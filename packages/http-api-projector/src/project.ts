@@ -55,10 +55,10 @@
 //   docs/design/dispatch-extensibility.md    — DU + interpreter pattern
 //   docs/design/meta-role-split-spec.md      — SharedMeta/LeafMeta/BranchMeta split
 
-import { makeRouterFromRoute, naiveTransform } from "./route.ts"
-import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { EncodingMap, SourceMap, StandardSchemaV1 } from "./decode.ts"
+import { makeRouterFromRoute, naiveTransform } from "./route.ts";
+import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import type { EncodingMap, SourceMap, StandardSchemaV1 } from "./decode.ts";
 // `Fetch` is layers.ts's own type (`(req: Request) => Promise<Response>`) —
 // reused here, not redeclared (see `HttpSharedMetaProperties`'s `middleware`
 // field doc below). Type-only: layers.ts VALUE-imports `allowHeader` from
@@ -66,10 +66,10 @@ import type { EncodingMap, SourceMap, StandardSchemaV1 } from "./decode.ts"
 // emit and creates no runtime cycle, the same reasoning route.ts's own
 // module doc already applies to its (reverse-direction) type-only import of
 // `HttpLeafMeta`/`HttpSharedMeta` from this file.
-import type { Fetch } from "./layers.ts"
+import type { Fetch } from "./layers.ts";
 
-export { verbFromTags } from "./tags.ts"
-export type { HttpRoute } from "./route.ts"
+export { verbFromTags } from "./tags.ts";
+export type { HttpRoute } from "./route.ts";
 export {
   applyMethods,
   applyMoveTo,
@@ -81,10 +81,17 @@ export {
   makeRouterFromRoute,
   naiveTransform,
   routeCandidatesForUrl,
-} from "./route.ts"
-export type { ResponseOverride } from "./route.ts"
-export type { Store, Stores, ParamSource, SourceMap, StandardSchemaV1, StandardSchemaOutcome } from "./decode.ts"
-export { assemble, httpStores, primaryStoreForMethod, runStandardSchema } from "./decode.ts"
+} from "./route.ts";
+export type { ResponseOverride } from "./route.ts";
+export type {
+  Store,
+  Stores,
+  ParamSource,
+  SourceMap,
+  StandardSchemaV1,
+  StandardSchemaOutcome,
+} from "./decode.ts";
+export { assemble, httpStores, primaryStoreForMethod, runStandardSchema } from "./decode.ts";
 
 /**
  * Produce the HTTP route tree from an API tree — the naive transform (see
@@ -94,7 +101,7 @@ export { assemble, httpStores, primaryStoreForMethod, runStandardSchema } from "
  * from.
  */
 export function toHttpRoutes(node: Node): HttpRoute {
-  return naiveTransform(node)
+  return naiveTransform(node);
 }
 
 // ============================================================================
@@ -117,7 +124,7 @@ export function toHttpRoutes(node: Node): HttpRoute {
  */
 export interface HttpSharedMetaProperties {
   /** At-most-one relative node placement — single-op or whole-subtree relocation (route.ts § applyMoveTo; placement axis left open, see spec §8). Last-wins. */
-  readonly moveTo?: string
+  readonly moveTo?: string;
   /**
    * Genuinely multiple/ordered — every `http.middleware(...)` function
    * contributed to THIS node (this node's own contribution only; ancestor
@@ -130,31 +137,31 @@ export interface HttpSharedMetaProperties {
    * verbs.ts). Valid at leaf or branch position: a branch scopes its
    * subtree, a leaf scopes only itself.
    */
-  readonly middleware?: readonly ((inner: Fetch) => Fetch)[]
+  readonly middleware?: readonly ((inner: Fetch) => Fetch)[];
   /** Genuinely multiple/ordered — same shape and same reasoning as `middleware` above, for `http.handlerMiddleware(...)`. */
-  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[]
+  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[];
 }
 
 /** Wraps `HttpSharedMetaProperties` under the `http` key — extend `SharedMeta` with this in a deployment's augmentation file. */
 export interface HttpSharedMeta {
-  readonly http?: HttpSharedMetaProperties
+  readonly http?: HttpSharedMetaProperties;
 }
 
 /** `meta.http` fields valid at LEAF (operation) position only — same flat, shape-folded convention as `HttpSharedMetaProperties` above. */
 export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
   /** At-most-one — sets the HTTP method on a route's method entry (read by `applyMethods`, route.ts; renames the `methods` key). Last-wins. */
-  readonly method?: string
+  readonly method?: string;
   /** At-most-one — explicit verb override; wins over tag-derived verb in `verbFromTags` (tags.ts). Last-wins. Set alongside `method` by every `http.*` verb bundle (`httpVerbBundle`, verbs.ts) — two flat keys describing one fact, read by two different projectors. */
-  readonly verb?: string
+  readonly verb?: string;
   /** At-most-one — response overrides, materialized into the handler via composition (read by `applyResponse`, route.ts). Last-wins (the whole `{status,headers}` object, not merged field-by-field — see node.ts's `mergeRecords`/`MergeMetaValue` depth-cap doc comments). */
-  readonly response?: { readonly status?: number; readonly headers?: Record<string, string> }
+  readonly response?: { readonly status?: number; readonly headers?: Record<string, string> };
   /** At-most-one — pagination hints, read by `extensions/pagination.ts`'s client extension (see `paginated()` in verbs.ts). Detection of "is this endpoint paginated at all" is a RUNTIME shape check on the actual response (`isPageShape`); this only overrides the client's defaults when they don't apply. Last-wins. */
   readonly paginated?: {
-    readonly style?: "cursor" | "offset"
-    readonly inputCursorParam?: string
-    readonly inputOffsetParam?: string
-    readonly inputLimitParam?: string
-  }
+    readonly style?: "cursor" | "offset";
+    readonly inputCursorParam?: string;
+    readonly inputOffsetParam?: string;
+    readonly inputLimitParam?: string;
+  };
   /**
    * At-most-one — a Standard Schema (https://standardschema.dev/) validator
    * attached via `http.validate()` (verbs.ts). `naiveTransform` (route.ts)
@@ -165,7 +172,7 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
    * `fromStandardSchema` (shape ingestion) and api-tree's `wrapValidators`
    * (AOT-compiled validators).
    */
-  readonly validate?: StandardSchemaV1
+  readonly validate?: StandardSchemaV1;
   /**
    * Keyed partial contribution — per-param HTTP store overrides (see
    * `http.source()` in verbs.ts). A flat MAP key: key-merged, later call's
@@ -175,7 +182,7 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
    * index-signature-erased `Record<string, ParamSource>`), see `source()`'s
    * own doc comment (verbs.ts) for the empirical verification.
    */
-  readonly sourceMap?: SourceMap
+  readonly sourceMap?: SourceMap;
   /**
    * Keyed partial contribution — per-field wire-encoding overrides layered
    * on top of `sourceMap`'s per-field STORE choice (phase B/E, docs/design/
@@ -193,12 +200,12 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
    * to `op()`, by `MismatchedEncodingMapDecoders`/`CheckedContributions`
    * (api-tree's input.ts/node.ts), not by this declared field type.
    */
-  readonly encodingMap?: EncodingMap
+  readonly encodingMap?: EncodingMap;
 }
 
 /** Wraps `HttpLeafMetaProperties` under the `http` key — extend `LeafMeta` with this in a deployment's augmentation file. */
 export interface HttpLeafMeta {
-  readonly http?: HttpLeafMetaProperties
+  readonly http?: HttpLeafMetaProperties;
 }
 
 /**
@@ -217,9 +224,9 @@ export interface HttpLeafMeta {
  * a plain field read wouldn't give for free.
  */
 export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
-  const h = meta.http
-  if (typeof h !== "object" || h === null) return {}
-  return h
+  const h = meta.http;
+  if (typeof h !== "object" || h === null) return {};
+  return h;
 }
 
 // ============================================================================
@@ -228,15 +235,15 @@ export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
 
 /** Build a sorted Allow header string from a set of HTTP method strings. */
 export function allowHeader(verbs: Iterable<string>): string {
-  return [...new Set(verbs)].sort().join(", ")
+  return [...new Set(verbs)].sort().join(", ");
 }
 
 export function jsonResponse(value: unknown, init?: ResponseInit): Response {
-  const headers = new Headers(init?.headers)
+  const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json")
+    headers.set("Content-Type", "application/json");
   }
-  return new Response(JSON.stringify(value), { ...init, headers })
+  return new Response(JSON.stringify(value), { ...init, headers });
 }
 
 // ============================================================================
@@ -250,5 +257,5 @@ export function jsonResponse(value: unknown, init?: ResponseInit): Response {
 
 /** Build a fetch handler from an `HttpRoute` tree — see `makeRouterFromRoute` in route.ts. */
 export function makeRouter(root: HttpRoute): (req: Request) => Promise<Response> {
-  return makeRouterFromRoute(root)
+  return makeRouterFromRoute(root);
 }

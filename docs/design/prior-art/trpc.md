@@ -75,10 +75,10 @@ enumerable by key. Each procedure's `_def` exposes:
 
 ## Key Takeaways for Fractal
 
-| Aspect | tRPC pattern | Observation |
-|--------|-------------|-------------|
-| Composition | Builder chain producing immutable defs | Clean but deeply generic — type params accumulate |
-| Context | Middleware-layered `Overwrite<>` | Simple; no DI container, just object merge |
-| Transport split | Adapter calls procedure as a function | Procedure is pure; transport is plumbing |
-| Introspection | Flat record + `_def` metadata | Works because procedures are data, not just functions |
-| Input | Intersected parser array | Enables base-procedure + refinement patterns |
+| Aspect          | tRPC pattern                           | Observation                                           |
+| --------------- | -------------------------------------- | ----------------------------------------------------- |
+| Composition     | Builder chain producing immutable defs | Clean but deeply generic — type params accumulate     |
+| Context         | Middleware-layered `Overwrite<>`       | Simple; no DI container, just object merge            |
+| Transport split | Adapter calls procedure as a function  | Procedure is pure; transport is plumbing              |
+| Introspection   | Flat record + `_def` metadata          | Works because procedures are data, not just functions |
+| Input           | Intersected parser array               | Enables base-procedure + refinement patterns          |

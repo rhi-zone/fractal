@@ -16,32 +16,32 @@
 // })
 // ```
 
-import type { AuthAdapter } from "@rhi-zone/fractal-api-tree/auth"
-import { createJwksCache, resolveJwksUri } from "./jwks.ts"
-import type { JwksCache } from "./jwks.ts"
-import { checkClaims, isSupportedAlg, parseJwt, verifyJwtSignature } from "./jwt.ts"
-import type { JwtClaims } from "./jwt.ts"
-import type { FetchLike } from "./jwks.ts"
+import type { AuthAdapter } from "@rhi-zone/fractal-api-tree/auth";
+import { createJwksCache, resolveJwksUri } from "./jwks.ts";
+import type { JwksCache } from "./jwks.ts";
+import { checkClaims, isSupportedAlg, parseJwt, verifyJwtSignature } from "./jwt.ts";
+import type { JwtClaims } from "./jwt.ts";
+import type { FetchLike } from "./jwks.ts";
 
 /** Decoded JWT claims, handed back as `TUser` by `resolve` — every registered claim plus whatever the provider adds. */
-export type OidcClaims = JwtClaims
+export type OidcClaims = JwtClaims;
 
 export type OidcServerOptions = {
   /** The provider's issuer URL — used for `.well-known/openid-configuration` discovery (unless `jwksUri` is given) and for `iss` claim validation. */
-  readonly issuer?: string
+  readonly issuer?: string;
   /** Direct JWKS endpoint URL — skips discovery entirely when given. */
-  readonly jwksUri?: string
+  readonly jwksUri?: string;
   /** Expected `aud` claim — a single value or any-of a list. Unchecked when omitted. */
-  readonly audience?: string | readonly string[]
+  readonly audience?: string | readonly string[];
   /** Clock skew leeway (seconds) for `exp`/`nbf` comparisons. Default 0. */
-  readonly clockToleranceSec?: number
+  readonly clockToleranceSec?: number;
   /** JWKS cache TTL (ms). Default 10 minutes — see `./jwks.ts`. */
-  readonly jwksCacheTtlMs?: number
+  readonly jwksCacheTtlMs?: number;
   /** Overrides `fetch` for discovery + JWKS requests. Defaults to the global `fetch`. */
-  readonly fetchImpl?: FetchLike
+  readonly fetchImpl?: FetchLike;
   /** Injectable clock for tests. Defaults to `Date.now`. */
-  readonly now?: () => number
-}
+  readonly now?: () => number;
+};
 
 /**
  * Drops keys whose value is `undefined` — `exactOptionalPropertyTypes`
@@ -51,20 +51,22 @@ export type OidcServerOptions = {
  * spreading `options` directly) would work too, but this keeps each call
  * site a single object literal.
  */
-function omitUndefined<T extends Record<string, unknown>>(obj: T): { [K in keyof T]: Exclude<T[K], undefined> } {
-  const out = {} as Record<string, unknown>
+function omitUndefined<T extends Record<string, unknown>>(
+  obj: T,
+): { [K in keyof T]: Exclude<T[K], undefined> } {
+  const out = {} as Record<string, unknown>;
   for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) out[key] = value
+    if (value !== undefined) out[key] = value;
   }
-  return out as { [K in keyof T]: Exclude<T[K], undefined> }
+  return out as { [K in keyof T]: Exclude<T[K], undefined> };
 }
 
 function extractBearerToken(req: Request): string | null {
-  const header = req.headers.get("authorization")
-  if (header === null) return null
-  const [scheme, token] = header.split(" ", 2)
-  if (scheme?.toLowerCase() !== "bearer" || token === undefined || token.length === 0) return null
-  return token
+  const header = req.headers.get("authorization");
+  if (header === null) return null;
+  const [scheme, token] = header.split(" ", 2);
+  if (scheme?.toLowerCase() !== "bearer" || token === undefined || token.length === 0) return null;
+  return token;
 }
 
 /**
@@ -76,46 +78,52 @@ function extractBearerToken(req: Request): string | null {
  * (see `@rhi-zone/fractal-api-tree/auth`).
  */
 export function oidcServer(options: OidcServerOptions): AuthAdapter<OidcClaims> {
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? fetch;
 
   // JWKS URI resolution (discovery, when needed) happens at most once —
   // memoized as a promise so concurrent first-requests share it instead of
   // each kicking off their own discovery fetch.
-  let jwksUriPromise: Promise<string> | undefined
-  let cache: JwksCache | undefined
+  let jwksUriPromise: Promise<string> | undefined;
+  let cache: JwksCache | undefined;
 
   async function getCache(): Promise<JwksCache> {
-    if (cache !== undefined) return cache
-    jwksUriPromise ??= resolveJwksUri(omitUndefined({ issuer: options.issuer, jwksUri: options.jwksUri }), fetchImpl)
-    const jwksUri = await jwksUriPromise
-    cache = createJwksCache(jwksUri, omitUndefined({ ttlMs: options.jwksCacheTtlMs, fetchImpl }))
-    return cache
+    if (cache !== undefined) return cache;
+    jwksUriPromise ??= resolveJwksUri(
+      omitUndefined({ issuer: options.issuer, jwksUri: options.jwksUri }),
+      fetchImpl,
+    );
+    const jwksUri = await jwksUriPromise;
+    cache = createJwksCache(jwksUri, omitUndefined({ ttlMs: options.jwksCacheTtlMs, fetchImpl }));
+    return cache;
   }
 
   async function resolve(req: Request): Promise<OidcClaims | null> {
-    const token = extractBearerToken(req)
-    if (token === null) return null
+    const token = extractBearerToken(req);
+    if (token === null) return null;
 
     try {
-      const parsed = parseJwt(token)
-      if (!isSupportedAlg(parsed.header.alg)) return null
+      const parsed = parseJwt(token);
+      if (!isSupportedAlg(parsed.header.alg)) return null;
 
-      const jwksCache = await getCache()
-      const jwk = await jwksCache.getKey(parsed.header.kid)
+      const jwksCache = await getCache();
+      const jwk = await jwksCache.getKey(parsed.header.kid);
 
-      const validSignature = await verifyJwtSignature(parsed, jwk)
-      if (!validSignature) return null
+      const validSignature = await verifyJwtSignature(parsed, jwk);
+      if (!validSignature) return null;
 
-      checkClaims(parsed.claims, omitUndefined({
-        issuer: options.issuer,
-        audience: options.audience,
-        clockToleranceSec: options.clockToleranceSec,
-        now: options.now,
-      }))
+      checkClaims(
+        parsed.claims,
+        omitUndefined({
+          issuer: options.issuer,
+          audience: options.audience,
+          clockToleranceSec: options.clockToleranceSec,
+          now: options.now,
+        }),
+      );
 
-      return parsed.claims
+      return parsed.claims;
     } catch {
-      return null
+      return null;
     }
   }
 
@@ -131,10 +139,10 @@ export function oidcServer(options: OidcServerOptions): AuthAdapter<OidcClaims> 
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401,
         headers: { "content-type": "application/json" },
-      })
+      });
     }
-    return undefined
+    return undefined;
   }
 
-  return { resolve, guard }
+  return { resolve, guard };
 }

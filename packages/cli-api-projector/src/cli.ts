@@ -44,12 +44,12 @@
 //   packages/api-tree/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
 import {
   assemble,
   composeErrorEncoders,
@@ -60,7 +60,7 @@ import {
   isStreamChunk,
   isStreamProgress,
   matchKind,
-} from "@rhi-zone/fractal-api-tree"
+} from "@rhi-zone/fractal-api-tree";
 import type {
   DetectionOptions,
   EncodingMap,
@@ -69,7 +69,7 @@ import type {
   ProjectorStores,
   SourceMap,
   Store,
-} from "@rhi-zone/fractal-api-tree"
+} from "@rhi-zone/fractal-api-tree";
 
 /**
  * CLI's own store-name fragment: an INERT, plain interface naming the stores
@@ -87,11 +87,11 @@ import type {
  */
 export interface CliStores {
   /** Parsed flags — a repeated flag collects into an array, a valueless flag is `true`. */
-  flag?: Store
+  flag?: Store;
   /** Positional/slug params matched against the command path. */
-  path?: Store
+  path?: Store;
   /** The process environment (`process.env`). */
-  env?: Store
+  env?: Store;
 }
 
 /**
@@ -101,10 +101,10 @@ export interface CliStores {
  * intersection is what lets this package build and read `flag`/`path`/`env`
  * without its own ambient augmentation — see `HttpStoreBag`'s doc.
  */
-export type CliStoreBag = ProjectorStores & CliStores
+export type CliStoreBag = ProjectorStores & CliStores;
 
-import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
-import { generateCompletions, isShellName } from "./completions.ts"
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context";
+import { generateCompletions, isShellName } from "./completions.ts";
 
 // ============================================================================
 // CliError — thrown instead of process.exit()
@@ -115,11 +115,11 @@ import { generateCompletions, isShellName } from "./completions.ts"
  * code (1 for errors). The caller (a real main() or test harness) handles it.
  */
 export class CliError extends Error {
-  readonly exitCode: number
+  readonly exitCode: number;
   constructor(message: string, exitCode = 1) {
-    super(message)
-    this.name = "CliError"
-    this.exitCode = exitCode
+    super(message);
+    this.name = "CliError";
+    this.exitCode = exitCode;
   }
 }
 
@@ -137,12 +137,12 @@ export class CliError extends Error {
 
 /** An error encoder's CLI-specific target shape — exit code + message. */
 export type CliErrorResponse = {
-  readonly exitCode: number
-  readonly message: string
-}
+  readonly exitCode: number;
+  readonly message: string;
+};
 
 /** `ErrorEncoder<E, CliErrorResponse>` — maps a handler's error value to a CLI exit/message. */
-export type CliErrorEncoder<E = unknown> = ErrorEncoder<E, CliErrorResponse>
+export type CliErrorEncoder<E = unknown> = ErrorEncoder<E, CliErrorResponse>;
 
 /**
  * Pre-built `CliErrorEncoder`: maps error `kind` values to an exit code
@@ -159,16 +159,16 @@ export function cliErrors<E = unknown>(
 ): CliErrorEncoder<E> {
   const encoders = Object.entries(mapping).map(([kind, override]) =>
     matchKind<{ exit?: number; message?: string }>(kind, override),
-  )
-  const composed = composeErrorEncoders(...encoders)
+  );
+  const composed = composeErrorEncoders(...encoders);
   return (error) => {
-    const matched = composed(error)
-    if (matched === undefined) return undefined
+    const matched = composed(error);
+    if (matched === undefined) return undefined;
     return {
       exitCode: matched.exit ?? 1,
       message: matched.message ?? `Error: ${JSON.stringify(error)}`,
-    }
-  }
+    };
+  };
 }
 
 // ============================================================================
@@ -182,10 +182,10 @@ export function cliErrors<E = unknown>(
  * Defaults: process.stdout, process.stderr, readline-based confirm.
  */
 export type CliIO = {
-  stdout: { write(s: string): void }
-  stderr: { write(s: string): void }
-  confirm(prompt: string): Promise<boolean>
-}
+  stdout: { write(s: string): void };
+  stderr: { write(s: string): void };
+  confirm(prompt: string): Promise<boolean>;
+};
 
 // ============================================================================
 // Options
@@ -202,18 +202,18 @@ export type CliOpts<T = unknown> = {
    * help text just can't list per-field flags for a leaf; dispatch itself is
    * unaffected.
    */
-  readonly schemas?: SchemaMap
+  readonly schemas?: SchemaMap;
   /**
    * Program name used in usage/help text and generated completion scripts.
    * Defaults to "cli".
    */
-  readonly programName?: string
+  readonly programName?: string;
   /**
    * Program version string, printed (and returned from) on `--version`/`-V`.
    * When absent, `--version` falls through to a CliError — there's nothing
    * to print.
    */
-  readonly version?: string
+  readonly version?: string;
   /**
    * Additional `Node => Node` passes, applied in array order, to `rootNode`
    * before dispatch — CLI's counterpart to HTTP's `PresetOptions.rewriters`
@@ -260,7 +260,7 @@ export type CliOpts<T = unknown> = {
    * (see docs/design/wire-profiles-and-staged-validation.md, "What goes
    * away").
    */
-  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
+  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>;
   /**
    * Wrap the handler call so it runs inside its own `AsyncLocalStorage`
    * context. `init` computes the per-invocation context value from
@@ -276,7 +276,7 @@ export type CliOpts<T = unknown> = {
    * receives), or read the ALS store from code it invokes synchronously
    * inside `next`. Absent by default (no ALS wrapping).
    */
-  readonly als?: AlsConfig<CliAlsContext, T>
+  readonly als?: AlsConfig<CliAlsContext, T>;
   /**
    * Around-hooks wrapping the handler call — `F => F` where
    * `F = (input, stores) => result` (see
@@ -290,7 +290,7 @@ export type CliOpts<T = unknown> = {
    *
    * When omitted (or empty), the handler is called directly — zero overhead.
    */
-  readonly middleware?: readonly CliMiddleware[]
+  readonly middleware?: readonly CliMiddleware[];
   /**
    * Opt-in configuration for the structural sniffing `runCli` applies to a
    * handler's return value — `result` gates `Result`-shape
@@ -306,7 +306,7 @@ export type CliOpts<T = unknown> = {
    * (`packages/http-api-projector/src/preset.ts`) and MCP's
    * `CreateMcpServerOptions.detection`.
    */
-  readonly detection?: DetectionOptions
+  readonly detection?: DetectionOptions;
   /**
    * Maps a handler's `Result.err(E)` error value to a `CliErrorResponse`
    * (exit code + message) — see `CliErrorEncoder`/`cliErrors` above. Called
@@ -320,8 +320,8 @@ export type CliOpts<T = unknown> = {
    * `CreateMcpServerOptions.errorEncoder`
    * (`packages/mcp-api-projector/src/server.ts`).
    */
-  readonly errorEncoder?: CliErrorEncoder
-}
+  readonly errorEncoder?: CliErrorEncoder;
+};
 
 // ============================================================================
 // Middleware — around-hooks wrapping the handler call
@@ -342,7 +342,7 @@ export type CliOpts<T = unknown> = {
  */
 export type CliMiddleware = (
   next: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>
+) => (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>;
 
 /**
  * Compose `middleware` around `base`, first entry outermost — `middleware[0]`
@@ -353,11 +353,11 @@ function composeMiddleware(
   middleware: readonly CliMiddleware[],
   base: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
 ): (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base
+  let wrapped = base;
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped)
+    wrapped = middleware[i]!(wrapped);
   }
-  return wrapped
+  return wrapped;
 }
 
 // ============================================================================
@@ -369,11 +369,11 @@ function composeMiddleware(
 
 /** Dispatch context `CliOpts.als`'s `init` receives. */
 export type CliAlsContext = {
-  readonly meta: LeafMeta
-  readonly io: CliIO
-  readonly slugs: Record<string, string>
-  readonly leafName: string
-}
+  readonly meta: LeafMeta;
+  readonly io: CliIO;
+  readonly slugs: Record<string, string>;
+  readonly leafName: string;
+};
 
 // ============================================================================
 // CLI meta extraction
@@ -389,19 +389,19 @@ export type CliAlsContext = {
 /** `meta.cli` fields valid at BOTH leaf and branch position. */
 export type CliSharedMetaProperties = {
   /** Hides this leaf/branch from generated help text (`buildHelp`) without removing it from dispatch. */
-  readonly hidden?: boolean
-  readonly [key: string]: unknown
-}
+  readonly hidden?: boolean;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `CliSharedMetaProperties` under the `cli` key — extend `SharedMeta` with this in a deployment's augmentation file. */
 export type CliSharedMeta = {
-  readonly cli?: CliSharedMetaProperties
-}
+  readonly cli?: CliSharedMetaProperties;
+};
 
 /** `meta.cli` fields valid at LEAF position only. */
 export type CliLeafMetaProperties = CliSharedMetaProperties & {
-  readonly name?: string
-  readonly alias?: string
+  readonly name?: string;
+  readonly alias?: string;
   /**
    * Per-param source overrides for this leaf's input assembly (see
    * `packages/api-tree/src/input.ts`). Lets a tree author pull a field from
@@ -410,7 +410,7 @@ export type CliLeafMetaProperties = CliSharedMetaProperties & {
    * variable instead of a `--api-key` flag. Params not listed here still
    * resolve via the normal flag/slug convention.
    */
-  readonly sourceMap?: SourceMap
+  readonly sourceMap?: SourceMap;
   /**
    * Keyed partial contribution — per-field wire-encoding overrides layered
    * on top of `sourceMap`'s per-field STORE choice (phase B/E, docs/design/
@@ -425,7 +425,7 @@ export type CliLeafMetaProperties = CliSharedMetaProperties & {
    * `MismatchedEncodingMapDecoders`/`CheckedContributions` (api-tree's
    * input.ts/node.ts), not by this declared field type.
    */
-  readonly encodingMap?: EncodingMap
+  readonly encodingMap?: EncodingMap;
   /**
    * Overrides the input field names `--all-pages` merges the next cursor/
    * offset into, when this leaf's result is page-shaped (`CursorPage<T>`/
@@ -439,15 +439,15 @@ export type CliLeafMetaProperties = CliSharedMetaProperties & {
    * `"cursor"`/`"offset"`.
    */
   readonly paginated?: {
-    readonly inputCursorParam?: string
-    readonly inputOffsetParam?: string
-  }
-}
+    readonly inputCursorParam?: string;
+    readonly inputOffsetParam?: string;
+  };
+};
 
 /** Wraps `CliLeafMetaProperties` under the `cli` key — extend `LeafMeta` with this in a deployment's augmentation file. */
 export type CliLeafMeta = {
-  readonly cli?: CliLeafMetaProperties
-}
+  readonly cli?: CliLeafMetaProperties;
+};
 
 /**
  * Parse `meta.cli`. Accepts `CliLeafMeta` (the broader of the two roles,
@@ -457,9 +457,9 @@ export type CliLeafMeta = {
  * inherited `CliSharedMetaProperties` shape) at different call sites below.
  */
 export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
-  const c = meta.cli
-  if (typeof c !== "object" || c === null) return {}
-  return c
+  const c = meta.cli;
+  if (typeof c !== "object" || c === null) return {};
+  return c;
 }
 
 // ============================================================================
@@ -483,12 +483,12 @@ export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
  * for the read site this snapshot replaces).
  */
 type Resolved = {
-  readonly handler: Handler
-  readonly slugs: Record<string, string>
-  readonly leafName: string
-  readonly leafMeta: LeafMeta
+  readonly handler: Handler;
+  readonly slugs: Record<string, string>;
+  readonly leafName: string;
+  readonly leafMeta: LeafMeta;
   /** Snapshot of `getCliMeta(leafMeta).sourceMap`, resolved once, here. */
-  readonly sourceMap: SourceMap
+  readonly sourceMap: SourceMap;
   /**
    * The path used to look up this leaf's schema in a `SchemaMap`, i.e. the
    * same underscore-joined segments `extractToolSchemas` (packages/api-tree/
@@ -497,8 +497,8 @@ type Resolved = {
    * Distinct from the raw argv path segments, which contain the literal
    * slug value at that position.
    */
-  readonly schemaPath: string[]
-}
+  readonly schemaPath: string[];
+};
 
 /**
  * Find a leaf child of `children` whose `meta.cli.alias` equals `head`.
@@ -506,14 +506,11 @@ type Resolved = {
  * schema lookups and help text key off the canonical name, so an alias is
  * purely an alternate invocation spelling, never a rename.
  */
-function findLeafByAlias(
-  children: Record<string, Node>,
-  head: string,
-): [string, Node] | undefined {
+function findLeafByAlias(children: Record<string, Node>, head: string): [string, Node] | undefined {
   for (const [key, child] of Object.entries(children)) {
-    if (isLeaf(child) && getCliMeta(child.meta as CliLeafMeta).alias === head) return [key, child]
+    if (isLeaf(child) && getCliMeta(child.meta as CliLeafMeta).alias === head) return [key, child];
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -536,18 +533,19 @@ function resolveLeaf(
   slugs: Record<string, string>,
   schemaPath: string[] = [],
 ): Resolved | null {
-  if (segments.length === 0) return null
-  const [head, ...tail] = segments
-  if (head === undefined) return null
+  if (segments.length === 0) return null;
+  const [head, ...tail] = segments;
+  if (head === undefined) return null;
 
-  const children = n.children ?? {}
+  const children = n.children ?? {};
 
   // Terminal: head should name a leaf child, by its own key or its alias
   if (tail.length === 0) {
-    const direct = children[head]
-    const [key, child] = direct !== undefined
-      ? [head, direct]
-      : (findLeafByAlias(children, head) ?? [head, undefined])
+    const direct = children[head];
+    const [key, child] =
+      direct !== undefined
+        ? [head, direct]
+        : (findLeafByAlias(children, head) ?? [head, undefined]);
     if (child !== undefined && isLeaf(child)) {
       return {
         handler: child.handler!,
@@ -556,7 +554,7 @@ function resolveLeaf(
         leafMeta: child.meta,
         sourceMap: getCliMeta(child.meta as CliLeafMeta).sourceMap ?? {},
         schemaPath: [...schemaPath, key],
-      }
+      };
     }
 
     // No static/alias match at the terminal segment — if `head` isn't a
@@ -576,20 +574,20 @@ function resolveLeaf(
         leafMeta: n.fallback.subtree.meta,
         sourceMap: getCliMeta(n.fallback.subtree.meta as CliLeafMeta).sourceMap ?? {},
         schemaPath: [...schemaPath, n.fallback.name],
-      }
+      };
     }
 
-    return null
+    return null;
   }
 
   // Non-terminal: try a static child first (static children always win)
-  const staticChild = children[head]
+  const staticChild = children[head];
   if (staticChild !== undefined) {
     if (!isLeaf(staticChild)) {
-      return resolveLeaf(staticChild, tail, slugs, [...schemaPath, head])
+      return resolveLeaf(staticChild, tail, slugs, [...schemaPath, head]);
     }
     // A leaf child at non-tail is a dead-end (a leaf has no children to recurse into)
-    return null
+    return null;
   }
 
   // No static match — fall back to the wildcard-capture subtree, if any.
@@ -597,15 +595,13 @@ function resolveLeaf(
   // schema path instead records `fallback.name`, matching how
   // extractToolSchemas names the fallback subtree's tools.
   if (n.fallback !== undefined) {
-    return resolveLeaf(
-      n.fallback.subtree,
-      tail,
-      { ...slugs, [n.fallback.name]: head },
-      [...schemaPath, n.fallback.name],
-    )
+    return resolveLeaf(n.fallback.subtree, tail, { ...slugs, [n.fallback.name]: head }, [
+      ...schemaPath,
+      n.fallback.name,
+    ]);
   }
 
-  return null
+  return null;
 }
 
 // ============================================================================
@@ -613,71 +609,70 @@ function resolveLeaf(
 // ============================================================================
 
 function descriptionFrom(meta: SharedMeta & CliLeafMeta): string | undefined {
-  if (typeof meta.description === "string") return meta.description
-  const cliMeta = getCliMeta(meta)
-  if (typeof cliMeta.description === "string") return cliMeta.description
-  return undefined
+  if (typeof meta.description === "string") return meta.description;
+  const cliMeta = getCliMeta(meta);
+  if (typeof cliMeta.description === "string") return cliMeta.description;
+  return undefined;
 }
 
-function buildHelp(
-  n: Node,
-  path: string[],
-  programName: string,
-): string {
-  const lines: string[] = []
-  const cmd = [programName, ...path].join(" ")
+function buildHelp(n: Node, path: string[], programName: string): string {
+  const lines: string[] = [];
+  const cmd = [programName, ...path].join(" ");
 
-  const desc = descriptionFrom(n.meta)
-  if (desc !== undefined) lines.push(desc, "")
+  const desc = descriptionFrom(n.meta);
+  if (desc !== undefined) lines.push(desc, "");
 
-  lines.push(`Usage: ${cmd} <subcommand> [options]`, "")
+  lines.push(`Usage: ${cmd} <subcommand> [options]`, "");
 
-  const children = n.children ?? {}
+  const children = n.children ?? {};
 
   // List leaf children (callables)
-  const leafEntries = Object.entries(children).filter(([, child]) => isLeaf(child))
+  const leafEntries = Object.entries(children).filter(([, child]) => isLeaf(child));
   if (leafEntries.length > 0) {
-    lines.push("Commands:")
+    lines.push("Commands:");
     for (const [key, child] of leafEntries) {
-      const cliMeta = getCliMeta(child.meta as CliLeafMeta)
-      if (cliMeta.hidden === true) continue
-      const leafDesc = descriptionFrom(child.meta)
-      const leafName = typeof cliMeta.name === "string" ? cliMeta.name : key
-      const aliasSuffix = typeof cliMeta.alias === "string" ? ` (alias: ${cliMeta.alias})` : ""
-      const deprecatedPrefix = resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true ? "[DEPRECATED] " : ""
-      lines.push(`  ${deprecatedPrefix}${leafName}${aliasSuffix}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`)
+      const cliMeta = getCliMeta(child.meta as CliLeafMeta);
+      if (cliMeta.hidden === true) continue;
+      const leafDesc = descriptionFrom(child.meta);
+      const leafName = typeof cliMeta.name === "string" ? cliMeta.name : key;
+      const aliasSuffix = typeof cliMeta.alias === "string" ? ` (alias: ${cliMeta.alias})` : "";
+      const deprecatedPrefix =
+        resolveTags((child.meta.tags ?? {}) as Tags).deprecated === true ? "[DEPRECATED] " : "";
+      lines.push(
+        `  ${deprecatedPrefix}${leafName}${aliasSuffix}${leafDesc !== undefined ? `  — ${leafDesc}` : ""}`,
+      );
     }
   }
 
   // List branch children
-  const nonLeafEntries = Object.entries(children).filter(([, child]) => !isLeaf(child))
+  const nonLeafEntries = Object.entries(children).filter(([, child]) => !isLeaf(child));
   if (nonLeafEntries.length > 0 || n.fallback !== undefined) {
-    if (leafEntries.length > 0) lines.push("")
-    lines.push("Subcommand groups:")
+    if (leafEntries.length > 0) lines.push("");
+    lines.push("Subcommand groups:");
     for (const [key, child] of nonLeafEntries) {
-      const cliMeta = getCliMeta(child.meta as CliLeafMeta)
-      if (cliMeta.hidden === true) continue
-      const childDesc = descriptionFrom(child.meta)
-      lines.push(`  ${key}${childDesc !== undefined ? `  — ${childDesc}` : ""}`)
+      const cliMeta = getCliMeta(child.meta as CliLeafMeta);
+      if (cliMeta.hidden === true) continue;
+      const childDesc = descriptionFrom(child.meta);
+      lines.push(`  ${key}${childDesc !== undefined ? `  — ${childDesc}` : ""}`);
     }
     if (n.fallback !== undefined) {
-      const cliMeta = getCliMeta(n.fallback.subtree.meta as CliLeafMeta)
+      const cliMeta = getCliMeta(n.fallback.subtree.meta as CliLeafMeta);
       if (cliMeta.hidden !== true) {
-        lines.push(`  <${n.fallback.name}>  — parameterized group`)
+        lines.push(`  <${n.fallback.name}>  — parameterized group`);
       }
     }
   }
 
-  lines.push("")
-  lines.push("Global flags:")
-  lines.push("  --help        Show this help text")
-  lines.push("  --version, -V  Print the program version")
-  lines.push("  --json        Output result as JSON (default)")
-  lines.push("  --yes, --force  Skip confirmation prompts for destructive ops")
-  lines.push("")
-  lines.push(`Run '${cmd} completions <bash|zsh|fish>' to print a shell completion script.`)
+  lines.push("");
+  lines.push("Global flags:");
+  lines.push("  --help        Show this help text");
+  lines.push("  --version, -V  Print the program version");
+  lines.push("  --json        Output result as JSON (default)");
+  lines.push("  --yes, --force  Skip confirmation prompts for destructive ops");
+  lines.push("");
+  lines.push(`Run '${cmd} completions <bash|zsh|fish>' to print a shell completion script.`);
 
-  return lines.join("\n") + "\n"
+  return lines.join("\n") + "\n";
 }
 
 function buildLeafHelp(
@@ -686,57 +681,65 @@ function buildLeafHelp(
   programName: string,
   schemas: SchemaMap,
 ): string {
-  const lines: string[] = []
-  const cmd = [programName, ...path].join(" ")
-  const desc = descriptionFrom(resolved.leafMeta)
-  if (desc !== undefined) lines.push(desc, "")
-  lines.push(`Usage: ${cmd} [options]`, "")
+  const lines: string[] = [];
+  const cmd = [programName, ...path].join(" ");
+  const desc = descriptionFrom(resolved.leafMeta);
+  if (desc !== undefined) lines.push(desc, "");
+  lines.push(`Usage: ${cmd} [options]`, "");
 
-  const tags = resolveTags((resolved.leafMeta.tags ?? {}) as Tags)
-  if (tags.deprecated === true) lines.push("  [DEPRECATED] This operation is deprecated and may be removed.", "")
-  if (tags.destructive === true) lines.push("  This operation is destructive and irreversible. Requires --yes/--force to skip confirmation.", "")
-  if (tags.readOnly === true) lines.push("  This operation is read-only.", "")
-  if (tags.streaming === true) lines.push("  This operation streams results (one JSON object per line).", "")
+  const tags = resolveTags((resolved.leafMeta.tags ?? {}) as Tags);
+  if (tags.deprecated === true)
+    lines.push("  [DEPRECATED] This operation is deprecated and may be removed.", "");
+  if (tags.destructive === true)
+    lines.push(
+      "  This operation is destructive and irreversible. Requires --yes/--force to skip confirmation.",
+      "",
+    );
+  if (tags.readOnly === true) lines.push("  This operation is read-only.", "");
+  if (tags.streaming === true)
+    lines.push("  This operation streams results (one JSON object per line).", "");
 
   // Derive flags from schema — schemaPath uses fallback.name (e.g. "bookId"),
   // not the runtime slug value, matching extractToolSchemas' key convention.
-  const schemaName = resolved.schemaPath.join("_").replace(/-/g, "_")
-  const toolSchema = schemas[schemaName]
+  const schemaName = resolved.schemaPath.join("_").replace(/-/g, "_");
+  const toolSchema = schemas[schemaName];
 
-  lines.push("Options:")
-  lines.push("  --help        Show this help text")
-  lines.push("  --yes, --force  Skip confirm for destructive ops")
-  lines.push("  --json        Output as JSON (default)")
+  lines.push("Options:");
+  lines.push("  --help        Show this help text");
+  lines.push("  --yes, --force  Skip confirm for destructive ops");
+  lines.push("  --json        Output as JSON (default)");
 
   if (toolSchema?.inputSchema.properties !== undefined) {
-    const props = toolSchema.inputSchema.properties
-    const required = toolSchema.inputSchema.required ?? []
+    const props = toolSchema.inputSchema.properties;
+    const required = toolSchema.inputSchema.required ?? [];
     for (const [field, fieldSchema] of Object.entries(props)) {
-      const isRequired = required.includes(field)
+      const isRequired = required.includes(field);
       // `extractToolSchemas` (packages/api-tree/src/extract.ts) populates
       // per-field `description` from each property's leading JSDoc comment.
-      const fsDesc = fieldSchema.description
-      const req = isRequired ? " (required)" : " (optional)"
-      const typeHint = describeFieldType(fieldSchema)
-      lines.push(`  --${field}${typeHint !== undefined ? `  <${typeHint}>` : ""}${fsDesc !== undefined ? `  ${fsDesc}` : ""}${req}`)
+      const fsDesc = fieldSchema.description;
+      const req = isRequired ? " (required)" : " (optional)";
+      const typeHint = describeFieldType(fieldSchema);
+      lines.push(
+        `  --${field}${typeHint !== undefined ? `  <${typeHint}>` : ""}${fsDesc !== undefined ? `  ${fsDesc}` : ""}${req}`,
+      );
     }
   }
 
-  return lines.join("\n") + "\n"
+  return lines.join("\n") + "\n";
 }
 
 /** Short human-readable type hint for a field's help line, e.g. "number" or "enum: a|b|c". */
 function describeFieldType(fieldSchema: JsonSchema): string | undefined {
-  if (fieldSchema.enum !== undefined) return `enum: ${fieldSchema.enum.join("|")}`
+  if (fieldSchema.enum !== undefined) return `enum: ${fieldSchema.enum.join("|")}`;
   if (fieldSchema.type === "array") {
-    const items = fieldSchema.items
+    const items = fieldSchema.items;
     if (items !== undefined && items !== false) {
-      const itemType = describeFieldType(items)
-      if (itemType !== undefined) return `${itemType}[]`
+      const itemType = describeFieldType(items);
+      if (itemType !== undefined) return `${itemType}[]`;
     }
-    return "array"
+    return "array";
   }
-  return fieldSchema.type
+  return fieldSchema.type;
 }
 
 // ============================================================================
@@ -744,14 +747,14 @@ function describeFieldType(fieldSchema: JsonSchema): string | undefined {
 // ============================================================================
 
 type ParsedArgv = {
-  flags: Record<string, string | string[] | true>
-  help: boolean
-  version: boolean
-  yes: boolean
-  json: boolean
-  jsonl: boolean
-  allPages: boolean
-}
+  flags: Record<string, string | string[] | true>;
+  help: boolean;
+  version: boolean;
+  yes: boolean;
+  json: boolean;
+  jsonl: boolean;
+  allPages: boolean;
+};
 
 /**
  * Parse named --flags from argv into a flat object.
@@ -760,64 +763,79 @@ type ParsedArgv = {
  * Extracts: --help, --version/-V, --yes/--force, --json, --jsonl, --all-pages.
  */
 function parseFlags(argv: string[]): ParsedArgv {
-  const flags: Record<string, string | string[] | true> = {}
-  let help = false
-  let version = false
-  let yes = false
-  let json = false
-  let jsonl = false
-  let allPages = false
+  const flags: Record<string, string | string[] | true> = {};
+  let help = false;
+  let version = false;
+  let yes = false;
+  let json = false;
+  let jsonl = false;
+  let allPages = false;
 
-  let i = 0
+  let i = 0;
   while (i < argv.length) {
-    const arg = argv[i]
-    if (arg === undefined) { i++; continue }
+    const arg = argv[i];
+    if (arg === undefined) {
+      i++;
+      continue;
+    }
 
     if (arg === "--help" || arg === "-h") {
-      help = true; i++; continue
+      help = true;
+      i++;
+      continue;
     }
     if (arg === "--version" || arg === "-V") {
-      version = true; i++; continue
+      version = true;
+      i++;
+      continue;
     }
     if (arg === "--yes" || arg === "--force" || arg === "-y") {
-      yes = true; i++; continue
+      yes = true;
+      i++;
+      continue;
     }
     if (arg === "--json") {
-      json = true; i++; continue
+      json = true;
+      i++;
+      continue;
     }
     if (arg === "--jsonl") {
-      jsonl = true; i++; continue
+      jsonl = true;
+      i++;
+      continue;
     }
     if (arg === "--all-pages") {
-      allPages = true; i++; continue
+      allPages = true;
+      i++;
+      continue;
     }
     if (arg.startsWith("--")) {
-      const key = arg.slice(2)
-      const next = argv[i + 1]
+      const key = arg.slice(2);
+      const next = argv[i + 1];
       if (next === undefined || next.startsWith("--")) {
         // Boolean flag
-        flags[key] = true
-        i++
+        flags[key] = true;
+        i++;
       } else {
         // Key-value flag; handle repeated
-        const existing = flags[key]
+        const existing = flags[key];
         if (existing === undefined) {
-          flags[key] = next
+          flags[key] = next;
         } else if (Array.isArray(existing)) {
-          existing.push(next)
+          existing.push(next);
         } else if (typeof existing === "string") {
-          flags[key] = [existing, next]
+          flags[key] = [existing, next];
         }
-        i += 2
+        i += 2;
       }
-      continue
+      continue;
     }
 
     // Ignore non-flag args in the rest (path segments are already separated)
-    i++
+    i++;
   }
 
-  return { flags, help, version, yes, json: json || !jsonl, jsonl, allPages }
+  return { flags, help, version, yes, json: json || !jsonl, jsonl, allPages };
 }
 
 // ============================================================================
@@ -865,23 +883,19 @@ function buildInput(
 ): { readonly input: Record<string, unknown>; readonly stores: CliStoreBag } {
   const caller: Record<string, unknown> = {
     user: process.env.USER ?? process.env.USERNAME,
-  }
+  };
   const stores: CliStoreBag = {
     flag: flags,
     path: slugs,
     env: process.env as Record<string, unknown>,
     caller,
-  }
+  };
 
   const paramNames = [
-    ...new Set([
-      ...Object.keys(flags),
-      ...Object.keys(slugs),
-      ...Object.keys(sourceMap),
-    ]),
-  ]
+    ...new Set([...Object.keys(flags), ...Object.keys(slugs), ...Object.keys(sourceMap)]),
+  ];
 
-  return { input: assemble(stores, paramNames, sourceMap, "flag", Object.keys(slugs)), stores }
+  return { input: assemble(stores, paramNames, sourceMap, "flag", Object.keys(slugs)), stores };
 }
 
 // ============================================================================
@@ -893,26 +907,22 @@ function buildInput(
 
 /** Levenshtein edit distance. */
 function levenshteinDistance(a: string, b: string): number {
-  const rows = a.length + 1
-  const cols = b.length + 1
-  const dp: number[][] = []
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp: number[][] = [];
   for (let i = 0; i < rows; i++) {
-    const row = new Array<number>(cols).fill(0)
-    row[0] = i
-    dp.push(row)
+    const row = new Array<number>(cols).fill(0);
+    row[0] = i;
+    dp.push(row);
   }
-  for (let j = 0; j < cols; j++) dp[0]![j] = j
+  for (let j = 0; j < cols; j++) dp[0]![j] = j;
   for (let i = 1; i < rows; i++) {
     for (let j = 1; j < cols; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      dp[i]![j] = Math.min(
-        dp[i - 1]![j]! + 1,
-        dp[i]![j - 1]! + 1,
-        dp[i - 1]![j - 1]! + cost,
-      )
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i]![j] = Math.min(dp[i - 1]![j]! + 1, dp[i]![j - 1]! + 1, dp[i - 1]![j - 1]! + cost);
     }
   }
-  return dp[rows - 1]![cols - 1]!
+  return dp[rows - 1]![cols - 1]!;
 }
 
 // ============================================================================
@@ -923,7 +933,7 @@ const defaultIO: CliIO = {
   stdout: { write: (s: string) => process.stdout.write(s) },
   stderr: { write: (s: string) => process.stderr.write(s) },
   confirm: async (_prompt: string): Promise<boolean> => false,
-}
+};
 
 // ============================================================================
 // runCli — public API
@@ -952,28 +962,28 @@ export async function runCli<T = unknown>(
   io: Partial<CliIO> = {},
   opts: CliOpts<T> = {},
 ): Promise<void> {
-  const ioResolved: CliIO = { ...defaultIO, ...io }
-  const schemas: SchemaMap = opts.schemas ?? {}
-  const programName = opts.programName ?? "cli"
+  const ioResolved: CliIO = { ...defaultIO, ...io };
+  const schemas: SchemaMap = opts.schemas ?? {};
+  const programName = opts.programName ?? "cli";
   // Apply any consumer-supplied Node => Node rewriters BEFORE any dispatch —
   // see `CliOpts.rewriters`. This is where generated validation wires in
   // (`applyValidation`), same integration point HTTP's `PresetOptions.
   // rewriters` provides.
-  let n = rootNode
-  for (const rewrite of opts.rewriters ?? []) n = rewrite(n)
+  let n = rootNode;
+  for (const rewrite of opts.rewriters ?? []) n = rewrite(n);
 
   // Split argv into subcommand-path segments vs flag tokens.
   // Strategy: consume leading non-flag tokens as path segments; everything
   // after the first --flag is treated as flag argv.
-  const pathSegments: string[] = []
-  const flagArgv: string[] = []
-  let seenFlag = false
+  const pathSegments: string[] = [];
+  const flagArgv: string[] = [];
+  let seenFlag = false;
   for (const arg of argv) {
     if (seenFlag || arg.startsWith("-")) {
-      seenFlag = true
-      flagArgv.push(arg)
+      seenFlag = true;
+      flagArgv.push(arg);
     } else {
-      pathSegments.push(arg)
+      pathSegments.push(arg);
     }
   }
 
@@ -981,86 +991,84 @@ export async function runCli<T = unknown>(
   // authored tree) that prints a static shell completion script derived from
   // the tree structure + schemas. See ./completions.ts.
   if (pathSegments[0] === "completions") {
-    const shellArg = pathSegments[1]
+    const shellArg = pathSegments[1];
     if (!isShellName(shellArg)) {
-      ioResolved.stderr.write(
-        `Usage: ${programName} completions <bash|zsh|fish>\n`,
-      )
-      throw new CliError("Unknown or missing shell for completions", 1)
+      ioResolved.stderr.write(`Usage: ${programName} completions <bash|zsh|fish>\n`);
+      throw new CliError("Unknown or missing shell for completions", 1);
     }
-    ioResolved.stdout.write(generateCompletions(shellArg, n, schemas, programName))
-    return
+    ioResolved.stdout.write(generateCompletions(shellArg, n, schemas, programName));
+    return;
   }
 
-  const { flags, help, version, yes, json: _json, jsonl, allPages } = parseFlags(flagArgv)
+  const { flags, help, version, yes, json: _json, jsonl, allPages } = parseFlags(flagArgv);
 
   // --version — print the configured program version and return. Takes
   // priority over subcommand resolution (mirrors --help), since it's a
   // program-level query, not a subcommand-scoped one.
   if (version) {
     if (opts.version === undefined) {
-      ioResolved.stderr.write("No version configured for this program.\n")
-      throw new CliError("No version configured", 1)
+      ioResolved.stderr.write("No version configured for this program.\n");
+      throw new CliError("No version configured", 1);
     }
-    ioResolved.stdout.write(opts.version + "\n")
-    return
+    ioResolved.stdout.write(opts.version + "\n");
+    return;
   }
 
   // No subcommand args — show root help
   if (pathSegments.length === 0) {
     if (help) {
-      ioResolved.stdout.write(buildHelp(n, [], programName))
-      return
+      ioResolved.stdout.write(buildHelp(n, [], programName));
+      return;
     }
-    ioResolved.stderr.write(`Usage: ${programName} <subcommand> [options]\nRun with --help for usage.\n`)
-    throw new CliError("No subcommand provided", 1)
+    ioResolved.stderr.write(
+      `Usage: ${programName} <subcommand> [options]\nRun with --help for usage.\n`,
+    );
+    throw new CliError("No subcommand provided", 1);
   }
 
   // --help requested — show help for the subcommand path
   if (help) {
     // Try to resolve to a leaf first
-    const target = resolveLeaf(n, pathSegments, {})
+    const target = resolveLeaf(n, pathSegments, {});
     if (target !== null) {
-      ioResolved.stdout.write(buildLeafHelp(target, pathSegments, programName, schemas))
-      return
+      ioResolved.stdout.write(buildLeafHelp(target, pathSegments, programName, schemas));
+      return;
     }
     // Otherwise walk to a branch child for group help
-    let cursor: Node = n
-    let depth = 0
+    let cursor: Node = n;
+    let depth = 0;
     for (const seg of pathSegments) {
-      const child = (cursor.children ?? {})[seg]
+      const child = (cursor.children ?? {})[seg];
       if (child !== undefined && !isLeaf(child)) {
-        cursor = child
-        depth++
+        cursor = child;
+        depth++;
       } else {
-        break
+        break;
       }
     }
-    ioResolved.stdout.write(buildHelp(cursor, pathSegments.slice(0, depth), programName))
-    return
+    ioResolved.stdout.write(buildHelp(cursor, pathSegments.slice(0, depth), programName));
+    return;
   }
 
   // Resolve the leaf handler
-  const target = resolveLeaf(n, pathSegments, {})
+  const target = resolveLeaf(n, pathSegments, {});
   if (target === null) {
-    const typed = pathSegments.join(" ")
-    const suggestion = suggestCommand(n, pathSegments)
-    const hint = suggestion !== undefined ? ` Did you mean "${suggestion}"?` : ""
-    ioResolved.stderr.write(`Unknown command: "${typed}".${hint}\nRun with --help for usage.\n`)
-    throw new CliError(`Unknown command: "${typed}".${hint}`, 1)
+    const typed = pathSegments.join(" ");
+    const suggestion = suggestCommand(n, pathSegments);
+    const hint = suggestion !== undefined ? ` Did you mean "${suggestion}"?` : "";
+    ioResolved.stderr.write(`Unknown command: "${typed}".${hint}\nRun with --help for usage.\n`);
+    throw new CliError(`Unknown command: "${typed}".${hint}`, 1);
   }
 
   // Tags are read directly from the leaf's own meta — no ancestor inheritance.
-  const tags = resolveTags((target.leafMeta.tags ?? {}) as Tags)
+  const tags = resolveTags((target.leafMeta.tags ?? {}) as Tags);
 
   // Confirm for destructive ops (unless --yes/--force)
   if (tags.destructive === true && !yes) {
-    const ok = await ioResolved.confirm(
-      "This operation is destructive and irreversible. Proceed?"
-    )
+    const ok = await ioResolved.confirm("This operation is destructive and irreversible. Proceed?");
     if (!ok) {
-      ioResolved.stderr.write("Aborted.\n")
-      throw new CliError("Aborted by user", 1)
+      ioResolved.stderr.write("Aborted.\n");
+      throw new CliError("Aborted by user", 1);
     }
   }
 
@@ -1083,8 +1091,8 @@ export async function runCli<T = unknown>(
   // or codegen hasn't run yet), `rawInput` — raw wire values, `string |
   // string[] | true` per flag, exactly as `parseFlags`/`buildInput` produced
   // them — reaches the handler completely unvalidated.
-  const { input: rawInput, stores } = buildInput(flags, target.slugs, target.sourceMap)
-  const input: Record<string, unknown> = rawInput
+  const { input: rawInput, stores } = buildInput(flags, target.slugs, target.sourceMap);
+  const input: Record<string, unknown> = rawInput;
 
   // Call handler — wrapped (innermost-first) by ALS (see CliOpts.als), then
   // by any configured middleware (outermost-first; see CliOpts.middleware).
@@ -1095,27 +1103,26 @@ export async function runCli<T = unknown>(
     io: ioResolved,
     slugs: target.slugs,
     leafName: target.leafName,
-  }
-  const alsHandler = opts.als !== undefined
-    ? (input: Record<string, unknown>) => {
-        const store = opts.als!.init(alsContext)
-        return store instanceof Promise
-          ? store.then((resolved) => opts.als!.storage.run(resolved, () => target.handler(input)))
-          : opts.als!.storage.run(store, () => target.handler(input))
-      }
-    : target.handler
+  };
+  const alsHandler =
+    opts.als !== undefined
+      ? (input: Record<string, unknown>) => {
+          const store = opts.als!.init(alsContext);
+          return store instanceof Promise
+            ? store.then((resolved) => opts.als!.storage.run(resolved, () => target.handler(input)))
+            : opts.als!.storage.run(store, () => target.handler(input));
+        }
+      : target.handler;
   // Bridge the plain handler `(input) => result` into `F => F`'s base case
   // `(input, stores) => handler(input)` — the handler never sees `stores`,
   // structurally (see CliMiddleware's module doc above).
-  const base = (input: Record<string, unknown>, _stores: CliStoreBag) => alsHandler(input)
-  const middleware = opts.middleware ?? []
-  const callHandler = middleware.length === 0
-    ? base
-    : composeMiddleware(middleware, base)
+  const base = (input: Record<string, unknown>, _stores: CliStoreBag) => alsHandler(input);
+  const middleware = opts.middleware ?? [];
+  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
 
-  let result: unknown
+  let result: unknown;
   try {
-    result = await Promise.resolve(callHandler(input, stores))
+    result = await Promise.resolve(callHandler(input, stores));
   } catch {
     // Thrown errors are never surfaced verbatim to the end user — matching
     // HTTP's `runRoute` (route.ts), which already collapses a thrown error
@@ -1126,14 +1133,14 @@ export async function runCli<T = unknown>(
     // user-facing failure should return an `err(...)` Result instead (see
     // the Result-unwrapping check below), which IS surfaced verbatim — that
     // is the intentional, opt-in error-reporting channel.
-    ioResolved.stderr.write("Error: internal error\n")
-    throw new CliError("internal error", 1)
+    ioResolved.stderr.write("Error: internal error\n");
+    throw new CliError("internal error", 1);
   }
 
   // Opt-in return-value detection — see CliOpts.detection. Both default to
   // `true`, matching every prior release's unconditional behavior.
-  const detectStreaming = opts.detection?.streaming ?? true
-  const detectResult = opts.detection?.result ?? true
+  const detectStreaming = opts.detection?.streaming ?? true;
+  const detectResult = opts.detection?.result ?? true;
 
   // Streaming: an async-iterable result (e.g. an async generator handler) is
   // streamed incrementally — one JSONL line written to stdout per yield, as
@@ -1148,8 +1155,8 @@ export async function runCli<T = unknown>(
   // — with detection disabled, an async-iterable result falls through to
   // the plain-value output path below instead.
   if (detectStreaming && isAsyncIterable(result)) {
-    await streamAsyncIterable(result, ioResolved)
-    return
+    await streamAsyncIterable(result, ioResolved);
+    return;
   }
 
   // Result unwrapping: applied whenever `detectResult` is on (matching
@@ -1163,13 +1170,13 @@ export async function runCli<T = unknown>(
   // `ok`/`err`) is treated the same way regardless of validator wiring.
   if (detectResult && isResultShape(result)) {
     if (result.kind === "err") {
-      const encoded = opts.errorEncoder?.(result.error)
-      const msg = encoded?.message ?? `Error: ${JSON.stringify(result.error)}`
-      const exitCode = encoded?.exitCode ?? 1
-      ioResolved.stderr.write(`${msg}\n`)
-      throw new CliError(msg, exitCode)
+      const encoded = opts.errorEncoder?.(result.error);
+      const msg = encoded?.message ?? `Error: ${JSON.stringify(result.error)}`;
+      const exitCode = encoded?.exitCode ?? 1;
+      ioResolved.stderr.write(`${msg}\n`);
+      throw new CliError(msg, exitCode);
     }
-    result = result.value
+    result = result.value;
   }
 
   // Pagination: a page-shaped result (`CursorPage<T>`/`OffsetPage<T>`, see
@@ -1185,7 +1192,7 @@ export async function runCli<T = unknown>(
   // when there IS a next page, so a human knows how to continue (a machine
   // consumer already has `cursor`/`offset`+`hasMore` in the JSON body).
   if (isPageShape(result)) {
-    const paginatedMeta = getCliMeta(target.leafMeta as CliLeafMeta).paginated
+    const paginatedMeta = getCliMeta(target.leafMeta as CliLeafMeta).paginated;
     if (allPages) {
       await streamAllPages(
         result,
@@ -1196,10 +1203,10 @@ export async function runCli<T = unknown>(
         opts.errorEncoder,
         paginatedMeta,
         ioResolved,
-      )
-      return
+      );
+      return;
     }
-    writePaginationHint(result, paginatedMeta, ioResolved)
+    writePaginationHint(result, paginatedMeta, ioResolved);
   }
 
   // Output
@@ -1211,21 +1218,21 @@ export async function runCli<T = unknown>(
     // (the hint above already surfaced it to stderr).
     if (isPageShape(result)) {
       for (const item of result.items) {
-        ioResolved.stdout.write(jsonLine(item))
+        ioResolved.stdout.write(jsonLine(item));
       }
     } else if (Array.isArray(result)) {
       for (const item of result) {
-        ioResolved.stdout.write(JSON.stringify(item) + "\n")
+        ioResolved.stdout.write(JSON.stringify(item) + "\n");
       }
     } else {
-      ioResolved.stdout.write(JSON.stringify(result) + "\n")
+      ioResolved.stdout.write(JSON.stringify(result) + "\n");
     }
   } else {
     // Default: pretty JSON
     if (result === undefined || result === null) {
-      ioResolved.stdout.write("null\n")
+      ioResolved.stdout.write("null\n");
     } else {
-      ioResolved.stdout.write(JSON.stringify(result, null, 2) + "\n")
+      ioResolved.stdout.write(JSON.stringify(result, null, 2) + "\n");
     }
   }
 }
@@ -1235,13 +1242,13 @@ export async function runCli<T = unknown>(
 // ============================================================================
 
 function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
-  return typeof v === "object" && v !== null && Symbol.asyncIterator in v
+  return typeof v === "object" && v !== null && Symbol.asyncIterator in v;
 }
 
 /** A JSONL line for one value — `null` for `undefined`/`null` (matching the
  *  non-streaming default output's convention), `JSON.stringify` otherwise. */
 function jsonLine(v: unknown): string {
-  return (v === undefined || v === null ? "null" : JSON.stringify(v)) + "\n"
+  return (v === undefined || v === null ? "null" : JSON.stringify(v)) + "\n";
 }
 
 /**
@@ -1258,28 +1265,26 @@ function jsonLine(v: unknown): string {
  * Each line is written as it's produced — true push streaming, not
  * buffer-then-emit.
  */
-async function streamAsyncIterable(
-  iterable: AsyncIterable<unknown>,
-  io: CliIO,
-): Promise<void> {
-  const iterator = iterable[Symbol.asyncIterator]()
+async function streamAsyncIterable(iterable: AsyncIterable<unknown>, io: CliIO): Promise<void> {
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
+    const step = await iterator.next();
     if (step.done) {
-      io.stdout.write(jsonLine(step.value))
-      return
+      io.stdout.write(jsonLine(step.value));
+      return;
     }
-    const value: unknown = step.value
+    const value: unknown = step.value;
     if (isStreamProgress(value)) {
-      const pct = value.total !== undefined
-        ? `${Math.round((value.progress / value.total) * 100)}%`
-        : `${value.progress}%`
-      const message = value.message !== undefined ? ` ${value.message}` : ""
-      io.stderr.write(`[progress] ${pct}${message}\n`)
+      const pct =
+        value.total !== undefined
+          ? `${Math.round((value.progress / value.total) * 100)}%`
+          : `${value.progress}%`;
+      const message = value.message !== undefined ? ` ${value.message}` : "";
+      io.stderr.write(`[progress] ${pct}${message}\n`);
     } else if (isStreamChunk(value)) {
-      io.stdout.write(jsonLine(value.data))
+      io.stdout.write(jsonLine(value.data));
     } else {
-      io.stdout.write(jsonLine(value))
+      io.stdout.write(jsonLine(value));
     }
   }
 }
@@ -1296,11 +1301,14 @@ async function streamAsyncIterable(
 // ============================================================================
 
 /** Resolved `{ inputCursorParam, inputOffsetParam }`, defaults matching HTTP's `pagination()` extension. */
-function resolvedPaginationParams(meta: CliLeafMetaProperties["paginated"]): { cursorParam: string; offsetParam: string } {
+function resolvedPaginationParams(meta: CliLeafMetaProperties["paginated"]): {
+  cursorParam: string;
+  offsetParam: string;
+} {
   return {
     cursorParam: meta?.inputCursorParam ?? "cursor",
     offsetParam: meta?.inputOffsetParam ?? "offset",
-  }
+  };
 }
 
 /** The next call's input: `page`'s cursor/offset merged onto `input` under the resolved param names. `undefined` (no next page) returns `input` unchanged — caller only calls this when `page.hasMore` is already known true. */
@@ -1311,12 +1319,12 @@ function nextPageInput(
   offsetParam: string,
 ): Record<string, unknown> {
   if (isOffsetPage(page)) {
-    return { ...input, [offsetParam]: page.offset + page.items.length }
+    return { ...input, [offsetParam]: page.offset + page.items.length };
   }
   if (isCursorPage(page) && page.cursor !== undefined) {
-    return { ...input, [cursorParam]: page.cursor }
+    return { ...input, [cursorParam]: page.cursor };
   }
-  return input
+  return input;
 }
 
 /**
@@ -1330,16 +1338,16 @@ function writePaginationHint(
   meta: CliLeafMetaProperties["paginated"],
   io: CliIO,
 ): void {
-  if (!page.hasMore) return
-  const { cursorParam, offsetParam } = resolvedPaginationParams(meta)
+  if (!page.hasMore) return;
+  const { cursorParam, offsetParam } = resolvedPaginationParams(meta);
   if (isOffsetPage(page)) {
     io.stderr.write(
       `# more results available — pass --${offsetParam} ${page.offset + page.items.length} (or --all-pages) to continue\n`,
-    )
+    );
   } else if (isCursorPage(page) && page.cursor !== undefined) {
     io.stderr.write(
       `# more results available — pass --${cursorParam} ${page.cursor} (or --all-pages) to continue\n`,
-    )
+    );
   }
 }
 
@@ -1352,21 +1360,24 @@ async function fetchNextPage(
   errorEncoder: CliErrorEncoder | undefined,
   io: CliIO,
 ): Promise<Page<unknown>> {
-  let out: unknown = await Promise.resolve(callHandler(input, stores))
+  let out: unknown = await Promise.resolve(callHandler(input, stores));
   if (detectResult && isResultShape(out)) {
     if (out.kind === "err") {
-      const encoded = errorEncoder?.(out.error)
-      const msg = encoded?.message ?? `Error: ${JSON.stringify(out.error)}`
-      const exitCode = encoded?.exitCode ?? 1
-      io.stderr.write(`${msg}\n`)
-      throw new CliError(msg, exitCode)
+      const encoded = errorEncoder?.(out.error);
+      const msg = encoded?.message ?? `Error: ${JSON.stringify(out.error)}`;
+      const exitCode = encoded?.exitCode ?? 1;
+      io.stderr.write(`${msg}\n`);
+      throw new CliError(msg, exitCode);
     }
-    out = out.value
+    out = out.value;
   }
   if (!isPageShape(out)) {
-    throw new CliError("--all-pages: a subsequent page fetch did not return a page-shaped result", 1)
+    throw new CliError(
+      "--all-pages: a subsequent page fetch did not return a page-shaped result",
+      1,
+    );
   }
-  return out
+  return out;
 }
 
 /**
@@ -1387,14 +1398,14 @@ async function streamAllPages(
   paginatedMeta: CliLeafMetaProperties["paginated"],
   io: CliIO,
 ): Promise<void> {
-  const { cursorParam, offsetParam } = resolvedPaginationParams(paginatedMeta)
-  let page = first
-  let currentInput = input
+  const { cursorParam, offsetParam } = resolvedPaginationParams(paginatedMeta);
+  let page = first;
+  let currentInput = input;
   for (;;) {
-    for (const item of page.items) io.stdout.write(jsonLine(item))
-    if (!page.hasMore) return
-    currentInput = nextPageInput(currentInput, page, cursorParam, offsetParam)
-    page = await fetchNextPage(callHandler, currentInput, stores, detectResult, errorEncoder, io)
+    for (const item of page.items) io.stdout.write(jsonLine(item));
+    if (!page.hasMore) return;
+    currentInput = nextPageInput(currentInput, page, cursorParam, offsetParam);
+    page = await fetchNextPage(callHandler, currentInput, stores, detectResult, errorEncoder, io);
   }
 }
 
@@ -1403,11 +1414,11 @@ async function streamAllPages(
 // ============================================================================
 
 export type CliCommandEntry = {
-  readonly path: string[]
-  readonly leafName: string
-  readonly handler: Handler
-  readonly slugs: string[]
-}
+  readonly path: string[];
+  readonly leafName: string;
+  readonly handler: Handler;
+  readonly slugs: string[];
+};
 
 /**
  * Walk the Node tree and enumerate all reachable leaf nodes with their CLI paths.
@@ -1418,7 +1429,7 @@ export function walkCliCommands(
   prefix: string[] = [],
   slugAcc: string[] = [],
 ): CliCommandEntry[] {
-  const out: CliCommandEntry[] = []
+  const out: CliCommandEntry[] = [];
 
   for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isLeaf(child)) {
@@ -1427,9 +1438,9 @@ export function walkCliCommands(
         leafName: key,
         handler: child.handler!,
         slugs: slugAcc,
-      })
+      });
     } else {
-      out.push(...walkCliCommands(child, [...prefix, key], slugAcc))
+      out.push(...walkCliCommands(child, [...prefix, key], slugAcc));
     }
   }
 
@@ -1449,13 +1460,13 @@ export function walkCliCommands(
         leafName: n.fallback.name,
         handler: n.fallback.subtree.handler!,
         slugs: [...slugAcc, n.fallback.name],
-      })
+      });
     } else {
-      out.push(...walkCliCommands(n.fallback.subtree, prefix, [...slugAcc, n.fallback.name]))
+      out.push(...walkCliCommands(n.fallback.subtree, prefix, [...slugAcc, n.fallback.name]));
     }
   }
 
-  return out
+  return out;
 }
 
 /**
@@ -1465,20 +1476,20 @@ export function walkCliCommands(
  * undefined when the tree has no leaf commands at all.
  */
 function suggestCommand(root: Node, pathSegments: string[]): string | undefined {
-  const typed = pathSegments.join(" ")
-  const candidates = walkCliCommands(root).map((c) => [...c.path, c.leafName].join(" "))
-  let best: string | undefined
-  let bestDist = Infinity
+  const typed = pathSegments.join(" ");
+  const candidates = walkCliCommands(root).map((c) => [...c.path, c.leafName].join(" "));
+  let best: string | undefined;
+  let bestDist = Infinity;
   for (const candidate of candidates) {
-    const d = levenshteinDistance(typed, candidate)
+    const d = levenshteinDistance(typed, candidate);
     if (d < bestDist) {
-      bestDist = d
-      best = candidate
+      bestDist = d;
+      best = candidate;
     }
   }
-  return best
+  return best;
 }
 
 // Re-export types for consumers
-export type { SchemaMap }
-export type { Node, Handler, LeafMeta }
+export type { SchemaMap };
+export type { Node, Handler, LeafMeta };

@@ -1,5 +1,5 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Python ctypes projector — Python source (a `ctypes.CDLL` load, per-function
 // `.argtypes`/`.restype` declarations, and thin wrapper functions/classes)
@@ -74,17 +74,48 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 // Python 3 reserved keywords (https://docs.python.org/3/reference/lexical_analysis.html#keywords)
 // — cannot appear as a plain identifier.
 const PY_KEYWORDS = new Set([
-  "False", "None", "True", "and", "as", "assert", "async", "await", "break",
-  "class", "continue", "def", "del", "elif", "else", "except", "finally",
-  "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal",
-  "not", "or", "pass", "raise", "return", "try", "while", "with", "yield",
-])
+  "False",
+  "None",
+  "True",
+  "and",
+  "as",
+  "assert",
+  "async",
+  "await",
+  "break",
+  "class",
+  "continue",
+  "def",
+  "del",
+  "elif",
+  "else",
+  "except",
+  "finally",
+  "for",
+  "from",
+  "global",
+  "if",
+  "import",
+  "in",
+  "is",
+  "lambda",
+  "nonlocal",
+  "not",
+  "or",
+  "pass",
+  "raise",
+  "return",
+  "try",
+  "while",
+  "with",
+  "yield",
+]);
 
 /** Escapes a Python identifier that collides with a reserved keyword using a
  * trailing underscore (`class_`, `type_`) — PEP 8's own documented
@@ -92,15 +123,15 @@ const PY_KEYWORDS = new Set([
  * by convention to avoid conflicts with Python keyword"), the Python
  * analogue of `rust-c-abi.ts`'s raw-identifier (`r#type`) escape. */
 function escapePyIdent(name: string): string {
-  return PY_KEYWORDS.has(name) ? `${name}_` : name
+  return PY_KEYWORDS.has(name) ? `${name}_` : name;
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`${indent}# ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`${indent}# ${meta.description}`] : [];
 }
 
 /**
@@ -123,15 +154,21 @@ function docComment(indent: string, meta: Readonly<Record<string, unknown>>): st
  * intersections, etc.) here — that's `toCtypesShape`'s job, which throws.
  */
 export function toCtypesType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  const base = toCtypesShape(ref)
-  if (discipline === undefined || discipline.kind === "copy") return base
-  if (discipline.kind === "opaque-handle" || discipline.kind === "refcount" || discipline.kind === "resource") {
-    return `POINTER(${base})`
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  const base = toCtypesShape(ref);
+  if (discipline === undefined || discipline.kind === "copy") return base;
+  if (
+    discipline.kind === "opaque-handle" ||
+    discipline.kind === "refcount" ||
+    discipline.kind === "resource"
+  ) {
+    return `POINTER(${base})`;
   }
   // Exhaustiveness guard — OwnershipDiscipline is a closed union in index.ts;
   // this branch is unreachable for any value constructible via `ownership.*`.
-  throw new Error(`toCtypesType: unhandled ownership discipline "${(discipline as { kind: string }).kind}"`)
+  throw new Error(
+    `toCtypesType: unhandled ownership discipline "${(discipline as { kind: string }).kind}"`,
+  );
 }
 
 /**
@@ -145,49 +182,49 @@ export function toCtypesType(ref: TypeRef): string {
  * shapes outside its target's representable subset.
  */
 export function toCtypesShape(ref: TypeRef): string {
-  const shape = ref.shape
+  const shape = ref.shape;
   switch (shape.kind) {
     case "boolean":
-      return "c_bool"
+      return "c_bool";
     case "integer":
-      return "c_int64"
+      return "c_int64";
     case "number":
-      return "c_double"
+      return "c_double";
     case "string":
       // char* — the C-ABI string convention (NUL-terminated bytes), matching
       // this package's convention of treating a boundary `TypeRef` as
       // crossing at the raw-C level, not a Python-native `str`. `c_char_p`
       // marshals as Python `bytes`/`None` per the docs (see file header).
-      return "c_char_p"
+      return "c_char_p";
     case "null":
     case "void":
-      return "None"
+      return "None";
     case "object": {
-      const typeName = ref.meta.typeName
+      const typeName = ref.meta.typeName;
       if (typeof typeName !== "string") {
         throw new Error(
           'toCtypesShape: an "object" TypeRef requires meta.typeName naming the Structure class declared for it — ctypes.Structure fields need a class name, and this shape carries no name of its own at this position',
-        )
+        );
       }
-      return typeName
+      return typeName;
     }
     case "ref":
       // Bare pass-through of the referenced name, trusting a Structure (or
       // primitive alias) of that name is declared elsewhere — same
       // convention `rust-serde.ts`'s `ref` handler documents ("trusting a
       // struct of that name is declared/imported elsewhere").
-      return (shape as { kind: "ref"; target: string }).target
+      return (shape as { kind: "ref"; target: string }).target;
     default:
       throw new Error(
         `toCtypesShape: type-ir kind "${shape.kind}" has no ctypes representation this backend implements — ctypes marshals fixed C-ABI scalar/pointer/struct values only, with no native array-length, tagged-union, or map convention of its own`,
-      )
+      );
   }
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+  readonly returnType: TypeRef;
+};
 
 /** One function's ctypes wiring: the `.argtypes`/`.restype` assignment on
  * the raw `lib.<fnName>` symbol, plus a thin Pythonic wrapper function with
@@ -202,29 +239,35 @@ type FfiFunctionLike = {
  * really does call into the loaded library) — ffi-ir carries only the
  * signature, so there is no library-side implementation to stub, unlike the
  * producer-side `rust-c-abi.ts`/`wasm-bindgen.ts` `todo!()` bodies. */
-function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, selfParam?: string): string {
-  const paramNames: string[] = []
-  const argtypes: string[] = []
+function buildFunction(
+  fnName: string,
+  ref: FfiRef,
+  shape: FfiFunctionLike,
+  selfParam?: string,
+): string {
+  const paramNames: string[] = [];
+  const argtypes: string[] = [];
   if (selfParam !== undefined) {
-    paramNames.push("handle")
-    argtypes.push(`POINTER(${selfParam})`)
+    paramNames.push("handle");
+    argtypes.push(`POINTER(${selfParam})`);
   }
   for (const p of shape.params) {
-    const ident = escapePyIdent(toSnakeCase(p.name))
-    paramNames.push(ident)
-    argtypes.push(toCtypesType(p.type))
+    const ident = escapePyIdent(toSnakeCase(p.name));
+    paramNames.push(ident);
+    argtypes.push(toCtypesType(p.type));
   }
 
-  const isVoidReturn = shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null"
-  const restype = isVoidReturn ? "None" : toCtypesType(shape.returnType)
+  const isVoidReturn =
+    shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null";
+  const restype = isVoidReturn ? "None" : toCtypesType(shape.returnType);
 
-  const lines: string[] = [...docComment("", ref.meta)]
-  lines.push(`lib.${fnName}.argtypes = [${argtypes.join(", ")}]`)
-  lines.push(`lib.${fnName}.restype = ${restype}`)
-  lines.push("")
-  lines.push(`def ${fnName}(${paramNames.join(", ")}):`)
-  lines.push(`    return lib.${fnName}(${paramNames.join(", ")})`)
-  return lines.join("\n")
+  const lines: string[] = [...docComment("", ref.meta)];
+  lines.push(`lib.${fnName}.argtypes = [${argtypes.join(", ")}]`);
+  lines.push(`lib.${fnName}.restype = ${restype}`);
+  lines.push("");
+  lines.push(`def ${fnName}(${paramNames.join(", ")}):`);
+  lines.push(`    return lib.${fnName}(${paramNames.join(", ")})`);
+  return lines.join("\n");
 }
 
 /** The opaque-handle Structure declaration for a resource — see the file
@@ -234,7 +277,7 @@ function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, self
  * convention that `rust-c-abi.ts`'s `buildOpaqueStruct` implements on the
  * producer side. */
 function buildOpaqueStruct(name: string, ref: FfiRef): string {
-  return [...docComment("", ref.meta), `class ${name}(Structure):`, "    pass"].join("\n")
+  return [...docComment("", ref.meta), `class ${name}(Structure):`, "    pass"].join("\n");
 }
 
 /** A resource's method surface projected as a Python class: `__init__`
@@ -250,33 +293,47 @@ function buildOpaqueStruct(name: string, ref: FfiRef): string {
  * expose methods, free on GC) — the mirror of a `cffi`/`ctypesgen` wrapper
  * class, not a bare function-taking-a-raw-handle style, so calling code
  * gets normal Python object semantics over the raw handle. */
-function buildResourceClass(name: string, shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> }): string {
-  const resourceSnake = toSnakeCase(name)
-  const lines: string[] = [`class ${name}:`, "    def __init__(self, handle):", "        self._handle = handle", ""]
+function buildResourceClass(
+  name: string,
+  shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
+): string {
+  const resourceSnake = toSnakeCase(name);
+  const lines: string[] = [
+    `class ${name}:`,
+    "    def __init__(self, handle):",
+    "        self._handle = handle",
+    "",
+  ];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
-    const methodShape = methodRef.shape as FfiShape & { kind: "method" }
-    const pyMethodName = escapePyIdent(toSnakeCase(methodName))
-    const paramNames = methodShape.params.map((p) => escapePyIdent(toSnakeCase(p.name)))
-    const callArgs = ["self._handle", ...paramNames].join(", ")
-    lines.push(`    def ${pyMethodName}(self${paramNames.length > 0 ? ", " + paramNames.join(", ") : ""}):`)
-    lines.push(`        return ${resourceSnake}_${toSnakeCase(methodName)}(${callArgs})`)
-    lines.push("")
+    const methodShape = methodRef.shape as FfiShape & { kind: "method" };
+    const pyMethodName = escapePyIdent(toSnakeCase(methodName));
+    const paramNames = methodShape.params.map((p) => escapePyIdent(toSnakeCase(p.name)));
+    const callArgs = ["self._handle", ...paramNames].join(", ");
+    lines.push(
+      `    def ${pyMethodName}(self${paramNames.length > 0 ? ", " + paramNames.join(", ") : ""}):`,
+    );
+    lines.push(`        return ${resourceSnake}_${toSnakeCase(methodName)}(${callArgs})`);
+    lines.push("");
   }
 
-  lines.push("    def __del__(self):")
-  lines.push(`        ${resourceSnake}_free(self._handle)`)
-  return lines.join("\n")
+  lines.push("    def __del__(self):");
+  lines.push(`        ${resourceSnake}_free(self._handle)`);
+  return lines.join("\n");
 }
 
-function buildResource(name: string, ref: FfiRef, shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> }): string {
-  const resourceSnake = toSnakeCase(name)
-  const decls: string[] = [buildOpaqueStruct(name, ref)]
+function buildResource(
+  name: string,
+  ref: FfiRef,
+  shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
+): string {
+  const resourceSnake = toSnakeCase(name);
+  const decls: string[] = [buildOpaqueStruct(name, ref)];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
-    const methodShape = methodRef.shape as FfiShape & { kind: "method" }
-    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`
-    decls.push(buildFunction(fnName, methodRef, methodShape, name))
+    const methodShape = methodRef.shape as FfiShape & { kind: "method" };
+    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`;
+    decls.push(buildFunction(fnName, methodRef, methodShape, name));
   }
 
   // The paired free function's own argtypes/restype — no ffi-ir shape backs
@@ -291,10 +348,10 @@ function buildResource(name: string, ref: FfiRef, shape: FfiShape & { kind: "res
       `def ${resourceSnake}_free(handle):`,
       `    return lib.${resourceSnake}_free(handle)`,
     ].join("\n"),
-  )
+  );
 
-  decls.push(buildResourceClass(name, shape))
-  return decls.join("\n\n")
+  decls.push(buildResourceClass(name, shape));
+  return decls.join("\n\n");
 }
 
 /**
@@ -320,45 +377,55 @@ function buildResource(name: string, ref: FfiRef, shape: FfiShape & { kind: "res
  * own target.
  */
 export function toCtypes(ref: FfiRef, name?: string, libraryPath?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toCtypes: "function" requires a name — a C export is a named symbol, not an anonymous inline type')
+      throw new Error(
+        'toCtypes: "function" requires a name — a C export is a named symbol, not an anonymous inline type',
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    return buildFunction(toSnakeCase(name), ref, shape)
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    return buildFunction(toSnakeCase(name), ref, shape);
   }
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toCtypes: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error(
+        "toCtypes: \"method\" requires a name — the method's own key in its resource's methods map",
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "method" }
-    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`
-    return buildFunction(fnName, ref, shape, shape.receiver)
+    const shape = ref.shape as FfiShape & { kind: "method" };
+    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`;
+    return buildFunction(fnName, ref, shape, shape.receiver);
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiShape & { kind: "resource"; name: string; methods: Readonly<Record<string, FfiRef>> }
-    return buildResource(shape.name, ref, shape)
+    const shape = ref.shape as FfiShape & {
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    return buildResource(shape.name, ref, shape);
   }
 
   if (kind === "module") {
     const shape = ref.shape as FfiShape & {
-      kind: "module"
-      name: string
-      functions: Readonly<Record<string, FfiRef>>
-      resources: Readonly<Record<string, FfiRef>>
-    }
-    const path = libraryPath ?? `./lib${toSnakeCase(shape.name)}.so`
-    const header = ["from ctypes import *", "", `lib = CDLL(${quote(path)})`]
+      kind: "module";
+      name: string;
+      functions: Readonly<Record<string, FfiRef>>;
+      resources: Readonly<Record<string, FfiRef>>;
+    };
+    const path = libraryPath ?? `./lib${toSnakeCase(shape.name)}.so`;
+    const header = ["from ctypes import *", "", `lib = CDLL(${quote(path)})`];
     const decls: string[] = [
       ...Object.entries(shape.resources).map(([resName, resRef]) => toCtypes(resRef, resName)),
       ...Object.entries(shape.functions).map(([fnName, fnRef]) => toCtypes(fnRef, fnName)),
-    ]
-    return [header.join("\n"), ...decls].join("\n\n")
+    ];
+    return [header.join("\n"), ...decls].join("\n\n");
   }
 
-  throw new Error(`toCtypes: unhandled ffi-ir kind "${kind}" — no ctypes mapping implemented for this backend`)
+  throw new Error(
+    `toCtypes: unhandled ffi-ir kind "${kind}" — no ctypes mapping implemented for this backend`,
+  );
 }

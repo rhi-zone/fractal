@@ -11,8 +11,8 @@ export type {
   ProjectMethodsOptions,
   ProjectMethodsResult,
   SchemaMap,
-} from "./project.ts"
-export { getJsonRpcMeta, projectMethods, toMethods } from "./project.ts"
+} from "./project.ts";
+export { getJsonRpcMeta, projectMethods, toMethods } from "./project.ts";
 
 export type {
   JsonRpcErrorObject,
@@ -22,7 +22,7 @@ export type {
   JsonRpcRequest,
   JsonRpcResponse,
   JsonRpcSuccessResponse,
-} from "./wire.ts"
+} from "./wire.ts";
 export {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -35,14 +35,33 @@ export {
   isJsonRpcRequestShape,
   jsonRpcErrorResponse,
   jsonRpcSuccessResponse,
-} from "./wire.ts"
+} from "./wire.ts";
 
-export type { CreateJsonRpcServerOptions, JsonRpcErrorEncoder, JsonRpcSocket, JsonRpcWebSocketHandlers } from "./server.ts"
-export type { JsonRpcStoreBag, JsonRpcStores } from "./server.ts"
-export { createJsonRpcHttpHandler, createJsonRpcWebSocketHandlers, jsonRpcErrors } from "./server.ts"
+export type {
+  CreateJsonRpcServerOptions,
+  JsonRpcErrorEncoder,
+  JsonRpcSocket,
+  JsonRpcWebSocketHandlers,
+} from "./server.ts";
+export type { JsonRpcStoreBag, JsonRpcStores } from "./server.ts";
+export {
+  createJsonRpcHttpHandler,
+  createJsonRpcWebSocketHandlers,
+  jsonRpcErrors,
+} from "./server.ts";
 
-export type { AnyJsonRpcClient, FetchLike, JsonRpcCall, JsonRpcHttpClientOptions } from "./client.ts"
-export { createJsonRpcClient, createJsonRpcHttpCall, createJsonRpcHttpClient, JsonRpcClientError } from "./client.ts"
+export type {
+  AnyJsonRpcClient,
+  FetchLike,
+  JsonRpcCall,
+  JsonRpcHttpClientOptions,
+} from "./client.ts";
+export {
+  createJsonRpcClient,
+  createJsonRpcHttpCall,
+  createJsonRpcHttpClient,
+  JsonRpcClientError,
+} from "./client.ts";
 
-export { jsonrpc, source } from "./source.ts"
-export type { JsonRpcStoreName } from "./source.ts"
+export { jsonrpc, source } from "./source.ts";
+export type { JsonRpcStoreName } from "./source.ts";

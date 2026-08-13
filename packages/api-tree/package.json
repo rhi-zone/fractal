@@ -2,20 +2,26 @@
   "name": "@rhi-zone/fractal-api-tree",
   "version": "0.1.0-alpha.0",
   "description": "Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in ./node; Tags lattice in ./tags",
+  "keywords": [
+    "api",
+    "auth",
+    "cli",
+    "codegen",
+    "combinators",
+    "function-core",
+    "otel"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/api-tree"
   },
-  "keywords": [
-    "api",
-    "function-core",
-    "combinators",
-    "codegen",
-    "cli",
-    "otel",
-    "auth"
+  "bin": {
+    "fractal-api-tree": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -87,14 +93,13 @@
       "import": "./dist/auth.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
+  "publishConfig": {
+    "access": "public"
   },
-  "bin": {
-    "fractal-api-tree": "./dist/cli.js"
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@rhi-zone/fractal-type-ir": "workspace:*"
@@ -107,12 +112,7 @@
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
     "typescript": "^6.0.3"
   },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:watch": "bun test --watch"
-  },
-  "publishConfig": {
-    "access": "public"
+  "engines": {
+    "node": ">=20"
   }
 }

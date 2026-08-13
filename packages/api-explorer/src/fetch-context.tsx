@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react"
+import { createContext, useContext } from "react";
 
 // ============================================================================
 // The fetch a doc site's embedded <ApiExplorer/> instances actually call.
@@ -32,23 +32,29 @@ import { createContext, useContext } from "react"
 // satisfies.
 // ============================================================================
 
-export type ApiExplorerFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+export type ApiExplorerFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-const ApiExplorerFetchContext = createContext<ApiExplorerFetch>((input, init) => fetch(input, init))
+const ApiExplorerFetchContext = createContext<ApiExplorerFetch>((input, init) =>
+  fetch(input, init),
+);
 
 /** Wrap a subtree so every <ApiExplorer/> inside it issues requests through
  * `fetchImpl` instead of the ambient global `fetch` — the one site-wide
  * wiring point a generated doc page can't do for itself. See this module's
  * doc comment for why. */
 export function ApiExplorerFetchProvider(props: {
-  readonly fetch: ApiExplorerFetch
-  readonly children?: React.ReactNode
+  readonly fetch: ApiExplorerFetch;
+  readonly children?: React.ReactNode;
 }): React.ReactElement {
-  return <ApiExplorerFetchContext.Provider value={props.fetch}>{props.children}</ApiExplorerFetchContext.Provider>
+  return (
+    <ApiExplorerFetchContext.Provider value={props.fetch}>
+      {props.children}
+    </ApiExplorerFetchContext.Provider>
+  );
 }
 
 /** The fetch implementation the nearest enclosing `<ApiExplorerFetchProvider>`
  * supplies, or the ambient global `fetch` if none wraps the caller. */
 export function useApiExplorerFetch(): ApiExplorerFetch {
-  return useContext(ApiExplorerFetchContext)
+  return useContext(ApiExplorerFetchContext);
 }

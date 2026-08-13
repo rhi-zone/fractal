@@ -20,7 +20,7 @@ to theme a generated doc site:
 
 - Light and dark mode variants of that color (and of whatever fuller palette
   gets derived from it).
-- WCAG-contrast-compliant color *pairs* (text-on-background, etc.), not just
+- WCAG-contrast-compliant color _pairs_ (text-on-background, etc.), not just
   a palette of colors that happen to exist.
 - A fuller palette "projected" from the one seed color using real color
   theory — not arbitrary lighten/darken steps, but a grounded derivation
@@ -90,7 +90,7 @@ open items this doc doesn't resolve:
   that returns the current family list; whether the enum would be
   generated from that API at build/publish time, vendored and periodically
   refreshed, or hand-maintained is not decided.
-- Whether the enum is scoped to font *families* only, or also encodes
+- Whether the enum is scoped to font _families_ only, or also encodes
   available weights/styles/variable-font axes per family (real DX value,
   real added complexity — not designed here).
 - How this adapter's output actually reaches each docgen target — same
@@ -154,7 +154,7 @@ it gets consistent semantics regardless of which hue was picked.
 - **Generation is mixed, not purely algorithmic.** Radix's own shipped
   named palettes (~30 colors) are described by Radix as hand-crafted/tuned,
   not blind algorithm output. A separate custom-palette generation tool
-  (and a related community tool, Equinor's) *is* algorithmic: given one
+  (and a related community tool, Equinor's) _is_ algorithmic: given one
   seed, it works in OKLCH, holds hue roughly fixed, and varies
   lightness/chroma across the 12 steps via a Gaussian falloff on chroma.
   **Open/unverified:** whether the shipped named palettes came from the same
@@ -164,12 +164,12 @@ it gets consistent semantics regardless of which hue was picked.
 
 ### culori vs. chroma.js — JS color math libraries
 
-| | culori | chroma.js |
-|---|---|---|
-| Coverage | Conversion/interpolation/ΔE/blending/gamut-mapping across CSS Color 4 spaces incl. OKLab/OKLCH | Chainable manipulation + scale/interpolation, historically the dataviz default |
-| License | MIT | BSD |
-| Adoption signal | Used internally by Tailwind CSS v4 and Radix's OKLCH tooling | ~18.4M weekly downloads, mostly legacy/dataviz consumers |
-| Fit here | Better fit for theme-token generation (native OKLCH, used by comparable tools) | Better fit for chart color scales specifically |
+|                 | culori                                                                                         | chroma.js                                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Coverage        | Conversion/interpolation/ΔE/blending/gamut-mapping across CSS Color 4 spaces incl. OKLab/OKLCH | Chainable manipulation + scale/interpolation, historically the dataviz default |
+| License         | MIT                                                                                            | BSD                                                                            |
+| Adoption signal | Used internally by Tailwind CSS v4 and Radix's OKLCH tooling                                   | ~18.4M weekly downloads, mostly legacy/dataviz consumers                       |
+| Fit here        | Better fit for theme-token generation (native OKLCH, used by comparable tools)                 | Better fit for chart color scales specifically                                 |
 
 Sources: [culori](https://github.com/evercoder/culori), [culorijs.org](https://culorijs.org/), [chroma.js](https://github.com/gka/chroma.js)
 
@@ -218,7 +218,7 @@ kind of programmatic derivation.
 ### Other seed-to-palette tools worth citing
 
 - **Adobe Leonardo** (`@adobe/leonardo-contrast-colors`, open source) —
-  inverts the usual flow: you specify a *target contrast ratio* against a
+  inverts the usual flow: you specify a _target contrast ratio_ against a
   background and it solves for the color hitting that ratio, built on
   D3-color. Powers Adobe Spectrum's adaptive color system. [GitHub](https://github.com/adobe/leonardo)
 - **Huetone** — an interactive LCH/OKLCH/CIELCH palette editor with live
@@ -255,7 +255,7 @@ partial exception.
 - **MkDocs, Material variant** (`packages/type-ir/src/mkdocs-reference.ts`)
   — the one exception: `toMkdocsYaml` (lines 534–601) already emits an
   `mkdocs.yml` with a `theme: { name: material, features: [...], palette:
-  [...] }` block, but it's a literal copy of Material's stock light/dark
+[...] }` block, but it's a literal copy of Material's stock light/dark
   toggle scaffold (`scheme: default` / `scheme: slate`) — no brand colors,
   no `palette.primary`/`accent`, no logo, no font, no `extra_css`. A
   branding layer here would be **editing an existing block**, not adding a
@@ -299,7 +299,7 @@ offer:
 - **Docusaurus / Starlight:** both have real native theming config surfaces
   (`themeConfig`/`colorMode`, and Starlight's own theme CSS-variable
   overrides respectively) that today's projectors don't touch at all. Open:
-  would a branding layer emit config *into* those native surfaces (requires
+  would a branding layer emit config _into_ those native surfaces (requires
   generating `docusaurus.config.js`/Starlight integration config, which
   doesn't exist today), or ship raw CSS custom properties via each
   framework's custom-CSS-file mechanism, sidestepping the native config
@@ -340,9 +340,9 @@ scope of the color/font derivation work above and not designed at all here
 — captured because the project owner wants it recorded as a real target for
 this system, not just a color-derivation utility.
 
-The idea: once fractal can *generate* a branded theme from one input, the
+The idea: once fractal can _generate_ a branded theme from one input, the
 same machinery (color-derivation rules, contrast checks, whatever the font
-system becomes) could plausibly also *audit* an already-built docs site —
+system becomes) could plausibly also _audit_ an already-built docs site —
 checking things like contrast compliance, palette consistency, and general
 "branding polish" against fractal's own generated output — in the spirit of
 how Lighthouse audits a page for performance/accessibility/SEO, but scoped
@@ -360,8 +360,8 @@ stated goal, not a spec.
 ## Adjacent dependency for the audit idea: composable doc generation, in fractal's own combinator pattern
 
 Flagged as a real dependency of the audit idea above, not a standalone
-ask: auditing meaningfully requires knowing what got generated and *where
-it landed* in a site's structure, and today's projectors don't offer that
+ask: auditing meaningfully requires knowing what got generated and _where
+it landed_ in a site's structure, and today's projectors don't offer that
 kind of control — per the survey above, every projector's job today is
 closer to "generate pages for everything in the input document," with
 `options.basePath` (seen in both the type-ir reference projectors and
@@ -369,7 +369,7 @@ closer to "generate pages for everything in the input document," with
 even that is a single flat prefix applied uniformly to every generated
 page (confirmed directly against `docusaurus-reference.ts`'s own doc
 comment: "every page in the set lives in the same directory"), not a way
-to selectively scope *what* gets generated or place different subsets at
+to selectively scope _what_ gets generated or place different subsets at
 different points in a site's structure. You can't audit placement you
 don't control — an audit that wants to check "is this section's branding
 consistent with that section's" needs the generation step to be able to
@@ -414,7 +414,7 @@ that placement DU instead of over "the whole input document, optionally
 prefixed." This would put doc-generation placement through the same
 architecture as fractal's routing and type-IR layers rather than being a
 one-off addition bolted onto the current projector functions — but this is
-this session's own reading of how the pattern *might* transfer, not
+this session's own reading of how the pattern _might_ transfer, not
 something the project owner has confirmed maps this way, and no part of
 it — combinator names, the DU's shape, which projectors would need to
 change — is designed here.
@@ -422,7 +422,7 @@ change — is designed here.
 Not designed here at all: the actual combinator vocabulary (compose?
 nest? scope? filter? transform? some other verbs — none chosen), the DU's
 shape, whether this is an evolution of the existing projector functions or
-a new layer generating input *for* them, and whether it's motivated *only*
+a new layer generating input _for_ them, and whether it's motivated _only_
 by the audit idea or has independent value (e.g. large API surfaces
 wanting partial/staged doc generation regardless of branding). Recorded
 here as "the audit idea needs something like this to be buildable, and it

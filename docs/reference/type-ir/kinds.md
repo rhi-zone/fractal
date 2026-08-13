@@ -13,47 +13,47 @@ parent (if any), and a minimal `types.*` constructor call.
 
 ### Core kinds (`src/index.ts`)
 
-| kind | parent | one-line semantic |
-|---|---|---|
-| `boolean` | — | true/false |
-| `number` | — | any numeric value |
-| `integer` | `number` | whole-number numeric value |
-| `string` | — | text |
-| `null` | — | the null value |
-| `void` | — | absence of a return value |
-| `unknown` | — | unconstrained/unresolved type |
-| `never` | — | uninhabited type |
-| `object` | — | structural record of named fields |
-| `instance` | — | nominal class identity only (no fields) |
-| `array` | — | synchronous, materialized, indexable collection |
-| `stream` | — | asynchronously-produced sequence of values |
-| `page` | — | one window over a paginated collection |
-| `tuple` | — | fixed-length, positionally-typed collection |
-| `map` | — | dynamic-key dictionary |
-| `union` | — | one of several variant types |
-| `literal` | — | one exact value |
-| `enum` | — | closed set of string members, no payload |
-| `ref` | — | named reference into a `TypeRefDocument`'s `defs` |
-| `intersection` | — | all-of several member types |
-| `function` | — | standalone callable type |
-| `method` | `function` | callable belonging to a type's method surface |
-| `interface` | — | type whose surface is callables, not data |
+| kind           | parent     | one-line semantic                                 |
+| -------------- | ---------- | ------------------------------------------------- |
+| `boolean`      | —          | true/false                                        |
+| `number`       | —          | any numeric value                                 |
+| `integer`      | `number`   | whole-number numeric value                        |
+| `string`       | —          | text                                              |
+| `null`         | —          | the null value                                    |
+| `void`         | —          | absence of a return value                         |
+| `unknown`      | —          | unconstrained/unresolved type                     |
+| `never`        | —          | uninhabited type                                  |
+| `object`       | —          | structural record of named fields                 |
+| `instance`     | —          | nominal class identity only (no fields)           |
+| `array`        | —          | synchronous, materialized, indexable collection   |
+| `stream`       | —          | asynchronously-produced sequence of values        |
+| `page`         | —          | one window over a paginated collection            |
+| `tuple`        | —          | fixed-length, positionally-typed collection       |
+| `map`          | —          | dynamic-key dictionary                            |
+| `union`        | —          | one of several variant types                      |
+| `literal`      | —          | one exact value                                   |
+| `enum`         | —          | closed set of string members, no payload          |
+| `ref`          | —          | named reference into a `TypeRefDocument`'s `defs` |
+| `intersection` | —          | all-of several member types                       |
+| `function`     | —          | standalone callable type                          |
+| `method`       | `function` | callable belonging to a type's method surface     |
+| `interface`    | —          | type whose surface is callables, not data         |
 
 ### Extension kinds (`src/kinds/*.ts`)
 
-| kind | parent | module | one-line semantic |
-|---|---|---|---|
-| `int8`/`int16`/`int32`/`int64` | `integer` | int-widths.ts | fixed-width signed integers |
-| `uint8`/`uint16`/`uint32`/`uint64` | `integer` | int-widths.ts | fixed-width unsigned integers |
-| `float32`/`float64` | `number` | float-widths.ts | fixed-width floating-point |
-| `datetime` | — | date-time.ts | domain `Date`-with-time value |
-| `date` | — | date-time.ts | domain date-only value |
-| `time` | `string` | date-time.ts | time-of-day, formatted string |
-| `duration` | `string` | duration.ts | elapsed time, formatted string |
-| `uuid` | `string` | semantic-strings.ts | UUID-formatted string |
-| `uri` | `string` | semantic-strings.ts | URI-formatted string |
-| `email` | `string` | semantic-strings.ts | email-formatted string |
-| `bytes` | — | bytes.ts | binary blob |
+| kind                               | parent    | module              | one-line semantic              |
+| ---------------------------------- | --------- | ------------------- | ------------------------------ |
+| `int8`/`int16`/`int32`/`int64`     | `integer` | int-widths.ts       | fixed-width signed integers    |
+| `uint8`/`uint16`/`uint32`/`uint64` | `integer` | int-widths.ts       | fixed-width unsigned integers  |
+| `float32`/`float64`                | `number`  | float-widths.ts     | fixed-width floating-point     |
+| `datetime`                         | —         | date-time.ts        | domain `Date`-with-time value  |
+| `date`                             | —         | date-time.ts        | domain date-only value         |
+| `time`                             | `string`  | date-time.ts        | time-of-day, formatted string  |
+| `duration`                         | `string`  | duration.ts         | elapsed time, formatted string |
+| `uuid`                             | `string`  | semantic-strings.ts | UUID-formatted string          |
+| `uri`                              | `string`  | semantic-strings.ts | URI-formatted string           |
+| `email`                            | `string`  | semantic-strings.ts | email-formatted string         |
+| `bytes`                            | —         | bytes.ts            | binary blob                    |
 
 `refinements.ts` registers no IR kind — see [Extension kinds § refinements.ts](#refinements-ts).
 
@@ -113,7 +113,7 @@ parent (if any), and a minimal `types.*` constructor call.
 
 - **Parent:** none.
 - **Semantics:** the null value itself (distinct from `meta.nullable`, which
-  marks an existing type as *additionally* accepting null).
+  marks an existing type as _additionally_ accepting null).
 - **Constructor:** `types.null` (`t(types.null)`).
 
 ### `void`
@@ -163,7 +163,7 @@ parent (if any), and a minimal `types.*` constructor call.
   a declaration concern (`meta.typeName`), not part of the shape.
 - **Constructor:**
   ```ts
-  types.object({ id: t(types.integer), name: t(types.string) })
+  types.object({ id: t(types.integer), name: t(types.string) });
   ```
 
 ### `instance`
@@ -192,7 +192,7 @@ parent (if any), and a minimal `types.*` constructor call.
   names, aligned on that one field.
 - **Constructor:**
   ```ts
-  types.instance("User", "/src/models/user.ts")
+  types.instance("User", "/src/models/user.ts");
   ```
 
 ### `array`
@@ -207,7 +207,7 @@ parent (if any), and a minimal `types.*` constructor call.
   do NOT chain up to (see below).
 - **Constructor:**
   ```ts
-  types.array(t(types.string))
+  types.array(t(types.string));
   ```
 
 ### `stream`
@@ -232,7 +232,7 @@ parent (if any), and a minimal `types.*` constructor call.
   preserved.
 - **Constructor:**
   ```ts
-  types.stream(t(types.string))
+  types.stream(t(types.string));
   ```
 
 ### `page`
@@ -256,7 +256,7 @@ parent (if any), and a minimal `types.*` constructor call.
   its array/list equivalent over `element`.
 - **Constructor:**
   ```ts
-  types.page(t(types.object({ id: t(types.integer) })), "cursor")
+  types.page(t(types.object({ id: t(types.integer) })), "cursor");
   ```
 
 ### `tuple`
@@ -270,7 +270,7 @@ parent (if any), and a minimal `types.*` constructor call.
   `[string, number]`.
 - **Constructor:**
   ```ts
-  types.tuple([t(types.string), t(types.integer)])
+  types.tuple([t(types.string), t(types.integer)]);
   ```
 
 ### `map`
@@ -286,7 +286,7 @@ parent (if any), and a minimal `types.*` constructor call.
   `meta.additionalPropertyType`.
 - **Constructor:**
   ```ts
-  types.map(t(types.string), t(types.integer))
+  types.map(t(types.string), t(types.integer));
   ```
 
 ### `union`
@@ -301,7 +301,7 @@ parent (if any), and a minimal `types.*` constructor call.
   of `literal`s instead.
 - **Constructor:**
   ```ts
-  types.union([t(types.string), t(types.integer)])
+  types.union([t(types.string), t(types.integer)]);
   ```
 
 ### `literal`
@@ -315,7 +315,7 @@ parent (if any), and a minimal `types.*` constructor call.
   types. `value` is restricted to `string | number | boolean | null`.
 - **Constructor:**
   ```ts
-  types.literal("foo")
+  types.literal("foo");
   ```
 
 ### `enum`
@@ -336,7 +336,7 @@ parent (if any), and a minimal `types.*` constructor call.
   union-lowering).
 - **Constructor:**
   ```ts
-  types.enum(["ACTIVE", "INACTIVE"])
+  types.enum(["ACTIVE", "INACTIVE"]);
   ```
 
 ### `ref`
@@ -356,7 +356,7 @@ parent (if any), and a minimal `types.*` constructor call.
   produce one.
 - **Constructor:**
   ```ts
-  types.ref("User")
+  types.ref("User");
   ```
 
 ### `intersection`
@@ -369,7 +369,7 @@ parent (if any), and a minimal `types.*` constructor call.
 - **Semantics:** all-of several member types — TypeScript's `A & B`.
 - **Constructor:**
   ```ts
-  types.intersection([t(types.object({ id: t(types.integer) })), t(types.ref("Timestamped"))])
+  types.intersection([t(types.object({ id: t(types.integer) })), t(types.ref("Timestamped"))]);
   ```
 
 ### `function`
@@ -387,16 +387,13 @@ parent (if any), and a minimal `types.*` constructor call.
 - **Semantics:** a callable type: ordered parameters, a return type, and an
   optional `this` binding (present for class methods and other functions
   with an explicit/implicit `this` — e.g. `types.instance("ClassName",
-  declarationFile)`; absent for free functions with no `this`). Not used to
+declarationFile)`; absent for free functions with no `this`). Not used to
   inline class methods onto `instance` (which stays purely nominal); this
   kind is for callable types that appear in type positions (callback
   params, fields, etc.).
 - **Constructor:**
   ```ts
-  types.function(
-    [{ name: "x", type: t(types.integer) }],
-    t(types.boolean),
-  )
+  types.function([{ name: "x", type: t(types.integer) }], t(types.boolean));
   ```
   (`thisType` is a 3rd, optional argument.)
 
@@ -422,10 +419,7 @@ parent (if any), and a minimal `types.*` constructor call.
   method-signature syntax vs. arrow-function syntax) can special-case it.
 - **Constructor:**
   ```ts
-  types.method(
-    [{ name: "id", type: t(types.integer) }],
-    t(types.object({ id: t(types.integer) })),
-  )
+  types.method([{ name: "id", type: t(types.integer) }], t(types.object({ id: t(types.integer) })));
   ```
   (`thisType` is a 3rd, optional argument.)
 
@@ -451,7 +445,7 @@ parent (if any), and a minimal `types.*` constructor call.
   ```ts
   types.interface({
     getUser: t(types.method([{ name: "id", type: t(types.integer) }], t(types.ref("User")))),
-  })
+  });
   ```
 
 ---
@@ -466,13 +460,13 @@ is independently importable; `common.ts` bundles all of them.
 
 Fixed-width integer kinds, all with parent `integer`:
 
-| kind | shape | constructor |
-|---|---|---|
-| `int8` | `{ readonly kind: "int8" }` | `int8(meta?)` |
-| `int16` | `{ readonly kind: "int16" }` | `int16(meta?)` |
-| `int32` | `{ readonly kind: "int32" }` | `int32(meta?)` |
-| `int64` | `{ readonly kind: "int64" }` | `int64(meta?)` |
-| `uint8` | `{ readonly kind: "uint8" }` | `uint8(meta?)` |
+| kind     | shape                         | constructor     |
+| -------- | ----------------------------- | --------------- |
+| `int8`   | `{ readonly kind: "int8" }`   | `int8(meta?)`   |
+| `int16`  | `{ readonly kind: "int16" }`  | `int16(meta?)`  |
+| `int32`  | `{ readonly kind: "int32" }`  | `int32(meta?)`  |
+| `int64`  | `{ readonly kind: "int64" }`  | `int64(meta?)`  |
+| `uint8`  | `{ readonly kind: "uint8" }`  | `uint8(meta?)`  |
 | `uint16` | `{ readonly kind: "uint16" }` | `uint16(meta?)` |
 | `uint32` | `{ readonly kind: "uint32" }` | `uint32(meta?)` |
 | `uint64` | `{ readonly kind: "uint64" }` | `uint64(meta?)` |
@@ -484,8 +478,8 @@ handler falls back to `integer`, then `number`.
 
 Fixed-width float kinds, both with parent `number`:
 
-| kind | shape | constructor |
-|---|---|---|
+| kind      | shape                          | constructor      |
+| --------- | ------------------------------ | ---------------- |
 | `float32` | `{ readonly kind: "float32" }` | `float32(meta?)` |
 | `float64` | `{ readonly kind: "float64" }` | `float64(meta?)` |
 
@@ -497,11 +491,11 @@ together for wire formats (protobuf, Avro, TypeBox, …)."
 
 ### `date-time.ts`
 
-| kind | shape | parent | constructor |
-|---|---|---|---|
-| `datetime` | `{ readonly kind: "datetime" }` | none | `datetime(meta?)` |
-| `date` | `{ readonly kind: "date" }` | none | `date(meta?)` |
-| `time` | `{ readonly kind: "time" }` | `string` | `time(meta?)` |
+| kind       | shape                           | parent   | constructor       |
+| ---------- | ------------------------------- | -------- | ----------------- |
+| `datetime` | `{ readonly kind: "datetime" }` | none     | `datetime(meta?)` |
+| `date`     | `{ readonly kind: "date" }`     | none     | `date(meta?)`     |
+| `time`     | `{ readonly kind: "time" }`     | `string` | `time(meta?)`     |
 
 Doc-comment rationale, quoted closely: `datetime`/`date` represent the
 **domain type** (JS `Date`), not a wire format — type-ir describes what a
@@ -511,8 +505,8 @@ chaining to `string`'s handlers/constraints (`minLength`/`pattern`/etc.)
 would be structurally wrong wherever a projector lacks an explicit
 `datetime`/`date` entry and falls back through `ancestors()`. Every
 projector in this package DOES carry an explicit `datetime`/`date` handler
-— the wire-format string (`"2024-01-01T00:00:00Z"`) is a *projection
-concern* produced by the projector targeting that wire format, not baked
+— the wire-format string (`"2024-01-01T00:00:00Z"`) is a _projection
+concern_ produced by the projector targeting that wire format, not baked
 into the IR shape.
 
 `time` stays a subtype of `string` — JS has no native time-of-day type (no
@@ -522,8 +516,8 @@ runtime doesn't have.
 
 ### `duration.ts`
 
-| kind | shape | parent | constructor |
-|---|---|---|---|
+| kind       | shape                           | parent   | constructor       |
+| ---------- | ------------------------------- | -------- | ----------------- |
 | `duration` | `{ readonly kind: "duration" }` | `string` | `duration(meta?)` |
 
 Elapsed-time kind; subtypes `string`.
@@ -535,10 +529,10 @@ Not a kind-adding module itself — a composite re-exporting `date-time.ts` +
 
 ### `semantic-strings.ts`
 
-| kind | shape | parent | constructor |
-|---|---|---|---|
-| `uuid` | `{ readonly kind: "uuid" }` | `string` | `uuid(meta?)` |
-| `uri` | `{ readonly kind: "uri" }` | `string` | `uri(meta?)` |
+| kind    | shape                        | parent   | constructor    |
+| ------- | ---------------------------- | -------- | -------------- |
+| `uuid`  | `{ readonly kind: "uuid" }`  | `string` | `uuid(meta?)`  |
+| `uri`   | `{ readonly kind: "uri" }`   | `string` | `uri(meta?)`   |
 | `email` | `{ readonly kind: "email" }` | `string` | `email(meta?)` |
 
 Semantically-tagged string kinds, all subtyping `string`. The module also
@@ -554,9 +548,9 @@ matched case-insensitively by the extractor's promotion lookup.
 
 ### `bytes.ts`
 
-| kind | shape | parent | constructor |
-|---|---|---|---|
-| `bytes` | `{ readonly kind: "bytes" }` | none | `bytes(meta?)` |
+| kind    | shape                        | parent | constructor    |
+| ------- | ---------------------------- | ------ | -------------- |
+| `bytes` | `{ readonly kind: "bytes" }` | none   | `bytes(meta?)` |
 
 Binary blob kind. No parent — orthogonal to `string`, matching the core
 hierarchy, where `bytes` was never a subtype of `string`.
@@ -575,7 +569,7 @@ the matching `meta` refinement key(s) (`minLength`/`maxLength`/…) — the same
 keys `compile.ts` already validates and every projector (json-schema,
 effect-schema, sql, …) already reads. All tags share one `unique symbol` key
 (`RefinementTag`) rather than each carrying its own distinct property name,
-but with a *structured* value (`{ minLength: N }`) instead of a single
+but with a _structured_ value (`{ minLength: N }`) instead of a single
 string literal, so intersecting several tags merges their value objects
 instead of colliding on one shared string.
 

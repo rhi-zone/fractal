@@ -10,15 +10,20 @@ representation stays byte-for-byte unchanged.
 ## serde
 
 ```ts
-import { toRust } from "@rhi-zone/fractal-type-ir/rust"
+import { toRust } from "@rhi-zone/fractal-type-ir/rust";
 // or: import { toRust } from "@rhi-zone/fractal-type-ir/rust-serde"
 
-toRust(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toRust(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```rust

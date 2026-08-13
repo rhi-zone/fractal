@@ -50,27 +50,27 @@
 //   packages/type-ir/src/json-schema.ts       — toJsonSchema (params/result/error schema source)
 //   packages/json-rpc-api-projector/src/project.ts — framework-layer consumer (method dispatch, naming)
 
-import type { TypeRef, TypeShape } from "./index.ts"
-import { toJsonSchema, type JsonSchema } from "./json-schema.ts"
+import type { TypeRef, TypeShape } from "./index.ts";
+import { toJsonSchema, type JsonSchema } from "./json-schema.ts";
 
 // ============================================================================
 // Standard JSON-RPC 2.0 error codes (§5.1)
 // ============================================================================
 
 /** Invalid JSON was received by the server. */
-export const JSON_RPC_PARSE_ERROR = -32700
+export const JSON_RPC_PARSE_ERROR = -32700;
 /** The JSON sent is not a valid Request object. */
-export const JSON_RPC_INVALID_REQUEST = -32600
+export const JSON_RPC_INVALID_REQUEST = -32600;
 /** The method does not exist / is not available. */
-export const JSON_RPC_METHOD_NOT_FOUND = -32601
+export const JSON_RPC_METHOD_NOT_FOUND = -32601;
 /** Invalid method parameter(s). */
-export const JSON_RPC_INVALID_PARAMS = -32602
+export const JSON_RPC_INVALID_PARAMS = -32602;
 /** Internal JSON-RPC error. */
-export const JSON_RPC_INTERNAL_ERROR = -32603
+export const JSON_RPC_INTERNAL_ERROR = -32603;
 /** Lower bound (inclusive) of the range reserved for implementation-defined server errors (-32000 to -32099). */
-export const JSON_RPC_SERVER_ERROR_MIN = -32099
+export const JSON_RPC_SERVER_ERROR_MIN = -32099;
 /** Upper bound (inclusive) of the range reserved for implementation-defined server errors (-32000 to -32099). */
-export const JSON_RPC_SERVER_ERROR_MAX = -32000
+export const JSON_RPC_SERVER_ERROR_MAX = -32000;
 
 // ============================================================================
 // Types
@@ -82,24 +82,24 @@ export const JSON_RPC_SERVER_ERROR_MAX = -32000
  * (description/deprecated, read from `meta.description`/`meta.deprecated`).
  */
 export type JsonRpcMethod = {
-  readonly name: string
-  readonly paramsSchema: JsonSchema
-  readonly resultSchema: JsonSchema
-  readonly errorSchema: JsonSchema
-  readonly description?: string
-  readonly deprecated?: boolean
+  readonly name: string;
+  readonly paramsSchema: JsonSchema;
+  readonly resultSchema: JsonSchema;
+  readonly errorSchema: JsonSchema;
+  readonly description?: string;
+  readonly deprecated?: boolean;
   /**
    * True when the method's return type was a `stream` TypeRef — its result
    * is delivered as a sequence of JSON-RPC Notifications (one per element)
    * rather than a single "result" response; `resultSchema` describes ONE
    * element. See module doc's "Result" section.
    */
-  readonly streaming?: boolean
-}
+  readonly streaming?: boolean;
+};
 
 /** Loose runtime check: true when `v` looks like a `TypeRef` (has a `.shape`). Used to read the optional `meta.errorType` convention without requiring callers to prove its type statically. */
 function isTypeRef(v: unknown): v is TypeRef {
-  return typeof v === "object" && v !== null && "shape" in v
+  return typeof v === "object" && v !== null && "shape" in v;
 }
 
 // ============================================================================
@@ -120,7 +120,7 @@ export function jsonRpcErrorSchema(dataSchema?: JsonSchema): JsonSchema {
       data: dataSchema ?? {},
     },
     required: ["code", "message"],
-  }
+  };
 }
 
 // ============================================================================
@@ -132,16 +132,18 @@ export function jsonRpcErrorSchema(dataSchema?: JsonSchema): JsonSchema {
  * from a method/function TypeRef's ordered `params` list — one property per
  * param, `required` mirroring each param TypeRef's own `meta.optional`.
  */
-function toParamsSchema(params: readonly { readonly name: string; readonly type: TypeRef }[]): JsonSchema {
-  const properties: Record<string, JsonSchema> = {}
-  const required: string[] = []
+function toParamsSchema(
+  params: readonly { readonly name: string; readonly type: TypeRef }[],
+): JsonSchema {
+  const properties: Record<string, JsonSchema> = {};
+  const required: string[] = [];
   for (const p of params) {
-    properties[p.name] = toJsonSchema(p.type)
-    if (p.type.meta.optional !== true) required.push(p.name)
+    properties[p.name] = toJsonSchema(p.type);
+    if (p.type.meta.optional !== true) required.push(p.name);
   }
-  const schema: JsonSchema = { type: "object", properties }
-  if (required.length > 0) schema.required = required
-  return schema
+  const schema: JsonSchema = { type: "object", properties };
+  if (required.length > 0) schema.required = required;
+  return schema;
 }
 
 /**
@@ -151,13 +153,16 @@ function toParamsSchema(params: readonly { readonly name: string; readonly type:
  * "null" }`, matching JSON-RPC's convention that a no-result call still
  * carries a `result` key (`null`) per §5.
  */
-function toResultSchema(returnType: TypeRef | undefined): { readonly schema: JsonSchema; readonly streaming: boolean } {
-  if (returnType === undefined) return { schema: { type: "null" }, streaming: false }
+function toResultSchema(returnType: TypeRef | undefined): {
+  readonly schema: JsonSchema;
+  readonly streaming: boolean;
+} {
+  if (returnType === undefined) return { schema: { type: "null" }, streaming: false };
   if (returnType.shape.kind === "stream") {
-    const s = returnType.shape as TypeShape & { kind: "stream" }
-    return { schema: toJsonSchema(s.element), streaming: true }
+    const s = returnType.shape as TypeShape & { kind: "stream" };
+    return { schema: toJsonSchema(s.element), streaming: true };
   }
-  return { schema: toJsonSchema(returnType), streaming: false }
+  return { schema: toJsonSchema(returnType), streaming: false };
 }
 
 // ============================================================================
@@ -173,12 +178,12 @@ function toResultSchema(returnType: TypeRef | undefined): { readonly schema: Jso
  */
 export function toJsonRpcMethod(name: string, ref: TypeRef): JsonRpcMethod {
   const m = ref.shape as TypeShape & {
-    kind: "method" | "function"
-    params: readonly { readonly name: string; readonly type: TypeRef }[]
-    returnType: TypeRef
-  }
-  const { schema: resultSchema, streaming } = toResultSchema(m.returnType)
-  const errorType = ref.meta.errorType
+    kind: "method" | "function";
+    params: readonly { readonly name: string; readonly type: TypeRef }[];
+    returnType: TypeRef;
+  };
+  const { schema: resultSchema, streaming } = toResultSchema(m.returnType);
+  const errorType = ref.meta.errorType;
   const method: JsonRpcMethod = {
     name,
     paramsSchema: toParamsSchema(m.params ?? []),
@@ -187,8 +192,8 @@ export function toJsonRpcMethod(name: string, ref: TypeRef): JsonRpcMethod {
     ...(typeof ref.meta.description === "string" ? { description: ref.meta.description } : {}),
     ...(ref.meta.deprecated === true ? { deprecated: true } : {}),
     ...(streaming ? { streaming: true } : {}),
-  }
-  return method
+  };
+  return method;
 }
 
 /**
@@ -197,6 +202,8 @@ export function toJsonRpcMethod(name: string, ref: TypeRef): JsonRpcMethod {
  * descriptors, one per entry in `shape.methods`, in object-key order.
  */
 export function toJsonRpcMethods(ref: TypeRef): JsonRpcMethod[] {
-  const shape = ref.shape as TypeShape & { kind: "interface" }
-  return Object.entries(shape.methods).map(([methodName, methodRef]) => toJsonRpcMethod(methodName, methodRef))
+  const shape = ref.shape as TypeShape & { kind: "interface" };
+  return Object.entries(shape.methods).map(([methodName, methodRef]) =>
+    toJsonRpcMethod(methodName, methodRef),
+  );
 }

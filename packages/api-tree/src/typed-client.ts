@@ -22,7 +22,7 @@
 //   packages/api-tree/src/node.ts                  — Node, Handler, fallback, isLeaf
 //   packages/http-api-projector/src/client.ts     — createClient, CallOptions
 
-import type { Handler, Node } from "./node.ts"
+import type { Handler, Node } from "./node.ts";
 
 /**
  * The fully typed shape of a remote client built from a `Node` tree.
@@ -53,19 +53,27 @@ import type { Handler, Node } from "./node.ts"
  * (rather than e.g. `unknown`) keeps a bare `TypedClient<N>` from accepting
  * arbitrary junk as a second argument.
  */
-export type TypedClient<N extends Node, CallOpts = never, Slugs extends string = never> =
-  (N extends { readonly handler: infer H extends Handler }
-    ? // Callable part — subtract accumulated slug keys from handler input
-      H extends (input: infer I) => infer R
-      ? keyof Omit<I, Slugs> extends never
-        ? (input?: undefined, opts?: CallOpts) => Promise<Awaited<R>>
-        : (input: Omit<I, Slugs>, opts?: CallOpts) => Promise<Awaited<R>>
-      : never
-    : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-      ? // Children part — pass CallOpts/slugs through
-        { readonly [K in keyof C]: TypedClient<C[K], CallOpts, Slugs> }
-      : unknown)
+export type TypedClient<
+  N extends Node,
+  CallOpts = never,
+  Slugs extends string = never,
+> = (N extends { readonly handler: infer H extends Handler }
+  ? // Callable part — subtract accumulated slug keys from handler input
+    H extends (input: infer I) => infer R
+    ? keyof Omit<I, Slugs> extends never
+      ? (input?: undefined, opts?: CallOpts) => Promise<Awaited<R>>
+      : (input: Omit<I, Slugs>, opts?: CallOpts) => Promise<Awaited<R>>
+    : never
+  : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+    ? // Children part — pass CallOpts/slugs through
+      { readonly [K in keyof C]: TypedClient<C[K], CallOpts, Slugs> }
+    : unknown) &
   // Fallback part — accumulate the fallback name into Slugs for the subtree
-  & (N extends { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
+  (N extends {
+    readonly fallback: {
+      readonly name: infer Name extends string;
+      readonly subtree: infer S extends Node;
+    };
+  }
     ? { readonly [K in Name]: (slugValue: string) => TypedClient<S, CallOpts, Slugs | Name> }
-    : unknown)
+    : unknown);

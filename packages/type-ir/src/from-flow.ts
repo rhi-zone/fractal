@@ -37,11 +37,19 @@
 // unhandled case — self-documenting rather than silently lossy, same
 // convention as `from-typescript.ts`'s `puntRef`.
 
-import { parse as parseFlow } from "flow-parser"
-import { t, types, typeRefDocument, withMeta, type TypeRef, type TypeRefDocument } from "./index.ts"
+import { parse as parseFlow } from "flow-parser";
+import {
+  t,
+  types,
+  typeRefDocument,
+  withMeta,
+  type TypeRef,
+  type TypeRefDocument,
+} from "./index.ts";
 
 /** The TypeRef punt: `unknown` tagged with the unhandled case. */
-const puntRef = (reason: string): TypeRef => t(types.unknown, { $comment: `TODO(type-ir): unhandled Flow type — ${reason}` })
+const puntRef = (reason: string): TypeRef =>
+  t(types.unknown, { $comment: `TODO(type-ir): unhandled Flow type — ${reason}` });
 
 // ============================================================================
 // Minimal structural typing over flow-parser's ESTree-ish AST. flow-parser
@@ -53,81 +61,81 @@ const puntRef = (reason: string): TypeRef => t(types.unknown, { $comment: `TODO(
 // ============================================================================
 
 interface Node {
-  readonly type: string
+  readonly type: string;
 }
 
 interface Identifier extends Node {
-  readonly type: "Identifier"
-  readonly name: string
+  readonly type: "Identifier";
+  readonly name: string;
 }
 
 interface TypeParameterDeclaration extends Node {
   readonly params: readonly {
-    readonly name: string
-    readonly bound: { readonly typeAnnotation: TypeNode } | null
-  }[]
+    readonly name: string;
+    readonly bound: { readonly typeAnnotation: TypeNode } | null;
+  }[];
 }
 
 interface TypeAnnotationNode extends Node {
-  readonly typeAnnotation: TypeNode
+  readonly typeAnnotation: TypeNode;
 }
 
 interface ObjectTypeProperty extends Node {
-  readonly type: "ObjectTypeProperty"
-  readonly key: Identifier | { readonly type: "StringLiteral"; readonly value: string }
-  readonly value: TypeNode
-  readonly method: boolean
-  readonly optional: boolean
-  readonly variance: { readonly kind: "plus" | "minus" } | null
+  readonly type: "ObjectTypeProperty";
+  readonly key: Identifier | { readonly type: "StringLiteral"; readonly value: string };
+  readonly value: TypeNode;
+  readonly method: boolean;
+  readonly optional: boolean;
+  readonly variance: { readonly kind: "plus" | "minus" } | null;
 }
 
 interface ObjectTypeIndexer extends Node {
-  readonly type: "ObjectTypeIndexer"
-  readonly key: TypeNode
-  readonly value: TypeNode
+  readonly type: "ObjectTypeIndexer";
+  readonly key: TypeNode;
+  readonly value: TypeNode;
 }
 
 interface ObjectTypeCallProperty extends Node {
-  readonly type: "ObjectTypeCallProperty"
-  readonly value: TypeNode
+  readonly type: "ObjectTypeCallProperty";
+  readonly value: TypeNode;
 }
 
 interface ObjectTypeAnnotation extends Node {
-  readonly type: "ObjectTypeAnnotation"
-  readonly properties: readonly ObjectTypeProperty[]
-  readonly indexers: readonly ObjectTypeIndexer[]
-  readonly callProperties: readonly ObjectTypeCallProperty[]
-  readonly exact: boolean
+  readonly type: "ObjectTypeAnnotation";
+  readonly properties: readonly ObjectTypeProperty[];
+  readonly indexers: readonly ObjectTypeIndexer[];
+  readonly callProperties: readonly ObjectTypeCallProperty[];
+  readonly exact: boolean;
 }
 
 interface FunctionTypeParam extends Node {
-  readonly name: Identifier | null
-  readonly typeAnnotation: TypeNode
+  readonly name: Identifier | null;
+  readonly typeAnnotation: TypeNode;
 }
 
 interface FunctionTypeAnnotation extends Node {
-  readonly type: "FunctionTypeAnnotation"
-  readonly params: readonly FunctionTypeParam[]
-  readonly this: { readonly typeAnnotation: TypeNode } | null
-  readonly returnType: TypeNode
+  readonly type: "FunctionTypeAnnotation";
+  readonly params: readonly FunctionTypeParam[];
+  readonly this: { readonly typeAnnotation: TypeNode } | null;
+  readonly returnType: TypeNode;
 }
 
 interface GenericTypeAnnotation extends Node {
-  readonly type: "GenericTypeAnnotation"
-  readonly id: Identifier | { readonly type: "QualifiedTypeIdentifier"; readonly id: Identifier }
-  readonly typeParameters: { readonly params: readonly TypeNode[] } | null
+  readonly type: "GenericTypeAnnotation";
+  readonly id: Identifier | { readonly type: "QualifiedTypeIdentifier"; readonly id: Identifier };
+  readonly typeParameters: { readonly params: readonly TypeNode[] } | null;
 }
 
-type TypeNode = Node
+type TypeNode = Node;
 
 interface TypeAliasLike extends Node {
-  readonly id: Identifier
-  readonly typeParameters: TypeParameterDeclaration | null
+  readonly id: Identifier;
+  readonly typeParameters: TypeParameterDeclaration | null;
 }
 
 interface InterfaceLike extends TypeAliasLike {
-  readonly body: ObjectTypeAnnotation
-  readonly extends: readonly { readonly id: Identifier; readonly typeParameters: unknown }[]
+  readonly body: ObjectTypeAnnotation;
+  readonly extends: readonly { readonly id: Identifier; readonly typeParameters: unknown }[];
 }
 
 // ============================================================================
@@ -142,16 +150,21 @@ interface InterfaceLike extends TypeAliasLike {
 // its parameters are visible).
 // ============================================================================
 
-type TypeScope = ReadonlyMap<string, TypeRef | undefined>
+type TypeScope = ReadonlyMap<string, TypeRef | undefined>;
 
-function scopeFromTypeParameters(decl: TypeParameterDeclaration | null, declared: ReadonlySet<string>): TypeScope {
-  const scope = new Map<string, TypeRef | undefined>()
-  if (!decl) return scope
+function scopeFromTypeParameters(
+  decl: TypeParameterDeclaration | null,
+  declared: ReadonlySet<string>,
+): TypeScope {
+  const scope = new Map<string, TypeRef | undefined>();
+  if (!decl) return scope;
   for (const param of decl.params) {
-    const bound = param.bound ? convertType(param.bound.typeAnnotation, declared, scope) : undefined
-    scope.set(param.name, bound)
+    const bound = param.bound
+      ? convertType(param.bound.typeAnnotation, declared, scope)
+      : undefined;
+    scope.set(param.name, bound);
   }
-  return scope
+  return scope;
 }
 
 // ============================================================================
@@ -161,17 +174,21 @@ function scopeFromTypeParameters(decl: TypeParameterDeclaration | null, declared
 // ============================================================================
 
 function keyName(key: ObjectTypeProperty["key"]): string {
-  return key.type === "Identifier" ? key.name : key.value
+  return key.type === "Identifier" ? key.name : key.value;
 }
 
-function convertFunctionType(node: FunctionTypeAnnotation, declared: ReadonlySet<string>, scope: TypeScope): TypeRef {
+function convertFunctionType(
+  node: FunctionTypeAnnotation,
+  declared: ReadonlySet<string>,
+  scope: TypeScope,
+): TypeRef {
   const params = node.params.map((p, i) => ({
     name: p.name?.name ?? `arg${i}`,
     type: convertType(p.typeAnnotation, declared, scope),
-  }))
-  const returnType = convertType(node.returnType, declared, scope)
-  const thisType = node.this ? convertType(node.this.typeAnnotation, declared, scope) : undefined
-  return t(types.function(params, returnType, thisType))
+  }));
+  const returnType = convertType(node.returnType, declared, scope);
+  const thisType = node.this ? convertType(node.this.typeAnnotation, declared, scope) : undefined;
+  return t(types.function(params, returnType, thisType));
 }
 
 /**
@@ -192,35 +209,53 @@ function convertFunctionType(node: FunctionTypeAnnotation, declared: ReadonlySet
  *     convention `from-json-corpus.ts` uses (see index.ts's `TypeRef` doc
  *     comment).
  */
-function convertObjectType(node: ObjectTypeAnnotation, declared: ReadonlySet<string>, scope: TypeScope): TypeRef {
+function convertObjectType(
+  node: ObjectTypeAnnotation,
+  declared: ReadonlySet<string>,
+  scope: TypeScope,
+): TypeRef {
   if (node.properties.length === 0 && node.indexers.length > 0) {
-    const [indexer] = node.indexers
-    return t(types.map(convertType(indexer!.key, declared, scope), convertType(indexer!.value, declared, scope)))
+    const [indexer] = node.indexers;
+    return t(
+      types.map(
+        convertType(indexer!.key, declared, scope),
+        convertType(indexer!.value, declared, scope),
+      ),
+    );
   }
 
-  if (node.properties.length === 0 && node.indexers.length === 0 && node.callProperties.length > 0) {
-    const refs = node.callProperties.map((cp) => convertFunctionType(cp.value as unknown as FunctionTypeAnnotation, declared, scope))
-    return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
+  if (
+    node.properties.length === 0 &&
+    node.indexers.length === 0 &&
+    node.callProperties.length > 0
+  ) {
+    const refs = node.callProperties.map((cp) =>
+      convertFunctionType(cp.value as unknown as FunctionTypeAnnotation, declared, scope),
+    );
+    return refs.length === 1 ? refs[0]! : t(types.intersection(refs));
   }
 
-  const fields: Record<string, TypeRef> = {}
+  const fields: Record<string, TypeRef> = {};
   for (const prop of node.properties) {
-    const name = keyName(prop.key)
+    const name = keyName(prop.key);
     const valueRef = prop.method
       ? convertFunctionType(prop.value as unknown as FunctionTypeAnnotation, declared, scope)
-      : convertType(prop.value, declared, scope)
-    const extraMeta: Record<string, unknown> = {}
-    if (prop.optional) extraMeta.optional = true
-    if (prop.variance?.kind === "plus") extraMeta.readonly = true
-    fields[name] = Object.keys(extraMeta).length > 0 ? t(valueRef.shape, { ...valueRef.meta, ...extraMeta }) : valueRef
+      : convertType(prop.value, declared, scope);
+    const extraMeta: Record<string, unknown> = {};
+    if (prop.optional) extraMeta.optional = true;
+    if (prop.variance?.kind === "plus") extraMeta.readonly = true;
+    fields[name] =
+      Object.keys(extraMeta).length > 0
+        ? t(valueRef.shape, { ...valueRef.meta, ...extraMeta })
+        : valueRef;
   }
 
-  const meta: Record<string, unknown> = {}
-  if (!node.exact) meta.exact = false
+  const meta: Record<string, unknown> = {};
+  if (!node.exact) meta.exact = false;
   if (node.indexers.length > 0) {
-    meta.additionalPropertyType = convertType(node.indexers[0]!.value, declared, scope)
+    meta.additionalPropertyType = convertType(node.indexers[0]!.value, declared, scope);
   }
-  return t(types.object(fields), meta)
+  return t(types.object(fields), meta);
 }
 
 // ============================================================================
@@ -228,7 +263,7 @@ function convertObjectType(node: ObjectTypeAnnotation, declared: ReadonlySet<str
 // ============================================================================
 
 function isStringLiteralNode(n: TypeNode): boolean {
-  return n.type === "StringLiteralTypeAnnotation"
+  return n.type === "StringLiteralTypeAnnotation";
 }
 
 /** The shared-discriminator-field detection `from-typescript.ts` runs over a
@@ -238,46 +273,55 @@ function isStringLiteralNode(n: TypeNode): boolean {
  * typed fields (string/number/boolean literal annotations) count as
  * discriminator candidates. */
 function findDiscriminator(members: readonly ObjectTypeAnnotation[]): string | undefined {
-  const [first] = members
-  if (!first) return undefined
-  const fieldNameSets = members.map((m) => new Set(m.properties.map((p) => keyName(p.key))))
-  const sharedNames = [...fieldNameSets[0]!].filter((name) => fieldNameSets.every((names) => names.has(name)))
+  const [first] = members;
+  if (!first) return undefined;
+  const fieldNameSets = members.map((m) => new Set(m.properties.map((p) => keyName(p.key))));
+  const sharedNames = [...fieldNameSets[0]!].filter((name) =>
+    fieldNameSets.every((names) => names.has(name)),
+  );
 
   for (const name of sharedNames) {
-    const seenValues = new Set<unknown>()
+    const seenValues = new Set<unknown>();
     const distinctLiteralOnEveryVariant = members.every((m) => {
-      const prop = m.properties.find((p) => keyName(p.key) === name)
-      if (!prop) return false
-      const v = prop.value
+      const prop = m.properties.find((p) => keyName(p.key) === name);
+      if (!prop) return false;
+      const v = prop.value;
       const literal =
-        v.type === "StringLiteralTypeAnnotation" || v.type === "NumberLiteralTypeAnnotation" || v.type === "BooleanLiteralTypeAnnotation"
+        v.type === "StringLiteralTypeAnnotation" ||
+        v.type === "NumberLiteralTypeAnnotation" ||
+        v.type === "BooleanLiteralTypeAnnotation"
           ? (v as unknown as { value: string | number | boolean }).value
-          : undefined
-      if (literal === undefined || seenValues.has(literal)) return false
-      seenValues.add(literal)
-      return true
-    })
-    if (distinctLiteralOnEveryVariant) return name
+          : undefined;
+      if (literal === undefined || seenValues.has(literal)) return false;
+      seenValues.add(literal);
+      return true;
+    });
+    if (distinctLiteralOnEveryVariant) return name;
   }
-  return undefined
+  return undefined;
 }
 
-function convertUnion(node: { readonly types: readonly TypeNode[] }, declared: ReadonlySet<string>, scope: TypeScope): TypeRef {
-  const members = node.types
+function convertUnion(
+  node: { readonly types: readonly TypeNode[] },
+  declared: ReadonlySet<string>,
+  scope: TypeScope,
+): TypeRef {
+  const members = node.types;
 
   if (members.every(isStringLiteralNode)) {
-    return t(types.enum(members.map((m) => (m as unknown as { value: string }).value)))
+    return t(types.enum(members.map((m) => (m as unknown as { value: string }).value)));
   }
 
-  const isObjectLikeMember = (m: TypeNode): m is ObjectTypeAnnotation => m.type === "ObjectTypeAnnotation"
+  const isObjectLikeMember = (m: TypeNode): m is ObjectTypeAnnotation =>
+    m.type === "ObjectTypeAnnotation";
   if (members.length > 0 && members.every(isObjectLikeMember)) {
-    const objectMembers = members as unknown as ObjectTypeAnnotation[]
-    const discriminator = findDiscriminator(objectMembers)
-    const variants = objectMembers.map((m) => convertObjectType(m, declared, scope))
-    return t(types.union(variants), discriminator ? { discriminator } : {})
+    const objectMembers = members as unknown as ObjectTypeAnnotation[];
+    const discriminator = findDiscriminator(objectMembers);
+    const variants = objectMembers.map((m) => convertObjectType(m, declared, scope));
+    return t(types.union(variants), discriminator ? { discriminator } : {});
   }
 
-  return t(types.union(members.map((m) => convertType(m, declared, scope))))
+  return t(types.union(members.map((m) => convertType(m, declared, scope))));
 }
 
 // ============================================================================
@@ -290,44 +334,69 @@ function convertUnion(node: { readonly types: readonly TypeNode[] }, declared: R
 // undeclared custom scalar).
 // ============================================================================
 
-const BUILTIN_CONTAINERS = new Set(["Array", "$ReadOnlyArray", "Set", "$ReadOnlySet", "Map", "$ReadOnlyMap", "Promise"])
+const BUILTIN_CONTAINERS = new Set([
+  "Array",
+  "$ReadOnlyArray",
+  "Set",
+  "$ReadOnlySet",
+  "Map",
+  "$ReadOnlyMap",
+  "Promise",
+]);
 
-function convertGeneric(node: GenericTypeAnnotation, declared: ReadonlySet<string>, scope: TypeScope): TypeRef {
+function convertGeneric(
+  node: GenericTypeAnnotation,
+  declared: ReadonlySet<string>,
+  scope: TypeScope,
+): TypeRef {
   if (node.id.type === "QualifiedTypeIdentifier") {
-    return puntRef(`qualified type reference (${node.id.id.name})`)
+    return puntRef(`qualified type reference (${node.id.id.name})`);
   }
-  const name = node.id.name
-  const args = node.typeParameters?.params ?? []
+  const name = node.id.name;
+  const args = node.typeParameters?.params ?? [];
 
   if (scope.has(name)) {
-    const bound = scope.get(name)
-    if (bound) return t(bound.shape, { ...bound.meta, generic: true })
-    return t(types.unknown, { $comment: `unconstrained generic type parameter (${name}) — no bound to extract` })
+    const bound = scope.get(name);
+    if (bound) return t(bound.shape, { ...bound.meta, generic: true });
+    return t(types.unknown, {
+      $comment: `unconstrained generic type parameter (${name}) — no bound to extract`,
+    });
   }
 
   if (BUILTIN_CONTAINERS.has(name)) {
-    if (name === "Array" || name === "$ReadOnlyArray" || name === "Set" || name === "$ReadOnlySet") {
-      const [elem] = args
-      return t(types.array(elem ? convertType(elem, declared, scope) : puntRef(`unknown element of ${name}`)))
+    if (
+      name === "Array" ||
+      name === "$ReadOnlyArray" ||
+      name === "Set" ||
+      name === "$ReadOnlySet"
+    ) {
+      const [elem] = args;
+      return t(
+        types.array(
+          elem ? convertType(elem, declared, scope) : puntRef(`unknown element of ${name}`),
+        ),
+      );
     }
     if (name === "Map" || name === "$ReadOnlyMap") {
-      const [key, value] = args
+      const [key, value] = args;
       return t(
         types.map(
           key ? convertType(key, declared, scope) : puntRef("unknown map key"),
           value ? convertType(value, declared, scope) : puntRef("unknown map value"),
         ),
-      )
+      );
     }
     // Promise<T> unwraps to T — same convention as from-typescript.ts's
     // Promise handling.
-    const [inner] = args
-    return inner ? convertType(inner, declared, scope) : t(types.unknown, { $comment: "Promise with no type argument" })
+    const [inner] = args;
+    return inner
+      ? convertType(inner, declared, scope)
+      : t(types.unknown, { $comment: "Promise with no type argument" });
   }
 
-  if (declared.has(name)) return t(types.ref(name))
+  if (declared.has(name)) return t(types.ref(name));
 
-  return t(types.unknown, { $comment: `unresolved type reference: ${name}` })
+  return t(types.unknown, { $comment: `unresolved type reference: ${name}` });
 }
 
 // ============================================================================
@@ -337,56 +406,71 @@ function convertGeneric(node: GenericTypeAnnotation, declared: ReadonlySet<strin
 function convertType(node: TypeNode, declared: ReadonlySet<string>, scope: TypeScope): TypeRef {
   switch (node.type) {
     case "StringTypeAnnotation":
-      return t(types.string)
+      return t(types.string);
     case "NumberTypeAnnotation":
-      return t(types.number)
+      return t(types.number);
     case "BooleanTypeAnnotation":
-      return t(types.boolean)
+      return t(types.boolean);
     case "VoidTypeAnnotation":
-      return t(types.void)
+      return t(types.void);
     case "NullLiteralTypeAnnotation":
-      return t(types.null)
+      return t(types.null);
     // Flow's top type (`mixed` accepts any value, nothing is assignable
     // FROM it without a refinement) maps to the IR's own top, `unknown` —
     // same role TypeScript's `unknown` plays for from-typescript.ts.
     case "MixedTypeAnnotation":
-      return t(types.unknown)
+      return t(types.unknown);
     // Flow's bottom type — no value inhabits it.
     case "EmptyTypeAnnotation":
-      return t(types.never)
+      return t(types.never);
     // `any` is Flow's UNCHECKED escape hatch (unlike `mixed`, which is
     // checked) — degrades to `unknown` same as `mixed`, but tagged so the
     // distinction isn't silently lost.
     case "AnyTypeAnnotation":
-      return t(types.unknown, { $comment: "Flow 'any' (unchecked) — degraded to unknown" })
+      return t(types.unknown, { $comment: "Flow 'any' (unchecked) — degraded to unknown" });
     case "StringLiteralTypeAnnotation":
-      return t(types.literal((node as unknown as { value: string }).value))
+      return t(types.literal((node as unknown as { value: string }).value));
     case "NumberLiteralTypeAnnotation":
-      return t(types.literal((node as unknown as { value: number }).value))
+      return t(types.literal((node as unknown as { value: number }).value));
     case "BooleanLiteralTypeAnnotation":
-      return t(types.literal((node as unknown as { value: boolean }).value))
+      return t(types.literal((node as unknown as { value: boolean }).value));
     case "NullableTypeAnnotation":
-      return withMeta(convertType((node as unknown as TypeAnnotationNode).typeAnnotation, declared, scope), { nullable: true })
+      return withMeta(
+        convertType((node as unknown as TypeAnnotationNode).typeAnnotation, declared, scope),
+        { nullable: true },
+      );
     case "ArrayTypeAnnotation":
-      return t(types.array(convertType((node as unknown as { elementType: TypeNode }).elementType, declared, scope)))
+      return t(
+        types.array(
+          convertType((node as unknown as { elementType: TypeNode }).elementType, declared, scope),
+        ),
+      );
     case "TupleTypeAnnotation":
       return t(
-        types.tuple((node as unknown as { elementTypes: readonly TypeNode[] }).elementTypes.map((el) => convertType(el, declared, scope))),
-      )
+        types.tuple(
+          (node as unknown as { elementTypes: readonly TypeNode[] }).elementTypes.map((el) =>
+            convertType(el, declared, scope),
+          ),
+        ),
+      );
     case "UnionTypeAnnotation":
-      return convertUnion(node as unknown as { types: readonly TypeNode[] }, declared, scope)
+      return convertUnion(node as unknown as { types: readonly TypeNode[] }, declared, scope);
     case "IntersectionTypeAnnotation":
       return t(
-        types.intersection((node as unknown as { types: readonly TypeNode[] }).types.map((m) => convertType(m, declared, scope))),
-      )
+        types.intersection(
+          (node as unknown as { types: readonly TypeNode[] }).types.map((m) =>
+            convertType(m, declared, scope),
+          ),
+        ),
+      );
     case "ObjectTypeAnnotation":
-      return convertObjectType(node as unknown as ObjectTypeAnnotation, declared, scope)
+      return convertObjectType(node as unknown as ObjectTypeAnnotation, declared, scope);
     case "FunctionTypeAnnotation":
-      return convertFunctionType(node as unknown as FunctionTypeAnnotation, declared, scope)
+      return convertFunctionType(node as unknown as FunctionTypeAnnotation, declared, scope);
     case "GenericTypeAnnotation":
-      return convertGeneric(node as unknown as GenericTypeAnnotation, declared, scope)
+      return convertGeneric(node as unknown as GenericTypeAnnotation, declared, scope);
     default:
-      return puntRef(`unsupported (${node.type})`)
+      return puntRef(`unsupported (${node.type})`);
   }
 }
 
@@ -404,10 +488,10 @@ function convertType(node: TypeNode, declared: ReadonlySet<string>, scope: TypeS
  */
 function unwrapDeclaration(node: TypeNode): TypeNode | undefined {
   if (node.type === "ExportNamedDeclaration" || node.type === "DeclareExportDeclaration") {
-    const inner = (node as unknown as { declaration: TypeNode | null }).declaration
-    return inner ?? undefined
+    const inner = (node as unknown as { declaration: TypeNode | null }).declaration;
+    return inner ?? undefined;
   }
-  return node
+  return node;
 }
 
 const TYPE_DECLARATION_KINDS = new Set([
@@ -417,54 +501,60 @@ const TYPE_DECLARATION_KINDS = new Set([
   "DeclareInterface",
   "OpaqueType",
   "DeclareOpaqueType",
-])
+]);
 
 function declarationsOf(program: { readonly body: readonly TypeNode[] }): TypeAliasLike[] {
-  const decls: TypeAliasLike[] = []
+  const decls: TypeAliasLike[] = [];
   for (const stmt of program.body) {
-    const unwrapped = unwrapDeclaration(stmt)
+    const unwrapped = unwrapDeclaration(stmt);
     if (unwrapped && TYPE_DECLARATION_KINDS.has(unwrapped.type)) {
-      decls.push(unwrapped as unknown as TypeAliasLike)
+      decls.push(unwrapped as unknown as TypeAliasLike);
     }
   }
-  return decls
+  return decls;
 }
 
 function convertInterfaceLike(node: InterfaceLike, declared: ReadonlySet<string>): TypeRef {
-  const scope = scopeFromTypeParameters(node.typeParameters, declared)
-  const ownBody = convertObjectType(node.body, declared, scope)
-  if (node.extends.length === 0) return ownBody
+  const scope = scopeFromTypeParameters(node.typeParameters, declared);
+  const ownBody = convertObjectType(node.body, declared, scope);
+  if (node.extends.length === 0) return ownBody;
 
-  const baseRefs = node.extends.map((e): TypeRef => (declared.has(e.id.name) ? t(types.ref(e.id.name)) : puntRef(`unresolved interface base: ${e.id.name}`)))
-  return t(types.intersection([...baseRefs, ownBody]))
+  const baseRefs = node.extends.map((e): TypeRef =>
+    declared.has(e.id.name)
+      ? t(types.ref(e.id.name))
+      : puntRef(`unresolved interface base: ${e.id.name}`),
+  );
+  return t(types.intersection([...baseRefs, ownBody]));
 }
 
 function convertDeclaration(node: TypeAliasLike, declared: ReadonlySet<string>): TypeRef {
   switch (node.type) {
     case "TypeAlias":
     case "DeclareTypeAlias": {
-      const scope = scopeFromTypeParameters(node.typeParameters, declared)
-      return convertType((node as unknown as { right: TypeNode }).right, declared, scope)
+      const scope = scopeFromTypeParameters(node.typeParameters, declared);
+      return convertType((node as unknown as { right: TypeNode }).right, declared, scope);
     }
     case "InterfaceDeclaration":
     case "DeclareInterface":
-      return convertInterfaceLike(node as unknown as InterfaceLike, declared)
+      return convertInterfaceLike(node as unknown as InterfaceLike, declared);
     case "OpaqueType":
     case "DeclareOpaqueType": {
-      const scope = scopeFromTypeParameters(node.typeParameters, declared)
-      const opaque = node as unknown as { impltype: TypeNode | null; supertype: TypeNode | null }
+      const scope = scopeFromTypeParameters(node.typeParameters, declared);
+      const opaque = node as unknown as { impltype: TypeNode | null; supertype: TypeNode | null };
       // `impltype` (the type's real, module-private definition) is preferred
       // when present; `supertype` (its public upper bound, e.g. `opaque type
       // X: string = ...`) is the fallback for a `declare opaque type` with no
       // accessible implementation at all — same "best available structural
       // approximation" spirit as from-typescript.ts's generic-constraint
       // extraction.
-      const underlying = opaque.impltype ?? opaque.supertype
-      const base = underlying ? convertType(underlying, declared, scope) : puntRef("opaque type with no accessible implementation")
-      return t(base.shape, { ...base.meta, opaque: true })
+      const underlying = opaque.impltype ?? opaque.supertype;
+      const base = underlying
+        ? convertType(underlying, declared, scope)
+        : puntRef("opaque type with no accessible implementation");
+      return t(base.shape, { ...base.meta, opaque: true });
     }
     default:
-      return puntRef(`unsupported top-level declaration (${node.type})`)
+      return puntRef(`unsupported top-level declaration (${node.type})`);
   }
 }
 
@@ -478,13 +568,13 @@ function convertDeclaration(node: TypeAliasLike, declared: ReadonlySet<string>):
  * documents for its own non-type-system SDL definitions.
  */
 export function fromFlow(source: string): TypeRefDocument {
-  const ast = parseFlow(source, { types: true }) as { body: readonly TypeNode[] }
-  const decls = declarationsOf(ast)
-  const declared = new Set(decls.map((d) => d.id.name))
+  const ast = parseFlow(source, { types: true }) as { body: readonly TypeNode[] };
+  const decls = declarationsOf(ast);
+  const declared = new Set(decls.map((d) => d.id.name));
 
-  const defs: Record<string, TypeRef> = {}
-  for (const decl of decls) defs[decl.id.name] = convertDeclaration(decl, declared)
+  const defs: Record<string, TypeRef> = {};
+  for (const decl of decls) defs[decl.id.name] = convertDeclaration(decl, declared);
 
-  const root = decls.length > 0 ? t(types.ref(decls[0]!.id.name)) : t(types.unknown)
-  return typeRefDocument(root, defs)
+  const root = decls.length > 0 ? t(types.ref(decls[0]!.id.name)) : t(types.unknown);
+  return typeRefDocument(root, defs);
 }

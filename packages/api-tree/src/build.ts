@@ -56,6 +56,6 @@ export type GeneratedEntry = {
   parse: (
     value: unknown,
     hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
-  ) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] }
-  readonly hookFields?: readonly string[]
-}
+  ) => { kind: "ok"; value: unknown } | { kind: "err"; errors: unknown[] };
+  readonly hookFields?: readonly string[];
+};

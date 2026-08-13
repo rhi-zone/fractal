@@ -38,29 +38,29 @@
 // `retry()` would call this extension's `wrapFetch` fresh on each attempt,
 // minting a new key per attempt (defeats the purpose).
 
-import type { ClientExtension, FetchImpl } from "../extension.ts"
+import type { ClientExtension, FetchImpl } from "../extension.ts";
 
-const DEFAULT_HEADER = "Idempotency-Key"
-const DEFAULT_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const
+const DEFAULT_HEADER = "Idempotency-Key";
+const DEFAULT_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 
 export type IdempotencyKeyOptions = {
   /** Header name to carry the key. Default `"Idempotency-Key"`. */
-  readonly header?: string
+  readonly header?: string;
   /**
    * HTTP methods (case-insensitive) to attach a key to. Default
    * `["POST", "PUT", "PATCH", "DELETE"]` — every mutating verb (see module
    * doc for why PUT/DELETE are included alongside POST). GET/HEAD requests
    * are never keyed — safe to retry with no side effect to de-dupe.
    */
-  readonly methods?: readonly string[]
+  readonly methods?: readonly string[];
   /**
    * Key generator, called once per request that needs one. Default
    * `() => crypto.randomUUID()`. Runtime-only — codegen always uses
    * `crypto.randomUUID()` (a function value has no textual representation
    * to embed, same limitation `retry()`'s `retryOn` documents).
    */
-  readonly generateKey?: () => string
-}
+  readonly generateKey?: () => string;
+};
 
 /**
  * Idempotency-key extension: attaches an `Idempotency-Key` header to
@@ -70,16 +70,18 @@ export type IdempotencyKeyOptions = {
  * createClient(node, { baseUrl, extensions: [idempotencyKey(), retry()] })
  */
 export function idempotencyKey(options: IdempotencyKeyOptions = {}): ClientExtension {
-  const header = options.header ?? DEFAULT_HEADER
-  const methods = new Set((options.methods ?? DEFAULT_METHODS).map((m) => m.toUpperCase()))
-  const generateKey = options.generateKey ?? (() => crypto.randomUUID())
+  const header = options.header ?? DEFAULT_HEADER;
+  const methods = new Set((options.methods ?? DEFAULT_METHODS).map((m) => m.toUpperCase()));
+  const generateKey = options.generateKey ?? (() => crypto.randomUUID());
 
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    if (!methods.has(req.method.toUpperCase()) || req.headers.has(header)) return inner(req)
-    const headers = new Headers(req.headers)
-    headers.set(header, generateKey())
-    return inner(new Request(req, { headers }))
-  }
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      if (!methods.has(req.method.toUpperCase()) || req.headers.has(header)) return inner(req);
+      const headers = new Headers(req.headers);
+      headers.set(header, generateKey());
+      return inner(new Request(req, { headers }));
+    };
 
   return {
     name: "idempotencyKey",
@@ -89,7 +91,7 @@ export function idempotencyKey(options: IdempotencyKeyOptions = {}): ClientExten
       wrap: (innerExpr) =>
         `__withIdempotencyKey(${innerExpr}, ${JSON.stringify({ header, methods: [...methods] })})`,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -109,4 +111,4 @@ function __withIdempotencyKey(inner: typeof fetch, options: __IdempotencyKeyOpti
     headers.set(options.header, crypto.randomUUID())
     return inner(url, { ...init, headers })
   }) as typeof fetch
-}`.trim()
+}`.trim();

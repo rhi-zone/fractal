@@ -5,23 +5,25 @@ schema text, SQL DDL text, GraphQL SDL text, or a JSON-RPC method descriptor
 object — shown as-is below. All examples render the same shape:
 
 ```ts
-import { t, types } from "@rhi-zone/fractal-type-ir"
+import { t, types } from "@rhi-zone/fractal-type-ir";
 
-const user = t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  age: { shape: types.integer, meta: { optional: true } },
-}))
+const user = t(
+  types.object({
+    id: t(types.integer),
+    name: t(types.string),
+    email: t(types.string),
+    age: { shape: types.integer, meta: { optional: true } },
+  }),
+);
 ```
 
 ## Protobuf
 
 ```ts
-import { toProtoMessage, renderProto } from "@rhi-zone/fractal-type-ir/protobuf"
+import { toProtoMessage, renderProto } from "@rhi-zone/fractal-type-ir/protobuf";
 
-const msg = toProtoMessage("User", user)
-renderProto([msg])
+const msg = toProtoMessage("User", user);
+renderProto([msg]);
 ```
 
 ```proto
@@ -45,10 +47,10 @@ projectors — capnp, flatbuffers, SQL — which require an `object` root).
 ## Cap'n Proto
 
 ```ts
-import { toCapnpStruct, renderCapnp } from "@rhi-zone/fractal-type-ir/capnp"
+import { toCapnpStruct, renderCapnp } from "@rhi-zone/fractal-type-ir/capnp";
 
-const cs = toCapnpStruct("User", user)
-renderCapnp([cs])
+const cs = toCapnpStruct("User", user);
+renderCapnp([cs]);
 ```
 
 ```
@@ -71,9 +73,9 @@ fabricating a struct.
 ## FlatBuffers
 
 ```ts
-import { toFlatBuffersTable } from "@rhi-zone/fractal-type-ir/flatbuffers"
+import { toFlatBuffersTable } from "@rhi-zone/fractal-type-ir/flatbuffers";
 
-toFlatBuffersTable("User", user)
+toFlatBuffersTable("User", user);
 ```
 
 ```
@@ -93,9 +95,9 @@ registry.
 ## SQL DDL
 
 ```ts
-import { toCreateTable } from "@rhi-zone/fractal-type-ir/sql"
+import { toCreateTable } from "@rhi-zone/fractal-type-ir/sql";
 
-toCreateTable("users", user)
+toCreateTable("users", user);
 ```
 
 ```sql
@@ -113,15 +115,16 @@ Dialect defaults to Postgres (`toSqlDdl`/`toCreateTable` take `opts?.dialect:
 syntax (native `COMMENT` for MySQL, block comment otherwise) all vary by
 dialect. A `union`-rooted TypeRef needs a layout strategy to become tables:
 `singleTableInheritanceSqlLayout()` (one table, nullable columns per variant
-+ a discriminator column) or `tablePerVariantSqlLayout()` (one table per
-variant) — passed as `opts.unionLayout`.
+
+- a discriminator column) or `tablePerVariantSqlLayout()` (one table per
+  variant) — passed as `opts.unionLayout`.
 
 ## SQL DDL (MSSQL)
 
 ```ts
-import { toMssqlCreateTableFromRef } from "@rhi-zone/fractal-type-ir/sql-mssql"
+import { toMssqlCreateTableFromRef } from "@rhi-zone/fractal-type-ir/sql-mssql";
 
-toMssqlCreateTableFromRef("users", user)
+toMssqlCreateTableFromRef("users", user);
 ```
 
 ```sql
@@ -143,9 +146,9 @@ Same union-layout split as `sql.ts`: `singleTableInheritanceMssqlLayout()` /
 ## GraphQL SDL
 
 ```ts
-import { toGraphQLType } from "@rhi-zone/fractal-type-ir/graphql"
+import { toGraphQLType } from "@rhi-zone/fractal-type-ir/graphql";
 
-toGraphQLType("User", user)
+toGraphQLType("User", user);
 ```
 
 ```graphql
@@ -168,13 +171,10 @@ fabricated shape.
 ## JSON-RPC
 
 ```ts
-import { toJsonRpcMethod } from "@rhi-zone/fractal-type-ir/json-rpc"
+import { toJsonRpcMethod } from "@rhi-zone/fractal-type-ir/json-rpc";
 
-const getUser = t(types.method(
-  [{ name: "id", type: t(types.integer) }],
-  user,
-))
-toJsonRpcMethod("getUser", getUser)
+const getUser = t(types.method([{ name: "id", type: t(types.integer) }], user));
+toJsonRpcMethod("getUser", getUser);
 ```
 
 ```json

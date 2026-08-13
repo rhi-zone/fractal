@@ -239,7 +239,7 @@ leaves' handler source text, compared across trees, is:
   leaf read in this pass, no two leaves share call text unless they are
   genuinely wrapping the same call. A trivial shared boilerplate skeleton
   (`async () => { const result = await X(); if (result.kind === "err")
-  return err(result.error); return ok(...) }`) recurs across leaves, but `X`
+return err(result.error); return ok(...) }`) recurs across leaves, but `X`
   and the final `ok(...)` shape are what's being fingerprinted along with
   the skeleton — normalizing whitespace/comments does not erase the actual
   differing tokens.
@@ -265,23 +265,23 @@ input, returns findings":
 // packages/tree-lint/src/rule.ts
 
 export interface MountedTree {
-  readonly basePath: string
-  readonly tree: Node
+  readonly basePath: string;
+  readonly tree: Node;
   /** Free-form label for where this tree came from — e.g. "accounting",
    *  matching the slice/file it was built in — surfaced in findings so a
    *  human can jump straight to the source, never consulted by rule logic
    *  itself (rules reason about `basePath`/`tree`, never about labels). */
-  readonly label?: string
+  readonly label?: string;
 }
 
 export interface Finding {
-  readonly rule: string
-  readonly severity: "error" | "warning"
-  readonly message: string
-  readonly locations: readonly { basePath: string; path: readonly string[]; label?: string }[]
+  readonly rule: string;
+  readonly severity: "error" | "warning";
+  readonly message: string;
+  readonly locations: readonly { basePath: string; path: readonly string[]; label?: string }[];
 }
 
-export type LintRule = (trees: readonly MountedTree[]) => readonly Finding[]
+export type LintRule = (trees: readonly MountedTree[]) => readonly Finding[];
 ```
 
 `collisionRule` (§3, §4c) is one such function, exported by the package as
@@ -292,7 +292,7 @@ export function runTreeLint(
   trees: readonly MountedTree[],
   rules: readonly LintRule[] = [collisionRule],
 ): readonly Finding[] {
-  return rules.flatMap((rule) => rule(trees))
+  return rules.flatMap((rule) => rule(trees));
 }
 ```
 
@@ -318,8 +318,8 @@ Two call shapes follow from this, both legitimate, differing only in WHEN
 - **Boot-time (loud):** the composition root (wherever `buildApp.ts` already
   constructs one real `ComposedSurface`) additionally builds the array
   `[{ basePath: "/api/accounting", tree: buildAccountingTree(composed) },
-  { basePath: "/api/admin/tax-compliance", tree: buildTaxComplianceTree(composed) },
-  ...]` — one entry per existing `app.mount(...)` call, trivially derivable
+{ basePath: "/api/admin/tax-compliance", tree: buildTaxComplianceTree(composed) },
+...]` — one entry per existing `app.mount(...)` call, trivially derivable
   by pairing each `buildXTree` import with the base path already given to
   its neighboring `app.mount()` call — and passes it to `runTreeLint`,
   throwing (or logging loud, per the deployment's own choice, mirroring

@@ -21,42 +21,54 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import "./wire-apply-validation-meta.fixture.ts"
-import { api, op } from "../node.ts"
-import { applyValidation } from "./apply-validation-stub.fixture.ts"
+import "./wire-apply-validation-meta.fixture.ts";
+import { api, op } from "../node.ts";
+import { applyValidation } from "./apply-validation-stub.fixture.ts";
 
 const httpTree = api({
-  byId: api({}, {
-    fallback: {
-      name: "bookId",
-      subtree: op(
-        (input: { bookId: string; page: number }) => ({ bookId: input.bookId, page: input.page }),
-        { http: { method: "GET" } },
-      ),
+  byId: api(
+    {},
+    {
+      fallback: {
+        name: "bookId",
+        subtree: op(
+          (input: { bookId: string; page: number }) => ({ bookId: input.bookId, page: input.page }),
+          { http: { method: "GET" } },
+        ),
+      },
     },
-  }),
-})
+  ),
+});
 
 const httpOverrideTree = api({
-  byId: api({}, {
-    fallback: {
-      name: "bookId",
-      subtree: op(
-        (input: { bookId: string; page: number }) => ({ bookId: input.bookId, page: input.page }),
-        { http: { method: "GET", sourceMap: { page: { store: "body", key: "page" } } } },
-      ),
+  byId: api(
+    {},
+    {
+      fallback: {
+        name: "bookId",
+        subtree: op(
+          (input: { bookId: string; page: number }) => ({ bookId: input.bookId, page: input.page }),
+          { http: { method: "GET", sourceMap: { page: { store: "body", key: "page" } } } },
+        ),
+      },
     },
-  }),
-})
+  ),
+});
 
 const cliTree = api({
-  byId: api({}, {
-    fallback: {
-      name: "bookId",
-      subtree: op((input: { bookId: string; page: number }) => ({ bookId: input.bookId, page: input.page })),
+  byId: api(
+    {},
+    {
+      fallback: {
+        name: "bookId",
+        subtree: op((input: { bookId: string; page: number }) => ({
+          bookId: input.bookId,
+          page: input.page,
+        })),
+      },
     },
-  }),
-})
+  ),
+});
 
 // `encodingMap` STRING form (base-profile-name override, phase B) plus its
 // FUNCTION form (custom decoder, phase E) on the SAME leaf, over two
@@ -68,45 +80,52 @@ const cliTree = api({
 // entry at all, so it still resolves through the ordinary path-segment-name
 // derivation, unaffected by either override.
 const httpEncodingMapTree = api({
-  byId: api({}, {
-    fallback: {
-      name: "bookId",
-      subtree: op(
-        (input: { bookId: string; price: number; qty: number }) => ({
-          bookId: input.bookId,
-          price: input.price,
-          qty: input.qty,
-        }),
-        {
-          http: {
-            method: "GET",
-            encodingMap: {
-              price: "identity",
-              qty: (w: string): number => Number(w) * 2,
+  byId: api(
+    {},
+    {
+      fallback: {
+        name: "bookId",
+        subtree: op(
+          (input: { bookId: string; price: number; qty: number }) => ({
+            bookId: input.bookId,
+            price: input.price,
+            qty: input.qty,
+          }),
+          {
+            http: {
+              method: "GET",
+              encodingMap: {
+                price: "identity",
+                qty: (w: string): number => Number(w) * 2,
+              },
             },
           },
-        },
-      ),
+        ),
+      },
     },
-  }),
-})
+  ),
+});
 
 const mcpTree = api({
   get: op((input: { count: number }) => ({ count: input.count })),
-})
+});
 
 const graphqlTree = api({
   get: op((input: { count: number }) => ({ count: input.count })),
-})
+});
 
 const jsonrpcTree = api({
   get: op((input: { count: number }) => ({ count: input.count })),
-})
+});
 
-export const http = applyValidation("wire-http", httpTree, "http")
-export const httpOverride = applyValidation("wire-http-override", httpOverrideTree, "http")
-export const httpEncodingMap = applyValidation("wire-http-encoding-map", httpEncodingMapTree, "http")
-export const cli = applyValidation("wire-cli", cliTree, "cli")
-export const mcp = applyValidation("wire-mcp", mcpTree, "mcp")
-export const graphql = applyValidation("wire-graphql", graphqlTree, "graphql")
-export const jsonrpc = applyValidation("wire-jsonrpc", jsonrpcTree, "jsonrpc")
+export const http = applyValidation("wire-http", httpTree, "http");
+export const httpOverride = applyValidation("wire-http-override", httpOverrideTree, "http");
+export const httpEncodingMap = applyValidation(
+  "wire-http-encoding-map",
+  httpEncodingMapTree,
+  "http",
+);
+export const cli = applyValidation("wire-cli", cliTree, "cli");
+export const mcp = applyValidation("wire-mcp", mcpTree, "mcp");
+export const graphql = applyValidation("wire-graphql", graphqlTree, "graphql");
+export const jsonrpc = applyValidation("wire-jsonrpc", jsonrpcTree, "jsonrpc");

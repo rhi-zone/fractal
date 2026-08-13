@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA, quote } from "./codegen-helpers.ts";
 
 // Ruby/dry-types projector — a second Ruby target alongside ruby-sorbet.ts,
 // but a different convention entirely: dry-types (https://dry-rb.org/gems/
@@ -42,9 +42,14 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts"
  * generated structs only wants it once.
  */
 export function dryTypesPreamble(): string {
-  return ["require \"dry-types\"", "require \"dry-struct\"", "", "module Types", "  include Dry.Types()", "end"].join(
-    "\n",
-  )
+  return [
+    'require "dry-types"',
+    'require "dry-struct"',
+    "",
+    "module Types",
+    "  include Dry.Types()",
+    "end",
+  ].join("\n");
 }
 
 // Render a `meta.default`/literal value (JSON-ish: string/number/boolean/
@@ -55,16 +60,16 @@ export function dryTypesPreamble(): string {
 // instead, so each struct instance gets its own object rather than one
 // literal mutated across instances.
 function rubyLiteral(value: unknown): string {
-  if (value === null || value === undefined) return "nil"
-  if (typeof value === "boolean") return value ? "true" : "false"
-  if (typeof value === "number") return String(value)
-  if (typeof value === "string") return `${quote(value)}.freeze`
-  if (Array.isArray(value)) return `[${value.map(rubyLiteral).join(", ")}]`
+  if (value === null || value === undefined) return "nil";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return `${quote(value)}.freeze`;
+  if (Array.isArray(value)) return `[${value.map(rubyLiteral).join(", ")}]`;
   if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-    return `{ ${entries.map(([k, v]) => `${quote(k)}: ${rubyLiteral(v)}`).join(", ")} }`
+    const entries = Object.entries(value as Record<string, unknown>);
+    return `{ ${entries.map(([k, v]) => `${quote(k)}: ${rubyLiteral(v)}`).join(", ")} }`;
   }
-  return "nil"
+  return "nil";
 }
 
 // dry-types' `.default(...)` combinator takes a plain value for immutable
@@ -73,17 +78,17 @@ function rubyLiteral(value: unknown): string {
 // every instance sharing (and potentially mutating) the same literal.
 function defaultClause(value: unknown): string {
   if (Array.isArray(value) || (typeof value === "object" && value !== null)) {
-    return `.default { ${rubyLiteral(value)} }`
+    return `.default { ${rubyLiteral(value)} }`;
   }
-  return `.default(${rubyLiteral(value)})`
+  return `.default(${rubyLiteral(value)})`;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("Types::Bool"),
@@ -117,18 +122,18 @@ const handlers: Record<string, Converter> = {
   // dedicated combinator for "value must be an instance of this class."
   instance: (shape) => `Types.Instance(${(shape as TypeShape & { kind: "instance" }).className})`,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `Types::Array.of(${toDryType(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `Types::Array.of(${toDryType(s.element)})`;
   },
   // dry-types has no native tuple combinator; a uniform tuple degrades to
   // `Types::Array.of(T)`, a heterogeneous one to an array of the unioned
   // element types (same lossy-but-honest degrade ruby-sorbet.ts uses for
   // tuples via `T::Array[T.any(...)]`).
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    const elementTypes = [...new Set(s.elements.map(toDryType))]
-    const [first] = elementTypes
-    return `Types::Array.of(${elementTypes.length <= 1 ? (first ?? "Types::Any") : elementTypes.join(" | ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    const elementTypes = [...new Set(s.elements.map(toDryType))];
+    const [first] = elementTypes;
+    return `Types::Array.of(${elementTypes.length <= 1 ? (first ?? "Types::Any") : elementTypes.join(" | ")})`;
   },
   // No lazy/asynchronous-sequence combinator in dry-types (it models values,
   // not enumeration timing) — degrades to the materialized array form, same
@@ -137,14 +142,14 @@ const handlers: Record<string, Converter> = {
   // constraint that can express "lazily produced," so array is the closest
   // dry-types can get.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `Types::Array.of(${toDryType(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `Types::Array.of(${toDryType(s.element)})`;
   },
   // No native pagination construct — degrades to the element array, same
   // convention as every other structural projector in this package.
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `Types::Array.of(${toDryType(s.element)})`
+    const s = shape as TypeShape & { kind: "page" };
+    return `Types::Array.of(${toDryType(s.element)})`;
   },
   // `Types::Hash.map(key_type, value_type)` is dry-types' homogeneous-map
   // combinator (dry-types >= 1.5) — every key must satisfy `key_type`, every
@@ -152,44 +157,47 @@ const handlers: Record<string, Converter> = {
   // declares a FIXED set of named keys (that's `object`'s job here, not
   // `map`'s).
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Types::Hash.map(${toDryType(s.key)}, ${toDryType(s.value)})`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Types::Hash.map(${toDryType(s.key)}, ${toDryType(s.value)})`;
   },
   // A two-variant union with `null` collapses to dry-types' `.optional`
   // sugar (equivalent to `T | Types::Nil`) rather than the general `|`-chain
   // form — same sugar-when-possible convention ruby-sorbet.ts uses for
   // `T.nilable`.
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
+    const s = shape as TypeShape & { kind: "union" };
     if (s.variants.length === 2) {
-      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null")
+      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null");
       if (nullIndex !== -1) {
-        const other = s.variants[nullIndex === 0 ? 1 : 0]!
-        return `${toDryType(other)}.optional`
+        const other = s.variants[nullIndex === 0 ? 1 : 0]!;
+        return `${toDryType(other)}.optional`;
       }
     }
     // dry-types unions are built with the `|` operator
     // (https://dry-rb.org/gems/dry-types/main/sum/); parenthesized so the
     // expression composes safely as an argument or receiver of a further
     // combinator (e.g. `.optional`, `Types::Array.of(...)`).
-    return `(${s.variants.map(toDryType).join(" | ")})`
+    return `(${s.variants.map(toDryType).join(" | ")})`;
   },
   // dry-types has no dedicated literal-value type — `.enum(value)`
   // constrains the base type down to that single value while keeping its
   // coercion behavior, the closest honest analogue.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "Types::Nil"
-    if (typeof s.value === "string") return `Types::String.enum(${quote(s.value)})`
-    if (typeof s.value === "boolean") return `Types::Bool.enum(${s.value})`
-    return Number.isInteger(s.value) ? `Types::Integer.enum(${s.value})` : `Types::Float.enum(${s.value})`
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "Types::Nil";
+    if (typeof s.value === "string") return `Types::String.enum(${quote(s.value)})`;
+    if (typeof s.value === "boolean") return `Types::Bool.enum(${s.value})`;
+    return Number.isInteger(s.value)
+      ? `Types::Integer.enum(${s.value})`
+      : `Types::Float.enum(${s.value})`;
   },
   // `Types::String.enum(...)` is dry-types' native closed-set-of-values
   // combinator (https://dry-rb.org/gems/dry-types/main/enum/) — every enum
   // member in this IR is a string (see TypeKinds.enum), so no coercion type
   // parameter is needed the way ruby-sorbet.ts needs `meta.enumName` to name
   // a `T::Enum` class; the bare expression is already self-contained.
-  enum: (shape) => `Types::String.enum(${(shape as TypeShape & { kind: "enum" }).members.map(quote).join(", ")})`,
+  enum: (shape) =>
+    `Types::String.enum(${(shape as TypeShape & { kind: "enum" }).members.map(quote).join(", ")})`,
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // dry-types has no intersection combinator (`&`-composing two type
   // constraints isn't part of its vocabulary the way `|` for unions is) —
@@ -205,19 +213,19 @@ const handlers: Record<string, Converter> = {
   // it's a method surface, not a value dry-types coerces/validates — degrades
   // honestly to `Types::Any`, same as ruby-sorbet.ts's `interface` handler.
   interface: leaf("Types::Any"),
-}
+};
 
 function coreDryType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "Types::Any" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "Types::Any" : converter(ref.shape, ref.meta);
 }
 
 /** A dry-types type expression for `ref` — suitable for an `attribute`
  * declaration, a `Types::Array.of(...)`/`Types::Hash.map(...)` argument, or
  * any other place a `Types::` constant is expected. */
 export function toDryType(ref: TypeRef): string {
-  const core = coreDryType(ref)
-  return ref.meta.nullable === true ? `${core}.optional` : core
+  const core = coreDryType(ref);
+  return ref.meta.nullable === true ? `${core}.optional` : core;
 }
 
 // attribute/const declaration for one Dry::Struct field, handling the
@@ -230,42 +238,42 @@ function structField(
   fieldName: string,
   fieldRef: TypeRef,
 ): { declaration: string; nested: string[] } {
-  const nested: string[] = []
-  let core: string
+  const nested: string[] = [];
+  let core: string;
   if (isA(fieldRef.shape.kind, "object")) {
-    const nestedName = `${structName}${capitalize(fieldName)}`
-    nested.push(toDryStruct(nestedName, fieldRef))
-    core = nestedName
+    const nestedName = `${structName}${capitalize(fieldName)}`;
+    nested.push(toDryStruct(nestedName, fieldRef));
+    core = nestedName;
   } else if (fieldRef.shape.kind === "enum") {
-    const nestedName = `${structName}${capitalize(fieldName)}Type`
-    nested.push(toDryEnum(nestedName, fieldRef))
-    core = nestedName
+    const nestedName = `${structName}${capitalize(fieldName)}Type`;
+    nested.push(toDryEnum(nestedName, fieldRef));
+    core = nestedName;
   } else if (
     fieldRef.shape.kind === "array" &&
     isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
   ) {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    const nestedName = `${structName}${capitalize(fieldName)}`
-    nested.push(toDryStruct(nestedName, element))
-    core = `Types::Array.of(${nestedName})`
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    const nestedName = `${structName}${capitalize(fieldName)}`;
+    nested.push(toDryStruct(nestedName, element));
+    core = `Types::Array.of(${nestedName})`;
   } else if (
     fieldRef.shape.kind === "array" &&
     (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum"
   ) {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    const nestedName = `${structName}${capitalize(fieldName)}Type`
-    nested.push(toDryEnum(nestedName, element))
-    core = `Types::Array.of(${nestedName})`
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    const nestedName = `${structName}${capitalize(fieldName)}Type`;
+    nested.push(toDryEnum(nestedName, element));
+    core = `Types::Array.of(${nestedName})`;
   } else {
-    core = coreDryType(fieldRef)
+    core = coreDryType(fieldRef);
   }
 
-  const optional = fieldRef.meta.optional === true
-  const nullable = fieldRef.meta.nullable === true
-  const hasDefault = fieldRef.meta.default !== undefined
+  const optional = fieldRef.meta.optional === true;
+  const nullable = fieldRef.meta.nullable === true;
+  const hasDefault = fieldRef.meta.default !== undefined;
 
-  let type = nullable ? `${core}.optional` : core
-  if (hasDefault) type = `${type}${defaultClause(fieldRef.meta.default)}`
+  let type = nullable ? `${core}.optional` : core;
+  if (hasDefault) type = `${type}${defaultClause(fieldRef.meta.default)}`;
 
   // `attribute?` is dry-struct's "this key may be omitted entirely" macro
   // (https://dry-rb.org/gems/dry-struct/main/#optional-attributes) —
@@ -274,13 +282,14 @@ function structField(
   // the default already covers the omitted-key case, so the plain
   // `attribute` macro is used (matching python-pydantic.ts's parallel
   // "explicit default subsumes optionality" reasoning).
-  const macro = optional && !hasDefault ? "attribute?" : "attribute"
-  const deprecatedComment = fieldRef.meta.deprecated === true ? " # @deprecated" : ""
-  const description = typeof fieldRef.meta.description === "string" ? `  # ${fieldRef.meta.description}\n` : ""
+  const macro = optional && !hasDefault ? "attribute?" : "attribute";
+  const deprecatedComment = fieldRef.meta.deprecated === true ? " # @deprecated" : "";
+  const description =
+    typeof fieldRef.meta.description === "string" ? `  # ${fieldRef.meta.description}\n` : "";
   return {
     declaration: `${description}  ${macro} :${fieldName}, ${type}${deprecatedComment}`,
     nested,
-  }
+  };
 }
 
 /**
@@ -291,28 +300,28 @@ function structField(
  * without requiring the caller to symbolize keys first.
  */
 export function toDryStruct(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const nestedDecls: string[] = []
-  const fieldLines: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const nestedDecls: string[] = [];
+  const fieldLines: string[] = [];
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const { declaration, nested } = structField(name, fieldName, fieldRef)
-    nestedDecls.push(...nested)
-    fieldLines.push(declaration)
+    const { declaration, nested } = structField(name, fieldName, fieldRef);
+    nestedDecls.push(...nested);
+    fieldLines.push(declaration);
   }
 
-  const lines: string[] = []
-  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`)
-  if (ref.meta.deprecated === true) lines.push("# @deprecated")
-  lines.push(`class ${name} < Dry::Struct`)
-  lines.push("  transform_keys(&:to_sym)")
+  const lines: string[] = [];
+  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`);
+  if (ref.meta.deprecated === true) lines.push("# @deprecated");
+  lines.push(`class ${name} < Dry::Struct`);
+  lines.push("  transform_keys(&:to_sym)");
   if (fieldLines.length > 0) {
-    lines.push("")
-    lines.push(...fieldLines)
+    lines.push("");
+    lines.push(...fieldLines);
   }
-  lines.push("end")
+  lines.push("end");
 
-  return [...nestedDecls, lines.join("\n")].join("\n\n")
+  return [...nestedDecls, lines.join("\n")].join("\n\n");
 }
 
 /**
@@ -324,11 +333,11 @@ export function toDryStruct(name: string, ref: TypeRef): string {
  * name is.
  */
 export function toDryEnum(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const lines: string[] = []
-  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`)
-  lines.push(`${name} = Types::String.enum(${shape.members.map(quote).join(", ")})`)
-  return lines.join("\n")
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const lines: string[] = [];
+  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`);
+  lines.push(`${name} = Types::String.enum(${shape.members.map(quote).join(", ")})`);
+  return lines.join("\n");
 }
 
 /**
@@ -341,9 +350,9 @@ export function toDryEnum(name: string, ref: TypeRef): string {
  */
 export function toDry(ref: TypeRef, name?: string): string {
   if (name !== undefined) {
-    if (ref.shape.kind === "object") return toDryStruct(name, ref)
-    if (ref.shape.kind === "enum") return toDryEnum(name, ref)
-    return `${name} = ${toDryType(ref)}`
+    if (ref.shape.kind === "object") return toDryStruct(name, ref);
+    if (ref.shape.kind === "enum") return toDryEnum(name, ref);
+    return `${name} = ${toDryType(ref)}`;
   }
-  return toDryType(ref)
+  return toDryType(ref);
 }

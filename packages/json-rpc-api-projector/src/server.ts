@@ -67,11 +67,23 @@
 //   packages/json-rpc-api-projector/src/wire.ts       — JSON-RPC 2.0 message types + standard codes
 //   packages/mcp-api-projector/src/server.ts          — sibling preset (structural mirror: detection, errorEncoder)
 
-import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, ProjectorStores, Store } from "@rhi-zone/fractal-api-tree"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { projectMethods } from "./project.ts"
-import type { Dispatch, ProjectMethodsOptions, SchemaMap } from "./project.ts"
+import {
+  assemble,
+  composeErrorEncoders,
+  isResultShape,
+  isStreamChunk,
+  isStreamProgress,
+  matchKind,
+} from "@rhi-zone/fractal-api-tree";
+import type {
+  DetectionOptions,
+  ErrorEncoder,
+  ProjectorStores,
+  Store,
+} from "@rhi-zone/fractal-api-tree";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { projectMethods } from "./project.ts";
+import type { Dispatch, ProjectMethodsOptions, SchemaMap } from "./project.ts";
 import {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -81,8 +93,8 @@ import {
   isJsonRpcRequestShape,
   jsonRpcErrorResponse,
   jsonRpcSuccessResponse,
-} from "./wire.ts"
-import type { JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from "./wire.ts"
+} from "./wire.ts";
+import type { JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from "./wire.ts";
 
 export type {
   JsonRpcErrorObject,
@@ -92,7 +104,7 @@ export type {
   JsonRpcRequest,
   JsonRpcResponse,
   JsonRpcSuccessResponse,
-} from "./wire.ts"
+} from "./wire.ts";
 export {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -102,7 +114,7 @@ export {
   JSON_RPC_SERVER_ERROR_MAX,
   JSON_RPC_SERVER_ERROR_MIN,
   isJsonRpcError,
-} from "./wire.ts"
+} from "./wire.ts";
 
 /**
  * JSON-RPC's own store-name fragment: an INERT, plain interface naming the one
@@ -120,7 +132,7 @@ export {
  */
 export interface JsonRpcStores {
   /** A request's by-name `params` object (a positional/array `params` degrades to `{}` — see `dispatchRequest`). */
-  params?: Store
+  params?: Store;
 }
 
 /**
@@ -130,14 +142,17 @@ export interface JsonRpcStores {
  * `HttpStoreBag`'s doc for why the intersection is what lets this package build
  * and read `params` without an ambient augmentation.
  */
-export type JsonRpcStoreBag = ProjectorStores & JsonRpcStores
+export type JsonRpcStoreBag = ProjectorStores & JsonRpcStores;
 
 // ============================================================================
 // Error encoding
 // ============================================================================
 
 /** An error encoder's JSON-RPC-specific target shape — a full error object (code/message/data). */
-export type JsonRpcErrorEncoder<E = unknown> = ErrorEncoder<E, { readonly code: number; readonly message: string; readonly data?: unknown }>
+export type JsonRpcErrorEncoder<E = unknown> = ErrorEncoder<
+  E,
+  { readonly code: number; readonly message: string; readonly data?: unknown }
+>;
 
 /**
  * Pre-built `JsonRpcErrorEncoder`: maps error `kind` values to JSON-RPC
@@ -149,16 +164,18 @@ export type JsonRpcErrorEncoder<E = unknown> = ErrorEncoder<E, { readonly code: 
  * degrades to the JSON dump. Internally a `composeErrorEncoders` over one
  * `matchKind` per mapping entry — first match wins (object key order).
  */
-export function jsonRpcErrors<E = unknown>(mapping: Record<string, number>): JsonRpcErrorEncoder<E> {
-  const encoders = Object.entries(mapping).map(([kind, code]) => matchKind<number>(kind, code))
-  const composed = composeErrorEncoders(...encoders)
+export function jsonRpcErrors<E = unknown>(
+  mapping: Record<string, number>,
+): JsonRpcErrorEncoder<E> {
+  const encoders = Object.entries(mapping).map(([kind, code]) => matchKind<number>(kind, code));
+  const composed = composeErrorEncoders(...encoders);
   return (error) => {
-    const code = composed(error)
-    if (code === undefined) return undefined
-    const messageField = (error as { message?: unknown } | null)?.message
-    const message = typeof messageField === "string" ? messageField : JSON.stringify(error)
-    return { code, message, data: error }
-  }
+    const code = composed(error);
+    if (code === undefined) return undefined;
+    const messageField = (error as { message?: unknown } | null)?.message;
+    const message = typeof messageField === "string" ? messageField : JSON.stringify(error);
+    return { code, message, data: error };
+  };
 }
 
 // ============================================================================
@@ -171,7 +188,7 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
     typeof v === "object" &&
     v !== null &&
     typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
-  )
+  );
 }
 
 /**
@@ -187,11 +204,11 @@ async function streamViaNotifications(
   id: JsonRpcId,
   send: (n: JsonRpcNotification) => void | Promise<void>,
 ): Promise<unknown> {
-  const iterator = iterable[Symbol.asyncIterator]()
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
-    if (step.done) return step.value ?? null
-    const value: unknown = step.value
+    const step = await iterator.next();
+    if (step.done) return step.value ?? null;
+    const value: unknown = step.value;
     if (isStreamProgress(value)) {
       await send({
         jsonrpc: "2.0",
@@ -203,11 +220,15 @@ async function streamViaNotifications(
           total: value.total ?? 1,
           ...(value.message !== undefined ? { message: value.message } : {}),
         },
-      })
+      });
     } else if (isStreamChunk(value)) {
-      await send({ jsonrpc: "2.0", method, params: { type: "chunk", subscription: id, value: value.data } })
+      await send({
+        jsonrpc: "2.0",
+        method,
+        params: { type: "chunk", subscription: id, value: value.data },
+      });
     } else {
-      await send({ jsonrpc: "2.0", method, params: { type: "chunk", subscription: id, value } })
+      await send({ jsonrpc: "2.0", method, params: { type: "chunk", subscription: id, value } });
     }
   }
 }
@@ -219,19 +240,19 @@ async function streamViaNotifications(
  * return value, when present, is appended last.
  */
 async function drainToArray(iterable: AsyncIterable<unknown>): Promise<unknown[]> {
-  const out: unknown[] = []
-  const iterator = iterable[Symbol.asyncIterator]()
+  const out: unknown[] = [];
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
+    const step = await iterator.next();
     if (step.done) {
-      if (step.value !== undefined) out.push(step.value)
-      break
+      if (step.value !== undefined) out.push(step.value);
+      break;
     }
-    const value: unknown = step.value
-    if (isStreamProgress(value)) continue
-    out.push(isStreamChunk(value) ? value.data : value)
+    const value: unknown = step.value;
+    if (isStreamProgress(value)) continue;
+    out.push(isStreamChunk(value) ? value.data : value);
   }
-  return out
+  return out;
 }
 
 // ============================================================================
@@ -241,20 +262,20 @@ async function drainToArray(iterable: AsyncIterable<unknown>): Promise<unknown[]
 /** Options shared by both transport adapters (`createJsonRpcHttpHandler`/`createJsonRpcWebSocketHandlers`). */
 export type CreateJsonRpcServerOptions = {
   /** Method-name -> derived params/result schema + description (from codegen). Forwarded to `projectMethods`. */
-  readonly schemas?: SchemaMap
+  readonly schemas?: SchemaMap;
   /** Opt-in return-value detection, mirroring HTTP/MCP/CLI's own `detection` option — `result` gates `Result`-shape unwrapping, `streaming` gates `AsyncIterable` draining. Both default `true`. */
-  readonly detection?: DetectionOptions
+  readonly detection?: DetectionOptions;
   /** Maps a handler's `Result.err(E)` value to a JSON-RPC error object — see `JsonRpcErrorEncoder`/`jsonRpcErrors`. `undefined` (including when omitted) falls back to `JSON_RPC_INVALID_PARAMS` carrying the raw error as `data`. */
-  readonly errorEncoder?: JsonRpcErrorEncoder
-}
+  readonly errorEncoder?: JsonRpcErrorEncoder;
+};
 
 type RunOptions = {
-  readonly detectResult: boolean
-  readonly detectStreaming: boolean
-  readonly errorEncoder: JsonRpcErrorEncoder | undefined
+  readonly detectResult: boolean;
+  readonly detectStreaming: boolean;
+  readonly errorEncoder: JsonRpcErrorEncoder | undefined;
   /** Present only for the WebSocket transport — enables the notification-streaming path (see `streamViaNotifications`) instead of HTTP's drain-to-array degrade. */
-  readonly sendNotification: ((n: JsonRpcNotification) => void | Promise<void>) | undefined
-}
+  readonly sendNotification: ((n: JsonRpcNotification) => void | Promise<void>) | undefined;
+};
 
 /**
  * Dispatch ONE JSON-RPC Request/Notification object: look up its method,
@@ -274,17 +295,19 @@ async function dispatchRequest(
     const id =
       typeof raw === "object" && raw !== null && "id" in raw && !Array.isArray(raw)
         ? ((raw as { id?: JsonRpcId }).id ?? null)
-        : null
-    return jsonRpcErrorResponse(id, JSON_RPC_INVALID_REQUEST, "Invalid Request")
+        : null;
+    return jsonRpcErrorResponse(id, JSON_RPC_INVALID_REQUEST, "Invalid Request");
   }
 
-  const req = raw as JsonRpcRequest
-  const isNotification = !("id" in req) || req.id === undefined
-  const id: JsonRpcId = req.id ?? null
+  const req = raw as JsonRpcRequest;
+  const isNotification = !("id" in req) || req.id === undefined;
+  const id: JsonRpcId = req.id ?? null;
 
-  const dispatch = handlers.get(req.method)
+  const dispatch = handlers.get(req.method);
   if (dispatch === undefined) {
-    return isNotification ? undefined : jsonRpcErrorResponse(id, JSON_RPC_METHOD_NOT_FOUND, `Method not found: ${req.method}`)
+    return isNotification
+      ? undefined
+      : jsonRpcErrorResponse(id, JSON_RPC_METHOD_NOT_FOUND, `Method not found: ${req.method}`);
   }
 
   // By-name params only (see type-ir's json-rpc.ts module doc's "Params"
@@ -295,40 +318,44 @@ async function dispatchRequest(
   const paramsObj: Record<string, unknown> =
     typeof req.params === "object" && req.params !== null && !Array.isArray(req.params)
       ? (req.params as Record<string, unknown>)
-      : {}
+      : {};
 
   try {
-    const stores: JsonRpcStoreBag = { params: paramsObj, caller: {} }
-    const paramNames = [...new Set([...Object.keys(paramsObj), ...Object.keys(dispatch.sourceMap)])]
-    const input = assemble(stores, paramNames, dispatch.sourceMap, "params")
+    const stores: JsonRpcStoreBag = { params: paramsObj, caller: {} };
+    const paramNames = [
+      ...new Set([...Object.keys(paramsObj), ...Object.keys(dispatch.sourceMap)]),
+    ];
+    const input = assemble(stores, paramNames, dispatch.sourceMap, "params");
 
-    let result: unknown = await dispatch.handler(input)
+    let result: unknown = await dispatch.handler(input);
 
     if (opts.detectStreaming && isAsyncIterable(result)) {
       result =
         opts.sendNotification !== undefined
           ? await streamViaNotifications(result, req.method, id, opts.sendNotification)
-          : await drainToArray(result)
+          : await drainToArray(result);
     }
 
     if (opts.detectResult && isResultShape(result)) {
       if (result.kind === "err") {
-        if (isNotification) return undefined
-        const encoded = opts.errorEncoder?.(result.error)
+        if (isNotification) return undefined;
+        const encoded = opts.errorEncoder?.(result.error);
         return encoded !== undefined
           ? jsonRpcErrorResponse(id, encoded.code, encoded.message, encoded.data)
-          : jsonRpcErrorResponse(id, JSON_RPC_INVALID_PARAMS, "Invalid params", result.error)
+          : jsonRpcErrorResponse(id, JSON_RPC_INVALID_PARAMS, "Invalid params", result.error);
       }
-      result = result.value
+      result = result.value;
     }
 
-    return isNotification ? undefined : jsonRpcSuccessResponse(id, result)
+    return isNotification ? undefined : jsonRpcSuccessResponse(id, result);
   } catch {
     // A thrown error is never surfaced verbatim — matching HTTP/MCP/CLI's
     // own default (collapse to a generic message); a handler that wants a
     // client-facing failure should return `err(...)` instead (surfaced via
     // `errorEncoder` above), which IS conveyed verbatim.
-    return isNotification ? undefined : jsonRpcErrorResponse(id, JSON_RPC_INTERNAL_ERROR, "Internal error")
+    return isNotification
+      ? undefined
+      : jsonRpcErrorResponse(id, JSON_RPC_INTERNAL_ERROR, "Internal error");
   }
 }
 
@@ -344,12 +371,13 @@ async function dispatchBody(
   opts: RunOptions,
 ): Promise<JsonRpcResponse | JsonRpcResponse[] | undefined> {
   if (Array.isArray(body)) {
-    if (body.length === 0) return jsonRpcErrorResponse(null, JSON_RPC_INVALID_REQUEST, "Invalid Request")
-    const results = await Promise.all(body.map((item) => dispatchRequest(handlers, item, opts)))
-    const responses = results.filter((r): r is JsonRpcResponse => r !== undefined)
-    return responses.length > 0 ? responses : undefined
+    if (body.length === 0)
+      return jsonRpcErrorResponse(null, JSON_RPC_INVALID_REQUEST, "Invalid Request");
+    const results = await Promise.all(body.map((item) => dispatchRequest(handlers, item, opts)));
+    const responses = results.filter((r): r is JsonRpcResponse => r !== undefined);
+    return responses.length > 0 ? responses : undefined;
   }
-  return dispatchRequest(handlers, body, opts)
+  return dispatchRequest(handlers, body, opts);
 }
 
 function resolveRunOptions(
@@ -361,7 +389,7 @@ function resolveRunOptions(
     detectStreaming: opts.detection?.streaming ?? true,
     errorEncoder: opts.errorEncoder,
     sendNotification,
-  }
+  };
 }
 
 // ============================================================================
@@ -369,7 +397,10 @@ function resolveRunOptions(
 // ============================================================================
 
 function jsonResponse(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } })
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 /**
@@ -386,25 +417,28 @@ function jsonResponse(value: unknown, status = 200): Response {
  * (§4.2, code -32600). See module doc for batch/streaming/error-mapping
  * behavior.
  */
-export function createJsonRpcHttpHandler(tree: Node, opts: CreateJsonRpcServerOptions = {}): (req: Request) => Promise<Response> {
-  const { handlers } = projectMethods(tree, toProjectOptions(opts))
-  const runOpts = resolveRunOptions(opts, undefined)
+export function createJsonRpcHttpHandler(
+  tree: Node,
+  opts: CreateJsonRpcServerOptions = {},
+): (req: Request) => Promise<Response> {
+  const { handlers } = projectMethods(tree, toProjectOptions(opts));
+  const runOpts = resolveRunOptions(opts, undefined);
 
   return async (req) => {
-    let body: unknown
+    let body: unknown;
     try {
-      body = await req.json()
+      body = await req.json();
     } catch {
-      return jsonResponse(jsonRpcErrorResponse(null, JSON_RPC_PARSE_ERROR, "Parse error"))
+      return jsonResponse(jsonRpcErrorResponse(null, JSON_RPC_PARSE_ERROR, "Parse error"));
     }
 
-    const result = await dispatchBody(handlers, body, runOpts)
+    const result = await dispatchBody(handlers, body, runOpts);
     // §6: a batch consisting entirely of Notifications (or a lone
     // Notification) sends NO response at all — 204 No Content is the
     // conventional HTTP rendering of "nothing to say back."
-    if (result === undefined) return new Response(null, { status: 204 })
-    return jsonResponse(result)
-  }
+    if (result === undefined) return new Response(null, { status: 204 });
+    return jsonResponse(result);
+  };
 }
 
 // ============================================================================
@@ -412,17 +446,20 @@ export function createJsonRpcHttpHandler(tree: Node, opts: CreateJsonRpcServerOp
 // ============================================================================
 
 /** The minimal socket shape this transport needs — deliberately duck-typed (not `import type { ServerWebSocket } from "bun"`) so this package has no hard dependency on any one runtime's WebSocket API; Bun's `ServerWebSocket`, `ws`'s `WebSocket`, and the standard `WebSocket` all satisfy it. */
-export type JsonRpcSocket = { send(data: string): void }
+export type JsonRpcSocket = { send(data: string): void };
 
 /** The handler shape `createJsonRpcWebSocketHandlers` returns — matches (a subset of) Bun's `WebSocketHandler<T>` and is trivially adaptable to `ws`'s `on("message", ...)` event shape. */
 export type JsonRpcWebSocketHandlers = {
-  readonly message: (ws: JsonRpcSocket, raw: string | ArrayBufferLike | Uint8Array) => Promise<void>
-}
+  readonly message: (
+    ws: JsonRpcSocket,
+    raw: string | ArrayBufferLike | Uint8Array,
+  ) => Promise<void>;
+};
 
 function decodeMessage(raw: string | ArrayBufferLike | Uint8Array): string {
-  if (typeof raw === "string") return raw
-  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
-  return new TextDecoder().decode(bytes)
+  if (typeof raw === "string") return raw;
+  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+  return new TextDecoder().decode(bytes);
 }
 
 /**
@@ -441,26 +478,29 @@ function decodeMessage(raw: string | ArrayBufferLike | Uint8Array): string {
  * docs/design/middleware-and-caller-context.md), not this transport, which
  * stays a thin message pump.
  */
-export function createJsonRpcWebSocketHandlers(tree: Node, opts: CreateJsonRpcServerOptions = {}): JsonRpcWebSocketHandlers {
-  const { handlers } = projectMethods(tree, toProjectOptions(opts))
+export function createJsonRpcWebSocketHandlers(
+  tree: Node,
+  opts: CreateJsonRpcServerOptions = {},
+): JsonRpcWebSocketHandlers {
+  const { handlers } = projectMethods(tree, toProjectOptions(opts));
 
   return {
     async message(ws, raw) {
-      let body: unknown
+      let body: unknown;
       try {
-        body = JSON.parse(decodeMessage(raw))
+        body = JSON.parse(decodeMessage(raw));
       } catch {
-        ws.send(JSON.stringify(jsonRpcErrorResponse(null, JSON_RPC_PARSE_ERROR, "Parse error")))
-        return
+        ws.send(JSON.stringify(jsonRpcErrorResponse(null, JSON_RPC_PARSE_ERROR, "Parse error")));
+        return;
       }
 
-      const runOpts = resolveRunOptions(opts, (n) => ws.send(JSON.stringify(n)))
-      const result = await dispatchBody(handlers, body, runOpts)
-      if (result !== undefined) ws.send(JSON.stringify(result))
+      const runOpts = resolveRunOptions(opts, (n) => ws.send(JSON.stringify(n)));
+      const result = await dispatchBody(handlers, body, runOpts);
+      if (result !== undefined) ws.send(JSON.stringify(result));
     },
-  }
+  };
 }
 
 function toProjectOptions(opts: CreateJsonRpcServerOptions): ProjectMethodsOptions {
-  return opts.schemas !== undefined ? { schemas: opts.schemas } : {}
+  return opts.schemas !== undefined ? { schemas: opts.schemas } : {};
 }

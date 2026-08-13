@@ -3,7 +3,10 @@ import { methods, param, path, validated, type StandardSchemaV1 } from "../../me
 import { client } from "../../client.ts";
 import { json } from "../../std.ts";
 
-interface Body { readonly name: string; readonly qty: number }
+interface Body {
+  readonly name: string;
+  readonly qty: number;
+}
 const bodySchema: StandardSchemaV1<unknown, Body> = {
   "~standard": {
     version: 1,
@@ -17,13 +20,28 @@ const bodySchema: StandardSchemaV1<unknown, Body> = {
 
 export const app = path({
   res0: methods({ GET: () => json({ id: 0, kind: "get" as const }) }),
-  res1: methods({ GET: () => json({ id: 1 }), POST: validated<typeof bodySchema, { ok: true; qty: number }>(bodySchema, (b) => json({ ok: true as const, qty: b.qty })) }),
+  res1: methods({
+    GET: () => json({ id: 1 }),
+    POST: validated<typeof bodySchema, { ok: true; qty: number }>(bodySchema, (b) =>
+      json({ ok: true as const, qty: b.qty }),
+    ),
+  }),
   res2: param("id", methods({ GET: () => json({ id: 2, kind: "param" as const }) })),
   res3: methods({ GET: () => json({ id: 3, kind: "get" as const }) }),
-  res4: methods({ GET: () => json({ id: 4 }), POST: validated<typeof bodySchema, { ok: true; qty: number }>(bodySchema, (b) => json({ ok: true as const, qty: b.qty })) }),
+  res4: methods({
+    GET: () => json({ id: 4 }),
+    POST: validated<typeof bodySchema, { ok: true; qty: number }>(bodySchema, (b) =>
+      json({ ok: true as const, qty: b.qty }),
+    ),
+  }),
   res5: param("id", methods({ GET: () => json({ id: 5, kind: "param" as const }) })),
   res6: methods({ GET: () => json({ id: 6, kind: "get" as const }) }),
-  res7: methods({ GET: () => json({ id: 7 }), POST: validated<typeof bodySchema, { ok: true; qty: number }>(bodySchema, (b) => json({ ok: true as const, qty: b.qty })) }),
+  res7: methods({
+    GET: () => json({ id: 7 }),
+    POST: validated<typeof bodySchema, { ok: true; qty: number }>(bodySchema, (b) =>
+      json({ ok: true as const, qty: b.qty }),
+    ),
+  }),
   res8: param("id", methods({ GET: () => json({ id: 8, kind: "param" as const }) })),
   res9: methods({ GET: () => json({ id: 9, kind: "get" as const }) }),
 });

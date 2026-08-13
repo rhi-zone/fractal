@@ -9,8 +9,8 @@
 // shared generic to CLI's own store names and wraps the result under
 // `meta.cli`.
 
-import { resolveSourceMap } from "@rhi-zone/fractal-api-tree"
-import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree"
+import { resolveSourceMap } from "@rhi-zone/fractal-api-tree";
+import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree";
 
 /**
  * CLI's own store names — the stores `cli.source()`'s map accepts. Mirrors
@@ -22,7 +22,7 @@ import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tr
  * point today, and this design doesn't introduce one; a deployment that
  * needs a custom CLI store name would need that extended here first.
  */
-export type CliStoreName = "flag" | "path" | "env" | "caller"
+export type CliStoreName = "flag" | "path" | "env" | "caller";
 
 /**
  * `cli.source(map)` — declares which CLI store (`flag`, `path`, `env`,
@@ -44,8 +44,8 @@ export type CliStoreName = "flag" | "path" | "env" | "caller"
 export function source<const M extends SourceMapInput<CliStoreName>>(
   map: M,
 ): { readonly cli: { readonly sourceMap: ResolvedSourceMap<M> } } {
-  return { cli: { sourceMap: resolveSourceMap(map) } }
+  return { cli: { sourceMap: resolveSourceMap(map) } };
 }
 
 /** `cli.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs.ts). */
-export const cli = { source }
+export const cli = { source };

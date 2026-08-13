@@ -2,23 +2,23 @@
 //
 // Semantically-tagged string kinds (uuid, uri, email) — all subtype "string".
 
-import { registerParent, t, type TypeRef } from "../index.ts"
+import { registerParent, t, type TypeRef } from "../index.ts";
 
 declare module "../index.ts" {
   interface TypeKinds {
-    uuid: { readonly kind: "uuid" }
-    uri: { readonly kind: "uri" }
-    email: { readonly kind: "email" }
+    uuid: { readonly kind: "uuid" };
+    uri: { readonly kind: "uri" };
+    email: { readonly kind: "email" };
   }
 }
 
-registerParent("uuid", "string")
-registerParent("uri", "string")
-registerParent("email", "string")
+registerParent("uuid", "string");
+registerParent("uri", "string");
+registerParent("email", "string");
 
-export const uuid = (meta?: Record<string, unknown>): TypeRef => t({ kind: "uuid" }, meta)
-export const uri = (meta?: Record<string, unknown>): TypeRef => t({ kind: "uri" }, meta)
-export const email = (meta?: Record<string, unknown>): TypeRef => t({ kind: "email" }, meta)
+export const uuid = (meta?: Record<string, unknown>): TypeRef => t({ kind: "uuid" }, meta);
+export const uri = (meta?: Record<string, unknown>): TypeRef => t({ kind: "uri" }, meta);
+export const email = (meta?: Record<string, unknown>): TypeRef => t({ kind: "email" }, meta);
 
 // ============================================================================
 // Canonical brand types — for consumers authoring TS source that
@@ -48,9 +48,9 @@ export const email = (meta?: Record<string, unknown>): TypeRef => t({ kind: "ema
 // value here is written in the canonical lowercase form.
 // ============================================================================
 
-declare const BrandTag: unique symbol
-export type { BrandTag }
+declare const BrandTag: unique symbol;
+export type { BrandTag };
 
-export type Uuid = string & { readonly [BrandTag]: "uuid" }
-export type Uri = string & { readonly [BrandTag]: "uri" }
-export type Email = string & { readonly [BrandTag]: "email" }
+export type Uuid = string & { readonly [BrandTag]: "uuid" };
+export type Uri = string & { readonly [BrandTag]: "uri" };
+export type Email = string & { readonly [BrandTag]: "email" };

@@ -36,6 +36,7 @@ When a term is resolved, update `CONTEXT.md` right there. Don't batch — captur
 
 ```markdown
 ## TermName
+
 _Avoid:_ synonym or related term easily confused with this one
 
 One-sentence definition capturing what makes this term precise.

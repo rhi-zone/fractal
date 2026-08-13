@@ -52,6 +52,7 @@ These apply to any codebase:
 The lenses above are starting points. You can define arbitrary lenses based on the project's needs — if a project has a specific concern (performance, accessibility, security, concurrency safety, etc.), propose it as a lens. The user can also suggest their own.
 
 **Presets to offer:**
+
 - `comprehensive` — all applicable lenses
 - `quick` — 2 most impactful lenses for the project type
 - `custom` — user picks
@@ -65,6 +66,7 @@ Also ask: which files or directories to focus on? Default: entire codebase. Narr
 Spawn one Agent per agreed lens, all in parallel (single message, multiple Agent tool calls). Each agent is a `general-purpose` agent.
 
 Each agent prompt should:
+
 - State its single lens clearly at the top
 - Specify the file scope agreed in step 2
 - Instruct the agent to return findings as a structured list: `file:line — issue — suggested fix` (one finding per line)
@@ -85,6 +87,7 @@ Once all agents complete:
 ## Step 5: User review
 
 Present the findings. The user may:
+
 - Approve findings (will be applied next)
 - Reject findings (note reason, won't recur)
 - Defer findings (keep for later rounds)
@@ -105,19 +108,23 @@ Round: <N>
 Project type: <inferred type>
 
 ## Lenses
+
 <list of lenses used this session>
 
 ## Scope
+
 <files/directories in scope>
 
 ## Findings — Round <N>
 
 ### <Lens Name>
+
 - [PENDING] `file:line` — issue — suggested fix _(severity: high)_
 - [APPROVED] `file:line` — issue — suggested fix _(severity: medium)_
 - [REJECTED] `file:line` — issue — suggested fix _(reason: intentional)_
 
 ### Conflicts
+
 - <lens A> vs <lens B>: description of conflict — awaiting user decision
 ```
 
@@ -126,6 +133,7 @@ If POLISH.md already existed, increment the round number and append the new roun
 ## Step 7: Offer next steps
 
 Tell the user:
+
 - How many findings are APPROVED and ready to apply
 - That they can ask you to apply approved findings now, or run `/polish` again after applying to re-audit
 - If there were conflicts, that those need a decision before proceeding

@@ -141,7 +141,7 @@ with sourcing.
   Source: [Plugin encapsulation — fastify/fastify discussion #2735](https://github.com/fastify/fastify/discussions/2735).
 - The core confusion has a specific shape: `register()` creates a new encapsulation scope so
   anything decorated inside isn't visible outside it, but the official `fastify-plugin`
-  wrapper exists specifically to *break* that scoping — so the same API surface has both an
+  wrapper exists specifically to _break_ that scoping — so the same API surface has both an
   encapsulation feature and a first-party way to opt out of it, and users report not being
   able to tell which to reach for.
   Source: [Plugins best practices — fastify/fastify#1448](https://github.com/fastify/fastify/issues/1448).
@@ -165,7 +165,7 @@ with sourcing.
 
 - Passing a response schema without nesting it under a status code produces an error like
   `"Failed building the serialization schema for GET: /meters, due to error schema is
-  invalid: data.properties should be object"` — a message about AJV's internal schema
+invalid: data.properties should be object"` — a message about AJV's internal schema
   compilation rather than the actual mistake (forgetting to nest under a status code).
   Source: [schema.response without a status code throws a cryptic error message — fastify/fastify#3932](https://github.com/fastify/fastify/issues/3932).
 - Default validation error messages are concatenated, AJV-shaped strings like
@@ -195,7 +195,7 @@ with sourcing.
 - Fastify enforces semver-range checks between plugins and core at load time; a plugin
   built against an older core can outright fail to load against a newer one with an error
   like `"fastify-plugin: fastify-cookie - expected '>=3' fastify version, '4.0.0-alpha.3' is
-  installed"` — even in cases where the plugin would actually work fine, because the check
+installed"` — even in cases where the plugin would actually work fine, because the check
   is on declared version ranges, not actual compatibility.
   Source: [Is it possible to ignore fastify plugin version incompatibility errors? — fastify/help#668](https://github.com/fastify/help/issues/668).
 - Upgrading Fastify major versions is described as needing a manual audit of which

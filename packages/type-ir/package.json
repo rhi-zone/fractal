@@ -2,22 +2,25 @@
   "name": "@rhi-zone/fractal-type-ir",
   "version": "0.1.0-alpha.0",
   "description": "Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.)",
+  "keywords": [
+    "codegen",
+    "graphql",
+    "json-schema",
+    "openapi",
+    "protobuf",
+    "schema",
+    "sql",
+    "type-generation",
+    "type-ir"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/type-ir"
   },
-  "keywords": [
-    "type-ir",
-    "schema",
-    "codegen",
-    "json-schema",
-    "openapi",
-    "graphql",
-    "sql",
-    "protobuf",
-    "type-generation"
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -525,16 +528,24 @@
       "import": "./dist/kinds/refinements.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
     "flow-parser": "^0.324.0",
     "graphql": "^16.9.0"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "^0.34.41",
+    "fast-check": "^4.9.0",
+    "protobufjs": "^8.7.1",
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "protobufjs": "^8.7.1",
@@ -548,18 +559,7 @@
       "optional": true
     }
   },
-  "devDependencies": {
-    "@sinclair/typebox": "^0.34.41",
-    "fast-check": "^4.9.0",
-    "protobufjs": "^8.7.1",
-    "typescript": "^6.0.3"
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:watch": "bun test --watch"
-  },
-  "publishConfig": {
-    "access": "public"
+  "engines": {
+    "node": ">=20"
   }
 }

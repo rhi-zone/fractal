@@ -5,8 +5,8 @@
 // https://kotlinlang.org/docs/data-classes.html,
 // https://kotlinlang.org/docs/sealed-classes.html,
 // https://github.com/Kotlin/kotlinx.serialization
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA, kotlinDocComment, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA, kotlinDocComment, quote } from "./codegen-helpers.ts";
 
 // Kotlin enum entries conventionally read SCREAMING_SNAKE_CASE
 // (https://kotlinlang.org/docs/coding-conventions.html#property-names) —
@@ -16,19 +16,19 @@ function toEnumEntryName(member: string): string {
   const snake = member
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^A-Za-z0-9]+/g, "_")
-    .toUpperCase()
-  const cleaned = snake.replace(/^_+|_+$/g, "")
-  if (cleaned.length === 0) return "UNKNOWN"
+    .toUpperCase();
+  const cleaned = snake.replace(/^_+|_+$/g, "");
+  if (cleaned.length === 0) return "UNKNOWN";
   // A Kotlin identifier can't start with a digit.
-  return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned
+  return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Kotlin built-in types: https://kotlinlang.org/docs/basic-types.html. Named
 // (object/enum/union) kinds have no anonymous Kotlin equivalent — a data
@@ -67,7 +67,8 @@ const handlers: Record<string, Converter> = {
   void: leaf("Unit"),
   unknown: leaf("Any"),
   never: leaf("Nothing"),
-  object: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "Map<String, @Contextual Any?>"),
+  object: (_shape, meta) =>
+    typeof meta.typeName === "string" ? meta.typeName : "Map<String, @Contextual Any?>",
   // A class instance carries only nominal identity (className/source), never
   // fields (see type-ir's TypeKinds.instance doc comment) — the caller
   // (whatever assembles this emitted source into a Kotlin file) is
@@ -87,26 +88,26 @@ const handlers: Record<string, Converter> = {
   // have no stdlib equivalent and degrade to `List<Any?>` (lossy — drops
   // per-position typing, same tradeoff typescript.ts's peers take elsewhere).
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
+    const s = shape as TypeShape & { kind: "tuple" };
     if (s.elements.length === 2) {
-      return `Pair<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}>`
+      return `Pair<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}>`;
     }
     if (s.elements.length === 3) {
-      return `Triple<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}, ${toKotlinType(s.elements[2]!)}>`
+      return `Triple<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}, ${toKotlinType(s.elements[2]!)}>`;
     }
-    return "List<Any?>"
+    return "List<Any?>";
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Map<${toKotlinType(s.key)}, ${toKotlinType(s.value)}>`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Map<${toKotlinType(s.key)}, ${toKotlinType(s.value)}>`;
   },
   union: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "Any"),
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "Nothing?"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "Boolean"
-    return Number.isInteger(s.value) ? "Int" : "Double"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "Nothing?";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "Boolean";
+    return Number.isInteger(s.value) ? "Int" : "Double";
   },
   enum: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "Any"),
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
@@ -114,18 +115,18 @@ const handlers: Record<string, Converter> = {
   // lossy: falls back to the first member's type, dropping the rest (same
   // convention protobuf.ts/capnp.ts use for their own missing intersection).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "Any" : toKotlinType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "Any" : toKotlinType(first);
   },
   // https://kotlinlang.org/docs/lambdas.html#function-types — `(A, B) -> R`.
   // An explicit `thisType` becomes a Kotlin function-type receiver
   // (`ThisType.(A) -> R`, https://kotlinlang.org/docs/lambdas.html#function-types-with-receiver).
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p) => toKotlinType(p.type)).join(", ")
-    const receiver = s.thisType === undefined ? "" : `${toKotlinType(s.thisType)}.`
-    return `${receiver}(${params}) -> ${toKotlinType(s.returnType)}`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p) => toKotlinType(p.type)).join(", ");
+    const receiver = s.thisType === undefined ? "" : `${toKotlinType(s.thisType)}.`;
+    return `${receiver}(${params}) -> ${toKotlinType(s.returnType)}`;
   },
   // `method` has no explicit entry — `registerParent("method", "function")`
   // falls back to the `function` handler above for the bare-type-expression
@@ -136,20 +137,20 @@ const handlers: Record<string, Converter> = {
   // `interface` TypeRef used as a top-level declaration instead becomes a
   // real Kotlin `interface` — see `toKotlin`'s interface branch below).
   interface: leaf("Any"),
-}
+};
 
 /** Inline type expression — used for field types, list/map element types,
  * etc. Named (object/enum/union) kinds without `meta.typeName` degrade
  * honestly rather than fabricating a declaration site; see the `handlers`
  * doc comment above for the exact per-kind fallback. */
 export function toKotlinType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const type = converter === undefined ? "Any" : converter(ref.shape, ref.meta)
-  const nullable = ref.meta.nullable === true || ref.meta.optional === true
-  return nullable && !type.endsWith("?") ? `${type}?` : type
+  const converter = resolve(ref.shape.kind, handlers);
+  const type = converter === undefined ? "Any" : converter(ref.shape, ref.meta);
+  const nullable = ref.meta.nullable === true || ref.meta.optional === true;
+  return nullable && !type.endsWith("?") ? `${type}?` : type;
 }
 
-type FieldResult = { type: string; nested: string[] }
+type FieldResult = { type: string; nested: string[] };
 
 /**
  * A field's Kotlin type plus any nested declarations it needed to synthesize.
@@ -161,36 +162,36 @@ type FieldResult = { type: string; nested: string[] }
  * reference to that name.
  */
 function declareField(fieldName: string, fieldRef: TypeRef): FieldResult {
-  const nested: string[] = []
-  let type: string
+  const nested: string[] = [];
+  let type: string;
 
   if (isA(fieldRef.shape.kind, "object")) {
-    const nestedName = capitalize(fieldName)
-    nested.push(toKotlin(fieldRef, nestedName))
-    type = nestedName
+    const nestedName = capitalize(fieldName);
+    nested.push(toKotlin(fieldRef, nestedName));
+    type = nestedName;
   } else if (
     fieldRef.shape.kind === "array" &&
     isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
   ) {
-    const nestedName = capitalize(fieldName)
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    nested.push(toKotlin(element, nestedName))
-    type = `List<${nestedName}>`
+    const nestedName = capitalize(fieldName);
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    nested.push(toKotlin(element, nestedName));
+    type = `List<${nestedName}>`;
   } else if (fieldRef.shape.kind === "enum") {
-    const nestedName = capitalize(fieldName)
-    nested.push(toKotlin(fieldRef, nestedName))
-    type = nestedName
+    const nestedName = capitalize(fieldName);
+    nested.push(toKotlin(fieldRef, nestedName));
+    type = nestedName;
   } else if (fieldRef.shape.kind === "union") {
-    const nestedName = capitalize(fieldName)
-    nested.push(toKotlin(fieldRef, nestedName))
-    type = nestedName
+    const nestedName = capitalize(fieldName);
+    nested.push(toKotlin(fieldRef, nestedName));
+    type = nestedName;
   } else {
-    type = toKotlinType(fieldRef)
+    type = toKotlinType(fieldRef);
   }
 
-  const nullable = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-  if (nullable && !type.endsWith("?")) type += "?"
-  return { type, nested }
+  const nullable = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+  if (nullable && !type.endsWith("?")) type += "?";
+  return { type, nested };
 }
 
 // https://kotlinlang.org/docs/data-classes.html + kotlinx.serialization's
@@ -199,32 +200,46 @@ function declareField(fieldName: string, fieldRef: TypeRef): FieldResult {
 // how `optional` is understood everywhere else in type-ir (a field that MAY
 // be absent, not one that's merely nullable).
 function toDataClass(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const nestedDecls: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const nestedDecls: string[] = [];
   const params = Object.entries(shape.fields).map(([fieldName, fieldRef]) => {
-    const { type, nested } = declareField(fieldName, fieldRef)
-    nestedDecls.push(...nested)
-    const readonly = fieldRef.meta.readonly === true
-    const optional = fieldRef.meta.optional === true
-    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ")
-    const keyword = readonly ? "val" : "var"
-    const suffix = optional ? " = null" : ""
-    return `${fieldDoc}    @SerialName(${quote(fieldName)}) ${keyword} ${fieldName}: ${type}${suffix}`
-  })
+    const { type, nested } = declareField(fieldName, fieldRef);
+    nestedDecls.push(...nested);
+    const readonly = fieldRef.meta.readonly === true;
+    const optional = fieldRef.meta.optional === true;
+    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ");
+    const keyword = readonly ? "val" : "var";
+    const suffix = optional ? " = null" : "";
+    return `${fieldDoc}    @SerialName(${quote(fieldName)}) ${keyword} ${fieldName}: ${type}${suffix}`;
+  });
 
-  const lines = [kotlinDocComment(ref.meta, ""), "@Serializable", `data class ${name}(`, params.join(",\n"), ")"]
-  const decl = lines.filter((l) => l !== "").join("\n")
-  return [decl, ...nestedDecls].join("\n\n")
+  const lines = [
+    kotlinDocComment(ref.meta, ""),
+    "@Serializable",
+    `data class ${name}(`,
+    params.join(",\n"),
+    ")",
+  ];
+  const decl = lines.filter((l) => l !== "").join("\n");
+  return [decl, ...nestedDecls].join("\n\n");
 }
 
 // https://kotlinlang.org/docs/enum-classes.html + kotlinx.serialization's
 // @SerialName per entry — preserves the exact wire string regardless of how
 // `toEnumEntryName` reshapes the Kotlin identifier.
 function toEnumClass(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const entries = shape.members.map((member) => `    @SerialName(${quote(member)}) ${toEnumEntryName(member)}`)
-  const lines = [kotlinDocComment(ref.meta, ""), "@Serializable", `enum class ${name} {`, entries.join(",\n"), "}"]
-  return lines.filter((l) => l !== "").join("\n")
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const entries = shape.members.map(
+    (member) => `    @SerialName(${quote(member)}) ${toEnumEntryName(member)}`,
+  );
+  const lines = [
+    kotlinDocComment(ref.meta, ""),
+    "@Serializable",
+    `enum class ${name} {`,
+    entries.join(",\n"),
+    "}",
+  ];
+  return lines.filter((l) => l !== "").join("\n");
 }
 
 /** True when every union variant is (or descends from) `object` and they all
@@ -235,11 +250,11 @@ function toEnumClass(name: string, ref: TypeRef): string {
  * encoding below; a plain union without this falls back to a bare marker
  * `sealed interface` wrapping each variant. */
 function discriminantValue(variant: TypeRef, discriminator: string): string | undefined {
-  if (!isA(variant.shape.kind, "object")) return undefined
-  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator]
-  if (field === undefined || field.shape.kind !== "literal") return undefined
-  const value = (field.shape as TypeShape & { kind: "literal" }).value
-  return typeof value === "string" ? value : undefined
+  if (!isA(variant.shape.kind, "object")) return undefined;
+  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator];
+  if (field === undefined || field.shape.kind !== "literal") return undefined;
+  const value = (field.shape as TypeShape & { kind: "literal" }).value;
+  return typeof value === "string" ? value : undefined;
 }
 
 // https://kotlinlang.org/docs/sealed-classes.html +
@@ -250,13 +265,14 @@ function discriminantValue(variant: TypeRef, discriminator: string): string | un
 // from the IR (rather than the subclass's own Kotlin name), so the wire
 // format matches the source schema exactly.
 function toSealedClass(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
-  const nestedDecls: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator =
+    typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
+  const nestedDecls: string[] = [];
 
   const variantDecls = shape.variants.map((variant, i) => {
-    const tag = discriminator === undefined ? undefined : discriminantValue(variant, discriminator)
-    const variantName = tag !== undefined ? capitalize(tag) : `Variant${i + 1}`
+    const tag = discriminator === undefined ? undefined : discriminantValue(variant, discriminator);
+    const variantName = tag !== undefined ? capitalize(tag) : `Variant${i + 1}`;
 
     if (isA(variant.shape.kind, "object")) {
       // The discriminant field itself is structural noise once it's encoded
@@ -264,40 +280,44 @@ function toSealedClass(name: string, ref: TypeRef): string {
       // it from the generated data class's fields, same as every other
       // discriminated-union projector in this package (e.g. from-jtd.ts's
       // reconstruction, in reverse).
-      const objShape = variant.shape as TypeShape & { kind: "object" }
+      const objShape = variant.shape as TypeShape & { kind: "object" };
       const fields =
         tag === undefined
           ? objShape.fields
-          : Object.fromEntries(Object.entries(objShape.fields).filter(([fieldName]) => fieldName !== discriminator))
-      const variantRef = { shape: { ...objShape, fields }, meta: variant.meta }
-      const classDecl = toDataClass(variantName, variantRef)
+          : Object.fromEntries(
+              Object.entries(objShape.fields).filter(([fieldName]) => fieldName !== discriminator),
+            );
+      const variantRef = { shape: { ...objShape, fields }, meta: variant.meta };
+      const classDecl = toDataClass(variantName, variantRef);
       // `toDataClass` always emits "@Serializable\ndata class ..." as its
       // first two lines (once any KDoc comment precedes them) — splice
       // `@SerialName` in directly after `@Serializable`, matching the
       // idiomatic kotlinx.serialization annotation order.
       const annotated =
-        tag === undefined ? classDecl : classDecl.replace("@Serializable\n", `@Serializable\n@SerialName(${quote(tag)})\n`)
+        tag === undefined
+          ? classDecl
+          : classDecl.replace("@Serializable\n", `@Serializable\n@SerialName(${quote(tag)})\n`);
       // Splice `: Name()` onto the constructor's closing paren so the
       // variant extends the sealed parent. `toDataClass` always ends a
       // declaration's own class body with a bare ")" line (see its `lines`
       // array), so this only ever matches that line, never a nested
       // declaration's closing paren (those are joined in afterwards, with a
       // blank-line separator, by `toDataClass`'s own return).
-      const [ownDecl, ...rest] = annotated.split("\n\n")
-      return [`${ownDecl!.replace(/\)$/, `) : ${name}()`)}`, ...rest].join("\n\n")
+      const [ownDecl, ...rest] = annotated.split("\n\n");
+      return [`${ownDecl!.replace(/\)$/, `) : ${name}()`)}`, ...rest].join("\n\n");
     }
 
     // A non-object variant (e.g. a bare string/number in the union) has no
     // fields to lift into a data class — wrap it as a single-value carrier,
     // the idiomatic Kotlin pattern for a sealed subtype over a scalar.
-    const { type, nested } = declareField(`${variantName}Value`, variant)
-    nestedDecls.push(...nested)
-    return `@Serializable\ndata class ${variantName}(val value: ${type}) : ${name}()`
-  })
+    const { type, nested } = declareField(`${variantName}Value`, variant);
+    nestedDecls.push(...nested);
+    return `@Serializable\ndata class ${variantName}(val value: ${type}) : ${name}()`;
+  });
 
-  const header = [kotlinDocComment(ref.meta, ""), "@Serializable", `sealed class ${name}`]
-  const decl = header.filter((l) => l !== "").join("\n")
-  return [decl, ...variantDecls, ...nestedDecls].join("\n\n")
+  const header = [kotlinDocComment(ref.meta, ""), "@Serializable", `sealed class ${name}`];
+  const decl = header.filter((l) => l !== "").join("\n");
+  return [decl, ...variantDecls, ...nestedDecls].join("\n\n");
 }
 
 /**
@@ -312,17 +332,17 @@ function toSealedClass(name: string, ref: TypeRef): string {
  */
 export function toKotlin(ref: TypeRef, name?: string): string {
   if (ref.shape.kind === "object" || ref.shape.kind === "union" || ref.shape.kind === "enum") {
-    const declName = name ?? "Anonymous"
-    if (ref.shape.kind === "object") return toDataClass(declName, ref)
-    if (ref.shape.kind === "enum") return toEnumClass(declName, ref)
-    return toSealedClass(declName, ref)
+    const declName = name ?? "Anonymous";
+    if (ref.shape.kind === "object") return toDataClass(declName, ref);
+    if (ref.shape.kind === "enum") return toEnumClass(declName, ref);
+    return toSealedClass(declName, ref);
   }
-  if (name === undefined) return toKotlinType(ref)
-  return `typealias ${name} = ${toKotlinType(ref)}`
+  if (name === undefined) return toKotlinType(ref);
+  return `typealias ${name} = ${toKotlinType(ref)}`;
 }
 
 export function toKotlinDeclarations(registry: Record<string, TypeRef>): string {
   return Object.entries(registry)
     .map(([name, ref]) => toKotlin(ref, name))
-    .join("\n\n")
+    .join("\n\n");
 }

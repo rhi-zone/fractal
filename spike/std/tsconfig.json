@@ -12,12 +12,5 @@
     "types": ["bun-types"],
     "noEmit": true
   },
-  "include": [
-    "std.ts",
-    "app.ts",
-    "app.test.ts",
-    "meta.ts",
-    "client.ts",
-    "client.test.ts"
-  ]
+  "include": ["std.ts", "app.ts", "app.test.ts", "meta.ts", "client.ts", "client.test.ts"]
 }

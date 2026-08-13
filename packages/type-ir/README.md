@@ -44,6 +44,7 @@ package in this monorepo. "Key exports" above covers the handful most
 consumers reach for directly; the rest groups into a few clear families.
 
 **Output format projectors** — `TypeRef` → a specific schema/IDL text or object, beyond the JSON Schema/OpenAPI 3.0 pair already listed above:
+
 - `./openapi20` — Swagger 2.0 schema objects (draft-04-restricted JSON Schema vocabulary)
 - `./graphql` — GraphQL SDL type projector
 - `./protobuf` — proto3 message/service projector
@@ -54,22 +55,25 @@ consumers reach for directly; the rest groups into a few clear families.
 - `./sql`, `./sql-mssql` — SQL DDL (postgres/mysql/sqlite via `./sql`; MSSQL is a separate dialect with its own IDENTITY/NVARCHAR conventions)
 
 **Ingestion (`from-*`)** — the reverse direction, an external schema or source → `TypeRef`, mirroring the output projector of the same name where one exists:
+
 - `./from-json-schema`, `./from-openapi`, `./from-graphql`, `./from-protobuf`, `./from-flatbuffers`, `./from-capnp`, `./from-jtd` — reverse of the matching projector above
 - `./from-sql` — postgres/mysql/sqlite DDL → `TypeRef` (reverse of `./sql`)
 - `./from-cql` — Cassandra CQL DDL (`CREATE TABLE`/`CREATE TYPE`, partition/clustering keys, collections, UDTs, `frozen<...>`) → `TypeRef`
 - `./from-elasticsearch` — an Elasticsearch index mapping → `TypeRef` (pure structural traversal, already-JSON input)
-- `./from-json` — a single JSON *value* → `TypeRef` by structural heuristic (no declared schema to read, only a shape to guess)
-- `./from-json-corpus` — *multiple* JSON values → the tightest covering `TypeRef` (enum detection, discriminated unions, record-vs-dict, optional-field inference — signals only visible across a corpus)
+- `./from-json` — a single JSON _value_ → `TypeRef` by structural heuristic (no declared schema to read, only a shape to guess)
+- `./from-json-corpus` — _multiple_ JSON values → the tightest covering `TypeRef` (enum detection, discriminated unions, record-vs-dict, optional-field inference — signals only visible across a corpus)
 - `./from-typescript` — general-purpose TS compiler-API ingester (`ts.Type` + `ts.TypeChecker` → `TypeRef`; primitives, literals, objects, arrays, tuples, unions incl. TS enums and discriminated unions, intersections incl. branded/opaque types)
 - `./from-flow` — Flow type-annotation syntax → `TypeRef`, via `flow-parser` (Flow's own OCaml parser compiled to WASM)
 - `./standard-schema`, `./from-standard-schema` — the two directions of [Standard Schema](https://standardschema.dev/), the vendor-neutral `~standard.validate` interface Zod/Valibot/ArkType and others implement: `./standard-schema` emits a runtime object implementing it from a `TypeRef`, `./from-standard-schema` ingests any object implementing it back into a `TypeRef`
 
 **Documentation-site generators** — a `TypeRefDocument` → one reference page per named `defs` entry, one module per doc-site toolchain's conventions:
+
 - `./docusaurus-reference` — MDX pages for Docusaurus
 - `./starlight-reference` — Astro Starlight MDX pages
 - `./mkdocs-reference` — Markdown pages for MkDocs-Material (admonitions, content tabs, abbreviations — no MDX/JSX)
 
 **Type-level utilities:**
+
 - `./derive` — the pure `TypeRef` → `TypeRef` transform operators (same family as `partial`/`pick`/`omit` above; every projector benefits automatically since these operate before projection)
 - `./kinds/*` — the shape-kind extension modules the core lattice itself is assembled from: `int-widths`, `float-widths`, `wire-numerics` (int+float widths combined, for wire formats like protobuf/Avro/TypeBox), `date-time`, `duration`, `temporal` (date-time+duration combined), `semantic-strings` (`uuid`/`uri`/`email`, all subtype `string`), `bytes` (binary blob, no parent), `common` (everything above, bundled for convenience), `refinements` (branded refinement-tag types for authoring TS source that `./from-typescript` reads)
 
@@ -78,31 +82,31 @@ consumers reach for directly; the rest groups into a few clear families.
 
 **Per-language serialization library variants** — the bulk of the export surface (52 subpaths across 18 general-purpose languages): `TypeRef` → an idiomatic struct/class in that language, wired to one specific serialization library. One module per `{language}-{library}` pair; a bare `./{language}` alias exists only for languages with exactly one variant today, and is removed once a language grows a second (no default silently wins the unqualified path). This is a **structural snapshot of `package.json`'s current `exports` map**, not a status/quality claim — for what's implemented-and-tested vs. still planned per language, and the history behind the bare-alias policy, see [`docs/roadmap.md`](../../docs/roadmap.md)'s "Output: General-Purpose Languages" and "Per-Language Serialization Library Variants" sections, which are the authoritative tracking for this matrix:
 
-| Language | Variant export subpaths |
-|---|---|
-| TypeScript | `typescript`, `typescript-native` |
-| Python | `python-dataclass`, `python-pydantic`, `python-attrs`, `python-msgspec`, `python-cattrs` |
-| Go | `go-encoding-json`, `go-easyjson`, `go-jsoniter`, `go-sonic` |
-| Rust | `rust`, `rust-serde` |
-| Java | `java-jackson`, `java-gson`, `java-moshi`, `java-jsonb` |
-| C# | `csharp-systemtextjson`, `csharp-newtonsoft`, `csharp-servicestack` |
-| Swift | `swift-codable`, `swift-swiftyjson`, `swift-objectmapper` |
-| Kotlin | `kotlin-kotlinx`, `kotlin-jackson`, `kotlin-gson` |
-| Dart | `dart-json-serializable`, `dart-freezed`, `dart-built-value` |
-| Elm | `elm`, `elm-json` |
-| Haskell | `haskell`, `haskell-aeson` |
-| Ruby | `ruby-sorbet`, `ruby-dry-types`, `ruby-rbs` |
-| C++ | `cpp-nlohmann`, `cpp-rapidjson`, `cpp-simdjson`, `cpp-boost-json`, `cpp-glaze` |
-| PHP | `php-native`, `php-symfony`, `php-jms` |
-| Crystal | `crystal`, `crystal-json-serializable` |
-| Objective-C | `objc`, `objc-foundation` |
-| Flow | `flow`, `flow-native` |
-| Elixir | `elixir`, `elixir-jason` |
+| Language    | Variant export subpaths                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| TypeScript  | `typescript`, `typescript-native`                                                        |
+| Python      | `python-dataclass`, `python-pydantic`, `python-attrs`, `python-msgspec`, `python-cattrs` |
+| Go          | `go-encoding-json`, `go-easyjson`, `go-jsoniter`, `go-sonic`                             |
+| Rust        | `rust`, `rust-serde`                                                                     |
+| Java        | `java-jackson`, `java-gson`, `java-moshi`, `java-jsonb`                                  |
+| C#          | `csharp-systemtextjson`, `csharp-newtonsoft`, `csharp-servicestack`                      |
+| Swift       | `swift-codable`, `swift-swiftyjson`, `swift-objectmapper`                                |
+| Kotlin      | `kotlin-kotlinx`, `kotlin-jackson`, `kotlin-gson`                                        |
+| Dart        | `dart-json-serializable`, `dart-freezed`, `dart-built-value`                             |
+| Elm         | `elm`, `elm-json`                                                                        |
+| Haskell     | `haskell`, `haskell-aeson`                                                               |
+| Ruby        | `ruby-sorbet`, `ruby-dry-types`, `ruby-rbs`                                              |
+| C++         | `cpp-nlohmann`, `cpp-rapidjson`, `cpp-simdjson`, `cpp-boost-json`, `cpp-glaze`           |
+| PHP         | `php-native`, `php-symfony`, `php-jms`                                                   |
+| Crystal     | `crystal`, `crystal-json-serializable`                                                   |
+| Objective-C | `objc`, `objc-foundation`                                                                |
+| Flow        | `flow`, `flow-native`                                                                    |
+| Elixir      | `elixir`, `elixir-jason`                                                                 |
 
 ## Generated Python code: unmodeled validation-metadata fields
 
 The four Python serialization-variant projectors that model per-field
-*validation* metadata (not just shape) — `./python-pydantic`,
+_validation_ metadata (not just shape) — `./python-pydantic`,
 `./python-msgspec`, `./python-cattrs`, `./python-attrs` — each keep a
 `KNOWN_FIELD_META` allow-list of the `TypeRef` metadata keys they translate
 into real target-library validation. Any metadata key present on a field
@@ -122,7 +126,7 @@ validation intent, and are excluded from consideration entirely — not
 
 **`multipleOf` is a divergence point**: modeled by `./python-pydantic` and
 `./python-msgspec` (both emit real multiple-of validation), but
-*deliberately* left out of `./python-cattrs` and `./python-attrs`'s
+_deliberately_ left out of `./python-cattrs` and `./python-attrs`'s
 allow-lists — attrs (which cattrs' classes are also built on) has no
 built-in multiple-of validator, so on those two targets `multipleOf` falls
 through to the generic unmodeled-metadata stub like any other unrecognized
@@ -130,6 +134,7 @@ key (documented inline at each file's `KNOWN_FIELD_META` definition).
 
 What the marker looks like per target, when a field or object carries an
 unmodeled key:
+
 - **`python-pydantic.ts`** (~line 213 per-field, ~line 233 object-level) —
   emits a `@field_validator`/`@model_validator` stub method whose body is a
   `# TODO: unmodeled validation metadata on "<name>": <keys>` comment
@@ -160,16 +165,18 @@ discriminant field directly, since it already assumes a module-level
 ## Usage
 
 ```ts
-import { types, t, resolve } from "@rhi-zone/fractal-type-ir"
+import { types, t, resolve } from "@rhi-zone/fractal-type-ir";
 
-const book = t(types.object({
-  id: t(types.uuid),
-  title: t(types.string),
-}))
+const book = t(
+  types.object({
+    id: t(types.uuid),
+    title: t(types.string),
+  }),
+);
 
 const toDescription = resolve("uuid", {
   string: (r: typeof book) => "a string",
-})
+});
 ```
 
 ## Install

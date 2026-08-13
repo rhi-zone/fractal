@@ -1,6 +1,6 @@
-import { resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeRefDocument, type TypeShape } from "./index.ts";
 
-export type JsonSchema = Record<string, unknown>
+export type JsonSchema = Record<string, unknown>;
 
 const passthroughKeys = [
   "minimum",
@@ -18,34 +18,38 @@ const passthroughKeys = [
   // writeOnly, examples (since draft-06/07).
   "readOnly",
   "writeOnly",
-] as const
+] as const;
 
-function withMeta(schema: JsonSchema, meta: Readonly<Record<string, unknown>>, complex: boolean): JsonSchema {
-  let result = schema
+function withMeta(
+  schema: JsonSchema,
+  meta: Readonly<Record<string, unknown>>,
+  complex: boolean,
+): JsonSchema {
+  let result = schema;
 
   if (meta.nullable === true) {
     if (complex) {
-      result = { anyOf: [result, { type: "null" }] }
+      result = { anyOf: [result, { type: "null" }] };
     } else if (typeof result.type === "string") {
-      result = { ...result, type: [result.type, "null"] }
+      result = { ...result, type: [result.type, "null"] };
     } else {
-      result = { anyOf: [result, { type: "null" }] }
+      result = { anyOf: [result, { type: "null" }] };
     }
   }
 
-  if (typeof meta.title === "string") result = { ...result, title: meta.title }
-  if (typeof meta.description === "string") result = { ...result, description: meta.description }
-  if (meta.deprecated === true) result = { ...result, deprecated: true }
-  if (meta.default !== undefined) result = { ...result, default: meta.default }
+  if (typeof meta.title === "string") result = { ...result, title: meta.title };
+  if (typeof meta.description === "string") result = { ...result, description: meta.description };
+  if (meta.deprecated === true) result = { ...result, deprecated: true };
+  if (meta.default !== undefined) result = { ...result, default: meta.default };
   // draft 2020-12 §9.5: "examples" is an array of example values (distinct from
   // OAS's singular "example").
-  if (Array.isArray(meta.examples)) result = { ...result, examples: meta.examples }
+  if (Array.isArray(meta.examples)) result = { ...result, examples: meta.examples };
 
   for (const key of passthroughKeys) {
-    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }
+    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] };
   }
 
-  return result
+  return result;
 }
 
 // Infers the JSON Schema `type` for an enum's members from their actual
@@ -58,24 +62,24 @@ function withMeta(schema: JsonSchema, meta: Readonly<Record<string, unknown>>, c
 // values).
 function enumSchema(members: readonly unknown[]): JsonSchema {
   if (members.length > 0 && members.every((m) => typeof m === "boolean")) {
-    return { type: "boolean", enum: [...members] }
+    return { type: "boolean", enum: [...members] };
   }
   if (members.length > 0 && members.every((m) => typeof m === "number")) {
-    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number"
-    return { type, enum: [...members] }
+    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number";
+    return { type, enum: [...members] };
   }
   if (members.length > 0 && members.every((m) => typeof m === "string")) {
-    return { type: "string", enum: [...members] }
+    return { type: "string", enum: [...members] };
   }
-  return { enum: [...members] }
+  return { enum: [...members] };
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema;
 
 const leaf =
   (schema: JsonSchema): Converter =>
   () =>
-    schema
+    schema;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf({ type: "boolean" }),
@@ -99,21 +103,21 @@ const handlers: Record<string, Converter> = {
   unknown: leaf({}),
   never: leaf({ not: {} }),
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
-    const properties: Record<string, JsonSchema> = {}
-    const required: string[] = []
+    const s = shape as TypeShape & { kind: "object" };
+    const properties: Record<string, JsonSchema> = {};
+    const required: string[] = [];
     for (const [name, field] of Object.entries(s.fields)) {
-      let propSchema = toJsonSchema(field)
+      let propSchema = toJsonSchema(field);
       // draft 2020-12 §9.5: `readOnly` is a per-schema annotation, driven by
       // the `meta.readonly` open-metadata-bag convention (see type-ir's
       // TypeRef doc comment) set on the field's own TypeRef.
-      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true }
-      properties[name] = propSchema
-      if (field.meta.optional !== true) required.push(name)
+      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true };
+      properties[name] = propSchema;
+      if (field.meta.optional !== true) required.push(name);
     }
-    const schema: JsonSchema = { type: "object", properties }
-    if (required.length > 0) schema.required = required
-    return schema
+    const schema: JsonSchema = { type: "object", properties };
+    if (required.length > 0) schema.required = required;
+    return schema;
   },
   // JSON Schema has no class-identity concept and `instance` carries no field
   // data to build `properties` from (it's purely nominal — see type-ir's
@@ -122,26 +126,26 @@ const handlers: Record<string, Converter> = {
   // key, same convention as this package's OAS projectors' `x-*` fields) so
   // tooling that wants the identity back can still read it.
   instance: (shape) => {
-    const s = shape as TypeShape & { kind: "instance" }
+    const s = shape as TypeShape & { kind: "instance" };
     // `x-declaration-file` alongside `x-class-name` so `fromJsonSchema` can
     // rebuild the full nominal identity rather than half of it — without it
     // the round trip loses `declarationFile` and cannot reconstruct the
     // original `instance`.
-    const out: Record<string, unknown> = { type: "object", "x-class-name": s.className }
-    if (s.declarationFile !== "") out["x-declaration-file"] = s.declarationFile
-    return out as ReturnType<typeof toJsonSchema>
+    const out: Record<string, unknown> = { type: "object", "x-class-name": s.className };
+    if (s.declarationFile !== "") out["x-declaration-file"] = s.declarationFile;
+    return out as ReturnType<typeof toJsonSchema>;
   },
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return { type: "array", items: toJsonSchema(s.element) }
+    const s = shape as TypeShape & { kind: "array" };
+    return { type: "array", items: toJsonSchema(s.element) };
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return { type: "array", prefixItems: s.elements.map(toJsonSchema), items: false }
+    const s = shape as TypeShape & { kind: "tuple" };
+    return { type: "array", prefixItems: s.elements.map(toJsonSchema), items: false };
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return { type: "object", additionalProperties: toJsonSchema(s.value) }
+    const s = shape as TypeShape & { kind: "map" };
+    return { type: "object", additionalProperties: toJsonSchema(s.value) };
   },
   // JSON Schema has no streaming/async-sequence vocabulary — degrades to the
   // same `array`-of-element shape used elsewhere for a materialized sequence,
@@ -149,16 +153,16 @@ const handlers: Record<string, Converter> = {
   // `x-class-name`/`x-function`) so tooling that cares can still tell a
   // stream apart from an ordinary array.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return { type: "array", items: toJsonSchema(s.element), "x-stream": true }
+    const s = shape as TypeShape & { kind: "stream" };
+    return { type: "array", items: toJsonSchema(s.element), "x-stream": true };
   },
   // JSON Schema has no pagination vocabulary either — degrade to the same
   // array-of-element shape, carrying `x-page-style` (vendor-extension-style
   // key, same convention as `x-stream`) so tooling that cares can still tell
   // a paginated endpoint's items apart from a plain array.
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return { type: "array", items: toJsonSchema(s.element), "x-page-style": s.style }
+    const s = shape as TypeShape & { kind: "page" };
+    return { type: "array", items: toJsonSchema(s.element), "x-page-style": s.style };
   },
   // JSON Schema 2019-09 §9.2.1.2 defines no `discriminator` keyword itself,
   // but the OpenAPI-originated `discriminator: { propertyName }` shape is a
@@ -167,30 +171,30 @@ const handlers: Record<string, Converter> = {
   // matches) is the correct composition keyword once a discriminator makes
   // variants mutually exclusive by construction; plain unions keep `anyOf`.
   union: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const variants = s.variants.map(toJsonSchema)
+    const s = shape as TypeShape & { kind: "union" };
+    const variants = s.variants.map(toJsonSchema);
     if (typeof meta.discriminator === "string") {
-      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } }
+      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } };
     }
-    return { anyOf: variants }
+    return { anyOf: variants };
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    return { const: s.value }
+    const s = shape as TypeShape & { kind: "literal" };
+    return { const: s.value };
   },
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return enumSchema(s.members)
+    const s = shape as TypeShape & { kind: "enum" };
+    return enumSchema(s.members);
   },
   ref: (shape) => {
-    const s = shape as TypeShape & { kind: "ref" }
-    return { $ref: `#/$defs/${s.target}` }
+    const s = shape as TypeShape & { kind: "ref" };
+    return { $ref: `#/$defs/${s.target}` };
   },
   // draft 2020-12 §10.2.1.1 `allOf`: every listed schema must validate — the
   // faithful encoding of a structural intersection (mixin composition).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    return { allOf: s.members.map(toJsonSchema) }
+    const s = shape as TypeShape & { kind: "intersection" };
+    return { allOf: s.members.map(toJsonSchema) };
   },
   // JSON Schema has no callable-type vocabulary — degrade honestly to an
   // untyped schema, carrying `x-function: true` (vendor-extension-style key,
@@ -207,7 +211,7 @@ const handlers: Record<string, Converter> = {
   // degrade to an untyped object schema, carrying `x-interface: true` (same
   // vendor-extension convention as `x-class-name`/`x-function`/`x-method`).
   interface: leaf({ type: "object", "x-interface": true }),
-}
+};
 
 const complexKinds = new Set([
   "object",
@@ -222,13 +226,13 @@ const complexKinds = new Set([
   "function",
   "method",
   "interface",
-])
+]);
 
 export function toJsonSchema(ref: TypeRef): JsonSchema {
-  const converter = resolve(ref.shape.kind, handlers)
-  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta)
-  const complex = complexKinds.has(ref.shape.kind)
-  return withMeta(schema, ref.meta, complex)
+  const converter = resolve(ref.shape.kind, handlers);
+  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta);
+  const complex = complexKinds.has(ref.shape.kind);
+  return withMeta(schema, ref.meta, complex);
 }
 
 /**
@@ -241,10 +245,10 @@ export function toJsonSchema(ref: TypeRef): JsonSchema {
  * directly for the no-sharing case.
  */
 export function toJsonSchemaDocument(doc: TypeRefDocument): JsonSchema {
-  const schema = toJsonSchema(doc.root)
-  const defNames = Object.keys(doc.defs)
-  if (defNames.length === 0) return schema
-  const $defs: Record<string, JsonSchema> = {}
-  for (const name of defNames) $defs[name] = toJsonSchema(doc.defs[name]!)
-  return { ...schema, $defs }
+  const schema = toJsonSchema(doc.root);
+  const defNames = Object.keys(doc.defs);
+  if (defNames.length === 0) return schema;
+  const $defs: Record<string, JsonSchema> = {};
+  for (const name of defNames) $defs[name] = toJsonSchema(doc.defs[name]!);
+  return { ...schema, $defs };
 }

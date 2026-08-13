@@ -80,9 +80,9 @@
 // `ts.resolveTypeReferenceDirective`) is straightforward future work if a
 // caller's project ever depends on triple-slash-only reachability.
 
-import * as path from "node:path"
-import ts from "typescript"
-import { isTsBuiltinLibFile } from "./cache.ts"
+import * as path from "node:path";
+import ts from "typescript";
+import { isTsBuiltinLibFile } from "./cache.ts";
 
 /** `ts.SourceFile.imports` isn't declared on the public `SourceFile`
  * interface in this TypeScript version, but is populated by the parser at
@@ -92,8 +92,8 @@ import { isTsBuiltinLibFile } from "./cache.ts"
  * list -> empty closures -> every entry's cache permanently misses, loudly
  * visible as "always rebuilds") rather than silently miscompiling elsewhere. */
 function moduleSpecifiersOf(sourceFile: ts.SourceFile): readonly string[] {
-  const withImports = sourceFile as unknown as { imports?: readonly ts.StringLiteralLike[] }
-  return (withImports.imports ?? []).map((specifier) => specifier.text)
+  const withImports = sourceFile as unknown as { imports?: readonly ts.StringLiteralLike[] };
+  return (withImports.imports ?? []).map((specifier) => specifier.text);
 }
 
 /** Resolve every module specifier `sourceFile` references to an absolute
@@ -106,7 +106,7 @@ function directDependenciesOf(
   compilerOptions: ts.CompilerOptions,
   moduleCache: ts.ModuleResolutionCache,
 ): readonly string[] {
-  const deps: string[] = []
+  const deps: string[] = [];
   for (const specifier of moduleSpecifiersOf(sourceFile)) {
     const resolved = ts.resolveModuleName(
       specifier,
@@ -114,11 +114,11 @@ function directDependenciesOf(
       compilerOptions,
       ts.sys,
       moduleCache,
-    )
-    const resolvedFileName = resolved.resolvedModule?.resolvedFileName
-    if (resolvedFileName !== undefined) deps.push(path.resolve(resolvedFileName))
+    );
+    const resolvedFileName = resolved.resolvedModule?.resolvedFileName;
+    if (resolvedFileName !== undefined) deps.push(path.resolve(resolvedFileName));
   }
-  return deps
+  return deps;
 }
 
 /**
@@ -147,47 +147,50 @@ export function computeEntryClosures(
   entryFiles: readonly string[],
   program: ts.Program,
 ): ReadonlyMap<string, ReadonlySet<string>> {
-  const compilerOptions = program.getCompilerOptions()
+  const compilerOptions = program.getCompilerOptions();
   const moduleCache = ts.createModuleResolutionCache(
     program.getCurrentDirectory(),
     (fileName) => fileName,
     compilerOptions,
-  )
+  );
 
-  const byPath = new Map<string, ts.SourceFile>()
+  const byPath = new Map<string, ts.SourceFile>();
   for (const sourceFile of program.getSourceFiles()) {
-    byPath.set(path.resolve(sourceFile.fileName), sourceFile)
+    byPath.set(path.resolve(sourceFile.fileName), sourceFile);
   }
 
   // Direct-dependency memo, shared across every entry's BFS below — a file
   // imported by more than one entry (or reached at more than one depth
   // within one entry's own graph) has its specifiers resolved exactly once.
-  const directDepsMemo = new Map<string, readonly string[]>()
+  const directDepsMemo = new Map<string, readonly string[]>();
   function directDeps(resolvedPath: string): readonly string[] {
-    const cached = directDepsMemo.get(resolvedPath)
-    if (cached !== undefined) return cached
-    const sourceFile = byPath.get(resolvedPath)
-    const deps = sourceFile === undefined ? [] : directDependenciesOf(sourceFile, compilerOptions, moduleCache)
-    directDepsMemo.set(resolvedPath, deps)
-    return deps
+    const cached = directDepsMemo.get(resolvedPath);
+    if (cached !== undefined) return cached;
+    const sourceFile = byPath.get(resolvedPath);
+    const deps =
+      sourceFile === undefined
+        ? []
+        : directDependenciesOf(sourceFile, compilerOptions, moduleCache);
+    directDepsMemo.set(resolvedPath, deps);
+    return deps;
   }
 
-  const closures = new Map<string, ReadonlySet<string>>()
+  const closures = new Map<string, ReadonlySet<string>>();
   for (const entryFile of entryFiles) {
-    const resolvedEntry = path.resolve(entryFile)
-    const closure = new Set<string>()
-    const stack = [resolvedEntry]
+    const resolvedEntry = path.resolve(entryFile);
+    const closure = new Set<string>();
+    const stack = [resolvedEntry];
     while (stack.length > 0) {
-      const current = stack.pop() as string
-      if (closure.has(current) || isTsBuiltinLibFile(current)) continue
-      closure.add(current)
+      const current = stack.pop() as string;
+      if (closure.has(current) || isTsBuiltinLibFile(current)) continue;
+      closure.add(current);
       for (const dep of directDeps(current)) {
-        if (!closure.has(dep)) stack.push(dep)
+        if (!closure.has(dep)) stack.push(dep);
       }
     }
-    closures.set(resolvedEntry, closure)
+    closures.set(resolvedEntry, closure);
   }
-  return closures
+  return closures;
 }
 
 /**
@@ -203,10 +206,10 @@ export function affectedEntries(
   closures: ReadonlyMap<string, ReadonlySet<string>>,
   touchedFile: string,
 ): ReadonlySet<string> {
-  const resolvedTouched = path.resolve(touchedFile)
-  const affected = new Set<string>()
+  const resolvedTouched = path.resolve(touchedFile);
+  const affected = new Set<string>();
   for (const [entry, closure] of closures) {
-    if (closure.has(resolvedTouched)) affected.add(entry)
+    if (closure.has(resolvedTouched)) affected.add(entry);
   }
-  return affected
+  return affected;
 }

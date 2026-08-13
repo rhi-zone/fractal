@@ -30,7 +30,7 @@
 //   packages/api-tree/src/typed-client.ts — the nested-shape analogue
 //   packages/api-tree/src/node.ts         — Node, Handler, fallback, op/api
 
-import type { Handler, Node } from "./node.ts"
+import type { Handler, Node } from "./node.ts";
 
 /**
  * Join a path prefix and the next segment with ".". No leading dot when
@@ -39,7 +39,7 @@ import type { Handler, Node } from "./node.ts"
  */
 type ExtendPath<Prefix extends string, Segment extends string> = Prefix extends ""
   ? Segment
-  : `${Prefix}.${Segment}`
+  : `${Prefix}.${Segment}`;
 
 /**
  * Union-to-intersection: flattens a union of object types into one object
@@ -55,8 +55,11 @@ type ExtendPath<Prefix extends string, Segment extends string> = Prefix extends 
  * type from that (contravariant) function-type union forces it back into
  * `A & B`.
  */
-type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) extends
-  (u: infer I) => void ? I : never
+type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) extends (
+  u: infer I,
+) => void
+  ? I
+  : never;
 
 /**
  * Force eager evaluation of a mapped/intersection type into a single plain
@@ -70,7 +73,7 @@ type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) exten
  * been run through a key-remapping identity like this one, which forces TS
  * to resolve the intersection down to concrete properties before comparison.
  */
-type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
+type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
 
 /**
  * Flattens `N`'s tree into a map from dot-separated path to
@@ -95,24 +98,29 @@ type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
  *   direct.ts, for the full rationale) — never both, so the leaf part below
  *   only applies when there's no children part to recurse into.
  */
-type TreeManifestRaw<N extends Node, Prefix extends string> =
-  (N extends { readonly handler: infer H extends Handler }
-    ? // Leaf part — this node's own entry, keyed at Prefix
-      H extends (input: infer I) => infer R
-      ? { readonly [K in Prefix]: { readonly input: I; readonly output: Awaited<R> } }
-      : object
-    : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-      ? // Children part — recurse per child, then flatten the resulting union
-        // into one object so every child's path is a sibling key.
-        UnionToIntersection<
-          { [K in keyof C & string]: TreeManifestRaw<C[K], ExtendPath<Prefix, K>> }[keyof C & string]
-        >
-      : object)
+type TreeManifestRaw<N extends Node, Prefix extends string> = (N extends {
+  readonly handler: infer H extends Handler;
+}
+  ? // Leaf part — this node's own entry, keyed at Prefix
+    H extends (input: infer I) => infer R
+    ? { readonly [K in Prefix]: { readonly input: I; readonly output: Awaited<R> } }
+    : object
+  : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+    ? // Children part — recurse per child, then flatten the resulting union
+      // into one object so every child's path is a sibling key.
+      UnionToIntersection<
+        { [K in keyof C & string]: TreeManifestRaw<C[K], ExtendPath<Prefix, K>> }[keyof C & string]
+      >
+    : object) &
   // Fallback part — same recursion, keyed by the fallback's authored name.
-  & (N extends
-      { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
-      ? TreeManifestRaw<S, ExtendPath<Prefix, Name>>
-      : object)
+  (N extends {
+    readonly fallback: {
+      readonly name: infer Name extends string;
+      readonly subtree: infer S extends Node;
+    };
+  }
+    ? TreeManifestRaw<S, ExtendPath<Prefix, Name>>
+    : object);
 
 /**
  * Public entry point: recurses via `TreeManifestRaw`, then runs the result
@@ -124,4 +132,4 @@ type TreeManifestRaw<N extends Node, Prefix extends string> =
  */
 export type TreeManifest<N extends Node, Prefix extends string = ""> = Simplify<
   TreeManifestRaw<N, Prefix>
->
+>;

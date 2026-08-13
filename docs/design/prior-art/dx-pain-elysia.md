@@ -160,7 +160,7 @@ issues:
 ## Hot Reload
 
 - **`--hot` stopped starting the server after a specific commit**, surfaced via `git
-  bisect` by a user hitting "Failed to start server. Is port 8080 in use?" on every file
+bisect` by a user hitting "Failed to start server. Is port 8080 in use?" on every file
   change. ([GitHub issue #125](https://github.com/elysiajs/elysia/issues/125))
 - **Hot reload silently stopped triggering browser reloads** on save with `--watch`/`--hot`
   both set, in an earlier release. ([GitHub issue #100](https://github.com/elysiajs/elysia/issues/100))

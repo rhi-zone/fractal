@@ -18,34 +18,34 @@
 //      proving the emitted code is not just plausible-looking text but an
 //      actually-typed, actually-working client.
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { pathToFileURL } from "node:url"
-import { generateClient, generateClientFromNode } from "./codegen.ts"
-import { errors } from "./extensions/errors.ts"
-import { httpProjection } from "./dx.ts"
-import { createFetch } from "./preset.ts"
-import { serveBun } from "./adapter.ts"
-import { api, clearStore, type Book } from "../../../examples/library-api/src/tree.ts"
-import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "./verbs.ts"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { generateClient, generateClientFromNode } from "./codegen.ts";
+import { errors } from "./extensions/errors.ts";
+import { httpProjection } from "./dx.ts";
+import { createFetch } from "./preset.ts";
+import { serveBun } from "./adapter.ts";
+import { api, clearStore, type Book } from "../../../examples/library-api/src/tree.ts";
+import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "./verbs.ts";
 
-const treePath = new URL("../../../examples/library-api/src/tree.ts", import.meta.url).pathname
-const schemas = extractToolSchemas(treePath)
+const treePath = new URL("../../../examples/library-api/src/tree.ts", import.meta.url).pathname;
+const schemas = extractToolSchemas(treePath);
 
-let source: string
+let source: string;
 
 beforeAll(() => {
-  source = generateClientFromNode(api, schemas, { clientName: "Client" })
-})
+  source = generateClientFromNode(api, schemas, { clientName: "Client" });
+});
 
 beforeEach(() => {
-  clearStore()
-})
+  clearStore();
+});
 
 // ============================================================================
 // 1. Structural assertions — generateClientFromNode (Node-driven naming)
@@ -53,73 +53,79 @@ beforeEach(() => {
 
 describe("generateClientFromNode — structure", () => {
   it("emits no imports (standalone)", () => {
-    expect(source).not.toMatch(/^\s*import /m)
-  })
+    expect(source).not.toMatch(/^\s*import /m);
+  });
 
   it("emits Input/Output type aliases named from the codegen name", () => {
-    expect(source).toContain("export type BooksAddInput")
-    expect(source).toContain("export type BooksAddOutput")
-    expect(source).toContain("export type BooksListOutput")
-    expect(source).toContain("export type BooksBookIdReadOutput")
-  })
+    expect(source).toContain("export type BooksAddInput");
+    expect(source).toContain("export type BooksAddOutput");
+    expect(source).toContain("export type BooksListOutput");
+    expect(source).toContain("export type BooksBookIdReadOutput");
+  });
 
   it("BooksAddInput has the three required book fields", () => {
-    expect(source).toMatch(/BooksAddInput = \{[^}]*readonly title: string/s)
-    expect(source).toMatch(/BooksAddInput = \{[^}]*readonly author: string/s)
-    expect(source).toMatch(/BooksAddInput = \{[^}]*readonly genre: string/s)
-  })
+    expect(source).toMatch(/BooksAddInput = \{[^}]*readonly title: string/s);
+    expect(source).toMatch(/BooksAddInput = \{[^}]*readonly author: string/s);
+    expect(source).toMatch(/BooksAddInput = \{[^}]*readonly genre: string/s);
+  });
 
   it("read has no Input type — its only field (bookId) is supplied via the path-param call chain", () => {
-    expect(source).not.toContain("export type BooksBookIdReadInput")
-  })
+    expect(source).not.toContain("export type BooksBookIdReadInput");
+  });
 
   it("remove has no Input type — same reasoning as read (bookId-only input)", () => {
-    expect(source).not.toContain("export type BooksBookIdRemoveInput")
-  })
+    expect(source).not.toContain("export type BooksBookIdRemoveInput");
+  });
 
   it("catalog.search (GET) DOES get an Input type — the GET query-params fix", () => {
-    expect(source).toContain("export type CatalogSearchInput")
-    expect(source).toMatch(/CatalogSearchInput = \{[^}]*readonly q\?: string/s)
+    expect(source).toContain("export type CatalogSearchInput");
+    expect(source).toMatch(/CatalogSearchInput = \{[^}]*readonly q\?: string/s);
     expect(source).toMatch(
       /readonly search: \(input: CatalogSearchInput, callOpts\?: CallOptions\) => Promise<CatalogSearchOutput>/,
-    )
-  })
+    );
+  });
 
   it("emits a Client type with a nested books branch", () => {
-    expect(source).toContain("export type Client")
-    expect(source).toMatch(/readonly books: \{/)
-  })
+    expect(source).toContain("export type Client");
+    expect(source).toMatch(/readonly books: \{/);
+  });
 
   it("emits a bookId param as a function type taking a string", () => {
-    expect(source).toMatch(/readonly bookId: \(bookId: string\) => \{/)
-  })
+    expect(source).toMatch(/readonly bookId: \(bookId: string\) => \{/);
+  });
 
   it("emits list/add/read/remove client members with the right call signatures", () => {
-    expect(source).toMatch(/readonly list: \(callOpts\?: CallOptions\) => Promise<BooksListOutput>/)
+    expect(source).toMatch(
+      /readonly list: \(callOpts\?: CallOptions\) => Promise<BooksListOutput>/,
+    );
     expect(source).toMatch(
       /readonly add: \(input: BooksAddInput, callOpts\?: CallOptions\) => Promise<BooksAddOutput>/,
-    )
-    expect(source).toMatch(/readonly read: \(callOpts\?: CallOptions\) => Promise<BooksBookIdReadOutput>/)
-    expect(source).toMatch(/readonly remove: \(callOpts\?: CallOptions\) => Promise<BooksBookIdRemoveOutput>/)
-  })
+    );
+    expect(source).toMatch(
+      /readonly read: \(callOpts\?: CallOptions\) => Promise<BooksBookIdReadOutput>/,
+    );
+    expect(source).toMatch(
+      /readonly remove: \(callOpts\?: CallOptions\) => Promise<BooksBookIdRemoveOutput>/,
+    );
+  });
 
   it("emits createClient and ClientError", () => {
-    expect(source).toContain("export function createClient(baseUrl: string")
-    expect(source).toContain("export class ClientError extends Error")
-  })
+    expect(source).toContain("export function createClient(baseUrl: string");
+    expect(source).toContain("export class ClientError extends Error");
+  });
 
   it("respects a custom clientName option", () => {
-    const named = generateClientFromNode(api, schemas, { clientName: "LibraryClient" })
-    expect(named).toContain("export type LibraryClient =")
-    expect(named).toContain("): LibraryClient {")
-  })
+    const named = generateClientFromNode(api, schemas, { clientName: "LibraryClient" });
+    expect(named).toContain("export type LibraryClient =");
+    expect(named).toContain("): LibraryClient {");
+  });
 
   it("degrades to unknown input/output when no SchemaMap is supplied", () => {
-    const untyped = generateClientFromNode(api)
-    expect(untyped).not.toContain("export type BooksAddInput")
-    expect(untyped).toMatch(/readonly add: \(callOpts\?: CallOptions\) => Promise<unknown>/)
-  })
-})
+    const untyped = generateClientFromNode(api);
+    expect(untyped).not.toContain("export type BooksAddInput");
+    expect(untyped).toMatch(/readonly add: \(callOpts\?: CallOptions\) => Promise<unknown>/);
+  });
+});
 
 // ============================================================================
 // 2. Structural assertions — generateClient (HttpRoute-driven, no Node)
@@ -128,30 +134,42 @@ describe("generateClientFromNode — structure", () => {
 describe("generateClient — HttpRoute + SchemaMap directly, no Node", () => {
   it("walks a plain HttpRoute tree with no name maps, degrading co-located names to the lowercased verb", () => {
     const tree = api_({
-      widgets: api_({
-        list: op((_: unknown): { id: string }[] => [], http.get),
-      }, { fallback: { name: "widgetId", subtree: api_({
-        get: op((input: { widgetId: string }): { id: string } => ({ id: input.widgetId }), http.get, http.moveTo("..")),
-      }) } }),
-    })
-    const route = httpProjection(tree)
+      widgets: api_(
+        {
+          list: op((_: unknown): { id: string }[] => [], http.get),
+        },
+        {
+          fallback: {
+            name: "widgetId",
+            subtree: api_({
+              get: op(
+                (input: { widgetId: string }): { id: string } => ({ id: input.widgetId }),
+                http.get,
+                http.moveTo(".."),
+              ),
+            }),
+          },
+        },
+      ),
+    });
+    const route = httpProjection(tree);
 
     // No SchemaMap: still produces a complete, working (untyped) client.
-    const untyped = generateClient(route)
-    expect(untyped).not.toMatch(/^\s*import /m)
-    expect(untyped).toContain("export function createClient(baseUrl: string")
-    expect(untyped).toMatch(/readonly widgets: \{/)
-    expect(untyped).toMatch(/readonly widgetId: \(widgetId: string\) => \{/)
+    const untyped = generateClient(route);
+    expect(untyped).not.toMatch(/^\s*import /m);
+    expect(untyped).toContain("export function createClient(baseUrl: string");
+    expect(untyped).toMatch(/readonly widgets: \{/);
+    expect(untyped).toMatch(/readonly widgetId: \(widgetId: string\) => \{/);
     // Co-located single GET at the fallback position has no Node-derived
     // name available, so it degrades to the lowercased verb.
-    expect(untyped).toMatch(/readonly get: \(callOpts\?: CallOptions\) => Promise<unknown>/)
-  })
+    expect(untyped).toMatch(/readonly get: \(callOpts\?: CallOptions\) => Promise<unknown>/);
+  });
 
   it("types operations from a manually-built SchemaMap keyed by the path-derived codegen name", () => {
     const tree = api_({
       widgets: op((_input: { q?: string }): { id: string }[] => [], http.get),
-    })
-    const route = httpProjection(tree)
+    });
+    const route = httpProjection(tree);
 
     // generateClient's degraded naming (no Node) keys schema lookups as
     // `<path-segments>_<verb>` — see codegen.ts's `nameFromPath`.
@@ -163,109 +181,117 @@ describe("generateClient — HttpRoute + SchemaMap directly, no Node", () => {
           items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
         },
       },
-    }
+    };
 
-    const typed = generateClient(route, manualSchemas)
-    expect(typed).toContain("export type WidgetsGetInput")
-    expect(typed).toContain("export type WidgetsGetOutput")
-    expect(typed).toMatch(/WidgetsGetInput = \{[^}]*readonly q\?: string/s)
+    const typed = generateClient(route, manualSchemas);
+    expect(typed).toContain("export type WidgetsGetInput");
+    expect(typed).toContain("export type WidgetsGetOutput");
+    expect(typed).toMatch(/WidgetsGetInput = \{[^}]*readonly q\?: string/s);
     expect(typed).toMatch(
       /readonly widgets: \(input: WidgetsGetInput, callOpts\?: CallOptions\) => Promise<WidgetsGetOutput>/,
-    )
-  })
-})
+    );
+  });
+});
 
 // ============================================================================
 // 3. Eval test — real server, real generated module, real HTTP calls
 // ============================================================================
 
 describe("generateClientFromNode — eval end-to-end", () => {
-  let server: { port: number; stop(closeActiveConnections?: boolean): void } | undefined
-  let tmpDir: string | undefined
+  let server: { port: number; stop(closeActiveConnections?: boolean): void } | undefined;
+  let tmpDir: string | undefined;
 
   afterAll(async () => {
-    server?.stop(true)
-    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true })
-  })
+    server?.stop(true);
+    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true });
+  });
 
   it("generated createClient drives real HTTP calls against a live server", async () => {
     // Real server hosting the library-api tree.
-    const fetchHandler = createFetch(api, { openapi: false })
-    server = serveBun(fetchHandler, { port: 0 })
+    const fetchHandler = createFetch(api, { openapi: false });
+    server = serveBun(fetchHandler, { port: 0 });
 
     // Write the generated module to disk and import it for real.
-    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-"))
-    const modulePath = join(tmpDir, "client.ts")
-    await writeFile(modulePath, source, "utf8")
+    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-"));
+    const modulePath = join(tmpDir, "client.ts");
+    await writeFile(modulePath, source, "utf8");
     const mod = (await import(pathToFileURL(modulePath).href)) as {
       createClient: (baseUrl: string) => {
         readonly books: {
-          readonly list: () => Promise<Book[]>
-          readonly add: (input: { title: string; author: string; genre: string }) => Promise<Book>
+          readonly list: () => Promise<Book[]>;
+          readonly add: (input: { title: string; author: string; genre: string }) => Promise<Book>;
           readonly bookId: (bookId: string) => {
-            readonly read: () => Promise<Book>
-            readonly remove: () => Promise<{ deleted: boolean }>
-          }
-        }
+            readonly read: () => Promise<Book>;
+            readonly remove: () => Promise<{ deleted: boolean }>;
+          };
+        };
         readonly catalog: {
-          readonly search: (input: { q?: string }) => Promise<Book[]>
-        }
-      }
-      ClientError: new (status: number, statusText: string, body: unknown) => Error
-    }
+          readonly search: (input: { q?: string }) => Promise<Book[]>;
+        };
+      };
+      ClientError: new (status: number, statusText: string, body: unknown) => Error;
+    };
 
-    const client = mod.createClient(`http://localhost:${server.port}`)
+    const client = mod.createClient(`http://localhost:${server.port}`);
 
     // add -> list
-    const created = await client.books.add({ title: "Codegen Test", author: "Robot", genre: "SciFi" })
-    expect(created.title).toBe("Codegen Test")
-    expect(typeof created.id).toBe("string")
+    const created = await client.books.add({
+      title: "Codegen Test",
+      author: "Robot",
+      genre: "SciFi",
+    });
+    expect(created.title).toBe("Codegen Test");
+    expect(typeof created.id).toBe("string");
 
-    const books = await client.books.list()
-    expect(books.map((b) => b.title)).toContain("Codegen Test")
+    const books = await client.books.list();
+    expect(books.map((b) => b.title)).toContain("Codegen Test");
 
     // bookId(...).read()
-    const fetched = await client.books.bookId(created.id).read()
-    expect(fetched).toEqual(created)
+    const fetched = await client.books.bookId(created.id).read();
+    expect(fetched).toEqual(created);
 
     // catalog.search
-    const results = await client.catalog.search({ q: "codegen" })
-    expect(results.map((b) => b.id)).toContain(created.id)
+    const results = await client.catalog.search({ q: "codegen" });
+    expect(results.map((b) => b.id)).toContain(created.id);
 
     // bookId(...).remove()
-    const removed = await client.books.bookId(created.id).remove()
-    expect(removed.deleted).toBe(true)
+    const removed = await client.books.bookId(created.id).remove();
+    expect(removed.deleted).toBe(true);
 
-    const booksAfter = await client.books.list()
-    expect(booksAfter.find((b) => b.id === created.id)).toBeUndefined()
-  })
+    const booksAfter = await client.books.list();
+    expect(booksAfter.find((b) => b.id === created.id)).toBeUndefined();
+  });
 
   it("throws a ClientError with status/statusText/body on a non-2xx response", async () => {
     // server, tmpDir, and the module are already set up by the previous test
-    tmpDir ??= await mkdtemp(join(tmpdir(), "fractal-codegen-"))
-    const modulePath = join(tmpDir, "client-error.ts")
-    await writeFile(modulePath, source, "utf8")
+    tmpDir ??= await mkdtemp(join(tmpdir(), "fractal-codegen-"));
+    const modulePath = join(tmpDir, "client-error.ts");
+    await writeFile(modulePath, source, "utf8");
     const mod = (await import(pathToFileURL(modulePath).href)) as {
       createClient: (baseUrl: string) => {
-        readonly books: { readonly bookId: (bookId: string) => { readonly read: () => Promise<unknown> } }
-      }
-      ClientError: new (...args: unknown[]) => Error & { status: number; statusText: string; body: unknown }
-    }
+        readonly books: {
+          readonly bookId: (bookId: string) => { readonly read: () => Promise<unknown> };
+        };
+      };
+      ClientError: new (
+        ...args: unknown[]
+      ) => Error & { status: number; statusText: string; body: unknown };
+    };
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const client = mod.createClient(`http://localhost:${server!.port}`)
+    const client = mod.createClient(`http://localhost:${server!.port}`);
 
-    let caught: unknown
+    let caught: unknown;
     try {
-      await client.books.bookId("does-not-exist").read()
+      await client.books.bookId("does-not-exist").read();
     } catch (e) {
-      caught = e
+      caught = e;
     }
-    expect(caught).toBeInstanceOf(mod.ClientError)
-    expect((caught as { status: number }).status).toBe(500)
-    expect((caught as { statusText: string }).statusText.length).toBeGreaterThan(0)
-    expect((caught as { body: unknown }).body).toBeDefined()
-  })
-})
+    expect(caught).toBeInstanceOf(mod.ClientError);
+    expect((caught as { status: number }).status).toBe(500);
+    expect((caught as { statusText: string }).statusText.length).toBeGreaterThan(0);
+    expect((caught as { body: unknown }).body).toBeDefined();
+  });
+});
 
 // ============================================================================
 // 4. timeout / AbortSignal support — generated `createClient`
@@ -279,145 +305,164 @@ describe("generateClientFromNode — eval end-to-end", () => {
 // ============================================================================
 
 describe("generated createClient — timeout / AbortSignal support", () => {
-  let tmpDir: string | undefined
-  let createClient: (baseUrl: string, options?: unknown) => {
-    readonly books: { readonly list: (input?: unknown, callOpts?: unknown) => Promise<unknown> }
-  }
-  let ownServer: { port: number; stop(closeActiveConnections?: boolean): void } | undefined
+  let tmpDir: string | undefined;
+  let createClient: (
+    baseUrl: string,
+    options?: unknown,
+  ) => {
+    readonly books: { readonly list: (input?: unknown, callOpts?: unknown) => Promise<unknown> };
+  };
+  let ownServer: { port: number; stop(closeActiveConnections?: boolean): void } | undefined;
 
   beforeAll(async () => {
-    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-timeout-"))
-    const modulePath = join(tmpDir, "client.ts")
-    await writeFile(modulePath, source, "utf8")
+    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-timeout-"));
+    const modulePath = join(tmpDir, "client.ts");
+    await writeFile(modulePath, source, "utf8");
     const mod = (await import(pathToFileURL(modulePath).href)) as {
-      createClient: typeof createClient
-    }
-    createClient = mod.createClient
+      createClient: typeof createClient;
+    };
+    createClient = mod.createClient;
 
-    ownServer = serveBun(createFetch(api, { openapi: false }), { port: 0 })
-  })
+    ownServer = serveBun(createFetch(api, { openapi: false }), { port: 0 });
+  });
 
   afterAll(async () => {
-    ownServer?.stop(true)
-    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true })
-  })
+    ownServer?.stop(true);
+    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true });
+  });
 
   function makeSlowFetch(): typeof fetch {
     return ((_url: string, init?: RequestInit) =>
       new Promise<Response>((resolve, reject) => {
-        const t = setTimeout(() => resolve(new Response("ok")), 5000)
-        const signal = init?.signal
+        const t = setTimeout(() => resolve(new Response("ok")), 5000);
+        const signal = init?.signal;
         signal?.addEventListener("abort", () => {
-          clearTimeout(t)
-          reject(signal.reason)
-        })
-      })) as typeof fetch
+          clearTimeout(t);
+          reject(signal.reason);
+        });
+      })) as typeof fetch;
   }
 
   it("a client-level timeout aborts a hanging request and throws a timeout-specific error", async () => {
-    const client = createClient("http://localhost", { fetch: makeSlowFetch(), timeout: 20 })
-    await expect(client.books.list()).rejects.toThrow(/timed out/i)
-  })
+    const client = createClient("http://localhost", { fetch: makeSlowFetch(), timeout: 20 });
+    await expect(client.books.list()).rejects.toThrow(/timed out/i);
+  });
 
   it("a per-call timeout override aborts a hanging request", async () => {
-    const client = createClient("http://localhost", { fetch: makeSlowFetch() })
+    const client = createClient("http://localhost", { fetch: makeSlowFetch() });
     // `books.list` takes no input schema, so its only param is `callOpts`.
-    await expect(client.books.list({ timeout: 20 })).rejects.toThrow(/timed out/i)
-  })
+    await expect(client.books.list({ timeout: 20 })).rejects.toThrow(/timed out/i);
+  });
 
   it("a user AbortSignal cancels the request and throws a cancellation-specific error", async () => {
-    const controller = new AbortController()
-    const client = createClient("http://localhost", { fetch: makeSlowFetch(), signal: controller.signal })
-    const pending = client.books.list()
-    queueMicrotask(() => controller.abort())
-    await expect(pending).rejects.toThrow(/aborted/i)
-  })
+    const controller = new AbortController();
+    const client = createClient("http://localhost", {
+      fetch: makeSlowFetch(),
+      signal: controller.signal,
+    });
+    const pending = client.books.list();
+    queueMicrotask(() => controller.abort());
+    await expect(pending).rejects.toThrow(/aborted/i);
+  });
 
   it("no timeout/signal set: existing behavior (real server round-trip) is unchanged", async () => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const client = createClient(`http://localhost:${ownServer!.port}`)
-    const books = (await client.books.list()) as unknown[]
-    expect(Array.isArray(books)).toBe(true)
-  })
-})
+    const client = createClient(`http://localhost:${ownServer!.port}`);
+    const books = (await client.books.list()) as unknown[];
+    expect(Array.isArray(books)).toBe(true);
+  });
+});
 
 describe("generated createClient — errors() extension", () => {
-  let tmpDir: string | undefined
+  let tmpDir: string | undefined;
   let createClient: (
     baseUrl: string,
     options?: unknown,
-  ) => { readonly books: { readonly list: (input?: unknown, callOpts?: unknown) => Promise<unknown> } }
-  let NotFoundError: new (...args: unknown[]) => Error & { status: number; body: unknown }
-  let RateLimitError: new (...args: unknown[]) => Error & { status: number; retryAfterMs?: number }
-  let InternalServerError: new (...args: unknown[]) => Error & { status: number }
+  ) => {
+    readonly books: { readonly list: (input?: unknown, callOpts?: unknown) => Promise<unknown> };
+  };
+  let NotFoundError: new (...args: unknown[]) => Error & { status: number; body: unknown };
+  let RateLimitError: new (...args: unknown[]) => Error & { status: number; retryAfterMs?: number };
+  let InternalServerError: new (...args: unknown[]) => Error & { status: number };
 
   beforeAll(async () => {
-    const errorsSource = generateClientFromNode(api, schemas, { clientName: "Client", extensions: [errors()] })
-    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-errors-"))
-    const modulePath = join(tmpDir, "client.ts")
-    await writeFile(modulePath, errorsSource, "utf8")
+    const errorsSource = generateClientFromNode(api, schemas, {
+      clientName: "Client",
+      extensions: [errors()],
+    });
+    tmpDir = await mkdtemp(join(tmpdir(), "fractal-codegen-errors-"));
+    const modulePath = join(tmpDir, "client.ts");
+    await writeFile(modulePath, errorsSource, "utf8");
     const mod = (await import(pathToFileURL(modulePath).href)) as {
-      createClient: typeof createClient
-      NotFoundError: typeof NotFoundError
-      RateLimitError: typeof RateLimitError
-      InternalServerError: typeof InternalServerError
-    }
-    createClient = mod.createClient
-    NotFoundError = mod.NotFoundError
-    RateLimitError = mod.RateLimitError
-    InternalServerError = mod.InternalServerError
-  })
+      createClient: typeof createClient;
+      NotFoundError: typeof NotFoundError;
+      RateLimitError: typeof RateLimitError;
+      InternalServerError: typeof InternalServerError;
+    };
+    createClient = mod.createClient;
+    NotFoundError = mod.NotFoundError;
+    RateLimitError = mod.RateLimitError;
+    InternalServerError = mod.InternalServerError;
+  });
 
   afterAll(async () => {
-    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true })
-  })
+    if (tmpDir !== undefined) await rm(tmpDir, { recursive: true, force: true });
+  });
 
-  function fetchReturning(status: number, body: unknown, headers?: Record<string, string>): typeof fetch {
+  function fetchReturning(
+    status: number,
+    body: unknown,
+    headers?: Record<string, string>,
+  ): typeof fetch {
     return (async () =>
       new Response(JSON.stringify(body), {
         status,
         headers: { "Content-Type": "application/json", ...headers },
-      })) as unknown as typeof fetch
+      })) as unknown as typeof fetch;
   }
 
   it("emits the typed error classes as named exports", () => {
-    expect(NotFoundError).toBeDefined()
-    expect(RateLimitError).toBeDefined()
-    expect(InternalServerError).toBeDefined()
-  })
+    expect(NotFoundError).toBeDefined();
+    expect(RateLimitError).toBeDefined();
+    expect(InternalServerError).toBeDefined();
+  });
 
   it("throws NotFoundError (not generic ClientError) on a 404 response", async () => {
-    const client = createClient("http://localhost", { fetch: fetchReturning(404, { message: "gone" }) })
-    const caught = await client.books.list().catch((e: unknown) => e)
-    expect(caught).toBeInstanceOf(NotFoundError)
-    expect((caught as { status: number }).status).toBe(404)
-    expect((caught as { body: unknown }).body).toEqual({ message: "gone" })
-  })
+    const client = createClient("http://localhost", {
+      fetch: fetchReturning(404, { message: "gone" }),
+    });
+    const caught = await client.books.list().catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(NotFoundError);
+    expect((caught as { status: number }).status).toBe(404);
+    expect((caught as { body: unknown }).body).toEqual({ message: "gone" });
+  });
 
   it("throws RateLimitError with a parsed Retry-After on a 429 response", async () => {
     const client = createClient("http://localhost", {
       fetch: fetchReturning(429, {}, { "Retry-After": "7" }),
-    })
-    const caught = await client.books.list().catch((e: unknown) => e)
-    expect(caught).toBeInstanceOf(RateLimitError)
-    expect((caught as { retryAfterMs?: number }).retryAfterMs).toBe(7000)
-  })
+    });
+    const caught = await client.books.list().catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(RateLimitError);
+    expect((caught as { retryAfterMs?: number }).retryAfterMs).toBe(7000);
+  });
 
   it("throws InternalServerError on a 5xx response", async () => {
-    const client = createClient("http://localhost", { fetch: fetchReturning(502, { message: "bad gateway" }) })
-    const caught = await client.books.list().catch((e: unknown) => e)
-    expect(caught).toBeInstanceOf(InternalServerError)
-    expect((caught as { status: number }).status).toBe(502)
-  })
+    const client = createClient("http://localhost", {
+      fetch: fetchReturning(502, { message: "bad gateway" }),
+    });
+    const caught = await client.books.list().catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(InternalServerError);
+    expect((caught as { status: number }).status).toBe(502);
+  });
 
   it("real server round-trip still works unchanged with errors() present", async () => {
-    const server = serveBun(createFetch(api, { openapi: false }), { port: 0 })
+    const server = serveBun(createFetch(api, { openapi: false }), { port: 0 });
     try {
-      const client = createClient(`http://localhost:${server.port}`)
-      const books = (await client.books.list()) as unknown[]
-      expect(Array.isArray(books)).toBe(true)
+      const client = createClient(`http://localhost:${server.port}`);
+      const books = (await client.books.list()) as unknown[];
+      expect(Array.isArray(books)).toBe(true);
     } finally {
-      server.stop(true)
+      server.stop(true);
     }
-  })
-})
+  });
+});

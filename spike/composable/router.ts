@@ -12,7 +12,7 @@
 // from parsing a path string. The router's type is the FLAT union of its route
 // values — no deep accumulation chain. This is the whole point: linear cost.
 
-import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree"
+import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree";
 
 // ============================================================================
 // Segments — value structs. A path is Segment[]; its params come from the
@@ -21,47 +21,47 @@ import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree"
 
 /** A literal path segment, e.g. lit("users") → matches "users". */
 export interface LitSegment<V extends string = string> {
-  readonly kind: "lit"
-  readonly value: V
+  readonly kind: "lit";
+  readonly value: V;
 }
 
 /** A param segment. `name` keys the params record; `codec` may refine its type
  *  (default string). The codec is a StandardSchema<string, T>: decode the raw
  *  path segment string into T. */
 export interface ParamSegment<N extends string = string, T = unknown> {
-  readonly kind: "param"
-  readonly name: N
+  readonly kind: "param";
+  readonly name: N;
   // phantom carrier for the decoded type T (no runtime cost when absent)
-  readonly codec?: StandardSchema<string, T>
+  readonly codec?: StandardSchema<string, T>;
 }
 
 // The Segment union admits any param-codec type (T = unknown) so a numeric
 // codec's segment is still a Segment. ParamsOf recovers the precise T per route.
-export type Segment = LitSegment | ParamSegment<string, unknown>
+export type Segment = LitSegment | ParamSegment<string, unknown>;
 
 // --- constructors (values, not strings) ------------------------------------
 
 export function lit<const V extends string>(value: V): LitSegment<V> {
-  return { kind: "lit", value }
+  return { kind: "lit", value };
 }
 
 /** param("id") → {id:string}; param("id", codec) → {id: InferOutput<codec>}. */
-export function param<const N extends string>(name: N): ParamSegment<N, string>
+export function param<const N extends string>(name: N): ParamSegment<N, string>;
 export function param<const N extends string, T>(
   name: N,
   codec: StandardSchema<string, T>,
-): ParamSegment<N, T>
+): ParamSegment<N, T>;
 export function param(
   name: string,
   codec?: StandardSchema<string, unknown>,
 ): ParamSegment<string, unknown> {
-  return codec === undefined ? { kind: "param", name } : { kind: "param", name, codec }
+  return codec === undefined ? { kind: "param", name } : { kind: "param", name, codec };
 }
 
 /** Compose segments into a path value. Variadic + flat — `path(a, b, c)` is
  *  exactly `[a, b, c]`. Associativity is structural (array concat). */
 export function path<const S extends readonly Segment[]>(...segs: S): S {
-  return segs
+  return segs;
 }
 
 // --- params type, derived from the STRUCTURE of the segment tuple ----------
@@ -75,22 +75,22 @@ export type ParamsOf<S extends readonly Segment[]> = {
     infer T
   >
     ? T
-    : never
-}
+    : never;
+};
 
 // ============================================================================
 // Route — a VALUE. meta = {pattern, method, input?, output?}; handler = closure.
 // The handler is the ONLY opaque leaf; everything else is inert data.
 // ============================================================================
 
-export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"
+export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 /** The context a route handler receives: typed params + a body accessor. The
  *  body type is `I` (the validated input, or never when there's no body). */
 export interface RouteCtx<S extends readonly Segment[], I> {
-  readonly params: ParamsOf<S>
-  readonly body: I
-  readonly request: Request
+  readonly params: ParamsOf<S>;
+  readonly body: I;
+  readonly request: Request;
 }
 
 /** A route value. The pattern is data (Segment[]); `schema` (optional) is the
@@ -109,13 +109,13 @@ export interface Route<
   I = unknown,
   O = unknown,
 > {
-  readonly pattern: S
-  readonly method: M
-  readonly schema?: StandardSchema<unknown, unknown>
-  readonly handler: (ctx: RouteCtx<S, I>) => O | Promise<O>
+  readonly pattern: S;
+  readonly method: M;
+  readonly schema?: StandardSchema<unknown, unknown>;
+  readonly handler: (ctx: RouteCtx<S, I>) => O | Promise<O>;
   // phantom carriers — recovered by the client/openapi projections
-  readonly __in?: I
-  readonly __out?: O
+  readonly __in?: I;
+  readonly __out?: O;
 }
 
 /** Permissive element bound for flat collections. The `handler` position is
@@ -125,12 +125,12 @@ export interface Route<
  *  and whose phantoms are unconstrained, so each route keeps its own I/O on the
  *  inferred tuple. This is the element constraint; the inferred `R` is precise. */
 export interface AnyRoute {
-  readonly pattern: readonly Segment[]
-  readonly method: Method
-  readonly schema?: StandardSchema<unknown, unknown>
-  readonly handler: (ctx: never) => unknown
-  readonly __in?: unknown
-  readonly __out?: unknown
+  readonly pattern: readonly Segment[];
+  readonly method: Method;
+  readonly schema?: StandardSchema<unknown, unknown>;
+  readonly handler: (ctx: never) => unknown;
+  readonly __in?: unknown;
+  readonly __out?: unknown;
 }
 
 /** route(method, path, handler) — no body. */
@@ -138,7 +138,7 @@ export function route<const S extends readonly Segment[], M extends Method, O>(
   method: M,
   pattern: S,
   handler: (ctx: RouteCtx<S, never>) => O | Promise<O>,
-): Route<S, M, never, O>
+): Route<S, M, never, O>;
 /** route(method, path, schema, handler) — validated body of type InferOutput. */
 export function route<
   const S extends readonly Segment[],
@@ -150,7 +150,7 @@ export function route<
   pattern: S,
   schema: V,
   handler: (ctx: RouteCtx<S, InferOutput<V>>) => O | Promise<O>,
-): Route<S, M, InferOutput<V>, O>
+): Route<S, M, InferOutput<V>, O>;
 export function route(
   method: Method,
   pattern: readonly Segment[],
@@ -158,14 +158,14 @@ export function route(
   maybeHandler?: unknown,
 ): AnyRoute {
   if (maybeHandler === undefined) {
-    return { pattern, method, handler: schemaOrHandler as Route["handler"] }
+    return { pattern, method, handler: schemaOrHandler as Route["handler"] };
   }
   return {
     pattern,
     method,
     schema: schemaOrHandler as StandardSchema<unknown, unknown>,
     handler: maybeHandler as Route["handler"],
-  }
+  };
 }
 
 // ============================================================================
@@ -175,11 +175,11 @@ export function route(
 
 /** A router IS its flat tuple of routes. No wrapper object, no accumulation
  *  state — the value and its type are the flat array. */
-export type Router<R extends readonly AnyRoute[] = readonly AnyRoute[]> = R
+export type Router<R extends readonly AnyRoute[] = readonly AnyRoute[]> = R;
 
 /** Collect routes into a flat router value. `routes(a, b, c)` === `[a, b, c]`. */
 export function routes<const R extends readonly AnyRoute[]>(...rs: R): R {
-  return rs
+  return rs;
 }
 
 /** Merge flat routers — associative concat. `merge(routes(a), routes(b))`. */
@@ -187,7 +187,7 @@ export function merge<const A extends readonly AnyRoute[], const B extends reado
   a: A,
   b: B,
 ): readonly [...A, ...B] {
-  return [...a, ...b]
+  return [...a, ...b];
 }
 
 /** mount(prefix, sub) — prepend `prefix` segments to EACH route's pattern. A
@@ -197,11 +197,11 @@ export function mount<const P extends readonly Segment[], const R extends readon
   sub: R,
 ): { readonly [K in keyof R]: MountRoute<P, R[K]> } {
   return sub.map((r) => ({ ...r, pattern: [...prefix, ...r.pattern] })) as {
-    readonly [K in keyof R]: MountRoute<P, R[K]>
-  }
+    readonly [K in keyof R]: MountRoute<P, R[K]>;
+  };
 }
 
 type MountRoute<P extends readonly Segment[], R> =
   R extends Route<infer S, infer M, infer I, infer O>
     ? Route<readonly [...P, ...S], M, I, O>
-    : never
+    : never;

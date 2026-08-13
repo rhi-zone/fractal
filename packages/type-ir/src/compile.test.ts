@@ -17,102 +17,106 @@
 // API, used directly by @rhi-zone/fractal-type-ir consumers (see
 // corpora.test.ts/cross-projector.test.ts) and not part of that codegen route.
 
-import { spawnSync } from "node:child_process"
-import { mkdtempSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { describe, expect, it } from "bun:test"
-import { compileValidator, type ValidationError } from "./compile.ts"
-import { t, types } from "./index.ts"
-import { bytes, date, datetime, duration, email, int32, time, uri, uuid } from "./kinds/common.ts"
-import { int64 } from "./kinds/int-widths.ts"
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "bun:test";
+import { compileValidator, type ValidationError } from "./compile.ts";
+import { t, types } from "./index.ts";
+import { bytes, date, datetime, duration, email, int32, time, uri, uuid } from "./kinds/common.ts";
+import { int64 } from "./kinds/int-widths.ts";
 
 type Triple = {
-  check: (value: unknown) => boolean
-  errors: (value: unknown) => ValidationError[]
-  parse: (value: unknown) => { kind: "ok"; value: unknown } | { kind: "err"; errors: ValidationError[] }
-}
+  check: (value: unknown) => boolean;
+  errors: (value: unknown) => ValidationError[];
+  parse: (
+    value: unknown,
+  ) => { kind: "ok"; value: unknown } | { kind: "err"; errors: ValidationError[] };
+};
 
 /** Strip TypeScript syntax (type annotations, `as` casts) via Bun's
  * transpiler — the generated source is no longer plain JS `new Function` can
  * parse directly; this mirrors what the consuming toolchain (Bun/tsc) does to
  * the generated file before running it. */
-const tsTranspiler = new Bun.Transpiler({ loader: "ts" })
+const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 function stripTypes(source: string): string {
-  return tsTranspiler.transformSync(source).trim().replace(/;$/, "")
+  return tsTranspiler.transformSync(source).trim().replace(/;$/, "");
 }
 
 /** Evaluate a `compileValidator(...)`-produced expression string into its `{ check, errors, parse }` triple. */
 function evalValidator(source: string): Triple {
-  return new Function(`return (${stripTypes(source)});`)()
+  return new Function(`return (${stripTypes(source)});`)();
 }
 
 describe("compileValidator — check/errors/parse triple", () => {
   it("check accepts a matching object and rejects a mismatched one", () => {
-    const ref = t(types.object({ name: t(types.string), age: t(types.number, { optional: true }) }))
-    const v = evalValidator(compileValidator(ref))
+    const ref = t(
+      types.object({ name: t(types.string), age: t(types.number, { optional: true }) }),
+    );
+    const v = evalValidator(compileValidator(ref));
 
-    expect(v.check({ name: "Alice" })).toBe(true)
-    expect(v.check({ name: 42 })).toBe(false)
-  })
+    expect(v.check({ name: "Alice" })).toBe(true);
+    expect(v.check({ name: 42 })).toBe(false);
+  });
 
   it("errors collects every violation, not just the first", () => {
-    const ref = t(types.object({ name: t(types.string), age: t(types.number) }))
-    const v = evalValidator(compileValidator(ref))
-    const errs = v.errors({ name: 1, age: "x" })
-    expect(errs).toHaveLength(2)
-    expect(errs.map((e) => e.kind)).toEqual(["type", "type"])
-  })
+    const ref = t(types.object({ name: t(types.string), age: t(types.number) }));
+    const v = evalValidator(compileValidator(ref));
+    const errs = v.errors({ name: 1, age: "x" });
+    expect(errs).toHaveLength(2);
+    expect(errs.map((e) => e.kind)).toEqual(["type", "type"]);
+  });
 
   it("errors reports a missing required field with its path", () => {
-    const ref = t(types.object({ id: t(types.string) }))
-    const v = evalValidator(compileValidator(ref))
-    const errs = v.errors({})
-    expect(errs).toEqual([{ kind: "missing", path: ["id"] }])
-  })
+    const ref = t(types.object({ id: t(types.string) }));
+    const v = evalValidator(compileValidator(ref));
+    const errs = v.errors({});
+    expect(errs).toEqual([{ kind: "missing", path: ["id"] }]);
+  });
 
   it("parse returns ok with a fresh value, err with structured errors", () => {
-    const ref = t(types.object({ id: t(types.string) }))
-    const v = evalValidator(compileValidator(ref))
+    const ref = t(types.object({ id: t(types.string) }));
+    const v = evalValidator(compileValidator(ref));
 
-    const ok = v.parse({ id: "x" })
-    expect(ok).toEqual({ kind: "ok", value: { id: "x" } })
+    const ok = v.parse({ id: "x" });
+    expect(ok).toEqual({ kind: "ok", value: { id: "x" } });
 
-    const err = v.parse({}) as { kind: "err"; errors: ValidationError[] }
-    expect(err.kind).toBe("err")
-    expect(err.errors).toEqual([{ kind: "missing", path: ["id"] }])
-  })
+    const err = v.parse({}) as { kind: "err"; errors: ValidationError[] };
+    expect(err.kind).toBe("err");
+    expect(err.errors).toEqual([{ kind: "missing", path: ["id"] }]);
+  });
 
   it("parse never mutates or aliases the input object", () => {
-    const ref = t(types.object({ id: t(types.string) }))
-    const v = evalValidator(compileValidator(ref))
-    const input = { id: "x" }
-    const result = v.parse(input) as { kind: "ok"; value: { id: string } }
-    expect(result.value).not.toBe(input)
-    expect(result.value).toEqual(input)
-  })
+    const ref = t(types.object({ id: t(types.string) }));
+    const v = evalValidator(compileValidator(ref));
+    const input = { id: "x" };
+    const result = v.parse(input) as { kind: "ok"; value: { id: string } };
+    expect(result.value).not.toBe(input);
+    expect(result.value).toEqual(input);
+  });
 
   it("parse coerces a numeric string field", () => {
-    const ref = t(types.object({ age: t(types.number) }))
-    const v = evalValidator(compileValidator(ref))
-    const result = v.parse({ age: "42" }) as { kind: "ok"; value: { age: number } }
-    expect(result).toEqual({ kind: "ok", value: { age: 42 } })
-  })
+    const ref = t(types.object({ age: t(types.number) }));
+    const v = evalValidator(compileValidator(ref));
+    const result = v.parse({ age: "42" }) as { kind: "ok"; value: { age: number } };
+    expect(result).toEqual({ kind: "ok", value: { age: 42 } });
+  });
 
   it("parse coerces a boolean-like string field", () => {
-    const ref = t(types.object({ active: t(types.boolean) }))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.parse({ active: "true" })).toEqual({ kind: "ok", value: { active: true } })
-    expect(v.parse({ active: "false" })).toEqual({ kind: "ok", value: { active: false } })
-  })
+    const ref = t(types.object({ active: t(types.boolean) }));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.parse({ active: "true" })).toEqual({ kind: "ok", value: { active: true } });
+    expect(v.parse({ active: "false" })).toEqual({ kind: "ok", value: { active: false } });
+  });
 
   it("parse reports a coerce error for an unparseable numeric string", () => {
-    const ref = t(types.object({ age: t(types.number) }))
-    const v = evalValidator(compileValidator(ref))
-    const result = v.parse({ age: "not-a-number" }) as { kind: "err"; errors: ValidationError[] }
-    expect(result.kind).toBe("err")
-    expect(result.errors[0]!.kind).toBe("coerce")
-  })
+    const ref = t(types.object({ age: t(types.number) }));
+    const v = evalValidator(compileValidator(ref));
+    const result = v.parse({ age: "not-a-number" }) as { kind: "err"; errors: ValidationError[] };
+    expect(result.kind).toBe("err");
+    expect(result.errors[0]!.kind).toBe("coerce");
+  });
 
   it("validates a nested object + array shape", () => {
     const ref = t(
@@ -120,300 +124,321 @@ describe("compileValidator — check/errors/parse triple", () => {
         roles: t(types.array(t(types.string))),
         address: t(types.object({ street: t(types.string) })),
       }),
-    )
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ roles: ["a"], address: { street: "Main" } })).toBe(true)
-    expect(v.check({ roles: [1], address: { street: "Main" } })).toBe(false)
-    expect(v.check({ roles: ["a"], address: {} })).toBe(false)
+    );
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ roles: ["a"], address: { street: "Main" } })).toBe(true);
+    expect(v.check({ roles: [1], address: { street: "Main" } })).toBe(false);
+    expect(v.check({ roles: ["a"], address: {} })).toBe(false);
 
-    const errs = v.errors({ roles: [1], address: {} })
-    expect(errs.some((e) => e.kind === "type" && e.path.join(".") === "roles.0")).toBe(true)
-    expect(errs.some((e) => e.kind === "missing" && e.path.join(".") === "address.street")).toBe(true)
-  })
-})
+    const errs = v.errors({ roles: [1], address: {} });
+    expect(errs.some((e) => e.kind === "type" && e.path.join(".") === "roles.0")).toBe(true);
+    expect(errs.some((e) => e.kind === "missing" && e.path.join(".") === "address.street")).toBe(
+      true,
+    );
+  });
+});
 
 describe("compileValidator — leaf kinds", () => {
   it("boolean/number/string", () => {
-    expect(evalValidator(compileValidator(t(types.boolean))).check(true)).toBe(true)
-    expect(evalValidator(compileValidator(t(types.boolean))).check("true")).toBe(false)
-    expect(evalValidator(compileValidator(t(types.number))).check(1)).toBe(true)
-    expect(evalValidator(compileValidator(t(types.string))).check("x")).toBe(true)
-  })
+    expect(evalValidator(compileValidator(t(types.boolean))).check(true)).toBe(true);
+    expect(evalValidator(compileValidator(t(types.boolean))).check("true")).toBe(false);
+    expect(evalValidator(compileValidator(t(types.number))).check(1)).toBe(true);
+    expect(evalValidator(compileValidator(t(types.string))).check("x")).toBe(true);
+  });
 
   it("null/void/unknown/never", () => {
-    expect(evalValidator(compileValidator(t(types.null))).check(null)).toBe(true)
-    expect(evalValidator(compileValidator(t(types.null))).check(undefined)).toBe(false)
-    expect(evalValidator(compileValidator(t(types.void))).check(undefined)).toBe(true)
-    expect(evalValidator(compileValidator(t(types.unknown))).check("anything")).toBe(true)
-    expect(evalValidator(compileValidator(t(types.never))).check("anything")).toBe(false)
-  })
+    expect(evalValidator(compileValidator(t(types.null))).check(null)).toBe(true);
+    expect(evalValidator(compileValidator(t(types.null))).check(undefined)).toBe(false);
+    expect(evalValidator(compileValidator(t(types.void))).check(undefined)).toBe(true);
+    expect(evalValidator(compileValidator(t(types.unknown))).check("anything")).toBe(true);
+    expect(evalValidator(compileValidator(t(types.never))).check("anything")).toBe(false);
+  });
 
   it("literal", () => {
-    const v = evalValidator(compileValidator(t(types.literal("active"))))
-    expect(v.check("active")).toBe(true)
-    expect(v.check("inactive")).toBe(false)
-    expect(v.errors("inactive")).toEqual([{ kind: "literal", path: [], expected: "active", actual: "inactive" }])
-  })
+    const v = evalValidator(compileValidator(t(types.literal("active"))));
+    expect(v.check("active")).toBe(true);
+    expect(v.check("inactive")).toBe(false);
+    expect(v.errors("inactive")).toEqual([
+      { kind: "literal", path: [], expected: "active", actual: "inactive" },
+    ]);
+  });
 
   it("enum", () => {
-    const v = evalValidator(compileValidator(t(types.enum(["a", "b"]))))
-    expect(v.check("a")).toBe(true)
-    expect(v.check("c")).toBe(false)
-    const errs = v.errors("c")
-    expect(errs).toEqual([{ kind: "enum", path: [], expected: ["a", "b"], actual: "c" }])
-  })
+    const v = evalValidator(compileValidator(t(types.enum(["a", "b"]))));
+    expect(v.check("a")).toBe(true);
+    expect(v.check("c")).toBe(false);
+    const errs = v.errors("c");
+    expect(errs).toEqual([{ kind: "enum", path: [], expected: ["a", "b"], actual: "c" }]);
+  });
 
   it("nullable meta accepts null alongside the base type", () => {
-    const v = evalValidator(compileValidator(t(types.string, { nullable: true })))
-    expect(v.check(null)).toBe(true)
-    expect(v.check("x")).toBe(true)
-    expect(v.check(1)).toBe(false)
-    expect(v.parse(null)).toEqual({ kind: "ok", value: null })
-  })
+    const v = evalValidator(compileValidator(t(types.string, { nullable: true })));
+    expect(v.check(null)).toBe(true);
+    expect(v.check("x")).toBe(true);
+    expect(v.check(1)).toBe(false);
+    expect(v.parse(null)).toEqual({ kind: "ok", value: null });
+  });
 
   it("semantic string kinds (uuid/uri/email/time/duration/bytes)", () => {
-    expect(evalValidator(compileValidator(uuid())).check("550e8400-e29b-41d4-a716-446655440000")).toBe(true)
-    expect(evalValidator(compileValidator(uuid())).check("not-a-uuid")).toBe(false)
-    expect(evalValidator(compileValidator(uri())).check("https://example.com")).toBe(true)
-    expect(evalValidator(compileValidator(email())).check("user@example.com")).toBe(true)
-    expect(evalValidator(compileValidator(email())).check("not-an-email")).toBe(false)
-    expect(evalValidator(compileValidator(time())).check("12:30:00")).toBe(true)
-    expect(evalValidator(compileValidator(duration())).check("P1DT2H")).toBe(true)
-    expect(evalValidator(compileValidator(bytes())).check("aGVsbG8=")).toBe(true)
-  })
+    expect(
+      evalValidator(compileValidator(uuid())).check("550e8400-e29b-41d4-a716-446655440000"),
+    ).toBe(true);
+    expect(evalValidator(compileValidator(uuid())).check("not-a-uuid")).toBe(false);
+    expect(evalValidator(compileValidator(uri())).check("https://example.com")).toBe(true);
+    expect(evalValidator(compileValidator(email())).check("user@example.com")).toBe(true);
+    expect(evalValidator(compileValidator(email())).check("not-an-email")).toBe(false);
+    expect(evalValidator(compileValidator(time())).check("12:30:00")).toBe(true);
+    expect(evalValidator(compileValidator(duration())).check("P1DT2H")).toBe(true);
+    expect(evalValidator(compileValidator(bytes())).check("aGVsbG8=")).toBe(true);
+  });
 
   // datetime/date are type-ir's `Date` domain type, not a string subtype —
   // see kinds/date-time.ts. check()/errors() require an actual (valid)
   // `Date` instance; parse() additionally coerces an ISO string via
   // `new Date(v)`.
   it("datetime/date (Date domain type)", () => {
-    expect(evalValidator(compileValidator(datetime())).check(new Date("2024-01-01T12:30:00Z"))).toBe(true)
-    expect(evalValidator(compileValidator(datetime())).check(new Date("not-a-date"))).toBe(false)
-    expect(evalValidator(compileValidator(datetime())).check("2024-01-01T12:30:00Z")).toBe(false)
-    expect(evalValidator(compileValidator(date())).check(new Date("2024-01-01"))).toBe(true)
-    expect(evalValidator(compileValidator(date())).check("2024-01-01")).toBe(false)
-  })
+    expect(
+      evalValidator(compileValidator(datetime())).check(new Date("2024-01-01T12:30:00Z")),
+    ).toBe(true);
+    expect(evalValidator(compileValidator(datetime())).check(new Date("not-a-date"))).toBe(false);
+    expect(evalValidator(compileValidator(datetime())).check("2024-01-01T12:30:00Z")).toBe(false);
+    expect(evalValidator(compileValidator(date())).check(new Date("2024-01-01"))).toBe(true);
+    expect(evalValidator(compileValidator(date())).check("2024-01-01")).toBe(false);
+  });
 
   it("datetime/date parse() coerces an ISO string to a Date", () => {
-    const v = evalValidator(compileValidator(datetime()))
-    const ok = v.parse("2024-01-01T12:30:00Z") as { kind: "ok"; value: Date }
-    expect(ok.kind).toBe("ok")
-    expect(ok.value instanceof Date).toBe(true)
-    expect(ok.value.toISOString()).toBe("2024-01-01T12:30:00.000Z")
+    const v = evalValidator(compileValidator(datetime()));
+    const ok = v.parse("2024-01-01T12:30:00Z") as { kind: "ok"; value: Date };
+    expect(ok.kind).toBe("ok");
+    expect(ok.value instanceof Date).toBe(true);
+    expect(ok.value.toISOString()).toBe("2024-01-01T12:30:00.000Z");
 
-    const err = v.parse("not-a-date") as { kind: "err"; errors: ValidationError[] }
-    expect(err.kind).toBe("err")
-    expect(err.errors[0]!.kind).toBe("coerce")
-  })
+    const err = v.parse("not-a-date") as { kind: "err"; errors: ValidationError[] };
+    expect(err.kind).toBe("err");
+    expect(err.errors[0]!.kind).toBe("coerce");
+  });
 
   it("int32 enforces range on top of integer-ness", () => {
-    const v = evalValidator(compileValidator(int32()))
-    expect(v.check(42)).toBe(true)
-    expect(v.check(3.5)).toBe(false)
-    expect(v.check(2 ** 32)).toBe(false)
-  })
-})
+    const v = evalValidator(compileValidator(int32()));
+    expect(v.check(42)).toBe(true);
+    expect(v.check(3.5)).toBe(false);
+    expect(v.check(2 ** 32)).toBe(false);
+  });
+});
 
 describe("compileValidator — meta-driven constraints", () => {
   it("minLength/maxLength/pattern on strings", () => {
-    const ref = t(types.string, { minLength: 2, maxLength: 4, pattern: "^[a-z]+$" })
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check("ab")).toBe(true)
-    expect(v.check("a")).toBe(false)
-    expect(v.check("abcde")).toBe(false)
-    expect(v.check("AB")).toBe(false)
-    const errs = v.errors("A")
-    expect(errs.map((e) => e.kind).sort()).toEqual(["min_length", "pattern"])
-  })
+    const ref = t(types.string, { minLength: 2, maxLength: 4, pattern: "^[a-z]+$" });
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check("ab")).toBe(true);
+    expect(v.check("a")).toBe(false);
+    expect(v.check("abcde")).toBe(false);
+    expect(v.check("AB")).toBe(false);
+    const errs = v.errors("A");
+    expect(errs.map((e) => e.kind).sort()).toEqual(["min_length", "pattern"]);
+  });
 
   it("minimum/maximum/exclusiveMinimum/exclusiveMaximum/multipleOf on numbers", () => {
-    const ref = t(types.number, { minimum: 0, maximum: 10, multipleOf: 2 })
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check(4)).toBe(true)
-    expect(v.check(-1)).toBe(false)
-    expect(v.check(11)).toBe(false)
-    expect(v.check(3)).toBe(false)
-  })
+    const ref = t(types.number, { minimum: 0, maximum: 10, multipleOf: 2 });
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check(4)).toBe(true);
+    expect(v.check(-1)).toBe(false);
+    expect(v.check(11)).toBe(false);
+    expect(v.check(3)).toBe(false);
+  });
 
   it("exclusive bounds mark the exclusive flag on the error", () => {
-    const ref = t(types.number, { exclusiveMinimum: 0 })
-    const v = evalValidator(compileValidator(ref))
-    const errs = v.errors(0)
-    expect(errs).toEqual([{ kind: "min", path: [], expected: 0, actual: 0, exclusive: true }])
-  })
+    const ref = t(types.number, { exclusiveMinimum: 0 });
+    const v = evalValidator(compileValidator(ref));
+    const errs = v.errors(0);
+    expect(errs).toEqual([{ kind: "min", path: [], expected: 0, actual: 0, exclusive: true }]);
+  });
 
   it("array minLength/maxLength", () => {
-    const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 2 })
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check([])).toBe(false)
-    expect(v.check(["a"])).toBe(true)
-    expect(v.check(["a", "b", "c"])).toBe(false)
-  })
-})
+    const ref = t(types.array(t(types.string)), { minLength: 1, maxLength: 2 });
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check([])).toBe(false);
+    expect(v.check(["a"])).toBe(true);
+    expect(v.check(["a", "b", "c"])).toBe(false);
+  });
+});
 
 describe("compileValidator — composite kinds", () => {
   it("tuple: check enforces arity and per-index shape; errors reports tuple_length", () => {
-    const ref = t(types.tuple([t(types.string), t(types.number)]))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check(["a", 1])).toBe(true)
-    expect(v.check(["a"])).toBe(false)
-    expect(v.check(["a", 1, 2])).toBe(false)
-    const errs = v.errors(["a"])
-    expect(errs.some((e) => e.kind === "tuple_length")).toBe(true)
-  })
+    const ref = t(types.tuple([t(types.string), t(types.number)]));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check(["a", 1])).toBe(true);
+    expect(v.check(["a"])).toBe(false);
+    expect(v.check(["a", 1, 2])).toBe(false);
+    const errs = v.errors(["a"]);
+    expect(errs.some((e) => e.kind === "tuple_length")).toBe(true);
+  });
 
   it("map (Record<string, V>)", () => {
-    const ref = t(types.map(t(types.string), t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ a: 1, b: 2 })).toBe(true)
-    expect(v.check({ a: "x" })).toBe(false)
-    expect(v.parse({ a: "1" })).toEqual({ kind: "ok", value: { a: 1 } })
-  })
+    const ref = t(types.map(t(types.string), t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ a: 1, b: 2 })).toBe(true);
+    expect(v.check({ a: "x" })).toBe(false);
+    expect(v.parse({ a: "1" })).toEqual({ kind: "ok", value: { a: 1 } });
+  });
 
   it("union: check is true if any variant matches; errors collects all variants' errors when none match", () => {
-    const ref = t(types.union([t(types.string), t(types.number)]))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check("x")).toBe(true)
-    expect(v.check(1)).toBe(true)
-    expect(v.check(true)).toBe(false)
-    const errs = v.errors(true)
-    expect(errs).toHaveLength(1)
-    expect(errs[0]!.kind).toBe("union")
-    expect((errs[0] as { kind: "union"; errors: ValidationError[][] }).errors).toHaveLength(2)
-  })
+    const ref = t(types.union([t(types.string), t(types.number)]));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check("x")).toBe(true);
+    expect(v.check(1)).toBe(true);
+    expect(v.check(true)).toBe(false);
+    const errs = v.errors(true);
+    expect(errs).toHaveLength(1);
+    expect(errs[0]!.kind).toBe("union");
+    expect((errs[0] as { kind: "union"; errors: ValidationError[][] }).errors).toHaveLength(2);
+  });
 
   it("union parse picks the first variant that validates without coercion errors", () => {
-    const ref = t(types.union([t(types.number), t(types.string)]))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.parse(5)).toEqual({ kind: "ok", value: 5 })
-    expect(v.parse("hi")).toEqual({ kind: "ok", value: "hi" })
-  })
+    const ref = t(types.union([t(types.number), t(types.string)]));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.parse(5)).toEqual({ kind: "ok", value: 5 });
+    expect(v.parse("hi")).toEqual({ kind: "ok", value: "hi" });
+  });
 
   it("intersection: value must satisfy every member; object members merge into one fresh value", () => {
-    const ref = t(types.intersection([t(types.object({ a: t(types.string) })), t(types.object({ b: t(types.number) }))]))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ a: "x", b: 1 })).toBe(true)
-    expect(v.check({ a: "x" })).toBe(false)
-    expect(v.parse({ a: "x", b: 1 })).toEqual({ kind: "ok", value: { a: "x", b: 1 } })
-  })
+    const ref = t(
+      types.intersection([
+        t(types.object({ a: t(types.string) })),
+        t(types.object({ b: t(types.number) })),
+      ]),
+    );
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ a: "x", b: 1 })).toBe(true);
+    expect(v.check({ a: "x" })).toBe(false);
+    expect(v.parse({ a: "x", b: 1 })).toEqual({ kind: "ok", value: { a: "x", b: 1 } });
+  });
 
   it("instance/ref/function shapes pass through (no runtime structural check available)", () => {
-    expect(evalValidator(compileValidator(t(types.instance("Foo", "./foo.ts")))).check({})).toBe(true)
-    expect(evalValidator(compileValidator(t(types.ref("Foo")))).check("anything")).toBe(true)
-    expect(evalValidator(compileValidator(t(types.function([], t(types.void))))).check(() => {})).toBe(true)
-    expect(evalValidator(compileValidator(t(types.function([], t(types.void))))).check("not a fn")).toBe(false)
-  })
+    expect(evalValidator(compileValidator(t(types.instance("Foo", "./foo.ts")))).check({})).toBe(
+      true,
+    );
+    expect(evalValidator(compileValidator(t(types.ref("Foo")))).check("anything")).toBe(true);
+    expect(
+      evalValidator(compileValidator(t(types.function([], t(types.void))))).check(() => {}),
+    ).toBe(true);
+    expect(
+      evalValidator(compileValidator(t(types.function([], t(types.void))))).check("not a fn"),
+    ).toBe(false);
+  });
 
   it("stream: check accepts an async iterable without consuming/validating its elements", () => {
-    const ref = t(types.stream(t(types.number)))
-    const v = evalValidator(compileValidator(ref))
+    const ref = t(types.stream(t(types.number)));
+    const v = evalValidator(compileValidator(ref));
     async function* gen() {
-      yield "not a number" // elements are never validated — see the stream doc comment
+      yield "not a number"; // elements are never validated — see the stream doc comment
     }
-    expect(v.check(gen())).toBe(true)
-    expect(v.check([1, 2, 3])).toBe(false) // a plain array has no Symbol.asyncIterator
-    expect(v.check({})).toBe(false)
-    expect(v.check(null)).toBe(false)
-  })
+    expect(v.check(gen())).toBe(true);
+    expect(v.check([1, 2, 3])).toBe(false); // a plain array has no Symbol.asyncIterator
+    expect(v.check({})).toBe(false);
+    expect(v.check(null)).toBe(false);
+  });
 
   it("stream: errors/parse report a type error for a non-async-iterable, and alias the input otherwise", () => {
-    const ref = t(types.stream(t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.errors({})).toHaveLength(1)
-    expect(v.errors({})[0]!.kind).toBe("type")
+    const ref = t(types.stream(t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.errors({})).toHaveLength(1);
+    expect(v.errors({})[0]!.kind).toBe("type");
     async function* gen() {
-      yield 1
+      yield 1;
     }
-    const g = gen()
-    expect(v.errors(g)).toHaveLength(0)
-    const parsed = v.parse(g)
-    expect(parsed).toEqual({ kind: "ok", value: g })
-  })
+    const g = gen();
+    expect(v.errors(g)).toHaveLength(0);
+    const parsed = v.parse(g);
+    expect(parsed).toEqual({ kind: "ok", value: g });
+  });
 
   it("page (cursor style): check enforces items/hasMore/cursor shape", () => {
-    const ref = t(types.page(t(types.string), "cursor"))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ items: ["a", "b"], hasMore: false })).toBe(true)
-    expect(v.check({ items: ["a", "b"], cursor: "abc", hasMore: true })).toBe(true)
-    expect(v.check({ items: ["a", 1], hasMore: false })).toBe(false) // wrong element type
-    expect(v.check({ items: ["a"], hasMore: "no" })).toBe(false) // hasMore must be boolean
-    expect(v.check({ items: ["a"] })).toBe(false) // missing hasMore
-  })
+    const ref = t(types.page(t(types.string), "cursor"));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ items: ["a", "b"], hasMore: false })).toBe(true);
+    expect(v.check({ items: ["a", "b"], cursor: "abc", hasMore: true })).toBe(true);
+    expect(v.check({ items: ["a", 1], hasMore: false })).toBe(false); // wrong element type
+    expect(v.check({ items: ["a"], hasMore: "no" })).toBe(false); // hasMore must be boolean
+    expect(v.check({ items: ["a"] })).toBe(false); // missing hasMore
+  });
 
   it("page (offset style): check enforces items/offset/total/hasMore shape", () => {
-    const ref = t(types.page(t(types.string), "offset"))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ items: ["a"], offset: 0, total: 10, hasMore: true })).toBe(true)
-    expect(v.check({ items: ["a"], hasMore: true })).toBe(false) // missing offset/total
-  })
+    const ref = t(types.page(t(types.string), "offset"));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ items: ["a"], offset: 0, total: 10, hasMore: true })).toBe(true);
+    expect(v.check({ items: ["a"], hasMore: true })).toBe(false); // missing offset/total
+  });
 
   it("page: errors/parse validate per-field and coerce items' elements", () => {
-    const ref = t(types.page(t(types.number), "offset"))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.errors({ items: [1, 2], offset: 0, total: 2, hasMore: false })).toHaveLength(0)
-    const errs = v.errors({ items: [1], hasMore: false })
-    expect(errs.length).toBeGreaterThan(0)
+    const ref = t(types.page(t(types.number), "offset"));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.errors({ items: [1, 2], offset: 0, total: 2, hasMore: false })).toHaveLength(0);
+    const errs = v.errors({ items: [1], hasMore: false });
+    expect(errs.length).toBeGreaterThan(0);
     expect(v.parse({ items: ["1", "2"], offset: "0", total: "2", hasMore: true })).toEqual({
       kind: "ok",
       value: { items: [1, 2], offset: 0, total: 2, hasMore: true },
-    })
-  })
-})
+    });
+  });
+});
 
 describe("compileValidator — map key validation (bug: key type was never checked)", () => {
   it("check rejects a map whose keys don't match the key type (uuid)", () => {
-    const ref = t(types.map(uuid(), t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ "550e8400-e29b-41d4-a716-446655440000": 1 })).toBe(true)
-    expect(v.check({ "not-a-uuid": 1 })).toBe(false)
-  })
+    const ref = t(types.map(uuid(), t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ "550e8400-e29b-41d4-a716-446655440000": 1 })).toBe(true);
+    expect(v.check({ "not-a-uuid": 1 })).toBe(false);
+  });
 
   it("check rejects a map whose keys don't match the key type (enum)", () => {
-    const ref = t(types.map(t(types.enum(["a", "b"])), t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ a: 1, b: 2 })).toBe(true)
-    expect(v.check({ c: 1 })).toBe(false)
-  })
+    const ref = t(types.map(t(types.enum(["a", "b"])), t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ a: 1, b: 2 })).toBe(true);
+    expect(v.check({ c: 1 })).toBe(false);
+  });
 
   it("check rejects a map whose keys violate a pattern constraint", () => {
-    const ref = t(types.map(t(types.string, { pattern: "^[a-z]+$" }), t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ abc: 1 })).toBe(true)
-    expect(v.check({ ABC: 1 })).toBe(false)
-  })
+    const ref = t(types.map(t(types.string, { pattern: "^[a-z]+$" }), t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ abc: 1 })).toBe(true);
+    expect(v.check({ ABC: 1 })).toBe(false);
+  });
 
   it("errors reports a bad key's violation at the entry's path", () => {
-    const ref = t(types.map(uuid(), t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    const errs = v.errors({ "not-a-uuid": 1 })
-    expect(errs.length).toBeGreaterThan(0)
-    expect(errs.some((e) => e.path.join(".") === "not-a-uuid")).toBe(true)
-  })
+    const ref = t(types.map(uuid(), t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    const errs = v.errors({ "not-a-uuid": 1 });
+    expect(errs.length).toBeGreaterThan(0);
+    expect(errs.some((e) => e.path.join(".") === "not-a-uuid")).toBe(true);
+  });
 
   it("parse reports a bad key's violation and still validates the value", () => {
-    const ref = t(types.map(t(types.enum(["a", "b"])), t(types.number)))
-    const v = evalValidator(compileValidator(ref))
-    const result = v.parse({ c: "not-a-number" }) as { kind: "err"; errors: ValidationError[] }
-    expect(result.kind).toBe("err")
-    expect(result.errors.some((e) => e.kind === "enum")).toBe(true)
-    expect(result.errors.some((e) => e.kind === "coerce")).toBe(true)
-  })
-})
+    const ref = t(types.map(t(types.enum(["a", "b"])), t(types.number)));
+    const v = evalValidator(compileValidator(ref));
+    const result = v.parse({ c: "not-a-number" }) as { kind: "err"; errors: ValidationError[] };
+    expect(result.kind).toBe("err");
+    expect(result.errors.some((e) => e.kind === "enum")).toBe(true);
+    expect(result.errors.some((e) => e.kind === "coerce")).toBe(true);
+  });
+});
 
 describe("compileValidator — standalone output typechecks (bug: ValidationError type was never declared)", () => {
   it("compileValidator's output declares a local ValidationError type usable without a cast", () => {
-    const ref = t(types.object({ name: t(types.string) }))
-    const source = compileValidator(ref)
-    expect(source).toContain("type ValidationError")
-  })
+    const ref = t(types.object({ name: t(types.string) }));
+    const source = compileValidator(ref);
+    expect(source).toContain("type ValidationError");
+  });
 
   it("compileValidator's standalone output typechecks under tsc with no unresolved names", () => {
-    const ref = t(types.object({ name: t(types.string), age: t(types.number, { optional: true }) }))
-    const expr = compileValidator(ref)
-    const source = `const v = (${expr});\nexport {};\n`
-    const dir = mkdtempSync(join(tmpdir(), "compile-validator-tsc-"))
-    const file = join(dir, "standalone.ts")
-    writeFileSync(file, source)
+    const ref = t(
+      types.object({ name: t(types.string), age: t(types.number, { optional: true }) }),
+    );
+    const expr = compileValidator(ref);
+    const source = `const v = (${expr});\nexport {};\n`;
+    const dir = mkdtempSync(join(tmpdir(), "compile-validator-tsc-"));
+    const file = join(dir, "standalone.ts");
+    writeFileSync(file, source);
     // `--ignoreConfig`: TypeScript 6 errors (TS5112) when a tsconfig.json is
     // present in the process cwd and files are also passed on the command
     // line — even though that ambient tsconfig has nothing to do with the
@@ -422,12 +447,26 @@ describe("compileValidator — standalone output typechecks (bug: ValidationErro
     // invocation fails regardless of whether the generated source is valid.
     const result = spawnSync(
       "bunx",
-      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
+      [
+        "tsc",
+        "--noEmit",
+        "--strict",
+        "--target",
+        "es2022",
+        "--module",
+        "es2022",
+        "--skipLibCheck",
+        "--ignoreConfig",
+        file,
+      ],
       { encoding: "utf-8" },
-    )
-    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
-  })
-})
+    );
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({
+      status: 0,
+      output: expect.stringContaining(""),
+    });
+  });
+});
 
 describe("compileValidator — a map whose VALUE is an object typechecks (bug: Object.values(any) resolves to unknown[], not any[])", () => {
   // `checkHandlers.map`'s generated `check()` body calls `Object.values(${v})`
@@ -450,19 +489,33 @@ describe("compileValidator — a map whose VALUE is an object typechecks (bug: O
           ),
         ),
       }),
-    )
-    const expr = compileValidator(ref)
-    const source = `const v = (${expr});\nexport {};\n`
-    const dir = mkdtempSync(join(tmpdir(), "compile-validator-map-object-tsc-"))
-    const file = join(dir, "standalone.ts")
-    writeFileSync(file, source)
+    );
+    const expr = compileValidator(ref);
+    const source = `const v = (${expr});\nexport {};\n`;
+    const dir = mkdtempSync(join(tmpdir(), "compile-validator-map-object-tsc-"));
+    const file = join(dir, "standalone.ts");
+    writeFileSync(file, source);
     const result = spawnSync(
       "bunx",
-      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
+      [
+        "tsc",
+        "--noEmit",
+        "--strict",
+        "--target",
+        "es2022",
+        "--module",
+        "es2022",
+        "--skipLibCheck",
+        "--ignoreConfig",
+        file,
+      ],
       { encoding: "utf-8" },
-    )
-    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
-  })
+    );
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({
+      status: 0,
+      output: expect.stringContaining(""),
+    });
+  });
 
   it("still validates real values correctly (runtime behavior unchanged by the `as any[]` type-only cast)", () => {
     const ref = t(
@@ -474,93 +527,93 @@ describe("compileValidator — a map whose VALUE is an object typechecks (bug: O
           ),
         ),
       }),
-    )
-    const v = evalValidator(compileValidator(ref))
-    expect(v.check({ transforms: { field1: { before: "a", after: "b" } } })).toBe(true)
-    expect(v.check({ transforms: { field1: { before: "a", after: 2 } } })).toBe(false)
-  })
-})
+    );
+    const v = evalValidator(compileValidator(ref));
+    expect(v.check({ transforms: { field1: { before: "a", after: "b" } } })).toBe(true);
+    expect(v.check({ transforms: { field1: { before: "a", after: 2 } } })).toBe(false);
+  });
+});
 
 describe("compileValidator — errors()/parse() agree on error kind for wrong-type values (bug: parse over-reported coerce)", () => {
   it("a boolean where a number is expected is a type error in both errors() and parse()", () => {
-    const ref = t(types.object({ age: t(types.number) }))
-    const v = evalValidator(compileValidator(ref))
-    const errKinds = v.errors({ age: true }).map((e) => e.kind)
-    const parseResult = v.parse({ age: true }) as { kind: "err"; errors: ValidationError[] }
-    expect(errKinds).toEqual(["type"])
-    expect(parseResult.kind).toBe("err")
-    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"])
-  })
+    const ref = t(types.object({ age: t(types.number) }));
+    const v = evalValidator(compileValidator(ref));
+    const errKinds = v.errors({ age: true }).map((e) => e.kind);
+    const parseResult = v.parse({ age: true }) as { kind: "err"; errors: ValidationError[] };
+    expect(errKinds).toEqual(["type"]);
+    expect(parseResult.kind).toBe("err");
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"]);
+  });
 
   it("an array where a number is expected is a type error in both errors() and parse()", () => {
-    const ref = t(types.object({ age: t(types.number) }))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.errors({ age: [1] }).map((e) => e.kind)).toEqual(["type"])
-    const parseResult = v.parse({ age: [1] }) as { kind: "err"; errors: ValidationError[] }
-    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"])
-  })
+    const ref = t(types.object({ age: t(types.number) }));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.errors({ age: [1] }).map((e) => e.kind)).toEqual(["type"]);
+    const parseResult = v.parse({ age: [1] }) as { kind: "err"; errors: ValidationError[] };
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"]);
+  });
 
   it("a number where a boolean is expected is a type error in both errors() and parse()", () => {
-    const ref = t(types.object({ active: t(types.boolean) }))
-    const v = evalValidator(compileValidator(ref))
-    expect(v.errors({ active: 1 }).map((e) => e.kind)).toEqual(["type"])
-    const parseResult = v.parse({ active: 1 }) as { kind: "err"; errors: ValidationError[] }
-    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"])
-  })
+    const ref = t(types.object({ active: t(types.boolean) }));
+    const v = evalValidator(compileValidator(ref));
+    expect(v.errors({ active: 1 }).map((e) => e.kind)).toEqual(["type"]);
+    const parseResult = v.parse({ active: 1 }) as { kind: "err"; errors: ValidationError[] };
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["type"]);
+  });
 
   it("an unparseable numeric string is still a coerce error (not over-corrected to type)", () => {
-    const ref = t(types.object({ age: t(types.number) }))
-    const v = evalValidator(compileValidator(ref))
-    const parseResult = v.parse({ age: "nope" }) as { kind: "err"; errors: ValidationError[] }
-    expect(parseResult.errors.map((e) => e.kind)).toEqual(["coerce"])
-  })
+    const ref = t(types.object({ age: t(types.number) }));
+    const v = evalValidator(compileValidator(ref));
+    const parseResult = v.parse({ age: "nope" }) as { kind: "err"; errors: ValidationError[] };
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["coerce"]);
+  });
 
   it("a non-true/false string is still a coerce error for boolean (not over-corrected to type)", () => {
-    const ref = t(types.object({ active: t(types.boolean) }))
-    const v = evalValidator(compileValidator(ref))
-    const parseResult = v.parse({ active: "nope" }) as { kind: "err"; errors: ValidationError[] }
-    expect(parseResult.errors.map((e) => e.kind)).toEqual(["coerce"])
-  })
-})
+    const ref = t(types.object({ active: t(types.boolean) }));
+    const v = evalValidator(compileValidator(ref));
+    const parseResult = v.parse({ active: "nope" }) as { kind: "err"; errors: ValidationError[] };
+    expect(parseResult.errors.map((e) => e.kind)).toEqual(["coerce"]);
+  });
+});
 
 describe("compileValidator — int64 range check (bug: int64 had no bounds check, identical to integer)", () => {
   it("check accepts values within Number.MIN_SAFE_INTEGER/MAX_SAFE_INTEGER and rejects values outside", () => {
-    const v = evalValidator(compileValidator(int64()))
-    expect(v.check(42)).toBe(true)
-    expect(v.check(Number.MAX_SAFE_INTEGER)).toBe(true)
-    expect(v.check(Number.MAX_SAFE_INTEGER + 2)).toBe(false)
-    expect(v.check(Number.MIN_SAFE_INTEGER - 2)).toBe(false)
-  })
+    const v = evalValidator(compileValidator(int64()));
+    expect(v.check(42)).toBe(true);
+    expect(v.check(Number.MAX_SAFE_INTEGER)).toBe(true);
+    expect(v.check(Number.MAX_SAFE_INTEGER + 2)).toBe(false);
+    expect(v.check(Number.MIN_SAFE_INTEGER - 2)).toBe(false);
+  });
 
   it("errors reports a type error for an out-of-range int64", () => {
-    const v = evalValidator(compileValidator(int64()))
-    const errs = v.errors(Number.MAX_SAFE_INTEGER + 2)
-    expect(errs).toHaveLength(1)
-    expect(errs[0]!.kind).toBe("type")
-  })
-})
+    const v = evalValidator(compileValidator(int64()));
+    const errs = v.errors(Number.MAX_SAFE_INTEGER + 2);
+    expect(errs).toHaveLength(1);
+    expect(errs[0]!.kind).toBe("type");
+  });
+});
 
 describe("compileValidator — duplicate const hoisting (quality: enum/known-field consts were emitted 3x)", () => {
   it("an enum field's member array is hoisted once, not once per check/errors/parse", () => {
-    const ref = t(types.object({ status: t(types.enum(["a", "b", "c"])) }))
-    const source = compileValidator(ref)
+    const ref = t(types.object({ status: t(types.enum(["a", "b", "c"])) }));
+    const source = compileValidator(ref);
     // Count `const __membersN = [...]` DECLARATIONS specifically (not
     // substring occurrences of the array literal text, which also shows up
     // nested inside the unrelated `__ref` TypeRef literal used for `type`
     // errors) — errors()/parse() both reference `.enum` handling, so a
     // pre-fix build would declare this const twice (once per handler
     // invocation) even though check() only invokes it once more.
-    const memberConstDecls = source.match(/const __members\d+ = /g) ?? []
-    expect(memberConstDecls).toHaveLength(1)
-  })
+    const memberConstDecls = source.match(/const __members\d+ = /g) ?? [];
+    expect(memberConstDecls).toHaveLength(1);
+  });
 
   it("an object's known-field Set is hoisted once, not once per check/errors/parse", () => {
-    const ref = t(types.object({ name: t(types.string) }), { additionalProperties: false })
-    const source = compileValidator(ref)
-    const occurrences = source.split("new Set(").length - 1
-    expect(occurrences).toBe(1)
-  })
-})
+    const ref = t(types.object({ name: t(types.string) }), { additionalProperties: false });
+    const source = compileValidator(ref);
+    const occurrences = source.split("new Set(").length - 1;
+    expect(occurrences).toBe(1);
+  });
+});
 
 describe("compileValidator — defs + recursive validator codegen", () => {
   // A self-recursive tree: { value: number; children: Tree[] }, where `Tree`
@@ -570,49 +623,58 @@ describe("compileValidator — defs + recursive validator codegen", () => {
       value: t(types.number),
       children: t(types.array(t(types.ref("Tree")))),
     }),
-  )
-  const defs = { Tree: treeRef }
-  const validTree = { value: 1, children: [{ value: 2, children: [{ value: 3, children: [] }] }] }
-  const invalidTree = { value: 1, children: [{ value: "x", children: [] }] }
+  );
+  const defs = { Tree: treeRef };
+  const validTree = { value: 1, children: [{ value: 2, children: [{ value: 3, children: [] }] }] };
+  const invalidTree = { value: 1, children: [{ value: "x", children: [] }] };
 
   it("compileValidator: a bare ref with no defs passed is a structural no-op (prior behavior preserved)", () => {
-    const v = evalValidator(compileValidator(t(types.ref("Whatever"))))
-    expect(v.check("anything")).toBe(true)
-    expect(v.errors("anything")).toEqual([])
-  })
+    const v = evalValidator(compileValidator(t(types.ref("Whatever"))));
+    expect(v.check("anything")).toBe(true);
+    expect(v.errors("anything")).toEqual([]);
+  });
 
   it("compileValidator: check/errors/parse all validate through a recursive def correctly", () => {
-    const v = evalValidator(compileValidator(treeRef, defs))
-    expect(v.check(validTree)).toBe(true)
-    expect(v.check(invalidTree)).toBe(false)
+    const v = evalValidator(compileValidator(treeRef, defs));
+    expect(v.check(validTree)).toBe(true);
+    expect(v.check(invalidTree)).toBe(false);
 
-    const errs = v.errors(invalidTree)
+    const errs = v.errors(invalidTree);
     expect(errs).toEqual([
-      { kind: "type", path: ["children", "0", "value"], expected: expect.anything(), actual: expect.anything() },
-    ])
+      {
+        kind: "type",
+        path: ["children", "0", "value"],
+        expected: expect.anything(),
+        actual: expect.anything(),
+      },
+    ]);
 
-    const ok = v.parse(validTree)
-    expect(ok).toEqual({ kind: "ok", value: validTree })
-    const err = v.parse(invalidTree)
-    expect(err.kind).toBe("err")
-  })
+    const ok = v.parse(validTree);
+    expect(ok).toEqual({ kind: "ok", value: validTree });
+    const err = v.parse(invalidTree);
+    expect(err.kind).toBe("err");
+  });
 
   it("compileValidator: parse rebuilds a FRESH value through the recursive def, not an alias of the input", () => {
-    const v = evalValidator(compileValidator(treeRef, defs))
-    const result = v.parse(validTree) as { kind: "ok"; value: typeof validTree }
-    expect(result.value).toEqual(validTree)
-    expect(result.value).not.toBe(validTree)
-    expect(result.value.children[0]).not.toBe(validTree.children[0])
-  })
+    const v = evalValidator(compileValidator(treeRef, defs));
+    const result = v.parse(validTree) as { kind: "ok"; value: typeof validTree };
+    expect(result.value).toEqual(validTree);
+    expect(result.value).not.toBe(validTree);
+    expect(result.value.children[0]).not.toBe(validTree.children[0]);
+  });
 
   it("mutually recursive defs (A refs B, B refs A) validate correctly in both directions", () => {
-    const aRef = t(types.object({ kind: t(types.literal("a")), next: t(types.ref("B"), { optional: true }) }))
-    const bRef = t(types.object({ kind: t(types.literal("b")), next: t(types.ref("A"), { optional: true }) }))
-    const v = evalValidator(compileValidator(aRef, { A: aRef, B: bRef }))
-    expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "a" } } })).toBe(true)
-    expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "wrong" } } })).toBe(false)
-  })
-})
+    const aRef = t(
+      types.object({ kind: t(types.literal("a")), next: t(types.ref("B"), { optional: true }) }),
+    );
+    const bRef = t(
+      types.object({ kind: t(types.literal("b")), next: t(types.ref("A"), { optional: true }) }),
+    );
+    const v = evalValidator(compileValidator(aRef, { A: aRef, B: bRef }));
+    expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "a" } } })).toBe(true);
+    expect(v.check({ kind: "a", next: { kind: "b", next: { kind: "wrong" } } })).toBe(false);
+  });
+});
 
 describe("compileDefs — a shared/recursive def gets a real static type alias, not a bare unimported name (bug: TS2304)", () => {
   // Reproduces the real-world shape (the sibling codebase's `triggers.ts`'s self-
@@ -633,47 +695,67 @@ describe("compileDefs — a shared/recursive def gets a real static type alias, 
       t(types.object({ op: t(types.literal("and")), args: t(types.array(t(types.ref("Expr")))) })),
       t(types.object({ op: t(types.literal("not")), arg: t(types.ref("Expr")) })),
     ]),
-  )
-  const defs = { Expr: exprRef }
+  );
+  const defs = { Expr: exprRef };
   // The entry's own top-level type: an unrelated object with a NESTED field
   // typed as the recursive def — not the def itself.
-  const conditionRef = t(types.object({ name: t(types.string), condition: t(types.ref("Expr")) }))
-  const validValue = { name: "trigger-1", condition: { op: "and", args: [{ op: "ref", ref: "x" }] } }
-  const invalidValue = { name: "trigger-1", condition: { op: "and", args: [{ op: "ref", ref: 123 }] } }
+  const conditionRef = t(types.object({ name: t(types.string), condition: t(types.ref("Expr")) }));
+  const validValue = {
+    name: "trigger-1",
+    condition: { op: "and", args: [{ op: "ref", ref: "x" }] },
+  };
+  const invalidValue = {
+    name: "trigger-1",
+    condition: { op: "and", args: [{ op: "ref", ref: 123 }] },
+  };
 
   it("compileDefs emits a `type __def_NAME = <structural>` alias for every def, not just runtime functions", () => {
-    const expr = compileValidator(conditionRef, defs)
-    expect(expr).toContain("type __def_Expr =")
-  })
+    const expr = compileValidator(conditionRef, defs);
+    expect(expr).toContain("type __def_Expr =");
+  });
 
   it("a nested ref to a shared def renders the local alias name in the guard annotation, not the bare unimported target", () => {
-    const expr = compileValidator(conditionRef, defs)
+    const expr = compileValidator(conditionRef, defs);
     // The generated `value is {...}` annotation must reference the
     // locally-declared `__def_Expr` alias, not a bare `Expr` that resolves to
     // nothing in the generated output.
-    expect(expr).toContain("condition: __def_Expr")
-    expect(expr).not.toMatch(/condition:\s*Expr[^_a-zA-Z0-9]/)
-  })
+    expect(expr).toContain("condition: __def_Expr");
+    expect(expr).not.toMatch(/condition:\s*Expr[^_a-zA-Z0-9]/);
+  });
 
   it("compileValidator's standalone output — same nested-recursive-def shape — typechecks under tsc with no unresolved names", () => {
-    const expr = compileValidator(conditionRef, defs)
-    const source = `const v = (${expr});\nexport {};\n`
-    const dir = mkdtempSync(join(tmpdir(), "compile-validator-nested-ref-tsc-"))
-    const file = join(dir, "standalone.ts")
-    writeFileSync(file, source)
+    const expr = compileValidator(conditionRef, defs);
+    const source = `const v = (${expr});\nexport {};\n`;
+    const dir = mkdtempSync(join(tmpdir(), "compile-validator-nested-ref-tsc-"));
+    const file = join(dir, "standalone.ts");
+    writeFileSync(file, source);
     const result = spawnSync(
       "bunx",
-      ["tsc", "--noEmit", "--strict", "--target", "es2022", "--module", "es2022", "--skipLibCheck", "--ignoreConfig", file],
+      [
+        "tsc",
+        "--noEmit",
+        "--strict",
+        "--target",
+        "es2022",
+        "--module",
+        "es2022",
+        "--skipLibCheck",
+        "--ignoreConfig",
+        file,
+      ],
       { encoding: "utf-8" },
-    )
-    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({ status: 0, output: expect.stringContaining("") })
-  })
+    );
+    expect({ status: result.status, output: result.stdout + result.stderr }).toEqual({
+      status: 0,
+      output: expect.stringContaining(""),
+    });
+  });
 
   it("the recursive def still validates real values correctly through the nested field (runtime behavior unchanged by the type-alias fix)", () => {
-    const v = evalValidator(compileValidator(conditionRef, defs))
-    expect(v.check(validValue)).toBe(true)
-    expect(v.check(invalidValue)).toBe(false)
-    const parsed = v.parse(validValue)
-    expect(parsed).toEqual({ kind: "ok", value: validValue })
-  })
-})
+    const v = evalValidator(compileValidator(conditionRef, defs));
+    expect(v.check(validValue)).toBe(true);
+    expect(v.check(invalidValue)).toBe(false);
+    const parsed = v.parse(validValue);
+    expect(parsed).toEqual({ kind: "ok", value: validValue });
+  });
+});

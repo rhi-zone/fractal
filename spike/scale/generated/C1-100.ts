@@ -1,22 +1,28 @@
-import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"
-import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"
-import type { ClientOfContract } from "../contract"
+import { json, withValidation } from "@rhi-zone/fractal-http-api-projector";
+import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree";
+import type { ClientOfContract } from "../contract";
 
 // Minimal Standard-Schema validator (no zod — isolate fractal's cost).
-interface Body { readonly name: string; readonly qty: number }
+interface Body {
+  readonly name: string;
+  readonly qty: number;
+}
 const bodySchema: StandardSchema<unknown, Body> = {
   "~standard": {
     version: 1,
     validate(v: unknown) {
-      const o = v as Body
-      return { value: { name: String(o?.name ?? ""), qty: Number(o?.qty ?? 0) } }
+      const o = v as Body;
+      return { value: { name: String(o?.name ?? ""), qty: Number(o?.qty ?? 0) } };
     },
   },
-}
+};
 
 type Ctx<P extends string> = RoutingCtx & { params: PathParams<P> } & {
-  query: URLSearchParams; headers: Headers; body: () => Promise<unknown>; request: Request
-}
+  query: URLSearchParams;
+  headers: Headers;
+  body: () => Promise<unknown>;
+  request: Request;
+};
 
 const contract = {
   "/res0/:id": {
@@ -319,23 +325,23 @@ const contract = {
   "/res99": {
     get: async (ctx: Ctx<"/res99">) => json({ id: 99, key: "res99" }),
   },
-} as const
+} as const;
 
-type Api = ClientOfContract<typeof contract>
-declare const api: Api
-const r0 = api["/res0/:id"].get({ params: { id: "1" } })
-void r0.then((v) => v)
-const r14 = api["/res14/:id"].put({ params: { id: "1" } })
-void r14.then((v) => v)
-const r28 = api["/res28/:id"].post({ params: { id: "1" } })
-void r28.then((v) => v)
-const r42 = api["/res42/:id"].get({ params: { id: "1" } })
-void r42.then((v) => v)
-const r56 = api["/res56/:id"].put({ params: { id: "1" } })
-void r56.then((v) => v)
-const r70 = api["/res70/:id"].post({ params: { id: "1" } })
-void r70.then((v) => v)
-const r84 = api["/res84/:id"].get({ params: { id: "1" } })
-void r84.then((v) => v)
-const r99 = api["/res99"].get()
-void r99.then((v) => v)
+type Api = ClientOfContract<typeof contract>;
+declare const api: Api;
+const r0 = api["/res0/:id"].get({ params: { id: "1" } });
+void r0.then((v) => v);
+const r14 = api["/res14/:id"].put({ params: { id: "1" } });
+void r14.then((v) => v);
+const r28 = api["/res28/:id"].post({ params: { id: "1" } });
+void r28.then((v) => v);
+const r42 = api["/res42/:id"].get({ params: { id: "1" } });
+void r42.then((v) => v);
+const r56 = api["/res56/:id"].put({ params: { id: "1" } });
+void r56.then((v) => v);
+const r70 = api["/res70/:id"].post({ params: { id: "1" } });
+void r70.then((v) => v);
+const r84 = api["/res84/:id"].get({ params: { id: "1" } });
+void r84.then((v) => v);
+const r99 = api["/res99"].get();
+void r99.then((v) => v);

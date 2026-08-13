@@ -19,78 +19,78 @@
 // through tree.fixture.ts, just one hop further from FIXTURE now — still
 // invalidates.
 
-import { describe, expect, it, beforeEach, afterEach, spyOn } from "bun:test"
-import * as fs from "node:fs"
-import * as path from "node:path"
-import * as extract from "./extract.ts"
-import { createExtractorProgram } from "./extract.ts"
-import { writeWireApplyValidationModuleCached } from "./apply-validation-build.ts"
-import { writeSchemaModuleCached } from "./schema-build.ts"
-import { checkCache, writeCacheMetadata } from "./cache.ts"
-import { computeEntryClosures } from "./reachability.ts"
+import { describe, expect, it, beforeEach, afterEach, spyOn } from "bun:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as extract from "./extract.ts";
+import { createExtractorProgram } from "./extract.ts";
+import { writeWireApplyValidationModuleCached } from "./apply-validation-build.ts";
+import { writeSchemaModuleCached } from "./schema-build.ts";
+import { checkCache, writeCacheMetadata } from "./cache.ts";
+import { computeEntryClosures } from "./reachability.ts";
 
-const FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-tree.fixture.ts`
-const DEP_FIXTURE = `${import.meta.dir}/__fixtures__/result-reexport.fixture.ts`
-const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`
+const FIXTURE = `${import.meta.dir}/__fixtures__/apply-validation-tree.fixture.ts`;
+const DEP_FIXTURE = `${import.meta.dir}/__fixtures__/result-reexport.fixture.ts`;
+const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`;
 
-const TMP_DIR = `${import.meta.dir}/__fixtures__/.cache-test-tmp`
+const TMP_DIR = `${import.meta.dir}/__fixtures__/.cache-test-tmp`;
 
 function freshOutFile(name: string): string {
-  return path.join(TMP_DIR, name)
+  return path.join(TMP_DIR, name);
 }
 
 beforeEach(() => {
-  fs.mkdirSync(TMP_DIR, { recursive: true })
-})
+  fs.mkdirSync(TMP_DIR, { recursive: true });
+});
 
 afterEach(() => {
-  fs.rmSync(TMP_DIR, { recursive: true, force: true })
-})
+  fs.rmSync(TMP_DIR, { recursive: true, force: true });
+});
 
 describe("cache.ts — content-addressed incremental build cache", () => {
   it("first build is a miss (no cache metadata yet); rebuilding immediately after is a hit", async () => {
-    const outFile = freshOutFile("v1.ts")
+    const outFile = freshOutFile("v1.ts");
 
-    const first = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-    expect(first.status).toBe("built")
-    expect(fs.existsSync(outFile)).toBe(true)
-    expect(fs.existsSync(`${outFile}.cache.json`)).toBe(true)
+    const first = await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    expect(first.status).toBe("built");
+    expect(fs.existsSync(outFile)).toBe(true);
+    expect(fs.existsSync(`${outFile}.cache.json`)).toBe(true);
 
-    const second = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-    expect(second.status).toBe("hit")
+    const second = await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    expect(second.status).toBe("hit");
 
-    const check = checkCache(FIXTURE, outFile)
-    expect(check.hit).toBe(true)
-  })
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(true);
+  });
 
   it("touching a DEPENDENCY the extractor reads (not the entry file itself) invalidates the cache", async () => {
-    const outFile = freshOutFile("v2.ts")
-    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit")
+    const outFile = freshOutFile("v2.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit");
 
     // Touch result-reexport.fixture.ts — a real transitive dependency of
     // tree.fixture.ts's `ResultFromBarrel` import — via a content change,
     // reverted in `finally` so the fixture stays clean for other tests.
-    const original = fs.readFileSync(DEP_FIXTURE, "utf8")
+    const original = fs.readFileSync(DEP_FIXTURE, "utf8");
     try {
-      fs.writeFileSync(DEP_FIXTURE, `${original}\n// cache-test perturbation\n`)
-      const check = checkCache(FIXTURE, outFile)
-      expect(check.hit).toBe(false)
-      if (!check.hit) expect(check.reason).toContain("result-reexport.fixture.ts")
+      fs.writeFileSync(DEP_FIXTURE, `${original}\n// cache-test perturbation\n`);
+      const check = checkCache(FIXTURE, outFile);
+      expect(check.hit).toBe(false);
+      if (!check.hit) expect(check.reason).toContain("result-reexport.fixture.ts");
 
-      const rebuilt = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-      expect(rebuilt.status).toBe("built")
+      const rebuilt = await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+      expect(rebuilt.status).toBe("built");
     } finally {
-      fs.writeFileSync(DEP_FIXTURE, original)
+      fs.writeFileSync(DEP_FIXTURE, original);
     }
-  })
+  });
 
   it("editing the entry file itself invalidates the cache", async () => {
-    const outFile = freshOutFile("v3.ts")
+    const outFile = freshOutFile("v3.ts");
     // A throwaway copy of the fixture, with its relative imports rewritten
     // to still resolve from the copy's new (tmp) location, so it extracts
     // cleanly and can safely be edited without touching the real fixture.
-    const entryCopy = freshOutFile("entry.fixture.ts")
+    const entryCopy = freshOutFile("entry.fixture.ts");
     const rewritten = fs
       .readFileSync(FIXTURE, "utf8")
       .replaceAll(
@@ -100,47 +100,51 @@ describe("cache.ts — content-addressed incremental build cache", () => {
       .replaceAll(
         "./tree.fixture.ts",
         path.relative(TMP_DIR, `${import.meta.dir}/__fixtures__/tree.fixture.ts`),
-      )
-    fs.writeFileSync(entryCopy, rewritten)
+      );
+    fs.writeFileSync(entryCopy, rewritten);
 
-    await writeWireApplyValidationModuleCached(entryCopy, outFile)
-    expect((await writeWireApplyValidationModuleCached(entryCopy, outFile)).status).toBe("hit")
+    await writeWireApplyValidationModuleCached(entryCopy, outFile);
+    expect((await writeWireApplyValidationModuleCached(entryCopy, outFile)).status).toBe("hit");
 
-    fs.appendFileSync(entryCopy, "\n// entry-file perturbation\n")
-    const check = checkCache(entryCopy, outFile)
-    expect(check.hit).toBe(false)
-    expect((await writeWireApplyValidationModuleCached(entryCopy, outFile)).status).toBe("built")
-  })
+    fs.appendFileSync(entryCopy, "\n// entry-file perturbation\n");
+    const check = checkCache(entryCopy, outFile);
+    expect(check.hit).toBe(false);
+    expect((await writeWireApplyValidationModuleCached(entryCopy, outFile)).status).toBe("built");
+  });
 
   it("force bypasses the cache unconditionally, even on a hit", async () => {
-    const outFile = freshOutFile("v4.ts")
-    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit")
-    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile, { force: true })).status).toBe("built")
-  })
+    const outFile = freshOutFile("v4.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile)).status).toBe("hit");
+    expect(
+      (await writeWireApplyValidationModuleCached(FIXTURE, outFile, { force: true })).status,
+    ).toBe("built");
+  });
 
   it("hand-editing the output file invalidates the cache even though no input changed", async () => {
-    const outFile = freshOutFile("v5.ts")
-    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-    fs.appendFileSync(outFile, "\n// hand edit\n")
-    const check = checkCache(FIXTURE, outFile)
-    expect(check.hit).toBe(false)
-    if (!check.hit) expect(check.reason).toContain("output file changed")
-  })
+    const outFile = freshOutFile("v5.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    fs.appendFileSync(outFile, "\n// hand edit\n");
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(false);
+    if (!check.hit) expect(check.reason).toContain("output file changed");
+  });
 
   it("cacheFile/cacheDir options relocate cache metadata away from the default <output>.cache.json sibling", async () => {
-    const outFile = freshOutFile("v6.ts")
-    const cacheDir = freshOutFile("cache-pool")
-    const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })
-    expect(outcome.status).toBe("built")
-    expect(fs.existsSync(`${outFile}.cache.json`)).toBe(false)
-    expect(fs.existsSync(path.join(cacheDir, `${path.basename(outFile)}.cache.json`))).toBe(true)
-    expect((await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })).status).toBe("hit")
-  })
+    const outFile = freshOutFile("v6.ts");
+    const cacheDir = freshOutFile("cache-pool");
+    const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir });
+    expect(outcome.status).toBe("built");
+    expect(fs.existsSync(`${outFile}.cache.json`)).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, `${path.basename(outFile)}.cache.json`))).toBe(true);
+    expect(
+      (await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })).status,
+    ).toBe("hit");
+  });
 
   it("a warm hit never constructs a ts.Program — checkCache re-validates off recorded size/mtime/hash only", async () => {
-    const outFile = freshOutFile("v8.ts")
-    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
+    const outFile = freshOutFile("v8.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
 
     // Spy on `createExtractorProgram` (extract.ts) — apply-validation-build.ts's
     // Program-construction entry point (`buildWireApplyValidationModuleCached`'s
@@ -148,76 +152,85 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     // call must never reach it: the whole point of the tiered stat/hash
     // re-validation (see cache.ts's warm-check-cost doc block) is to decide
     // "hit" without ever needing a Program.
-    const createProgramSpy = spyOn(extract, "createExtractorProgram")
+    const createProgramSpy = spyOn(extract, "createExtractorProgram");
     try {
-      const check = checkCache(FIXTURE, outFile)
-      expect(check.hit).toBe(true)
-      expect(createProgramSpy).not.toHaveBeenCalled()
+      const check = checkCache(FIXTURE, outFile);
+      expect(check.hit).toBe(true);
+      expect(createProgramSpy).not.toHaveBeenCalled();
 
-      const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-      expect(outcome.status).toBe("hit")
-      expect(createProgramSpy).not.toHaveBeenCalled()
+      const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+      expect(outcome.status).toBe("hit");
+      expect(createProgramSpy).not.toHaveBeenCalled();
     } finally {
-      createProgramSpy.mockRestore()
+      createProgramSpy.mockRestore();
     }
-  })
+  });
 
   it("touching a tracked file's mtime without changing its content still resolves to a hit (content-hash fallback)", async () => {
-    const outFile = freshOutFile("v9.ts")
-    await writeWireApplyValidationModuleCached(FIXTURE, outFile)
+    const outFile = freshOutFile("v9.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
 
     // Bump DEP_FIXTURE's mtime (and only its mtime — content unchanged) far
     // enough into the future that it can't collide with the recorded value
     // under any filesystem's timestamp resolution, so the fast size/mtime
     // path is guaranteed to miss and fall through to the content-hash check.
-    const future = new Date(Date.now() + 60_000)
-    fs.utimesSync(DEP_FIXTURE, future, future)
+    const future = new Date(Date.now() + 60_000);
+    fs.utimesSync(DEP_FIXTURE, future, future);
 
-    const check = checkCache(FIXTURE, outFile)
-    expect(check.hit).toBe(true)
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(true);
 
-    const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile)
-    expect(outcome.status).toBe("hit")
-  })
+    const outcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    expect(outcome.status).toBe("hit");
+  });
 
   it("schema-build.ts's writeSchemaModuleCached uses the SAME cache contract, independently of the validator module's cache entry", async () => {
-    const validatorOut = freshOutFile("v7.validators.ts")
-    const schemaOut = freshOutFile("v7.schemas.ts")
+    const validatorOut = freshOutFile("v7.validators.ts");
+    const schemaOut = freshOutFile("v7.schemas.ts");
 
-    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("built")
-    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit")
+    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("built");
+    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit");
 
     // Building the validator module for the same entry doesn't touch the
     // schema artifact's cache entry (separate outFile, separate metadata).
-    expect((await writeWireApplyValidationModuleCached(FIXTURE, validatorOut)).status).toBe("built")
-    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit")
+    expect((await writeWireApplyValidationModuleCached(FIXTURE, validatorOut)).status).toBe(
+      "built",
+    );
+    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit");
 
-    const source = fs.readFileSync(schemaOut, "utf8")
-    expect(source).toContain("export const schemas")
-    expect(source).toContain("namedType_search")
-  })
+    const source = fs.readFileSync(schemaOut, "utf8");
+    expect(source).toContain("export const schemas");
+    expect(source).toContain("namedType_search");
+  });
 
   describe("writeCacheMetadata's `reachable` param — per-entry closures over a SHARED multi-root Program", () => {
     it("recording with `reachable` tracks only that entry's own closure, not the whole shared Program's file set — touching an UNRELATED entry's dependency stays a hit", async () => {
-      const treeOut = freshOutFile("shared-tree.ts")
-      const sharingOut = freshOutFile("shared-sharing.ts")
+      const treeOut = freshOutFile("shared-tree.ts");
+      const sharingOut = freshOutFile("shared-sharing.ts");
 
       // One Program shared across both entries — the exact shape the sibling codebase's
       // codegen-fractal-validators.ts uses.
-      const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE])
-      const closures = computeEntryClosures([FIXTURE, SHARING_FIXTURE], program)
-      const treeClosure = closures.get(path.resolve(FIXTURE))
-      const sharingClosure = closures.get(path.resolve(SHARING_FIXTURE))
-      expect(treeClosure).toBeDefined()
-      expect(sharingClosure).toBeDefined()
+      const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE]);
+      const closures = computeEntryClosures([FIXTURE, SHARING_FIXTURE], program);
+      const treeClosure = closures.get(path.resolve(FIXTURE));
+      const sharingClosure = closures.get(path.resolve(SHARING_FIXTURE));
+      expect(treeClosure).toBeDefined();
+      expect(sharingClosure).toBeDefined();
 
-      fs.writeFileSync(treeOut, "tree content")
-      fs.writeFileSync(sharingOut, "sharing content")
-      writeCacheMetadata(FIXTURE, treeOut, program, "tree content", undefined, treeClosure)
-      writeCacheMetadata(SHARING_FIXTURE, sharingOut, program, "sharing content", undefined, sharingClosure)
+      fs.writeFileSync(treeOut, "tree content");
+      fs.writeFileSync(sharingOut, "sharing content");
+      writeCacheMetadata(FIXTURE, treeOut, program, "tree content", undefined, treeClosure);
+      writeCacheMetadata(
+        SHARING_FIXTURE,
+        sharingOut,
+        program,
+        "sharing content",
+        undefined,
+        sharingClosure,
+      );
 
-      expect(checkCache(FIXTURE, treeOut).hit).toBe(true)
-      expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true)
+      expect(checkCache(FIXTURE, treeOut).hit).toBe(true);
+      expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true);
 
       // Touch DEP_FIXTURE — reachable from FIXTURE (tree.fixture.ts) but NOT
       // from SHARING_FIXTURE (sharing.fixture.ts never imports it, see
@@ -225,27 +238,29 @@ describe("cache.ts — content-addressed incremental build cache", () => {
       // whole shared Program's file set for every entry), this touch would
       // invalidate BOTH entries; with per-entry closures, only the entry
       // that actually reaches the touched file invalidates.
-      const original = fs.readFileSync(DEP_FIXTURE, "utf8")
+      const original = fs.readFileSync(DEP_FIXTURE, "utf8");
       try {
-        fs.writeFileSync(DEP_FIXTURE, `${original}\n// cache-test perturbation\n`)
-        expect(checkCache(FIXTURE, treeOut).hit).toBe(false)
-        expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true)
+        fs.writeFileSync(DEP_FIXTURE, `${original}\n// cache-test perturbation\n`);
+        expect(checkCache(FIXTURE, treeOut).hit).toBe(false);
+        expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true);
       } finally {
-        fs.writeFileSync(DEP_FIXTURE, original)
+        fs.writeFileSync(DEP_FIXTURE, original);
       }
-    })
+    });
 
     it("omitting `reachable` keeps the old behavior: the whole Program's file set is tracked", async () => {
-      const outFile = freshOutFile("no-reachable.ts")
-      const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE])
-      fs.writeFileSync(outFile, "content")
-      writeCacheMetadata(FIXTURE, outFile, program, "content")
+      const outFile = freshOutFile("no-reachable.ts");
+      const program = createExtractorProgram([FIXTURE, SHARING_FIXTURE]);
+      fs.writeFileSync(outFile, "content");
+      writeCacheMetadata(FIXTURE, outFile, program, "content");
 
-      const meta = JSON.parse(fs.readFileSync(`${outFile}.cache.json`, "utf8")) as { files: Record<string, unknown> }
+      const meta = JSON.parse(fs.readFileSync(`${outFile}.cache.json`, "utf8")) as {
+        files: Record<string, unknown>;
+      };
       // Without `reachable`, every file in the shared Program (including
       // sharing.fixture.ts's own unique files) is tracked against FIXTURE's
       // cache entry — the coarse union behavior.
-      expect(Object.keys(meta.files)).toContain(path.resolve(SHARING_FIXTURE))
-    })
-  })
-})
+      expect(Object.keys(meta.files)).toContain(path.resolve(SHARING_FIXTURE));
+    });
+  });
+});

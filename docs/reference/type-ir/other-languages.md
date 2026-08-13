@@ -6,15 +6,20 @@ conventions for shapes the target can't express natively.
 ## Haskell (aeson)
 
 ```ts
-import { toHaskell } from "@rhi-zone/fractal-type-ir/haskell"
+import { toHaskell } from "@rhi-zone/fractal-type-ir/haskell";
 // or: import { toHaskell } from "@rhi-zone/fractal-type-ir/haskell-aeson"
 
-toHaskell(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toHaskell(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```haskell
@@ -46,13 +51,18 @@ named `data` declaration.
 ## Elm
 
 ```ts
-import { toElm } from "@rhi-zone/fractal-type-ir/elm"
+import { toElm } from "@rhi-zone/fractal-type-ir/elm";
 // or: import { toElm } from "@rhi-zone/fractal-type-ir/elm-json"
 
-toElm(t(types.object({
-  id: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toElm(
+  t(
+    types.object({
+      id: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```elm
@@ -85,13 +95,17 @@ record types don't need this since Elm supports inline `{ field : T }`.
 ## Flow
 
 ```ts
-import { toFlow } from "@rhi-zone/fractal-type-ir/flow"
+import { toFlow } from "@rhi-zone/fractal-type-ir/flow";
 // or: import { toFlow } from "@rhi-zone/fractal-type-ir/flow-native"
 
-toFlow(t(types.object({
-  id: t(types.string),
-  age: opt(t(types.integer)),
-})))
+toFlow(
+  t(
+    types.object({
+      id: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+);
 ```
 
 ```js
@@ -100,17 +114,17 @@ export type User = {| id: string, age?: number |};
 ```
 
 Structurally close to the TypeScript projector, but `unknown`→`mixed`,
-`never`→`empty`, objects default to Flow's *exact* form (`{| ... |}`, opt out
+`never`→`empty`, objects default to Flow's _exact_ form (`{| ... |}`, opt out
 via `meta.exact === false`), and readonly fields use the covariant-property
 marker (`+name: T`) instead of a `readonly` keyword.
 
 ## Objective-C (Foundation)
 
 ```ts
-import { toObjC } from "@rhi-zone/fractal-type-ir/objc"
+import { toObjC } from "@rhi-zone/fractal-type-ir/objc";
 // or: import { toObjC } from "@rhi-zone/fractal-type-ir/objc-foundation"
 
-toObjC(t(types.object({ id: t(types.string) })), "Item")
+toObjC(t(types.object({ id: t(types.string) })), "Item");
 // => { header: "...", implementation: "..." }
 ```
 
@@ -142,15 +156,20 @@ be `nil`.
 ## Crystal (JSON::Serializable)
 
 ```ts
-import { toCrystal } from "@rhi-zone/fractal-type-ir/crystal"
+import { toCrystal } from "@rhi-zone/fractal-type-ir/crystal";
 // or: import { toCrystal } from "@rhi-zone/fractal-type-ir/crystal-json-serializable"
 
-toCrystal(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toCrystal(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```crystal

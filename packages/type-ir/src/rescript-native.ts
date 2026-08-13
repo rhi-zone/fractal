@@ -35,8 +35,8 @@
 // encountered in field position is hoisted exactly the same way a nested
 // union/enum is (elm-json.ts didn't need this because Elm's `{ field : T }`
 // IS a valid anonymous inline type).
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { toPascalCaseFromWords } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { toPascalCaseFromWords } from "./codegen-helpers.ts";
 
 // ============================================================================
 // naming
@@ -49,23 +49,61 @@ import { toPascalCaseFromWords } from "./codegen-helpers.ts"
 // standard ReScript escape hatch for "the JS/JSON key doesn't look like a
 // ReScript identifier" (https://rescript-lang.org/docs/manual/latest/bind-to-js-function#object).
 const RESERVED = new Set([
-  "and", "as", "assert", "constraint", "else", "exception", "external", "false", "for", "fun",
-  "function", "functor", "if", "in", "include", "inherit", "initializer", "lazy", "let", "module",
-  "mutable", "new", "of", "open", "or", "private", "rec", "sig", "struct", "then", "to", "true",
-  "try", "type", "val", "virtual", "when", "while", "with", "switch",
-])
+  "and",
+  "as",
+  "assert",
+  "constraint",
+  "else",
+  "exception",
+  "external",
+  "false",
+  "for",
+  "fun",
+  "function",
+  "functor",
+  "if",
+  "in",
+  "include",
+  "inherit",
+  "initializer",
+  "lazy",
+  "let",
+  "module",
+  "mutable",
+  "new",
+  "of",
+  "open",
+  "or",
+  "private",
+  "rec",
+  "sig",
+  "struct",
+  "then",
+  "to",
+  "true",
+  "try",
+  "type",
+  "val",
+  "virtual",
+  "when",
+  "while",
+  "with",
+  "switch",
+]);
 
 function sanitizeLabel(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_")
-  const lowered = /^[A-Z]/.test(cleaned) ? cleaned.charAt(0).toLowerCase() + cleaned.slice(1) : cleaned
-  const prefixed = /^[a-z_]/.test(lowered) ? lowered : `_${lowered}`
-  return prefixed
+  const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_");
+  const lowered = /^[A-Z]/.test(cleaned)
+    ? cleaned.charAt(0).toLowerCase() + cleaned.slice(1)
+    : cleaned;
+  const prefixed = /^[a-z_]/.test(lowered) ? lowered : `_${lowered}`;
+  return prefixed;
 }
 
 function fieldLabel(name: string): { label: string; asAttr: string } {
-  const label = sanitizeLabel(name)
-  const isValid = label === name && !RESERVED.has(name)
-  return { label, asAttr: isValid ? "" : `@as(${JSON.stringify(name)}) ` }
+  const label = sanitizeLabel(name);
+  const isValid = label === name && !RESERVED.has(name);
+  return { label, asAttr: isValid ? "" : `@as(${JSON.stringify(name)}) ` };
 }
 
 // ============================================================================
@@ -78,41 +116,41 @@ interface Ctx {
    * nested records/unions/enums, in the order first encountered (dependency
    * order: a referenced type is always pushed before the type referencing
    * it, since hoisting happens depth-first during rendering). */
-  decls: string[]
+  decls: string[];
   /** Names already claimed (top-level name + every hoisted name), so a
    * collision falls back to a numbered suffix. */
-  used: Set<string>
+  used: Set<string>;
   /** `TypeRef` identity -> the name it was hoisted under. */
-  names: Map<TypeRef, string>
+  names: Map<TypeRef, string>;
 }
 
 function newCtx(): Ctx {
-  return { decls: [], used: new Set(), names: new Map() }
+  return { decls: [], used: new Set(), names: new Map() };
 }
 
 function freshName(ctx: Ctx, hint: string): string {
-  const base = toPascalCaseFromWords(hint) || "Anonymous"
+  const base = toPascalCaseFromWords(hint) || "Anonymous";
   if (!ctx.used.has(base)) {
-    ctx.used.add(base)
-    return base
+    ctx.used.add(base);
+    return base;
   }
-  let n = 2
-  while (ctx.used.has(`${base}${n}`)) n++
-  const name = `${base}${n}`
-  ctx.used.add(name)
-  return name
+  let n = 2;
+  while (ctx.used.has(`${base}${n}`)) n++;
+  const name = `${base}${n}`;
+  ctx.used.add(name);
+  return name;
 }
 
 /** Returns the name previously hoisted for `ref` (by identity), hoisting it
  * now (rendering its full `type` declaration into `ctx.decls`) if this is
  * the first time it's been seen. */
 function hoistedName(ctx: Ctx, ref: TypeRef, nameHint: string): string {
-  const cached = ctx.names.get(ref)
-  if (cached !== undefined) return cached
-  const name = freshName(ctx, nameHint)
-  ctx.names.set(ref, name)
-  ctx.decls.push(generateNamedType(ref, name, ctx))
-  return name
+  const cached = ctx.names.get(ref);
+  if (cached !== undefined) return cached;
+  const name = freshName(ctx, nameHint);
+  ctx.names.set(ref, name);
+  ctx.decls.push(generateNamedType(ref, name, ctx));
+  return name;
 }
 
 // ============================================================================
@@ -122,39 +160,43 @@ function hoistedName(ctx: Ctx, ref: TypeRef, nameHint: string): string {
 // ============================================================================
 
 function stringLiteralMembers(ref: TypeRef): readonly string[] | undefined {
-  if (ref.shape.kind !== "union") return undefined
-  const s = ref.shape as TypeShape & { kind: "union" }
-  const members: string[] = []
+  if (ref.shape.kind !== "union") return undefined;
+  const s = ref.shape as TypeShape & { kind: "union" };
+  const members: string[] = [];
   for (const variant of s.variants) {
-    if (variant.shape.kind !== "literal") return undefined
-    const value = (variant.shape as TypeShape & { kind: "literal" }).value
-    if (typeof value !== "string") return undefined
-    members.push(value)
+    if (variant.shape.kind !== "literal") return undefined;
+    const value = (variant.shape as TypeShape & { kind: "literal" }).value;
+    if (typeof value !== "string") return undefined;
+    members.push(value);
   }
-  return members
+  return members;
 }
 
 // ============================================================================
 // type-expression rendering
 // ============================================================================
 
-type Converter = (shape: TypeShape, ctx: Ctx, nameHint: string) => string
+type Converter = (shape: TypeShape, ctx: Ctx, nameHint: string) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 /** ReScript record-field list — used both for a hoisted named record
  * declaration and (there being no anonymous-record alternative) nowhere
  * else; every `object` in field position gets hoisted (see `typeHandlers.object`). */
-function renderFields(fields: Readonly<Record<string, TypeRef>>, ctx: Ctx, nameHint: string): string[] {
+function renderFields(
+  fields: Readonly<Record<string, TypeRef>>,
+  ctx: Ctx,
+  nameHint: string,
+): string[] {
   return Object.entries(fields).map(([fieldName, fieldRef]) => {
-    const { label, asAttr } = fieldLabel(fieldName)
-    const fieldType = rescriptType(fieldRef, ctx, `${nameHint}${toPascalCaseFromWords(fieldName)}`)
-    const type = fieldRef.meta.optional === true ? `option<${fieldType}>` : fieldType
-    return `${asAttr}${label}: ${type}`
-  })
+    const { label, asAttr } = fieldLabel(fieldName);
+    const fieldType = rescriptType(fieldRef, ctx, `${nameHint}${toPascalCaseFromWords(fieldName)}`);
+    const type = fieldRef.meta.optional === true ? `option<${fieldType}>` : fieldType;
+    return `${asAttr}${label}: ${type}`;
+  });
 }
 
 const typeHandlers: Record<string, Converter> = {
@@ -179,41 +221,42 @@ const typeHandlers: Record<string, Converter> = {
   // variants, must be declared under a name — no `{ field: T }` anonymous
   // inline-type syntax the way Elm has) — hoisted exactly like union/enum.
   object: (_shape, ctx, nameHint) => {
-    const ref = currentRef!
-    return hoistedName(ctx, ref, nameHint)
+    const ref = currentRef!;
+    return hoistedName(ctx, ref, nameHint);
   },
   // A class instance carries only nominal identity, never structure — no
   // ReScript construct to reconstruct it from, degrades to the same opaque
   // JSON-value placeholder other unrepresentable kinds use.
   instance: leaf("Js.Json.t"),
   array: (shape, ctx, nameHint) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`
+    const s = shape as TypeShape & { kind: "array" };
+    return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`;
   },
   // No native async-sequence construct — degrades to its array equivalent,
   // same honest-degrade convention elm-json.ts/flow-native.ts use.
   stream: (shape, ctx, nameHint) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`;
   },
   page: (shape, ctx, nameHint) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`
+    const s = shape as TypeShape & { kind: "page" };
+    return `array<${rescriptType(s.element, ctx, `${nameHint}Item`)}>`;
   },
   // ReScript tuples are native and support arbitrary arity (unlike Elm, whose
   // tuple sugar tops out at 3) — `(a, b, c, d)` renders directly regardless
   // of element count.
   tuple: (shape, ctx, nameHint) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `(${s.elements.map((el, i) => rescriptType(el, ctx, `${nameHint}${i}`)).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `(${s.elements.map((el, i) => rescriptType(el, ctx, `${nameHint}${i}`)).join(", ")})`;
   },
   // `Js.Dict.t<V>` — ReScript's standard string-keyed dictionary
   // (https://rescript-lang.org/docs/manual/latest/api/js/dict). Only a
   // faithful rendering for STRING keys; see the file-level design-choice note
   // for non-string-keyed maps (flagged as ambiguous below, not guessed at).
   map: (shape, ctx, nameHint) => {
-    const s = shape as TypeShape & { kind: "map" }
-    if (s.key.shape.kind === "string") return `Js.Dict.t<${rescriptType(s.value, ctx, `${nameHint}Value`)}>`
+    const s = shape as TypeShape & { kind: "map" };
+    if (s.key.shape.kind === "string")
+      return `Js.Dict.t<${rescriptType(s.value, ctx, `${nameHint}Value`)}>`;
     // Non-string-keyed map: no idiomatic single ReScript construct carries
     // both a non-string key type and a value type together (`Js.Dict.t` is
     // string-keyed only; `Belt.Map.t` needs a first-class comparator module,
@@ -221,7 +264,7 @@ const typeHandlers: Record<string, Converter> = {
     // tuples, the closest structural analog that stays representable without
     // inventing a comparator. See file header: this is a real, flagged
     // design choice, not the only reasonable one.
-    return `array<(${rescriptType(s.key, ctx, `${nameHint}Key`)}, ${rescriptType(s.value, ctx, `${nameHint}Value`)})>`
+    return `array<(${rescriptType(s.key, ctx, `${nameHint}Key`)}, ${rescriptType(s.value, ctx, `${nameHint}Value`)})>`;
   },
   union: (_shape, ctx, nameHint) => hoistedName(ctx, currentRef!, nameHint),
   enum: (_shape, ctx, nameHint) => hoistedName(ctx, currentRef!, nameHint),
@@ -241,11 +284,15 @@ const typeHandlers: Record<string, Converter> = {
   // prepended as a leading positional parameter, the same convention
   // flow-native.ts/typescript.ts use for a callable's `this`.
   function: (shape, ctx, nameHint) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const thisParam = s.thisType === undefined ? [] : [rescriptType(s.thisType, ctx, `${nameHint}This`)]
-    const params = [...thisParam, ...s.params.map((p, i) => rescriptType(p.type, ctx, `${nameHint}${i}`))]
-    const paramList = params.length === 0 ? "unit" : params.join(", ")
-    return `(${paramList}) => ${rescriptType(s.returnType, ctx, `${nameHint}Return`)}`
+    const s = shape as TypeShape & { kind: "function" };
+    const thisParam =
+      s.thisType === undefined ? [] : [rescriptType(s.thisType, ctx, `${nameHint}This`)];
+    const params = [
+      ...thisParam,
+      ...s.params.map((p, i) => rescriptType(p.type, ctx, `${nameHint}${i}`)),
+    ];
+    const paramList = params.length === 0 ? "unit" : params.join(", ");
+    return `(${paramList}) => ${rescriptType(s.returnType, ctx, `${nameHint}Return`)}`;
   },
   // `method` has no explicit entry — falls back to `function` via
   // `registerParent("method", "function")` in index.ts.
@@ -254,23 +301,23 @@ const typeHandlers: Record<string, Converter> = {
   // contract, not data) — degrades to the same opaque JSON-value placeholder
   // `instance` uses.
   interface: leaf("Js.Json.t"),
-}
+};
 
 // `object`/`union`/`enum`/`intersection` converters need the original
 // `TypeRef` (for hoisting-cache identity), not just its `shape` —
 // `resolve()`/the `Converter` signature only carries `shape`, so
 // `rescriptType` stashes the current ref here before invoking the converter.
 // Reentrant-safe because it's saved/restored around each call.
-let currentRef: TypeRef | undefined
+let currentRef: TypeRef | undefined;
 
 function rescriptType(ref: TypeRef, ctx: Ctx, nameHint: string): string {
-  const previous = currentRef
-  currentRef = ref
-  const converter = resolve(ref.shape.kind, typeHandlers)
-  let type = converter === undefined ? "Js.Json.t" : converter(ref.shape, ctx, nameHint)
-  currentRef = previous
-  if (ref.meta.nullable === true) type = `option<${type}>`
-  return type
+  const previous = currentRef;
+  currentRef = ref;
+  const converter = resolve(ref.shape.kind, typeHandlers);
+  let type = converter === undefined ? "Js.Json.t" : converter(ref.shape, ctx, nameHint);
+  currentRef = previous;
+  if (ref.meta.nullable === true) type = `option<${type}>`;
+  return type;
 }
 
 /** Public, standalone type-expression rendering — for callers that just want
@@ -280,7 +327,7 @@ function rescriptType(ref: TypeRef, ctx: Ctx, nameHint: string): string {
  * returned — use `toReScript` when the hoisted declarations need to be
  * emitted too. */
 export function toReScriptType(ref: TypeRef): string {
-  return rescriptType(ref, newCtx(), "Anonymous")
+  return rescriptType(ref, newCtx(), "Anonymous");
 }
 
 // ============================================================================
@@ -294,7 +341,7 @@ export function toReScriptType(ref: TypeRef): string {
  * dropped/reordered information (`"in-progress"` -> `InProgress`, the
  * hyphen is gone for good). */
 function decapitalize(name: string): string {
-  return name.length === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1)
+  return name.length === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1);
 }
 
 // A member whose PascalCased constructor name is more than a pure-casing
@@ -306,13 +353,13 @@ function decapitalize(name: string): string {
 // (`"active"` -> `Active`) needs no `@as`: decapitalizing the constructor
 // name alone recovers the original.
 function renderCtor(member: string): string {
-  const name = toPascalCaseFromWords(member)
-  return decapitalize(name) === member ? name : `@as(${JSON.stringify(member)}) ${name}`
+  const name = toPascalCaseFromWords(member);
+  return decapitalize(name) === member ? name : `@as(${JSON.stringify(member)}) ${name}`;
 }
 
 function renderEnumLike(typeName: string, members: readonly string[]): string {
-  const ctorLines = members.map(renderCtor)
-  return [`type ${typeName} =`, `  | ${ctorLines.join("\n  | ")}`].join("\n")
+  const ctorLines = members.map(renderCtor);
+  return [`type ${typeName} =`, `  | ${ctorLines.join("\n  | ")}`].join("\n");
 }
 
 /** A tagged union: every variant is an `object` and all share
@@ -322,36 +369,41 @@ function renderEnumLike(typeName: string, members: readonly string[]): string {
  * carrying the variant's remaining fields as an inline-record payload
  * (`Ctor({field: T, ...})` — ReScript 10+ variant inline records,
  * https://rescript-lang.org/docs/manual/latest/variant#inline-records). */
-function renderTaggedUnion(typeName: string, discriminator: string, variants: readonly TypeRef[], ctx: Ctx): string | undefined {
-  const parsed: { tagValue: string; ctor: string; payload: Record<string, TypeRef> }[] = []
+function renderTaggedUnion(
+  typeName: string,
+  discriminator: string,
+  variants: readonly TypeRef[],
+  ctx: Ctx,
+): string | undefined {
+  const parsed: { tagValue: string; ctor: string; payload: Record<string, TypeRef> }[] = [];
   for (const variant of variants) {
-    if (variant.shape.kind !== "object") return undefined
-    const fields = (variant.shape as TypeShape & { kind: "object" }).fields
-    const tagRef = fields[discriminator]
-    if (tagRef === undefined || tagRef.shape.kind !== "literal") return undefined
-    const tagValue = (tagRef.shape as TypeShape & { kind: "literal" }).value
-    if (typeof tagValue !== "string") return undefined
-    const payload = { ...fields }
-    delete payload[discriminator]
-    parsed.push({ tagValue, ctor: toPascalCaseFromWords(tagValue), payload })
+    if (variant.shape.kind !== "object") return undefined;
+    const fields = (variant.shape as TypeShape & { kind: "object" }).fields;
+    const tagRef = fields[discriminator];
+    if (tagRef === undefined || tagRef.shape.kind !== "literal") return undefined;
+    const tagValue = (tagRef.shape as TypeShape & { kind: "literal" }).value;
+    if (typeof tagValue !== "string") return undefined;
+    const payload = { ...fields };
+    delete payload[discriminator];
+    parsed.push({ tagValue, ctor: toPascalCaseFromWords(tagValue), payload });
   }
 
   const ctorLines = parsed.map(({ tagValue, ctor, payload }) => {
-    const tag = decapitalize(ctor) === tagValue ? ctor : `@as(${JSON.stringify(tagValue)}) ${ctor}`
-    const fields = renderFields(payload, ctx, `${typeName}${ctor}`)
-    return fields.length === 0 ? tag : `${tag}({${fields.join(", ")}})`
-  })
-  return [`type ${typeName} =`, `  | ${ctorLines.join("\n  | ")}`].join("\n")
+    const tag = decapitalize(ctor) === tagValue ? ctor : `@as(${JSON.stringify(tagValue)}) ${ctor}`;
+    const fields = renderFields(payload, ctx, `${typeName}${ctor}`);
+    return fields.length === 0 ? tag : `${tag}({${fields.join(", ")}})`;
+  });
+  return [`type ${typeName} =`, `  | ${ctorLines.join("\n  | ")}`].join("\n");
 }
 
 /** The general (untagged) union fallback — one positionally-named constructor
  * per variant (`Variant1`, `Variant2`, …), each wrapping that variant's own
  * rendered type as a single positional payload. */
 function renderPositionalUnion(typeName: string, variants: readonly TypeRef[], ctx: Ctx): string {
-  const ctors = variants.map((_, i) => `Variant${i + 1}`)
-  const payloadTypes = variants.map((v, i) => rescriptType(v, ctx, `${typeName}${ctors[i]}`))
-  const ctorLines = ctors.map((c, i) => `${c}(${payloadTypes[i]})`)
-  return [`type ${typeName} =`, `  | ${ctorLines.join("\n  | ")}`].join("\n")
+  const ctors = variants.map((_, i) => `Variant${i + 1}`);
+  const payloadTypes = variants.map((v, i) => rescriptType(v, ctx, `${typeName}${ctors[i]}`));
+  const ctorLines = ctors.map((c, i) => `${c}(${payloadTypes[i]})`);
+  return [`type ${typeName} =`, `  | ${ctorLines.join("\n  | ")}`].join("\n");
 }
 
 // ReScript doc comment (https://rescript-lang.org/docs/manual/latest/module#comment) —
@@ -363,15 +415,15 @@ function renderPositionalUnion(typeName: string, variants: readonly TypeRef[], c
 // than a doc-comment line, since ReScript (unlike Elm) has a real
 // compiler-recognized deprecation attribute.
 function docComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  return description === undefined ? "" : `/** ${description} */\n`
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  return description === undefined ? "" : `/** ${description} */\n`;
 }
 
 function deprecatedAttr(meta: Readonly<Record<string, unknown>>): string {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return "@deprecated\n"
-  if (typeof deprecated === "string") return `@deprecated(${JSON.stringify(deprecated)})\n`
-  return ""
+  const deprecated = meta.deprecated;
+  if (deprecated === true) return "@deprecated\n";
+  if (typeof deprecated === "string") return `@deprecated(${JSON.stringify(deprecated)})\n`;
+  return "";
 }
 
 /** Renders a complete named declaration for `ref` under `name` — a record
@@ -379,28 +431,29 @@ function deprecatedAttr(meta: Readonly<Record<string, unknown>>): string {
  * else. Used both for the top-level `toReScript` call and (recursively, via
  * `hoistedName`) for nested objects/unions/enums/intersections. */
 function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
-  const typeName = toPascalCaseFromWords(name)
-  const kind = ref.shape.kind
-  const header = docComment(ref.meta) + deprecatedAttr(ref.meta)
+  const typeName = toPascalCaseFromWords(name);
+  const kind = ref.shape.kind;
+  const header = docComment(ref.meta) + deprecatedAttr(ref.meta);
 
   if (kind === "enum") {
-    const s = ref.shape as TypeShape & { kind: "enum" }
-    return header + renderEnumLike(typeName, s.members)
+    const s = ref.shape as TypeShape & { kind: "enum" };
+    return header + renderEnumLike(typeName, s.members);
   }
 
-  const literalMembers = stringLiteralMembers(ref)
+  const literalMembers = stringLiteralMembers(ref);
   if (kind === "union" && literalMembers !== undefined) {
-    return header + renderEnumLike(typeName, literalMembers)
+    return header + renderEnumLike(typeName, literalMembers);
   }
 
   if (kind === "union") {
-    const s = ref.shape as TypeShape & { kind: "union" }
-    const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
+    const s = ref.shape as TypeShape & { kind: "union" };
+    const discriminator =
+      typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
     if (discriminator !== undefined) {
-      const tagged = renderTaggedUnion(typeName, discriminator, s.variants, ctx)
-      if (tagged !== undefined) return header + tagged
+      const tagged = renderTaggedUnion(typeName, discriminator, s.variants, ctx);
+      if (tagged !== undefined) return header + tagged;
     }
-    return header + renderPositionalUnion(typeName, s.variants, ctx)
+    return header + renderPositionalUnion(typeName, s.variants, ctx);
   }
 
   if (kind === "object" || kind === "intersection") {
@@ -408,16 +461,16 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
       kind === "object"
         ? (ref.shape as TypeShape & { kind: "object" }).fields
         : (() => {
-            const s = ref.shape as TypeShape & { kind: "intersection" }
-            const merged: Record<string, TypeRef> = {}
+            const s = ref.shape as TypeShape & { kind: "intersection" };
+            const merged: Record<string, TypeRef> = {};
             for (const member of s.members) {
               if (member.shape.kind === "object") {
-                Object.assign(merged, (member.shape as TypeShape & { kind: "object" }).fields)
+                Object.assign(merged, (member.shape as TypeShape & { kind: "object" }).fields);
               }
             }
-            return merged
-          })()
-    const rendered = renderFields(fields, ctx, typeName)
+            return merged;
+          })();
+    const rendered = renderFields(fields, ctx, typeName);
     // A record type must have at least one field — ReScript/OCaml records
     // have no zero-field literal syntax (`{}` is not valid record syntax;
     // `{.}`/`{..}` are a structurally different construct, JS object types,
@@ -427,12 +480,12 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
     // this file.
     return rendered.length === 0
       ? header + `type ${typeName} = unit`
-      : header + [`type ${typeName} = {`, `  ${rendered.join(",\n  ")},`, `}`].join("\n")
+      : header + [`type ${typeName} = {`, `  ${rendered.join(",\n  ")},`, `}`].join("\n");
   }
 
   // Any other kind (a primitive, array, tuple, map, ref, …) at the top level:
   // a plain type alias to its rendered type.
-  return header + `type ${typeName} = ${rescriptType(ref, ctx, typeName)}`
+  return header + `type ${typeName} = ${rescriptType(ref, ctx, typeName)}`;
 }
 
 /**
@@ -449,9 +502,9 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
  * delegated to a chosen library rather than baked into every generated type.
  */
 export function toReScript(ref: TypeRef, name = "Value"): string {
-  const ctx = newCtx()
-  const typeName = toPascalCaseFromWords(name)
-  ctx.used.add(typeName)
-  const main = generateNamedType(ref, typeName, ctx)
-  return [main, ...ctx.decls].join("\n\n")
+  const ctx = newCtx();
+  const typeName = toPascalCaseFromWords(name);
+  ctx.used.add(typeName);
+  const main = generateNamedType(ref, typeName, ctx);
+  return [main, ...ctx.decls].join("\n\n");
 }

@@ -1,7 +1,7 @@
 {
   "name": "@rhi-zone/fractal-docs",
-  "type": "module",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",

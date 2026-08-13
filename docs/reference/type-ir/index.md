@@ -10,9 +10,9 @@ formats. It's the shared IR fractal's codegen tooling (`fractal-api-tree`,
 
 ```ts
 type TypeRef = {
-  readonly shape: TypeShape
-  readonly meta: Readonly<Record<string, unknown>>
-}
+  readonly shape: TypeShape;
+  readonly meta: Readonly<Record<string, unknown>>;
+};
 ```
 
 - **`shape`** is a discriminated union on `kind` — the structural payload
@@ -42,7 +42,7 @@ collapsing them would lose information a capable projector needs:
   and pagination that a plain array can't express.
 - `interface` (a method surface, like a Protobuf `service`) is not a subtype
   of `object`: its members are callables, not data fields.
-- `function` has no parent. `method` is the one kind that *does* register a
+- `function` has no parent. `method` is the one kind that _does_ register a
   parent (`function`) — see below.
 
 Semantic refinements (`int32`/`int64`, `float32`/`float64`, `uuid`/`uri`,
@@ -56,9 +56,9 @@ declaration merging and register their own parent relationship.
 ### Subtyping hierarchy: `ancestors`/`resolve`/`registerParent`
 
 ```ts
-export function registerParent(kind: string, parent: string | null): void
-export function ancestors(kind: string): string[]
-export function resolve<T>(kind: string, handlers: Record<string, T>): T | undefined
+export function registerParent(kind: string, parent: string | null): void;
+export function ancestors(kind: string): string[];
+export function resolve<T>(kind: string, handlers: Record<string, T>): T | undefined;
 ```
 
 Each kind has at most one parent, tracked in a flat `Record<string, string | null>`.
@@ -78,14 +78,16 @@ without editing `index.ts`.
 ### Building a `TypeRef`
 
 ```ts
-import { t, types } from "@rhi-zone/fractal-type-ir"
+import { t, types } from "@rhi-zone/fractal-type-ir";
 
-const user = t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string, { format: "email" }),
-  bio: { shape: types.string, meta: { optional: true } },
-}))
+const user = t(
+  types.object({
+    id: t(types.integer),
+    name: t(types.string),
+    email: t(types.string, { format: "email" }),
+    bio: { shape: types.string, meta: { optional: true } },
+  }),
+);
 ```
 
 `t(shape, meta?)` wraps a shape into a `TypeRef`. `types.*` are shape
@@ -100,9 +102,9 @@ the full constructor list. Structural derive helpers (`partial`, `required`,
 
 ```ts
 type TypeRefDocument = {
-  readonly root: TypeRef
-  readonly defs: Readonly<Record<string, TypeRef>>
-}
+  readonly root: TypeRef;
+  readonly defs: Readonly<Record<string, TypeRef>>;
+};
 ```
 
 A bare `TypeRef` has no registry to resolve `{ kind: "ref", target }` against.

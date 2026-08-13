@@ -2,7 +2,7 @@
 
 Three projectors emit idiomatic C# 9+ `record`/`enum` declarations — one per
 serialization library. C# has no structural/anonymous object type, so every
-`object`/`enum`/(discriminated-)`union` `TypeRef` becomes a *named*
+`object`/`enum`/(discriminated-)`union` `TypeRef` becomes a _named_
 declaration; nested object-shaped fields spawn their own nested record
 rather than inlining. All three share the same handler/context/entry-point
 architecture (`ctx.decls` accumulates every declaration discovered during
@@ -12,15 +12,20 @@ polymorphism strategy — differs.
 ## System.Text.Json
 
 ```ts
-import { toCSharp } from "@rhi-zone/fractal-type-ir/csharp-systemtextjson"
+import { toCSharp } from "@rhi-zone/fractal-type-ir/csharp-systemtextjson";
 
-toCSharp(t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  isActive: t(types.boolean),
-  tags: t(types.array(t(types.string))),
-})), "User")
+toCSharp(
+  t(
+    types.object({
+      id: t(types.integer),
+      name: t(types.string),
+      email: t(types.string),
+      isActive: t(types.boolean),
+      tags: t(types.array(t(types.string))),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```csharp
@@ -45,7 +50,7 @@ public record User
 ### Newtonsoft (Json.NET)
 
 ```ts
-import { toCSharpNewtonsoft } from "@rhi-zone/fractal-type-ir/csharp-newtonsoft"
+import { toCSharpNewtonsoft } from "@rhi-zone/fractal-type-ir/csharp-newtonsoft";
 ```
 
 `[JsonProperty("wire-name")]` in place of STJ's `[JsonPropertyName]`.
@@ -67,7 +72,7 @@ public record User
 ### ServiceStack.Text
 
 ```ts
-import { toCSharpServiceStack } from "@rhi-zone/fractal-type-ir/csharp-servicestack"
+import { toCSharpServiceStack } from "@rhi-zone/fractal-type-ir/csharp-servicestack";
 ```
 
 Reads the standard WCF `System.Runtime.Serialization` contract attributes —

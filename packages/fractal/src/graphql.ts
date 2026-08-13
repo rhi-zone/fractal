@@ -10,4 +10,4 @@
 // package's README for the install line and
 // `docs/design/decisions.md` § "Umbrella package" for the dependency policy.
 
-export * from "@rhi-zone/fractal-graphql-api-projector"
+export * from "@rhi-zone/fractal-graphql-api-projector";

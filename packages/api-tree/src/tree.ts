@@ -59,8 +59,8 @@
 // extract.test.ts's "meta.mcp overrides reflected in the reconstructed name"
 // describe block for the executable record.
 
-import ts from "typescript"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import ts from "typescript";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 import {
   createExtractorProgram,
   createSharingRegistry,
@@ -72,34 +72,34 @@ import {
   typeRefFromReturnType,
   type JsonSchema,
   type ShouldShare,
-} from "./extract.ts"
+} from "./extract.ts";
 
 /** Per-tool derived facts: real input schema + JSDoc-derived description. */
 export type ToolSchema = {
-  inputSchema: JsonSchema
-  outputSchema?: JsonSchema
-  description?: string
-}
+  inputSchema: JsonSchema;
+  outputSchema?: JsonSchema;
+  description?: string;
+};
 
 /** Map of MCP tool name → derived schema/description. */
-export type SchemaMap = Record<string, ToolSchema>
+export type SchemaMap = Record<string, ToolSchema>;
 
 /** Per-tool derived facts as TypeRefs (pre-projection). */
 export type ToolTypeInfo = {
-  input: TypeRef
-  output?: TypeRef
-  description?: string
-}
+  input: TypeRef;
+  output?: TypeRef;
+  description?: string;
+};
 
 /** Map of MCP tool name → derived TypeRefs/description. */
-export type TypeRefMap = Record<string, ToolTypeInfo>
+export type TypeRefMap = Record<string, ToolTypeInfo>;
 
 const join = (prefix: string, seg: string): string =>
-  prefix.length > 0 ? `${prefix}_${seg}` : seg
+  prefix.length > 0 ? `${prefix}_${seg}` : seg;
 
 /** True when a property symbol resolved off a type is REQUIRED (not optional). */
 function isRequiredProperty(prop: ts.Symbol): boolean {
-  return (prop.flags & ts.SymbolFlags.Optional) === 0
+  return (prop.flags & ts.SymbolFlags.Optional) === 0;
 }
 
 /**
@@ -108,12 +108,9 @@ function isRequiredProperty(prop: ts.Symbol): boolean {
  * arrow/function-expression node no matter how many named constants or
  * generic instantiations sit between it and this leaf's position in the tree.
  */
-function functionNodeOfHandler(
-  handlerType: ts.Type,
-  checker: ts.TypeChecker,
-): ts.Node | undefined {
-  const [sig] = checker.getSignaturesOfType(handlerType, ts.SignatureKind.Call)
-  return sig?.declaration
+function functionNodeOfHandler(handlerType: ts.Type, checker: ts.TypeChecker): ts.Node | undefined {
+  const [sig] = checker.getSignaturesOfType(handlerType, ts.SignatureKind.Call);
+  return sig?.declaration;
 }
 
 /**
@@ -131,10 +128,10 @@ function fallbackNameLiteral(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): string | undefined {
-  const nameProp = checker.getPropertyOfType(fallbackType, "name")
-  if (!nameProp) return undefined
-  const nameType = checker.getTypeOfSymbolAtLocation(nameProp, loc)
-  return nameType.isStringLiteral() ? nameType.value : undefined
+  const nameProp = checker.getPropertyOfType(fallbackType, "name");
+  if (!nameProp) return undefined;
+  const nameType = checker.getTypeOfSymbolAtLocation(nameProp, loc);
+  return nameType.isStringLiteral() ? nameType.value : undefined;
 }
 
 /**
@@ -155,16 +152,16 @@ function mcpMetaOverride(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): string | undefined {
-  const metaProp = checker.getPropertyOfType(nodeType, "meta")
-  if (!metaProp) return undefined
-  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
-  const mcpProp = checker.getPropertyOfType(metaType, "mcp")
-  if (!mcpProp) return undefined
-  const mcpType = checker.getTypeOfSymbolAtLocation(mcpProp, loc)
-  const keyProp = checker.getPropertyOfType(mcpType, key)
-  if (!keyProp) return undefined
-  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc)
-  return keyType.isStringLiteral() ? keyType.value : undefined
+  const metaProp = checker.getPropertyOfType(nodeType, "meta");
+  if (!metaProp) return undefined;
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc);
+  const mcpProp = checker.getPropertyOfType(metaType, "mcp");
+  if (!mcpProp) return undefined;
+  const mcpType = checker.getTypeOfSymbolAtLocation(mcpProp, loc);
+  const keyProp = checker.getPropertyOfType(mcpType, key);
+  if (!keyProp) return undefined;
+  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc);
+  return keyType.isStringLiteral() ? keyType.value : undefined;
 }
 
 /**
@@ -186,16 +183,16 @@ export function readMetaStringLiteral(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): string | undefined {
-  const metaProp = checker.getPropertyOfType(nodeType, "meta")
-  if (!metaProp) return undefined
-  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
-  const nsProp = checker.getPropertyOfType(metaType, namespace)
-  if (!nsProp) return undefined
-  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
-  const keyProp = checker.getPropertyOfType(nsType, key)
-  if (!keyProp) return undefined
-  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc)
-  return keyType.isStringLiteral() ? keyType.value : undefined
+  const metaProp = checker.getPropertyOfType(nodeType, "meta");
+  if (!metaProp) return undefined;
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc);
+  const nsProp = checker.getPropertyOfType(metaType, namespace);
+  if (!nsProp) return undefined;
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc);
+  const keyProp = checker.getPropertyOfType(nsType, key);
+  if (!keyProp) return undefined;
+  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc);
+  return keyType.isStringLiteral() ? keyType.value : undefined;
 }
 
 /**
@@ -222,28 +219,29 @@ export function readMetaSourceMap(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): Record<string, { readonly store: string; readonly key?: string }> | undefined {
-  const metaProp = checker.getPropertyOfType(nodeType, "meta")
-  if (!metaProp) return undefined
-  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
-  const nsProp = checker.getPropertyOfType(metaType, namespace)
-  if (!nsProp) return undefined
-  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
-  const sourceMapProp = checker.getPropertyOfType(nsType, "sourceMap")
-  if (!sourceMapProp) return undefined
-  const sourceMapType = checker.getTypeOfSymbolAtLocation(sourceMapProp, loc)
-  const out: Record<string, { store: string; key?: string }> = {}
+  const metaProp = checker.getPropertyOfType(nodeType, "meta");
+  if (!metaProp) return undefined;
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc);
+  const nsProp = checker.getPropertyOfType(metaType, namespace);
+  if (!nsProp) return undefined;
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc);
+  const sourceMapProp = checker.getPropertyOfType(nsType, "sourceMap");
+  if (!sourceMapProp) return undefined;
+  const sourceMapType = checker.getTypeOfSymbolAtLocation(sourceMapProp, loc);
+  const out: Record<string, { store: string; key?: string }> = {};
   for (const fieldProp of checker.getPropertiesOfType(sourceMapType)) {
-    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc)
-    const storeProp = checker.getPropertyOfType(fieldType, "store")
-    if (!storeProp) continue
-    const storeType = checker.getTypeOfSymbolAtLocation(storeProp, loc)
-    if (!storeType.isStringLiteral()) continue
-    const keyProp = checker.getPropertyOfType(fieldType, "key")
-    const keyType = keyProp ? checker.getTypeOfSymbolAtLocation(keyProp, loc) : undefined
-    const key = keyType?.isStringLiteral() ? keyType.value : undefined
-    out[fieldProp.name] = key !== undefined ? { store: storeType.value, key } : { store: storeType.value }
+    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc);
+    const storeProp = checker.getPropertyOfType(fieldType, "store");
+    if (!storeProp) continue;
+    const storeType = checker.getTypeOfSymbolAtLocation(storeProp, loc);
+    if (!storeType.isStringLiteral()) continue;
+    const keyProp = checker.getPropertyOfType(fieldType, "key");
+    const keyType = keyProp ? checker.getTypeOfSymbolAtLocation(keyProp, loc) : undefined;
+    const key = keyType?.isStringLiteral() ? keyType.value : undefined;
+    out[fieldProp.name] =
+      key !== undefined ? { store: storeType.value, key } : { store: storeType.value };
   }
-  return out
+  return out;
 }
 
 /**
@@ -268,21 +266,21 @@ export function readMetaEncodingMapProfileNames(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): Record<string, string> | undefined {
-  const metaProp = checker.getPropertyOfType(nodeType, "meta")
-  if (!metaProp) return undefined
-  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
-  const nsProp = checker.getPropertyOfType(metaType, namespace)
-  if (!nsProp) return undefined
-  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
-  const encodingMapProp = checker.getPropertyOfType(nsType, "encodingMap")
-  if (!encodingMapProp) return undefined
-  const encodingMapType = checker.getTypeOfSymbolAtLocation(encodingMapProp, loc)
-  const out: Record<string, string> = {}
+  const metaProp = checker.getPropertyOfType(nodeType, "meta");
+  if (!metaProp) return undefined;
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc);
+  const nsProp = checker.getPropertyOfType(metaType, namespace);
+  if (!nsProp) return undefined;
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc);
+  const encodingMapProp = checker.getPropertyOfType(nsType, "encodingMap");
+  if (!encodingMapProp) return undefined;
+  const encodingMapType = checker.getTypeOfSymbolAtLocation(encodingMapProp, loc);
+  const out: Record<string, string> = {};
   for (const fieldProp of checker.getPropertiesOfType(encodingMapType)) {
-    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc)
-    if (fieldType.isStringLiteral()) out[fieldProp.name] = fieldType.value
+    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc);
+    if (fieldType.isStringLiteral()) out[fieldProp.name] = fieldType.value;
   }
-  return out
+  return out;
 }
 
 /**
@@ -326,21 +324,22 @@ export function readMetaEncodingMapFunctionFields(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): ReadonlySet<string> | undefined {
-  const metaProp = checker.getPropertyOfType(nodeType, "meta")
-  if (!metaProp) return undefined
-  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc)
-  const nsProp = checker.getPropertyOfType(metaType, namespace)
-  if (!nsProp) return undefined
-  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc)
-  const encodingMapProp = checker.getPropertyOfType(nsType, "encodingMap")
-  if (!encodingMapProp) return undefined
-  const encodingMapType = checker.getTypeOfSymbolAtLocation(encodingMapProp, loc)
-  const out = new Set<string>()
+  const metaProp = checker.getPropertyOfType(nodeType, "meta");
+  if (!metaProp) return undefined;
+  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc);
+  const nsProp = checker.getPropertyOfType(metaType, namespace);
+  if (!nsProp) return undefined;
+  const nsType = checker.getTypeOfSymbolAtLocation(nsProp, loc);
+  const encodingMapProp = checker.getPropertyOfType(nsType, "encodingMap");
+  if (!encodingMapProp) return undefined;
+  const encodingMapType = checker.getTypeOfSymbolAtLocation(encodingMapProp, loc);
+  const out = new Set<string>();
   for (const fieldProp of checker.getPropertiesOfType(encodingMapType)) {
-    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc)
-    if (checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call).length > 0) out.add(fieldProp.name)
+    const fieldType = checker.getTypeOfSymbolAtLocation(fieldProp, loc);
+    if (checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call).length > 0)
+      out.add(fieldProp.name);
   }
-  return out
+  return out;
 }
 
 /**
@@ -368,7 +367,7 @@ export type OnLeaf = (
    * can read it off THIS type the same way `mcpMetaOverride` already reads
    * `meta.mcp.name`/`meta.mcp.segment`, without a second tree walk. */
   nodeType: ts.Type,
-) => void
+) => void;
 
 /**
  * Walk one node's resolved TYPE, invoking `onLeaf` for each leaf (a child
@@ -396,34 +395,34 @@ export function walkNodeType(
   checker: ts.TypeChecker,
   onLeaf: OnLeaf,
 ): void {
-  const childrenProp = checker.getPropertyOfType(nodeType, "children")
+  const childrenProp = checker.getPropertyOfType(nodeType, "children");
   if (childrenProp && isRequiredProperty(childrenProp)) {
-    const childrenType = checker.getTypeOfSymbolAtLocation(childrenProp, loc)
+    const childrenType = checker.getTypeOfSymbolAtLocation(childrenProp, loc);
     for (const childProp of checker.getPropertiesOfType(childrenType)) {
-      const childKey = childProp.name
-      const childType = checker.getTypeOfSymbolAtLocation(childProp, loc)
-      const childDecl = childProp.declarations?.[0]
+      const childKey = childProp.name;
+      const childType = checker.getTypeOfSymbolAtLocation(childProp, loc);
+      const childDecl = childProp.declarations?.[0];
 
-      const handlerProp = checker.getPropertyOfType(childType, "handler")
+      const handlerProp = checker.getPropertyOfType(childType, "handler");
       if (handlerProp && isRequiredProperty(handlerProp)) {
         // Leaf: op(fn, meta?) — handler is required on op()'s return type.
-        const handlerType = checker.getTypeOfSymbolAtLocation(handlerProp, loc)
-        const fn = functionNodeOfHandler(handlerType, checker)
-        if (!fn) continue
-        const descriptionSource = childDecl ?? fn
+        const handlerType = checker.getTypeOfSymbolAtLocation(handlerProp, loc);
+        const fn = functionNodeOfHandler(handlerType, checker);
+        if (!fn) continue;
+        const descriptionSource = childDecl ?? fn;
         // meta.mcp.name wins outright (no prefix applied) — else the usual
         // underscore-joined default, matching project.ts's own leaf-name ternary.
-        const nameOverride = mcpMetaOverride(childType, "name", loc, checker)
-        const name = nameOverride ?? join(prefix, childKey)
-        onLeaf(name, [...path, childKey], fn, descriptionSource, checker, childType)
-        continue
+        const nameOverride = mcpMetaOverride(childType, "name", loc, checker);
+        const name = nameOverride ?? join(prefix, childKey);
+        onLeaf(name, [...path, childKey], fn, descriptionSource, checker, childType);
+        continue;
       }
 
       // Branch: api(...) — children is required on api()'s return type.
       // meta.mcp.segment overrides this child's own contribution to the
       // prefix (the route `path` array is unaffected either way — mcp.segment
       // is an MCP-tool-naming concern only, matching project.ts's `rawSeg`).
-      const segmentOverride = mcpMetaOverride(childType, "segment", loc, checker)
+      const segmentOverride = mcpMetaOverride(childType, "segment", loc, checker);
       walkNodeType(
         childType,
         join(prefix, segmentOverride ?? childKey),
@@ -431,19 +430,19 @@ export function walkNodeType(
         loc,
         checker,
         onLeaf,
-      )
+      );
     }
   }
 
-  const fallbackProp = checker.getPropertyOfType(nodeType, "fallback")
+  const fallbackProp = checker.getPropertyOfType(nodeType, "fallback");
   if (fallbackProp) {
-    const fallbackType = checker.getTypeOfSymbolAtLocation(fallbackProp, loc)
-    const fallbackName = fallbackNameLiteral(fallbackType, loc, checker)
+    const fallbackType = checker.getTypeOfSymbolAtLocation(fallbackProp, loc);
+    const fallbackName = fallbackNameLiteral(fallbackType, loc, checker);
     if (fallbackName !== undefined) {
-      const subtreeProp = checker.getPropertyOfType(fallbackType, "subtree")
+      const subtreeProp = checker.getPropertyOfType(fallbackType, "subtree");
       if (subtreeProp) {
-        const subtreeType = checker.getTypeOfSymbolAtLocation(subtreeProp, loc)
-        const subtreePath = [...path, `:${fallbackName}`]
+        const subtreeType = checker.getTypeOfSymbolAtLocation(subtreeProp, loc);
+        const subtreePath = [...path, `:${fallbackName}`];
 
         // The Node model explicitly allows `fallback.subtree` to be a bare
         // leaf (`op()`), not just a branch (`api({...})`) — build.ts's
@@ -455,25 +454,18 @@ export function walkNodeType(
         // TYPE is itself a leaf (handler required) before recursing into it
         // as a branch, so extraction visits — and keys — a bare-leaf
         // fallback subtree exactly the way `wrapValidators` will at runtime.
-        const subtreeHandlerProp = checker.getPropertyOfType(subtreeType, "handler")
+        const subtreeHandlerProp = checker.getPropertyOfType(subtreeType, "handler");
         if (subtreeHandlerProp && isRequiredProperty(subtreeHandlerProp)) {
-          const handlerType = checker.getTypeOfSymbolAtLocation(subtreeHandlerProp, loc)
-          const fn = functionNodeOfHandler(handlerType, checker)
+          const handlerType = checker.getTypeOfSymbolAtLocation(subtreeHandlerProp, loc);
+          const fn = functionNodeOfHandler(handlerType, checker);
           if (fn) {
-            const descriptionSource = subtreeProp.declarations?.[0] ?? fn
-            const nameOverride = mcpMetaOverride(subtreeType, "name", loc, checker)
-            const name = nameOverride ?? join(prefix, fallbackName)
-            onLeaf(name, subtreePath, fn, descriptionSource, checker, subtreeType)
+            const descriptionSource = subtreeProp.declarations?.[0] ?? fn;
+            const nameOverride = mcpMetaOverride(subtreeType, "name", loc, checker);
+            const name = nameOverride ?? join(prefix, fallbackName);
+            onLeaf(name, subtreePath, fn, descriptionSource, checker, subtreeType);
           }
         } else {
-          walkNodeType(
-            subtreeType,
-            join(prefix, fallbackName),
-            subtreePath,
-            loc,
-            checker,
-            onLeaf,
-          )
+          walkNodeType(subtreeType, join(prefix, fallbackName), subtreePath, loc, checker, onLeaf);
         }
       }
     }
@@ -500,9 +492,9 @@ export function walkNodeType(
  * at the LAST statement.
  */
 function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefined {
-  const stmts = body.statements
-  const last = stmts[stmts.length - 1]
-  return last && ts.isReturnStatement(last) && last.expression ? last.expression : undefined
+  const stmts = body.statements;
+  const last = stmts[stmts.length - 1];
+  return last && ts.isReturnStatement(last) && last.expression ? last.expression : undefined;
 }
 
 /**
@@ -558,9 +550,9 @@ function forEachTreeCandidate(
   // (plain re-exported types, unrelated constants, a factory that doesn't
   // return a tree, …).
   const visitIfTree = (nodeType: ts.Type, loc: ts.Node, treeId: string): void => {
-    if (!checker.getPropertyOfType(nodeType, "meta")) return
-    visit(nodeType, loc, treeId)
-  }
+    if (!checker.getPropertyOfType(nodeType, "meta")) return;
+    visit(nodeType, loc, treeId);
+  };
 
   for (const stmt of source.statements) {
     // A bare `export default <expr>` parses as ts.ExportAssignment, which
@@ -571,27 +563,32 @@ function forEachTreeCandidate(
     // different export mechanism entirely) — deliberately left unhandled.
     if (ts.isExportAssignment(stmt)) {
       if (!stmt.isExportEquals) {
-        visitIfTree(checker.getTypeAtLocation(stmt.expression), stmt.expression, "default")
+        visitIfTree(checker.getTypeAtLocation(stmt.expression), stmt.expression, "default");
       }
-      continue
+      continue;
     }
 
     const isExported =
       ts.canHaveModifiers(stmt) &&
-      (ts.getModifiers(stmt)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false)
-    if (!isExported) continue
+      (ts.getModifiers(stmt)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false);
+    if (!isExported) continue;
 
     if (ts.isVariableStatement(stmt)) {
       for (const decl of stmt.declarationList.declarations) {
-        if (!ts.isIdentifier(decl.name) || !decl.initializer) continue
-        visitIfTree(checker.getTypeAtLocation(decl.name), decl.name, decl.name.text)
+        if (!ts.isIdentifier(decl.name) || !decl.initializer) continue;
+        visitIfTree(checker.getTypeAtLocation(decl.name), decl.name, decl.name.text);
       }
-      continue
+      continue;
     }
 
     if (ts.isFunctionDeclaration(stmt) && stmt.body) {
-      const returnExpr = returnExpressionOfFactoryBody(stmt.body)
-      if (returnExpr) visitIfTree(checker.getTypeAtLocation(returnExpr), returnExpr, stmt.name?.text ?? "default")
+      const returnExpr = returnExpressionOfFactoryBody(stmt.body);
+      if (returnExpr)
+        visitIfTree(
+          checker.getTypeAtLocation(returnExpr),
+          returnExpr,
+          stmt.name?.text ?? "default",
+        );
     }
   }
 }
@@ -613,14 +610,14 @@ function forEachTreeCandidate(
  * leaving it unprefixed is deliberate, not an oversight.
  */
 function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
-  const program = sharedProgram ?? createExtractorProgram(entryFile)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(entryFile)
-  if (!source) throw new Error(`walkTree: source not found: ${entryFile}`)
+  const program = sharedProgram ?? createExtractorProgram(entryFile);
+  const checker = program.getTypeChecker();
+  const source = program.getSourceFile(entryFile);
+  if (!source) throw new Error(`walkTree: source not found: ${entryFile}`);
 
   forEachTreeCandidate(source, checker, (nodeType, loc, treeId) =>
     walkNodeType(nodeType, "", [treeId], loc, checker, onLeaf),
-  )
+  );
 }
 
 /**
@@ -639,15 +636,15 @@ function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program)
  * `program` option (build.ts).
  */
 export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): boolean {
-  const program = sharedProgram ?? createExtractorProgram(entryFile)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(entryFile)
-  if (!source) throw new Error(`hasTreeExport: source not found: ${entryFile}`)
-  let found = false
+  const program = sharedProgram ?? createExtractorProgram(entryFile);
+  const checker = program.getTypeChecker();
+  const source = program.getSourceFile(entryFile);
+  if (!source) throw new Error(`hasTreeExport: source not found: ${entryFile}`);
+  let found = false;
   forEachTreeCandidate(source, checker, () => {
-    found = true
-  })
-  return found
+    found = true;
+  });
+  return found;
 }
 
 /**
@@ -665,21 +662,24 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * Program instead of paying a second multi-GB `ts.Program` build just for
  * schemas.
  */
-export function extractToolSchemas(entryFile: string, options?: { program?: ts.Program }): SchemaMap {
-  const out: SchemaMap = {}
+export function extractToolSchemas(
+  entryFile: string,
+  options?: { program?: ts.Program },
+): SchemaMap {
+  const out: SchemaMap = {};
   walkTree(
     entryFile,
     (name, _path, fn, descriptionSource, checker) => {
-      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
       out[name] = {
         inputSchema: schemaFromFunctionNode(fn, checker),
         outputSchema: schemaFromReturnType(fn, checker),
         ...(description !== undefined ? { description } : {}),
-      }
+      };
     },
     options?.program,
-  )
-  return out
+  );
+  return out;
 }
 
 /**
@@ -722,21 +722,24 @@ export function extractToolSchemas(entryFile: string, options?: { program?: ts.P
  * `openapi.ts`'s `buildPathMap`) rather than the underscore-joined
  * `codenName`.
  */
-export function extractRouteSchemas(entryFile: string, options?: { program?: ts.Program }): SchemaMap {
-  const out: SchemaMap = {}
+export function extractRouteSchemas(
+  entryFile: string,
+  options?: { program?: ts.Program },
+): SchemaMap {
+  const out: SchemaMap = {};
   walkTree(
     entryFile,
     (_name, path, fn, descriptionSource, checker) => {
-      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
       out[path.join("/")] = {
         inputSchema: schemaFromFunctionNode(fn, checker),
         outputSchema: schemaFromReturnType(fn, checker),
         ...(description !== undefined ? { description } : {}),
-      }
+      };
     },
     options?.program,
-  )
-  return out
+  );
+  return out;
 }
 
 /** Every leaf's derived input/output TypeRef, PLUS the shared `defs` map a
@@ -745,7 +748,10 @@ export function extractRouteSchemas(entryFile: string, options?: { program?: ts.
  * tree (every leaf's input and output alike), since that's the entire point:
  * a type reused ACROSS tools, not just within one, is exactly the case
  * structural sharing exists for. */
-export type TypeRefMapWithDefs = { readonly types: TypeRefMap; readonly defs: Record<string, TypeRef> }
+export type TypeRefMapWithDefs = {
+  readonly types: TypeRefMap;
+  readonly defs: Record<string, TypeRef>;
+};
 
 /**
  * Extract the tool-name → TypeRef map for every exported `api(children, opts?)`
@@ -764,31 +770,34 @@ export type TypeRefMapWithDefs = { readonly types: TypeRefMap; readonly defs: Re
  * single-root one over `entryFile` — see that function's doc comment for why
  * this matters for batch extraction across many entry files in one process.
  */
-export function extractToolTypeRefs(entryFile: string, options?: { program?: ts.Program }): TypeRefMap
+export function extractToolTypeRefs(
+  entryFile: string,
+  options?: { program?: ts.Program },
+): TypeRefMap;
 export function extractToolTypeRefs(
   entryFile: string,
   options: { shouldShare: ShouldShare; program?: ts.Program },
-): TypeRefMapWithDefs
+): TypeRefMapWithDefs;
 export function extractToolTypeRefs(
   entryFile: string,
   options?: { shouldShare?: ShouldShare; program?: ts.Program },
 ): TypeRefMap | TypeRefMapWithDefs {
-  const registry = options?.shouldShare ? createSharingRegistry() : undefined
-  const out: TypeRefMap = {}
+  const registry = options?.shouldShare ? createSharingRegistry() : undefined;
+  const out: TypeRefMap = {};
   walkTree(
     entryFile,
     (name, _path, fn, descriptionSource, checker) => {
-      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
       out[name] = {
         input: typeRefFromFunctionNode(fn, checker, registry),
         output: typeRefFromReturnType(fn, checker, registry),
         ...(description !== undefined ? { description } : {}),
-      }
+      };
     },
     options?.program,
-  )
-  if (!options?.shouldShare || !registry) return out
-  return finalizeWithDefs(out, registry, options.shouldShare)
+  );
+  if (!options?.shouldShare || !registry) return out;
+  return finalizeWithDefs(out, registry, options.shouldShare);
 }
 
 /**
@@ -807,32 +816,35 @@ export function extractToolTypeRefs(
  * Same `options.shouldShare`/`options.program` opt-ins as `extractToolTypeRefs`
  * — see its doc comment.
  */
-export function extractRouteTypeRefs(entryFile: string, options?: { program?: ts.Program }): TypeRefMap
+export function extractRouteTypeRefs(
+  entryFile: string,
+  options?: { program?: ts.Program },
+): TypeRefMap;
 export function extractRouteTypeRefs(
   entryFile: string,
   options: { shouldShare: ShouldShare; program?: ts.Program },
-): TypeRefMapWithDefs
+): TypeRefMapWithDefs;
 export function extractRouteTypeRefs(
   entryFile: string,
   options?: { shouldShare?: ShouldShare; program?: ts.Program },
 ): TypeRefMap | TypeRefMapWithDefs {
-  const registry = options?.shouldShare ? createSharingRegistry() : undefined
-  const out: TypeRefMap = {}
+  const registry = options?.shouldShare ? createSharingRegistry() : undefined;
+  const out: TypeRefMap = {};
   walkTree(
     entryFile,
     (_name, path, fn, descriptionSource, checker) => {
-      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn)
-      const key = path.join("/")
+      const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
+      const key = path.join("/");
       out[key] = {
         input: typeRefFromFunctionNode(fn, checker, registry),
         output: typeRefFromReturnType(fn, checker, registry),
         ...(description !== undefined ? { description } : {}),
-      }
+      };
     },
     options?.program,
-  )
-  if (!options?.shouldShare || !registry) return out
-  return finalizeWithDefs(out, registry, options.shouldShare)
+  );
+  if (!options?.shouldShare || !registry) return out;
+  return finalizeWithDefs(out, registry, options.shouldShare);
 }
 
 /** Shared plumbing for both `extractToolTypeRefs`/`extractRouteTypeRefs`'s
@@ -845,19 +857,19 @@ function finalizeWithDefs(
   registry: ReturnType<typeof createSharingRegistry>,
   shouldShare: ShouldShare,
 ): TypeRefMapWithDefs {
-  const flatRoots: Record<string, TypeRef> = {}
+  const flatRoots: Record<string, TypeRef> = {};
   for (const [key, info] of Object.entries(map)) {
-    flatRoots[`${key}\0input`] = info.input
-    if (info.output !== undefined) flatRoots[`${key}\0output`] = info.output
+    flatRoots[`${key}\0input`] = info.input;
+    if (info.output !== undefined) flatRoots[`${key}\0output`] = info.output;
   }
-  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, shouldShare)
-  const types: TypeRefMap = {}
+  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, shouldShare);
+  const types: TypeRefMap = {};
   for (const [key, info] of Object.entries(map)) {
     types[key] = {
       input: roots[`${key}\0input`]!,
       ...(info.output !== undefined ? { output: roots[`${key}\0output`]! } : {}),
       ...(info.description !== undefined ? { description: info.description } : {}),
-    }
+    };
   }
-  return { types, defs }
+  return { types, defs };
 }

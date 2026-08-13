@@ -4,8 +4,8 @@
 // temporal, semantic strings, bytes). Convenience import for consumers that
 // want the full pre-1.0 vocabulary without picking modules individually.
 
-export * from "./wire-numerics.ts"
-export * from "./temporal.ts"
-export * from "./semantic-strings.ts"
-export * from "./bytes.ts"
-export * from "./refinements.ts"
+export * from "./wire-numerics.ts";
+export * from "./temporal.ts";
+export * from "./semantic-strings.ts";
+export * from "./bytes.ts";
+export * from "./refinements.ts";

@@ -18,67 +18,67 @@ which this page defers to rather than duplicates.
 ## The catalog
 
 Ingesters fall into four kinds, distinguished by what they read from: a
-*declared* schema in some format's own grammar, a live language's type
-system, or *no* declared schema at all — just example data to guess from.
+_declared_ schema in some format's own grammar, a live language's type
+system, or _no_ declared schema at all — just example data to guess from.
 
 ### Schema-description formats
 
 These read a format whose entire purpose is describing shapes (as opposed to
 formats like SQL where the schema is incidental to another purpose).
 
-| Ingester | Subpath | Reach for it when… |
-| --- | --- | --- |
-| `fromJsonSchema` | `from-json-schema` | You have a JSON Schema document (draft-07 or 2020-12 style) and want it as `TypeRef`. |
-| `fromOpenApi30` / `fromOpenApi20` | `from-openapi` | You have an OpenAPI/Swagger schema object (not a whole spec — a `schema` node) to convert; `fromOpenApi20` additionally decodes Swagger 2.0's `x-oneOf`/`x-nullable` vendor extensions. |
-| `fromJtd` / `fromJtdDocument` | `from-jtd` | You have an RFC 8927 JSON Type Definition schema, single or with `definitions`. |
-| `fromStandardSchema` | `from-standard-schema` | You have a live [Standard Schema](https://standardschema.dev/) instance (a Zod, Valibot, or ArkType schema object) at runtime and want its `TypeRef`, not its source text. |
+| Ingester                          | Subpath                | Reach for it when…                                                                                                                                                                      |
+| --------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fromJsonSchema`                  | `from-json-schema`     | You have a JSON Schema document (draft-07 or 2020-12 style) and want it as `TypeRef`.                                                                                                   |
+| `fromOpenApi30` / `fromOpenApi20` | `from-openapi`         | You have an OpenAPI/Swagger schema object (not a whole spec — a `schema` node) to convert; `fromOpenApi20` additionally decodes Swagger 2.0's `x-oneOf`/`x-nullable` vendor extensions. |
+| `fromJtd` / `fromJtdDocument`     | `from-jtd`             | You have an RFC 8927 JSON Type Definition schema, single or with `definitions`.                                                                                                         |
+| `fromStandardSchema`              | `from-standard-schema` | You have a live [Standard Schema](https://standardschema.dev/) instance (a Zod, Valibot, or ArkType schema object) at runtime and want its `TypeRef`, not its source text.              |
 
 ### IDL / wire formats
 
 These read an interface-definition language for RPC or serialization, where
 message/struct declarations may cross-reference each other.
 
-| Ingester | Subpath | Reach for it when… |
-| --- | --- | --- |
-| `fromProtoText` / `fromProtoDescriptor` | `from-protobuf` | You have a `.proto` source string, or a `protoc --descriptor_set_out` JSON descriptor. |
-| `fromFlatbuffers` | `from-flatbuffers` | You have a `.fbs` FlatBuffers schema source string. |
-| `fromCapnp` | `from-capnp` | You have a Cap'n Proto `.capnp` schema source string. |
-| `fromGraphql` | `from-graphql` | You have a GraphQL SDL document (`type`/`input`/`interface`/`enum`/`scalar`/`union` definitions). |
+| Ingester                                | Subpath            | Reach for it when…                                                                                |
+| --------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- |
+| `fromProtoText` / `fromProtoDescriptor` | `from-protobuf`    | You have a `.proto` source string, or a `protoc --descriptor_set_out` JSON descriptor.            |
+| `fromFlatbuffers`                       | `from-flatbuffers` | You have a `.fbs` FlatBuffers schema source string.                                               |
+| `fromCapnp`                             | `from-capnp`       | You have a Cap'n Proto `.capnp` schema source string.                                             |
+| `fromGraphql`                           | `from-graphql`     | You have a GraphQL SDL document (`type`/`input`/`interface`/`enum`/`scalar`/`union` definitions). |
 
 ### Database schemas
 
 These read DDL — the schema is a side effect of a `CREATE` statement, not a
 document whose sole purpose is describing a type.
 
-| Ingester | Subpath | Reach for it when… |
-| --- | --- | --- |
+| Ingester  | Subpath    | Reach for it when…                                          |
+| --------- | ---------- | ----------------------------------------------------------- |
 | `fromSql` | `from-sql` | You have `CREATE TABLE` DDL for Postgres, MySQL, or SQLite. |
-| `fromCql` | `from-cql` | You have Cassandra `CREATE TABLE`/`CREATE TYPE` CQL. |
+| `fromCql` | `from-cql` | You have Cassandra `CREATE TABLE`/`CREATE TYPE` CQL.        |
 
 ### Search-index mappings
 
-| Ingester | Subpath | Reach for it when… |
-| --- | --- | --- |
+| Ingester                                       | Subpath              | Reach for it when…                                                                             |
+| ---------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------- |
 | `fromElasticsearch` / `fromElasticsearchField` | `from-elasticsearch` | You have an Elasticsearch/OpenSearch mapping (`{ properties: {...} }`) as already-parsed JSON. |
 
 ### Live-language types
 
-| Ingester | Subpath | Reach for it when… |
-| --- | --- | --- |
+| Ingester                                     | Subpath           | Reach for it when…                                                                                                                                                                                                                                                |
+| -------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `typeRefFromType` + `createExtractorProgram` | `from-typescript` | You have real TypeScript source and want to extract `TypeRef`s from a live `ts.Program`/`ts.TypeChecker` — not text-parsing, actual compiler type resolution (handles generics, conditional/mapped types the compiler already resolved, JSDoc-derived meta, etc). |
 
 ### Value-based inference (heuristic, not declared)
 
 These are fundamentally different in kind from everything above: there is no
-schema to read, only example *values* to guess a schema from. Every ingester
+schema to read, only example _values_ to guess a schema from. Every ingester
 above is a parser — deterministic, format-grammar-driven. These two are
 statistical inference — probabilistic, tunable, and capable of being wrong
 in ways a parser cannot be (a parser either matches the grammar or errors; a
 heuristic can confidently infer the wrong shape from an unlucky sample).
 
-| Ingester | Subpath | Reach for it when… |
-| --- | --- | --- |
-| `fromJson` | `from-json` | You have **one** example JSON value (e.g. one API response captured from the network tab) and no schema. |
+| Ingester         | Subpath            | Reach for it when…                                                                                                                                                                                                                                                                     |
+| ---------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fromJson`       | `from-json`        | You have **one** example JSON value (e.g. one API response captured from the network tab) and no schema.                                                                                                                                                                               |
 | `fromJsonCorpus` | `from-json-corpus` | You have **many** example JSON values (a batch of API responses, a JSONL log sample) and want signal that only shows up across a population — which fields are actually optional, which string field is really an enum, whether a fanned-out shape is a discriminated union or a dict. |
 
 Both are covered in API-reference depth in
@@ -98,22 +98,25 @@ allows it. `fromJsonSchema` reverses `json-schema.ts`; `fromSql` reverses
 A concrete example, SQL in, Zod out, SQL back out:
 
 ```ts
-import { fromSql } from "@rhi-zone/fractal-type-ir/from-sql"
-import { toZod } from "@rhi-zone/fractal-type-ir/typescript-zod"
-import { toCreateTable } from "@rhi-zone/fractal-type-ir/sql"
+import { fromSql } from "@rhi-zone/fractal-type-ir/from-sql";
+import { toZod } from "@rhi-zone/fractal-type-ir/typescript-zod";
+import { toCreateTable } from "@rhi-zone/fractal-type-ir/sql";
 
-const tables = fromSql(`
+const tables = fromSql(
+  `
   CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL
   )
-`, { dialect: "postgres" })
+`,
+  { dialect: "postgres" },
+);
 
 // Project the same TypeRef out to a Zod schema for runtime validation…
-const usersSchema = toZod(tables.users)
+const usersSchema = toZod(tables.users);
 
 // …and back out to DDL (same or a different dialect):
-const ddl = toCreateTable("users", tables.users, { dialect: "postgres" })
+const ddl = toCreateTable("users", tables.users, { dialect: "postgres" });
 // CREATE TABLE users (
 //   id SERIAL NOT NULL PRIMARY KEY,
 //   email TEXT NOT NULL UNIQUE
@@ -145,7 +148,7 @@ forcing one shape on every format:
   `fromFlatbuffers` and `fromCapnp` (keyed by namespace/nesting-qualified
   dotted path, e.g. `"a.b.Foo"`, `"Person.Address"`).
 - **`TypeRefDocument`** (`{ root, defs }`) — the format has both a
-  well-defined entry point *and* a set of named, cross-referenced
+  well-defined entry point _and_ a set of named, cross-referenced
   declarations that entry point (and each other) can point into.
   `fromProtoText`/`fromProtoDescriptor` (`root` is the first top-level
   message/enum declaration; `defs` holds every message/enum keyed by dotted
@@ -170,14 +173,14 @@ to adjust.
 `fromJson` takes an optional `InferConfig`:
 
 ```ts
-import { fromJson, type InferConfig } from "@rhi-zone/fractal-type-ir/from-json"
+import { fromJson, type InferConfig } from "@rhi-zone/fractal-type-ir/from-json";
 
 const config: InferConfig = {
-  arrayThreshold: 3,        // min elements before inferring array over tuple
+  arrayThreshold: 3, // min elements before inferring array over tuple
   narrowIntegerWidth: true, // narrow whole numbers to the tightest int kind
-  detectStringFormats: true,// try uuid/email/uri/date detection on strings
-  leafHeuristics: [],       // custom heuristics tried before the built-ins
-}
+  detectStringFormats: true, // try uuid/email/uri/date detection on strings
+  leafHeuristics: [], // custom heuristics tried before the built-ins
+};
 ```
 
 `fromJsonCorpus` takes a `CorpusInferConfig` (a superset of `InferConfig`,
@@ -195,16 +198,16 @@ internals, and how to evaluate/tune them, are covered in
 
 ## Worked example: which ingester?
 
-| You have… | Reach for… |
-| --- | --- |
-| A `.proto` file | `fromProtoText` |
-| A live Zod schema object | `fromStandardSchema` |
-| A `CREATE TABLE` statement | `fromSql` |
-| One example JSON API response, no schema | `fromJson` |
-| A folder of example JSON API responses, no schema | `fromJsonCorpus` |
-| A GraphQL SDL file | `fromGraphql` |
-| A TypeScript interface in your own codebase | `from-typescript`'s `typeRefFromType` over a `ts.Program` |
-| An Elasticsearch index mapping | `fromElasticsearch` |
+| You have…                                         | Reach for…                                                |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| A `.proto` file                                   | `fromProtoText`                                           |
+| A live Zod schema object                          | `fromStandardSchema`                                      |
+| A `CREATE TABLE` statement                        | `fromSql`                                                 |
+| One example JSON API response, no schema          | `fromJson`                                                |
+| A folder of example JSON API responses, no schema | `fromJsonCorpus`                                          |
+| A GraphQL SDL file                                | `fromGraphql`                                             |
+| A TypeScript interface in your own codebase       | `from-typescript`'s `typeRefFromType` over a `ts.Program` |
+| An Elasticsearch index mapping                    | `fromElasticsearch`                                       |
 
 The dividing case worth calling out explicitly: `fromJson` vs.
 `fromJsonCorpus` for JSON data with **no** declared schema. A single sample

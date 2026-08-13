@@ -18,13 +18,13 @@
 // buildPathMap/schemaKey) exactly — the SAME keying toOpenApi(n, opts) uses
 // to look schemas up via `schemas[schemaKey] ?? schemas[codenName]`.
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
-import { toOpenApi } from "@rhi-zone/fractal-http-api-projector/openapi"
-import { toDocusaurusRouteReference } from "@rhi-zone/fractal-http-api-projector/http-route-reference"
-import { api } from "./src/fixture-tree.ts"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { toOpenApi } from "@rhi-zone/fractal-http-api-projector/openapi";
+import { toDocusaurusRouteReference } from "@rhi-zone/fractal-http-api-projector/http-route-reference";
+import { api } from "./src/fixture-tree.ts";
 
-const outDir = join(import.meta.dirname, "docs", "api")
+const outDir = join(import.meta.dirname, "docs", "api");
 
 async function main(): Promise<void> {
   const doc = await toOpenApi(api, {
@@ -51,7 +51,11 @@ async function main(): Promise<void> {
         },
       },
       "books/:bookId": {
-        inputSchema: { type: "object", properties: { bookId: { type: "string" } }, required: ["bookId"] },
+        inputSchema: {
+          type: "object",
+          properties: { bookId: { type: "string" } },
+          required: ["bookId"],
+        },
         outputSchema: {
           type: "object",
           properties: {
@@ -63,16 +67,16 @@ async function main(): Promise<void> {
         },
       },
     },
-  })
+  });
 
-  const pages = toDocusaurusRouteReference(doc)
+  const pages = toDocusaurusRouteReference(doc);
 
-  rmSync(outDir, { recursive: true, force: true })
-  mkdirSync(outDir, { recursive: true })
+  rmSync(outDir, { recursive: true, force: true });
+  mkdirSync(outDir, { recursive: true });
   for (const [filename, content] of pages) {
-    writeFileSync(join(outDir, filename), content, "utf8")
-    console.log(`wrote docs/api/${filename}`)
+    writeFileSync(join(outDir, filename), content, "utf8");
+    console.log(`wrote docs/api/${filename}`);
   }
 }
 
-await main()
+await main();

@@ -1,5 +1,5 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // JNI (Java Native Interface) projector — the Java-side `native` method
 // declaration surface for calling into native code, the human-facing
@@ -111,13 +111,60 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
 // a style preference.
 
 const JAVA_RESERVED = new Set([
-  "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
-  "continue", "default", "do", "double", "else", "enum", "extends", "final", "finally", "float",
-  "for", "goto", "if", "implements", "import", "instanceof", "int", "interface", "long", "native",
-  "new", "package", "private", "protected", "public", "return", "short", "static", "strictfp",
-  "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
-  "volatile", "while", "true", "false", "null",
-])
+  "abstract",
+  "assert",
+  "boolean",
+  "break",
+  "byte",
+  "case",
+  "catch",
+  "char",
+  "class",
+  "const",
+  "continue",
+  "default",
+  "do",
+  "double",
+  "else",
+  "enum",
+  "extends",
+  "final",
+  "finally",
+  "float",
+  "for",
+  "goto",
+  "if",
+  "implements",
+  "import",
+  "instanceof",
+  "int",
+  "interface",
+  "long",
+  "native",
+  "new",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "short",
+  "static",
+  "strictfp",
+  "super",
+  "switch",
+  "synchronized",
+  "this",
+  "throw",
+  "throws",
+  "transient",
+  "try",
+  "void",
+  "volatile",
+  "while",
+  "true",
+  "false",
+  "null",
+]);
 
 /** A valid Java identifier for `name` — replaces characters that cannot
  * appear in a Java identifier, prefixes a leading digit, and escapes exact
@@ -125,28 +172,28 @@ const JAVA_RESERVED = new Set([
  * a `native` method's Java name IS the linkable JNI symbol name, so this
  * file does not rewrite spelling beyond what's needed to compile). */
 function sanitizeIdent(name: string): string {
-  const cleaned = name.replace(/[^A-Za-z0-9_$]/g, "_")
-  const based = /^[A-Za-z_$]/.test(cleaned) ? cleaned : `_${cleaned}`
-  return JAVA_RESERVED.has(based) ? `${based}_` : based
+  const cleaned = name.replace(/[^A-Za-z0-9_$]/g, "_");
+  const based = /^[A-Za-z_$]/.test(cleaned) ? cleaned : `_${cleaned}`;
+  return JAVA_RESERVED.has(based) ? `${based}_` : based;
 }
 
 function toPascalCase(name: string): string {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[^a-zA-Z0-9]+/)
-    .filter((w) => w.length > 0)
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("")
+    .filter((w) => w.length > 0);
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
 }
 
 function indent(block: string, prefix = "    "): string {
   return block
     .split("\n")
     .map((line) => (line.length === 0 ? line : `${prefix}${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 /**
@@ -163,50 +210,50 @@ function quote(value: string): string {
  *     boolean/integer/number/string/bytes/void mapping below.
  */
 export function toJniType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
   if (discipline !== undefined) {
-    if (discipline.kind === "opaque-handle") return "long"
+    if (discipline.kind === "opaque-handle") return "long";
     if (discipline.kind === "refcount") {
       throw new Error(
         'toJniType: unsupported ownership discipline "refcount" for JNI target — no native JNI/JVM shared-refcount mechanism ' +
           "(Java's GC-triggered finalize()/Cleaner is a single-owner collection callback, not reference counting; see jni.ts's file header)",
-      )
+      );
     }
     if (discipline.kind === "resource") {
       throw new Error(
         'toJniType: unsupported ownership discipline "resource" for JNI target — WIT-only own/borrow lend-count-and-trap mechanism, ' +
           "no citable JNI/Android NDK convention enforces it (see jni.ts's file header; use ownership.opaqueHandle() instead)",
-      )
+      );
     }
     // "copy" falls through to the plain mapping below.
   }
 
-  const kind = ref.shape.kind
-  if (kind === "boolean") return "boolean"
-  if (kind === "integer") return "long"
-  if (kind === "int32") return "int"
-  if (kind === "int64") return "long"
-  if (kind === "number") return "double"
-  if (kind === "float32") return "float"
-  if (kind === "float64") return "double"
-  if (kind === "string") return "String"
-  if (kind === "bytes") return "byte[]"
-  if (kind === "void" || kind === "null") return "void"
+  const kind = ref.shape.kind;
+  if (kind === "boolean") return "boolean";
+  if (kind === "integer") return "long";
+  if (kind === "int32") return "int";
+  if (kind === "int64") return "long";
+  if (kind === "number") return "double";
+  if (kind === "float32") return "float";
+  if (kind === "float64") return "double";
+  if (kind === "string") return "String";
+  if (kind === "bytes") return "byte[]";
+  if (kind === "void" || kind === "null") return "void";
 
   throw new Error(
     `toJniType: unsupported type-ir kind "${kind}" for JNI target — this minimal projector maps only ` +
       "boolean/integer(+int32/int64)/number(+float32/float64)/string/bytes/void to Java's native-declaration vocabulary",
-  )
+  );
 }
 
 function docComment(meta: Readonly<Record<string, unknown>>): string {
-  return typeof meta.description === "string" ? `/** ${meta.description} */\n` : ""
+  return typeof meta.description === "string" ? `/** ${meta.description} */\n` : "";
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+  readonly returnType: TypeRef;
+};
 
 /**
  * One `native` method declaration. `isStatic` distinguishes a module-level
@@ -218,11 +265,18 @@ type FfiFunctionLike = {
  * Oracle spec's documented native-function signature shape verified in the
  * file header).
  */
-function buildDecl(javaName: string, ref: FfiRef, shape: FfiFunctionLike, isStatic: boolean): string {
-  const params = shape.params.map((p) => `${toJniType(p.type)} ${sanitizeIdent(p.name)}`).join(", ")
-  const returnType = toJniType(shape.returnType)
-  const modifiers = isStatic ? "public static native" : "public native"
-  return `${docComment(ref.meta)}${modifiers} ${returnType} ${sanitizeIdent(javaName)}(${params});`
+function buildDecl(
+  javaName: string,
+  ref: FfiRef,
+  shape: FfiFunctionLike,
+  isStatic: boolean,
+): string {
+  const params = shape.params
+    .map((p) => `${toJniType(p.type)} ${sanitizeIdent(p.name)}`)
+    .join(", ");
+  const returnType = toJniType(shape.returnType);
+  const modifiers = isStatic ? "public static native" : "public native";
+  return `${docComment(ref.meta)}${modifiers} ${returnType} ${sanitizeIdent(javaName)}(${params});`;
 }
 
 /**
@@ -246,21 +300,31 @@ function buildResource(
   shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
   isNested: boolean,
 ): string {
-  const classModifiers = isNested ? "public static class" : "public class"
-  const lines: string[] = [`${docComment(ref.meta)}${classModifiers} ${name} {`, "    private long nativeHandle;", ""]
+  const classModifiers = isNested ? "public static class" : "public class";
+  const lines: string[] = [
+    `${docComment(ref.meta)}${classModifiers} ${name} {`,
+    "    private long nativeHandle;",
+    "",
+  ];
 
   const methodDecls = Object.entries(shape.methods).map(([methodName, methodRef]) => {
-    const kind = methodRef.shape.kind
+    const kind = methodRef.shape.kind;
     if (kind !== "method" && kind !== "function") {
-      throw new Error(`toJniFfi: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`)
+      throw new Error(
+        `toJniFfi: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`,
+      );
     }
-    const methodShape = methodRef.shape as FfiShape & { kind: "method"; params: readonly { name: string; type: TypeRef }[]; returnType: TypeRef }
-    return buildDecl(methodName, methodRef, methodShape, false)
-  })
+    const methodShape = methodRef.shape as FfiShape & {
+      kind: "method";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+    };
+    return buildDecl(methodName, methodRef, methodShape, false);
+  });
 
-  lines.push(indent(methodDecls.join("\n\n")))
-  lines.push("}")
-  return lines.join("\n")
+  lines.push(indent(methodDecls.join("\n\n")));
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /**
@@ -283,25 +347,36 @@ function buildResource(
  */
 function buildModule(
   name: string,
-  shape: FfiShape & { kind: "module"; functions: Readonly<Record<string, FfiRef>>; resources: Readonly<Record<string, FfiRef>> },
+  shape: FfiShape & {
+    kind: "module";
+    functions: Readonly<Record<string, FfiRef>>;
+    resources: Readonly<Record<string, FfiRef>>;
+  },
 ): string {
-  const className = toPascalCase(name)
+  const className = toPascalCase(name);
 
   const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) => {
-    const fnShape = fnRef.shape
+    const fnShape = fnRef.shape;
     if (fnShape.kind !== "function" && fnShape.kind !== "method") {
-      throw new Error(`toJniFfi: module function "${fnName}" has unexpected kind "${fnShape.kind}" (expected "function")`)
+      throw new Error(
+        `toJniFfi: module function "${fnName}" has unexpected kind "${fnShape.kind}" (expected "function")`,
+      );
     }
-    return buildDecl(fnName, fnRef, fnShape as FfiShape & { kind: "function" }, true)
-  })
+    return buildDecl(fnName, fnRef, fnShape as FfiShape & { kind: "function" }, true);
+  });
 
   const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) =>
-    buildResource(resName, resRef, resRef.shape as FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> }, true),
-  )
+    buildResource(
+      resName,
+      resRef,
+      resRef.shape as FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
+      true,
+    ),
+  );
 
-  const loadLibrary = ["static {", `    System.loadLibrary(${quote(name)});`, "}"].join("\n")
-  const body = [loadLibrary, ...functionDecls, ...resourceDecls].join("\n\n")
-  return [`public class ${className} {`, indent(body), "}"].join("\n")
+  const loadLibrary = ["static {", `    System.loadLibrary(${quote(name)});`, "}"].join("\n");
+  const body = [loadLibrary, ...functionDecls, ...resourceDecls].join("\n\n");
+  return [`public class ${className} {`, indent(body), "}"].join("\n");
 }
 
 /**
@@ -324,38 +399,48 @@ function buildModule(
  * own target.
  */
 export function toJniFfi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toJniFfi: "function" requires a name — a Java native method is a named declaration, not an anonymous inline type')
+      throw new Error(
+        'toJniFfi: "function" requires a name — a Java native method is a named declaration, not an anonymous inline type',
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    return buildDecl(name, ref, shape, true)
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    return buildDecl(name, ref, shape, true);
   }
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toJniFfi: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error(
+        "toJniFfi: \"method\" requires a name — the method's own key in its resource's methods map",
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "method" }
-    return buildDecl(name, ref, shape, false)
+    const shape = ref.shape as FfiShape & { kind: "method" };
+    return buildDecl(name, ref, shape, false);
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiShape & { kind: "resource"; name: string; methods: Readonly<Record<string, FfiRef>> }
-    return buildResource(shape.name, ref, shape, false)
+    const shape = ref.shape as FfiShape & {
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    return buildResource(shape.name, ref, shape, false);
   }
 
   if (kind === "module") {
     const shape = ref.shape as FfiShape & {
-      kind: "module"
-      name: string
-      functions: Readonly<Record<string, FfiRef>>
-      resources: Readonly<Record<string, FfiRef>>
-    }
-    return buildModule(shape.name, shape)
+      kind: "module";
+      name: string;
+      functions: Readonly<Record<string, FfiRef>>;
+      resources: Readonly<Record<string, FfiRef>>;
+    };
+    return buildModule(shape.name, shape);
   }
 
-  throw new Error(`toJniFfi: unhandled ffi-ir kind "${kind}" — no JNI mapping implemented for this backend`)
+  throw new Error(
+    `toJniFfi: unhandled ffi-ir kind "${kind}" — no JNI mapping implemented for this backend`,
+  );
 }

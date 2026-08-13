@@ -1,5 +1,5 @@
-import { defineConfig } from "vite"
-import solid from "vite-plugin-solid"
+import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
 
 export default defineConfig({
   base: "/fractal/playground/",
@@ -7,4 +7,4 @@ export default defineConfig({
   server: {
     port: 5173,
   },
-})
+});

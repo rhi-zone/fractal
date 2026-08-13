@@ -7,4 +7,4 @@
 // directly for those; it is a hard dependency of this one, so it is already
 // installed.
 
-export * from "@rhi-zone/fractal-http-api-projector"
+export * from "@rhi-zone/fractal-http-api-projector";

@@ -6,8 +6,8 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "../../../node.ts"
+import { api, op } from "../../../node.ts";
 
 export const tree = api({
   deep: op((x: { value: number }) => x),
-})
+});

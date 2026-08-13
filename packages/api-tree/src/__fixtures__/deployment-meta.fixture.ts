@@ -15,8 +15,8 @@
 // the shape this mirrors; this fixture only needs the `extends` clauses,
 // not a required field.
 
-import "../node.ts"
-import type { McpBranchMeta, McpLeafMeta } from "@rhi-zone/fractal-mcp-api-projector"
+import "../node.ts";
+import type { McpBranchMeta, McpLeafMeta } from "@rhi-zone/fractal-mcp-api-projector";
 
 declare module "../node.ts" {
   interface LeafMeta extends McpLeafMeta {}

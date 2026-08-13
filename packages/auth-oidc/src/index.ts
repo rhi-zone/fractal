@@ -12,19 +12,27 @@
 // const clientAuth = oidc.client({ tokenEndpoint, clientId: "my-client", clientSecret: "secret" })
 // ```
 
-import { oidcClient } from "./client.ts"
-import { oidcServer } from "./server.ts"
+import { oidcClient } from "./client.ts";
+import { oidcServer } from "./server.ts";
 
 /** `oidc.server(...)` / `oidc.client(...)` — see `./server.ts` / `./client.ts`. */
 export const oidc = {
   server: oidcServer,
   client: oidcClient,
-}
+};
 
-export { oidcServer, oidcClient }
-export type { OidcClaims, OidcServerOptions } from "./server.ts"
-export type { OidcClientOptions } from "./client.ts"
-export type { FetchLike, Jwk, Jwks, JwksCache } from "./jwks.ts"
-export { createJwksCache, resolveJwksUri, JwksFetchError } from "./jwks.ts"
-export type { ClaimCheckOptions, JwtClaims, JwtHeader, ParsedJwt } from "./jwt.ts"
-export { checkClaims, isSupportedAlg, JwtClaimError, JwtParseError, parseJwt, verifyJwt, verifyJwtSignature } from "./jwt.ts"
+export { oidcServer, oidcClient };
+export type { OidcClaims, OidcServerOptions } from "./server.ts";
+export type { OidcClientOptions } from "./client.ts";
+export type { FetchLike, Jwk, Jwks, JwksCache } from "./jwks.ts";
+export { createJwksCache, resolveJwksUri, JwksFetchError } from "./jwks.ts";
+export type { ClaimCheckOptions, JwtClaims, JwtHeader, ParsedJwt } from "./jwt.ts";
+export {
+  checkClaims,
+  isSupportedAlg,
+  JwtClaimError,
+  JwtParseError,
+  parseJwt,
+  verifyJwt,
+  verifyJwtSignature,
+} from "./jwt.ts";

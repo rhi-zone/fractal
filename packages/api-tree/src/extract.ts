@@ -26,9 +26,9 @@
 //   packages/api-tree/src/node.ts    — the op model (`op(fn, meta)`)
 //   packages/mcp-api-projector/src/project.ts  — the consumer (toTools inputSchema/description)
 
-import ts from "typescript"
-import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
+import ts from "typescript";
+import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema";
 import {
   createExtractorProgram,
   createSharingRegistry,
@@ -37,7 +37,7 @@ import {
   type SharingRegistry,
   type ShouldShare,
   typeRefFromType,
-} from "@rhi-zone/fractal-type-ir/from-typescript"
+} from "@rhi-zone/fractal-type-ir/from-typescript";
 
 // Re-exported for backward compatibility — every symbol below moved to
 // `@rhi-zone/fractal-type-ir/from-typescript` (the general-purpose ts.Type →
@@ -53,14 +53,14 @@ export {
   type SharingRegistry,
   type ShouldShare,
   typeRefFromType,
-}
+};
 
 /** The TypeRef punt: `unknown` tagged with the unhandled case. Used only by
  * this module's own api-tree-specific extraction paths (op function-node
  * input, `Result<T, E>` return-type unwrapping) — `typeRefFromType`'s own
  * internal punts live with it in `@rhi-zone/fractal-type-ir/from-typescript`. */
 const puntRef = (reason: string): TypeRef =>
-  t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` })
+  t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` });
 
 // ============================================================================
 // JSON-Schema value (structural subset we emit)
@@ -100,60 +100,60 @@ const puntRef = (reason: string): TypeRef =>
  * never exercised.
  */
 export type JsonSchema = {
-  type?: "string" | "number" | "boolean" | "array" | "object"
-  properties?: Record<string, JsonSchema>
-  required?: string[]
-  items?: JsonSchema | false
-  prefixItems?: JsonSchema[]
-  additionalProperties?: JsonSchema
-  const?: string | number | boolean | null
-  enum?: string[]
-  anyOf?: JsonSchema[]
-  oneOf?: JsonSchema[]
+  type?: "string" | "number" | "boolean" | "array" | "object";
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema | false;
+  prefixItems?: JsonSchema[];
+  additionalProperties?: JsonSchema;
+  const?: string | number | boolean | null;
+  enum?: string[];
+  anyOf?: JsonSchema[];
+  oneOf?: JsonSchema[];
   /** Structural intersection (`json-schema.ts`'s `intersection` shape kind
    * — draft 2020-12 §10.2.1.1: every listed schema must validate). */
-  allOf?: JsonSchema[]
-  discriminator?: { propertyName: string }
+  allOf?: JsonSchema[];
+  discriminator?: { propertyName: string };
   // Vendor-extension keys (`x-`-prefixed, same convention across
   // `json-schema.ts`'s degrade-honestly shape kinds — a callable/
   // interface/class-instance/stream/paginated-sequence type has no native
   // JSON-Schema vocabulary, so each degrades to the closest structural
   // shape (`object`/`array`/untyped) plus one of these markers so tooling
   // that cares can still tell what it degraded FROM).
-  "x-function"?: boolean
-  "x-method"?: boolean
-  "x-interface"?: boolean
-  "x-class-name"?: string
-  "x-declaration-file"?: string
-  "x-stream"?: boolean
-  "x-page-style"?: string
+  "x-function"?: boolean;
+  "x-method"?: boolean;
+  "x-interface"?: boolean;
+  "x-class-name"?: string;
+  "x-declaration-file"?: string;
+  "x-stream"?: boolean;
+  "x-page-style"?: string;
   /** Structural-sharing reference (`json-schema.ts`'s `ref`-kind rendering)
    * — `#/$defs/<name>`, resolved against the containing document's
    * `$defs` (see `toJsonSchema`'s own doc comment on how `defs` surfaces
    * at the document root vs. inline). */
-  $ref?: string
-  $comment?: string
+  $ref?: string;
+  $comment?: string;
   // Numeric/string constraint passthroughs — `json-schema.ts`'s
   // `passthroughKeys`, copied verbatim from a TypeRef's `meta` onto the
   // projected schema whenever present (branded numeric/string kinds,
   // `t(types.string, { minLength: 1 })`-style meta, …).
-  minimum?: number
-  maximum?: number
-  exclusiveMinimum?: number
-  exclusiveMaximum?: number
-  minLength?: number
-  maxLength?: number
-  pattern?: string
-  multipleOf?: number
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  multipleOf?: number;
   /** String/number sub-format (`json-schema.ts`'s tagged leaf kinds —
    * `int32`/`int64`/`float32`/`float64`/`uuid`/`uri`/`email`/`datetime`/
    * `date`/`time`/`duration`). */
-  format?: string
-  readOnly?: boolean
-  writeOnly?: boolean
-  title?: string
-  deprecated?: boolean
-  examples?: unknown[]
+  format?: string;
+  readOnly?: boolean;
+  writeOnly?: boolean;
+  title?: string;
+  deprecated?: boolean;
+  examples?: unknown[];
   // `description`/`default` are emitted by the underlying type-ir projector
   // (json-schema.ts's `withMeta`) whenever a TypeRef carries
   // `meta.description`/`meta.default`. `typeRefFromType` (in
@@ -164,9 +164,9 @@ export type JsonSchema = {
   // consumers (e.g. the CLI projector's help text / default-value
   // application) can read them without an `as Record<string, unknown>`
   // escape hatch at every read site.
-  description?: string
-  default?: string | number | boolean
-}
+  description?: string;
+  default?: string | number | boolean;
+};
 
 // ============================================================================
 // Core: TypeScript type → JSON-Schema
@@ -178,12 +178,8 @@ export type JsonSchema = {
  * Handles the obvious cases; punts everything else to `unknown` with a
  * `$comment` naming the case. `loc` anchors symbol-type resolution.
  */
-export function schemaFromType(
-  type: ts.Type,
-  checker: ts.TypeChecker,
-  loc: ts.Node,
-): JsonSchema {
-  return toJsonSchema(typeRefFromType(type, checker, loc)) as JsonSchema
+export function schemaFromType(type: ts.Type, checker: ts.TypeChecker, loc: ts.Node): JsonSchema {
+  return toJsonSchema(typeRefFromType(type, checker, loc)) as JsonSchema;
 }
 
 // ============================================================================
@@ -209,7 +205,7 @@ export function schemaFromType(
  * trip this so far.
  */
 function isTsBuiltinLibFile(fileName: string): boolean {
-  return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName)
+  return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName);
 }
 
 /**
@@ -266,21 +262,21 @@ function typeProvenanceOf(
   type: ts.Type,
   _checker: ts.TypeChecker,
 ): { name: string; declarationFile: string } | undefined {
-  const aliasSymbol = type.aliasSymbol
-  const aliasDecl = aliasSymbol?.declarations?.[0]
+  const aliasSymbol = type.aliasSymbol;
+  const aliasDecl = aliasSymbol?.declarations?.[0];
   if (aliasSymbol && aliasDecl && aliasSymbol.name !== "__type") {
-    const declarationFile = aliasDecl.getSourceFile().fileName
-    if (isTsBuiltinLibFile(declarationFile)) return undefined
-    return { name: aliasSymbol.name, declarationFile }
+    const declarationFile = aliasDecl.getSourceFile().fileName;
+    if (isTsBuiltinLibFile(declarationFile)) return undefined;
+    return { name: aliasSymbol.name, declarationFile };
   }
-  const symbol = type.getSymbol()
-  const decl = symbol?.declarations?.[0]
+  const symbol = type.getSymbol();
+  const decl = symbol?.declarations?.[0];
   if (symbol && decl && symbol.name !== "__type") {
-    const declarationFile = decl.getSourceFile().fileName
-    if (isTsBuiltinLibFile(declarationFile)) return undefined
-    return { name: symbol.name, declarationFile }
+    const declarationFile = decl.getSourceFile().fileName;
+    if (isTsBuiltinLibFile(declarationFile)) return undefined;
+    return { name: symbol.name, declarationFile };
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -301,17 +297,21 @@ export function typeRefFromFunctionNode(
   checker: ts.TypeChecker,
   registry?: SharingRegistry,
 ): TypeRef {
-  const fnType = checker.getTypeAtLocation(fn)
-  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
-  if (!sig) return puntRef("no call signature on op fn")
-  const [param] = sig.getParameters()
-  if (!param) return t(types.object({}))
-  const paramType = checker.getTypeOfSymbolAtLocation(param, fn)
-  const ref = typeRefFromType(paramType, checker, fn, undefined, registry)
-  const provenance = typeProvenanceOf(paramType, checker)
+  const fnType = checker.getTypeAtLocation(fn);
+  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call);
+  if (!sig) return puntRef("no call signature on op fn");
+  const [param] = sig.getParameters();
+  if (!param) return t(types.object({}));
+  const paramType = checker.getTypeOfSymbolAtLocation(param, fn);
+  const ref = typeRefFromType(paramType, checker, fn, undefined, registry);
+  const provenance = typeProvenanceOf(paramType, checker);
   return provenance
-    ? t(ref.shape, { ...ref.meta, typeName: provenance.name, declarationFile: provenance.declarationFile })
-    : ref
+    ? t(ref.shape, {
+        ...ref.meta,
+        typeName: provenance.name,
+        declarationFile: provenance.declarationFile,
+      })
+    : ref;
 }
 
 /**
@@ -319,11 +319,8 @@ export function typeRefFromFunctionNode(
  * expression): its first parameter's type is the op input. A niladic op
  * lowers to an empty object schema.
  */
-export function schemaFromFunctionNode(
-  fn: ts.Node,
-  checker: ts.TypeChecker,
-): JsonSchema {
-  return toJsonSchema(typeRefFromFunctionNode(fn, checker)) as JsonSchema
+export function schemaFromFunctionNode(fn: ts.Node, checker: ts.TypeChecker): JsonSchema {
+  return toJsonSchema(typeRefFromFunctionNode(fn, checker)) as JsonSchema;
 }
 
 // ============================================================================
@@ -396,28 +393,25 @@ function resultTypeArgNodeFrom(
   typeRefNode: ts.TypeReferenceNode,
   checker: ts.TypeChecker,
 ): ts.TypeNode | undefined {
-  if (!ts.isIdentifier(typeRefNode.typeName)) return undefined
+  if (!ts.isIdentifier(typeRefNode.typeName)) return undefined;
 
   // Strip Promise<X> → recurse into X
   if (typeRefNode.typeName.text === "Promise") {
-    const inner = typeRefNode.typeArguments?.[0]
-    if (!inner || !ts.isTypeReferenceNode(inner)) return undefined
-    return resultTypeArgNodeFrom(inner, checker)
+    const inner = typeRefNode.typeArguments?.[0];
+    if (!inner || !ts.isTypeReferenceNode(inner)) return undefined;
+    return resultTypeArgNodeFrom(inner, checker);
   }
 
   // (a) / (b-no-rename): direct "Result" name with ≥ 2 type arguments.
   //   Covers: `import { Result } from "@rhi-zone/fractal-api-tree"` (a)
   //           `import { Result } from "./barrel"`               (b, no rename)
-  if (
-    typeRefNode.typeName.text === "Result" &&
-    (typeRefNode.typeArguments?.length ?? 0) >= 2
-  ) {
-    return typeRefNode.typeArguments![0]
+  if (typeRefNode.typeName.text === "Result" && (typeRefNode.typeArguments?.length ?? 0) >= 2) {
+    return typeRefNode.typeArguments![0];
   }
 
   // Resolve the identifier's symbol for remaining cases.
-  const sym = checker.getSymbolAtLocation(typeRefNode.typeName)
-  if (!sym) return undefined
+  const sym = checker.getSymbolAtLocation(typeRefNode.typeName);
+  if (!sym) return undefined;
 
   // (b-rename): import alias → `import { Result as X } from "..."`.
   //   The import specifier's declarations ARE accessible (same file) even with
@@ -425,15 +419,12 @@ function resultTypeArgNodeFrom(
   //   is "Result". This verifies the barrel re-exports core's Result under a
   //   different local name.
   if (sym.flags & ts.SymbolFlags.Alias) {
-    const specDecl = sym.declarations?.[0]
+    const specDecl = sym.declarations?.[0];
     if (specDecl && ts.isImportSpecifier(specDecl)) {
       // propertyName is set when renamed (`Result as X`); name is the local name.
-      const originalName = specDecl.propertyName?.text ?? specDecl.name.text
-      if (
-        originalName === "Result" &&
-        (typeRefNode.typeArguments?.length ?? 0) >= 1
-      ) {
-        return typeRefNode.typeArguments![0]
+      const originalName = specDecl.propertyName?.text ?? specDecl.name.text;
+      if (originalName === "Result" && (typeRefNode.typeArguments?.length ?? 0) >= 1) {
+        return typeRefNode.typeArguments![0];
       }
     }
   }
@@ -442,8 +433,8 @@ function resultTypeArgNodeFrom(
   //   Local alias declarations are accessible (same file, not behind skipLibCheck).
   //   If the alias's body is a TypeReference to "Result" with ≥ 2 type parameters,
   //   the first type parameter maps positionally to the call site's first type arg.
-  if ((sym.flags & ts.SymbolFlags.TypeAlias) && sym.declarations?.[0]) {
-    const decl = sym.declarations[0]
+  if (sym.flags & ts.SymbolFlags.TypeAlias && sym.declarations?.[0]) {
+    const decl = sym.declarations[0];
     if (
       ts.isTypeAliasDeclaration(decl) &&
       ts.isTypeReferenceNode(decl.type) &&
@@ -451,11 +442,11 @@ function resultTypeArgNodeFrom(
       decl.type.typeName.text === "Result" &&
       (decl.typeParameters?.length ?? 0) >= 1
     ) {
-      return typeRefNode.typeArguments?.[0]
+      return typeRefNode.typeArguments?.[0];
     }
   }
 
-  return undefined
+  return undefined;
 }
 
 /**
@@ -482,34 +473,34 @@ function structuralResultValueType(
   checker: ts.TypeChecker,
   loc: ts.Node,
 ): ts.Type | undefined {
-  if (!type.isUnion()) return undefined
-  const members = type.types
-  if (members.length !== 2) return undefined
+  if (!type.isUnion()) return undefined;
+  const members = type.types;
+  if (members.length !== 2) return undefined;
 
-  let okMember: ts.Type | undefined
-  let errMember: ts.Type | undefined
+  let okMember: ts.Type | undefined;
+  let errMember: ts.Type | undefined;
 
   for (const member of members) {
-    const kindProp = member.getProperty("kind")
-    if (!kindProp) return undefined
-    const kindType = checker.getTypeOfSymbolAtLocation(kindProp, loc)
-    if (!kindType.isStringLiteral()) return undefined
-    if (kindType.value === "ok") okMember = member
-    else if (kindType.value === "err") errMember = member
-    else return undefined
+    const kindProp = member.getProperty("kind");
+    if (!kindProp) return undefined;
+    const kindType = checker.getTypeOfSymbolAtLocation(kindProp, loc);
+    if (!kindType.isStringLiteral()) return undefined;
+    if (kindType.value === "ok") okMember = member;
+    else if (kindType.value === "err") errMember = member;
+    else return undefined;
   }
 
-  if (!okMember || !errMember) return undefined
+  if (!okMember || !errMember) return undefined;
 
   // kind:"ok" branch must have `value` (T)
-  const valueProp = okMember.getProperty("value")
-  if (!valueProp) return undefined
+  const valueProp = okMember.getProperty("value");
+  if (!valueProp) return undefined;
 
   // kind:"err" branch must have `error` (E) — guards against accidental matches
-  const errorProp = errMember.getProperty("error")
-  if (!errorProp) return undefined
+  const errorProp = errMember.getProperty("error");
+  if (!errorProp) return undefined;
 
-  return checker.getTypeOfSymbolAtLocation(valueProp, loc)
+  return checker.getTypeOfSymbolAtLocation(valueProp, loc);
 }
 
 // ============================================================================
@@ -537,9 +528,9 @@ export function typeRefFromReturnType(
   checker: ts.TypeChecker,
   registry?: SharingRegistry,
 ): TypeRef {
-  const fnType = checker.getTypeAtLocation(fn)
-  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
-  if (!sig) return puntRef("no call signature on op fn")
+  const fnType = checker.getTypeAtLocation(fn);
+  const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call);
+  if (!sig) return puntRef("no call signature on op fn");
 
   // ── SYNTAX PATH: explicit return type annotation on the function node ────
   //
@@ -552,12 +543,12 @@ export function typeRefFromReturnType(
   // recursing; we detect `Result<T,E>` by name + 2 type args; we detect local
   // aliases like `ApiResult<T>` by checking their declaration's body.
   if (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) {
-    const retTypeNode = fn.type
+    const retTypeNode = fn.type;
     if (retTypeNode && ts.isTypeReferenceNode(retTypeNode)) {
-      const tNode = resultTypeArgNodeFrom(retTypeNode, checker)
+      const tNode = resultTypeArgNodeFrom(retTypeNode, checker);
       if (tNode !== undefined) {
-        const tType = checker.getTypeAtLocation(tNode)
-        return typeRefFromType(tType, checker, fn, undefined, registry)
+        const tType = checker.getTypeAtLocation(tNode);
+        return typeRefFromType(tType, checker, fn, undefined, registry);
       }
     }
   }
@@ -565,35 +556,32 @@ export function typeRefFromReturnType(
   // ── TYPE-LEVEL PATH: inferred returns or non-annotated functions ─────────
   //
   // Fall through to the resolved return type from the call signature.
-  let returnType = checker.getReturnTypeOfSignature(sig)
+  let returnType = checker.getReturnTypeOfSignature(sig);
 
   // Strip Promise<T> at the type level (concrete Promise objects resolve fine).
   if (returnType.symbol?.name === "Promise") {
-    const args = checker.getTypeArguments(returnType as ts.TypeReference)
-    const inner = args[0]
-    if (inner === undefined) return puntRef("Promise with no type argument")
-    returnType = inner
+    const args = checker.getTypeArguments(returnType as ts.TypeReference);
+    const inner = args[0];
+    if (inner === undefined) return puntRef("Promise with no type argument");
+    returnType = inner;
   }
 
   // STRUCTURAL path: match the exact DU shape from core/src/index.ts.
   // Fires when the type is a proper union (not an unresolved alias instantiation).
-  const structuralValue = structuralResultValueType(returnType, checker, fn)
+  const structuralValue = structuralResultValueType(returnType, checker, fn);
   if (structuralValue !== undefined) {
-    returnType = structuralValue
+    returnType = structuralValue;
   }
 
-  return typeRefFromType(returnType, checker, fn, undefined, registry)
+  return typeRefFromType(returnType, checker, fn, undefined, registry);
 }
 
 /**
  * Derive the output schema from a function-typed node by inspecting its return
  * type. Unwraps `Result<T, E>` and `Promise<Result<T, E>>` to yield T's schema.
  */
-export function schemaFromReturnType(
-  fn: ts.Node,
-  checker: ts.TypeChecker,
-): JsonSchema {
-  return toJsonSchema(typeRefFromReturnType(fn, checker)) as JsonSchema
+export function schemaFromReturnType(fn: ts.Node, checker: ts.TypeChecker): JsonSchema {
+  return toJsonSchema(typeRefFromReturnType(fn, checker)) as JsonSchema;
 }
 
 // ============================================================================
@@ -604,11 +592,11 @@ export function schemaFromReturnType(
 function jsDocTextOf(node: ts.Node): string | undefined {
   for (const j of ts.getJSDocCommentsAndTags(node)) {
     if (ts.isJSDoc(j)) {
-      const text = ts.getTextOfJSDocComment(j.comment)
-      if (text && text.trim().length > 0) return text.trim()
+      const text = ts.getTextOfJSDocComment(j.comment);
+      if (text && text.trim().length > 0) return text.trim();
     }
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -618,16 +606,16 @@ function jsDocTextOf(node: ts.Node): string | undefined {
  * undefined when absent.
  */
 export function extractJsDoc(node: ts.Node): string | undefined {
-  const own = jsDocTextOf(node)
-  if (own) return own
-  let cur: ts.Node | undefined = node.parent
+  const own = jsDocTextOf(node);
+  if (own) return own;
+  let cur: ts.Node | undefined = node.parent;
   while (cur && !ts.isSourceFile(cur)) {
-    const text = jsDocTextOf(cur)
-    if (text) return text
-    if (ts.isStatement(cur)) break
-    cur = cur.parent
+    const text = jsDocTextOf(cur);
+    if (text) return text;
+    if (ts.isStatement(cur)) break;
+    cur = cur.parent;
   }
-  return undefined
+  return undefined;
 }
 
 // ============================================================================
@@ -643,12 +631,12 @@ export function extractJsDoc(node: ts.Node): string | undefined {
  * not resolve — the arrow's own parameter annotation is what we read.
  */
 export function opFunctionNode(expr: ts.Expression): ts.Node | undefined {
-  if (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr)) return expr
+  if (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr)) return expr;
   if (ts.isCallExpression(expr)) {
-    const [first] = expr.arguments
+    const [first] = expr.arguments;
     if (first && (ts.isArrowFunction(first) || ts.isFunctionExpression(first))) {
-      return first
+      return first;
     }
   }
-  return undefined
+  return undefined;
 }

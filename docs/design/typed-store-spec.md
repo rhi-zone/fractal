@@ -14,7 +14,7 @@ What the implementation settled, beyond what the text already fixed:
   literal-key object that checks directly against the bag type. All four call
   sites already passed a literal.
 - **§8's open question on `source()`'s `const M` — it composes.** The `const M
-  extends SourceMapInput` signature keeps each call's literal key/store
+extends SourceMapInput` signature keeps each call's literal key/store
   association through `HttpStore`'s own declaration-merged openness, verified by
   compiling against the real types rather than a simplified stand-in. Two
   guards were needed that the scratch repro could not have surfaced: a verb
@@ -36,22 +36,22 @@ What the implementation settled, beyond what the text already fixed:
   `ProjectorStores & HttpStores`). **CLI/MCP/JSON-RPC/GraphQL projectors are
   still DEFERRED** — each remains typed `ProjectorStores & XStores` — because
   no real consumer has needed one yet; `ProjectorStores` (`Omit<Stores,
-  RequiredServiceStoreKeys>`) stays in api-tree for their sake.
+RequiredServiceStoreKeys>`) stays in api-tree for their sake.
 - **Fractal has no real deployment**, so §3's single-augmentation role is played
   by `examples/library-api/src/stores.ts` (the example app's composition root)
   and by `packages/api-tree/src/__fixtures__/deployment-store.fixture.ts` (that
   package's own test suite's stand-in), mirroring the meta role-split precedent.
   §7's consumer story is the sibling codebase's, and is not implemented here. Scope: `packages/api-tree/src/input.ts`'s `Store`/
-`StoreRegistry`/`Stores`/`assemble`, every projector's current `declare
+  `StoreRegistry`/`Stores`/`assemble`, every projector's current `declare
 module` augmentation of `StoreRegistry` (`http-api-projector/src/decode.ts`,
-`cli-api-projector/src/cli.ts`, `mcp-api-projector/src/server.ts`,
-`json-rpc-api-projector/src/server.ts`, `graphql-api-projector/src/resolve.ts`),
-and the reference deployment (the sibling codebase)'s own composition root
-(`packages/fractal-support/`). Sibling to
-`docs/design/meta-role-split-spec.md` — same defect class (an ambient,
-all-optional registry that only a projector's own runtime walk keeps
-honest), same fix shape (deployment-owned single augmentation, projectors
-export inert fragments), applied to stores instead of meta.
+  `cli-api-projector/src/cli.ts`, `mcp-api-projector/src/server.ts`,
+  `json-rpc-api-projector/src/server.ts`, `graphql-api-projector/src/resolve.ts`),
+  and the reference deployment (the sibling codebase)'s own composition root
+  (`packages/fractal-support/`). Sibling to
+  `docs/design/meta-role-split-spec.md` — same defect class (an ambient,
+  all-optional registry that only a projector's own runtime walk keeps
+  honest), same fix shape (deployment-owned single augmentation, projectors
+  export inert fragments), applied to stores instead of meta.
 
 ## 1. Motivation
 
@@ -60,7 +60,7 @@ Today `StoreRegistry` is a name-only registry — every member is typed
 
 ```ts
 export interface StoreRegistry {
-  caller: true
+  caller: true;
 }
 ```
 
@@ -69,7 +69,7 @@ actually is, by a single mapped type with a `?` modifier applied uniformly
 (`input.ts:68`):
 
 ```ts
-export type Stores = Readonly<{ [K in keyof StoreRegistry]?: Store }>
+export type Stores = Readonly<{ [K in keyof StoreRegistry]?: Store }>;
 ```
 
 Each projector declaration-merges its own store names onto this same
@@ -100,7 +100,7 @@ Two defects follow directly from `true`-typed members and the blanket `?`:
 - **`assemble()` cannot look anything up by literal key, so it string-casts
   past the type entirely.** `assemble`'s internal `byName` lookup
   (`input.ts:134`) widens `stores` to `Readonly<Record<string, Store |
-  undefined>>` with a comment explaining why: store names are resolved
+undefined>>` with a comment explaining why: store names are resolved
   DYNAMICALLY there (from `sourceMap`/`pathParamNames`, both plain strings),
   and `Stores`' declaration-merged literal-key shape doesn't support that —
   by design, per the comment, for call sites that access it by literal key.
@@ -142,13 +142,13 @@ declared optionality (`?` present or absent) is what determines whether
 // packages/api-tree/src/input.ts
 
 export interface StoreRegistry {
-  caller: CallerStoreShape
+  caller: CallerStoreShape;
 }
 
 // No blanket `?` — an identity-projection over StoreRegistry, not a
 // Partial<>-style modifier. Each member's own optionality (declared on
 // StoreRegistry, by whoever adds that member) survives unchanged.
-export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>
+export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>;
 ```
 
 `caller`'s shape (`CallerStoreShape`) is a plain object of unknown-typed
@@ -168,7 +168,7 @@ optionality, not by a second registry or a wrapper type:
 
 - **Projector-built, per-request data stores** (`path`, `query`, `body`,
   `header`, `flag`, `argument`, `params`, …) — declared OPTIONAL (`name?:
-  Shape`), because any single projector only ever builds the subset it
+Shape`), because any single projector only ever builds the subset it
   defines (`Stores`' existing doc comment already explains this — a
   compilation merging HTTP's and CLI's augmentations together doesn't mean
   a given request populates both). This is today's kind, unchanged in
@@ -193,35 +193,35 @@ names' shapes:
 // packages/http-api-projector/src/decode.ts
 
 export interface HttpStores {
-  path?: Record<string, string>
-  query?: Store // Proxy-backed, see httpStores' doc — still Store-shaped
-  header?: Store
-  body?: Store
+  path?: Record<string, string>;
+  query?: Store; // Proxy-backed, see httpStores' doc — still Store-shaped
+  header?: Store;
+  body?: Store;
 }
 ```
 
 ```ts
 // packages/cli-api-projector/src/cli.ts
 export interface CliStores {
-  flag?: Store
-  path?: Store
-  env?: Store
+  flag?: Store;
+  path?: Store;
+  env?: Store;
 }
 
 // packages/mcp-api-projector/src/server.ts
 export interface McpStores {
-  argument?: Store
-  "uri-variable"?: Store
+  argument?: Store;
+  "uri-variable"?: Store;
 }
 
 // packages/json-rpc-api-projector/src/server.ts
 export interface JsonRpcStores {
-  params?: Store
+  params?: Store;
 }
 
 // packages/graphql-api-projector/src/resolve.ts
 export interface GraphQLStores {
-  argument?: Store
+  argument?: Store;
 }
 ```
 
@@ -234,14 +234,14 @@ decided here — both are "the composition root," same invariant either way):
 ```ts
 // e.g. the sibling codebase's packages/fractal-support/src/stores.ts
 
-import "@rhi-zone/fractal-api-tree/input"
-import type { HttpStores } from "@rhi-zone/fractal-http-api-projector"
-import type { CliStores } from "@rhi-zone/fractal-cli-api-projector"
-import type { McpStores } from "@rhi-zone/fractal-mcp-api-projector"
+import "@rhi-zone/fractal-api-tree/input";
+import type { HttpStores } from "@rhi-zone/fractal-http-api-projector";
+import type { CliStores } from "@rhi-zone/fractal-cli-api-projector";
+import type { McpStores } from "@rhi-zone/fractal-mcp-api-projector";
 
 declare module "@rhi-zone/fractal-api-tree/input" {
   interface StoreRegistry extends HttpStores, CliStores, McpStores {
-    tabularSource: TabularSourceShape // required — deployment-provided (§7)
+    tabularSource: TabularSourceShape; // required — deployment-provided (§7)
   }
 }
 ```
@@ -334,9 +334,9 @@ incrementally without violating its own required members:
   small, mechanical refactor of `assembleInput`'s signature (two overloads,
   or a discriminated-by-caller helper), not a consequence of §2's shape
   change on its own. Flagged here as a `[verify: NOT independently
-  re-verified against a scratch repro this session — the reasoning above is
-  read directly from `server.ts`'s existing code and comment, not from a
-  compiled check of the proposed split]`.
+re-verified against a scratch repro this session — the reasoning above is
+read directly from `server.ts`'s existing code and comment, not from a
+compiled check of the proposed split]`.
 - **`Stores`' blanket-`?` mapped type** (`input.ts:68`) itself is the seam
   §2 replaces, and the replacement's exact mechanics ARE independently
   verified this session (not merely reasoned about): a scratch `tsc`
@@ -355,7 +355,7 @@ incrementally without violating its own required members:
   exists to enforce, unchanged from today); (4) a registration function
   typed to require `tabularSource` rejects an empty object and accepts one
   supplying it. The identity-mapped `{ [K in keyof StoreRegistry]:
-  StoreRegistry[K] }` (no `?` modifier anywhere) is confirmed to preserve
+StoreRegistry[K] }` (no `?` modifier anywhere) is confirmed to preserve
   each member's OWN optionality from wherever it was declared, through
   cross-module declaration merging, to a read site three files away — the
   mechanism §2/§4 depend on is not speculative.
@@ -487,8 +487,8 @@ adopts that lean, not a fresh guess):
 // StoreRegistry augmentation (composition root, §3)
 interface StoreRegistry {
   tabularSource: {
-    read(sourceId: string): Promise<{ headers: string[]; rows: unknown[][] }>
-  }
+    read(sourceId: string): Promise<{ headers: string[]; rows: unknown[][] }>;
+  };
 }
 ```
 
@@ -585,11 +585,11 @@ any of the following:
    reason unrelated to this spec's changes; don't conflate the two.
 5. **Adapter-signature service store shapes.** A service store typed to
    match its IMPLEMENTATION's signature (`tabularSource: { read:
-   typeof readGoogleSheet } }`, or worse, `googleSheetReader:
-   ReadSheetOpts => ...`) is dependency injection without inversion — the
+typeof readGoogleSheet } }`, or worse, `googleSheetReader:
+ReadSheetOpts => ...`) is dependency injection without inversion — the
    exact defect §7 exists to avoid. A service store's shape is declared in
    the CONSUMER's vocabulary (`tabularSource.read(sourceId):
-   {headers,rows}`, generic over what backs it), never the adapter's own
+{headers,rows}`, generic over what backs it), never the adapter's own
    parameter/return shape, never named after the concrete provider
    (`google`, `sheets`, …).
 6. **Scattered registration defeating completeness checking.** A required

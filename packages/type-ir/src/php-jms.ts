@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { phpDocComment, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { phpDocComment, quote } from "./codegen-helpers.ts";
 
 // ============================================================================
 // PHP/JMS Serializer projector — TypeRef -> idiomatic PHP 8.1+ source using
@@ -52,20 +52,21 @@ import { phpDocComment, quote } from "./codegen-helpers.ts"
 //     PHP union type php-native.ts's `union` handler produces.
 // ============================================================================
 
-type PhpType = { type: string; doc?: string }
+type PhpType = { type: string; doc?: string };
 
-type Converter = (shape: TypeShape) => PhpType
+type Converter = (shape: TypeShape) => PhpType;
 
 const leaf =
   (type: string): Converter =>
-  () => ({ type })
+  () => ({ type });
 
 // PHP 8.1 enum case names must be valid identifiers — member strings (often
 // lowercase/kebab/snake wire values) are PascalCased and sanitized into one.
 function caseName(member: string): string {
-  const cleaned = member.replace(/[^a-zA-Z0-9_]+/g, "_")
-  const capitalized = cleaned.length === 0 ? "_" : cleaned.charAt(0).toUpperCase() + cleaned.slice(1)
-  return /^[0-9]/.test(capitalized) ? `_${capitalized}` : capitalized
+  const cleaned = member.replace(/[^a-zA-Z0-9_]+/g, "_");
+  const capitalized =
+    cleaned.length === 0 ? "_" : cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  return /^[0-9]/.test(capitalized) ? `_${capitalized}` : capitalized;
 }
 
 const handlers: Record<string, Converter> = {
@@ -86,14 +87,14 @@ const handlers: Record<string, Converter> = {
   // honest-degrade convention other projectors use for constructs their
   // target can't express structurally.
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
+    const s = shape as TypeShape & { kind: "object" };
     const shapeDoc = Object.entries(s.fields)
       .map(([fieldName, fieldRef]) => {
-        const field = toPhpType(fieldRef)
-        return `${fieldName}: ${field.doc ?? field.type}`
+        const field = toPhpType(fieldRef);
+        return `${fieldName}: ${field.doc ?? field.type}`;
       })
-      .join(", ")
-    return { type: "array", doc: `array{${shapeDoc}}` }
+      .join(", ");
+    return { type: "array", doc: `array{${shapeDoc}}` };
   },
   // A class instance carries only nominal identity (className/source), never
   // fields (see type-ir's TypeKinds.instance doc comment) — renders as a
@@ -101,57 +102,57 @@ const handlers: Record<string, Converter> = {
   // is responsible for the corresponding `use` import.
   instance: (shape) => ({ type: (shape as TypeShape & { kind: "instance" }).className }),
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    const element = toPhpType(s.element)
-    return { type: "array", doc: `array<${element.doc ?? element.type}>` }
+    const s = shape as TypeShape & { kind: "array" };
+    const element = toPhpType(s.element);
+    return { type: "array", doc: `array<${element.doc ?? element.type}>` };
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
+    const s = shape as TypeShape & { kind: "tuple" };
     const elements = s.elements.map((element) => {
-      const el = toPhpType(element)
-      return el.doc ?? el.type
-    })
-    return { type: "array", doc: `array{${elements.join(", ")}}` }
+      const el = toPhpType(element);
+      return el.doc ?? el.type;
+    });
+    return { type: "array", doc: `array{${elements.join(", ")}}` };
   },
   // No native async-stream construct — degrades to `iterable` (PHP's
   // Traversable|array union, the closest built-in analog to a lazily
   // produced sequence), same honest-degrade convention `array` uses above
   // for the element-type PHPDoc.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    const element = toPhpType(s.element)
-    return { type: "iterable", doc: `iterable<${element.doc ?? element.type}>` }
+    const s = shape as TypeShape & { kind: "stream" };
+    const element = toPhpType(s.element);
+    return { type: "iterable", doc: `iterable<${element.doc ?? element.type}>` };
   },
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    const element = toPhpType(s.element)
-    return { type: "array", doc: `array<${element.doc ?? element.type}>` }
+    const s = shape as TypeShape & { kind: "page" };
+    const element = toPhpType(s.element);
+    return { type: "array", doc: `array<${element.doc ?? element.type}>` };
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    const key = toPhpType(s.key)
-    const value = toPhpType(s.value)
-    const keyDoc = s.key.shape.kind === "string" ? "string" : (key.doc ?? key.type)
-    return { type: "array", doc: `array<${keyDoc}, ${value.doc ?? value.type}>` }
+    const s = shape as TypeShape & { kind: "map" };
+    const key = toPhpType(s.key);
+    const value = toPhpType(s.value);
+    const keyDoc = s.key.shape.kind === "string" ? "string" : (key.doc ?? key.type);
+    return { type: "array", doc: `array<${keyDoc}, ${value.doc ?? value.type}>` };
   },
   // PHP 8.0 union types — native, so no PHPDoc needed UNLESS a member itself
   // needed one (e.g. a union containing an array), in which case the doc
   // mirrors the union structure with each member's fuller annotation.
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const members = s.variants.map(toPhpType)
-    const types = Array.from(new Set(members.map((m) => m.type)))
-    const needsDoc = members.some((m) => m.doc !== undefined)
+    const s = shape as TypeShape & { kind: "union" };
+    const members = s.variants.map(toPhpType);
+    const types = Array.from(new Set(members.map((m) => m.type)));
+    const needsDoc = members.some((m) => m.doc !== undefined);
     return needsDoc
       ? { type: types.join("|"), doc: members.map((m) => m.doc ?? m.type).join("|") }
-      : { type: types.join("|") }
+      : { type: types.join("|") };
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return { type: "null" }
-    if (typeof s.value === "string") return { type: "string" }
-    if (typeof s.value === "boolean") return { type: "bool" }
-    return { type: Number.isInteger(s.value) ? "int" : "float" }
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return { type: "null" };
+    if (typeof s.value === "string") return { type: "string" };
+    if (typeof s.value === "boolean") return { type: "bool" };
+    return { type: Number.isInteger(s.value) ? "int" : "float" };
   },
   // A bare (unnamed) enum TypeRef has nowhere to hang a PHP 8.1 backed-enum
   // declaration — that's `toJmsEnum`'s job when a name is available (see
@@ -159,8 +160,8 @@ const handlers: Record<string, Converter> = {
   // (`string`, matching the backed-enum cases `toJmsEnum` generates) with a
   // PHPDoc listing the literal members.
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return { type: "string", doc: s.members.map(quote).join("|") }
+    const s = shape as TypeShape & { kind: "enum" };
+    return { type: "string", doc: s.members.map(quote).join("|") };
   },
   ref: (shape) => ({ type: (shape as TypeShape & { kind: "ref" }).target }),
   // PHP has no structural intersection-type construct for anything but
@@ -169,27 +170,27 @@ const handlers: Record<string, Converter> = {
   // here as the closest native analog regardless (same best-effort stance
   // php-native.ts takes).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    return { type: s.members.map((member) => toPhpType(member).type).join("&") }
+    const s = shape as TypeShape & { kind: "intersection" };
+    return { type: s.members.map((member) => toPhpType(member).type).join("&") };
   },
   function: leaf("callable"),
   // No field-level construct for a method surface — degrades to `object`,
   // same honest-degrade stance `instance`/`function` take above.
   interface: leaf("object"),
-}
+};
 
 function isNullable(base: PhpType): boolean {
-  if (base.type === "null" || base.type === "mixed") return true
-  return base.type.split("|").includes("null")
+  if (base.type === "null" || base.type === "mixed") return true;
+  return base.type.split("|").includes("null");
 }
 
 // PHP's `?T` nullable shorthand only applies to a single type; a union
 // (`A|B`) instead spells `null` out as an explicit member.
 function applyNullable(base: PhpType): PhpType {
-  if (isNullable(base)) return base
-  const isUnion = base.type.includes("|")
-  const type = isUnion ? `${base.type}|null` : `?${base.type}`
-  return base.doc === undefined ? { type } : { type, doc: `${base.doc}|null` }
+  if (isNullable(base)) return base;
+  const isUnion = base.type.includes("|");
+  const type = isUnion ? `${base.type}|null` : `?${base.type}`;
+  return base.doc === undefined ? { type } : { type, doc: `${base.doc}|null` };
 }
 
 /** Convert a `TypeRef` to a PHP type expression usable in a property/param/
@@ -199,10 +200,10 @@ function applyNullable(base: PhpType): PhpType {
  * "absent key" distinct from an explicit `null` value, so an optional field
  * is modeled as a nullable one defaulting to `null` (see `toJmsClass`). */
 export function toPhpType(ref: TypeRef): PhpType {
-  const converter = resolve(ref.shape.kind, handlers)
-  const base = converter === undefined ? { type: "mixed" } : converter(ref.shape)
-  const nullable = ref.meta.optional === true || ref.meta.nullable === true
-  return nullable ? applyNullable(base) : base
+  const converter = resolve(ref.shape.kind, handlers);
+  const base = converter === undefined ? { type: "mixed" } : converter(ref.shape);
+  const nullable = ref.meta.optional === true || ref.meta.nullable === true;
+  return nullable ? applyNullable(base) : base;
 }
 
 /** JMS's own compact `#[Type(...)]` type-hint string — narrower than the
@@ -215,7 +216,7 @@ export function toPhpType(ref: TypeRef): PhpType {
  * this reuses that PHPDoc string whenever the field carries one, falling
  * back to the bare PHP type for everything else. */
 function jmsTypeHint(phpType: PhpType): string {
-  return phpType.doc ?? phpType.type
+  return phpType.doc ?? phpType.type;
 }
 
 /**
@@ -228,9 +229,9 @@ function jmsTypeHint(phpType: PhpType): string {
  * needed.
  */
 export function toJmsEnum(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "enum" }
-  const cases = s.members.map((member) => `    case ${caseName(member)} = ${quote(member)};`)
-  return phpDocComment(ref.meta) + [`enum ${name}: string`, "{", ...cases, "}"].join("\n")
+  const s = ref.shape as TypeShape & { kind: "enum" };
+  const cases = s.members.map((member) => `    case ${caseName(member)} = ${quote(member)};`);
+  return phpDocComment(ref.meta) + [`enum ${name}: string`, "{", ...cases, "}"].join("\n");
 }
 
 /**
@@ -247,27 +248,30 @@ export function toJmsEnum(name: string, ref: TypeRef): string {
  * a `@param` PHPDoc line on the constructor.
  */
 export function toJmsClass(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const fields = Object.entries(s.fields)
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const fields = Object.entries(s.fields);
 
-  const paramLines: string[] = []
-  const docParams: string[] = []
+  const paramLines: string[] = [];
+  const docParams: string[] = [];
 
   fields.forEach(([fieldName, fieldRef], i) => {
-    const phpType = toPhpType(fieldRef)
-    const optional = fieldRef.meta.optional === true
-    const trailingComma = i === fields.length - 1 ? "" : ","
+    const phpType = toPhpType(fieldRef);
+    const optional = fieldRef.meta.optional === true;
+    const trailingComma = i === fields.length - 1 ? "" : ",";
     const attrs = [
       `#[Type(${quote(jmsTypeHint(phpType))})]`,
       `#[SerializedName(${quote(fieldName)})]`,
       "#[Expose]",
-    ]
-    paramLines.push(`        ${attrs.join(" ")}`)
-    paramLines.push(`        public ${phpType.type} $${fieldName}${optional ? " = null" : ""}${trailingComma}`)
-    if (phpType.doc !== undefined) docParams.push(` * @param ${phpType.doc} $${fieldName}`)
-  })
+    ];
+    paramLines.push(`        ${attrs.join(" ")}`);
+    paramLines.push(
+      `        public ${phpType.type} $${fieldName}${optional ? " = null" : ""}${trailingComma}`,
+    );
+    if (phpType.doc !== undefined) docParams.push(` * @param ${phpType.doc} $${fieldName}`);
+  });
 
-  const docBlock = docParams.length === 0 ? "" : ["    /**", ...docParams, "     */"].join("\n") + "\n"
+  const docBlock =
+    docParams.length === 0 ? "" : ["    /**", ...docParams, "     */"].join("\n") + "\n";
 
   return [
     phpDocComment(ref.meta) + "#[ExclusionPolicy('all')]",
@@ -277,7 +281,7 @@ export function toJmsClass(name: string, ref: TypeRef): string {
     ...paramLines,
     "    ) {}",
     "}",
-  ].join("\n")
+  ].join("\n");
 }
 
 /**
@@ -294,29 +298,30 @@ export function toJmsClass(name: string, ref: TypeRef): string {
  * degrades to the bare native PHP union type `toPhpType` already produces.
  */
 export function toJmsDiscriminatedUnion(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator =
+    typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
   if (discriminator === undefined) {
-    const phpType = toPhpType(ref)
-    return `/** @phpstan-type ${name} ${phpType.doc ?? phpType.type} */`
+    const phpType = toPhpType(ref);
+    return `/** @phpstan-type ${name} ${phpType.doc ?? phpType.type} */`;
   }
 
   const names = shape.variants.map((variant, i) => {
-    if (typeof variant.meta.typeName === "string") return variant.meta.typeName
-    return `${name}Variant${i + 1}`
-  })
+    if (typeof variant.meta.typeName === "string") return variant.meta.typeName;
+    return `${name}Variant${i + 1}`;
+  });
 
   const map = names
     .map((vName, i) => {
-      const tag = discriminatorValue(shape.variants[i]!, discriminator)
-      return `${tag ?? quote(vName)}: ${vName}::class`
+      const tag = discriminatorValue(shape.variants[i]!, discriminator);
+      return `${tag ?? quote(vName)}: ${vName}::class`;
     })
-    .join(", ")
+    .join(", ");
 
   const decls = shape.variants.map((variant, i) => {
-    const vName = names[i]!
+    const vName = names[i]!;
     if (variant.shape.kind !== "object") {
-      const inner = toPhpType(variant)
+      const inner = toPhpType(variant);
       return [
         "#[ExclusionPolicy('all')]",
         `final readonly class ${vName} extends ${name}`,
@@ -326,19 +331,22 @@ export function toJmsDiscriminatedUnion(name: string, ref: TypeRef): string {
         `        public ${inner.type} $value,`,
         "    ) {}",
         "}",
-      ].join("\n")
+      ].join("\n");
     }
-    const objShape = variant.shape as TypeShape & { kind: "object" }
+    const objShape = variant.shape as TypeShape & { kind: "object" };
     const fields = Object.fromEntries(
       Object.entries(objShape.fields).filter(([fieldName]) => fieldName !== discriminator),
-    )
-    const variantRef = { shape: { ...objShape, fields }, meta: variant.meta }
-    const body = toJmsClass(vName, variantRef)
+    );
+    const variantRef = { shape: { ...objShape, fields }, meta: variant.meta };
+    const body = toJmsClass(vName, variantRef);
     // `toJmsClass` always renders `final readonly class {vName}\n{` right
     // after its `#[ExclusionPolicy('all')]` line — swap in `extends {name}`
     // so the variant participates in the discriminator hierarchy.
-    return body.replace(`final readonly class ${vName}\n{`, `final readonly class ${vName} extends ${name}\n{`)
-  })
+    return body.replace(
+      `final readonly class ${vName}\n{`,
+      `final readonly class ${vName} extends ${name}\n{`,
+    );
+  });
 
   const header = [
     phpDocComment(ref.meta),
@@ -348,17 +356,17 @@ export function toJmsDiscriminatedUnion(name: string, ref: TypeRef): string {
     "}",
   ]
     .filter((l) => l !== "")
-    .join("\n")
+    .join("\n");
 
-  return [header, ...decls].join("\n\n")
+  return [header, ...decls].join("\n\n");
 }
 
 function discriminatorValue(variant: TypeRef, discriminator: string): string | undefined {
-  if (variant.shape.kind !== "object") return undefined
-  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator]
-  if (field === undefined || field.shape.kind !== "literal") return undefined
-  const value = (field.shape as TypeShape & { kind: "literal" }).value
-  return typeof value === "string" ? quote(value) : undefined
+  if (variant.shape.kind !== "object") return undefined;
+  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator];
+  if (field === undefined || field.shape.kind !== "literal") return undefined;
+  const value = (field.shape as TypeShape & { kind: "literal" }).value;
+  return typeof value === "string" ? quote(value) : undefined;
 }
 
 /**
@@ -371,11 +379,11 @@ function discriminatorValue(variant: TypeRef, discriminator: string): string | u
  * emit natively.
  */
 export function toJms(ref: TypeRef, name?: string): string {
-  if (ref.shape.kind === "object") return toJmsClass(name ?? "GeneratedClass", ref)
-  if (ref.shape.kind === "enum") return toJmsEnum(name ?? "GeneratedEnum", ref)
-  if (ref.shape.kind === "union") return toJmsDiscriminatedUnion(name ?? "GeneratedUnion", ref)
+  if (ref.shape.kind === "object") return toJmsClass(name ?? "GeneratedClass", ref);
+  if (ref.shape.kind === "enum") return toJmsEnum(name ?? "GeneratedEnum", ref);
+  if (ref.shape.kind === "union") return toJmsDiscriminatedUnion(name ?? "GeneratedUnion", ref);
 
-  const phpType = toPhpType(ref)
-  if (name === undefined) return phpType.type
-  return `/** @phpstan-type ${name} ${phpType.doc ?? phpType.type} */`
+  const phpType = toPhpType(ref);
+  if (name === undefined) return phpType.type;
+  return `/** @phpstan-type ${name} ${phpType.doc ?? phpType.type} */`;
 }

@@ -8,14 +8,19 @@ format bundled with Ruby 3+).
 ## Sorbet
 
 ```ts
-import { toRuby } from "@rhi-zone/fractal-type-ir/ruby-sorbet"
+import { toRuby } from "@rhi-zone/fractal-type-ir/ruby-sorbet";
 
-toRuby(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toRuby(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```ruby
@@ -48,12 +53,12 @@ syntax.
 ### dry-types
 
 ```ts
-import { toDry, toDryStruct } from "@rhi-zone/fractal-type-ir/ruby-dry-types"
+import { toDry, toDryStruct } from "@rhi-zone/fractal-type-ir/ruby-dry-types";
 
-toDryStruct("Item", t(types.object({ id: t(types.string) })))
+toDryStruct("Item", t(types.object({ id: t(types.string) })));
 ```
 
-dry-types is a *runtime* type system (coercion + validation), not a static
+dry-types is a _runtime_ type system (coercion + validation), not a static
 annotation layer — `Dry::Struct` classes built from `Types::` constants that
 validate at construction time, no external checker involved:
 
@@ -68,12 +73,12 @@ end
 ### RBS
 
 ```ts
-import { toRbsFile } from "@rhi-zone/fractal-type-ir/ruby-rbs"
+import { toRbsFile } from "@rhi-zone/fractal-type-ir/ruby-rbs";
 
-toRbsFile(t(types.object({ id: t(types.string) })), "Item")
+toRbsFile(t(types.object({ id: t(types.string) })), "Item");
 ```
 
-RBS lives in a *separate* `.rbs` file next to the `.rb` source — it describes
+RBS lives in a _separate_ `.rbs` file next to the `.rb` source — it describes
 an existing class's shape rather than defining it, so `toRbsFile` emits both
 read accessors and an `initialize` keyword-argument signature (RBS's only way
 to express required-vs-defaulted, since there's no default-value syntax in

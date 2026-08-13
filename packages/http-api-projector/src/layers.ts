@@ -7,11 +7,11 @@
 //   autoMethodLayer  — HEAD-from-GET, OPTIONS→204+Allow, 405+Allow on wrong method
 //   corsLayer        — minimal CORS / preflight, opt-in
 
-import { allowHeader } from "./project.ts"
-import { routeCandidatesForUrl } from "./route.ts"
-import type { HttpRoute } from "./route.ts"
+import { allowHeader } from "./project.ts";
+import { routeCandidatesForUrl } from "./route.ts";
+import type { HttpRoute } from "./route.ts";
 
-export type Fetch = (req: Request) => Promise<Response>
+export type Fetch = (req: Request) => Promise<Response>;
 
 // ============================================================================
 // autoMethodLayer
@@ -37,47 +37,47 @@ export type Fetch = (req: Request) => Promise<Response>
 export function autoMethodLayer(inner: Fetch, root: HttpRoute): Fetch {
   return async (req) => {
     // Find all candidates whose path matches (ignoring method)
-    const pathMatches = routeCandidatesForUrl(root, req.url)
+    const pathMatches = routeCandidatesForUrl(root, req.url);
 
     // No path match at all — let the inner handler return 404
-    if (pathMatches.length === 0) return inner(req)
+    if (pathMatches.length === 0) return inner(req);
 
-    const verbs = new Set(pathMatches.map((r) => r.method))
+    const verbs = new Set(pathMatches.map((r) => r.method));
 
     // OPTIONS: 204 + Allow (HEAD and OPTIONS are always implied)
     if (req.method === "OPTIONS") {
-      const all = new Set(verbs)
-      all.add("OPTIONS")
-      if (verbs.has("GET")) all.add("HEAD")
+      const all = new Set(verbs);
+      all.add("OPTIONS");
+      if (verbs.has("GET")) all.add("HEAD");
       return new Response(null, {
         status: 204,
         headers: { Allow: allowHeader(all) },
-      })
+      });
     }
 
     // HEAD: derive from GET handler, strip body
     if (req.method === "HEAD" && verbs.has("GET")) {
-      const getReq = new Request(req, { method: "GET" })
-      const res = await inner(getReq)
+      const getReq = new Request(req, { method: "GET" });
+      const res = await inner(getReq);
       return new Response(null, {
         status: res.status,
         statusText: res.statusText,
         headers: new Headers(res.headers),
-      })
+      });
     }
 
     // Exact verb present — delegate to inner
-    if (verbs.has(req.method)) return inner(req)
+    if (verbs.has(req.method)) return inner(req);
 
     // Path exists but verb not registered → 405 + Allow
-    const all = new Set(verbs)
-    all.add("OPTIONS")
-    if (verbs.has("GET")) all.add("HEAD")
+    const all = new Set(verbs);
+    all.add("OPTIONS");
+    if (verbs.has("GET")) all.add("HEAD");
     return new Response("Method Not Allowed", {
       status: 405,
       headers: { Allow: allowHeader(all) },
-    })
-  }
+    });
+  };
 }
 
 // ============================================================================
@@ -96,12 +96,12 @@ export type CorsOptions = {
    * Allowed origins. `"*"` (default) permits any origin.
    * Pass a string or array of strings for explicit origin allowlisting.
    */
-  readonly origin?: string | readonly string[]
+  readonly origin?: string | readonly string[];
   /** Include `Access-Control-Allow-Credentials: true`. Default false. */
-  readonly credentials?: boolean
+  readonly credentials?: boolean;
   /** `Access-Control-Max-Age` for preflight cache. Default 86400 (1 day). */
-  readonly maxAge?: number
-}
+  readonly maxAge?: number;
+};
 
 /**
  * CORS layer factory. Returns a function that wraps an inner handler.
@@ -110,59 +110,51 @@ export type CorsOptions = {
  * const handler = corsLayer({ origin: "https://app.example.com" })(innerFetch)
  */
 export function corsLayer(opts: CorsOptions = {}): (inner: Fetch) => Fetch {
-  const rawOrigins = opts.origin
+  const rawOrigins = opts.origin;
   const origins: readonly string[] =
-    rawOrigins === undefined
-      ? ["*"]
-      : typeof rawOrigins === "string"
-        ? [rawOrigins]
-        : rawOrigins
+    rawOrigins === undefined ? ["*"] : typeof rawOrigins === "string" ? [rawOrigins] : rawOrigins;
 
   const resolveOrigin = (reqOrigin: string | null): string => {
-    if (origins.includes("*")) return "*"
-    if (reqOrigin !== null && origins.includes(reqOrigin)) return reqOrigin
-    return ""
-  }
+    if (origins.includes("*")) return "*";
+    if (reqOrigin !== null && origins.includes(reqOrigin)) return reqOrigin;
+    return "";
+  };
 
   return (inner) => async (req) => {
-    const reqOrigin = req.headers.get("Origin")
-    const allowedOrigin = resolveOrigin(reqOrigin)
+    const reqOrigin = req.headers.get("Origin");
+    const allowedOrigin = resolveOrigin(reqOrigin);
 
     // CORS preflight: OPTIONS with Access-Control-Request-Method
-    if (
-      req.method === "OPTIONS" &&
-      req.headers.has("Access-Control-Request-Method")
-    ) {
+    if (req.method === "OPTIONS" && req.headers.has("Access-Control-Request-Method")) {
       const headers: Record<string, string> = {
-        "Access-Control-Allow-Methods":
-          "GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS",
         "Access-Control-Allow-Headers":
           req.headers.get("Access-Control-Request-Headers") ?? "Content-Type",
         "Access-Control-Max-Age": String(opts.maxAge ?? 86400),
-      }
+      };
       if (allowedOrigin.length > 0) {
-        headers["Access-Control-Allow-Origin"] = allowedOrigin
+        headers["Access-Control-Allow-Origin"] = allowedOrigin;
         if (opts.credentials === true) {
-          headers["Access-Control-Allow-Credentials"] = "true"
+          headers["Access-Control-Allow-Credentials"] = "true";
         }
       }
-      return new Response(null, { status: 204, headers })
+      return new Response(null, { status: 204, headers });
     }
 
-    const res = await inner(req)
+    const res = await inner(req);
 
     // No matching origin — return response without CORS headers
-    if (allowedOrigin.length === 0) return res
+    if (allowedOrigin.length === 0) return res;
 
     const out = new Response(res.body, {
       status: res.status,
       statusText: res.statusText,
       headers: new Headers(res.headers),
-    })
-    out.headers.set("Access-Control-Allow-Origin", allowedOrigin)
+    });
+    out.headers.set("Access-Control-Allow-Origin", allowedOrigin);
     if (opts.credentials === true) {
-      out.headers.set("Access-Control-Allow-Credentials", "true")
+      out.headers.set("Access-Control-Allow-Credentials", "true");
     }
-    return out
-  }
+    return out;
+  };
 }

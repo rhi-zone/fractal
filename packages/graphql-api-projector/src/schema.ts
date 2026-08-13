@@ -13,11 +13,11 @@
 // declarations (`namedTypes` entries) — this module is upstream-thin by
 // design (see CLAUDE.md: the type-ir SDL layer is upstream, not duplicated).
 
-import { toGraphQLType } from "@rhi-zone/fractal-type-ir/graphql"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { projectGraphQL } from "./project.ts"
-import type { GraphQLField, ProjectGraphQLOptions, ProjectGraphQLResult } from "./project.ts"
+import { toGraphQLType } from "@rhi-zone/fractal-type-ir/graphql";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { projectGraphQL } from "./project.ts";
+import type { GraphQLField, ProjectGraphQLOptions, ProjectGraphQLResult } from "./project.ts";
 
 /**
  * Render one field's SDL declaration line — shared by root-type and
@@ -28,13 +28,13 @@ import type { GraphQLField, ProjectGraphQLOptions, ProjectGraphQLResult } from "
  * ordinary `toGraphQLType` declaration.
  */
 function renderFieldLine(field: GraphQLField, indent: string): string {
-  const desc = field.description !== undefined ? `${indent}"""${field.description}"""\n` : ""
+  const desc = field.description !== undefined ? `${indent}"""${field.description}"""\n` : "";
   const deprecated = field.deprecated
     ? field.deprecatedReason !== undefined
       ? ` @deprecated(reason: ${JSON.stringify(field.deprecatedReason)})`
       : " @deprecated"
-    : ""
-  return `${desc}${indent}${field.name}${field.argsSDL}: ${field.typeSDL}${deprecated}`
+    : "";
+  return `${desc}${indent}${field.name}${field.argsSDL}: ${field.typeSDL}${deprecated}`;
 }
 
 /**
@@ -45,18 +45,22 @@ function renderFieldLine(field: GraphQLField, indent: string): string {
  * text, not `TypeRef`s type-ir's own renderer could walk.
  */
 function renderNamespaceType(name: string, fields: readonly GraphQLField[]): string {
-  const lines = fields.map((f) => renderFieldLine(f, "  "))
-  return `type ${name} {\n${lines.join("\n")}\n}`
+  const lines = fields.map((f) => renderFieldLine(f, "  "));
+  return `type ${name} {\n${lines.join("\n")}\n}`;
 }
 
 /** True when `ref` is one of project.ts's synthesized namespace-type carriers. */
-function isNamespaceTypeCarrier(ref: TypeRef): ref is TypeRef & { meta: { graphqlFields: readonly GraphQLField[] } } {
-  return Array.isArray(ref.meta.graphqlFields)
+function isNamespaceTypeCarrier(
+  ref: TypeRef,
+): ref is TypeRef & { meta: { graphqlFields: readonly GraphQLField[] } } {
+  return Array.isArray(ref.meta.graphqlFields);
 }
 
 /** Render one entry of `ProjectGraphQLResult.types` — a synthesized namespace type or an ordinary named type-ir declaration. */
 function renderTypeEntry(name: string, ref: TypeRef): string {
-  return isNamespaceTypeCarrier(ref) ? renderNamespaceType(name, ref.meta.graphqlFields) : toGraphQLType(name, ref)
+  return isNamespaceTypeCarrier(ref)
+    ? renderNamespaceType(name, ref.meta.graphqlFields)
+    : toGraphQLType(name, ref);
 }
 
 /**
@@ -72,17 +76,19 @@ function renderRootType(
   fields: readonly GraphQLField[],
   emptyPlaceholder: boolean,
 ): string | undefined {
-  if (fields.length === 0 && !emptyPlaceholder) return undefined
+  if (fields.length === 0 && !emptyPlaceholder) return undefined;
   const lines =
     fields.length === 0
-      ? [`  """No ${typeName.toLowerCase()} fields are declared on this tree yet."""\n  _empty: Boolean`]
-      : fields.map((f) => renderFieldLine(f, "  "))
-  return `type ${typeName} {\n${lines.join("\n")}\n}`
+      ? [
+          `  """No ${typeName.toLowerCase()} fields are declared on this tree yet."""\n  _empty: Boolean`,
+        ]
+      : fields.map((f) => renderFieldLine(f, "  "));
+  return `type ${typeName} {\n${lines.join("\n")}\n}`;
 }
 
 /** True when any named-type entry (or its transitive references, best-effort) needs the `JSON` custom scalar declared. */
 function usesJsonScalar(fragments: readonly string[]): boolean {
-  return fragments.some((f) => /\bJSON\b/.test(f))
+  return fragments.some((f) => /\bJSON\b/.test(f));
 }
 
 /**
@@ -93,30 +99,32 @@ function usesJsonScalar(fragments: readonly string[]): boolean {
  * for unrepresentable shapes (see type-ir/src/graphql.ts's module doc).
  */
 export function toSchema(projection: ProjectGraphQLResult): string {
-  const queryType = renderRootType("Query", projection.queryFields, true)!
-  const mutationType = renderRootType("Mutation", projection.mutationFields, false)
-  const subscriptionType = renderRootType("Subscription", projection.subscriptionFields, false)
+  const queryType = renderRootType("Query", projection.queryFields, true)!;
+  const mutationType = renderRootType("Mutation", projection.mutationFields, false);
+  const subscriptionType = renderRootType("Subscription", projection.subscriptionFields, false);
 
-  const namedTypeFragments = Object.entries(projection.types).map(([name, ref]) => renderTypeEntry(name, ref))
+  const namedTypeFragments = Object.entries(projection.types).map(([name, ref]) =>
+    renderTypeEntry(name, ref),
+  );
 
   const rootTypeFragments = [queryType, mutationType, subscriptionType].filter(
     (f): f is string => f !== undefined,
-  )
+  );
 
   const schemaDefLines = [
     "  query: Query",
     ...(mutationType !== undefined ? ["  mutation: Mutation"] : []),
     ...(subscriptionType !== undefined ? ["  subscription: Subscription"] : []),
-  ]
-  const schemaDef = `schema {\n${schemaDefLines.join("\n")}\n}`
+  ];
+  const schemaDef = `schema {\n${schemaDefLines.join("\n")}\n}`;
 
-  const allFragments = [...rootTypeFragments, ...namedTypeFragments]
-  const scalarFragment = usesJsonScalar(allFragments) ? ["scalar JSON"] : []
+  const allFragments = [...rootTypeFragments, ...namedTypeFragments];
+  const scalarFragment = usesJsonScalar(allFragments) ? ["scalar JSON"] : [];
 
-  return [schemaDef, ...scalarFragment, ...rootTypeFragments, ...namedTypeFragments].join("\n\n")
+  return [schemaDef, ...scalarFragment, ...rootTypeFragments, ...namedTypeFragments].join("\n\n");
 }
 
 /** Convenience: `projectGraphQL` then `toSchema` in one call. */
 export function toSDL(n: Node, opts: ProjectGraphQLOptions = {}): string {
-  return toSchema(projectGraphQL(n, opts))
+  return toSchema(projectGraphQL(n, opts));
 }

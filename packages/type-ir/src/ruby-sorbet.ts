@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA, quote } from "./codegen-helpers.ts";
 
 // Ruby projector — two independent output modes:
 //
@@ -26,20 +26,23 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts"
 // (including ones with spaces/punctuation) can round-trip through a legal
 // Ruby constant name.
 function enumConstantName(member: string): string {
-  const upper = member.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "")
-  return upper.length === 0 ? "VALUE" : /^[0-9]/.test(upper) ? `_${upper}` : upper
+  const upper = member
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return upper.length === 0 ? "VALUE" : /^[0-9]/.test(upper) ? `_${upper}` : upper;
 }
 
 // ============================================================================
 // Sorbet mode
 // ============================================================================
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("T::Boolean"),
@@ -71,56 +74,56 @@ const handlers: Record<string, Converter> = {
   // responsible for `require`-ing `source` alongside it.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `T::Array[${toRubyType(s.element)}]`
+    const s = shape as TypeShape & { kind: "array" };
+    return `T::Array[${toRubyType(s.element)}]`;
   },
   // Sorbet has no native tuple type; a uniform tuple degrades to
   // `T::Array[T]`, a heterogeneous one to `T::Array[T.any(...)]` over its
   // distinct element types (same lossy-but-honest degrade protobuf.ts uses
   // for tuples).
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    const elementTypes = [...new Set(s.elements.map(toRubyType))]
-    const [first] = elementTypes
-    return `T::Array[${elementTypes.length <= 1 ? (first ?? "T.untyped") : `T.any(${elementTypes.join(", ")})`}]`
+    const s = shape as TypeShape & { kind: "tuple" };
+    const elementTypes = [...new Set(s.elements.map(toRubyType))];
+    const [first] = elementTypes;
+    return `T::Array[${elementTypes.length <= 1 ? (first ?? "T.untyped") : `T.any(${elementTypes.join(", ")})`}]`;
   },
   // `Enumerator` is Ruby's closest native analogue to an asynchronously (or
   // lazily) produced sequence — there's no built-in async-iterable construct
   // to target 1:1, same honest-degrade reasoning as protobuf.ts's `stream`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `T::Enumerator[${toRubyType(s.element)}]`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `T::Enumerator[${toRubyType(s.element)}]`;
   },
   // No native pagination construct — degrades to the element array, same
   // convention as every other structural projector in this package.
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `T::Array[${toRubyType(s.element)}]`
+    const s = shape as TypeShape & { kind: "page" };
+    return `T::Array[${toRubyType(s.element)}]`;
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `T::Hash[${toRubyType(s.key)}, ${toRubyType(s.value)}]`
+    const s = shape as TypeShape & { kind: "map" };
+    return `T::Hash[${toRubyType(s.key)}, ${toRubyType(s.value)}]`;
   },
   // A two-variant union with `null` collapses to Sorbet's dedicated
   // `T.nilable(T)` sugar rather than the general `T.any(T, NilClass)` form.
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
+    const s = shape as TypeShape & { kind: "union" };
     if (s.variants.length === 2) {
-      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null")
+      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null");
       if (nullIndex !== -1) {
-        const other = s.variants[nullIndex === 0 ? 1 : 0]!
-        return `T.nilable(${toRubyType(other)})`
+        const other = s.variants[nullIndex === 0 ? 1 : 0]!;
+        return `T.nilable(${toRubyType(other)})`;
       }
     }
-    return `T.any(${s.variants.map(toRubyType).join(", ")})`
+    return `T.any(${s.variants.map(toRubyType).join(", ")})`;
   },
   // Sorbet has no literal-value type — degrades to the value's runtime class.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "NilClass"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "T::Boolean"
-    return Number.isInteger(s.value) ? "Integer" : "Float"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "NilClass";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "T::Boolean";
+    return Number.isInteger(s.value) ? "Integer" : "Float";
   },
   // Mirrors protobuf.ts's `enumName` meta convention: with nowhere (no field
   // name context) to synthesize a `T::Enum` class name, falls back to the
@@ -130,36 +133,36 @@ const handlers: Record<string, Converter> = {
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // Sorbet's `T.all` composes multiple types the same way TS's `&` does.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    return `T.all(${s.members.map(toRubyType).join(", ")})`
+    const s = shape as TypeShape & { kind: "intersection" };
+    return `T.all(${s.members.map(toRubyType).join(", ")})`;
   },
   // Sorbet's `T.proc` builder is the closest native callable-type construct
   // (https://sorbet.org/docs/procs); `thisType` has no representation in a
   // `T.proc` signature (Ruby procs don't rebind `self` the way TS's `this`
   // parameter does), so it's dropped rather than misrendered.
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p) => `${p.name}: ${toRubyType(p.type)}`)
-    const paramsClause = params.length === 0 ? "" : `.params(${params.join(", ")})`
-    return `T.proc${paramsClause}.returns(${toRubyType(s.returnType)})`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p) => `${p.name}: ${toRubyType(p.type)}`);
+    const paramsClause = params.length === 0 ? "" : `.params(${params.join(", ")})`;
+    return `T.proc${paramsClause}.returns(${toRubyType(s.returnType)})`;
   },
   // A service surface (`interface`) has no Sorbet value-type equivalent —
   // it's a module's *method* surface, not a type occupying a variable/field
   // position — degrades honestly to `T.untyped`, same as protobuf.ts's
   // `interface` handler.
   interface: leaf("T.untyped"),
-}
+};
 
 function coreRubyType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "T.untyped" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "T.untyped" : converter(ref.shape, ref.meta);
 }
 
 /** A Sorbet type expression for `ref` — suitable for a `sig` param/return
  * annotation, a `T::Struct` prop declaration, or a `T.type_alias` body. */
 export function toRubyType(ref: TypeRef): string {
-  const core = coreRubyType(ref)
-  return ref.meta.nullable === true ? `T.nilable(${core})` : core
+  const core = coreRubyType(ref);
+  return ref.meta.nullable === true ? `T.nilable(${core})` : core;
 }
 
 // prop/const declaration for one T::Struct field, handling the
@@ -172,45 +175,52 @@ function structField(
   fieldName: string,
   fieldRef: TypeRef,
 ): { declaration: string; nested: string[] } {
-  const nested: string[] = []
-  let core: string
+  const nested: string[] = [];
+  let core: string;
   if (isA(fieldRef.shape.kind, "object")) {
-    const nestedName = `${structName}${capitalize(fieldName)}`
-    nested.push(toRubyClass(nestedName, fieldRef))
-    core = nestedName
+    const nestedName = `${structName}${capitalize(fieldName)}`;
+    nested.push(toRubyClass(nestedName, fieldRef));
+    core = nestedName;
   } else if (fieldRef.shape.kind === "enum") {
-    const nestedName = `${structName}${capitalize(fieldName)}`
-    nested.push(toRubyEnum(nestedName, fieldRef))
-    core = nestedName
-  } else if (fieldRef.shape.kind === "array" && isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")) {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    const nestedName = `${structName}${capitalize(fieldName)}`
-    nested.push(toRubyClass(nestedName, element))
-    core = `T::Array[${nestedName}]`
-  } else if (fieldRef.shape.kind === "array" && (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum") {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    const nestedName = `${structName}${capitalize(fieldName)}`
-    nested.push(toRubyEnum(nestedName, element))
-    core = `T::Array[${nestedName}]`
+    const nestedName = `${structName}${capitalize(fieldName)}`;
+    nested.push(toRubyEnum(nestedName, fieldRef));
+    core = nestedName;
+  } else if (
+    fieldRef.shape.kind === "array" &&
+    isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
+  ) {
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    const nestedName = `${structName}${capitalize(fieldName)}`;
+    nested.push(toRubyClass(nestedName, element));
+    core = `T::Array[${nestedName}]`;
+  } else if (
+    fieldRef.shape.kind === "array" &&
+    (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum"
+  ) {
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    const nestedName = `${structName}${capitalize(fieldName)}`;
+    nested.push(toRubyEnum(nestedName, element));
+    core = `T::Array[${nestedName}]`;
   } else {
-    core = coreRubyType(fieldRef)
+    core = coreRubyType(fieldRef);
   }
 
-  const optional = fieldRef.meta.optional === true
-  const nullable = fieldRef.meta.nullable === true
-  const type = optional || nullable ? `T.nilable(${core})` : core
+  const optional = fieldRef.meta.optional === true;
+  const nullable = fieldRef.meta.nullable === true;
+  const type = optional || nullable ? `T.nilable(${core})` : core;
   // `const` for a field marked `readonly` — Sorbet's T::Props distinguishes
   // an immutable `const` from a mutable `prop`
   // (https://sorbet.org/docs/tstruct) — `prop` otherwise (the default,
   // matching plain Ruby attr_accessor semantics).
-  const keyword = fieldRef.meta.readonly === true ? "const" : "prop"
-  const defaultClause = optional ? ", default: nil" : ""
-  const deprecatedComment = fieldRef.meta.deprecated === true ? " # @deprecated" : ""
-  const description = typeof fieldRef.meta.description === "string" ? `  # ${fieldRef.meta.description}\n` : ""
+  const keyword = fieldRef.meta.readonly === true ? "const" : "prop";
+  const defaultClause = optional ? ", default: nil" : "";
+  const deprecatedComment = fieldRef.meta.deprecated === true ? " # @deprecated" : "";
+  const description =
+    typeof fieldRef.meta.description === "string" ? `  # ${fieldRef.meta.description}\n` : "";
   return {
     declaration: `${description}  ${keyword} :${fieldName}, ${type}${defaultClause}${deprecatedComment}`,
     nested,
-  }
+  };
 }
 
 /**
@@ -222,38 +232,38 @@ function structField(
  * out of the box.
  */
 export function toRubyClass(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const nestedClasses: string[] = []
-  const fieldLines: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const nestedClasses: string[] = [];
+  const fieldLines: string[] = [];
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const { declaration, nested } = structField(name, fieldName, fieldRef)
-    nestedClasses.push(...nested)
-    fieldLines.push(declaration)
+    const { declaration, nested } = structField(name, fieldName, fieldRef);
+    nestedClasses.push(...nested);
+    fieldLines.push(declaration);
   }
 
-  const lines: string[] = []
-  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`)
-  if (ref.meta.deprecated === true) lines.push(`# @deprecated`)
-  lines.push(`class ${name} < T::Struct`)
-  lines.push("  extend T::Sig")
+  const lines: string[] = [];
+  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`);
+  if (ref.meta.deprecated === true) lines.push(`# @deprecated`);
+  lines.push(`class ${name} < T::Struct`);
+  lines.push("  extend T::Sig");
   if (fieldLines.length > 0) {
-    lines.push("")
-    lines.push(...fieldLines)
+    lines.push("");
+    lines.push(...fieldLines);
   }
-  lines.push("")
-  lines.push("  sig { returns(String) }")
-  lines.push("  def to_json(*_args)")
-  lines.push("    serialize.to_json")
-  lines.push("  end")
-  lines.push("")
-  lines.push(`  sig { params(json: String).returns(${name}) }`)
-  lines.push("  def self.from_json(json)")
-  lines.push("    from_hash(JSON.parse(json))")
-  lines.push("  end")
-  lines.push("end")
+  lines.push("");
+  lines.push("  sig { returns(String) }");
+  lines.push("  def to_json(*_args)");
+  lines.push("    serialize.to_json");
+  lines.push("  end");
+  lines.push("");
+  lines.push(`  sig { params(json: String).returns(${name}) }`);
+  lines.push("  def self.from_json(json)");
+  lines.push("    from_hash(JSON.parse(json))");
+  lines.push("  end");
+  lines.push("end");
 
-  return [...nestedClasses, lines.join("\n")].join("\n\n")
+  return [...nestedClasses, lines.join("\n")].join("\n\n");
 }
 
 /**
@@ -264,17 +274,17 @@ export function toRubyClass(name: string, ref: TypeRef): string {
  * no extra code needed here).
  */
 export function toRubyEnum(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const lines: string[] = []
-  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`)
-  lines.push(`class ${name} < T::Enum`)
-  lines.push("  enums do")
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const lines: string[] = [];
+  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`);
+  lines.push(`class ${name} < T::Enum`);
+  lines.push("  enums do");
   for (const member of shape.members) {
-    lines.push(`    ${enumConstantName(member)} = new(${quote(member)})`)
+    lines.push(`    ${enumConstantName(member)} = new(${quote(member)})`);
   }
-  lines.push("  end")
-  lines.push("end")
-  return lines.join("\n")
+  lines.push("  end");
+  lines.push("end");
+  return lines.join("\n");
 }
 
 /**
@@ -285,13 +295,17 @@ export function toRubyEnum(name: string, ref: TypeRef): string {
  * Sorbet rendering as instance methods).
  */
 export function toRubyMethodSig(methodName: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "method" | "function"; params: readonly { name: string; type: TypeRef }[]; returnType: TypeRef }
-  const params = s.params.map((p) => `${p.name}: ${toRubyType(p.type)}`)
-  const isVoid = s.returnType.shape.kind === "void"
-  const sigParams = params.length === 0 ? "" : ` params(${params.join(", ")}).`
-  const sigReturn = isVoid ? "void" : `returns(${toRubyType(s.returnType)})`
-  const paramNames = s.params.map((p) => p.name).join(", ")
-  return [`sig {${sigParams} ${sigReturn} }`, `def ${methodName}(${paramNames}); end`].join("\n")
+  const s = ref.shape as TypeShape & {
+    kind: "method" | "function";
+    params: readonly { name: string; type: TypeRef }[];
+    returnType: TypeRef;
+  };
+  const params = s.params.map((p) => `${p.name}: ${toRubyType(p.type)}`);
+  const isVoid = s.returnType.shape.kind === "void";
+  const sigParams = params.length === 0 ? "" : ` params(${params.join(", ")}).`;
+  const sigReturn = isVoid ? "void" : `returns(${toRubyType(s.returnType)})`;
+  const paramNames = s.params.map((p) => p.name).join(", ");
+  return [`sig {${sigParams} ${sigReturn} }`, `def ${methodName}(${paramNames}); end`].join("\n");
 }
 
 /**
@@ -302,11 +316,11 @@ export function toRubyMethodSig(methodName: string, ref: TypeRef): string {
  */
 export function toRuby(ref: TypeRef, name?: string): string {
   if (name !== undefined) {
-    if (ref.shape.kind === "object") return toRubyClass(name, ref)
-    if (ref.shape.kind === "enum") return toRubyEnum(name, ref)
-    return `${name} = T.type_alias { ${toRubyType(ref)} }`
+    if (ref.shape.kind === "object") return toRubyClass(name, ref);
+    if (ref.shape.kind === "enum") return toRubyEnum(name, ref);
+    return `${name} = T.type_alias { ${toRubyType(ref)} }`;
   }
-  return toRubyType(ref)
+  return toRubyType(ref);
 }
 
 // ============================================================================
@@ -316,7 +330,7 @@ export function toRuby(ref: TypeRef, name?: string): string {
 // Sorbet ones above; a caller picks one mode or the other per target file.
 // ============================================================================
 
-type RbsConverter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type RbsConverter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const rbsHandlers: Record<string, RbsConverter> = {
   boolean: leaf("bool"),
@@ -333,53 +347,57 @@ const rbsHandlers: Record<string, RbsConverter> = {
   object: () => "Hash[Symbol, untyped]",
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => `Array[${toRbsType((shape as TypeShape & { kind: "array" }).element)}]`,
-  tuple: (shape) => `[${(shape as TypeShape & { kind: "tuple" }).elements.map(toRbsType).join(", ")}]`,
+  tuple: (shape) =>
+    `[${(shape as TypeShape & { kind: "tuple" }).elements.map(toRbsType).join(", ")}]`,
   stream: (shape) => `Enumerator[${toRbsType((shape as TypeShape & { kind: "stream" }).element)}]`,
   page: (shape) => `Array[${toRbsType((shape as TypeShape & { kind: "page" }).element)}]`,
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Hash[${toRbsType(s.key)}, ${toRbsType(s.value)}]`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Hash[${toRbsType(s.key)}, ${toRbsType(s.value)}]`;
   },
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
+    const s = shape as TypeShape & { kind: "union" };
     if (s.variants.length === 2) {
-      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null")
+      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null");
       if (nullIndex !== -1) {
-        const other = s.variants[nullIndex === 0 ? 1 : 0]!
-        return `${toRbsType(other)}?`
+        const other = s.variants[nullIndex === 0 ? 1 : 0]!;
+        return `${toRbsType(other)}?`;
       }
     }
-    return s.variants.map(toRbsType).join(" | ")
+    return s.variants.map(toRbsType).join(" | ");
   },
   // RBS does support literal types (https://github.com/ruby/rbs/blob/master/docs/syntax.md#type-syntax),
   // unlike Sorbet — rendered directly rather than degraded to a runtime class.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "nil"
-    if (typeof s.value === "string") return quote(s.value)
-    return String(s.value)
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "nil";
+    if (typeof s.value === "string") return quote(s.value);
+    return String(s.value);
   },
   enum: (shape, meta) =>
-    typeof meta.enumName === "string" ? meta.enumName : (shape as TypeShape & { kind: "enum" }).members.map(quote).join(" | "),
+    typeof meta.enumName === "string"
+      ? meta.enumName
+      : (shape as TypeShape & { kind: "enum" }).members.map(quote).join(" | "),
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
-  intersection: (shape) => (shape as TypeShape & { kind: "intersection" }).members.map(toRbsType).join(" & "),
+  intersection: (shape) =>
+    (shape as TypeShape & { kind: "intersection" }).members.map(toRbsType).join(" & "),
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p) => `${toRbsType(p.type)} ${p.name}`)
-    return `^(${params.join(", ")}) -> ${toRbsType(s.returnType)}`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p) => `${toRbsType(p.type)} ${p.name}`);
+    return `^(${params.join(", ")}) -> ${toRbsType(s.returnType)}`;
   },
   interface: leaf("untyped"),
-}
+};
 
 function coreRbsType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, rbsHandlers)
-  return converter === undefined ? "untyped" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, rbsHandlers);
+  return converter === undefined ? "untyped" : converter(ref.shape, ref.meta);
 }
 
 /** An RBS type expression for `ref`. */
 export function toRbsType(ref: TypeRef): string {
-  const core = coreRbsType(ref)
-  return ref.meta.nullable === true ? `${core}?` : core
+  const core = coreRbsType(ref);
+  return ref.meta.nullable === true ? `${core}?` : core;
 }
 
 /**
@@ -392,14 +410,14 @@ export function toRbsType(ref: TypeRef): string {
  * classes are declared per source file, not embedded structurally).
  */
 export function toRbsClass(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const lines: string[] = [`class ${name}`]
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const lines: string[] = [`class ${name}`];
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const optional = fieldRef.meta.optional === true
-    const core = coreRbsType(fieldRef)
-    const type = optional || fieldRef.meta.nullable === true ? `${core}?` : core
-    lines.push(`  attr_reader ${fieldName}: ${type}`)
+    const optional = fieldRef.meta.optional === true;
+    const core = coreRbsType(fieldRef);
+    const type = optional || fieldRef.meta.nullable === true ? `${core}?` : core;
+    lines.push(`  attr_reader ${fieldName}: ${type}`);
   }
-  lines.push("end")
-  return lines.join("\n")
+  lines.push("end");
+  return lines.join("\n");
 }

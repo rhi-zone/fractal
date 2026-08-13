@@ -12,25 +12,25 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "../node.ts"
+import { api, op } from "../node.ts";
 
 // A stand-in for a composition-time value (e.g. `ComposedSurface`) the
 // factory closes over — walkTree never inspects the factory's own
 // parameters, only the type of the expression it returns, so this can be
 // anything.
-type Composed = { greeting: string }
+type Composed = { greeting: string };
 
 // The multi-statement form: destructuring + local `op(...)` consts, ending
 // in `return api(...)` directly — the sibling codebase's ACTUAL pattern
 // (`buildDomainAuthTree` in domain-auth.ts destructures `composed`, builds
 // three `op(...)` locals, then returns `api({}, { fallback: {...} })`).
 export function buildGreeterTree(composed: Composed) {
-  const { greeting } = composed
+  const { greeting } = composed;
   const greet = op(
     /** Say hello, closing over the composition-time greeting. */
     (_input: { name: string }) => ({ message: `${greeting} ${_input.name}` }),
-  )
-  return api({ greet })
+  );
+  return api({ greet });
 }
 
 // The single `return <expr>` shape — the expression returned directly, body
@@ -38,7 +38,7 @@ export function buildGreeterTree(composed: Composed) {
 export function buildPingTree(_composed: Composed) {
   return api({
     ping: op((_input: { count: number }) => ({ pong: _input.count })),
-  })
+  });
 }
 
 // A non-exported factory — must NOT be picked up (mirrors the exported-only
@@ -46,15 +46,15 @@ export function buildPingTree(_composed: Composed) {
 function buildUnexportedTree(_composed: Composed) {
   return api({
     hidden: op((_input: { x: number }) => ({ y: _input.x })),
-  })
+  });
 }
 
 // An exported factory that returns something other than a tree — must be
 // skipped, same as an unrelated `export const`.
 export function buildNotATree() {
-  return { plain: "object" }
+  return { plain: "object" };
 }
 
 // Referenced so the unused-declaration linter/checker doesn't flag it — the
 // walker itself never calls this at runtime, only reads its AST/type.
-export const unexportedTreeRef = buildUnexportedTree
+export const unexportedTreeRef = buildUnexportedTree;

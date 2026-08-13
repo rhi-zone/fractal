@@ -10,17 +10,17 @@ Write the tree once. Multiple interpreters walk it to produce an HTTP server wit
 
 ## Packages
 
-| Package | Role |
-|---------|------|
-| [`@rhi-zone/fractal`](packages/fractal) | Umbrella — the core on the package root, one subpath per protocol (`/http`, `/cli`, `/json-rpc`, `/graphql`, `/mcp`). Start here if you want more than one protocol |
-| [`@rhi-zone/fractal-api-tree`](packages/api-tree) | Core: `api`/`op` tree constructors, `Node`/`Handler`/`Meta`, the tag lattice, source-level schema extraction |
-| [`@rhi-zone/fractal-type-ir`](packages/type-ir) | Type IR — subtyping hierarchy + open metadata bag, projectable to 20+ targets (JSON Schema, OpenAPI, GraphQL SDL, SQL DDL, Protobuf, Zod, ...) |
-| [`@rhi-zone/fractal-http-api-projector`](packages/http-api-projector) | HTTP projection — compiled router, OpenAPI 3.1, typed client |
-| [`@rhi-zone/fractal-http-framework-projector`](packages/http-framework-projector) | Router codegen for existing HTTP frameworks (Express, more to follow) — eject model, not a runtime |
-| [`@rhi-zone/fractal-graphql-api-projector`](packages/graphql-api-projector) | GraphQL projection — SDL, resolver dispatch, subscriptions, typed client |
-| [`@rhi-zone/fractal-mcp-api-projector`](packages/mcp-api-projector) | MCP projection — tools, resources, prompts, sampling |
-| [`@rhi-zone/fractal-cli-api-projector`](packages/cli-api-projector) | CLI projection — subcommand dispatch, shell completions, streaming |
-| [`@rhi-zone/fractal-json-rpc-api-projector`](packages/json-rpc-api-projector) | JSON-RPC 2.0 projection — HTTP POST + WebSocket transports, batch requests, typed client |
+| Package                                                                           | Role                                                                                                                                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@rhi-zone/fractal`](packages/fractal)                                           | Umbrella — the core on the package root, one subpath per protocol (`/http`, `/cli`, `/json-rpc`, `/graphql`, `/mcp`). Start here if you want more than one protocol |
+| [`@rhi-zone/fractal-api-tree`](packages/api-tree)                                 | Core: `api`/`op` tree constructors, `Node`/`Handler`/`Meta`, the tag lattice, source-level schema extraction                                                        |
+| [`@rhi-zone/fractal-type-ir`](packages/type-ir)                                   | Type IR — subtyping hierarchy + open metadata bag, projectable to 20+ targets (JSON Schema, OpenAPI, GraphQL SDL, SQL DDL, Protobuf, Zod, ...)                      |
+| [`@rhi-zone/fractal-http-api-projector`](packages/http-api-projector)             | HTTP projection — compiled router, OpenAPI 3.1, typed client                                                                                                        |
+| [`@rhi-zone/fractal-http-framework-projector`](packages/http-framework-projector) | Router codegen for existing HTTP frameworks (Express, more to follow) — eject model, not a runtime                                                                  |
+| [`@rhi-zone/fractal-graphql-api-projector`](packages/graphql-api-projector)       | GraphQL projection — SDL, resolver dispatch, subscriptions, typed client                                                                                            |
+| [`@rhi-zone/fractal-mcp-api-projector`](packages/mcp-api-projector)               | MCP projection — tools, resources, prompts, sampling                                                                                                                |
+| [`@rhi-zone/fractal-cli-api-projector`](packages/cli-api-projector)               | CLI projection — subcommand dispatch, shell completions, streaming                                                                                                  |
+| [`@rhi-zone/fractal-json-rpc-api-projector`](packages/json-rpc-api-projector)     | JSON-RPC 2.0 projection — HTTP POST + WebSocket transports, batch requests, typed client                                                                            |
 
 Each projector is installable on its own; `bun add @rhi-zone/fractal` gets the core plus
 HTTP, CLI, and JSON-RPC behind subpaths, with GraphQL and MCP as optional peers so neither
@@ -32,40 +32,40 @@ doesn't ask for it.
 Author once:
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
-import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
+import { api, op } from "@rhi-zone/fractal-api-tree";
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
 
 const tree = api({
   books: api({
     list: op(() => [...store.values()], http.get),
     add: op((input: { title: string; author: string }) => addBook(input), http.post),
   }),
-})
+});
 ```
 
 Project to HTTP, with OpenAPI served for free:
 
 ```ts
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
 
-const fetch = createFetch(tree)
-await fetch(new Request("http://localhost/books/list"))
+const fetch = createFetch(tree);
+await fetch(new Request("http://localhost/books/list"));
 ```
 
 Project the same tree to MCP tools:
 
 ```ts
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
 
-const tools = toTools(tree) // [{ name: "books_list", ... }, { name: "books_add", ... }]
+const tools = toTools(tree); // [{ name: "books_list", ... }, { name: "books_add", ... }]
 ```
 
 ...or to a CLI:
 
 ```ts
-import { runCli } from "@rhi-zone/fractal-cli-api-projector"
+import { runCli } from "@rhi-zone/fractal-cli-api-projector";
 
-await runCli(tree, ["books", "add", "--title", "Dune", "--author", "Herbert"])
+await runCli(tree, ["books", "add", "--title", "Dune", "--author", "Herbert"]);
 ```
 
 ...or to GraphQL SDL and a resolver map — see [`packages/graphql-api-projector`](packages/graphql-api-projector).

@@ -12,7 +12,7 @@
 > doesn't match the combinator identity — RESOLVED 2026-07-16"): "the actual
 > pattern is inspectable declarations (data) interpreted by projectors to
 > produce surfaces," not chained router-combinators. The three-layer
-> *separation* (declarations / DU / interpreters) still holds and matches
+> _separation_ (declarations / DU / interpreters) still holds and matches
 > current code (`op`/`api` constructors in `packages/api-tree/src/node.ts`
 > producing a `Node` DU, consumed by each projector's interpreter) — only the
 > "combinators take routers, produce routers, Parsec-style" description of
@@ -75,7 +75,7 @@ The design supports two authoring surfaces. Neither is second-class:
 
 These are two separate mental models for arriving at the same underlying
 DU/expression. Having two mental models is fine. What is not fine is the
-two models *conflicting* — each surface needs its own self-contained,
+two models _conflicting_ — each surface needs its own self-contained,
 consistent story that does not contradict the other. Cross-checking the two
 surfaces against each other is a validity requirement, not a nice-to-have.
 
@@ -121,6 +121,7 @@ an existing capability as a deliberate, first-class concern.
 
 The TS Compiler API's `ts.Type` is the input but not a suitable
 intermediate:
+
 - Not serializable (tied to a live `Program` instance)
 - Version-coupled to TypeScript internals
 - Full complexity of TS's type system
@@ -160,8 +161,9 @@ Design principles:
   > header/query/contentType attribute-dispatch it supported have since been
   > retired with no current equivalent — see the module doc in
   > `packages/http-api-projector/src/project.ts` and `TODO.md`. The
-  > augmentable-interface *pattern* itself is still current practice, just via
+  > augmentable-interface _pattern_ itself is still current practice, just via
   > `StoreRegistry` rather than the retired dispatch mechanism.
+
 - **Superset of all targets.** The IR should be able to represent anything
   any target needs, so projections are always narrowing (dropping what they
   can't express), never guessing (inventing what the IR didn't capture).

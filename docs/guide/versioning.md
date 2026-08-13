@@ -37,7 +37,7 @@ composition of transforms (Stripe/Cloudflare style):
 
 - The handler operates on an **internal superset** shape — the union of everything all supported
   versions need. Every wire version (latest included) is a projection of it. This is what handles
-  a newer version that *removed* richness an old client still needs: the superset keeps computing
+  a newer version that _removed_ richness an old client still needs: the superset keeps computing
   it; that version's projection just drops it.
 - A **version is a composition of transforms against the superset** — `up` (migrate a request
   forward to the superset shape) and `down` (project a response back to the wire shape). Request
@@ -51,34 +51,40 @@ composition of transforms (Stripe/Cloudflare style):
 All shapes are just `compose` over `T => U` functions. Ship common ones as opt-in helpers:
 
 ### chain (linear diffs)
+
 One delta per bump, composed sequentially, each reused by older versions. DRY on increments;
 coupled; assumes linear history.
 
 ### star (independent projections from the superset)
+
 Each version is its own standalone `up`/`down` pair. Independent, easy to reason about in
 isolation, handles non-linear history. DRY recovered via shared helper functions.
 
 ### tree (branching)
+
 Non-linear history and parallel tracks. Deltas are shared on a trunk and diverge at branches.
 `chain` = a single-line tree; `star` = an all-independent tree. Use when parallel version tracks
 need to share partial migrations.
 
 ### aspect / feature-composition
+
 A version is expressed as a set of composed feature-deltas (a DAG or lattice), not a point on a
 line. Useful when versions are better described by capability flags than by a linear sequence.
 
 ### lens
+
 Where version ↔ superset is invertible, each version is one lens (`up = get`, `down = put`),
 guaranteeing round-trip fidelity. Strongest correctness guarantee; requires full invertibility.
 
 ### tiered directionality
-The *tier* of a change determines how much transform you need:
 
-| Tier | Character | Transform needed |
-|------|-----------|-----------------|
-| breaking ("major") | Old shape invalid | Full `up` + `down` |
+The _tier_ of a change determines how much transform you need:
+
+| Tier               | Character                                  | Transform needed                              |
+| ------------------ | ------------------------------------------ | --------------------------------------------- |
+| breaking ("major") | Old shape invalid                          | Full `up` + `down`                            |
 | additive ("minor") | Old requests still valid, new fields added | `down`-only (hide new fields for old clients) |
-| patch | No shape change | Identity (no transform) |
+| patch              | No shape change                            | Identity (no transform)                       |
 
 Under a **tolerant reader** (client ignores unknown fields), minor/additive steps need **no
 transform at all**; only a strict "never send unrequested fields" contract needs the

@@ -55,7 +55,7 @@ call-site-anchored mechanism), 56deb11 (phase 2: HTTP migration), and 1855c7a
 multi-stage pipeline" section for that mechanism's full history. This doc
 does not change that architecture — the keyed, call-site-anchored generated
 module, the one import, `assertValidationCoverage` — it changes what the
-generated `parse()` a leaf's handler is wrapped with actually *does*.
+generated `parse()` a leaf's handler is wrapped with actually _does_.
 
 ---
 
@@ -71,12 +71,12 @@ which protocol the value arrived over:
 
 This is wrong because coercion posture is **wire-shaped**, not universal:
 
-| wire | shape |
-|---|---|
-| CLI argv | every flag value is `string \| string[] \| true` (see `cli-api-projector/src/cli.ts`'s `parseFlags`/`buildInput`) |
-| HTTP query/path | strings (URL segments, query string) |
-| HTTP JSON body | typed, but dateless (JSON has no date literal) |
-| MCP / GraphQL | typed JSON — numbers are numbers, booleans are booleans, no coercion needed at all |
+| wire            | shape                                                                                                             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| CLI argv        | every flag value is `string \| string[] \| true` (see `cli-api-projector/src/cli.ts`'s `parseFlags`/`buildInput`) |
+| HTTP query/path | strings (URL segments, query string)                                                                              |
+| HTTP JSON body  | typed, but dateless (JSON has no date literal)                                                                    |
+| MCP / GraphQL   | typed JSON — numbers are numbers, booleans are booleans, no coercion needed at all                                |
 
 A single builtin rule set is simultaneously too permissive for mcp/graphql
 (a JSON body's `42` needs no coercion, so pretending every input might be a
@@ -961,7 +961,7 @@ Per protocol, migrated to `applyValidation(key, tree, protocol)`:
   (including the loose boolean vocabulary `"1"`/`"yes"`/`"0"`/`"no"`) are
   deleted. `runCli` passes `buildInput`'s raw assembled input straight to the
   handler unconditionally — a leaf covered by `applyValidation(key, tree,
-  "cli")` gets decode+validate from the generated wire validator; an
+"cli")` gets decode+validate from the generated wire validator; an
   uncovered leaf gets raw wire values with NO coercion at all (the accepted
   zero-setup tradeoff — `--flag=1`/`--flag=yes` no longer coerce to a
   boolean; they pass through as the literal string, or get a structured
@@ -1199,6 +1199,7 @@ already proved it bug-free for this exact shape.
 ---
 
 ## Implementation trace (phase E) — LANDED (2026-08-05, session
+
 https://claude.ai/code/session_011tFKVomiW7x2MkeRg3mw88)
 
 Phase E's mandate: close the one real gap the phase-B trace's "Static-meta-
@@ -1218,16 +1219,16 @@ inlining, no import emission, no source re-emission. Codegen only ever
 detects its EXISTENCE (a field name), never its value or body:
 
 - `tree.ts`'s new `readMetaEncodingMapFunctionFields(nodeType, namespace,
-  loc, checker)` — `readMetaEncodingMapProfileNames`'s sibling. Where the
+loc, checker)` — `readMetaEncodingMapProfileNames`'s sibling. Where the
   string form reads a literal VALUE off a resolved TYPE, this one only
   checks whether a property's TYPE carries a call signature at all
   (`checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call).length >
-  0`) — a function value has no literal payload for the checker to hand
+0`) — a function value has no literal payload for the checker to hand
   back, so existence is the only question codegen can (and needs to) answer.
 - `apply-validation-build.ts`'s `extractWireApplyValidationTypeRefs` calls
   this alongside the existing string-form read (http/cli only, same scope
   cut the string form already has), producing each leaf's `hookFields:
-  readonly string[]` (sorted, for deterministic fingerprinting) —
+readonly string[]` (sorted, for deterministic fingerprinting) —
   `WireApplyValidationLeaf` gained this field; `flatWireEntries`/
   `compileWireLeafFragment`/`fingerprintableDerivation`'s caller all thread
   it through.
@@ -1379,7 +1380,7 @@ on whether "path" and the default store happen to share a wire profile:
   `string`; `WireOf<number,"json">` is `number` — NOT the same type. For
   exactly this case — a field with no explicit override, under a non-GET
   method — the computed type is the UNION `WireOf<T,"query"> |
-  WireOf<T,"json">`, precisely the fallback the task instructions
+WireOf<T,"json">`, precisely the fallback the task instructions
   themselves anticipated as the likely resolution ("default to the union...
   when it can't statically rule out a path-slug match").
 

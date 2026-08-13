@@ -22,18 +22,18 @@
 // function is a local copy of the private one.
 // ============================================================================
 
-import { httpRoute, type HttpRoute } from "./route.ts"
-import type { Handler } from "@rhi-zone/fractal-api-tree/node"
-import os from "node:os"
-import { mkdirSync, writeFileSync } from "node:fs"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
+import { httpRoute, type HttpRoute } from "./route.ts";
+import type { Handler } from "@rhi-zone/fractal-api-tree/node";
+import os from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ============================================================================
 // Route table — the fixture every architecture compiles from
 // ============================================================================
 
-type RouteDef = { readonly method: string; readonly path: string; readonly name: string }
+type RouteDef = { readonly method: string; readonly path: string; readonly name: string };
 
 // ~32 static routes (depths 1-4), ~15 dynamic routes (1-2 params), a few deep
 // (5+ segments) routes, mixed GET/POST/PUT/DELETE.
@@ -92,8 +92,12 @@ const baseRouteDefs: readonly RouteDef[] = [
   // deep (5+ segments)
   { method: "GET", path: "/static/docs/guides/advanced/topics/performance", name: "perfTopic" },
   { method: "GET", path: "/admin/settings/security/audit/logs", name: "auditLogs" },
-  { method: "GET", path: "/api/v1/orgs/:orgId/teams/:teamId/members/:memberId", name: "orgTeamMember" },
-]
+  {
+    method: "GET",
+    path: "/api/v1/orgs/:orgId/teams/:teamId/members/:memberId",
+    name: "orgTeamMember",
+  },
+];
 
 // ============================================================================
 // Long-path routes — /a/bb/ccc/dddd/eeeee/... segments of increasing length
@@ -104,17 +108,17 @@ const baseRouteDefs: readonly RouteDef[] = [
 
 /** Segments of increasing length ("a", "bb", "ccc", ...) until the joined `/`-path reaches `targetLen` chars. */
 function buildDeepSegments(targetLen: number): string[] {
-  const segs: string[] = []
-  let len = 0
-  let n = 1
+  const segs: string[] = [];
+  let len = 0;
+  let n = 1;
   while (len < targetLen) {
-    const ch = String.fromCharCode(97 + (segs.length % 26)) // 'a'..'z', cycling
-    const seg = ch.repeat(n)
-    segs.push(seg)
-    len += seg.length + 1 // +1 for the leading "/"
-    n++
+    const ch = String.fromCharCode(97 + (segs.length % 26)); // 'a'..'z', cycling
+    const seg = ch.repeat(n);
+    segs.push(seg);
+    len += seg.length + 1; // +1 for the leading "/"
+    n++;
   }
-  return segs
+  return segs;
 }
 
 const LONG_PATH_TARGETS: readonly { readonly label: string; readonly chars: number }[] = [
@@ -123,36 +127,36 @@ const LONG_PATH_TARGETS: readonly { readonly label: string; readonly chars: numb
   { label: "2k", chars: 2000 },
   { label: "4k", chars: 4000 },
   { label: "8k", chars: 8000 },
-]
+];
 
 type LongPathFixture = {
-  readonly label: string
-  readonly staticPath: string
-  readonly dynamicPath: string // last segment replaced with ":id"
-  readonly dynamicConcretePath: string // ":id" replaced back with a concrete value, for dispatch tests
-  readonly dynamicConcreteValue: string
-}
+  readonly label: string;
+  readonly staticPath: string;
+  readonly dynamicPath: string; // last segment replaced with ":id"
+  readonly dynamicConcretePath: string; // ":id" replaced back with a concrete value, for dispatch tests
+  readonly dynamicConcreteValue: string;
+};
 
 const longPathFixtures: readonly LongPathFixture[] = LONG_PATH_TARGETS.map(({ label, chars }) => {
-  const segs = buildDeepSegments(chars)
-  const staticPath = `/${segs.join("/")}`
-  const lastLen = segs[segs.length - 1]!.length
-  const dynamicConcreteValue = "9".repeat(lastLen) // same length as the segment it replaces, for a comparable path length
-  const dynamicSegs = [...segs.slice(0, -1), ":id"]
-  const dynamicConcreteSegs = [...segs.slice(0, -1), dynamicConcreteValue]
+  const segs = buildDeepSegments(chars);
+  const staticPath = `/${segs.join("/")}`;
+  const lastLen = segs[segs.length - 1]!.length;
+  const dynamicConcreteValue = "9".repeat(lastLen); // same length as the segment it replaces, for a comparable path length
+  const dynamicSegs = [...segs.slice(0, -1), ":id"];
+  const dynamicConcreteSegs = [...segs.slice(0, -1), dynamicConcreteValue];
   return {
     label,
     staticPath,
     dynamicPath: `/${dynamicSegs.join("/")}`,
     dynamicConcretePath: `/${dynamicConcreteSegs.join("/")}`,
     dynamicConcreteValue,
-  }
-})
+  };
+});
 
 const longRouteDefs: readonly RouteDef[] = longPathFixtures.flatMap((f) => [
   { method: "GET", path: f.staticPath, name: `long${f.label}Static` },
   { method: "GET", path: f.dynamicPath, name: `long${f.label}Dynamic` },
-])
+]);
 
 // ============================================================================
 // Pathological cases — each stresses a different dimension than the base
@@ -166,118 +170,133 @@ const longRouteDefs: readonly RouteDef[] = longPathFixtures.flatMap((f) => [
 // --- Case A: wide branching — one node (/api/v1/*) with 120 static
 // siblings, to stress hash lookups (Map/segment trie) vs regex alternation
 // vs switch/trie branching at a single level.
-const WIDE_BRANCH_COUNT = 120
+const WIDE_BRANCH_COUNT = 120;
 const wideBranchDefs: readonly RouteDef[] = Array.from({ length: WIDE_BRANCH_COUNT }, (_, i) => ({
   method: "GET",
   path: `/api/v1/resource${String(i).padStart(3, "0")}`,
   name: `wideResource${i}`,
-}))
+}));
 
 // --- Case B: deep narrow tree — 25 levels, one child each, short segments.
 // Stresses per-level overhead: segment trie pays splitPath + N lookups,
 // compiled fn pays N startsWith/switch checks, char-level architectures pay
 // N traversal steps regardless of segment count.
-const DEEP_NARROW_LEVELS = 24 // + the "deep" root segment = 25 levels total
-const deepNarrowSegs = Array.from({ length: DEEP_NARROW_LEVELS }, (_, i) => String.fromCharCode(97 + (i % 26)))
-const deepNarrowPath = `/deep/${deepNarrowSegs.join("/")}`
-const deepNarrowDef: RouteDef = { method: "GET", path: deepNarrowPath, name: "deepNarrow" }
+const DEEP_NARROW_LEVELS = 24; // + the "deep" root segment = 25 levels total
+const deepNarrowSegs = Array.from({ length: DEEP_NARROW_LEVELS }, (_, i) =>
+  String.fromCharCode(97 + (i % 26)),
+);
+const deepNarrowPath = `/deep/${deepNarrowSegs.join("/")}`;
+const deepNarrowDef: RouteDef = { method: "GET", path: deepNarrowPath, name: "deepNarrow" };
 
 // --- Case C: many dynamic segments — 4 `:param` captures in one path.
 // Tests param-extraction overhead (object writes, capture groups, etc.)
 // across architectures, independent of tree size/shape.
-const manyDynamicPath = "/orgs/:orgId/teams/:teamId/members/:memberId/roles/:roleId"
-const manyDynamicDef: RouteDef = { method: "GET", path: manyDynamicPath, name: "orgTeamMemberRole" }
-const manyDynamicConcretePath = "/orgs/o1/teams/t1/members/m1/roles/r1"
+const manyDynamicPath = "/orgs/:orgId/teams/:teamId/members/:memberId/roles/:roleId";
+const manyDynamicDef: RouteDef = {
+  method: "GET",
+  path: manyDynamicPath,
+  name: "orgTeamMemberRole",
+};
+const manyDynamicConcretePath = "/orgs/o1/teams/t1/members/m1/roles/r1";
 
 // --- Case D: large tree + long paths combined — 200+ routes (mix of
 // static and dynamic) plus a couple of 4k+ char paths woven into that same
 // mixed set, so the "large tree" and "long path" dimensions compound rather
 // than being tested in isolation.
-const BULK_STATIC_COUNT = 150
+const BULK_STATIC_COUNT = 150;
 const bulkStaticDefs: readonly RouteDef[] = Array.from({ length: BULK_STATIC_COUNT }, (_, i) => ({
   method: "GET",
   path: `/bulk/item${String(i).padStart(3, "0")}`,
   name: `bulkStatic${i}`,
-}))
+}));
 
-const BULK_DYN_COUNT = 50
+const BULK_DYN_COUNT = 50;
 const bulkDynDefs: readonly RouteDef[] = Array.from({ length: BULK_DYN_COUNT }, (_, i) => ({
   method: "GET",
   path: `/bulk/dyn/${String(i).padStart(3, "0")}/:id`,
   name: `bulkDyn${i}`,
-}))
+}));
 
-const bulkLongSegs = buildDeepSegments(4500)
-const bulkLongStaticPath = `/bulk/long/${bulkLongSegs.join("/")}`
-const bulkLongDynSegs = [...bulkLongSegs.slice(0, -1), ":id"]
-const bulkLongDynPath = `/bulk/long/${bulkLongDynSegs.join("/")}`
-const bulkLongDynValue = "z".repeat(bulkLongSegs[bulkLongSegs.length - 1]!.length)
-const bulkLongDynConcretePath = `/bulk/long/${[...bulkLongSegs.slice(0, -1), bulkLongDynValue].join("/")}`
+const bulkLongSegs = buildDeepSegments(4500);
+const bulkLongStaticPath = `/bulk/long/${bulkLongSegs.join("/")}`;
+const bulkLongDynSegs = [...bulkLongSegs.slice(0, -1), ":id"];
+const bulkLongDynPath = `/bulk/long/${bulkLongDynSegs.join("/")}`;
+const bulkLongDynValue = "z".repeat(bulkLongSegs[bulkLongSegs.length - 1]!.length);
+const bulkLongDynConcretePath = `/bulk/long/${[...bulkLongSegs.slice(0, -1), bulkLongDynValue].join("/")}`;
 
 const bulkLongDefs: readonly RouteDef[] = [
   { method: "GET", path: bulkLongStaticPath, name: "bulkLongStatic" },
   { method: "GET", path: bulkLongDynPath, name: "bulkLongDynamic" },
-]
+];
 
 // --- Case E: unbalanced tree — one very deep branch (18 levels) hanging
 // off the same parent as 60 shallow (2-level) siblings, to test whether an
 // architecture optimized for one shape degrades on the other living right
 // next to it.
-const UNEVEN_DEEP_LEVELS = 16 // + "uneven"/"deep" prefix = 18 levels total
-const unevenDeepSegs = Array.from({ length: UNEVEN_DEEP_LEVELS }, (_, i) => String.fromCharCode(97 + (i % 26)))
-const unevenDeepPath = `/uneven/deep/${unevenDeepSegs.join("/")}`
-const unevenDeepDef: RouteDef = { method: "GET", path: unevenDeepPath, name: "unevenDeep" }
+const UNEVEN_DEEP_LEVELS = 16; // + "uneven"/"deep" prefix = 18 levels total
+const unevenDeepSegs = Array.from({ length: UNEVEN_DEEP_LEVELS }, (_, i) =>
+  String.fromCharCode(97 + (i % 26)),
+);
+const unevenDeepPath = `/uneven/deep/${unevenDeepSegs.join("/")}`;
+const unevenDeepDef: RouteDef = { method: "GET", path: unevenDeepPath, name: "unevenDeep" };
 
-const UNEVEN_SHALLOW_COUNT = 60
-const unevenShallowDefs: readonly RouteDef[] = Array.from({ length: UNEVEN_SHALLOW_COUNT }, (_, i) => ({
-  method: "GET",
-  path: `/uneven/shallow${String(i).padStart(3, "0")}`,
-  name: `unevenShallow${i}`,
-}))
+const UNEVEN_SHALLOW_COUNT = 60;
+const unevenShallowDefs: readonly RouteDef[] = Array.from(
+  { length: UNEVEN_SHALLOW_COUNT },
+  (_, i) => ({
+    method: "GET",
+    path: `/uneven/shallow${String(i).padStart(3, "0")}`,
+    name: `unevenShallow${i}`,
+  }),
+);
 
 // --- Case F: nesting + branching combined — a tree that branches at THREE
 // successive depths (10 x 10 x 5 = 500 leaves), unlike Case A (branches once,
 // at one depth) or Case B (never branches, just deep). Forces the dispatcher
 // to re-resolve a branch point repeatedly as it descends, not just once.
-const GRID_L1 = 10
-const GRID_L2 = 10
-const GRID_L3 = 5
-const gridDefs: RouteDef[] = []
+const GRID_L1 = 10;
+const GRID_L2 = 10;
+const GRID_L3 = 5;
+const gridDefs: RouteDef[] = [];
 for (let a = 0; a < GRID_L1; a++) {
   for (let b = 0; b < GRID_L2; b++) {
     for (let c = 0; c < GRID_L3; c++) {
-      gridDefs.push({ method: "GET", path: `/grid/l1-${a}/l2-${b}/l3-${c}`, name: `grid_${a}_${b}_${c}` })
+      gridDefs.push({
+        method: "GET",
+        path: `/grid/l1-${a}/l2-${b}/l3-${c}`,
+        name: `grid_${a}_${b}_${c}`,
+      });
     }
   }
 }
-const gridEarlyPath = gridDefs[0]!.path
-const gridMiddlePath = gridDefs[Math.floor(gridDefs.length / 2)]!.path
-const gridLatePath = gridDefs[gridDefs.length - 1]!.path
+const gridEarlyPath = gridDefs[0]!.path;
+const gridMiddlePath = gridDefs[Math.floor(gridDefs.length / 2)]!.path;
+const gridLatePath = gridDefs[gridDefs.length - 1]!.path;
 
 // --- Case G: nesting + branching + long paths, all three at once — same
 // three-deep branching shape as Case F (4 x 4 x 3 = 48 leaves) but each
 // segment is ~1400 chars, so every leaf path is 4k+ chars. Stresses whatever
 // architectures degrade separately on branching (A) and on long paths (long
 // fixtures) simultaneously, in combination rather than in isolation.
-const LONG_GRID_L1 = 4
-const LONG_GRID_L2 = 4
-const LONG_GRID_L3 = 3
-const LONG_GRID_SEG_LEN = 1400
+const LONG_GRID_L1 = 4;
+const LONG_GRID_L2 = 4;
+const LONG_GRID_L3 = 3;
+const LONG_GRID_SEG_LEN = 1400;
 function longGridSeg(prefix: string, i: number): string {
-  const idx = String(i)
-  return `${prefix}${idx}${"x".repeat(Math.max(0, LONG_GRID_SEG_LEN - prefix.length - idx.length))}`
+  const idx = String(i);
+  return `${prefix}${idx}${"x".repeat(Math.max(0, LONG_GRID_SEG_LEN - prefix.length - idx.length))}`;
 }
-const longGridDefs: RouteDef[] = []
+const longGridDefs: RouteDef[] = [];
 for (let a = 0; a < LONG_GRID_L1; a++) {
   for (let b = 0; b < LONG_GRID_L2; b++) {
     for (let c = 0; c < LONG_GRID_L3; c++) {
-      const path = `/longgrid/${longGridSeg("a", a)}/${longGridSeg("b", b)}/${longGridSeg("c", c)}`
-      longGridDefs.push({ method: "GET", path, name: `longGrid_${a}_${b}_${c}` })
+      const path = `/longgrid/${longGridSeg("a", a)}/${longGridSeg("b", b)}/${longGridSeg("c", c)}`;
+      longGridDefs.push({ method: "GET", path, name: `longGrid_${a}_${b}_${c}` });
     }
   }
 }
-const longGridEarlyPath = longGridDefs[0]!.path
-const longGridLatePath = longGridDefs[longGridDefs.length - 1]!.path
+const longGridEarlyPath = longGridDefs[0]!.path;
+const longGridLatePath = longGridDefs[longGridDefs.length - 1]!.path;
 
 const routeDefs: readonly RouteDef[] = [
   ...baseRouteDefs,
@@ -292,24 +311,26 @@ const routeDefs: readonly RouteDef[] = [
   ...unevenShallowDefs,
   ...gridDefs,
   ...longGridDefs,
-]
+];
 
 /** One shared stub handler body — identical across all routes and architectures. */
 function makeHandler(name: string): Handler {
-  return (input: unknown) => ({ name, input })
+  return (input: unknown) => ({ name, input });
 }
 
-const handlersByName = new Map<string, Handler>(routeDefs.map((r) => [r.name, makeHandler(r.name)]))
+const handlersByName = new Map<string, Handler>(
+  routeDefs.map((r) => [r.name, makeHandler(r.name)]),
+);
 
 function splitSegs(path: string): string[] {
-  return path.split("/").filter((s) => s.length > 0)
+  return path.split("/").filter((s) => s.length > 0);
 }
 
 /** Generated-source size for the two `new Function()`-codegen architectures (4, 7) —
  *  populated by buildCompiledSwitch/buildCompiledCharFn at module-load time, when
  *  the "production" (full routeDefs) instance of each is built. Not applicable to
  *  the other five architectures, which don't generate source text. */
-const codegenSizes: Record<string, { readonly chars: number; readonly bytes: number }> = {}
+const codegenSizes: Record<string, { readonly chars: number; readonly bytes: number }> = {};
 
 // ============================================================================
 // 1. Segment trie (current) — HttpRoute tree + a local verbatim port of
@@ -318,58 +339,60 @@ const codegenSizes: Record<string, { readonly chars: number; readonly bytes: num
 
 function buildHttpRouteTree(routes: readonly RouteDef[]): HttpRoute {
   type Mutable = {
-    methods: Record<string, { handler: Handler; meta: Record<string, never> }>
-    children: Map<string, Mutable>
-    fallback?: { name: string; node: Mutable }
-  }
-  const makeNode = (): Mutable => ({ methods: {}, children: new Map() })
-  const root = makeNode()
+    methods: Record<string, { handler: Handler; meta: Record<string, never> }>;
+    children: Map<string, Mutable>;
+    fallback?: { name: string; node: Mutable };
+  };
+  const makeNode = (): Mutable => ({ methods: {}, children: new Map() });
+  const root = makeNode();
 
   for (const route of routes) {
-    let node = root
+    let node = root;
     for (const seg of splitSegs(route.path)) {
       if (seg.startsWith(":")) {
-        const name = seg.slice(1)
-        if (node.fallback === undefined) node.fallback = { name, node: makeNode() }
-        node = node.fallback.node
+        const name = seg.slice(1);
+        if (node.fallback === undefined) node.fallback = { name, node: makeNode() };
+        node = node.fallback.node;
       } else {
-        let child = node.children.get(seg)
+        let child = node.children.get(seg);
         if (child === undefined) {
-          child = makeNode()
-          node.children.set(seg, child)
+          child = makeNode();
+          node.children.set(seg, child);
         }
-        node = child
+        node = child;
       }
     }
-    node.methods[route.method] = { handler: handlersByName.get(route.name)!, meta: {} }
+    node.methods[route.method] = { handler: handlersByName.get(route.name)!, meta: {} };
   }
 
   const toHttpRoute = (node: Mutable): HttpRoute =>
     httpRoute({
       methods: Object.keys(node.methods).length > 0 ? node.methods : undefined,
-      children: node.children.size > 0
-        ? Object.fromEntries([...node.children].map(([k, c]) => [k, toHttpRoute(c)]))
-        : undefined,
-      fallback: node.fallback !== undefined
-        ? { name: node.fallback.name, subtree: toHttpRoute(node.fallback.node) }
-        : undefined,
+      children:
+        node.children.size > 0
+          ? Object.fromEntries([...node.children].map(([k, c]) => [k, toHttpRoute(c)]))
+          : undefined,
+      fallback:
+        node.fallback !== undefined
+          ? { name: node.fallback.name, subtree: toHttpRoute(node.fallback.node) }
+          : undefined,
       meta: {},
-    })
+    });
 
-  return toHttpRoute(root)
+  return toHttpRoute(root);
 }
 
 /** Verbatim port of route.ts's private `splitPath` (route.ts:687). */
 function splitPath(pathname: string): string[] {
-  const segs: string[] = []
-  let start = 0
+  const segs: string[] = [];
+  let start = 0;
   for (let i = 0; i <= pathname.length; i++) {
     if (i === pathname.length || pathname.charCodeAt(i) === 47 /* "/" */) {
-      if (i > start) segs.push(pathname.slice(start, i))
-      start = i + 1
+      if (i > start) segs.push(pathname.slice(start, i));
+      start = i + 1;
     }
   }
-  return segs
+  return segs;
 }
 
 /** Verbatim port of route.ts's private `matchRoute` (route.ts:747). */
@@ -381,27 +404,30 @@ function matchRoute(
   slugs: Record<string, string>,
 ): { handler: Handler; slugs: Record<string, string> } | undefined {
   if (idx === segs.length) {
-    const entry = route.methods?.[method]
-    if (entry === undefined) return undefined
-    return { handler: entry.handler, slugs }
+    const entry = route.methods?.[method];
+    if (entry === undefined) return undefined;
+    return { handler: entry.handler, slugs };
   }
-  const seg = segs[idx]!
-  const child = route.children?.[seg]
+  const seg = segs[idx]!;
+  const child = route.children?.[seg];
   if (child !== undefined) {
-    return matchRoute(child, segs, idx + 1, method, slugs)
+    return matchRoute(child, segs, idx + 1, method, slugs);
   }
   if (route.fallback !== undefined) {
-    slugs[route.fallback.name] = seg
-    return matchRoute(route.fallback.subtree, segs, idx + 1, method, slugs)
+    slugs[route.fallback.name] = seg;
+    return matchRoute(route.fallback.subtree, segs, idx + 1, method, slugs);
   }
-  return undefined
+  return undefined;
 }
 
-const trieTree = buildHttpRouteTree(routeDefs)
+const trieTree = buildHttpRouteTree(routeDefs);
 
-function trieDispatch(pathname: string, method: string): { handler: Handler; slugs: Record<string, string> } | undefined {
-  const segs = splitPath(pathname)
-  return matchRoute(trieTree, segs, 0, method, {})
+function trieDispatch(
+  pathname: string,
+  method: string,
+): { handler: Handler; slugs: Record<string, string> } | undefined {
+  const segs = splitPath(pathname);
+  return matchRoute(trieTree, segs, 0, method, {});
 }
 
 // ============================================================================
@@ -412,37 +438,42 @@ function trieDispatch(pathname: string, method: string): { handler: Handler; slu
 // whose exact concrete path is known ahead of time.
 // ============================================================================
 
-const fullPathMap = new Map<string, { handler: Handler; slugs: Record<string, string> }>()
+const fullPathMap = new Map<string, { handler: Handler; slugs: Record<string, string> }>();
 
 // Concrete values used to expand dynamic routes into the map, and to build
 // the "dynamic hit" dispatch test path shared across all five architectures.
 const EXPANSIONS: Record<string, Record<string, string>> = {
   "/users/:id": { id: "42" },
   "/users/:id/profile": { id: "42" },
-  ...Object.fromEntries(longPathFixtures.map((f) => [f.dynamicPath, { id: f.dynamicConcreteValue }])),
+  ...Object.fromEntries(
+    longPathFixtures.map((f) => [f.dynamicPath, { id: f.dynamicConcreteValue }]),
+  ),
   [manyDynamicPath]: { orgId: "o1", teamId: "t1", memberId: "m1", roleId: "r1" },
   "/bulk/dyn/025/:id": { id: "xyz123" },
   [bulkLongDynPath]: { id: bulkLongDynValue },
-}
+};
 
 for (const route of routeDefs) {
-  const segs = splitSegs(route.path)
-  const hasParam = segs.some((s) => s.startsWith(":"))
+  const segs = splitSegs(route.path);
+  const hasParam = segs.some((s) => s.startsWith(":"));
   if (!hasParam) {
-    fullPathMap.set(`${route.method} /${segs.join("/")}`, { handler: handlersByName.get(route.name)!, slugs: {} })
-    continue
+    fullPathMap.set(`${route.method} /${segs.join("/")}`, {
+      handler: handlersByName.get(route.name)!,
+      slugs: {},
+    });
+    continue;
   }
-  const values = EXPANSIONS[route.path]
-  if (values === undefined) continue // not expanded — full-path map can't serve this route at all
-  const concreteSegs = segs.map((s) => (s.startsWith(":") ? values[s.slice(1)]! : s))
+  const values = EXPANSIONS[route.path];
+  if (values === undefined) continue; // not expanded — full-path map can't serve this route at all
+  const concreteSegs = segs.map((s) => (s.startsWith(":") ? values[s.slice(1)]! : s));
   fullPathMap.set(`${route.method} /${concreteSegs.join("/")}`, {
     handler: handlersByName.get(route.name)!,
     slugs: values,
-  })
+  });
 }
 
 function fullPathMapDispatch(pathname: string, method: string) {
-  return fullPathMap.get(`${method} ${pathname}`)
+  return fullPathMap.get(`${method} ${pathname}`);
 }
 
 // ============================================================================
@@ -453,37 +484,44 @@ function fullPathMapDispatch(pathname: string, method: string) {
 // ============================================================================
 
 function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-type RegexRouteMeta = { readonly outerGroup: number; readonly paramGroups: readonly { name: string; group: number }[]; readonly handler: Handler }
+type RegexRouteMeta = {
+  readonly outerGroup: number;
+  readonly paramGroups: readonly { name: string; group: number }[];
+  readonly handler: Handler;
+};
 
-function buildMethodRegex(routes: readonly RouteDef[]): { regex: RegExp; routeMetas: readonly RegexRouteMeta[] } {
-  const routeMetas: RegexRouteMeta[] = []
-  let groupCounter = 0 // group 0 is the whole match; first custom group is 1
+function buildMethodRegex(routes: readonly RouteDef[]): {
+  regex: RegExp;
+  routeMetas: readonly RegexRouteMeta[];
+} {
+  const routeMetas: RegexRouteMeta[] = [];
+  let groupCounter = 0; // group 0 is the whole match; first custom group is 1
   const alternatives = routes.map((route) => {
-    const segs = splitSegs(route.path)
+    const segs = splitSegs(route.path);
     // Group numbers are assigned left-to-right by OPENING paren position in
     // the final regex text — the outer group's "(" appears before any inner
     // param group's "(" (the alternative is literally `(\/inner)`), so the
     // outer group's number must be claimed first, not last.
-    const outerGroup = ++groupCounter
-    const paramGroups: { name: string; group: number }[] = []
+    const outerGroup = ++groupCounter;
+    const paramGroups: { name: string; group: number }[] = [];
     const inner = segs
       .map((seg) => {
         if (seg.startsWith(":")) {
-          const group = ++groupCounter
-          paramGroups.push({ name: seg.slice(1), group })
-          return "([^/]+)"
+          const group = ++groupCounter;
+          paramGroups.push({ name: seg.slice(1), group });
+          return "([^/]+)";
         }
-        return escapeRe(seg)
+        return escapeRe(seg);
       })
-      .join("\\/")
-    routeMetas.push({ outerGroup, paramGroups, handler: handlersByName.get(route.name)! })
-    return `(\\/${inner})`
-  })
-  const regex = new RegExp(`^(?:${alternatives.join("|")})$`)
-  return { regex, routeMetas }
+      .join("\\/");
+    routeMetas.push({ outerGroup, paramGroups, handler: handlersByName.get(route.name)! });
+    return `(\\/${inner})`;
+  });
+  const regex = new RegExp(`^(?:${alternatives.join("|")})$`);
+  return { regex, routeMetas };
 }
 
 const regexByMethod = new Map(
@@ -491,20 +529,23 @@ const regexByMethod = new Map(
     method,
     buildMethodRegex(routeDefs.filter((r) => r.method === method)),
   ]),
-)
+);
 
-function regexDispatch(pathname: string, method: string): { handler: Handler; slugs: Record<string, string> } | undefined {
-  const compiled = regexByMethod.get(method)
-  if (compiled === undefined) return undefined
-  const match = compiled.regex.exec(pathname)
-  if (match === null) return undefined
+function regexDispatch(
+  pathname: string,
+  method: string,
+): { handler: Handler; slugs: Record<string, string> } | undefined {
+  const compiled = regexByMethod.get(method);
+  if (compiled === undefined) return undefined;
+  const match = compiled.regex.exec(pathname);
+  if (match === null) return undefined;
   for (const meta of compiled.routeMetas) {
-    if (match[meta.outerGroup] === undefined) continue
-    const slugs: Record<string, string> = {}
-    for (const p of meta.paramGroups) slugs[p.name] = match[p.group]!
-    return { handler: meta.handler, slugs }
+    if (match[meta.outerGroup] === undefined) continue;
+    const slugs: Record<string, string> = {};
+    for (const p of meta.paramGroups) slugs[p.name] = match[p.group]!;
+    return { handler: meta.handler, slugs };
   }
-  return undefined
+  return undefined;
 }
 
 // ============================================================================
@@ -515,89 +556,100 @@ function regexDispatch(pathname: string, method: string): { handler: Handler; sl
 // module scope, so free variables are threaded in explicitly).
 // ============================================================================
 
-function buildCompiledSwitch(routes: readonly RouteDef[]): (pathname: string, method: string) => { handler: Handler; slugs: Record<string, string> } | undefined {
+function buildCompiledSwitch(
+  routes: readonly RouteDef[],
+): (
+  pathname: string,
+  method: string,
+) => { handler: Handler; slugs: Record<string, string> } | undefined {
   type Mutable = {
-    methods: Record<string, number> // method -> handler index
-    children: Map<string, Mutable>
-    fallback?: { name: string; node: Mutable }
-  }
-  const makeNode = (): Mutable => ({ methods: {}, children: new Map() })
-  const root = makeNode()
-  const handlers: Handler[] = []
-  const handlerIndex = new Map<string, number>()
+    methods: Record<string, number>; // method -> handler index
+    children: Map<string, Mutable>;
+    fallback?: { name: string; node: Mutable };
+  };
+  const makeNode = (): Mutable => ({ methods: {}, children: new Map() });
+  const root = makeNode();
+  const handlers: Handler[] = [];
+  const handlerIndex = new Map<string, number>();
   const indexOf = (name: string): number => {
-    let i = handlerIndex.get(name)
+    let i = handlerIndex.get(name);
     if (i === undefined) {
-      i = handlers.length
-      handlers.push(handlersByName.get(name)!)
-      handlerIndex.set(name, i)
+      i = handlers.length;
+      handlers.push(handlersByName.get(name)!);
+      handlerIndex.set(name, i);
     }
-    return i
-  }
+    return i;
+  };
 
   for (const route of routes) {
-    let node = root
+    let node = root;
     for (const seg of splitSegs(route.path)) {
       if (seg.startsWith(":")) {
-        const name = seg.slice(1)
-        if (node.fallback === undefined) node.fallback = { name, node: makeNode() }
-        node = node.fallback.node
+        const name = seg.slice(1);
+        if (node.fallback === undefined) node.fallback = { name, node: makeNode() };
+        node = node.fallback.node;
       } else {
-        let child = node.children.get(seg)
+        let child = node.children.get(seg);
         if (child === undefined) {
-          child = makeNode()
-          node.children.set(seg, child)
+          child = makeNode();
+          node.children.set(seg, child);
         }
-        node = child
+        node = child;
       }
     }
-    node.methods[route.method] = indexOf(route.name)
+    node.methods[route.method] = indexOf(route.name);
   }
 
-  let paramCounter = 0
+  let paramCounter = 0;
   function gen(node: Mutable, depth: number, slugAssigns: readonly string[]): string {
-    let code = ""
-    const methodEntries = Object.entries(node.methods)
+    let code = "";
+    const methodEntries = Object.entries(node.methods);
     if (methodEntries.length > 0) {
-      code += `if (segs.length === ${depth}) {\n`
+      code += `if (segs.length === ${depth}) {\n`;
       for (const [method, hIdx] of methodEntries) {
-        const slugsObj = slugAssigns.length > 0 ? `{ ${slugAssigns.join(", ")} }` : "{}"
-        code += `  if (method === ${JSON.stringify(method)}) return { handler: handlers[${hIdx}], slugs: ${slugsObj} }\n`
+        const slugsObj = slugAssigns.length > 0 ? `{ ${slugAssigns.join(", ")} }` : "{}";
+        code += `  if (method === ${JSON.stringify(method)}) return { handler: handlers[${hIdx}], slugs: ${slugsObj} }\n`;
       }
-      code += `}\n`
+      code += `}\n`;
     }
     if (node.children.size > 0) {
-      code += `if (segs.length > ${depth}) {\n`
-      code += `switch (segs[${depth}]) {\n`
+      code += `if (segs.length > ${depth}) {\n`;
+      code += `switch (segs[${depth}]) {\n`;
       for (const [seg, child] of node.children) {
-        code += `case ${JSON.stringify(seg)}: {\n${gen(child, depth + 1, slugAssigns)}\nbreak\n}\n`
+        code += `case ${JSON.stringify(seg)}: {\n${gen(child, depth + 1, slugAssigns)}\nbreak\n}\n`;
       }
-      code += `}\n`
-      code += `}\n`
+      code += `}\n`;
+      code += `}\n`;
     }
     if (node.fallback !== undefined) {
-      const pvar = `p${paramCounter++}`
-      code += `if (segs.length > ${depth}) {\n`
-      code += `const ${pvar} = segs[${depth}]\n`
-      code += gen(node.fallback.node, depth + 1, [...slugAssigns, `${JSON.stringify(node.fallback.name)}: ${pvar}`])
-      code += `}\n`
+      const pvar = `p${paramCounter++}`;
+      code += `if (segs.length > ${depth}) {\n`;
+      code += `const ${pvar} = segs[${depth}]\n`;
+      code += gen(node.fallback.node, depth + 1, [
+        ...slugAssigns,
+        `${JSON.stringify(node.fallback.name)}: ${pvar}`,
+      ]);
+      code += `}\n`;
     }
-    return code
+    return code;
   }
 
-  const body = `${gen(root, 0, [])}\nreturn undefined\n`
-  codegenSizes["4. Compiled switch (new Function)"] = { chars: body.length, bytes: Buffer.byteLength(body, "utf8") }
+  const body = `${gen(root, 0, [])}\nreturn undefined\n`;
+  codegenSizes["4. Compiled switch (new Function)"] = {
+    chars: body.length,
+    bytes: Buffer.byteLength(body, "utf8"),
+  };
   // eslint-disable-next-line @typescript-eslint/no-implied-eval -- deliberate: this IS the "compiled switch" architecture under test
   const fn = new Function("segs", "method", "handlers", body) as (
     segs: readonly string[],
     method: string,
     handlers: readonly Handler[],
-  ) => { handler: Handler; slugs: Record<string, string> } | undefined
+  ) => { handler: Handler; slugs: Record<string, string> } | undefined;
 
-  return (pathname: string, method: string) => fn(splitPath(pathname), method, handlers)
+  return (pathname: string, method: string) => fn(splitPath(pathname), method, handlers);
 }
 
-const compiledSwitchDispatch = buildCompiledSwitch(routeDefs)
+const compiledSwitchDispatch = buildCompiledSwitch(routeDefs);
 
 // ============================================================================
 // 5. Character-level radix trie — walk the raw pathname char-by-char against
@@ -607,21 +659,21 @@ const compiledSwitchDispatch = buildCompiledSwitch(routeDefs)
 // ============================================================================
 
 type RadixNode = {
-  prefix: string
-  children: RadixNode[]
-  param?: { name: string; node: RadixNode }
-  methods?: Record<string, Handler>
-}
+  prefix: string;
+  children: RadixNode[];
+  param?: { name: string; node: RadixNode };
+  methods?: Record<string, Handler>;
+};
 
 function newRadixNode(prefix: string): RadixNode {
-  return { prefix, children: [] }
+  return { prefix, children: [] };
 }
 
 function commonPrefixLen(a: string, b: string): number {
-  const max = Math.min(a.length, b.length)
-  let i = 0
-  while (i < max && a.charCodeAt(i) === b.charCodeAt(i)) i++
-  return i
+  const max = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < max && a.charCodeAt(i) === b.charCodeAt(i)) i++;
+  return i;
 }
 
 /** Split `child` at `len` chars into a new intermediate node, preserving its subtree below the split. */
@@ -631,95 +683,98 @@ function splitRadixNode(child: RadixNode, len: number): void {
     children: child.children,
     ...(child.param !== undefined ? { param: child.param } : {}),
     ...(child.methods !== undefined ? { methods: child.methods } : {}),
-  }
-  child.prefix = child.prefix.slice(0, len)
-  child.children = [tail]
-  delete child.param
-  delete child.methods
+  };
+  child.prefix = child.prefix.slice(0, len);
+  child.children = [tail];
+  delete child.param;
+  delete child.methods;
 }
 
 function insertRadix(node: RadixNode, path: string, method: string, handler: Handler): void {
   if (path.length === 0) {
-    node.methods = node.methods ?? {}
-    node.methods[method] = handler
-    return
+    node.methods = node.methods ?? {};
+    node.methods[method] = handler;
+    return;
   }
   if (path[0] === ":") {
-    const slashIdx = path.indexOf("/")
-    const name = slashIdx === -1 ? path.slice(1) : path.slice(1, slashIdx)
-    const rest = slashIdx === -1 ? "" : path.slice(slashIdx)
-    if (node.param === undefined) node.param = { name, node: newRadixNode("") }
-    insertRadix(node.param.node, rest, method, handler)
-    return
+    const slashIdx = path.indexOf("/");
+    const name = slashIdx === -1 ? path.slice(1) : path.slice(1, slashIdx);
+    const rest = slashIdx === -1 ? "" : path.slice(slashIdx);
+    if (node.param === undefined) node.param = { name, node: newRadixNode("") };
+    insertRadix(node.param.node, rest, method, handler);
+    return;
   }
   // literal chunk up to the next ':' (if any) is what we may share/split against existing children
-  const paramIdx = path.indexOf(":")
-  const literal = paramIdx === -1 ? path : path.slice(0, paramIdx)
-  const restAfterLiteral = paramIdx === -1 ? "" : path.slice(paramIdx)
+  const paramIdx = path.indexOf(":");
+  const literal = paramIdx === -1 ? path : path.slice(0, paramIdx);
+  const restAfterLiteral = paramIdx === -1 ? "" : path.slice(paramIdx);
 
   for (const child of node.children) {
-    const cp = commonPrefixLen(child.prefix, literal)
-    if (cp === 0) continue
-    if (cp < child.prefix.length) splitRadixNode(child, cp)
-    insertRadix(child, literal.slice(cp) + restAfterLiteral, method, handler)
-    return
+    const cp = commonPrefixLen(child.prefix, literal);
+    if (cp === 0) continue;
+    if (cp < child.prefix.length) splitRadixNode(child, cp);
+    insertRadix(child, literal.slice(cp) + restAfterLiteral, method, handler);
+    return;
   }
-  const newChild = newRadixNode(literal)
-  node.children.push(newChild)
-  insertRadix(newChild, restAfterLiteral, method, handler)
+  const newChild = newRadixNode(literal);
+  node.children.push(newChild);
+  insertRadix(newChild, restAfterLiteral, method, handler);
 }
 
 function buildRadixTrie(routes: readonly RouteDef[]): RadixNode {
-  const root = newRadixNode("")
+  const root = newRadixNode("");
   for (const route of routes) {
-    insertRadix(root, route.path, route.method, handlersByName.get(route.name)!)
+    insertRadix(root, route.path, route.method, handlersByName.get(route.name)!);
   }
-  return root
+  return root;
 }
 
-const radixRoot = buildRadixTrie(routeDefs)
+const radixRoot = buildRadixTrie(routeDefs);
 
-function radixDispatch(pathname: string, method: string): { handler: Handler; slugs: Record<string, string> } | undefined {
-  const slugs: Record<string, string> = {}
-  let node = radixRoot
-  let i = 0
-  const len = pathname.length
+function radixDispatch(
+  pathname: string,
+  method: string,
+): { handler: Handler; slugs: Record<string, string> } | undefined {
+  const slugs: Record<string, string> = {};
+  let node = radixRoot;
+  let i = 0;
+  const len = pathname.length;
   for (;;) {
     // consume this node's own prefix
-    const prefix = node.prefix
-    const plen = prefix.length
+    const prefix = node.prefix;
+    const plen = prefix.length;
     if (plen > 0) {
-      if (i + plen > len) return undefined
+      if (i + plen > len) return undefined;
       for (let k = 0; k < plen; k++) {
-        if (pathname.charCodeAt(i + k) !== prefix.charCodeAt(k)) return undefined
+        if (pathname.charCodeAt(i + k) !== prefix.charCodeAt(k)) return undefined;
       }
-      i += plen
+      i += plen;
     }
     if (i === len) {
-      const entry = node.methods?.[method]
-      return entry !== undefined ? { handler: entry, slugs } : undefined
+      const entry = node.methods?.[method];
+      return entry !== undefined ? { handler: entry, slugs } : undefined;
     }
-    const c = pathname.charCodeAt(i)
-    let next: RadixNode | undefined
+    const c = pathname.charCodeAt(i);
+    let next: RadixNode | undefined;
     for (const child of node.children) {
       if (child.prefix.charCodeAt(0) === c) {
-        next = child
-        break
+        next = child;
+        break;
       }
     }
     if (next !== undefined) {
-      node = next
-      continue
+      node = next;
+      continue;
     }
     if (node.param !== undefined) {
-      let end = i
-      while (end < len && pathname.charCodeAt(end) !== 47 /* "/" */) end++
-      slugs[node.param.name] = pathname.slice(i, end)
-      i = end
-      node = node.param.node
-      continue
+      let end = i;
+      while (end < len && pathname.charCodeAt(end) !== 47 /* "/" */) end++;
+      slugs[node.param.name] = pathname.slice(i, end);
+      i = end;
+      node = node.param.node;
+      continue;
     }
-    return undefined
+    return undefined;
   }
 }
 
@@ -738,94 +793,99 @@ function radixDispatch(pathname: string, method: string): { handler: Handler; sl
 // ============================================================================
 
 type DfaCharTrieNode = {
-  readonly id: number
-  readonly literalChildren: Map<number, DfaCharTrieNode>
-  paramChild?: { readonly name: string; readonly node: DfaCharTrieNode }
-  readonly isParamState: boolean
-  handler?: Handler
-}
+  readonly id: number;
+  readonly literalChildren: Map<number, DfaCharTrieNode>;
+  paramChild?: { readonly name: string; readonly node: DfaCharTrieNode };
+  readonly isParamState: boolean;
+  handler?: Handler;
+};
 
 function newDfaNode(nextId: () => number, isParamState: boolean): DfaCharTrieNode {
-  return { id: nextId(), literalChildren: new Map(), isParamState }
+  return { id: nextId(), literalChildren: new Map(), isParamState };
 }
 
-function insertDfaChars(root: DfaCharTrieNode, path: string, handler: Handler, nextId: () => number): void {
-  let node = root
-  let i = 0
+function insertDfaChars(
+  root: DfaCharTrieNode,
+  path: string,
+  handler: Handler,
+  nextId: () => number,
+): void {
+  let node = root;
+  let i = 0;
   while (i < path.length) {
     if (path[i] === ":") {
-      let j = i + 1
-      while (j < path.length && path[j] !== "/") j++
-      const name = path.slice(i + 1, j)
-      if (node.paramChild === undefined) node.paramChild = { name, node: newDfaNode(nextId, true) }
-      node = node.paramChild.node
-      i = j
+      let j = i + 1;
+      while (j < path.length && path[j] !== "/") j++;
+      const name = path.slice(i + 1, j);
+      if (node.paramChild === undefined) node.paramChild = { name, node: newDfaNode(nextId, true) };
+      node = node.paramChild.node;
+      i = j;
     } else {
-      const code = path.charCodeAt(i)
-      let child = node.literalChildren.get(code)
+      const code = path.charCodeAt(i);
+      let child = node.literalChildren.get(code);
       if (child === undefined) {
-        child = newDfaNode(nextId, false)
-        node.literalChildren.set(code, child)
+        child = newDfaNode(nextId, false);
+        node.literalChildren.set(code, child);
       }
-      node = child
-      i++
+      node = child;
+      i++;
     }
   }
-  node.handler = handler
+  node.handler = handler;
 }
 
 /** Iterative (not recursive) so an 8k-char route's char-per-state chain can't blow the call stack. */
 function collectDfaNodes(root: DfaCharTrieNode): DfaCharTrieNode[] {
-  const out: DfaCharTrieNode[] = []
-  const stack: DfaCharTrieNode[] = [root]
+  const out: DfaCharTrieNode[] = [];
+  const stack: DfaCharTrieNode[] = [root];
   while (stack.length > 0) {
-    const node = stack.pop()!
-    out.push(node)
-    for (const child of node.literalChildren.values()) stack.push(child)
-    if (node.paramChild !== undefined) stack.push(node.paramChild.node)
+    const node = stack.pop()!;
+    out.push(node);
+    for (const child of node.literalChildren.values()) stack.push(child);
+    if (node.paramChild !== undefined) stack.push(node.paramChild.node);
   }
-  return out
+  return out;
 }
 
 type MethodDfa = {
-  readonly table: Uint32Array
-  readonly paramNameOfState: readonly (string | undefined)[]
-  readonly terminalOf: readonly (Handler | undefined)[]
-  readonly startState: number
-}
+  readonly table: Uint32Array;
+  readonly paramNameOfState: readonly (string | undefined)[];
+  readonly terminalOf: readonly (Handler | undefined)[];
+  readonly startState: number;
+};
 
 function buildMethodDfa(routes: readonly RouteDef[]): MethodDfa {
-  let idCounter = 0
-  const nextId = () => ++idCounter // states are 1..N; 0 is reserved for "dead"
-  const root = newDfaNode(nextId, false)
+  let idCounter = 0;
+  const nextId = () => ++idCounter; // states are 1..N; 0 is reserved for "dead"
+  const root = newDfaNode(nextId, false);
   for (const route of routes) {
-    insertDfaChars(root, route.path, handlersByName.get(route.name)!, nextId)
+    insertDfaChars(root, route.path, handlersByName.get(route.name)!, nextId);
   }
 
-  const allNodes = collectDfaNodes(root)
-  const numStates = idCounter
-  const table = new Uint32Array((numStates + 1) * 128)
-  const paramNameOfState: (string | undefined)[] = new Array(numStates + 1)
-  const terminalOf: (Handler | undefined)[] = new Array(numStates + 1)
+  const allNodes = collectDfaNodes(root);
+  const numStates = idCounter;
+  const table = new Uint32Array((numStates + 1) * 128);
+  const paramNameOfState: (string | undefined)[] = new Array(numStates + 1);
+  const terminalOf: (Handler | undefined)[] = new Array(numStates + 1);
 
   for (const node of allNodes) {
-    const row = node.id * 128
+    const row = node.id * 128;
     for (let c = 0; c < 128; c++) {
-      table[row + c] = c === 47 ? 0 : node.isParamState ? node.id : 0
+      table[row + c] = c === 47 ? 0 : node.isParamState ? node.id : 0;
     }
-    for (const [code, child] of node.literalChildren) table[row + code] = child.id
+    for (const [code, child] of node.literalChildren) table[row + code] = child.id;
     if (node.paramChild !== undefined) {
-      const pid = node.paramChild.node.id
-      paramNameOfState[pid] = node.paramChild.name
+      const pid = node.paramChild.node.id;
+      paramNameOfState[pid] = node.paramChild.name;
       for (let c = 0; c < 128; c++) {
-        if (c === 47) continue
-        if (!node.literalChildren.has(c)) table[row + c] = pid
+        if (c === 47) continue;
+        if (!node.literalChildren.has(c)) table[row + c] = pid;
       }
     }
-    terminalOf[node.id] = node.handler
+    terminalOf[node.id] = node.handler;
   }
 
-  return { table, paramNameOfState, terminalOf, startState: root.id }
+  return { table, paramNameOfState, terminalOf, startState: root.id };
 }
 
 const dfaByMethod = new Map(
@@ -833,38 +893,41 @@ const dfaByMethod = new Map(
     method,
     buildMethodDfa(routeDefs.filter((r) => r.method === method)),
   ]),
-)
+);
 
-function dfaDispatch(pathname: string, method: string): { handler: Handler; slugs: Record<string, string> } | undefined {
-  const dfa = dfaByMethod.get(method)
-  if (dfa === undefined) return undefined
-  const { table, paramNameOfState, terminalOf, startState } = dfa
-  const len = pathname.length
-  let state = startState
-  const slugs: Record<string, string> = {}
-  let paramName: string | undefined
-  let paramStart = 0
-  let i = 0
+function dfaDispatch(
+  pathname: string,
+  method: string,
+): { handler: Handler; slugs: Record<string, string> } | undefined {
+  const dfa = dfaByMethod.get(method);
+  if (dfa === undefined) return undefined;
+  const { table, paramNameOfState, terminalOf, startState } = dfa;
+  const len = pathname.length;
+  let state = startState;
+  const slugs: Record<string, string> = {};
+  let paramName: string | undefined;
+  let paramStart = 0;
+  let i = 0;
   for (; i < len; i++) {
-    const c = pathname.charCodeAt(i)
-    const next = table[state * 128 + c]!
-    if (next === 0) return undefined
+    const c = pathname.charCodeAt(i);
+    const next = table[state * 128 + c]!;
+    if (next === 0) return undefined;
     if (next !== state) {
       if (paramName !== undefined) {
-        slugs[paramName] = pathname.slice(paramStart, i)
-        paramName = undefined
+        slugs[paramName] = pathname.slice(paramStart, i);
+        paramName = undefined;
       }
-      const enteredName = paramNameOfState[next]
+      const enteredName = paramNameOfState[next];
       if (enteredName !== undefined) {
-        paramName = enteredName
-        paramStart = i
+        paramName = enteredName;
+        paramStart = i;
       }
     }
-    state = next
+    state = next;
   }
-  if (paramName !== undefined) slugs[paramName] = pathname.slice(paramStart, i)
-  const handler = terminalOf[state]
-  return handler !== undefined ? { handler, slugs } : undefined
+  if (paramName !== undefined) slugs[paramName] = pathname.slice(paramStart, i);
+  const handler = terminalOf[state];
+  return handler !== undefined ? { handler, slugs } : undefined;
 }
 
 // ============================================================================
@@ -881,62 +944,70 @@ function dfaDispatch(pathname: string, method: string): { handler: Handler; slug
 // ============================================================================
 
 type CharFnTrieNode = {
-  readonly literalChildren: Map<number, CharFnTrieNode>
-  paramChild?: { readonly name: string; readonly node: CharFnTrieNode }
-  readonly methods: Map<string, number> // method -> handler index
-}
+  readonly literalChildren: Map<number, CharFnTrieNode>;
+  paramChild?: { readonly name: string; readonly node: CharFnTrieNode };
+  readonly methods: Map<string, number>; // method -> handler index
+};
 
 function newCharFnNode(): CharFnTrieNode {
-  return { literalChildren: new Map(), methods: new Map() }
+  return { literalChildren: new Map(), methods: new Map() };
 }
 
-function insertCharFn(root: CharFnTrieNode, path: string, method: string, handlerIdx: number): void {
-  let node = root
-  let i = 0
+function insertCharFn(
+  root: CharFnTrieNode,
+  path: string,
+  method: string,
+  handlerIdx: number,
+): void {
+  let node = root;
+  let i = 0;
   while (i < path.length) {
     if (path[i] === ":") {
-      let j = i + 1
-      while (j < path.length && path[j] !== "/") j++
-      const name = path.slice(i + 1, j)
-      if (node.paramChild === undefined) node.paramChild = { name, node: newCharFnNode() }
-      node = node.paramChild.node
-      i = j
+      let j = i + 1;
+      while (j < path.length && path[j] !== "/") j++;
+      const name = path.slice(i + 1, j);
+      if (node.paramChild === undefined) node.paramChild = { name, node: newCharFnNode() };
+      node = node.paramChild.node;
+      i = j;
     } else {
-      const code = path.charCodeAt(i)
-      let child = node.literalChildren.get(code)
+      const code = path.charCodeAt(i);
+      let child = node.literalChildren.get(code);
       if (child === undefined) {
-        child = newCharFnNode()
-        node.literalChildren.set(code, child)
+        child = newCharFnNode();
+        node.literalChildren.set(code, child);
       }
-      node = child
-      i++
+      node = child;
+      i++;
     }
   }
-  node.methods.set(method, handlerIdx)
+  node.methods.set(method, handlerIdx);
 }
 
 function buildCompiledCharFn(
   routes: readonly RouteDef[],
   codegenKey = "7. Compiled char-level fn",
-): (pathname: string, method: string) => { handler: Handler; slugs: Record<string, string> } | undefined {
-  const root = newCharFnNode()
-  const handlers: Handler[] = []
-  const handlerIndex = new Map<string, number>()
+): (
+  pathname: string,
+  method: string,
+) => { handler: Handler; slugs: Record<string, string> } | undefined {
+  const root = newCharFnNode();
+  const handlers: Handler[] = [];
+  const handlerIndex = new Map<string, number>();
   const indexOf = (name: string): number => {
-    let idx = handlerIndex.get(name)
+    let idx = handlerIndex.get(name);
     if (idx === undefined) {
-      idx = handlers.length
-      handlers.push(handlersByName.get(name)!)
-      handlerIndex.set(name, idx)
+      idx = handlers.length;
+      handlers.push(handlersByName.get(name)!);
+      handlerIndex.set(name, idx);
     }
-    return idx
-  }
+    return idx;
+  };
 
   for (const route of routes) {
-    insertCharFn(root, route.path, route.method, indexOf(route.name))
+    insertCharFn(root, route.path, route.method, indexOf(route.name));
   }
 
-  let paramCounter = 0
+  let paramCounter = 0;
 
   // Follow a run of unbranching single-literal-child nodes (no param, no
   // terminal in between) and fold it into one string, so a long unbranching
@@ -947,68 +1018,68 @@ function buildCompiledCharFn(
   // chars — a real limitation of naive char-by-char codegen, worked around
   // here the same way a real compiler would: batch the unambiguous run.
   function chaseChunk(node: CharFnTrieNode): { chunk: string; target: CharFnTrieNode } {
-    let chunk = ""
-    let cur = node
+    let chunk = "";
+    let cur = node;
     for (;;) {
-      if (cur.methods.size > 0) break
-      if (cur.paramChild !== undefined) break
-      if (cur.literalChildren.size !== 1) break
-      const [code, child] = [...cur.literalChildren][0]!
-      chunk += String.fromCharCode(code)
-      cur = child
+      if (cur.methods.size > 0) break;
+      if (cur.paramChild !== undefined) break;
+      if (cur.literalChildren.size !== 1) break;
+      const [code, child] = [...cur.literalChildren][0]!;
+      chunk += String.fromCharCode(code);
+      cur = child;
     }
-    return { chunk, target: cur }
+    return { chunk, target: cur };
   }
 
   function gen(node: CharFnTrieNode, slugAssigns: readonly string[]): string {
-    let code = ""
+    let code = "";
     if (node.methods.size > 0) {
-      code += `if (i === len) {\n`
+      code += `if (i === len) {\n`;
       for (const [method, hIdx] of node.methods) {
-        const slugsObj = slugAssigns.length > 0 ? `{ ${slugAssigns.join(", ")} }` : "{}"
-        code += `if (method === ${JSON.stringify(method)}) return { handler: handlers[${hIdx}], slugs: ${slugsObj} }\n`
+        const slugsObj = slugAssigns.length > 0 ? `{ ${slugAssigns.join(", ")} }` : "{}";
+        code += `if (method === ${JSON.stringify(method)}) return { handler: handlers[${hIdx}], slugs: ${slugsObj} }\n`;
       }
-      code += `}\n`
+      code += `}\n`;
     }
 
-    const branches: string[] = []
+    const branches: string[] = [];
     if (node.literalChildren.size > 0) {
       for (const [charCode, firstChild] of node.literalChildren) {
-        const { chunk, target } = chaseChunk(firstChild)
-        const fullChunk = String.fromCharCode(charCode) + chunk
+        const { chunk, target } = chaseChunk(firstChild);
+        const fullChunk = String.fromCharCode(charCode) + chunk;
         branches.push(
           `if (s.startsWith(${JSON.stringify(fullChunk)}, i)) {\ni += ${fullChunk.length}\n${gen(target, slugAssigns)}\n}`,
-        )
+        );
       }
     }
     if (node.paramChild !== undefined) {
-      const pvar = `p${paramCounter++}`
-      const nextSlugAssigns = [...slugAssigns, `${JSON.stringify(node.paramChild.name)}: ${pvar}`]
+      const pvar = `p${paramCounter++}`;
+      const nextSlugAssigns = [...slugAssigns, `${JSON.stringify(node.paramChild.name)}: ${pvar}`];
       branches.push(
         `{\nconst start${pvar} = i\nwhile (i < len && s.charCodeAt(i) !== 47) i++\nconst ${pvar} = s.slice(start${pvar}, i)\n${gen(node.paramChild.node, nextSlugAssigns)}\n}`,
-      )
+      );
     }
     if (branches.length > 0) {
-      code += `if (i < len) {\n`
-      code += branches.join(" else ")
-      code += `\n}\n`
+      code += `if (i < len) {\n`;
+      code += branches.join(" else ");
+      code += `\n}\n`;
     }
-    return code
+    return code;
   }
 
-  const body = `let i = 0\nconst len = s.length\n${gen(root, [])}\nreturn undefined\n`
-  codegenSizes[codegenKey] = { chars: body.length, bytes: Buffer.byteLength(body, "utf8") }
+  const body = `let i = 0\nconst len = s.length\n${gen(root, [])}\nreturn undefined\n`;
+  codegenSizes[codegenKey] = { chars: body.length, bytes: Buffer.byteLength(body, "utf8") };
   // eslint-disable-next-line @typescript-eslint/no-implied-eval -- deliberate: this IS the "compiled char-level function" architecture under test
   const fn = new Function("s", "method", "handlers", body) as (
     s: string,
     method: string,
     handlers: readonly Handler[],
-  ) => { handler: Handler; slugs: Record<string, string> } | undefined
+  ) => { handler: Handler; slugs: Record<string, string> } | undefined;
 
-  return (pathname: string, method: string) => fn(pathname, method, handlers)
+  return (pathname: string, method: string) => fn(pathname, method, handlers);
 }
 
-const compiledCharFnDispatch = buildCompiledCharFn(routeDefs)
+const compiledCharFnDispatch = buildCompiledCharFn(routeDefs);
 
 // ============================================================================
 // 8. Hybrid Map + compiled char-level fn — partition routeDefs at build time
@@ -1024,36 +1095,42 @@ const compiledCharFnDispatch = buildCompiledCharFn(routeDefs)
 // ============================================================================
 
 function isDynamicRoute(route: RouteDef): boolean {
-  return splitSegs(route.path).some((seg) => seg.startsWith(":"))
+  return splitSegs(route.path).some((seg) => seg.startsWith(":"));
 }
 
-const hybridStaticDefs = routeDefs.filter((r) => !isDynamicRoute(r))
-const hybridDynamicDefs = routeDefs.filter(isDynamicRoute)
+const hybridStaticDefs = routeDefs.filter((r) => !isDynamicRoute(r));
+const hybridDynamicDefs = routeDefs.filter(isDynamicRoute);
 
 function buildHybridStaticMap(routes: readonly RouteDef[]): Map<string, Record<string, Handler>> {
-  const map = new Map<string, Record<string, Handler>>()
+  const map = new Map<string, Record<string, Handler>>();
   for (const route of routes) {
-    const pathname = `/${splitSegs(route.path).join("/")}`
-    let methods = map.get(pathname)
+    const pathname = `/${splitSegs(route.path).join("/")}`;
+    let methods = map.get(pathname);
     if (methods === undefined) {
-      methods = {}
-      map.set(pathname, methods)
+      methods = {};
+      map.set(pathname, methods);
     }
-    methods[route.method] = handlersByName.get(route.name)!
+    methods[route.method] = handlersByName.get(route.name)!;
   }
-  return map
+  return map;
 }
 
-const hybridStaticMap = buildHybridStaticMap(hybridStaticDefs)
-const hybridDynamicDispatch = buildCompiledCharFn(hybridDynamicDefs, "8. Hybrid — dynamic-only compiled char fn")
+const hybridStaticMap = buildHybridStaticMap(hybridStaticDefs);
+const hybridDynamicDispatch = buildCompiledCharFn(
+  hybridDynamicDefs,
+  "8. Hybrid — dynamic-only compiled char fn",
+);
 
-function hybridDispatch(pathname: string, method: string): { handler: Handler; slugs: Record<string, string> } | undefined {
-  const methods = hybridStaticMap.get(pathname)
+function hybridDispatch(
+  pathname: string,
+  method: string,
+): { handler: Handler; slugs: Record<string, string> } | undefined {
+  const methods = hybridStaticMap.get(pathname);
   if (methods !== undefined) {
-    const handler = methods[method]
-    if (handler !== undefined) return { handler, slugs: {} }
+    const handler = methods[method];
+    if (handler !== undefined) return { handler, slugs: {} };
   }
-  return hybridDynamicDispatch(pathname, method)
+  return hybridDynamicDispatch(pathname, method);
 }
 
 // ============================================================================
@@ -1061,7 +1138,10 @@ function hybridDispatch(pathname: string, method: string): { handler: Handler; s
 // `typeof Bun.bench === "undefined"`); a small hand-rolled timer instead.
 // ============================================================================
 
-type Dispatch = (pathname: string, method: string) => { handler: Handler; slugs: Record<string, string> } | undefined
+type Dispatch = (
+  pathname: string,
+  method: string,
+) => { handler: Handler; slugs: Record<string, string> } | undefined;
 
 const architectures: readonly { readonly name: string; readonly dispatch: Dispatch }[] = [
   { name: "1. Segment trie (current)", dispatch: trieDispatch },
@@ -1072,9 +1152,13 @@ const architectures: readonly { readonly name: string; readonly dispatch: Dispat
   { name: "6. Flat DFA table", dispatch: dfaDispatch },
   { name: "7. Compiled char-level fn", dispatch: compiledCharFnDispatch },
   { name: "8. Hybrid Map+charFn", dispatch: hybridDispatch },
-]
+];
 
-const dispatchCases: readonly { readonly name: string; readonly pathname: string; readonly method: string }[] = [
+const dispatchCases: readonly {
+  readonly name: string;
+  readonly pathname: string;
+  readonly method: string;
+}[] = [
   { name: "static hit", pathname: "/static/about", method: "GET" },
   { name: "dynamic hit", pathname: "/users/42", method: "GET" },
   { name: "deep hit", pathname: "/static/docs/guides/quickstart", method: "GET" },
@@ -1113,36 +1197,47 @@ const dispatchCases: readonly { readonly name: string; readonly pathname: string
   // Case G: nesting + branching + long paths, all combined (48 leaves, 4k+ chars each).
   { name: "long grid early", pathname: longGridEarlyPath, method: "GET" },
   { name: "long grid late", pathname: longGridLatePath, method: "GET" },
-]
+];
 
 // --- correctness check: every architecture must agree on every case before
 // timing numbers are worth trusting.
 function checkCorrectness(): void {
-  console.log("=== Correctness check ===\n")
-  let allOk = true
+  console.log("=== Correctness check ===\n");
+  let allOk = true;
   for (const kase of dispatchCases) {
-    const results = architectures.map((a) => a.dispatch(kase.pathname, kase.method))
-    const names = results.map((r) => (r === undefined ? "MISS" : (r.handler as (i: unknown) => { name: string })(undefined).name))
-    const slugsStrs = results.map((r) => (r === undefined ? "-" : JSON.stringify(r.slugs)))
-    const allSame = names.every((n) => n === names[0])
-    if (!allSame) allOk = false
-    console.log(`${kase.name.padEnd(14)} ${kase.method} ${kase.pathname}`)
+    const results = architectures.map((a) => a.dispatch(kase.pathname, kase.method));
+    const names = results.map((r) =>
+      r === undefined ? "MISS" : (r.handler as (i: unknown) => { name: string })(undefined).name,
+    );
+    const slugsStrs = results.map((r) => (r === undefined ? "-" : JSON.stringify(r.slugs)));
+    const allSame = names.every((n) => n === names[0]);
+    if (!allSame) allOk = false;
+    console.log(`${kase.name.padEnd(14)} ${kase.method} ${kase.pathname}`);
     for (let i = 0; i < architectures.length; i++) {
-      console.log(`  ${architectures[i]!.name.padEnd(34)} -> ${String(names[i]).padEnd(20)} slugs=${slugsStrs[i]}`)
+      console.log(
+        `  ${architectures[i]!.name.padEnd(34)} -> ${String(names[i]).padEnd(20)} slugs=${slugsStrs[i]}`,
+      );
     }
-    console.log(allSame ? "  agree: yes" : "  agree: NO — architectures disagree, timings below are not meaningful")
-    console.log()
+    console.log(
+      allSame
+        ? "  agree: yes"
+        : "  agree: NO — architectures disagree, timings below are not meaningful",
+    );
+    console.log();
   }
-  if (!allOk) throw new Error("architectures disagree on at least one case — fix before trusting bench numbers")
+  if (!allOk)
+    throw new Error(
+      "architectures disagree on at least one case — fix before trusting bench numbers",
+    );
 }
 
 function timeOnce(fn: () => unknown, iterations: number): number {
   // warmup
-  for (let i = 0; i < Math.min(iterations, 10_000); i++) fn()
-  const start = performance.now()
-  for (let i = 0; i < iterations; i++) fn()
-  const end = performance.now()
-  return end - start
+  for (let i = 0; i < Math.min(iterations, 10_000); i++) fn();
+  const start = performance.now();
+  for (let i = 0; i < iterations; i++) fn();
+  const end = performance.now();
+  return end - start;
 }
 
 // JIT-hoisting fix: calling dispatch(sameStringLiteral, sameStringLiteral)
@@ -1155,27 +1250,33 @@ function timeOnce(fn: () => unknown, iterations: number): number {
 // counter, so the call target is a runtime array read the engine can't
 // prove constant — the same fix applied uniformly to all 7 architectures,
 // not just one.
-const VARIANT_COUNT = 8
+const VARIANT_COUNT = 8;
 
 function makeVariants(s: string): string[] {
-  return Array.from({ length: VARIANT_COUNT }, () => s.split("").join(""))
+  return Array.from({ length: VARIANT_COUNT }, () => s.split("").join(""));
 }
 
-function timeDispatch(dispatch: Dispatch, pathname: string, method: string, iterations: number): number {
-  const pathnames = makeVariants(pathname)
-  const methods = makeVariants(method)
-  const n = VARIANT_COUNT
+function timeDispatch(
+  dispatch: Dispatch,
+  pathname: string,
+  method: string,
+  iterations: number,
+): number {
+  const pathnames = makeVariants(pathname);
+  const methods = makeVariants(method);
+  const n = VARIANT_COUNT;
   // warmup
-  for (let i = 0; i < Math.min(iterations, 10_000); i++) dispatch(pathnames[i % n]!, methods[i % n]!)
-  const start = performance.now()
-  for (let i = 0; i < iterations; i++) dispatch(pathnames[i % n]!, methods[i % n]!)
-  const end = performance.now()
-  return end - start
+  for (let i = 0; i < Math.min(iterations, 10_000); i++)
+    dispatch(pathnames[i % n]!, methods[i % n]!);
+  const start = performance.now();
+  for (let i = 0; i < iterations; i++) dispatch(pathnames[i % n]!, methods[i % n]!);
+  const end = performance.now();
+  return end - start;
 }
 
-const DISPATCH_ITERATIONS = 500_000
-const BUILD_ITERATIONS = 200
-const MEMORY_SAMPLES = 3
+const DISPATCH_ITERATIONS = 500_000;
+const BUILD_ITERATIONS = 200;
+const MEMORY_SAMPLES = 3;
 
 // ============================================================================
 // System info — captured so a saved results file can be compared across
@@ -1183,23 +1284,23 @@ const MEMORY_SAMPLES = 3
 // ============================================================================
 
 type SystemInfo = {
-  readonly timestamp: string
-  readonly platform: string
-  readonly arch: string
-  readonly cpuModel: string
-  readonly cpuCount: number
-  readonly cpuSpeedMhz: number
-  readonly totalMemGB: number
-  readonly freeMemGB: number
-  readonly runtime: string
-  readonly runtimeVersion: string
-  readonly nodeVersions: Readonly<Record<string, string | undefined>>
-}
+  readonly timestamp: string;
+  readonly platform: string;
+  readonly arch: string;
+  readonly cpuModel: string;
+  readonly cpuCount: number;
+  readonly cpuSpeedMhz: number;
+  readonly totalMemGB: number;
+  readonly freeMemGB: number;
+  readonly runtime: string;
+  readonly runtimeVersion: string;
+  readonly nodeVersions: Readonly<Record<string, string | undefined>>;
+};
 
 function collectSystemInfo(): SystemInfo {
-  const cpus = os.cpus()
-  const runtime = typeof Bun !== "undefined" ? "bun" : "node"
-  const runtimeVersion = typeof Bun !== "undefined" ? Bun.version : process.version
+  const cpus = os.cpus();
+  const runtime = typeof Bun !== "undefined" ? "bun" : "node";
+  const runtimeVersion = typeof Bun !== "undefined" ? Bun.version : process.version;
   return {
     timestamp: new Date().toISOString(),
     platform: os.platform(),
@@ -1212,17 +1313,17 @@ function collectSystemInfo(): SystemInfo {
     runtime,
     runtimeVersion,
     nodeVersions: { ...process.versions },
-  }
+  };
 }
 
 /** Force a GC pass if the runtime exposes one (Bun always does; Node needs --expose-gc). */
 function forceGc(): void {
   if (typeof Bun !== "undefined" && typeof Bun.gc === "function") {
-    Bun.gc(true)
-    return
+    Bun.gc(true);
+    return;
   }
   if (typeof (globalThis as { gc?: () => void }).gc === "function") {
-    ;(globalThis as { gc: () => void }).gc()
+    (globalThis as { gc: () => void }).gc();
   }
 }
 
@@ -1250,90 +1351,112 @@ function forceGc(): void {
 // past the visibility floor), the already-expensive DFA build gets a small
 // one (it doesn't need amplification, and 50x of an already-88ms build would
 // dominate this phase's runtime for no accuracy benefit).
-const MEMORY_TIME_BUDGET_MS = 500
-const MEMORY_MIN_BATCH = 5
-const MEMORY_MAX_BATCH = 2000
+const MEMORY_TIME_BUDGET_MS = 500;
+const MEMORY_MIN_BATCH = 5;
+const MEMORY_MAX_BATCH = 2000;
 
 function calibrateMemoryBatchSize(build: () => unknown): number {
-  const t0 = performance.now()
-  const probe = build()
-  const singleMs = Math.max(0.001, performance.now() - t0)
-  void probe
-  return Math.max(MEMORY_MIN_BATCH, Math.min(MEMORY_MAX_BATCH, Math.round(MEMORY_TIME_BUDGET_MS / singleMs)))
+  const t0 = performance.now();
+  const probe = build();
+  const singleMs = Math.max(0.001, performance.now() - t0);
+  void probe;
+  return Math.max(
+    MEMORY_MIN_BATCH,
+    Math.min(MEMORY_MAX_BATCH, Math.round(MEMORY_TIME_BUDGET_MS / singleMs)),
+  );
 }
 
-type MemoryDelta = { readonly heapBytes: number; readonly externalBytes: number; readonly batchSize: number }
+type MemoryDelta = {
+  readonly heapBytes: number;
+  readonly externalBytes: number;
+  readonly batchSize: number;
+};
 
 function measureBuildMemory(build: () => unknown): MemoryDelta {
-  const batchSize = calibrateMemoryBatchSize(build)
-  const heapDeltas: number[] = []
-  const externalDeltas: number[] = []
+  const batchSize = calibrateMemoryBatchSize(build);
+  const heapDeltas: number[] = [];
+  const externalDeltas: number[] = [];
   for (let round = 0; round < MEMORY_SAMPLES; round++) {
-    forceGc()
-    const before = process.memoryUsage()
-    const built: unknown[] = []
-    for (let i = 0; i < batchSize; i++) built.push(build())
-    forceGc() // scavenge/compact WHILE `built` is still referenced — this is what makes the live set visible
-    const after = process.memoryUsage()
-    heapDeltas.push(Math.max(0, after.heapUsed - before.heapUsed) / batchSize)
-    externalDeltas.push(Math.max(0, after.external - before.external) / batchSize)
-    void built
+    forceGc();
+    const before = process.memoryUsage();
+    const built: unknown[] = [];
+    for (let i = 0; i < batchSize; i++) built.push(build());
+    forceGc(); // scavenge/compact WHILE `built` is still referenced — this is what makes the live set visible
+    const after = process.memoryUsage();
+    heapDeltas.push(Math.max(0, after.heapUsed - before.heapUsed) / batchSize);
+    externalDeltas.push(Math.max(0, after.external - before.external) / batchSize);
+    void built;
   }
-  heapDeltas.sort((a, b) => a - b)
-  externalDeltas.sort((a, b) => a - b)
-  const mid = Math.floor(MEMORY_SAMPLES / 2)
-  return { heapBytes: heapDeltas[mid]!, externalBytes: externalDeltas[mid]!, batchSize }
+  heapDeltas.sort((a, b) => a - b);
+  externalDeltas.sort((a, b) => a - b);
+  const mid = Math.floor(MEMORY_SAMPLES / 2);
+  return { heapBytes: heapDeltas[mid]!, externalBytes: externalDeltas[mid]!, batchSize };
 }
 
 type BuildResult = {
-  readonly name: string
-  readonly perBuildUs: number
-  readonly totalMs: number
-  readonly heapDeltaBytes: number
-  readonly externalDeltaBytes: number
-  readonly memoryBatchSize: number
-}
+  readonly name: string;
+  readonly perBuildUs: number;
+  readonly totalMs: number;
+  readonly heapDeltaBytes: number;
+  readonly externalDeltaBytes: number;
+  readonly memoryBatchSize: number;
+};
 
 function benchBuildPhase(): readonly BuildResult[] {
-  console.log("=== Build/compile phase (one-time cost + memory) ===\n")
+  console.log("=== Build/compile phase (one-time cost + memory) ===\n");
   const builders: readonly { readonly name: string; readonly build: () => unknown }[] = [
     { name: "1. Segment trie", build: () => buildHttpRouteTree(routeDefs) },
-    { name: "2. Full-path Map", build: () => {
-      const m = new Map<string, unknown>()
-      for (const route of routeDefs) {
-        const segs = splitSegs(route.path)
-        if (segs.some((s) => s.startsWith(":"))) continue
-        m.set(`${route.method} /${segs.join("/")}`, handlersByName.get(route.name))
-      }
-      return m
-    } },
-    { name: "3. Single regex/method", build: () => {
-      const built: unknown[] = []
-      for (const method of new Set(routeDefs.map((r) => r.method))) {
-        built.push(buildMethodRegex(routeDefs.filter((r) => r.method === method)))
-      }
-      return built
-    } },
+    {
+      name: "2. Full-path Map",
+      build: () => {
+        const m = new Map<string, unknown>();
+        for (const route of routeDefs) {
+          const segs = splitSegs(route.path);
+          if (segs.some((s) => s.startsWith(":"))) continue;
+          m.set(`${route.method} /${segs.join("/")}`, handlersByName.get(route.name));
+        }
+        return m;
+      },
+    },
+    {
+      name: "3. Single regex/method",
+      build: () => {
+        const built: unknown[] = [];
+        for (const method of new Set(routeDefs.map((r) => r.method))) {
+          built.push(buildMethodRegex(routeDefs.filter((r) => r.method === method)));
+        }
+        return built;
+      },
+    },
     { name: "4. Compiled switch", build: () => buildCompiledSwitch(routeDefs) },
     { name: "5. Char-level radix trie", build: () => buildRadixTrie(routeDefs) },
-    { name: "6. Flat DFA table", build: () => {
-      const built: unknown[] = []
-      for (const method of new Set(routeDefs.map((r) => r.method))) {
-        built.push(buildMethodDfa(routeDefs.filter((r) => r.method === method)))
-      }
-      return built
-    } },
+    {
+      name: "6. Flat DFA table",
+      build: () => {
+        const built: unknown[] = [];
+        for (const method of new Set(routeDefs.map((r) => r.method))) {
+          built.push(buildMethodDfa(routeDefs.filter((r) => r.method === method)));
+        }
+        return built;
+      },
+    },
     { name: "7. Compiled char-level fn", build: () => buildCompiledCharFn(routeDefs) },
-    { name: "8. Hybrid Map+charFn", build: () => ({
-      map: buildHybridStaticMap(hybridStaticDefs),
-      dynamicFn: buildCompiledCharFn(hybridDynamicDefs, "8. Hybrid — dynamic-only compiled char fn"),
-    }) },
-  ]
-  const results: BuildResult[] = []
+    {
+      name: "8. Hybrid Map+charFn",
+      build: () => ({
+        map: buildHybridStaticMap(hybridStaticDefs),
+        dynamicFn: buildCompiledCharFn(
+          hybridDynamicDefs,
+          "8. Hybrid — dynamic-only compiled char fn",
+        ),
+      }),
+    },
+  ];
+  const results: BuildResult[] = [];
   for (const b of builders) {
-    const ms = timeOnce(() => b.build(), BUILD_ITERATIONS)
-    const perBuildUs = (ms / BUILD_ITERATIONS) * 1000
-    const { heapBytes, externalBytes, batchSize } = measureBuildMemory(b.build)
+    const ms = timeOnce(() => b.build(), BUILD_ITERATIONS);
+    const perBuildUs = (ms / BUILD_ITERATIONS) * 1000;
+    const { heapBytes, externalBytes, batchSize } = measureBuildMemory(b.build);
     results.push({
       name: b.name,
       perBuildUs,
@@ -1341,58 +1464,64 @@ function benchBuildPhase(): readonly BuildResult[] {
       heapDeltaBytes: heapBytes,
       externalDeltaBytes: externalBytes,
       memoryBatchSize: batchSize,
-    })
-    const heapKB = (heapBytes / 1024).toFixed(1)
-    const externalKB = (externalBytes / 1024).toFixed(1)
+    });
+    const heapKB = (heapBytes / 1024).toFixed(1);
+    const externalKB = (externalBytes / 1024).toFixed(1);
     console.log(
       `${b.name.padEnd(28)} ${perBuildUs.toFixed(2).padStart(10)} us/build  (${BUILD_ITERATIONS} builds, ${ms.toFixed(1)}ms total)   ~${heapKB.padStart(9)} KB heap  ~${externalKB.padStart(9)} KB external  (batch of ${batchSize}, median of ${MEMORY_SAMPLES})`,
-    )
+    );
   }
-  console.log()
+  console.log();
   if (Object.keys(codegenSizes).length > 0) {
-    console.log("Generated source size (new Function() codegen architectures only):")
+    console.log("Generated source size (new Function() codegen architectures only):");
     for (const [name, size] of Object.entries(codegenSizes)) {
-      console.log(`  ${name.padEnd(34)} ${size.chars.toLocaleString().padStart(10)} chars  ${size.bytes.toLocaleString().padStart(10)} bytes`)
+      console.log(
+        `  ${name.padEnd(34)} ${size.chars.toLocaleString().padStart(10)} chars  ${size.bytes.toLocaleString().padStart(10)} bytes`,
+      );
     }
-    console.log()
+    console.log();
   }
-  return results
+  return results;
 }
 
 type DispatchResult = {
-  readonly architecture: string
-  readonly cases: Readonly<Record<string, number>> // case name -> ns/request
-}
+  readonly architecture: string;
+  readonly cases: Readonly<Record<string, number>>; // case name -> ns/request
+};
 
 function benchDispatchPhase(): readonly DispatchResult[] {
-  console.log("=== Dispatch phase (hot path, ns/request) ===\n")
-  const header = `${"".padEnd(34)} ${dispatchCases.map((c) => c.name.padEnd(16)).join("")}`
-  console.log(header)
-  const results: DispatchResult[] = []
+  console.log("=== Dispatch phase (hot path, ns/request) ===\n");
+  const header = `${"".padEnd(34)} ${dispatchCases.map((c) => c.name.padEnd(16)).join("")}`;
+  console.log(header);
+  const results: DispatchResult[] = [];
   for (const arch of architectures) {
-    const cells: string[] = []
-    const cases: Record<string, number> = {}
+    const cells: string[] = [];
+    const cases: Record<string, number> = {};
     for (const kase of dispatchCases) {
-      const ms = timeDispatch(arch.dispatch, kase.pathname, kase.method, DISPATCH_ITERATIONS)
-      const ns = (ms / DISPATCH_ITERATIONS) * 1_000_000
-      cases[kase.name] = ns
-      cells.push(`${ns.toFixed(1).padStart(8)} ns  `.padEnd(16))
+      const ms = timeDispatch(arch.dispatch, kase.pathname, kase.method, DISPATCH_ITERATIONS);
+      const ns = (ms / DISPATCH_ITERATIONS) * 1_000_000;
+      cases[kase.name] = ns;
+      cells.push(`${ns.toFixed(1).padStart(8)} ns  `.padEnd(16));
     }
-    results.push({ architecture: arch.name, cases })
-    console.log(`${arch.name.padEnd(34)} ${cells.join("")}`)
+    results.push({ architecture: arch.name, cases });
+    console.log(`${arch.name.padEnd(34)} ${cells.join("")}`);
   }
-  console.log()
-  return results
+  console.log();
+  return results;
 }
 
 /** Write the full run (system info, route-tree size, build cost + memory,
  *  codegen size, dispatch matrix) to a timestamped JSON file so runs can be
  *  diffed across machines/commits instead of only living in scrollback. */
-function saveResults(system: SystemInfo, build: readonly BuildResult[], dispatch: readonly DispatchResult[]): string {
-  const outDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "bench-results")
-  mkdirSync(outDir, { recursive: true })
-  const stamp = system.timestamp.replace(/[:.]/g, "-")
-  const outFile = path.join(outDir, `route-bench-${stamp}.json`)
+function saveResults(
+  system: SystemInfo,
+  build: readonly BuildResult[],
+  dispatch: readonly DispatchResult[],
+): string {
+  const outDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "bench-results");
+  mkdirSync(outDir, { recursive: true });
+  const stamp = system.timestamp.replace(/[:.]/g, "-");
+  const outFile = path.join(outDir, `route-bench-${stamp}.json`);
   const payload = {
     system,
     routeCount: routeDefs.length,
@@ -1400,33 +1529,37 @@ function saveResults(system: SystemInfo, build: readonly BuildResult[], dispatch
     codegenSizes,
     build,
     dispatch,
-  }
-  writeFileSync(outFile, JSON.stringify(payload, null, 2))
-  return outFile
+  };
+  writeFileSync(outFile, JSON.stringify(payload, null, 2));
+  return outFile;
 }
 
-checkCorrectness()
-const systemInfo = collectSystemInfo()
-console.log("=== System info ===\n")
-console.log(`${systemInfo.runtime} ${systemInfo.runtimeVersion} on ${systemInfo.platform}/${systemInfo.arch}`)
-console.log(`${systemInfo.cpuModel} x${systemInfo.cpuCount} @ ${systemInfo.cpuSpeedMhz}MHz, ${systemInfo.totalMemGB.toFixed(1)}GB RAM (${systemInfo.freeMemGB.toFixed(1)}GB free)`)
-console.log()
+checkCorrectness();
+const systemInfo = collectSystemInfo();
+console.log("=== System info ===\n");
+console.log(
+  `${systemInfo.runtime} ${systemInfo.runtimeVersion} on ${systemInfo.platform}/${systemInfo.arch}`,
+);
+console.log(
+  `${systemInfo.cpuModel} x${systemInfo.cpuCount} @ ${systemInfo.cpuSpeedMhz}MHz, ${systemInfo.totalMemGB.toFixed(1)}GB RAM (${systemInfo.freeMemGB.toFixed(1)}GB free)`,
+);
+console.log();
 
-const buildResults = benchBuildPhase()
-const dispatchResults = benchDispatchPhase()
+const buildResults = benchBuildPhase();
+const dispatchResults = benchDispatchPhase();
 
-console.log("=== Notes ===")
-console.log("- Full-path Map only serves the routes it was seeded with; its dynamic-hit")
-console.log("  number covers exactly one hardcoded /users/42, not general param matching.")
-console.log("- All numbers include the dispatch() closure call overhead, not just the")
-console.log("  core algorithm — kept identical across architectures so it cancels out.")
-console.log("- Memory: heap KB is process.memoryUsage().heapUsed delta, external KB is")
-console.log("  the .external delta (catches ArrayBuffer-backed data, e.g. arch 6's Uint32Array")
-console.log("  table, which heapUsed does NOT count at all). Both are averaged over a batch")
-console.log("  of retained builds, median of a few rounds — a single build's delta is too")
-console.log("  small to register on this engine's heap-accounting granularity (~10MB+ steps).")
-console.log("- Neither counter captures new Function()'s compiled bytecode/machine code —")
-console.log("  generated source chars/bytes (above) is the available proxy for architectures 4/7.")
+console.log("=== Notes ===");
+console.log("- Full-path Map only serves the routes it was seeded with; its dynamic-hit");
+console.log("  number covers exactly one hardcoded /users/42, not general param matching.");
+console.log("- All numbers include the dispatch() closure call overhead, not just the");
+console.log("  core algorithm — kept identical across architectures so it cancels out.");
+console.log("- Memory: heap KB is process.memoryUsage().heapUsed delta, external KB is");
+console.log("  the .external delta (catches ArrayBuffer-backed data, e.g. arch 6's Uint32Array");
+console.log("  table, which heapUsed does NOT count at all). Both are averaged over a batch");
+console.log("  of retained builds, median of a few rounds — a single build's delta is too");
+console.log("  small to register on this engine's heap-accounting granularity (~10MB+ steps).");
+console.log("- Neither counter captures new Function()'s compiled bytecode/machine code —");
+console.log("  generated source chars/bytes (above) is the available proxy for architectures 4/7.");
 
-const savedTo = saveResults(systemInfo, buildResults, dispatchResults)
-console.log(`\nResults saved to ${savedTo}`)
+const savedTo = saveResults(systemInfo, buildResults, dispatchResults);
+console.log(`\nResults saved to ${savedTo}`);

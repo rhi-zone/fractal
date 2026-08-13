@@ -3,8 +3,8 @@
 // Covers the pipeline described in docs/design/routing-and-transforms.md:
 //   Node --naiveTransform--> HttpRoute --rewriters--> HttpRoute --makeRouter--> Fetch
 
-import { describe, expect, it } from "bun:test"
-import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
+import { describe, expect, it } from "bun:test";
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
 import {
   applyMethods,
   applyMoveTo,
@@ -16,12 +16,12 @@ import {
   makeRouterFromRoute,
   naiveTransform,
   SourceCoverageError,
-} from "./route.ts"
-import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts"
-import { makeRouter, toHttpRoutes } from "./project.ts"
-import { http, paginated } from "./verbs.ts"
-import type { CursorPage, OffsetPage } from "@rhi-zone/fractal-api-tree"
-import type { StandardSchemaV1 } from "@standard-schema/spec"
+} from "./route.ts";
+import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts";
+import { makeRouter, toHttpRoutes } from "./project.ts";
+import { http, paginated } from "./verbs.ts";
+import type { CursorPage, OffsetPage } from "@rhi-zone/fractal-api-tree";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // ============================================================================
 // naiveTransform — basic tree → HttpRoute conversion
@@ -29,76 +29,79 @@ import type { StandardSchemaV1 } from "@standard-schema/spec"
 
 describe("naiveTransform", () => {
   it("turns a leaf into a single POST method entry", () => {
-    const getUser = (_: unknown) => ({ id: 1 })
-    const api = op(getUser)
-    const route = naiveTransform(api)
-    expect(isHttpRoute(route)).toBe(true)
-    expect(Object.keys(route.methods ?? {})).toEqual(["POST"])
-    expect(route.methods?.POST?.handler).toBe(getUser)
-  })
+    const getUser = (_: unknown) => ({ id: 1 });
+    const api = op(getUser);
+    const route = naiveTransform(api);
+    expect(isHttpRoute(route)).toBe(true);
+    expect(Object.keys(route.methods ?? {})).toEqual(["POST"]);
+    expect(route.methods?.POST?.handler).toBe(getUser);
+  });
 
   it("turns each child into a path-segment child, recursively", () => {
-    const list = (_: unknown) => []
-    const create = (_: unknown) => ({})
+    const list = (_: unknown) => [];
+    const create = (_: unknown) => ({});
     const api = api_({
-        users: api_({
-            list: op(list),
-            create: op(create),
-          }),
-      })
+      users: api_({
+        list: op(list),
+        create: op(create),
+      }),
+    });
     // Widened to the erased HttpRoute here — this assertion is exercising the
     // branch-node shape generically (no methods key at all, at any depth),
     // not the type-preservation naiveTransform now offers for leaves.
-    const route: HttpRoute = naiveTransform(api)
-    expect(route.methods).toBeUndefined()
-    expect(route.children?.users).toBeDefined()
-    expect(route.children?.users?.children?.list?.methods?.POST?.handler).toBe(list)
-    expect(route.children?.users?.children?.create?.methods?.POST?.handler).toBe(create)
-  })
+    const route: HttpRoute = naiveTransform(api);
+    expect(route.methods).toBeUndefined();
+    expect(route.children?.users).toBeDefined();
+    expect(route.children?.users?.children?.list?.methods?.POST?.handler).toBe(list);
+    expect(route.children?.users?.children?.create?.methods?.POST?.handler).toBe(create);
+  });
 
   it("copies meta through unchanged", () => {
-    const api = op((_: unknown) => ({}), { tags: { readOnly: true } })
-    const route = naiveTransform(api)
-    expect(route.methods?.POST?.meta).toEqual({ tags: { readOnly: true } })
-  })
+    const api = op((_: unknown) => ({}), { tags: { readOnly: true } });
+    const route = naiveTransform(api);
+    expect(route.methods?.POST?.meta).toEqual({ tags: { readOnly: true } });
+  });
 
   it("carries fallback subtrees through", () => {
-    const api = api_({}, { fallback: { name: "bookId", subtree: op((_: { bookId: string }) => ({})) } })
-    const route = naiveTransform(api)
-    expect(route.fallback?.name).toBe("bookId")
-    expect(route.fallback?.subtree.methods?.POST).toBeDefined()
-  })
+    const api = api_(
+      {},
+      { fallback: { name: "bookId", subtree: op((_: { bookId: string }) => ({})) } },
+    );
+    const route = naiveTransform(api);
+    expect(route.fallback?.name).toBe("bookId");
+    expect(route.fallback?.subtree.methods?.POST).toBeDefined();
+  });
 
   it("reads meta.http.sourceMap into the method entry's sources.sourceMap", () => {
     const api = op((_: unknown) => ({}), {
       http: { sourceMap: { apiKey: { store: "header", key: "x-api-key" } } },
-    })
-    const route = naiveTransform(api)
+    });
+    const route = naiveTransform(api);
     expect(route.methods?.POST?.sources?.sourceMap).toEqual({
       apiKey: { store: "header", key: "x-api-key" },
-    })
-  })
+    });
+  });
 
   it("a leaf composed from two source()-style contributions already carries ONE folded sourceMap (later wins per key) by the time naiveTransform reads it — the fold happens at op()'s own mergeMeta, not here", () => {
     const api = op(
       (_: unknown) => ({}),
       { http: { sourceMap: { year: { store: "query", key: "fiscal_year" } } } },
       { http: { sourceMap: { year: { store: "header", key: "year" } } } },
-    )
-    const route = naiveTransform(api)
+    );
+    const route = naiveTransform(api);
     expect(route.methods?.POST?.sources?.sourceMap).toEqual({
       year: { store: "header", key: "year" },
-    })
-  })
+    });
+  });
 
   it("omits sourceMap/validate but still stamps an empty authoredPathParams when meta.http.sourceMap is absent", () => {
-    const api = op((_: unknown) => ({}))
-    const route = naiveTransform(api)
-    expect(route.methods?.POST?.sources?.sourceMap).toBeUndefined()
-    expect(route.methods?.POST?.sources?.validate).toBeUndefined()
-    expect(route.methods?.POST?.sources?.authoredPathParams).toEqual([])
-  })
-})
+    const api = op((_: unknown) => ({}));
+    const route = naiveTransform(api);
+    expect(route.methods?.POST?.sources?.sourceMap).toBeUndefined();
+    expect(route.methods?.POST?.sources?.validate).toBeUndefined();
+    expect(route.methods?.POST?.sources?.authoredPathParams).toEqual([]);
+  });
+});
 
 // ============================================================================
 // applyMethods — directive changes method from POST to GET
@@ -106,36 +109,41 @@ describe("naiveTransform", () => {
 
 describe("applyMethods", () => {
   it("renames POST to the directive's method", () => {
-    const api = op((_: unknown) => ({}), { http: { method: "GET" } })
-    const route = applyMethods(naiveTransform(api))
-    expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
-    expect(route.methods?.GET).toBeDefined()
-    expect(route.methods?.POST).toBeUndefined()
-  })
+    const api = op((_: unknown) => ({}), { http: { method: "GET" } });
+    const route = applyMethods(naiveTransform(api));
+    expect(Object.keys(route.methods ?? {})).toEqual(["GET"]);
+    expect(route.methods?.GET).toBeDefined();
+    expect(route.methods?.POST).toBeUndefined();
+  });
 
   it("uppercases the method value", () => {
-    const api = op((_: unknown) => ({}), { http: { method: "delete" } })
-    const route = applyMethods(naiveTransform(api))
-    expect(Object.keys(route.methods ?? {})).toEqual(["DELETE"])
-  })
+    const api = op((_: unknown) => ({}), { http: { method: "delete" } });
+    const route = applyMethods(naiveTransform(api));
+    expect(Object.keys(route.methods ?? {})).toEqual(["DELETE"]);
+  });
 
   it("leaves POST unchanged when no method directive is present", () => {
-    const api = op((_: unknown) => ({}))
-    const route = applyMethods(naiveTransform(api))
-    expect(Object.keys(route.methods ?? {})).toEqual(["POST"])
-  })
+    const api = op((_: unknown) => ({}));
+    const route = applyMethods(naiveTransform(api));
+    expect(Object.keys(route.methods ?? {})).toEqual(["POST"]);
+  });
 
   it("recurses into children and fallback", () => {
-    const api = api_({
+    const api = api_(
+      {
         items: op((_: unknown) => ({}), { http: { method: "GET" } }),
-      }, { fallback: {
-        name: "id",
-        subtree: op((_: unknown) => ({}), { http: { method: "PUT" } }),
-      } })
-    const route = applyMethods(naiveTransform(api))
-    expect(Object.keys(route.children?.items?.methods ?? {})).toEqual(["GET"])
-    expect(Object.keys(route.fallback?.subtree.methods ?? {})).toEqual(["PUT"])
-  })
+      },
+      {
+        fallback: {
+          name: "id",
+          subtree: op((_: unknown) => ({}), { http: { method: "PUT" } }),
+        },
+      },
+    );
+    const route = applyMethods(naiveTransform(api));
+    expect(Object.keys(route.children?.items?.methods ?? {})).toEqual(["GET"]);
+    expect(Object.keys(route.fallback?.subtree.methods ?? {})).toEqual(["PUT"]);
+  });
 
   it("preserves sources.sourceMap through a method rename (naiveTransform's sourceMap survives applyMethods)", () => {
     const api = op((_: unknown) => ({}), {
@@ -143,14 +151,14 @@ describe("applyMethods", () => {
         method: "GET",
         sourceMap: { apiKey: { store: "header", key: "x-api-key" } },
       },
-    })
-    const route = applyMethods(naiveTransform(api))
-    expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
+    });
+    const route = applyMethods(naiveTransform(api));
+    expect(Object.keys(route.methods ?? {})).toEqual(["GET"]);
     expect(route.methods?.GET?.sources?.sourceMap).toEqual({
       apiKey: { store: "header", key: "x-api-key" },
-    })
-  })
-})
+    });
+  });
+});
 
 // ============================================================================
 // applyMoveTo — node moves under wildcard segment (motivating example)
@@ -158,128 +166,130 @@ describe("applyMethods", () => {
 
 describe("applyMoveTo", () => {
   it("moves a node up then down under a new wildcard segment (../*)", () => {
-    const getBook = (_: unknown) => ({})
+    const getBook = (_: unknown) => ({});
     const api = api_({
-        users: api_({
-            list: op((_: unknown) => []),
-            get: op(getBook, { http: { moveTo: "../*" } }),
-          }),
-      })
-    const route = applyMoveTo(naiveTransform(api))
+      users: api_({
+        list: op((_: unknown) => []),
+        get: op(getBook, { http: { moveTo: "../*" } }),
+      }),
+    });
+    const route = applyMoveTo(naiveTransform(api));
     // "get" no longer sits at users/get
-    expect(route.children?.users?.children?.get).toBeUndefined()
+    expect(route.children?.users?.children?.get).toBeUndefined();
     // "list" untouched
-    expect(route.children?.users?.children?.list).toBeDefined()
+    expect(route.children?.users?.children?.list).toBeDefined();
     // "get" now lives at users/* (fallback)
-    expect(route.children?.users?.fallback?.subtree.methods?.POST?.handler).toBe(getBook)
-  })
+    expect(route.children?.users?.fallback?.subtree.methods?.POST?.handler).toBe(getBook);
+  });
 
   it("merges multiple placed nodes converging on the same wildcard target", () => {
-    const read = (_: unknown) => ({ op: "read" })
-    const replace = (_: unknown) => ({ op: "replace" })
-    const remove = (_: unknown) => ({ op: "remove" })
+    const read = (_: unknown) => ({ op: "read" });
+    const replace = (_: unknown) => ({ op: "replace" });
+    const remove = (_: unknown) => ({ op: "remove" });
     const api = api_({
-        books: api_({
-            list: op((_: unknown) => []),
-            create: op((_: unknown) => ({})),
-            get: op(read, {
-              http: { moveTo: "../*", method: "GET" },
-            }),
-            update: op(replace, {
-              http: { moveTo: "../*", method: "PUT" },
-            }),
-            del: op(remove, {
-              http: { moveTo: "../*", method: "DELETE" },
-            }),
-          }),
-      })
-    const transform = composeTransforms(applyMethods, applyMoveTo)
-    const route = transform(naiveTransform(api))
+      books: api_({
+        list: op((_: unknown) => []),
+        create: op((_: unknown) => ({})),
+        get: op(read, {
+          http: { moveTo: "../*", method: "GET" },
+        }),
+        update: op(replace, {
+          http: { moveTo: "../*", method: "PUT" },
+        }),
+        del: op(remove, {
+          http: { moveTo: "../*", method: "DELETE" },
+        }),
+      }),
+    });
+    const transform = composeTransforms(applyMethods, applyMoveTo);
+    const route = transform(naiveTransform(api));
 
-    expect(route.children?.books?.children?.list?.methods?.POST).toBeDefined()
-    expect(route.children?.books?.children?.create?.methods?.POST).toBeDefined()
-    expect(route.children?.books?.children?.get).toBeUndefined()
-    expect(route.children?.books?.children?.update).toBeUndefined()
-    expect(route.children?.books?.children?.del).toBeUndefined()
+    expect(route.children?.books?.children?.list?.methods?.POST).toBeDefined();
+    expect(route.children?.books?.children?.create?.methods?.POST).toBeDefined();
+    expect(route.children?.books?.children?.get).toBeUndefined();
+    expect(route.children?.books?.children?.update).toBeUndefined();
+    expect(route.children?.books?.children?.del).toBeUndefined();
 
-    const wildcard = route.children?.books?.fallback
-    expect(wildcard).toBeDefined()
-    expect(wildcard?.subtree.methods?.GET?.handler).toBe(read)
-    expect(wildcard?.subtree.methods?.PUT?.handler).toBe(replace)
-    expect(wildcard?.subtree.methods?.DELETE?.handler).toBe(remove)
-  })
+    const wildcard = route.children?.books?.fallback;
+    expect(wildcard).toBeDefined();
+    expect(wildcard?.subtree.methods?.GET?.handler).toBe(read);
+    expect(wildcard?.subtree.methods?.PUT?.handler).toBe(replace);
+    expect(wildcard?.subtree.methods?.DELETE?.handler).toBe(remove);
+  });
 
   it("`.` is identity — node stays at its current position", () => {
-    const handler = (_: unknown) => ({})
-    const api = api_({ item: op(handler, { http: { moveTo: "." } }) })
-    const route = applyMoveTo(naiveTransform(api))
-    expect(route.children?.item?.methods?.POST?.handler).toBe(handler)
-  })
+    const handler = (_: unknown) => ({});
+    const api = api_({ item: op(handler, { http: { moveTo: "." } }) });
+    const route = applyMoveTo(naiveTransform(api));
+    expect(route.children?.item?.methods?.POST?.handler).toBe(handler);
+  });
 
   it("`../..` moves a node up two levels (to the root)", () => {
     // itemPath = [admin, ping]; base (self) = [admin, ping];
     // "../.." pops twice → [] (root) — merges directly into root.
-    const handler = (_: unknown) => ({})
+    const handler = (_: unknown) => ({});
     const api = api_({
-        admin: api_({
-            ping: op(handler, { http: { moveTo: "../.." } }),
-          }),
-      })
-    const route = applyMoveTo(naiveTransform(api))
-    expect(route.children?.admin?.children?.ping).toBeUndefined()
-    expect(route.methods?.POST?.handler).toBe(handler)
-  })
+      admin: api_({
+        ping: op(handler, { http: { moveTo: "../.." } }),
+      }),
+    });
+    const route = applyMoveTo(naiveTransform(api));
+    expect(route.children?.admin?.children?.ping).toBeUndefined();
+    expect(route.methods?.POST?.handler).toBe(handler);
+  });
 
   it("`../../../admin` moves a deeply nested node under a new named segment", () => {
-    const handler = (_: unknown) => ({})
+    const handler = (_: unknown) => ({});
     const api = api_({
-        a: api_({
-            b: api_({
-                leaf: op(handler, { http: { moveTo: "../../../admin" } }),
-              }),
-          }),
-      })
-    const route = applyMoveTo(naiveTransform(api))
-    expect(route.children?.a?.children?.b?.children?.leaf).toBeUndefined()
-    expect(route.children?.admin?.methods?.POST?.handler).toBe(handler)
-  })
+      a: api_({
+        b: api_({
+          leaf: op(handler, { http: { moveTo: "../../../admin" } }),
+        }),
+      }),
+    });
+    const route = applyMoveTo(naiveTransform(api));
+    expect(route.children?.a?.children?.b?.children?.leaf).toBeUndefined();
+    expect(route.children?.admin?.methods?.POST?.handler).toBe(handler);
+  });
 
   it("mkdir-p: a multi-segment moveTo target creates every missing intermediate node", () => {
-    const handler = (_: unknown) => ({})
+    const handler = (_: unknown) => ({});
     const api = api_({
-        leaf: op(handler, { http: { moveTo: "../api/v2/users" } }),
-      })
-    const route = applyMoveTo(naiveTransform(api))
-    expect(route.children?.leaf).toBeUndefined()
-    expect(route.children?.api?.children?.v2?.children?.users?.methods?.POST?.handler).toBe(handler)
-  })
+      leaf: op(handler, { http: { moveTo: "../api/v2/users" } }),
+    });
+    const route = applyMoveTo(naiveTransform(api));
+    expect(route.children?.leaf).toBeUndefined();
+    expect(route.children?.api?.children?.v2?.children?.users?.methods?.POST?.handler).toBe(
+      handler,
+    );
+  });
 
   it("throws when two placements converge on the same path AND method", () => {
     const api = api_({
-        first: op((_: unknown) => ({ from: "first" }), {
-          http: { moveTo: "../*", method: "GET" },
-        }),
-        second: op((_: unknown) => ({ from: "second" }), {
-          http: { moveTo: "../*", method: "GET" },
-        }),
-      })
-    const transform = composeTransforms(applyMethods, applyMoveTo)
-    expect(() => transform(naiveTransform(api))).toThrow(/conflict/i)
-  })
+      first: op((_: unknown) => ({ from: "first" }), {
+        http: { moveTo: "../*", method: "GET" },
+      }),
+      second: op((_: unknown) => ({ from: "second" }), {
+        http: { moveTo: "../*", method: "GET" },
+      }),
+    });
+    const transform = composeTransforms(applyMethods, applyMoveTo);
+    expect(() => transform(naiveTransform(api))).toThrow(/conflict/i);
+  });
 
   it("does NOT throw when two placements converge on the same path with DIFFERENT methods", () => {
     const api = api_({
-        first: op((_: unknown) => ({ from: "first" }), {
-          http: { moveTo: "../*", method: "GET" },
-        }),
-        second: op((_: unknown) => ({ from: "second" }), {
-          http: { moveTo: "../*", method: "PUT" },
-        }),
-      })
-    const transform = composeTransforms(applyMethods, applyMoveTo)
-    expect(() => transform(naiveTransform(api))).not.toThrow()
-  })
-})
+      first: op((_: unknown) => ({ from: "first" }), {
+        http: { moveTo: "../*", method: "GET" },
+      }),
+      second: op((_: unknown) => ({ from: "second" }), {
+        http: { moveTo: "../*", method: "PUT" },
+      }),
+    });
+    const transform = composeTransforms(applyMethods, applyMoveTo);
+    expect(() => transform(naiveTransform(api))).not.toThrow();
+  });
+});
 
 // ============================================================================
 // moveTo no longer affects input binding — a leaf's field↔store binding is a
@@ -300,33 +310,40 @@ describe("applyMoveTo", () => {
  * "wire onto the already-projected `HttpRoute`" layering `applyValidation`/
  * `wrapValidators` already use (see route.ts's module doc).
  */
-function withParamNames(route: HttpRoute, handler: unknown, paramNames: readonly string[]): HttpRoute {
+function withParamNames(
+  route: HttpRoute,
+  handler: unknown,
+  paramNames: readonly string[],
+): HttpRoute {
   const rebuildMethods = (methods: HttpRoute["methods"]) => {
-    if (methods === undefined) return methods
+    if (methods === undefined) return methods;
     // biome-ignore lint: test-only helper, erased shape is fine here
-    const rebuilt: Record<string, any> = {}
+    const rebuilt: Record<string, any> = {};
     for (const [key, entry] of Object.entries(methods)) {
-      rebuilt[key] = entry.handler === handler
-        ? { ...entry, sources: { ...entry.sources, paramNames } }
-        : entry
+      rebuilt[key] =
+        entry.handler === handler ? { ...entry, sources: { ...entry.sources, paramNames } } : entry;
     }
-    return rebuilt
-  }
+    return rebuilt;
+  };
   const walk = (node: HttpRoute): HttpRoute =>
     httpRoute({
       methods: rebuildMethods(node.methods),
-      children: node.children !== undefined
-        ? Object.fromEntries(Object.entries(node.children).map(([k, c]) => [k, walk(c)]))
-        : undefined,
-      fallback: node.fallback !== undefined ? { name: node.fallback.name, subtree: walk(node.fallback.subtree) } : undefined,
+      children:
+        node.children !== undefined
+          ? Object.fromEntries(Object.entries(node.children).map(([k, c]) => [k, walk(c)]))
+          : undefined,
+      fallback:
+        node.fallback !== undefined
+          ? { name: node.fallback.name, subtree: walk(node.fallback.subtree) }
+          : undefined,
       meta: node.meta,
-    })
-  return walk(route)
+    });
+  return walk(route);
 }
 
 describe("moveTo does not affect input binding", () => {
   it("an authored local slug survives an UNRELATED moveTo elsewhere in the tree — no coverage problem", () => {
-    const handler = (input: { bookId: string }) => ({ bookId: input.bookId })
+    const handler = (input: { bookId: string }) => ({ bookId: input.bookId });
     const api = api_({
       books: api_(
         {},
@@ -340,16 +357,16 @@ describe("moveTo does not affect input binding", () => {
       // An unrelated leaf moving elsewhere in the tree must not affect
       // "books/{bookId}/get"'s own authored bookId binding.
       unrelated: op((_: unknown) => ({}), { http: { moveTo: "../moved" } }),
-    })
-    const route = withParamNames(applyMoveTo(naiveTransform(api)), handler, ["bookId"])
-    expect(() => checkRouteSourceCoverage(route)).not.toThrow()
-  })
+    });
+    const route = withParamNames(applyMoveTo(naiveTransform(api)), handler, ["bookId"]);
+    expect(() => checkRouteSourceCoverage(route)).not.toThrow();
+  });
 
   it("an authored local slug moved AWAY from its wildcard ancestor throws unfillable-path at wire time", () => {
     // `leaf` is authored NESTED under `books`' fallback (so it authors
     // "bookId" as a local slug), but moveTo relocates it to a position with
     // no matching ancestor at all.
-    const handler = (input: { bookId: string }) => ({ bookId: input.bookId })
+    const handler = (input: { bookId: string }) => ({ bookId: input.bookId });
     const api = api_({
       books: api_(
         {},
@@ -364,20 +381,20 @@ describe("moveTo does not affect input binding", () => {
           },
         },
       ),
-    })
-    const route = withParamNames(applyMoveTo(naiveTransform(api)), handler, ["bookId"])
-    expect(() => checkRouteSourceCoverage(route)).toThrow(SourceCoverageError)
+    });
+    const route = withParamNames(applyMoveTo(naiveTransform(api)), handler, ["bookId"]);
+    expect(() => checkRouteSourceCoverage(route)).toThrow(SourceCoverageError);
     try {
-      checkRouteSourceCoverage(route)
+      checkRouteSourceCoverage(route);
     } catch (e) {
-      const err = e as SourceCoverageError
-      expect(err.problems).toHaveLength(1)
-      expect(err.problems[0]).toMatchObject({ param: "bookId", kind: "unfillable-path" })
+      const err = e as SourceCoverageError;
+      expect(err.problems).toHaveLength(1);
+      expect(err.problems[0]).toMatchObject({ param: "bookId", kind: "unfillable-path" });
     }
-  })
+  });
 
   it("an explicit path sourceMap with a bogus key at the leaf's final position throws the same unfillable-path kind", () => {
-    const handler = (input: { id: string }) => ({ id: input.id })
+    const handler = (input: { id: string }) => ({ id: input.id });
     const api = api_({
       books: api_(
         {},
@@ -392,17 +409,17 @@ describe("moveTo does not affect input binding", () => {
           },
         },
       ),
-    })
-    const route = withParamNames(naiveTransform(api), handler, ["id"])
-    expect(() => checkRouteSourceCoverage(route)).toThrow(SourceCoverageError)
+    });
+    const route = withParamNames(naiveTransform(api), handler, ["id"]);
+    expect(() => checkRouteSourceCoverage(route)).toThrow(SourceCoverageError);
     try {
-      checkRouteSourceCoverage(route)
+      checkRouteSourceCoverage(route);
     } catch (e) {
-      const err = e as SourceCoverageError
-      expect(err.problems).toHaveLength(1)
-      expect(err.problems[0]).toMatchObject({ param: "id", kind: "unfillable-path" })
+      const err = e as SourceCoverageError;
+      expect(err.problems).toHaveLength(1);
+      expect(err.problems[0]).toMatchObject({ param: "id", kind: "unfillable-path" });
     }
-  })
+  });
 
   it("a field that only coincidentally matches a live pathParam name post-move falls through to query/body silently — no error, no path binding", async () => {
     // `get`/`remove` (siblings of the fallback, not nested under it) get
@@ -418,21 +435,21 @@ describe("moveTo does not affect input binding", () => {
         },
         { fallback: { name: "bookId", subtree: api_({}) } },
       ),
-    })
-    const route = applyMethods(applyMoveTo(naiveTransform(api)))
+    });
+    const route = applyMethods(applyMoveTo(naiveTransform(api)));
     // No coverage problem — "bookId" isn't authored by `get`, and it has no
     // explicit sourceMap, so it's an ordinary (optional) query field now.
-    expect(() => checkRouteSourceCoverage(route)).not.toThrow()
+    expect(() => checkRouteSourceCoverage(route)).not.toThrow();
 
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/books/actual-book-id"))
-    expect(res.status).toBe(200)
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/books/actual-book-id"));
+    expect(res.status).toBe(200);
     // The path segment value ("actual-book-id") must NOT leak into `bookId`
     // via the old by-name-collision path binding — it falls through to the
     // query store, which has no "bookId" key on this request, so it's null.
-    expect(await res.json()).toEqual({ bookId: null })
-  })
-})
+    expect(await res.json()).toEqual({ bookId: null });
+  });
+});
 
 // ============================================================================
 // applyResponse — handler wrapping produces correct status code
@@ -442,33 +459,33 @@ describe("applyResponse", () => {
   it("wraps the handler so the router produces the directive's status", async () => {
     const api = op((_: unknown) => ({ created: true }), {
       http: { response: { status: 201 } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as { created: boolean }
-    expect(body.created).toBe(true)
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouter(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { created: boolean };
+    expect(body.created).toBe(true);
+  });
 
   it("applies response headers from the directive", async () => {
     const api = op((_: unknown) => ({ ok: true }), {
       http: { response: { headers: { "X-Custom": "yes" } } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.headers.get("X-Custom")).toBe("yes")
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouter(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.headers.get("X-Custom")).toBe("yes");
+  });
 
   it("leaves the handler untouched when there is no response directive", async () => {
-    const api = op((_: unknown) => ({ ok: true }))
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.status).toBe(200)
-  })
-})
+    const api = op((_: unknown) => ({ ok: true }));
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouter(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.status).toBe(200);
+  });
+});
 
 // ============================================================================
 // composeTransforms — multiple rewriters compose correctly
@@ -476,20 +493,20 @@ describe("applyResponse", () => {
 
 describe("composeTransforms", () => {
   it("applies rewriters left-to-right", () => {
-    const handler = (_: unknown) => ({})
-    const api = op(handler, { http: { method: "GET" } })
-    const pipeline = composeTransforms(applyMethods, applyResponse, applyMoveTo)
-    const route = pipeline(naiveTransform(api))
-    expect(Object.keys(route.methods ?? {})).toEqual(["GET"])
-  })
+    const handler = (_: unknown) => ({});
+    const api = op(handler, { http: { method: "GET" } });
+    const pipeline = composeTransforms(applyMethods, applyResponse, applyMoveTo);
+    const route = pipeline(naiveTransform(api));
+    expect(Object.keys(route.methods ?? {})).toEqual(["GET"]);
+  });
 
   it("identity when given no transforms", () => {
-    const api = op((_: unknown) => ({}))
-    const route = naiveTransform(api)
-    const pipeline = composeTransforms()
-    expect(pipeline(route)).toEqual(route)
-  })
-})
+    const api = op((_: unknown) => ({}));
+    const route = naiveTransform(api);
+    const pipeline = composeTransforms();
+    expect(pipeline(route)).toEqual(route);
+  });
+});
 
 // ============================================================================
 // Full pipeline: Node with directives → naiveTransform → rewriters → router
@@ -497,56 +514,64 @@ describe("composeTransforms", () => {
 
 describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter", () => {
   it("dispatches a REST-style resource built from a plain Node tree", async () => {
-    const store = new Map<string, { id: string; title: string }>()
-    store.set("book-1", { id: "book-1", title: "Dune" })
+    const store = new Map<string, { id: string; title: string }>();
+    store.set("book-1", { id: "book-1", title: "Dune" });
 
     const api = api_({
-        books: api_({
-            list: op((_: unknown) => [...store.values()], {
-              http: { method: "GET" },
-            }),
-            create: op((input: { title: string }) => {
-              const book = { id: "book-2", title: input.title }
-              store.set(book.id, book)
-              return book
-            }, { http: { method: "POST", response: { status: 201 } } }),
-            // `get`/`remove` are authored as SIBLINGS of `books`' fallback
-            // (not nested under it) — `moveTo` relocates them onto the
-            // fallback position, but moveTo is purely an address transform
-            // now: it does NOT grant them the `bookId` slug implicitly by
-            // landing on a same-named wildcard. They need an explicit
-            // `http.source()` declaration, same as they would if authored at
-            // any other non-nested position.
-            get: op(
-              (input: { bookId: string }) => store.get(input.bookId),
-              {
-                http: {
-                  moveTo: "../*", method: "GET",
-                },
+      books: api_(
+        {
+          list: op((_: unknown) => [...store.values()], {
+            http: { method: "GET" },
+          }),
+          create: op(
+            (input: { title: string }) => {
+              const book = { id: "book-2", title: input.title };
+              store.set(book.id, book);
+              return book;
+            },
+            { http: { method: "POST", response: { status: 201 } } },
+          ),
+          // `get`/`remove` are authored as SIBLINGS of `books`' fallback
+          // (not nested under it) — `moveTo` relocates them onto the
+          // fallback position, but moveTo is purely an address transform
+          // now: it does NOT grant them the `bookId` slug implicitly by
+          // landing on a same-named wildcard. They need an explicit
+          // `http.source()` declaration, same as they would if authored at
+          // any other non-nested position.
+          get: op(
+            (input: { bookId: string }) => store.get(input.bookId),
+            {
+              http: {
+                moveTo: "../*",
+                method: "GET",
               },
-              http.source({ bookId: "path" }),
-            ),
-            remove: op(
-              (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
-              {
-                http: {
-                  moveTo: "../*", method: "DELETE",
-                },
+            },
+            http.source({ bookId: "path" }),
+          ),
+          remove: op(
+            (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
+            {
+              http: {
+                moveTo: "../*",
+                method: "DELETE",
               },
-              http.source({ bookId: "path" }),
-            ),
-          }, { fallback: { name: "bookId", subtree: api_({}) } }),
-      })
+            },
+            http.source({ bookId: "path" }),
+          ),
+        },
+        { fallback: { name: "bookId", subtree: api_({}) } },
+      ),
+    });
 
-    const routes = toHttpRoutes(api)
-    const pipeline = composeTransforms(applyMethods, applyMoveTo, applyResponse)
-    const router = makeRouter(pipeline(routes))
+    const routes = toHttpRoutes(api);
+    const pipeline = composeTransforms(applyMethods, applyMoveTo, applyResponse);
+    const router = makeRouter(pipeline(routes));
 
     // "list" and "create" carry no `moveTo` directive, so they stay at their
     // naiveTransform positions: /books/list and /books/create.
-    const listRes = await router(new Request("http://localhost/books/list"))
-    expect(listRes.status).toBe(200)
-    expect(await listRes.json()).toEqual([{ id: "book-1", title: "Dune" }])
+    const listRes = await router(new Request("http://localhost/books/list"));
+    expect(listRes.status).toBe(200);
+    expect(await listRes.json()).toEqual([{ id: "book-1", title: "Dune" }]);
 
     const createRes = await router(
       new Request("http://localhost/books/create", {
@@ -554,20 +579,18 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "Foundation" }),
       }),
-    )
-    expect(createRes.status).toBe(201)
+    );
+    expect(createRes.status).toBe(201);
 
-    const getRes = await router(new Request("http://localhost/books/book-1"))
-    expect(getRes.status).toBe(200)
-    expect(await getRes.json()).toEqual({ id: "book-1", title: "Dune" })
+    const getRes = await router(new Request("http://localhost/books/book-1"));
+    expect(getRes.status).toBe(200);
+    expect(await getRes.json()).toEqual({ id: "book-1", title: "Dune" });
 
-    const delRes = await router(
-      new Request("http://localhost/books/book-1", { method: "DELETE" }),
-    )
-    expect(delRes.status).toBe(200)
-    expect(await delRes.json()).toEqual({ deleted: true })
-  })
-})
+    const delRes = await router(new Request("http://localhost/books/book-1", { method: "DELETE" }));
+    expect(delRes.status).toBe(200);
+    expect(await delRes.json()).toEqual({ deleted: true });
+  });
+});
 
 // ============================================================================
 // httpRoute / isHttpRoute — brand + makeRouter overload discrimination
@@ -575,26 +598,26 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
 
 describe("httpRoute / isHttpRoute", () => {
   it("values built via httpRoute() are recognized by isHttpRoute", () => {
-    const r = httpRoute({ meta: {} })
-    expect(isHttpRoute(r)).toBe(true)
-  })
+    const r = httpRoute({ meta: {} });
+    expect(isHttpRoute(r)).toBe(true);
+  });
 
   it("a plain Node value is not recognized as an HttpRoute", () => {
-    const n = api_({})
-    expect(isHttpRoute(n)).toBe(false)
-  })
+    const n = api_({});
+    expect(isHttpRoute(n)).toBe(false);
+  });
 
   it("makeRouter dispatches an HttpRoute through the simple exact-path/method dispatcher", async () => {
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => ({ via: "route" }), meta: {} } },
       meta: {},
-    })
-    const router = makeRouter(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ via: "route" })
-  })
-})
+    });
+    const router = makeRouter(route);
+    const res = await router(new Request("http://localhost/"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ via: "route" });
+  });
+});
 
 // ============================================================================
 // runRoute (via makeRouterFromRoute) — decode → handler → encode, no
@@ -606,61 +629,73 @@ describe("httpRoute / isHttpRoute", () => {
 
 describe("runRoute — default decode/encode", () => {
   it("default decode: JSON body merged for POST, empty input for GET", async () => {
-    let seenPost: unknown
-    let seenGet: unknown
+    let seenPost: unknown;
+    let seenGet: unknown;
     const route = httpRoute({
       methods: {
-        POST: { handler: (input: unknown) => { seenPost = input; return {} }, meta: {} },
-        GET: { handler: (input: unknown) => { seenGet = input; return {} }, meta: {} },
+        POST: {
+          handler: (input: unknown) => {
+            seenPost = input;
+            return {};
+          },
+          meta: {},
+        },
+        GET: {
+          handler: (input: unknown) => {
+            seenGet = input;
+            return {};
+          },
+          meta: {},
+        },
       },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
+    });
+    const router = makeRouterFromRoute(route);
     await router(
       new Request("http://localhost/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "Dune" }),
       }),
-    )
-    expect(seenPost).toEqual({ title: "Dune" })
+    );
+    expect(seenPost).toEqual({ title: "Dune" });
 
-    await router(new Request("http://localhost/"))
-    expect(seenGet).toEqual({})
-  })
+    await router(new Request("http://localhost/"));
+    expect(seenGet).toEqual({});
+  });
 
   it("invalid JSON body → 400", async () => {
     const route = httpRoute({
       methods: { POST: { handler: (input: unknown) => input, meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
+    });
+    const router = makeRouterFromRoute(route);
     const res = await router(
       new Request("http://localhost/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "not valid json {{{",
       }),
-    )
-    expect(res.status).toBe(400)
-  })
+    );
+    expect(res.status).toBe(400);
+  });
 
   it("handler throwing → 500", async () => {
     const route = httpRoute({
       methods: {
         GET: {
           handler: (_: unknown) => {
-            throw new Error("boom")
+            throw new Error("boom");
           },
           meta: {},
         },
       },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.status).toBe(500)
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    expect(res.status).toBe(500);
+  });
 
   it("handler returning Result ok → 200 with the unwrapped value", async () => {
     const route = httpRoute({
@@ -668,12 +703,12 @@ describe("runRoute — default decode/encode", () => {
         GET: { handler: (_: unknown) => ({ kind: "ok", value: { id: 1 } }), meta: {} },
       },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ id: 1 })
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: 1 });
+  });
 
   it("handler returning Result err → 400 with the error body", async () => {
     const route = httpRoute({
@@ -681,25 +716,25 @@ describe("runRoute — default decode/encode", () => {
         GET: { handler: (_: unknown) => ({ kind: "err", error: { message: "nope" } }), meta: {} },
       },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.status).toBe(400)
-    const body = (await res.json()) as { error: { message: string } }
-    expect(body.error.message).toBe("nope")
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toBe("nope");
+  });
 
   it("response override (via applyResponse) still takes effect through runRoute", async () => {
     const api = op((_: unknown) => ({ created: true }), {
       http: { response: { status: 201 } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.status).toBe(201)
-    expect(await res.json()).toEqual({ created: true })
-  })
-})
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ created: true });
+  });
+});
 
 // ============================================================================
 // runRoute — async iterable handlers stream as Server-Sent Events. Detection
@@ -711,106 +746,108 @@ describe("runRoute — default decode/encode", () => {
 // ============================================================================
 
 async function readAllSseText(res: Response): Promise<string> {
-  const reader = res.body!.getReader()
-  const decoder = new TextDecoder()
-  let text = ""
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
   for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    text += decoder.decode(value, { stream: true })
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
   }
-  return text
+  return text;
 }
 
 describe("runRoute — async iterable handlers stream as SSE", () => {
   it("streams an async generator as text/event-stream", async () => {
     async function* gen() {
-      yield 1
-      yield 2
+      yield 1;
+      yield 2;
     }
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.headers.get("Content-Type")).toBe("text/event-stream")
-    const text = await readAllSseText(res)
-    expect(text).toBe("data: 1\n\n" + "data: 2\n\n" + "event: done\ndata: undefined\n\n")
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    expect(res.headers.get("Content-Type")).toBe("text/event-stream");
+    const text = await readAllSseText(res);
+    expect(text).toBe("data: 1\n\n" + "data: 2\n\n" + "event: done\ndata: undefined\n\n");
+  });
 
   it("plain yielded values become untagged data events", async () => {
     async function* gen() {
-      yield { hello: "world" }
+      yield { hello: "world" };
     }
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    const text = await readAllSseText(res)
-    expect(text.startsWith(`data: ${JSON.stringify({ hello: "world" })}\n\n`)).toBe(true)
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    const text = await readAllSseText(res);
+    expect(text.startsWith(`data: ${JSON.stringify({ hello: "world" })}\n\n`)).toBe(true);
+  });
 
   it("StreamProgress yields become event: progress frames", async () => {
     async function* gen() {
-      yield { kind: "progress", progress: 0.5, total: 1, message: "halfway" }
+      yield { kind: "progress", progress: 0.5, total: 1, message: "halfway" };
     }
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    const text = await readAllSseText(res)
-    expect(text.startsWith("event: progress\n")).toBe(true)
-    const dataLine = text.split("\n")[1]!
-    expect(dataLine).toBe(`data: ${JSON.stringify({ progress: 0.5, total: 1, message: "halfway" })}`)
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    const text = await readAllSseText(res);
+    expect(text.startsWith("event: progress\n")).toBe(true);
+    const dataLine = text.split("\n")[1]!;
+    expect(dataLine).toBe(
+      `data: ${JSON.stringify({ progress: 0.5, total: 1, message: "halfway" })}`,
+    );
+  });
 
   it("StreamChunk yields unwrap to a plain data event carrying the inner data", async () => {
     async function* gen() {
-      yield { kind: "chunk", data: { n: 42 } }
+      yield { kind: "chunk", data: { n: 42 } };
     }
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    const text = await readAllSseText(res)
-    expect(text).toBe(`data: ${JSON.stringify({ n: 42 })}\n\nevent: done\ndata: undefined\n\n`)
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    const text = await readAllSseText(res);
+    expect(text).toBe(`data: ${JSON.stringify({ n: 42 })}\n\nevent: done\ndata: undefined\n\n`);
+  });
 
   it("the generator's return value is sent as a final event: done frame before close", async () => {
     async function* gen() {
-      yield 1
-      return { total: 1, ok: true }
+      yield 1;
+      return { total: 1, ok: true };
     }
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => gen(), meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    const text = await readAllSseText(res)
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    const text = await readAllSseText(res);
     expect(text).toBe(
       `data: 1\n\n` + `event: done\ndata: ${JSON.stringify({ total: 1, ok: true })}\n\n`,
-    )
-  })
+    );
+  });
 
   it("non-async-iterable return values are unaffected (backwards compat)", async () => {
     const route = httpRoute({
       methods: { GET: { handler: (_: unknown) => ({ id: 1 }), meta: {} } },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/"))
-    expect(res.headers.get("Content-Type")).toBe("application/json")
-    expect(await res.json()).toEqual({ id: 1 })
-  })
-})
+    });
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/"));
+    expect(res.headers.get("Content-Type")).toBe("application/json");
+    expect(await res.json()).toEqual({ id: 1 });
+  });
+});
 
 // ============================================================================
 // runRoute — ResponseOverride body passthrough (encodeOverride). A response
@@ -823,83 +860,83 @@ describe("runRoute — async iterable handlers stream as SSE", () => {
 
 describe("runRoute — ResponseOverride body passthrough", () => {
   it("binary ArrayBuffer body passes through untouched with the handler's content-type", async () => {
-    const bytes = new Uint8Array([1, 2, 3, 4])
+    const bytes = new Uint8Array([1, 2, 3, 4]);
     const api = op((_: unknown) => bytes.buffer, {
       http: {
         response: { headers: { "Content-Type": "application/octet-stream" } },
       },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.headers.get("Content-Type")).toBe("application/octet-stream")
-    const buf = await res.arrayBuffer()
-    expect(new Uint8Array(buf)).toEqual(bytes)
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
+    const buf = await res.arrayBuffer();
+    expect(new Uint8Array(buf)).toEqual(bytes);
+  });
 
   it("string body with an explicit non-JSON content-type passes through as-is", async () => {
     const api = op((_: unknown) => "<h1>hello</h1>", {
       http: { response: { headers: { "Content-Type": "text/html" } } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.headers.get("Content-Type")).toBe("text/html")
-    expect(await res.text()).toBe("<h1>hello</h1>")
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.headers.get("Content-Type")).toBe("text/html");
+    expect(await res.text()).toBe("<h1>hello</h1>");
+  });
 
   it("string body WITHOUT an explicit content-type still gets JSON.stringify'd (backwards compat)", async () => {
     const api = op((_: unknown) => "plain string", {
       http: { response: { status: 200 } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.headers.get("Content-Type")).toBe("application/json")
-    expect(await res.text()).toBe(JSON.stringify("plain string"))
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.headers.get("Content-Type")).toBe("application/json");
+    expect(await res.text()).toBe(JSON.stringify("plain string"));
+  });
 
   it("ReadableStream body passes through for streaming", async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new TextEncoder().encode("chunk-1"))
-        controller.close()
+        controller.enqueue(new TextEncoder().encode("chunk-1"));
+        controller.close();
       },
-    })
+    });
     const api = op((_: unknown) => stream, {
       http: { response: { headers: { "Content-Type": "text/plain" } } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(await res.text()).toBe("chunk-1")
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(await res.text()).toBe("chunk-1");
+  });
 
   it("a full Response object as the override body is returned directly", async () => {
-    const inner = new Response("teapot", { status: 418, headers: { "X-Kind": "teapot" } })
+    const inner = new Response("teapot", { status: 418, headers: { "X-Kind": "teapot" } });
     const api = op((_: unknown) => inner, {
       http: { response: { status: 200 } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.status).toBe(418)
-    expect(res.headers.get("X-Kind")).toBe("teapot")
-    expect(await res.text()).toBe("teapot")
-  })
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.status).toBe(418);
+    expect(res.headers.get("X-Kind")).toBe("teapot");
+    expect(await res.text()).toBe("teapot");
+  });
 
   it("existing plain-object JSON override behavior is unchanged", async () => {
     const api = op((_: unknown) => ({ created: true }), {
       http: { response: { status: 201 } },
-    })
-    const route = applyResponse(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
-    const res = await router(new Request("http://localhost/", { method: "POST" }))
-    expect(res.status).toBe(201)
-    expect(res.headers.get("Content-Type")).toBe("application/json")
-    expect(await res.json()).toEqual({ created: true })
-  })
-})
+    });
+    const route = applyResponse(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
+    const res = await router(new Request("http://localhost/", { method: "POST" }));
+    expect(res.status).toBe(201);
+    expect(res.headers.get("Content-Type")).toBe("application/json");
+    expect(await res.json()).toEqual({ created: true });
+  });
+});
 
 // ============================================================================
 // runRoute — per-route `sources` (declarative decode configuration; a direct
@@ -908,11 +945,14 @@ describe("runRoute — ResponseOverride body passthrough", () => {
 
 describe("runRoute — per-route sources", () => {
   it("reads a specific param from the header store via sources.sourceMap", async () => {
-    let capturedInput: unknown
+    let capturedInput: unknown;
     const route = httpRoute({
       methods: {
         POST: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
+          handler: (input: unknown) => {
+            capturedInput = input;
+            return {};
+          },
           meta: {},
           sources: {
             paramNames: ["title", "apiKey"],
@@ -921,63 +961,70 @@ describe("runRoute — per-route sources", () => {
         },
       },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
+    });
+    const router = makeRouterFromRoute(route);
     await router(
       new Request("http://localhost/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": "secret-123" },
         body: JSON.stringify({ title: "Dune" }),
       }),
-    )
-    expect(capturedInput).toEqual({ title: "Dune", apiKey: "secret-123" })
-  })
+    );
+    expect(capturedInput).toEqual({ title: "Dune", apiKey: "secret-123" });
+  });
 
   it("runs sources.transform after assembly, before the handler", async () => {
-    let capturedInput: unknown
+    let capturedInput: unknown;
     const route = httpRoute({
       methods: {
         GET: {
-          handler: (input: unknown) => { capturedInput = input; return {} },
+          handler: (input: unknown) => {
+            capturedInput = input;
+            return {};
+          },
           meta: {},
           sources: { transform: (bag) => ({ ...bag, injected: true }) },
         },
       },
       meta: {},
-    })
-    const router = makeRouterFromRoute(route)
-    await router(new Request("http://localhost/?name=Alice"))
-    expect(capturedInput).toEqual({ name: "Alice", injected: true })
-  })
+    });
+    const router = makeRouterFromRoute(route);
+    await router(new Request("http://localhost/?name=Alice"));
+    expect(capturedInput).toEqual({ name: "Alice", injected: true });
+  });
 
   it("end-to-end: op(fn, http.get, http.source(...)) decodes params from the declared stores through the full pipeline", async () => {
-    let capturedInput: unknown
+    let capturedInput: unknown;
     const getBudget = (input: unknown) => {
-      capturedInput = input
-      return { ok: true }
-    }
-    const api = op(getBudget, http.get, http.source({
-      year: "query",
-      months: { store: "header", key: "x-months" },
-    }))
-    const route = applyMethods(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
+      capturedInput = input;
+      return { ok: true };
+    };
+    const api = op(
+      getBudget,
+      http.get,
+      http.source({
+        year: "query",
+        months: { store: "header", key: "x-months" },
+      }),
+    );
+    const route = applyMethods(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
     const res = await router(
       new Request("http://localhost/?year=2026", {
         method: "GET",
         headers: { "x-months": "6" },
       }),
-    )
-    expect(res.status).toBe(200)
-    expect(capturedInput).toEqual({ year: "2026", months: "6" })
-  })
+    );
+    expect(res.status).toBe(200);
+    expect(capturedInput).toEqual({ year: "2026", months: "6" });
+  });
 
   it("end-to-end: two composed http.source() calls both take effect (POST, query override + renamed body field)", async () => {
-    let capturedInput: unknown
+    let capturedInput: unknown;
     const updateBudget = (input: unknown) => {
-      capturedInput = input
-      return { ok: true }
-    }
+      capturedInput = input;
+      return { ok: true };
+    };
     const api = op(
       updateBudget,
       http.post,
@@ -985,25 +1032,25 @@ describe("runRoute — per-route sources", () => {
       // `year` is pulled from the query string instead, as an override.
       http.source({ year: "query" }),
       http.source({ months: { store: "body", key: "budgetMonths" } }),
-    )
-    const route = applyMethods(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
+    );
+    const route = applyMethods(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
     const res = await router(
       new Request("http://localhost/?year=2026", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ budgetMonths: 6 }),
       }),
-    )
-    expect(res.status).toBe(200)
+    );
+    expect(res.status).toBe(200);
     // No explicit paramNames were declared, so defaultDecode bulk-collects
     // every name any store could produce (see route.ts's defaultDecode doc
     // comment) — budgetMonths (the body's own raw key) AND months (the
     // sourceMap-declared alias reading the same body field) both show up
     // alongside year.
-    expect(capturedInput).toEqual({ year: "2026", budgetMonths: 6, months: 6 })
-  })
-})
+    expect(capturedInput).toEqual({ year: "2026", budgetMonths: 6, months: 6 });
+  });
+});
 
 // ============================================================================
 // wrapValidators (Node-level, applied before naiveTransform) is deleted
@@ -1029,39 +1076,48 @@ describe("runRoute — handler-level middleware", () => {
       echo: op((input: { x: string }) => ({ got: input.x }), {
         http: { method: "GET" },
       }),
-    })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)))
-    const res = await router(new Request("http://localhost/echo?x=1"))
-    expect(await res.json()).toEqual({ got: "1" })
-  })
+    });
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)));
+    const res = await router(new Request("http://localhost/echo?x=1"));
+    expect(await res.json()).toEqual({ got: "1" });
+  });
 
   it("can read from stores — the raw pre-assembly path/query stores — and can transform input before / output after", async () => {
-    let seenPathBookId: unknown
-    let seenQueryX: unknown
+    let seenPathBookId: unknown;
+    let seenQueryX: unknown;
     const doubleInput: HttpHandlerMiddleware = (next) => (input, stores) => {
-      seenPathBookId = stores.path?.bookId
-      seenQueryX = stores.query?.x
-      return next({ ...input, x: String(Number(input.x) * 2) }, stores)
-    }
+      seenPathBookId = stores.path?.bookId;
+      seenQueryX = stores.query?.x;
+      return next({ ...input, x: String(Number(input.x) * 2) }, stores);
+    };
     const tree = api_({
-      books: api_({}, {
-        fallback: {
-          name: "bookId",
-          subtree: api_({
-            echo: op((input: { bookId: string; x: string }) => ({ bookId: input.bookId, got: Number(input.x) }), {
-              description: "an echo op",
-              http: { method: "GET" },
+      books: api_(
+        {},
+        {
+          fallback: {
+            name: "bookId",
+            subtree: api_({
+              echo: op(
+                (input: { bookId: string; x: string }) => ({
+                  bookId: input.bookId,
+                  got: Number(input.x),
+                }),
+                {
+                  description: "an echo op",
+                  http: { method: "GET" },
+                },
+              ),
             }),
-          }),
+          },
         },
-      }),
-    })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [doubleInput])
-    const res = await router(new Request("http://localhost/books/42/echo?x=5"))
-    expect(await res.json()).toEqual({ bookId: "42", got: 10 })
-    expect(seenPathBookId).toBe("42")
-    expect(seenQueryX).toBe("5")
-  })
+      ),
+    });
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [doubleInput]);
+    const res = await router(new Request("http://localhost/books/42/echo?x=5"));
+    expect(await res.json()).toEqual({ bookId: "42", got: 10 });
+    expect(seenPathBookId).toBe("42");
+    expect(seenQueryX).toBe("5");
+  });
 
   it("the handler does not receive stores — only the assembled input", async () => {
     // A handler declared with a single `input` parameter has no way to reach
@@ -1072,89 +1128,92 @@ describe("runRoute — handler-level middleware", () => {
       whatArgs: op((input: unknown) => ({ argCount: Object.keys(input as object).length }), {
         http: { method: "GET" },
       }),
-    })
-    const passStores: HttpHandlerMiddleware = (next) => (input, stores) => next(input, stores)
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [passStores])
-    const res = await router(new Request("http://localhost/whatArgs?x=1"))
-    expect(await res.json()).toEqual({ argCount: 1 })
-  })
+    });
+    const passStores: HttpHandlerMiddleware = (next) => (input, stores) => next(input, stores);
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [passStores]);
+    const res = await router(new Request("http://localhost/whatArgs?x=1"));
+    expect(await res.json()).toEqual({ argCount: 1 });
+  });
 
   it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
-    const order: string[] = []
+    const order: string[] = [];
     const outer: HttpHandlerMiddleware = (next) => async (input, stores) => {
-      order.push("outer:before")
-      const result = await next(input, stores)
-      order.push("outer:after")
-      return result
-    }
+      order.push("outer:before");
+      const result = await next(input, stores);
+      order.push("outer:after");
+      return result;
+    };
     const inner: HttpHandlerMiddleware = (next) => async (input, stores) => {
-      order.push("inner:before")
-      const result = await next(input, stores)
-      order.push("inner:after")
-      return result
-    }
+      order.push("inner:before");
+      const result = await next(input, stores);
+      order.push("inner:after");
+      return result;
+    };
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
         http: { method: "GET" },
       }),
-    })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [outer, inner])
-    await router(new Request("http://localhost/echo?x=1"))
-    expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"])
-  })
+    });
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [outer, inner]);
+    await router(new Request("http://localhost/echo?x=1"));
+    expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"]);
+  });
 
   it("middleware can read the caller store — populated from auth headers", async () => {
-    let seenAuthorization: unknown
-    let seenCookie: unknown
+    let seenAuthorization: unknown;
+    let seenCookie: unknown;
     const readCaller: HttpHandlerMiddleware = (next) => (input, stores) => {
-      seenAuthorization = stores.caller?.authorization
-      seenCookie = stores.caller?.cookie
-      return next(input, stores)
-    }
+      seenAuthorization = stores.caller?.authorization;
+      seenCookie = stores.caller?.cookie;
+      return next(input, stores);
+    };
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
         http: { method: "GET" },
       }),
-    })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [readCaller])
+    });
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [readCaller]);
     const res = await router(
       new Request("http://localhost/echo?x=1", {
         headers: { authorization: "Bearer abc123", cookie: "session=xyz" },
       }),
-    )
-    expect(await res.json()).toEqual({ got: "1" })
-    expect(seenAuthorization).toBe("Bearer abc123")
-    expect(seenCookie).toBe("session=xyz")
-  })
+    );
+    expect(await res.json()).toEqual({ got: "1" });
+    expect(seenAuthorization).toBe("Bearer abc123");
+    expect(seenCookie).toBe("session=xyz");
+  });
 
   it("the handler's assembled input does not include caller fields unless explicitly sourceMapped", async () => {
     const tree = api_({
       echo: op((input: { x: string }) => input, {
         http: { method: "GET" },
       }),
-    })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)))
+    });
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)));
     const res = await router(
       new Request("http://localhost/echo?x=1", { headers: { authorization: "Bearer abc123" } }),
-    )
-    const body = await res.json()
-    expect(body).toEqual({ x: "1" })
-    expect(body.authorization).toBeUndefined()
-  })
+    );
+    const body = await res.json();
+    expect(body).toEqual({ x: "1" });
+    expect(body.authorization).toBeUndefined();
+  });
 
   it("runs before Result-unwrapping — an err Result from the middleware chain still maps to 400", async () => {
-    const rejecting: HttpHandlerMiddleware = () => async () => ({ kind: "err", error: "rejected by middleware" })
+    const rejecting: HttpHandlerMiddleware = () => async () => ({
+      kind: "err",
+      error: "rejected by middleware",
+    });
     const tree = api_({
       echo: op((input: { x: string }) => ({ got: input.x }), {
         http: { method: "GET" },
       }),
-    })
-    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [rejecting])
-    const res = await router(new Request("http://localhost/echo?x=1"))
-    expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: "rejected by middleware" })
-  })
-})
+    });
+    const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [rejecting]);
+    const res = await router(new Request("http://localhost/echo?x=1"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "rejected by middleware" });
+  });
+});
 
 // ============================================================================
 // http.validate() — Standard Schema (https://standardschema.dev/) validation
@@ -1168,92 +1227,95 @@ describe("runRoute — handler-level middleware", () => {
 // ============================================================================
 
 /** A Standard Schema requiring `title` to be a non-empty string; coerces `year` to a number. */
-function bookSchema(): StandardSchemaV1<{ title: unknown; year?: unknown }, { title: string; year?: number }> {
+function bookSchema(): StandardSchemaV1<
+  { title: unknown; year?: unknown },
+  { title: string; year?: number }
+> {
   return {
     "~standard": {
       version: 1,
       vendor: "test",
       validate: (value: unknown) => {
         if (typeof value !== "object" || value === null) {
-          return { issues: [{ message: "expected an object" }] }
+          return { issues: [{ message: "expected an object" }] };
         }
-        const v = value as Record<string, unknown>
-        const issues: StandardSchemaV1.Issue[] = []
+        const v = value as Record<string, unknown>;
+        const issues: StandardSchemaV1.Issue[] = [];
         if (typeof v.title !== "string" || v.title.length === 0) {
-          issues.push({ message: "title must be a non-empty string", path: ["title"] })
+          issues.push({ message: "title must be a non-empty string", path: ["title"] });
         }
         if (v.year !== undefined && Number.isNaN(Number(v.year))) {
-          issues.push({ message: "year must be numeric", path: ["year"] })
+          issues.push({ message: "year must be numeric", path: ["year"] });
         }
-        if (issues.length > 0) return { issues }
+        if (issues.length > 0) return { issues };
         return {
           value: {
             title: v.title as string,
             ...(v.year !== undefined ? { year: Number(v.year) } : {}),
           },
-        }
+        };
       },
     },
-  }
+  };
 }
 
 describe("http.validate() — Standard Schema at the decode boundary", () => {
   it("valid input: handler receives the validator's own (coerced) output value", async () => {
-    let capturedInput: unknown
+    let capturedInput: unknown;
     const createBook = (input: unknown) => {
-      capturedInput = input
-      return { ok: true }
-    }
-    const api = op(createBook, http.post, http.validate(bookSchema()))
-    const route = applyMethods(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
+      capturedInput = input;
+      return { ok: true };
+    };
+    const api = op(createBook, http.post, http.validate(bookSchema()));
+    const route = applyMethods(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
     const res = await router(
       new Request("http://localhost/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "Dune", year: "1965" }),
       }),
-    )
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
     // year coerced string -> number by the validator; the handler never sees
     // the raw assembled bag once a validator is attached.
-    expect(capturedInput).toEqual({ title: "Dune", year: 1965 })
-  })
+    expect(capturedInput).toEqual({ title: "Dune", year: 1965 });
+  });
 
   it("invalid input: 422 with the validator's own issues, handler never runs", async () => {
-    let handlerRan = false
+    let handlerRan = false;
     const createBook = () => {
-      handlerRan = true
-      return { ok: true }
-    }
-    const api = op(createBook, http.post, http.validate(bookSchema()))
-    const route = applyMethods(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
+      handlerRan = true;
+      return { ok: true };
+    };
+    const api = op(createBook, http.post, http.validate(bookSchema()));
+    const route = applyMethods(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
     const res = await router(
       new Request("http://localhost/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "" }),
       }),
-    )
-    expect(res.status).toBe(422)
+    );
+    expect(res.status).toBe(422);
     expect(await res.json()).toEqual({
       error: "validation failed",
       issues: [{ message: "title must be a non-empty string", path: ["title"] }],
-    })
-    expect(handlerRan).toBe(false)
-  })
+    });
+    expect(handlerRan).toBe(false);
+  });
 
   it("a route with no http.validate() is unaffected — backward compatible", async () => {
-    let capturedInput: unknown
+    let capturedInput: unknown;
     const createBook = (input: unknown) => {
-      capturedInput = input
-      return { ok: true }
-    }
-    const api = op(createBook, http.post)
-    const route = applyMethods(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
+      capturedInput = input;
+      return { ok: true };
+    };
+    const api = op(createBook, http.post);
+    const route = applyMethods(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
     const res = await router(
       new Request("http://localhost/", {
         method: "POST",
@@ -1261,11 +1323,11 @@ describe("http.validate() — Standard Schema at the decode boundary", () => {
         // Would fail bookSchema() (empty title) — proves no validator ran.
         body: JSON.stringify({ title: "" }),
       }),
-    )
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ ok: true })
-    expect(capturedInput).toEqual({ title: "" })
-  })
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(capturedInput).toEqual({ title: "" });
+  });
 
   it("an async validator (Promise-returning ~standard.validate) is awaited correctly", async () => {
     const asyncSchema: StandardSchemaV1<{ title: unknown }, { title: string }> = {
@@ -1273,23 +1335,23 @@ describe("http.validate() — Standard Schema at the decode boundary", () => {
         version: 1,
         vendor: "test-async",
         validate: async (value: unknown) => {
-          await Promise.resolve()
-          const v = value as Record<string, unknown>
+          await Promise.resolve();
+          const v = value as Record<string, unknown>;
           if (typeof v.title !== "string" || v.title.length === 0) {
-            return { issues: [{ message: "title required" }] }
+            return { issues: [{ message: "title required" }] };
           }
-          return { value: { title: v.title } }
+          return { value: { title: v.title } };
         },
       },
-    }
-    let capturedInput: unknown
+    };
+    let capturedInput: unknown;
     const createBook = (input: unknown) => {
-      capturedInput = input
-      return { ok: true }
-    }
-    const api = op(createBook, http.post, http.validate(asyncSchema))
-    const route = applyMethods(naiveTransform(api))
-    const router = makeRouterFromRoute(route)
+      capturedInput = input;
+      return { ok: true };
+    };
+    const api = op(createBook, http.post, http.validate(asyncSchema));
+    const route = applyMethods(naiveTransform(api));
+    const router = makeRouterFromRoute(route);
 
     const ok = await router(
       new Request("http://localhost/", {
@@ -1297,9 +1359,9 @@ describe("http.validate() — Standard Schema at the decode boundary", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "Dune" }),
       }),
-    )
-    expect(ok.status).toBe(200)
-    expect(capturedInput).toEqual({ title: "Dune" })
+    );
+    expect(ok.status).toBe(200);
+    expect(capturedInput).toEqual({ title: "Dune" });
 
     const rejected = await router(
       new Request("http://localhost/", {
@@ -1307,14 +1369,14 @@ describe("http.validate() — Standard Schema at the decode boundary", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: "" }),
       }),
-    )
-    expect(rejected.status).toBe(422)
+    );
+    expect(rejected.status).toBe(422);
     expect(await rejected.json()).toEqual({
       error: "validation failed",
       issues: [{ message: "title required" }],
-    })
-  })
-})
+    });
+  });
+});
 
 // ============================================================================
 // Pagination — Link header (server-side `page` kind propagation)
@@ -1326,90 +1388,94 @@ describe("http.validate() — Standard Schema at the decode boundary", () => {
 // attaches to the same response, per RFC 8288, so a caller that isn't using
 // this package's own client can still discover the next page.
 
-const ITEMS = Array.from({ length: 5 }, (_, i) => ({ id: i }))
+const ITEMS = Array.from({ length: 5 }, (_, i) => ({ id: i }));
 
 function cursorList(input: { readonly cursor?: string }): CursorPage<{ id: number }> {
-  const start = input.cursor !== undefined ? Number(input.cursor) : 0
-  const page = ITEMS.slice(start, start + 2)
-  const nextStart = start + page.length
-  const hasMore = nextStart < ITEMS.length
-  return { items: page, hasMore, ...(hasMore ? { cursor: String(nextStart) } : {}) }
+  const start = input.cursor !== undefined ? Number(input.cursor) : 0;
+  const page = ITEMS.slice(start, start + 2);
+  const nextStart = start + page.length;
+  const hasMore = nextStart < ITEMS.length;
+  return { items: page, hasMore, ...(hasMore ? { cursor: String(nextStart) } : {}) };
 }
 
 function offsetList(input: { readonly offset?: number }): OffsetPage<{ id: number }> {
-  const offset = input.offset !== undefined ? Number(input.offset) : 0
-  const page = ITEMS.slice(offset, offset + 2)
-  return { items: page, offset, total: ITEMS.length, hasMore: offset + page.length < ITEMS.length }
+  const offset = input.offset !== undefined ? Number(input.offset) : 0;
+  const page = ITEMS.slice(offset, offset + 2);
+  return { items: page, offset, total: ITEMS.length, hasMore: offset + page.length < ITEMS.length };
 }
 
 describe("defaultEncode — pagination Link header", () => {
-  it("attaches a Link: rel=\"next\" header for a cursor page with hasMore: true", async () => {
-    const tree = api_({ list: op(cursorList, http.get) })
-    const router = makeRouter(applyMethodsPipeline(tree))
+  it('attaches a Link: rel="next" header for a cursor page with hasMore: true', async () => {
+    const tree = api_({ list: op(cursorList, http.get) });
+    const router = makeRouter(applyMethodsPipeline(tree));
 
-    const res = await router(new Request("http://localhost/list"))
-    expect(res.status).toBe(200)
-    expect(res.headers.get("Link")).toBe('<http://localhost/list?cursor=2>; rel="next"')
-    expect(await res.json()).toEqual({ items: [{ id: 0 }, { id: 1 }], hasMore: true, cursor: "2" })
-  })
+    const res = await router(new Request("http://localhost/list"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Link")).toBe('<http://localhost/list?cursor=2>; rel="next"');
+    expect(await res.json()).toEqual({ items: [{ id: 0 }, { id: 1 }], hasMore: true, cursor: "2" });
+  });
 
   it("preserves other query params on the next-page URL", async () => {
-    const tree = api_({ list: op(cursorList, http.get) })
-    const router = makeRouter(applyMethodsPipeline(tree))
+    const tree = api_({ list: op(cursorList, http.get) });
+    const router = makeRouter(applyMethodsPipeline(tree));
 
-    const res = await router(new Request("http://localhost/list?limit=2&sort=asc"))
-    const link = res.headers.get("Link")
-    expect(link).toContain("limit=2")
-    expect(link).toContain("sort=asc")
-    expect(link).toContain("cursor=2")
-  })
+    const res = await router(new Request("http://localhost/list?limit=2&sort=asc"));
+    const link = res.headers.get("Link");
+    expect(link).toContain("limit=2");
+    expect(link).toContain("sort=asc");
+    expect(link).toContain("cursor=2");
+  });
 
   it("uses offset+total for an OffsetPage", async () => {
-    const tree = api_({ list: op(offsetList, http.get) })
-    const router = makeRouter(applyMethodsPipeline(tree))
+    const tree = api_({ list: op(offsetList, http.get) });
+    const router = makeRouter(applyMethodsPipeline(tree));
 
-    const res = await router(new Request("http://localhost/list"))
-    expect(res.headers.get("Link")).toBe('<http://localhost/list?offset=2>; rel="next"')
-  })
+    const res = await router(new Request("http://localhost/list"));
+    expect(res.headers.get("Link")).toBe('<http://localhost/list?offset=2>; rel="next"');
+  });
 
   it("respects a paginated() directive's inputCursorParam override", async () => {
     const tree = api_({
       list: op(cursorList, http.get, paginated({ inputCursorParam: "after" })),
-    })
-    const router = makeRouter(applyMethodsPipeline(tree))
+    });
+    const router = makeRouter(applyMethodsPipeline(tree));
 
-    const res = await router(new Request("http://localhost/list"))
-    expect(res.headers.get("Link")).toBe('<http://localhost/list?after=2>; rel="next"')
-  })
+    const res = await router(new Request("http://localhost/list"));
+    expect(res.headers.get("Link")).toBe('<http://localhost/list?after=2>; rel="next"');
+  });
 
   it("omits the Link header once hasMore is false (last page)", async () => {
-    const tree = api_({ list: op(cursorList, http.get) })
-    const router = makeRouter(applyMethodsPipeline(tree))
+    const tree = api_({ list: op(cursorList, http.get) });
+    const router = makeRouter(applyMethodsPipeline(tree));
 
-    const res = await router(new Request("http://localhost/list?cursor=4"))
-    expect(res.headers.get("Link")).toBeNull()
-    expect(await res.json()).toEqual({ items: [{ id: 4 }], hasMore: false })
-  })
+    const res = await router(new Request("http://localhost/list?cursor=4"));
+    expect(res.headers.get("Link")).toBeNull();
+    expect(await res.json()).toEqual({ items: [{ id: 4 }], hasMore: false });
+  });
 
   it("omits the Link header for a non-page-shaped response", async () => {
-    const tree = api_({ get: op((_: unknown) => ({ id: 1 }), http.get) })
-    const router = makeRouter(applyMethodsPipeline(tree))
+    const tree = api_({ get: op((_: unknown) => ({ id: 1 }), http.get) });
+    const router = makeRouter(applyMethodsPipeline(tree));
 
-    const res = await router(new Request("http://localhost/get"))
-    expect(res.headers.get("Link")).toBeNull()
-  })
+    const res = await router(new Request("http://localhost/get"));
+    expect(res.headers.get("Link")).toBeNull();
+  });
 
   it("omits the Link header for a POST endpoint (no query-param URL to derive)", async () => {
-    const tree = api_({ list: op(cursorList) })
-    const router = makeRouter(toHttpRoutes(tree))
+    const tree = api_({ list: op(cursorList) });
+    const router = makeRouter(toHttpRoutes(tree));
 
     const res = await router(
-      new Request("http://localhost/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
-    )
-    expect(res.headers.get("Link")).toBeNull()
-  })
-})
+      new Request("http://localhost/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(res.headers.get("Link")).toBeNull();
+  });
+});
 
 function applyMethodsPipeline(tree: Parameters<typeof toHttpRoutes>[0]) {
-  return composeTransforms(applyMethods, applyMoveTo, applyResponse)(toHttpRoutes(tree))
+  return composeTransforms(applyMethods, applyMoveTo, applyResponse)(toHttpRoutes(tree));
 }

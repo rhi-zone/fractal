@@ -83,30 +83,40 @@
 //   const methods = autoMethodLayer(router, routes)
 //   return corsLayer({ origin: "https://app.example.com" })(methods)
 
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
-import type { DetectionOptions, ServiceStores } from "@rhi-zone/fractal-api-tree"
-import { encodeThrownError } from "./route.ts"
-import type { HttpErrorEncoder, HttpHandlerMiddleware, HttpRoute, ThrownErrorEncoder } from "./route.ts"
-import { httpProjection } from "./dx.ts"
-import type { HttpProjectionOptions } from "./dx.ts"
-import { mapCharRouter, withALS } from "./compile.ts"
-import type { CompiledRouter } from "./compile.ts"
-import { autoMethodLayer, corsLayer } from "./layers.ts"
-import type { CorsOptions, Fetch } from "./layers.ts"
-import { toOpenApiFromRoute } from "./openapi.ts"
-import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts"
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context";
+import type { DetectionOptions, ServiceStores } from "@rhi-zone/fractal-api-tree";
+import { encodeThrownError } from "./route.ts";
+import type {
+  HttpErrorEncoder,
+  HttpHandlerMiddleware,
+  HttpRoute,
+  ThrownErrorEncoder,
+} from "./route.ts";
+import { httpProjection } from "./dx.ts";
+import type { HttpProjectionOptions } from "./dx.ts";
+import { mapCharRouter, withALS } from "./compile.ts";
+import type { CompiledRouter } from "./compile.ts";
+import { autoMethodLayer, corsLayer } from "./layers.ts";
+import type { CorsOptions, Fetch } from "./layers.ts";
+import { toOpenApiFromRoute } from "./openapi.ts";
+import type { OpenApiDoc, OpenApiOpts } from "./openapi.ts";
 
-export type { CorsOptions, Fetch }
-export type { HttpErrorEncoder, HttpErrorResponse, HttpHandlerMiddleware, ThrownErrorEncoder } from "./route.ts"
-export { httpErrors } from "./route.ts"
-export type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
+export type { CorsOptions, Fetch };
+export type {
+  HttpErrorEncoder,
+  HttpErrorResponse,
+  HttpHandlerMiddleware,
+  ThrownErrorEncoder,
+} from "./route.ts";
+export { httpErrors } from "./route.ts";
+export type { DetectionOptions } from "@rhi-zone/fractal-api-tree";
 
 /** `PresetOptions.openapi` object form — `OpenApiOpts` plus the mount path. */
 export type OpenApiPresetOptions = OpenApiOpts & {
   /** URL path to serve the generated document at. Defaults to `/openapi.json`. */
-  readonly path?: string
-}
+  readonly path?: string;
+};
 
 export type PresetOptions<T = unknown> = {
   /**
@@ -114,14 +124,14 @@ export type PresetOptions<T = unknown> = {
    * `CorsOptions` object to configure origin, credentials, and maxAge.
    * Defaults to off.
    */
-  readonly cors?: CorsOptions | boolean
+  readonly cors?: CorsOptions | boolean;
   /**
    * Override the `Node => HttpRoute` rewriter pipeline (see `httpProjection`
    * in dx.ts). Defaults to `[applyMethods, applyMoveTo, applyResponse]`.
    * Takes precedence over `directives` when `transforms` is set — this is
    * the escape hatch for a fully custom directive pipeline.
    */
-  readonly projection?: HttpProjectionOptions
+  readonly projection?: HttpProjectionOptions;
   /**
    * Apply the directive rewriters (`applyMethods`, `applyMoveTo`,
    * `applyResponse`) that read `meta.http.directives`. Default `true` —
@@ -129,12 +139,12 @@ export type PresetOptions<T = unknown> = {
    * its own path-segment key, no method/placement/response directives
    * honored). Ignored when `opts.projection.transforms` is set.
    */
-  readonly directives?: boolean
+  readonly directives?: boolean;
   /**
    * Additional `HttpRoute => HttpRoute` passes, applied in array order,
    * after projection and before router compilation.
    */
-  readonly rewriters?: ReadonlyArray<(route: HttpRoute) => HttpRoute>
+  readonly rewriters?: ReadonlyArray<(route: HttpRoute) => HttpRoute>;
   /**
    * `HttpRoute => CompiledRouter` compiler. Default `mapCharRouter`
    * (compile.ts) — static routes in a prebuilt `Map`, dynamic routes through
@@ -159,7 +169,7 @@ export type PresetOptions<T = unknown> = {
     errorEncoder?: HttpErrorEncoder,
     thrownErrorEncoder?: ThrownErrorEncoder,
     serviceStores?: ServiceStores,
-  ) => CompiledRouter
+  ) => CompiledRouter;
   /**
    * Wrap the compiled router so every request runs inside its own
    * `AsyncLocalStorage` context (compile.ts's `withALS`). `init` computes
@@ -170,7 +180,7 @@ export type PresetOptions<T = unknown> = {
    * still call through to the router also run inside the context. Absent by
    * default (no ALS wrapping).
    */
-  readonly als?: AlsConfig<Request, T>
+  readonly als?: AlsConfig<Request, T>;
   /**
    * Consumer-supplied `Fetch => Fetch` layers, applied in array order —
    * the first entry is the outermost wrapper. Composed around the compiled
@@ -190,7 +200,7 @@ export type PresetOptions<T = unknown> = {
    * that case (only the raw error itself, same as every other
    * `thrownErrorEncoder` call). See `route.ts`'s `encodeThrownError`.
    */
-  readonly middleware?: ReadonlyArray<(inner: Fetch) => Fetch>
+  readonly middleware?: ReadonlyArray<(inner: Fetch) => Fetch>;
   /**
    * Around-hooks wrapping the HANDLER call itself — a separate mechanism
    * from `opts.middleware` above (which wraps the whole `Fetch` request/
@@ -208,7 +218,7 @@ export type PresetOptions<T = unknown> = {
    * compile.ts accepts it as a second argument). Empty/absent by default
    * (no-op, zero overhead).
    */
-  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[]
+  readonly handlerMiddleware?: readonly HttpHandlerMiddleware[];
   /**
    * Opt-in configuration for `runRoute`'s (route.ts) structural sniffing of
    * a handler's return value — `result` gates `Result`-shape
@@ -225,7 +235,7 @@ export type PresetOptions<T = unknown> = {
    * through to whichever router compiler `opts.router` resolves to (every
    * built-in compiler in compile.ts accepts it as a third argument).
    */
-  readonly detection?: DetectionOptions
+  readonly detection?: DetectionOptions;
   /**
    * Maps a handler's `Result.err(E)` error value to an `HttpErrorResponse`
    * (status + optional body/headers) — see `HttpErrorEncoder`/`httpErrors`
@@ -238,7 +248,7 @@ export type PresetOptions<T = unknown> = {
    * whichever router compiler `opts.router` resolves to (every built-in
    * compiler in compile.ts accepts it as a fourth argument).
    */
-  readonly errorEncoder?: HttpErrorEncoder
+  readonly errorEncoder?: HttpErrorEncoder;
   /**
    * Maps a THROWN error (caught in `runRoute`'s catch block, route.ts) to an
    * `HttpErrorResponse` — the parallel hook to `errorEncoder` above, but for
@@ -251,7 +261,7 @@ export type PresetOptions<T = unknown> = {
    * whichever router compiler `opts.router` resolves to (every built-in
    * compiler in compile.ts accepts it as a fifth argument).
    */
-  readonly thrownErrorEncoder?: ThrownErrorEncoder
+  readonly thrownErrorEncoder?: ThrownErrorEncoder;
   /**
    * Auto-serve a generated OpenAPI 3.1 document — OpenAPI only ever
    * describes HTTP APIs, so `createFetch` mounts it with zero extra setup.
@@ -264,7 +274,7 @@ export type PresetOptions<T = unknown> = {
    * first request to the mount path — and cached for the life of the
    * handler.
    */
-  readonly openapi?: boolean | OpenApiPresetOptions
+  readonly openapi?: boolean | OpenApiPresetOptions;
   /**
    * The deployment's registered service-store values (docs/design/
    * typed-store-spec.md §4) — a deployment-provided, long-lived capability
@@ -295,8 +305,8 @@ export type PresetOptions<T = unknown> = {
    * deployment with several mounted trees passes the SAME verified value only
    * into the ones that actually need it.
    */
-  readonly serviceStores?: ServiceStores
-}
+  readonly serviceStores?: ServiceStores;
+};
 
 /**
  * Wrap `handler` with a `GET <path>` short-circuit that serves a lazily-
@@ -308,25 +318,25 @@ function withOpenApi(
   routes: HttpRoute,
   opts: boolean | OpenApiPresetOptions | undefined,
 ): CompiledRouter {
-  if (opts === false) return handler
+  if (opts === false) return handler;
 
   const { path = "/openapi.json", ...openApiOpts }: OpenApiPresetOptions =
-    opts === true || opts === undefined ? {} : opts
+    opts === true || opts === undefined ? {} : opts;
 
-  let specPromise: Promise<OpenApiDoc> | undefined
+  let specPromise: Promise<OpenApiDoc> | undefined;
 
   return async (req: Request) => {
-    const url = new URL(req.url)
+    const url = new URL(req.url);
     if (req.method === "GET" && url.pathname === path) {
-      specPromise ??= toOpenApiFromRoute(routes, openApiOpts)
-      const spec = await specPromise
+      specPromise ??= toOpenApiFromRoute(routes, openApiOpts);
+      const spec = await specPromise;
       return new Response(JSON.stringify(spec), {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      })
+      });
     }
-    return handler(req)
-  }
+    return handler(req);
+  };
 }
 
 /**
@@ -337,26 +347,30 @@ function withOpenApi(
  * accepts `(req: Request) => Promise<Response>` — the same shape as
  * `CompiledRouter` (compile.ts).
  */
-export function createFetch<T = unknown>(
-  node: Node,
-  opts: PresetOptions<T> = {},
-): CompiledRouter {
+export function createFetch<T = unknown>(node: Node, opts: PresetOptions<T> = {}): CompiledRouter {
   const projectionOpts: HttpProjectionOptions =
     opts.projection?.transforms !== undefined
       ? opts.projection
       : opts.directives === false
         ? { transforms: [] }
-        : (opts.projection ?? {})
+        : (opts.projection ?? {});
 
-  let routes = httpProjection(node, projectionOpts)
+  let routes = httpProjection(node, projectionOpts);
 
-  for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes)
+  for (const rewrite of opts.rewriters ?? []) routes = rewrite(routes);
 
-  const compileRouter = opts.router ?? mapCharRouter
-  const router = compileRouter(routes, opts.handlerMiddleware, opts.detection, opts.errorEncoder, opts.thrownErrorEncoder, opts.serviceStores ?? ({} as ServiceStores))
+  const compileRouter = opts.router ?? mapCharRouter;
+  const router = compileRouter(
+    routes,
+    opts.handlerMiddleware,
+    opts.detection,
+    opts.errorEncoder,
+    opts.thrownErrorEncoder,
+    opts.serviceStores ?? ({} as ServiceStores),
+  );
 
   const withContext =
-    opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router
+    opts.als !== undefined ? withALS(router, opts.als.storage, opts.als.init) : router;
 
   // Consumer middleware wraps between the router (+ ALS context) and the
   // built-in protocol layers below — inside autoMethodLayer/corsLayer, so it
@@ -375,25 +389,25 @@ export function createFetch<T = unknown>(
   const rawMiddleware = (opts.middleware ?? []).reduceRight<CompiledRouter>(
     (inner, mw) => mw(inner),
     withContext,
-  )
+  );
   const withMiddleware: CompiledRouter = async (req) => {
     try {
-      return await rawMiddleware(req)
+      return await rawMiddleware(req);
     } catch (error) {
-      return encodeThrownError(error, opts.thrownErrorEncoder)
+      return encodeThrownError(error, opts.thrownErrorEncoder);
     }
-  }
+  };
 
-  const withMethods = autoMethodLayer(withMiddleware, routes)
+  const withMethods = autoMethodLayer(withMiddleware, routes);
 
-  const withOpenApiDoc = withOpenApi(withMethods, routes, opts.openapi)
+  const withOpenApiDoc = withOpenApi(withMethods, routes, opts.openapi);
 
   if (opts.cors !== undefined && opts.cors !== false) {
-    const corsOpts: CorsOptions = typeof opts.cors === "boolean" ? {} : opts.cors
-    return corsLayer(corsOpts)(withOpenApiDoc)
+    const corsOpts: CorsOptions = typeof opts.cors === "boolean" ? {} : opts.cors;
+    return corsLayer(corsOpts)(withOpenApiDoc);
   }
 
-  return withOpenApiDoc
+  return withOpenApiDoc;
 }
 
 /**
@@ -408,7 +422,7 @@ export function createFetch<T = unknown>(
  * not a drop-in for code that calls `fetch(url, init)` the way a browser or
  * `RequestInit`-typed client does. `toDropInFetch` below bridges the two.
  */
-export type DropInFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+export type DropInFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 /**
  * Adapt a `CompiledRouter` (e.g. `createFetch`'s return) to `DropInFetch` —
@@ -439,7 +453,9 @@ export type DropInFetch = (input: RequestInfo | URL, init?: RequestInit) => Prom
 export function toDropInFetch(router: CompiledRouter, baseUrl = "http://localhost"): DropInFetch {
   return async (input, init) => {
     const resolved =
-      input instanceof Request ? input : new URL(input instanceof URL ? input.href : input, baseUrl)
-    return router(new Request(resolved, init))
-  }
+      input instanceof Request
+        ? input
+        : new URL(input instanceof URL ? input.href : input, baseUrl);
+    return router(new Request(resolved, init));
+  };
 }

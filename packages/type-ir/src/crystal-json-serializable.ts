@@ -1,5 +1,5 @@
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, quote, toSnakeCaseAcronymAware } from "./codegen-helpers.ts"
+import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, quote, toSnakeCaseAcronymAware } from "./codegen-helpers.ts";
 
 // Crystal (https://crystal-lang.org/reference/) output projector.
 //
@@ -19,12 +19,12 @@ import { capitalize, quote, toSnakeCaseAcronymAware } from "./codegen-helpers.ts
 // degrade), since Crystal simply has no way to spell an anonymous struct
 // inline.
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Crystal enum members are conventionally PascalCase constants
 // (https://crystal-lang.org/reference/syntax_and_semantics/enum.html) —
@@ -32,7 +32,7 @@ const leaf =
 // (assumes an already-valid identifier body; this projector doesn't attempt
 // to sanitize arbitrary characters, same scope capnp.ts's enum handling has).
 function toEnumMemberName(member: string): string {
-  return capitalize(member)
+  return capitalize(member);
 }
 
 // Wrap a Crystal type expression as nilable (`T?`) — Crystal's shorthand for
@@ -40,12 +40,12 @@ function toEnumMemberName(member: string): string {
 // A no-op if the type is already nilable (own `?` suffix, or a union that
 // already spelled out `| Nil` explicitly — see the `union` handler below).
 function nilable(type: string): string {
-  if (type.endsWith("?") || type.includes(" | Nil")) return type
-  return `${type}?`
+  if (type.endsWith("?") || type.includes(" | Nil")) return type;
+  return `${type}?`;
 }
 
 function isObjectKind(kind: string): boolean {
-  return kind === "object" || ancestors(kind).includes("object")
+  return kind === "object" || ancestors(kind).includes("object");
 }
 
 // Fixed-width/semantic/temporal kinds are optional extension modules
@@ -103,29 +103,29 @@ const handlers: Record<string, Converter> = {
   // responsible for the type actually being in scope).
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `Array(${toCrystalType(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `Array(${toCrystalType(s.element)})`;
   },
   // No native async-iterable construct — degrades to the same `Array(T)`
   // encoding `array` uses above (same honest-degrade convention capnp.ts's
   // `stream` handler documents).
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `Array(${toCrystalType(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `Array(${toCrystalType(s.element)})`;
   },
   // No native pagination construct — degrades to `Array(T)` over the page's
   // element type, same reasoning as `stream` above.
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `Array(${toCrystalType(s.element)})`
+    const s = shape as TypeShape & { kind: "page" };
+    return `Array(${toCrystalType(s.element)})`;
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `Tuple(${s.elements.map(toCrystalType).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `Tuple(${s.elements.map(toCrystalType).join(", ")})`;
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Hash(${toCrystalType(s.key)}, ${toCrystalType(s.value)})`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Hash(${toCrystalType(s.key)}, ${toCrystalType(s.value)})`;
   },
   // Crystal union types (https://crystal-lang.org/reference/syntax_and_semantics/union_types.html):
   // `T1 | T2`. A `null` variant collapses to the `T?` nilable shorthand only
@@ -133,19 +133,19 @@ const handlers: Record<string, Converter> = {
   // `null` spells `Nil` out explicitly (`A | B | Nil`) rather than guessing
   // whether Crystal's `?` shorthand parses over a parenthesized union.
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const rendered = s.variants.map(toCrystalType)
-    const nonNil = rendered.filter((r) => r !== "Nil")
-    const hasNil = nonNil.length !== rendered.length
-    if (!hasNil) return rendered.join(" | ")
-    return nonNil.length === 1 ? nilable(nonNil[0]!) : `${nonNil.join(" | ")} | Nil`
+    const s = shape as TypeShape & { kind: "union" };
+    const rendered = s.variants.map(toCrystalType);
+    const nonNil = rendered.filter((r) => r !== "Nil");
+    const hasNil = nonNil.length !== rendered.length;
+    if (!hasNil) return rendered.join(" | ");
+    return nonNil.length === 1 ? nilable(nonNil[0]!) : `${nonNil.join(" | ")} | Nil`;
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "Nil"
-    if (typeof s.value === "boolean") return "Bool"
-    if (typeof s.value === "string") return "String"
-    return Number.isInteger(s.value) ? "Int32" : "Float64"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "Nil";
+    if (typeof s.value === "boolean") return "Bool";
+    if (typeof s.value === "string") return "String";
+    return Number.isInteger(s.value) ? "Int32" : "Float64";
   },
   // Nested enums need field-name context to be named (same as `object`
   // above) — `fieldDeclarations` special-cases enum-kind fields to emit a
@@ -158,30 +158,30 @@ const handlers: Record<string, Converter> = {
   // first member's type, dropping the rest (same degrade capnp.ts's
   // `intersection` handler documents).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "JSON::Any" : toCrystalType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "JSON::Any" : toCrystalType(first);
   },
   // Crystal's stdlib `Proc(*Args, Return)` is a first-class callable type —
   // the direct analogue of the IR's `function`/`method` kinds (`method`
   // falls back here via `registerParent("method", "function")` in index.ts,
   // same as every other projector in this package).
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p) => toCrystalType(p.type))
-    return `Proc(${[...params, toCrystalType(s.returnType)].join(", ")})`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p) => toCrystalType(p.type));
+    return `Proc(${[...params, toCrystalType(s.returnType)].join(", ")})`;
   },
   // No construct for a bare method-surface value in field position (same
   // reasoning as capnp.ts's `interface` handler) — degrades to `JSON::Any`.
   interface: leaf("JSON::Any"),
-}
+};
 
 /** Inline Crystal type expression for a `TypeRef` — the leaf-level converter
  * every declaration builder below composes with. */
 export function toCrystalType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  let type = converter === undefined ? "JSON::Any" : converter(ref.shape, ref.meta)
-  return ref.meta.nullable === true ? nilable(type) : type
+  const converter = resolve(ref.shape.kind, handlers);
+  let type = converter === undefined ? "JSON::Any" : converter(ref.shape, ref.meta);
+  return ref.meta.nullable === true ? nilable(type) : type;
 }
 
 // Crystal doc comments (`#` immediately above a declaration — Crystal has no
@@ -191,16 +191,16 @@ export function toCrystalType(ref: TypeRef): string {
 // `@[Deprecated]` annotation (https://crystal-lang.org/api/Deprecated.html)
 // is the idiomatic `@deprecated` equivalent.
 function docComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`# ${description}`)
-  if (deprecated) lines.push("@[Deprecated]")
-  return lines.length > 0 ? `${lines.join("\n")}\n` : ""
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  const deprecated = meta.deprecated === true;
+  const lines: string[] = [];
+  if (description !== undefined) lines.push(`# ${description}`);
+  if (deprecated) lines.push("@[Deprecated]");
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
-type ObjectShape = TypeShape & { kind: "object" }
-type EnumShape = TypeShape & { kind: "enum" }
+type ObjectShape = TypeShape & { kind: "object" };
+type EnumShape = TypeShape & { kind: "enum" };
 
 /** One field's rendered lines (doc comment, `@[JSON::Field]` if the JSON key
  * differs from the snake_case property name, and the `property` line
@@ -211,39 +211,47 @@ function fieldLines(
   fieldName: string,
   fieldRef: TypeRef,
 ): { lines: string[]; nested: string[] } {
-  const propName = toSnakeCaseAcronymAware(fieldName)
-  const nestedName = `${outerName}${capitalize(fieldName)}`
-  const nested: string[] = []
-  let fieldType: string
+  const propName = toSnakeCaseAcronymAware(fieldName);
+  const nestedName = `${outerName}${capitalize(fieldName)}`;
+  const nested: string[] = [];
+  let fieldType: string;
 
   if (isObjectKind(fieldRef.shape.kind)) {
-    nested.push(renderClass(nestedName, fieldRef))
-    fieldType = nestedName
+    nested.push(renderClass(nestedName, fieldRef));
+    fieldType = nestedName;
   } else if (fieldRef.shape.kind === "enum") {
-    nested.push(renderEnum(nestedName, fieldRef))
-    fieldType = nestedName
-  } else if (fieldRef.shape.kind === "array" && isObjectKind((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind)) {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    nested.push(renderClass(nestedName, element))
-    fieldType = `Array(${nestedName})`
-  } else if (fieldRef.shape.kind === "array" && (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum") {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    nested.push(renderEnum(nestedName, element))
-    fieldType = `Array(${nestedName})`
+    nested.push(renderEnum(nestedName, fieldRef));
+    fieldType = nestedName;
+  } else if (
+    fieldRef.shape.kind === "array" &&
+    isObjectKind((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind)
+  ) {
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    nested.push(renderClass(nestedName, element));
+    fieldType = `Array(${nestedName})`;
+  } else if (
+    fieldRef.shape.kind === "array" &&
+    (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum"
+  ) {
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    nested.push(renderEnum(nestedName, element));
+    fieldType = `Array(${nestedName})`;
   } else {
-    fieldType = toCrystalType(fieldRef)
+    fieldType = toCrystalType(fieldRef);
   }
 
-  if (fieldRef.meta.optional === true || fieldRef.meta.nullable === true) fieldType = nilable(fieldType)
+  if (fieldRef.meta.optional === true || fieldRef.meta.nullable === true)
+    fieldType = nilable(fieldType);
 
-  const lines: string[] = []
-  const description = typeof fieldRef.meta.description === "string" ? fieldRef.meta.description : undefined
-  if (description !== undefined) lines.push(`  # ${description}`)
-  if (fieldRef.meta.deprecated === true) lines.push("  @[Deprecated]")
-  if (fieldName !== propName) lines.push(`  @[JSON::Field(key: ${quote(fieldName)})]`)
-  lines.push(`  property ${propName} : ${fieldType}`)
+  const lines: string[] = [];
+  const description =
+    typeof fieldRef.meta.description === "string" ? fieldRef.meta.description : undefined;
+  if (description !== undefined) lines.push(`  # ${description}`);
+  if (fieldRef.meta.deprecated === true) lines.push("  @[Deprecated]");
+  if (fieldName !== propName) lines.push(`  @[JSON::Field(key: ${quote(fieldName)})]`);
+  lines.push(`  property ${propName} : ${fieldType}`);
 
-  return { lines, nested }
+  return { lines, nested };
 }
 
 /** Render an `object` TypeRef as a `class` declaration — `include
@@ -254,18 +262,23 @@ function fieldLines(
  * references them (see the module doc comment for why flat-sibling rather
  * than lexically nested). */
 export function renderClass(name: string, ref: TypeRef): string {
-  const shape = ref.shape as ObjectShape
-  const nested: string[] = []
-  const fieldBlocks: string[] = []
+  const shape = ref.shape as ObjectShape;
+  const nested: string[] = [];
+  const fieldBlocks: string[] = [];
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const { lines, nested: fieldNested } = fieldLines(name, fieldName, fieldRef)
-    fieldBlocks.push(lines.join("\n"))
-    nested.push(...fieldNested)
+    const { lines, nested: fieldNested } = fieldLines(name, fieldName, fieldRef);
+    fieldBlocks.push(lines.join("\n"));
+    nested.push(...fieldNested);
   }
 
-  const body = [`class ${name}`, "  include JSON::Serializable", ...(fieldBlocks.length > 0 ? ["", ...fieldBlocks] : []), "end"]
-  const classText = `${docComment(ref.meta)}${body.join("\n")}`
-  return nested.length > 0 ? `${nested.join("\n\n")}\n\n${classText}` : classText
+  const body = [
+    `class ${name}`,
+    "  include JSON::Serializable",
+    ...(fieldBlocks.length > 0 ? ["", ...fieldBlocks] : []),
+    "end",
+  ];
+  const classText = `${docComment(ref.meta)}${body.join("\n")}`;
+  return nested.length > 0 ? `${nested.join("\n\n")}\n\n${classText}` : classText;
 }
 
 /** Render an `enum` TypeRef as a Crystal `enum` declaration — members
@@ -274,9 +287,9 @@ export function renderClass(name: string, ref: TypeRef): string {
  * `JSON::Serializable`/`Enum#to_json`, so no `@[JSON::Field(converter:)]`
  * is needed for an enum-typed property. */
 export function renderEnum(name: string, ref: TypeRef): string {
-  const shape = ref.shape as EnumShape
-  const members = shape.members.map((m) => `  ${toEnumMemberName(m)}`)
-  return `${docComment(ref.meta)}enum ${name}\n${members.join("\n")}\nend`
+  const shape = ref.shape as EnumShape;
+  const members = shape.members.map((m) => `  ${toEnumMemberName(m)}`);
+  return `${docComment(ref.meta)}enum ${name}\n${members.join("\n")}\nend`;
 }
 
 /**
@@ -288,10 +301,10 @@ export function renderEnum(name: string, ref: TypeRef): string {
  */
 export function toCrystal(ref: TypeRef, name?: string): string {
   if (name !== undefined) {
-    if (isObjectKind(ref.shape.kind)) return renderClass(name, ref)
-    if (ref.shape.kind === "enum") return renderEnum(name, ref)
+    if (isObjectKind(ref.shape.kind)) return renderClass(name, ref);
+    if (ref.shape.kind === "enum") return renderEnum(name, ref);
   }
-  return toCrystalType(ref)
+  return toCrystalType(ref);
 }
 
 /** One `toCrystal(ref, name)` declaration per registry entry, joined with
@@ -300,5 +313,5 @@ export function toCrystal(ref: TypeRef, name?: string): string {
 export function toCrystalDeclarations(registry: Record<string, TypeRef>): string {
   return Object.entries(registry)
     .map(([name, ref]) => toCrystal(ref, name))
-    .join("\n\n")
+    .join("\n\n");
 }

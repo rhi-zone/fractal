@@ -29,7 +29,7 @@ subtyping relationships (e.g. `idempotent` implies nothing destructive).
 - `./apply-validation-build` — `buildWireApplyValidationModuleSource`, `writeWireApplyValidationModuleCached` (+ cached/incremental variants), `findApplyValidationCallSites`, `applyValidationStubSource` — the CALL-SITE-anchored codegen backing the CLI above: scans an entry file for `applyValidation(key, treeExpr, protocol?)` invocations (resolved by a phantom brand on the callee's TYPE, not by name) and compiles each key's leaves into the generated module `./apply-validation`'s `createApplyValidation` consumes
 - `./discover` — `findEntryFiles`, `PathMatcher`, `FindEntryFilesOptions` — autodetect a deployment's `api()`/`op()` tree entry files by directory scan + `hasTreeExport` (`./tree`), instead of hand-maintaining a per-consumer entry-file list
 - `./context` — `createContext`, `AlsConfig`, `ContextBuilder`, `CliContextShape`, `McpContextShape`, `GraphQLContextShape` — one shared `AsyncLocalStorage<T>` plus per-projector `{ storage, init }` config objects that plug into each projector's `als` option, so a consumer authors one context type + one extractor per surface instead of wiring a separate `AsyncLocalStorage` per projector by hand
-- `./otel` — `wrapTracing`, `parseTraceParent`, `formatTraceParent`, `runServerSpan`, `runClientSpan`, `getActiveSpan`, `TracingIntegration`, `OtelTracer`, `OtelSpan`, `OtelSpanContext`, `OtelSpanStatusCode`, `OtelSpanKind` — dependency-free, OpenTelemetry-*compatible* tracing: structural mirrors of the `@opentelemetry/api` interfaces the framework's tracing wiring calls (so a real `@opentelemetry/api` `Tracer` — or a hand-written stand-in — plugs in with no adapter), W3C `traceparent` parse/format, and `wrapTracing` to wire a span around every leaf handler's invocation (the same tree-wrap shape `./apply-validation`'s mechanism uses). HTTP-specific request/response instrumentation lives in `http-api-projector`, built on top of these exports.
+- `./otel` — `wrapTracing`, `parseTraceParent`, `formatTraceParent`, `runServerSpan`, `runClientSpan`, `getActiveSpan`, `TracingIntegration`, `OtelTracer`, `OtelSpan`, `OtelSpanContext`, `OtelSpanStatusCode`, `OtelSpanKind` — dependency-free, OpenTelemetry-_compatible_ tracing: structural mirrors of the `@opentelemetry/api` interfaces the framework's tracing wiring calls (so a real `@opentelemetry/api` `Tracer` — or a hand-written stand-in — plugs in with no adapter), W3C `traceparent` parse/format, and `wrapTracing` to wire a span around every leaf handler's invocation (the same tree-wrap shape `./apply-validation`'s mechanism uses). HTTP-specific request/response instrumentation lives in `http-api-projector`, built on top of these exports.
 - `./auth` — `AuthAdapter`, `authLayer`, `authMiddleware`, `AuthClientAdapter`, `authExtension` — the stable auth adapter contract a provider package (e.g. `@rhi-zone/fractal-auth-oidc`) implements and every projector consumes the same way: `AuthAdapter` (server-side `resolve`/`guard`, wired into ALS via `authLayer`/`authMiddleware`) and `AuthClientAdapter` (client-side token lifecycle, wired into the HTTP client via `authExtension`)
 
 `./tree` and `./extract` pull in the TypeScript compiler and are separate
@@ -39,16 +39,16 @@ subpaths from the package root so runtime consumers of the base `Node`/
 ## Usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
-import { ok, bind, pipe } from "@rhi-zone/fractal-api-tree"
+import { api, op } from "@rhi-zone/fractal-api-tree";
+import { ok, bind, pipe } from "@rhi-zone/fractal-api-tree";
 
 const tree = api({
   greet: op((input: { name: string }) => `Hello, ${input.name}`),
-})
+});
 
-const double = (n: number) => n * 2
-const inc = (n: number) => n + 1
-pipe(3, double, inc) // 7
+const double = (n: number) => n * 2;
+const inc = (n: number) => n + 1;
+pipe(3, double, inc); // 7
 ```
 
 ## Install

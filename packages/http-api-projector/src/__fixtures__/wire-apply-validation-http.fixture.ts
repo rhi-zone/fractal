@@ -10,20 +10,19 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "@rhi-zone/fractal-api-tree/node"
-import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation"
+import { api, op } from "@rhi-zone/fractal-api-tree/node";
+import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation";
 
 // Stands in for a consumer's pre-codegen generated module (see api-tree's
 // `apply-validation-stub.fixture.ts`) — the call-site scan's brand-based
 // resolution needs to see `applyValidation` reached through this same kind
 // of re-export hop.
-const applyValidation = createApplyValidation({})
+const applyValidation = createApplyValidation({});
 
 export const booksTree = api({
-  list: op(
-    (input: { page: number }) => ({ page: input.page, doubled: input.page * 2 }),
-    { http: { method: "GET" } },
-  ),
-})
+  list: op((input: { page: number }) => ({ page: input.page, doubled: input.page * 2 }), {
+    http: { method: "GET" },
+  }),
+});
 
-export const books = applyValidation("wire-books", booksTree, "http")
+export const books = applyValidation("wire-books", booksTree, "http");

@@ -12,12 +12,13 @@
 ## Framing: what a "tag" is (and is not)
 
 A **tag** is an agnostic behavioral/semantic generalization of an operation — a marker
-that *multiple* projections each specialize into their own surface (HTTP verb, CLI
+that _multiple_ projections each specialize into their own surface (HTTP verb, CLI
 confirm-prompt, MCP annotation hint, gRPC idempotency_level, GraphQL op type). Tags are
-the generalizations that verbs/hints/etc. *fall out of*: you author the tag; the
+the generalizations that verbs/hints/etc. _fall out of_: you author the tag; the
 projection-specific rendering is derived.
 
 Tags are **one category** within a larger open metadata bag. The bag also holds:
+
 - **Descriptive** metadata: `name`, `description` (from doc comments)
 - **Structural** metadata: param optionality, param multiplicity, mount topology,
   `notFound`, input/output schema — mostly type-inferable
@@ -26,7 +27,7 @@ Tags are **one category** within a larger open metadata bag. The bag also holds:
 - **Override/pin** metadata: explicit overrides when the inferred value is wrong
   (e.g. `#[route(method = "PUT")]`)
 
-This document defines only the tag subset. The distinction is: a tag has *agnostic*
+This document defines only the tag subset. The distinction is: a tag has _agnostic_
 behavioral semantics and at least two projections independently specialize it; anything
 narrower belongs in a projection namespace or the structural layer.
 
@@ -53,14 +54,14 @@ documents this failure mode across all five projections that encode the concept.
 
 **Per-projection specialization:**
 
-| Projection | Specialization |
-|---|---|
-| HTTP | Selects GET/HEAD verb class; readOnly methods are cacheable and bookmarkable (RFC 9110 §9.2.1) |
-| CLI | Governs whether a `--dry-run` / preview mode would suppress the call; no confirm-prompt |
-| MCP | Emitted as `annotations.readOnlyHint: true` in `ToolAnnotations` |
-| gRPC | Emitted as `option idempotency_level = NO_SIDE_EFFECTS` in the RPC definition |
-| GraphQL | Determines `query` op type; queries may execute in parallel (spec §6.2.1) |
-| WS | No direct hint; readOnly ops are candidates for request/response (not push) patterns |
+| Projection | Specialization                                                                                 |
+| ---------- | ---------------------------------------------------------------------------------------------- |
+| HTTP       | Selects GET/HEAD verb class; readOnly methods are cacheable and bookmarkable (RFC 9110 §9.2.1) |
+| CLI        | Governs whether a `--dry-run` / preview mode would suppress the call; no confirm-prompt        |
+| MCP        | Emitted as `annotations.readOnlyHint: true` in `ToolAnnotations`                               |
+| gRPC       | Emitted as `option idempotency_level = NO_SIDE_EFFECTS` in the RPC definition                  |
+| GraphQL    | Determines `query` op type; queries may execute in parallel (spec §6.2.1)                      |
+| WS         | No direct hint; readOnly ops are candidates for request/response (not push) patterns           |
 
 **Inferable or authored:** **Must-be-authored.** Partially inferable from name prefix
 (the server-less heuristic), but explicitly lossy — fractal treats inference as an
@@ -83,14 +84,14 @@ can both be idempotent despite different signatures.
 
 **Per-projection specialization:**
 
-| Projection | Specialization |
-|---|---|
-| HTTP | Selects PUT/DELETE verb class (idempotent with side effects) vs POST (not idempotent); controls retry safety in clients and load balancers |
-| MCP | Emitted as `annotations.idempotentHint: true` in `ToolAnnotations` |
-| gRPC | Emitted as `option idempotency_level = IDEMPOTENT` in the RPC definition |
-| GraphQL | Queries are idempotent by spec convention; mutations are not (implicit — not an explicit hint) |
-| CLI | Informs retry logic and scripting behavior; not yet a generated surface in server-less |
-| WS | No explicit hint; idempotent ops are retryable on reconnect |
+| Projection | Specialization                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| HTTP       | Selects PUT/DELETE verb class (idempotent with side effects) vs POST (not idempotent); controls retry safety in clients and load balancers |
+| MCP        | Emitted as `annotations.idempotentHint: true` in `ToolAnnotations`                                                                         |
+| gRPC       | Emitted as `option idempotency_level = IDEMPOTENT` in the RPC definition                                                                   |
+| GraphQL    | Queries are idempotent by spec convention; mutations are not (implicit — not an explicit hint)                                             |
+| CLI        | Informs retry logic and scripting behavior; not yet a generated surface in server-less                                                     |
+| WS         | No explicit hint; idempotent ops are retryable on reconnect                                                                                |
 
 **Inferable or authored:** **Must-be-authored.** No TS/Rust effect system captures
 idempotency. The gRPC `idempotency_level` field — the canonical protocol slot for this
@@ -113,14 +114,14 @@ destructiveness.
 
 **Per-projection specialization:**
 
-| Projection | Specialization |
-|---|---|
-| HTTP | Selects DELETE verb; signals irreversibility to API tooling, audit logs, and gateway policy |
-| CLI | Would trigger a confirmation prompt ("Are you sure? [y/N]") — noted as unimplemented in server-less because no `is_destructive` key existed to read (synthesis §5) |
-| MCP | Emitted as `annotations.destructiveHint: true` in `ToolAnnotations`; lets models prompt users before execution |
-| gRPC | No direct encoding; destructive semantics are informally a domain concern |
-| GraphQL | No direct encoding; mutation type absorbs all writes |
-| WS | No explicit hint |
+| Projection | Specialization                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| HTTP       | Selects DELETE verb; signals irreversibility to API tooling, audit logs, and gateway policy                                                                        |
+| CLI        | Would trigger a confirmation prompt ("Are you sure? [y/N]") — noted as unimplemented in server-less because no `is_destructive` key existed to read (synthesis §5) |
+| MCP        | Emitted as `annotations.destructiveHint: true` in `ToolAnnotations`; lets models prompt users before execution                                                     |
+| gRPC       | No direct encoding; destructive semantics are informally a domain concern                                                                                          |
+| GraphQL    | No direct encoding; mutation type absorbs all writes                                                                                                               |
+| WS         | No explicit hint                                                                                                                                                   |
 
 **Inferable or authored:** **Must-be-authored.** Destructiveness cannot be inferred
 from signature or name without domain knowledge.
@@ -142,14 +143,14 @@ implementation calls, invisible at the function signature.
 
 **Per-projection specialization:**
 
-| Projection | Specialization |
-|---|---|
-| MCP | Emitted as `annotations.openWorldHint: true`; lets models reason about sandboxing, permission scope, and environmental reach before invoking |
-| HTTP | Informs caching policy (external calls not safely cached), rate-limiting decisions, and permission-gating; noted as a "latent need" in synthesis §1 |
-| CLI | Could gate a sandbox/dry-run confirmation; no generated surface yet |
-| gRPC | No encoding |
-| GraphQL | No encoding |
-| WS | No encoding |
+| Projection | Specialization                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP        | Emitted as `annotations.openWorldHint: true`; lets models reason about sandboxing, permission scope, and environmental reach before invoking        |
+| HTTP       | Informs caching policy (external calls not safely cached), rate-limiting decisions, and permission-gating; noted as a "latent need" in synthesis §1 |
+| CLI        | Could gate a sandbox/dry-run confirmation; no generated surface yet                                                                                 |
+| gRPC       | No encoding                                                                                                                                         |
+| GraphQL    | No encoding                                                                                                                                         |
+| WS         | No encoding                                                                                                                                         |
 
 **Inferable or authored:** **Must-be-authored.** External reach is determined by
 implementation, not signature.
@@ -173,14 +174,14 @@ annotation required; a projection can read the return shape.
 
 **Per-projection specialization:**
 
-| Projection | Specialization |
-|---|---|
-| HTTP | Return type maps to SSE (`text/event-stream`) or chunked transfer encoding |
-| CLI | Drives `--jsonl` line-by-line emission mode (`cli.rs:2140–2157`) |
-| gRPC | Emits `stream` keyword on the response type in `.proto`; server-streaming RPC shape |
-| GraphQL | Maps to `subscription` op type (spec §6.2.3) |
-| WS | `is_stream` flag recognized; server pushes via `WsSender` injection (`ws.rs:945`) |
-| MCP | No current spec analog; subscription semantics are a gap |
+| Projection | Specialization                                                                      |
+| ---------- | ----------------------------------------------------------------------------------- |
+| HTTP       | Return type maps to SSE (`text/event-stream`) or chunked transfer encoding          |
+| CLI        | Drives `--jsonl` line-by-line emission mode (`cli.rs:2140–2157`)                    |
+| gRPC       | Emits `stream` keyword on the response type in `.proto`; server-streaming RPC shape |
+| GraphQL    | Maps to `subscription` op type (spec §6.2.3)                                        |
+| WS         | `is_stream` flag recognized; server pushes via `WsSender` injection (`ws.rs:945`)   |
+| MCP        | No current spec analog; subscription semantics are a gap                            |
 
 **Inferable or authored:** **Type-inferable** from the return type wrapper. This is the
 one tag that requires no authoring when the return type is correct — projections detect
@@ -201,8 +202,8 @@ full-replace vs partial-update distinction belongs in `http:` namespace as a ver
 override, not in the agnostic tag set.
 
 **`notFound` / absent-outcome:**
-This is structural, not behavioral. It is type-inferable from `Option<T>` *return* (as
-distinct from `Option<T>` *param*). The projection-synthesis correctly classifies it as
+This is structural, not behavioral. It is type-inferable from `Option<T>` _return_ (as
+distinct from `Option<T>` _param_). The projection-synthesis correctly classifies it as
 a structural key: HTTP → 404, CLI → exit 1 + "Not found", GraphQL → nullable null,
 gRPC → NOT_FOUND status. It belongs in the structural layer of the metadata bag, not
 as a tag.
@@ -217,6 +218,7 @@ definitions and propagate to projections automatically:
 ```
 readOnly ⇒ idempotent
 ```
+
 Rationale: an operation with no observable side-effects trivially satisfies
 idempotency. HTTP GET is both readOnly and idempotent. A projection that needs to select
 between `IDEMPOTENT` and `NO_SIDE_EFFECTS` can use readOnly-ness to imply idempotency
@@ -225,18 +227,21 @@ rather than requiring both assertions.
 ```
 readOnly ⇒ ¬destructive
 ```
+
 Rationale: an operation that destroys state produces an observable side-effect, so it
 cannot be readOnly. The two tags are mutually exclusive by definition.
 
 ```
 destructive ⇒ ¬readOnly
 ```
+
 Directly follows from the above (contrapositive of `readOnly ⇒ ¬destructive`). Stated
 separately to make the HTTP dispatch rule readable: readOnly→GET, destructive→DELETE.
 
 ```
 destructive ∧ idempotent  is valid
 ```
+
 Rationale: deleting a resource by id is both destructive (irreversibly removes state)
 and idempotent (deleting an already-deleted resource leaves the same state). HTTP DELETE
 is the canonical example. Authors may assert both; neither tag implies the other.
@@ -244,6 +249,7 @@ is the canonical example. Authors may assert both; neither tag implies the other
 ```
 streaming is orthogonal to all above
 ```
+
 Streaming is a cardinality property of the output channel, not a side-effect property.
 `streaming ∧ readOnly` (a streaming read) and `streaming ∧ ¬readOnly` (streaming a mutation's
 progress) are both valid combinations.
@@ -251,6 +257,7 @@ progress) are both valid combinations.
 ```
 openWorld is orthogonal to all above
 ```
+
 External reach is an architectural fact independent of idempotency, readOnly-ness, or
 destructiveness. A readOnly read can be openWorld (fetching from an external API); a
 destructive write can be intra-service.
@@ -261,6 +268,7 @@ These rules let a projection decide its surface from the tag set without ad-hoc
 branching:
 
 **HTTP verb selection:**
+
 ```
 readOnly            → GET / HEAD
 idempotent ∧ ¬readOnly ∧ destructive  → DELETE
@@ -270,6 +278,7 @@ idempotent ∧ ¬readOnly ∧ ¬destructive → PUT
 ```
 
 **gRPC idempotency_level:**
+
 ```
 readOnly   → NO_SIDE_EFFECTS
 idempotent → IDEMPOTENT
@@ -277,6 +286,7 @@ idempotent → IDEMPOTENT
 ```
 
 **GraphQL op type:**
+
 ```
 readOnly  → query
 ¬readOnly → mutation
@@ -289,16 +299,17 @@ streaming → subscription (orthogonal; can combine with readOnly/¬readOnly)
 
 The open metadata bag on every op contains:
 
-| Category | What it holds | Source | Examples |
-|---|---|---|---|
-| **Tags** (this document) | Agnostic behavioral/semantic properties; ≥2 projections specialize them | Must-be-authored (except `streaming`) | `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming` |
-| **Descriptive** | Human-readable identification | Type-inferable from method ident + doc comments | `name` (from method name), `description` (from `///` / JSDoc) |
-| **Structural** | Input/output shape, cardinality, presence, tree topology | Type-inferable from parameter and return types | `param.optional` (`Option<T>`), `param.multiple` (`Vec<T>`), `mount` (`&T` return), `notFound` (`Option<T>` return), `inputSchema`, `outputSchema` |
-| **Per-projection namespaced** | One projection reads, others ignore; not lifted to agnostic core | Must-be-authored; override via projection namespace | `http.verb`, `http.path`, `http.statusCode`, `grpc.fieldNumbers`, `cli.shortFlag`, `mcp.title`, `ws.path` |
-| **Override/pin** | Explicit corrections where inference is wrong or insufficient | Must-be-authored | `#[route(method = "PUT")]`, `#[param(name = "user_id")]` |
+| Category                      | What it holds                                                           | Source                                              | Examples                                                                                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tags** (this document)      | Agnostic behavioral/semantic properties; ≥2 projections specialize them | Must-be-authored (except `streaming`)               | `readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming`                                                                                  |
+| **Descriptive**               | Human-readable identification                                           | Type-inferable from method ident + doc comments     | `name` (from method name), `description` (from `///` / JSDoc)                                                                                      |
+| **Structural**                | Input/output shape, cardinality, presence, tree topology                | Type-inferable from parameter and return types      | `param.optional` (`Option<T>`), `param.multiple` (`Vec<T>`), `mount` (`&T` return), `notFound` (`Option<T>` return), `inputSchema`, `outputSchema` |
+| **Per-projection namespaced** | One projection reads, others ignore; not lifted to agnostic core        | Must-be-authored; override via projection namespace | `http.verb`, `http.path`, `http.statusCode`, `grpc.fieldNumbers`, `cli.shortFlag`, `mcp.title`, `ws.path`                                          |
+| **Override/pin**              | Explicit corrections where inference is wrong or insufficient           | Must-be-authored                                    | `#[route(method = "PUT")]`, `#[param(name = "user_id")]`                                                                                           |
 
 **Decision rule for "is this a tag?":**
 A candidate is a tag if and only if:
+
 1. It is a behavioral or semantic property of the operation (not a type shape or wire-format detail), AND
 2. At least two projections independently encode it in their surface (≥2 from the synthesis matrix), AND
 3. It cannot be reliably inferred from the TS/Rust type system alone (except `streaming`).
@@ -323,19 +334,21 @@ is a plain object:
 
 ```ts
 // consumer defines a new behavioral tag
-const cacheable = Symbol("cacheable");  // or a plain string key
+const cacheable = Symbol("cacheable"); // or a plain string key
 
 // author it on an op
 const getUser = defineOp(
-  async (id: string): Promise<User> => { /* ... */ },
+  async (id: string): Promise<User> => {
+    /* ... */
+  },
   {
     readOnly: true,
-    idempotent: true,       // implied by readOnly, but explicit is fine
+    idempotent: true, // implied by readOnly, but explicit is fine
     [cacheable]: {
-      ttl: 60,              // seconds; tag carries structured metadata
+      ttl: 60, // seconds; tag carries structured metadata
       varyOn: ["id"],
     },
-  }
+  },
 );
 ```
 
@@ -351,14 +364,14 @@ function httpCacheProjection(op: Op): CacheDirective | null {
   if (!cfg) return null;
   return {
     "Cache-Control": `public, max-age=${cfg.ttl}`,
-    "Vary": cfg.varyOn.join(", "),
+    Vary: cfg.varyOn.join(", "),
   };
 }
 
 // compose with the standard HTTP projection — core projection is unmodified
 function myHttpProjection(op: Op): RouteConfig {
-  const base = standardHttpProjection(op);       // core, reads readOnly/idempotent/etc.
-  const cacheHeader = httpCacheProjection(op);   // consumer extension, reads cacheable
+  const base = standardHttpProjection(op); // core, reads readOnly/idempotent/etc.
+  const cacheHeader = httpCacheProjection(op); // consumer extension, reads cacheable
   return { ...base, extraHeaders: cacheHeader ?? {} };
 }
 ```
@@ -381,13 +394,13 @@ standard library; consumer-defined tags should prefer namespaced strings or symb
 
 **Canonical tag set (5 tags):**
 
-| Tag | Agnostic definition | Inferable? | Projections | Confidence |
-|---|---|---|---|---|
-| `readOnly` | No observable side-effects | Must-be-authored (name prefix is lossy heuristic) | HTTP (GET), CLI (no confirm), MCP (`readOnlyHint`), gRPC (`NO_SIDE_EFFECTS`), GraphQL (`query`) | HIGH (5/6) |
-| `idempotent` | Repeat calls leave identical state | Must-be-authored | HTTP (PUT/DELETE), MCP (`idempotentHint`), gRPC (`IDEMPOTENT`) | HIGH (3 explicit) |
-| `destructive` | Irrevocably removes state | Must-be-authored | HTTP (DELETE), CLI (confirm-prompt), MCP (`destructiveHint`) | HIGH (3 explicit) |
-| `openWorld` | May reach external systems | Must-be-authored | MCP (`openWorldHint`), HTTP (caching/gating, latent) | WEAK (1 explicit + 1 latent) |
-| `streaming` | Yields item sequence over time | Type-inferable (`Stream`/`AsyncIterable` return) | HTTP (SSE), CLI (`--jsonl`), gRPC (server-streaming), GraphQL (`subscription`), WS (push) | HIGH (5/6) |
+| Tag           | Agnostic definition                | Inferable?                                        | Projections                                                                                     | Confidence                   |
+| ------------- | ---------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------- |
+| `readOnly`    | No observable side-effects         | Must-be-authored (name prefix is lossy heuristic) | HTTP (GET), CLI (no confirm), MCP (`readOnlyHint`), gRPC (`NO_SIDE_EFFECTS`), GraphQL (`query`) | HIGH (5/6)                   |
+| `idempotent`  | Repeat calls leave identical state | Must-be-authored                                  | HTTP (PUT/DELETE), MCP (`idempotentHint`), gRPC (`IDEMPOTENT`)                                  | HIGH (3 explicit)            |
+| `destructive` | Irrevocably removes state          | Must-be-authored                                  | HTTP (DELETE), CLI (confirm-prompt), MCP (`destructiveHint`)                                    | HIGH (3 explicit)            |
+| `openWorld`   | May reach external systems         | Must-be-authored                                  | MCP (`openWorldHint`), HTTP (caching/gating, latent)                                            | WEAK (1 explicit + 1 latent) |
+| `streaming`   | Yields item sequence over time     | Type-inferable (`Stream`/`AsyncIterable` return)  | HTTP (SSE), CLI (`--jsonl`), gRPC (server-streaming), GraphQL (`subscription`), WS (push)       | HIGH (5/6)                   |
 
 **Rejected from tag set:** `replace`/`partial` (HTTP-verb taxonomy, [CERTIFIED]
 rejected); `notFound` (structural, type-inferable from `Option<T>` return).
@@ -399,5 +412,5 @@ functions that read known keys and skip unknown ones; no core edits required.
 
 ---
 
-*Grounded in `projection-synthesis.md` (matrix §1, behavioral keys §2.1, gaps §5) and
-`converged-model.md` (arbitrary-metadata [CERTIFIED]; verb-taxonomy rejection [CERTIFIED]).*
+_Grounded in `projection-synthesis.md` (matrix §1, behavioral keys §2.1, gaps §5) and
+`converged-model.md` (arbitrary-metadata [CERTIFIED]; verb-taxonomy rejection [CERTIFIED])._

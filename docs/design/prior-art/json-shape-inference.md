@@ -39,10 +39,10 @@ Direct quotes are marked as such.
 ## 1. Klessinger et al. — "Extracting JSON Schemas with Tagged Unions" / Tagger
 
 **Citation.** Stefan Klessinger, Meike Klettke, Uta Störl, Stefanie
-Scherzinger. "Extracting JSON Schemas with Tagged Unions." *DEco@VLDB 2022*,
+Scherzinger. "Extracting JSON Schemas with Tagged Unions." _DEco@VLDB 2022_,
 CEUR-WS Vol. 3306, pp. 27–40. Also: Klessinger, Fruth, Gittinger, Klettke,
 Störl, Scherzinger. "Tagger: A Tool for the Discovery of Tagged Unions in JSON
-Schema Extraction" (demo paper), *EDBT 2023*, pp. 827–830,
+Schema Extraction" (demo paper), _EDBT 2023_, pp. 827–830,
 [10.48786/edbt.2023.75](https://doi.org/10.48786/edbt.2023.75). arXiv preprint:
 [2306.07085](https://arxiv.org/abs/2306.07085). Tool:
 [github.com/sdbs-uni-p/tagger-edbt2023](https://github.com/sdbs-uni-p/tagger-edbt2023).
@@ -50,7 +50,7 @@ Schema Extraction" (demo paper), *EDBT 2023*, pp. 827–830,
 ### Core idea
 
 A "tagged union" is JSON Schema's `if`/`then`/`else` pattern where one
-property's *value* (the tag) determines the subschema of sibling properties
+property's _value_ (the tag) determines the subschema of sibling properties
 — e.g. in GeoJSON, `type: "Point"` implies `coordinates` is `number[]`, while
 `type: "LineString"` implies `coordinates` is `number[][]`. Tagger is, per the
 authors, "the first implementation of JSON Schema extraction capable of
@@ -60,7 +60,7 @@ third-party schema extractor's output (composed via `allOf`).
 ### Algorithm
 
 **Formalization as CFDs.** The paper formalizes tag→subschema implications as
-*unary constant conditional functional dependencies* (ucCFDs), following
+_unary constant conditional functional dependencies_ (ucCFDs), following
 Bohannon et al.'s definition of CFDs for relational data cleaning. The
 restricted form used is:
 
@@ -76,9 +76,9 @@ relational encoding, not a JSON-native algorithm.
 
 **Relational encoding.** For every JSON path reached by the same JSONPath
 (the paper's running example is `/geometries[*]`), each object becomes a
-tuple. For each property, two columns are recorded: one for its *value*
+tuple. For each property, two columns are recorded: one for its _value_
 (only for basic/primitive values — nested values are not captured this way)
-and one for its inferred *subschema*. For the GeoJSON `Point`/`LineString`
+and one for its inferred _subschema_. For the GeoJSON `Point`/`LineString`
 example this yields tuples like:
 
 ```
@@ -90,7 +90,7 @@ id | type.value    | type.type | coordinates.type
 **Dependency discovery.** Standard CFD-discovery algorithms (the paper cites
 Chu et al.'s SIGMOD 2016 survey on data cleaning) are run over this relational
 encoding to mine `[A.value=const] → [B.type=σ]` dependencies. This is
-restricted to *unary* CFDs — a single tag column implying a single sibling's
+restricted to _unary_ CFDs — a single tag column implying a single sibling's
 subschema — because "CFD discovery is computationally expensive, scaling
 exponentially in the number of attributes" (Rammelaere & Geerts 2018 is cited
 for this complexity result); the authors explicitly flag multi-tag CFDs as
@@ -147,7 +147,7 @@ This is the closest prior art to our DU-detection pass
 - Emit a discriminated structure rather than a flat, unconstrained union.
 
 The key structural difference: Tagger discovers the discriminant among
-*arbitrary* sibling properties via CFD mining (general relational dependency
+_arbitrary_ sibling properties via CFD mining (general relational dependency
 discovery, unrestricted candidate set, exponential worst case, hence the
 unary restriction), whereas `tryDetectDU` restricts its own candidate set
 up front to fields already typed `enum` or literal-union (`fieldRef.shape.kind
@@ -166,7 +166,7 @@ saturation check but without its integer-clustering escape hatch or `K > 50`
 cap), cohesion (`1 -` average intra-group Jaccard distance on sibling
 field-sets), and separation (average inter-group Jaccard distance),
 accepting the best-scoring candidate above a threshold. This is still the
-*unary* restriction Tagger itself imposes for tractability — one candidate
+_unary_ restriction Tagger itself imposes for tractability — one candidate
 field scored at a time, not the general relational-encoding + CFD-mining
 search over arbitrary attribute combinations — so the "at the cost of being
 unable to discover a tag from a field we haven't already flagged as
@@ -187,7 +187,7 @@ design, matching Tagger's own restriction).
   own doc comments use.)
 - **`allOf`-style composability.** Rather than baking DU detection
   irreversibly into the merged type, structuring it as an independent pass
-  whose output *augments* a plain merged schema (as Tagger augments
+  whose output _augments_ a plain merged schema (as Tagger augments
   third-party schemas) would let DU detection be disabled/inspected
   independently — useful for the "before/after heuristics" transparency the
   Tagger demo explicitly showcases to build user trust. (`detectCfdDiscriminants`
@@ -202,13 +202,13 @@ design, matching Tagger's own restriction).
 
 ### Limitations
 
-- Unary-only: cannot detect a tag formed from a *combination* of two fields.
+- Unary-only: cannot detect a tag formed from a _combination_ of two fields.
   (`tryDetectCfdDiscriminant` inherits this restriction deliberately, for the
   same tractability reason.)
 - CFD discovery is exponential in attribute count in the general case; Tagger
   sidesteps this only by restricting to unary dependencies, not by a cheaper
   algorithm.
-- Discriminant candidates are restricted to *basic* (primitive) values — the
+- Discriminant candidates are restricted to _basic_ (primitive) values — the
   relational encoding doesn't capture nested-object tag values at all.
 - Main-memory only; no distributed/streaming story (unlike JSONoid or
   Baazizi's Spark-based approach below).
@@ -220,7 +220,7 @@ design, matching Tagger's own restriction).
 ## 2. ptype — Probabilistic Type Inference (Alan Turing Institute)
 
 **Citation.** Taha Ceritli, Christopher K. I. Williams, James Geddes. "ptype:
-probabilistic type inference." *Data Mining and Knowledge Discovery* 34,
+probabilistic type inference." _Data Mining and Knowledge Discovery_ 34,
 2020, pp. 870–904. [10.1007/s10618-020-00680-1](https://doi.org/10.1007/s10618-020-00680-1).
 arXiv preprint (with appendices):
 [1911.10081](https://arxiv.org/abs/1911.10081). Code:
@@ -228,11 +228,11 @@ arXiv preprint (with appendices):
 
 ### Core idea
 
-ptype infers the type of a *column* of tabular (CSV-style) data by modeling
+ptype infers the type of a _column_ of tabular (CSV-style) data by modeling
 each candidate type, plus "missing" and "anomaly" as competing generative
 processes over strings, and picking the type whose Probabilistic Finite-State
 Machine (PFSM) mixture best explains the observed column — simultaneously
-flagging which individual *cells* are missing/anomalous rather than assuming
+flagging which individual _cells_ are missing/anomalous rather than assuming
 the whole column is homogeneously one type.
 
 ### Algorithm
@@ -241,7 +241,7 @@ the whole column is homogeneously one type.
 alphabet `Σ`, transitions `δ ⊆ θ×Σ×θ`, initial-state probabilities `I`,
 final-state (stopping) probabilities `F`, and transition probabilities `T`.
 Unlike a plain regular expression (which only accepts/rejects), a PFSM
-assigns every string in `Σ*` a *probability* — this is the entire point: it
+assigns every string in `Σ*` a _probability_ — this is the entire point: it
 lets a value consistent with multiple types (e.g. `"1"` as integer, float,
 Boolean, or string) receive a graded posterior rather than a hard match.
 Structurally a PFSM is closest to an HMM but adds explicit final-state
@@ -256,7 +256,7 @@ expressions to FSMs (via the `greenery` library) and assigning uniform
 transition probabilities as a starting point.
 
 **Three-way generative model per column.** A column type `t ∈ {1..K}` is
-drawn uniformly; then *each row* `i` independently gets a row-type `zᵢ` that
+drawn uniformly; then _each row_ `i` independently gets a row-type `zᵢ` that
 is `t` with probability `π_t^t`, the missing-type `m` with probability
 `π_t^m`, or the anomaly-type `a` with probability `π_t^a` (with
 `π_t^t + π_t^m + π_t^a = 1`, and the weights hand-tuned so
@@ -273,8 +273,8 @@ directly targets what Pearson (2006) calls "disguised missing data" — e.g.
 `-99` inside an otherwise-clean integer column.
 
 **Anomaly PFSM ("X-factor," after Quinn et al. 2009).** A PFSM with the
-*widest possible alphabet* (all ~1.1M Unicode code points), so it always
-assigns *some* nonzero probability to any string, but a lower one than a
+_widest possible alphabet_ (all ~1.1M Unicode code points), so it always
+assigns _some_ nonzero probability to any string, but a lower one than a
 specific type's PFSM would for a well-formed value. This guarantees the
 mixture model never assigns zero total probability to an observation and lets
 truly out-of-domain values (`"refer to euro"` in an integer column,
@@ -296,7 +296,7 @@ type/missing/anomaly labels then follow from the row-level posterior:
 p(zᵢ=j | t=k, xᵢ) = π_k^j · p(xᵢ|zᵢ=j) / Σ_{ℓ∈{k,m,a}} π_k^ℓ · p(xᵢ|zᵢ=ℓ)
 ```
 
-(Eq. 2). Complexity is `O(U·K·M²·L)` where `U` = number of *unique* values
+(Eq. 2). Complexity is `O(U·K·M²·L)` where `U` = number of _unique_ values
 (not rows — repeated values are deduplicated before running the PFSM forward
 algorithm), `K` = number of candidate types, `M` = max PFSM state count, `L`
 = max value length. Reported throughput: ~10K unique values/second, scaling
@@ -304,12 +304,12 @@ linearly in `U`.
 
 **Training: discriminative, not pure maximum-likelihood.** Parameters
 (transition/initial/final probabilities) are tuned via a discriminative
-objective `Σⱼ log p(tʲ|xʲ)` maximized by conjugate gradient over *labeled*
+objective `Σⱼ log p(tʲ|xʲ)` maximized by conjugate gradient over _labeled_
 columns — explicitly chosen over plain maximum-likelihood because
 "discriminative training... is generally superior to maximum likelihood
 estimations, since a discriminative criterion is more consistent with the
 task being optimized," citing the same rationale used for discriminative HMM
-training in speech recognition. Missing/anomaly PFSM parameters are *not*
+training in speech recognition. Missing/anomaly PFSM parameters are _not_
 updated by this process (no labeled missing/anomaly examples exist), only
 hand-crafted; training starts from hand-tuned initial values rather than a
 uniform prior, because uniform-initialized training "[is] not competitive."
@@ -326,7 +326,7 @@ AUC), ptype averaged 0.93 AUC vs. Trifacta's 0.77 (paired t-test p=0.00005).
 
 ### Relevance to our work
 
-ptype targets a genuinely different substrate — homogeneous CSV *columns*,
+ptype targets a genuinely different substrate — homogeneous CSV _columns_,
 not heterogeneous JSON trees — but the core idea, **probability-weighted
 type competition instead of first-match/validation-function type
 assignment**, maps directly onto our dirty-data problem: when a field is
@@ -342,12 +342,12 @@ decide the split per-value rather than per-column.
   during merge — rather than our current implicit behavior where an outlier
   value just becomes another union member (or, worse, forces a coercion to a
   wider primitive kind). An explicit low-prior "this looks like an outlier,
-  not a genuine variant" bucket would let corpus-level inference *report*
+  not a genuine variant" bucket would let corpus-level inference _report_
   outlier rate rather than silently absorbing it into the type.
 - **A curated missing-value-sentinel alphabet** (`-1, -99, "", "NA", "N/A",
-  null-as-string, ...) as a first-class detector, distinguished from "this
-  field is genuinely nullable" — currently we'd likely just infer `number |
-  string` or widen to `unknown` when a numeric field has stray `"NA"` values,
+null-as-string, ...) as a first-class detector, distinguished from "this
+field is genuinely nullable" — currently we'd likely just infer `number |
+  string`or widen to`unknown`when a numeric field has stray`"NA"` values,
   rather than flagging that specific value as a probable missing-data
   encoding.
 - **Discriminative-training framing as a validation target**, not literally
@@ -397,7 +397,7 @@ at [quicktype.io/blog/markov](https://quicktype.io/blog/markov)). Code:
 Given a JSON object, quicktype must decide whether to generate a fixed
 `class`/`interface` (named, fixed properties) or a `Map<string, T>` (dynamic
 keys, homogeneous value type). It answers this per-object using a Markov
-chain over *property-name character sequences*, trained empirically on a
+chain over _property-name character sequences_, trained empirically on a
 corpus of real-world JSON, to score "does this key look like a human-chosen
 field name or an arbitrary/generated map key."
 
@@ -405,7 +405,7 @@ field name or an arbitrary/generated map key."
 
 **Character-trigram Markov chain.** The chain operates over 3-letter windows:
 the first two letters of any 3-letter sequence in a property name form the
-*state*, and the transition table gives `P(third letter | first two
+_state_, and the transition table gives `P(third letter | first two
 letters)`. Given a property name, quicktype walks it 3 letters at a time,
 looks up the transition probability at each step, and combines them.
 
@@ -450,15 +450,15 @@ This is the single closest piece of prior art to our dict-vs-record pass
 (`detectDicts` in `from-json-corpus.ts`). Both quicktype and we solve exactly
 the same disambiguation ("is this key set a fixed vocabulary of field names,
 or an open vocabulary of dynamic data-derived keys") but via structurally
-different evidence: quicktype scores *individual key strings* against a
+different evidence: quicktype scores _individual key strings_ against a
 learned character-level language model of "field-name-shaped" text; we score
-*the key-set's growth behavior across the corpus* (stable across samples →
+_the key-set's growth behavior across the corpus_ (stable across samples →
 record; growing linearly with sample count → dict), per the `detectDicts`
 comment: "If key set is stable (same keys in every sample), it's a record. If
 distinct key count keeps growing linearly, it's a dict."
 
 These are complementary, not competing, signals: quicktype's approach works
-on a *single* object with no corpus (it must decide the moment it sees one
+on a _single_ object with no corpus (it must decide the moment it sees one
 JSON document, which is why it needs a learned string-shape prior at all);
 ours requires a multi-sample corpus but doesn't need any pretrained model or
 language assumption, and correctly stays silent (falls back to record) below
@@ -471,12 +471,12 @@ language assumption, and correctly stays silent (falls back to record) below
   corpus below `dictMinSamples`). A lightweight key-shape heuristic (not
   necessarily a trained Markov chain — even something as simple as "keys
   look like UUIDs/hashes/numeric strings/emails" pattern checks) would give
-  us *some* dict-vs-record signal in the single-sample case where corpus
+  us _some_ dict-vs-record signal in the single-sample case where corpus
   growth evidence doesn't exist yet.
 - **Sample-size-sensitive thresholds.** quicktype's explicit "allow more
   weirdness when there are fewer keys" rule is a useful pattern independent
   of the specific Markov-chain mechanism — it's the same shape as our own
-  `enumMinSamples`/`dictMinSamples` gates, but applied *within* a single
+  `enumMinSamples`/`dictMinSamples` gates, but applied _within_ a single
   decision rather than as a hard sample-count cutoff. Worth considering for
   our own enum/DU heuristics: e.g. loosen the `K/N` saturation ratio
   slightly as `N` grows very small, rather than using one flat threshold.
@@ -494,7 +494,7 @@ language assumption, and correctly stays silent (falls back to record) below
 - English-only; the character-trigram model has no cross-lingual notion of
   "field-name-shaped."
 - Explicitly cannot recognize structured key patterns (e.g. email addresses)
-  purely from the Markov chain — the post suggests regex as a *separate*
+  purely from the Markov chain — the post suggests regex as a _separate_
   future mechanism, i.e. the authors themselves see the Markov-chain
   approach as necessarily supplemented by pattern-based checks, not
   sufficient alone.
@@ -515,7 +515,7 @@ Configurable and Scalable Data-Driven Schema Discovery." arXiv:
 
 Every piece of schema-relevant information extracted from a JSON document
 (type, enum candidates, numeric range, string pattern, distinct-value
-estimate, ...) is represented as a *monoid*: an identity element plus an
+estimate, ...) is represented as a _monoid_: an identity element plus an
 associative, commutative binary merge operation. Because monoid merge is
 associative and commutative, schema discovery over a document collection
 reduces to a distributed/streaming reduction — no different in structure
@@ -530,7 +530,7 @@ analogous to our own field-merging in `mergeObjectTypes`); `ArrayType`
 merges element-type information with special-cased tuple-vs-homogeneous-array
 handling.
 
-**Value/statistics monoids** carry auxiliary information *alongside* the
+**Value/statistics monoids** carry auxiliary information _alongside_ the
 structural type, each independently mergeable: `Examples` does reservoir
 sampling (bounded-size representative sample, merge = weighted-by-count
 resample); `Mean`/variance/skewness/kurtosis monoids use standard online
@@ -538,7 +538,7 @@ resample); `Mean`/variance/skewness/kurtosis monoids use standard online
 different shards combine exactly; `MaxMin` tracks numeric bounds;
 `HyperLogLog` estimates distinct-value cardinality with sub-linear memory,
 merging by taking the register-wise maximum; `Bloom filter` monoids support
-approximate set-membership and, notably, approximate *subset* detection for
+approximate set-membership and, notably, approximate _subset_ detection for
 foreign-key discovery (`B₁ ⊆ B₂` is likely true when every set bit in `B₁`'s
 filter is also set in `B₂`'s); `Histogram` monoids estimate value
 distributions; `Multiple` uses running-GCD to detect "all values are
@@ -587,7 +587,7 @@ JSONoid's central move — decompose "schema" into independently-mergeable,
 associative pieces of evidence rather than one monolithic inference pass —
 is architecturally close to our own tiered pass structure
 (`fromJson` per value → `unifyTypes` pairwise merge → post-merge passes:
-`detectEnums`, `tryDetectDU`, `detectDicts`). The *evaluation methodology*
+`detectEnums`, `tryDetectDU`, `detectDicts`). The _evaluation methodology_
 is directly relevant to our enum/DU/dict thresholds: JSONoid's finding that
 individual signals have wildly different accuracy/overfitting tradeoffs
 (`Required` cheap and reliable; `MaxMin` on strings expensive and overfit-
@@ -633,7 +633,7 @@ discriminative-power probe.
   deferred as future work.
 - The paper's own conclusion: "heuristics to reduce overfitting remain
   unimplemented future work" — i.e. JSONoid's monoid framework provides the
-  *infrastructure* for combining signals cheaply, but (per their own
+  _infrastructure_ for combining signals cheaply, but (per their own
   evaluation) does not yet solve the overfitting problem outright; naive
   "enable everything" still overfits at ~43% on their probe.
 
@@ -643,15 +643,15 @@ discriminative-power probe.
 
 **Citation.** Mohamed-Amine Baazizi, Houssem Ben Lahmar, Dario Colazzo,
 Giorgio Ghelli, Carlo Sartiani. "Schema Inference for Massive JSON Datasets."
-*EDBT 2017*, pp. 222–233, [10.5441/002/edbt.2017.21](https://doi.org/10.5441/002/edbt.2017.21).
+_EDBT 2017_, pp. 222–233, [10.5441/002/edbt.2017.21](https://doi.org/10.5441/002/edbt.2017.21).
 Journal version with the parametric K/L precision knob: Baazizi, Colazzo,
 Ghelli, Sartiani. "Parametric schema inference for massive JSON datasets."
-*The VLDB Journal* 28(4), 2019, pp. 497–521,
+_The VLDB Journal_ 28(4), 2019, pp. 497–521,
 [10.1007/s00778-018-0532-7](https://doi.org/10.1007/s00778-018-0532-7). See
 also the interactive follow-up: Baazizi, Berti, Colazzo, Ghelli, Sartiani.
-"Human-in-the-Loop Schema Inference for Massive JSON Datasets," *EDBT 2020*,
+"Human-in-the-Loop Schema Inference for Massive JSON Datasets," _EDBT 2020_,
 pp. 635–638. And the quantitative-types branch: Baazizi, Colazzo, Ghelli,
-Sartiani. "Counting Types for Massive JSON Datasets," *DBPL 2017*,
+Sartiani. "Counting Types for Massive JSON Datasets," _DBPL 2017_,
 [10.1145/3122831.3122837](https://doi.org/10.1145/3122831.3122837).
 
 ### Counting types (DBPL 2017)
@@ -665,7 +665,7 @@ paper: reduction is parameterised on an equivalence relation, with the analyst
 choosing the succinctness/precision tradeoff.
 
 Two things worth knowing when reading it alongside the enum proposal in the
-VLDB-journal paper's §8. First, the counts are *structural*: they count
+VLDB-journal paper's §8. First, the counts are _structural_: they count
 occurrences per path, never distinct values, so within this line of work the
 occurrence count N and the distinct count K are never available together —
 though combining them is entirely routine elsewhere (data profiling's
@@ -695,7 +695,7 @@ correct without re-processing the whole corpus.
 **Type language.** `T ::= BT | RT | AT | SAT | ∅ | T+T` — basic types
 (`Null | Bool | Num | Str`), record types (`RecT`/`OptRecT`, i.e. mandatory
 vs. optional fields), array types (`ArrT`, an ordered list of per-position
-element types), a *simplified* array type `SAT = [T*]` (a single "body" type
+element types), a _simplified_ array type `SAT = [T*]` (a single "body" type
 covering the whole array, used only as an intermediate/output form for
 fusion — the paper is explicit that repetition types are never inferred at
 Map time, only produced during fusion), and a union constructor `+`.
@@ -712,7 +712,7 @@ shape, so this phase is embarrassingly parallel per-document.
 **Reduce phase: the `kind()` function and the fusion algorithm.** A `kind`
 function maps every type to an integer 0–5 (`Null=0, Bool=1, Num=2, Str=3,
 RT=4, AT/SAT=5`); fusion only ever recursively merges two types of the
-*same* kind, and simply juxtaposes (unions) types of different kind. The
+_same_ kind, and simply juxtaposes (unions) types of different kind. The
 top-level entry point:
 
 ```
@@ -729,11 +729,11 @@ leftovers (passed through untouched into the output union). `LFuse` itself:
   basic type twice" case is trivial — genuinely different basic types never
   reach `LFuse` because they have different `kind()`.
 - **Record types:** matching keys recursively `Fuse`d (with cardinality
-  `min(m,n)` — a field stays mandatory only if mandatory on *both* sides,
+  `min(m,n)` — a field stays mandatory only if mandatory on _both_ sides,
   using the convention `? < 1`); unmatched keys copied through as
-  *optional*. This is the direct analogue of our own `mergeObjectTypes`
+  _optional_. This is the direct analogue of our own `mergeObjectTypes`
   field-union-with-optionality-widening.
-- **Array types:** first *simplified* via `collapse` — an array's
+- **Array types:** first _simplified_ via `collapse` — an array's
   positional element types `[T1,...,Tn]` are folded via repeated `Fuse`
   into one union body type, becoming `[T*]` — before the two (now-
   simplified) array bodies are fused with each other. This deliberately
@@ -741,7 +741,7 @@ leftovers (passed through untouched into the output union). `LFuse` itself:
   fusion is otherwise unbounded in the worst case (an array literally
   mixing many distinct shapes at different positions across the corpus).
   The paper is explicit that this loses precision for arrays where element
-  *position* is informationally meaningful (their acknowledged tradeoff).
+  _position_ is informationally meaningful (their acknowledged tradeoff).
 
 **Correctness/commutativity/associativity are proven theorems, not just
 claimed properties**: `Fuse(T1,T2) = Fuse(T2,T1)` (Theorem 5.4); `Fuse(Fuse(
@@ -753,7 +753,7 @@ supertype of both inputs, not merely "close enough."
 **The parametric precision knob: K-equivalence vs. L-equivalence (VLDB
 journal extension).** The 2017 paper's fusion always merges by `kind()`
 alone — every record merges with every other record regardless of field-set
-overlap. The VLDB-journal follow-up generalizes this into a *parametric*
+overlap. The VLDB-journal follow-up generalizes this into a _parametric_
 choice of equivalence relation deciding which schemas are eligible to merge
 at all:
 
@@ -774,7 +774,7 @@ never co-occur"; the same three objects under L keep `{a,b,d:{e,f}}`
 separate from the (L-merged) `{a,c,d:+L({e,f},{g,h})}`, correctly preserving
 that `b`⁻record never has `c`. This directly demonstrates the
 precision-vs-conciseness tradeoff the parameter controls, and — per the
-2020 interactive follow-up — the authors' conclusion was that *neither*
+2020 interactive follow-up — the authors' conclusion was that _neither_
 extreme is universally right, hence the follow-up work lets an analyst
 choose K vs. L (and mix them at different nesting depths within the same
 schema) interactively rather than picking one globally up front.
@@ -789,7 +789,7 @@ records against 310 average input size, because effectively every record
 looks structurally distinct when its keys are IDs) — the paper's own
 diagnosis: "this has an impact on our fusion technique, which relies on
 keys to merge the underlying records" — a direct, named instance of exactly
-our dict-vs-record problem, encountered as a *failure mode* rather than
+our dict-vs-record problem, encountered as a _failure mode_ rather than
 solved. Distributed scalability: linear in dataset size on a 6-node/120-core
 cluster, 12.5 min for the full 22GB/1.18M-record NYTimes dataset once
 partitioning was tuned to avoid HDFS/Spark data-locality bottlenecks.
@@ -805,21 +805,21 @@ Three direct connections:
    the same commutativity/associativity properties Baazizi et al. prove
    formally, since our corpus-level merge is a repeated pairwise fold over
    the same shape of operation.
-2. **Their K/L equivalence *is* our record/dict boundary, from the opposite
+2. **Their K/L equivalence _is_ our record/dict boundary, from the opposite
    direction.** K-equivalence (merge unconditionally by kind) is exactly
    what happens if a dict-detection pass never fires — every record
    collapses into one big optional-everything shape. L-equivalence (merge
    only same-label-set records) is what happens when dict detection
-   *never* fires and records with genuinely different field sets are kept
+   _never_ fires and records with genuinely different field sets are kept
    separate as distinct union variants. Our `detectDicts` pass is, in
-   effect, choosing L-vs-K *automatically per corpus location* based on
+   effect, choosing L-vs-K _automatically per corpus location_ based on
    whether the key-set is stable or growing, rather than requiring the
    analyst to pick one policy globally (Baazizi 2017/2019) or interactively
    per-subtree (Baazizi 2020) — this is a genuine point of departure worth
    naming explicitly.
 3. **Their Wikidata failure mode (user IDs used directly as object keys)
    is precisely the dict case our `detectDicts` targets**, and their own
-   diagnosis of *why* it fails (key-based record fusion assumes keys are a
+   diagnosis of _why_ it fails (key-based record fusion assumes keys are a
    fixed vocabulary) is independent confirmation that dict-vs-record
    disambiguation isn't a cosmetic nicety — without it, fusion size blows up
    by ~three orders of magnitude on real data (117,010 vs. 310 in their
@@ -846,15 +846,15 @@ Three direct connections:
   `mergeObjectTypes` doesn't already document this as crisply.
 - **The K/L-as-explicit-parameter framing**, even without building the full
   interactive UI: documenting our dict-detection thresholds
-  (`dictMinSamples`, the "stable vs. growing key set" test) as *implementing
-  a choice between two named, well-studied equivalence policies* rather than
+  (`dictMinSamples`, the "stable vs. growing key set" test) as _implementing
+  a choice between two named, well-studied equivalence policies_ rather than
   a bespoke heuristic gives us prior-art grounding for why the parameter
   exists at all, and a vocabulary (K vs. L) for describing what tuning it
   changes.
 
 ### Limitations
 
-- Requires the *entire* Map-phase output to be materialized before Reduce
+- Requires the _entire_ Map-phase output to be materialized before Reduce
   can run any given fusion step meaningfully at the "final schema" level —
   it's designed for batch/Spark, not incremental single-document ingestion
   with immediate typed output (though the 2020 follow-up's incremental
@@ -892,14 +892,14 @@ low-cost thing to close given we already have fast-check property tests
 
 **Enum detection.** `looksLikeEnum`'s core mechanism — distinct-count `K`
 saturating well below sample count `N` — is a lightweight, corpus-scale
-analogue of the *saturation intuition* that underlies JSONoid's
+analogue of the _saturation intuition_ that underlies JSONoid's
 `AttributeCounts`/cardinality-style monoids and, more distantly, ptype's
 "low entropy relative to a fixed alphabet suggests a closed type" intuition,
 but implemented as a direct ratio-threshold (`K/N < 1/3` strongly enum-like,
 `1/3 ≤ K/N < 1/2` needs corroborating integer-clustering evidence, `K ≥ N`
 or `K > 50` rules it out) rather than either PFSM-style probabilistic
 competition (ptype) or a monoid-composed cardinality estimator (JSONoid's
-`HyperLogLog`). None of the surveyed prior art does *exactly* this — it's
+`HyperLogLog`). None of the surveyed prior art does _exactly_ this — it's
 closest in spirit to ptype's "does the data look drawn from a small closed
 alphabet" framing, but arrived at from a cheap frequency-counting angle
 rather than a trained generative model, and — unlike JSONoid's
@@ -908,7 +908,7 @@ scale ceiling worth flagging (§4's "what we could adopt") rather than a
 design difference in kind.
 
 **DU/discriminated-union detection.** `tryDetectDU`'s restriction of
-candidate discriminants to fields *already* typed `enum` or all-literal
+candidate discriminants to fields _already_ typed `enum` or all-literal
 union is a narrower, cheaper version of Tagger's general CFD-discovery
 approach — we never search the full space of `[A.value=const] →
 [B.type=σ]` dependencies the way Tagger's relational-encoding + CFD-mining
@@ -931,12 +931,12 @@ design).
 **Dict-vs-record.** `detectDicts`'s corpus-growth-behavior signal (stable
 key set → record, linearly-growing key set → dict) is architecturally
 closest to quicktype's map/class problem statement but uses a
-*complementary* evidence source: quicktype scores individual key strings
+_complementary_ evidence source: quicktype scores individual key strings
 against a trained character-level language model with no corpus requirement
-(works on one document); we score key-set *behavior across the corpus* with
+(works on one document); we score key-set _behavior across the corpus_ with
 no trained model requirement (needs `dictMinSamples` samples, but no
 training data or language assumptions). Baazizi's K/L-equivalence parameter
-is the closest *conceptual* framing — record-vs-dict is essentially choosing
+is the closest _conceptual_ framing — record-vs-dict is essentially choosing
 L-equivalence (keep distinct shapes separate) vs. K-equivalence (merge
 everything) per corpus location automatically, rather than requiring an
 analyst to set the policy globally or per-subtree by hand.
@@ -949,14 +949,14 @@ signal is ambiguous, in the way our `looksLikeEnum`'s "strongly saturated →
 accept; borderline → check integer clustering; otherwise → reject" cascade
 does. The framing our design work has been reaching for — a **tiered
 heuristic model with explicit deopts** (cheap signal first, escalate to a
-more expensive/specific check only on ambiguity, and *give up cleanly*
+more expensive/specific check only on ambiguity, and _give up cleanly_
 rather than guess when even the escalated check is inconclusive) and
 **Zipf-aware weighting** (treating a field's value-frequency distribution
 shape, not just its raw cardinality, as enum evidence — a value set with one
 dominant mode and a long thin tail reads differently than one with uniform
 frequency even at the same `K`) — is a genuine design direction, not
 something borrowed wholesale from any single paper above. It is closest in
-*spirit* to JSONoid's ablation-tested, independently-scored monoid signals
+_spirit_ to JSONoid's ablation-tested, independently-scored monoid signals
 (cheap/reliable vs. expensive/overfit-prone, empirically measured) and to
 ptype's probabilistic competition between alternative explanations, but
 differs from both: JSONoid combines signals by enabling/disabling whole
@@ -974,7 +974,7 @@ gestures toward now has a concrete design document.** The "tiered heuristic
 model with explicit deopts" and "Zipf-aware weighting" directions named
 above turn out to be two symptoms of a single missing piece: no criterion
 puts the cascade's per-pass decisions on one comparable scale, so passes
-are arbitrated by *ordering* rather than by score. `docs/design/json-inference-model.md`
+are arbitrated by _ordering_ rather than by score. `docs/design/json-inference-model.md`
 works through five candidate formalisms (heuristic cascade, frequentist
 testing, Bayesian model comparison, MDL, Good–Turing vocabulary estimation),
 argues that Bayesian model comparison and MDL are the same procedure in two

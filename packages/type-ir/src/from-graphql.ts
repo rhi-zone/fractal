@@ -17,9 +17,9 @@ import {
   type TypeNode,
   type UnionTypeDefinitionNode,
   type ValueNode,
-} from "graphql"
-import { t, types, withMeta, type TypeRef } from "./index.ts"
-import { date, datetime } from "./kinds/common.ts"
+} from "graphql";
+import { t, types, withMeta, type TypeRef } from "./index.ts";
+import { date, datetime } from "./kinds/common.ts";
 
 // Reverse of graphql.ts: GraphQL SDL -> TypeRef. Uses graphql-js's own parser
 // (already a workspace dependency of the sibling graphql-api-projector
@@ -63,14 +63,16 @@ const builtinScalars: Record<string, () => TypeRef> = {
   ID: () => t(types.string, { format: "id" }),
   DateTime: () => datetime(),
   Date: () => date(),
-}
+};
 
 function nameOf(def: DefinitionNode): string | undefined {
-  return "name" in def && def.name !== undefined ? def.name.value : undefined
+  return "name" in def && def.name !== undefined ? def.name.value : undefined;
 }
 
-function description(node: { description?: { value: string } | undefined }): Record<string, unknown> {
-  return node.description !== undefined ? { description: node.description.value } : {}
+function description(node: {
+  description?: { value: string } | undefined;
+}): Record<string, unknown> {
+  return node.description !== undefined ? { description: node.description.value } : {};
 }
 
 // § "Value Literals" — enough of GraphQL's literal grammar to read directive
@@ -81,30 +83,30 @@ function description(node: { description?: { value: string } | undefined }): Rec
 function valueToJs(node: ValueNode): unknown {
   switch (node.kind) {
     case Kind.INT:
-      return Number.parseInt(node.value, 10)
+      return Number.parseInt(node.value, 10);
     case Kind.FLOAT:
-      return Number.parseFloat(node.value)
+      return Number.parseFloat(node.value);
     case Kind.STRING:
-      return node.value
+      return node.value;
     case Kind.BOOLEAN:
-      return node.value
+      return node.value;
     case Kind.NULL:
-      return null
+      return null;
     case Kind.ENUM:
-      return node.value
+      return node.value;
     case Kind.LIST:
-      return node.values.map(valueToJs)
+      return node.values.map(valueToJs);
     case Kind.OBJECT:
-      return Object.fromEntries(node.fields.map((f) => [f.name.value, valueToJs(f.value)]))
+      return Object.fromEntries(node.fields.map((f) => [f.name.value, valueToJs(f.value)]));
     case Kind.VARIABLE:
-      return undefined
+      return undefined;
     default:
-      return undefined
+      return undefined;
   }
 }
 
 function argsToJs(args: readonly ArgumentNode[]): Record<string, unknown> {
-  return Object.fromEntries(args.map((a) => [a.name.value, valueToJs(a.value)]))
+  return Object.fromEntries(args.map((a) => [a.name.value, valueToJs(a.value)]));
 }
 
 // § "Deprecation" mirrors graphql.ts's `deprecatedDirective` (which reads
@@ -112,22 +114,24 @@ function argsToJs(args: readonly ArgumentNode[]): Record<string, unknown> {
 // verbatim in `meta.directives` (open-metadata-bag convention — a projector
 // with its own directive vocabulary can read it back, even though no
 // built-in projector currently does).
-function directivesToMeta(directives: readonly DirectiveNode[] | undefined): Record<string, unknown> {
-  if (directives === undefined || directives.length === 0) return {}
-  const meta: Record<string, unknown> = {}
-  const rest: { name: string; args: Record<string, unknown> }[] = []
+function directivesToMeta(
+  directives: readonly DirectiveNode[] | undefined,
+): Record<string, unknown> {
+  if (directives === undefined || directives.length === 0) return {};
+  const meta: Record<string, unknown> = {};
+  const rest: { name: string; args: Record<string, unknown> }[] = [];
   for (const directive of directives) {
-    const name = directive.name.value
-    const args = argsToJs(directive.arguments ?? [])
+    const name = directive.name.value;
+    const args = argsToJs(directive.arguments ?? []);
     if (name === "deprecated") {
-      meta.deprecated = true
-      if (typeof args.reason === "string") meta.deprecatedReason = args.reason
-      continue
+      meta.deprecated = true;
+      if (typeof args.reason === "string") meta.deprecatedReason = args.reason;
+      continue;
     }
-    rest.push({ name, args })
+    rest.push({ name, args });
   }
-  if (rest.length > 0) meta.directives = rest
-  return meta
+  if (rest.length > 0) meta.directives = rest;
+  return meta;
 }
 
 // First pass: every declared type-system name, so field/argument types can
@@ -135,41 +139,47 @@ function directivesToMeta(directives: readonly DirectiveNode[] | undefined): Rec
 // "unrecognized custom scalar, presumably declared elsewhere" (-> opaque
 // scalar placeholder).
 function collectDeclaredNames(doc: DocumentNode): Set<string> {
-  const names = new Set<string>()
+  const names = new Set<string>();
   for (const def of doc.definitions) {
-    const name = nameOf(def)
-    if (name !== undefined) names.add(name)
+    const name = nameOf(def);
+    if (name !== undefined) names.add(name);
   }
-  return names
+  return names;
 }
 
 function convertNamedType(name: string, declared: Set<string>): TypeRef {
-  const builtin = builtinScalars[name]
-  if (builtin !== undefined) return builtin()
-  if (declared.has(name)) return t(types.ref(name))
+  const builtin = builtinScalars[name];
+  if (builtin !== undefined) return builtin();
+  if (declared.has(name)) return t(types.ref(name));
   // A scalar referenced but not declared anywhere in this document (e.g.
   // `Upload`, or any custom scalar defined in a schema this SDL fragment was
   // split off from) — no structural shape to recover, same honest-degrade
   // convention `unknown`-mapped kinds use in graphql.ts's forward direction.
-  return t(types.unknown, { graphqlScalar: name })
+  return t(types.unknown, { graphqlScalar: name });
 }
 
 function convertTypeBase(node: NamedTypeNode | ListTypeNode, declared: Set<string>): TypeRef {
-  if (node.kind === Kind.LIST_TYPE) return t(types.array(convertType(node.type, declared)))
-  return convertNamedType(node.name.value, declared)
+  if (node.kind === Kind.LIST_TYPE) return t(types.array(convertType(node.type, declared)));
+  return convertNamedType(node.name.value, declared);
 }
 
 function convertType(node: TypeNode, declared: Set<string>): TypeRef {
-  if (node.kind === Kind.NON_NULL_TYPE) return convertTypeBase(node.type, declared)
-  return withMeta(convertTypeBase(node, declared), { nullable: true })
+  if (node.kind === Kind.NON_NULL_TYPE) return convertTypeBase(node.type, declared);
+  return withMeta(convertTypeBase(node, declared), { nullable: true });
 }
 
-function convertArgument(arg: InputValueDefinitionNode, declared: Set<string>): { name: string; type: TypeRef } {
-  let type = convertType(arg.type, declared)
-  const extra: Record<string, unknown> = { ...description(arg), ...directivesToMeta(arg.directives) }
-  if (arg.defaultValue !== undefined) extra.default = valueToJs(arg.defaultValue)
-  if (Object.keys(extra).length > 0) type = withMeta(type, extra)
-  return { name: arg.name.value, type }
+function convertArgument(
+  arg: InputValueDefinitionNode,
+  declared: Set<string>,
+): { name: string; type: TypeRef } {
+  let type = convertType(arg.type, declared);
+  const extra: Record<string, unknown> = {
+    ...description(arg),
+    ...directivesToMeta(arg.directives),
+  };
+  if (arg.defaultValue !== undefined) extra.default = valueToJs(arg.defaultValue);
+  if (Object.keys(extra).length > 0) type = withMeta(type, extra);
+  return { name: arg.name.value, type };
 }
 
 // An object/interface field with arguments is a resolver, not plain data —
@@ -177,21 +187,24 @@ function convertArgument(arg: InputValueDefinitionNode, declared: Set<string>): 
 // (`isA(fieldRef.shape.kind, "method")` decides whether to render an
 // argument list). A field with no arguments stays a plain typed field.
 function convertField(field: FieldDefinitionNode, declared: Set<string>): TypeRef {
-  const meta = { ...description(field), ...directivesToMeta(field.directives) }
+  const meta = { ...description(field), ...directivesToMeta(field.directives) };
   if (field.arguments !== undefined && field.arguments.length > 0) {
-    const params = field.arguments.map((a) => convertArgument(a, declared))
-    const returnType = convertType(field.type, declared)
-    return withMeta(t(types.method(params, returnType)), meta)
+    const params = field.arguments.map((a) => convertArgument(a, declared));
+    const returnType = convertType(field.type, declared);
+    return withMeta(t(types.method(params, returnType)), meta);
   }
-  const fieldType = convertType(field.type, declared)
-  return Object.keys(meta).length > 0 ? withMeta(fieldType, meta) : fieldType
+  const fieldType = convertType(field.type, declared);
+  return Object.keys(meta).length > 0 ? withMeta(fieldType, meta) : fieldType;
 }
 
 function convertInputField(field: InputValueDefinitionNode, declared: Set<string>): TypeRef {
-  const meta: Record<string, unknown> = { ...description(field), ...directivesToMeta(field.directives) }
-  if (field.defaultValue !== undefined) meta.default = valueToJs(field.defaultValue)
-  const fieldType = convertType(field.type, declared)
-  return Object.keys(meta).length > 0 ? withMeta(fieldType, meta) : fieldType
+  const meta: Record<string, unknown> = {
+    ...description(field),
+    ...directivesToMeta(field.directives),
+  };
+  if (field.defaultValue !== undefined) meta.default = valueToJs(field.defaultValue);
+  const fieldType = convertType(field.type, declared);
+  return Object.keys(meta).length > 0 ? withMeta(fieldType, meta) : fieldType;
 }
 
 function convertObjectLike(
@@ -199,49 +212,49 @@ function convertObjectLike(
   declared: Set<string>,
   graphqlKind: "type" | "input" | "interface",
 ): TypeRef {
-  const fields: Record<string, TypeRef> = {}
-  const nodeFields = def.fields ?? []
+  const fields: Record<string, TypeRef> = {};
+  const nodeFields = def.fields ?? [];
   for (const field of nodeFields) {
     fields[field.name.value] =
       graphqlKind === "input"
         ? convertInputField(field as InputValueDefinitionNode, declared)
-        : convertField(field as FieldDefinitionNode, declared)
+        : convertField(field as FieldDefinitionNode, declared);
   }
   const meta: Record<string, unknown> = {
     ...description(def),
     ...directivesToMeta(def.directives),
     graphqlKind,
     typeName: def.name.value,
-  }
+  };
   if ("interfaces" in def && def.interfaces !== undefined && def.interfaces.length > 0) {
-    meta.implements = def.interfaces.map((i) => i.name.value)
+    meta.implements = def.interfaces.map((i) => i.name.value);
   }
-  return t(types.object(fields), meta)
+  return t(types.object(fields), meta);
 }
 
 function convertEnum(def: EnumTypeDefinitionNode): TypeRef {
-  const members = def.values?.map((v) => v.name.value) ?? []
+  const members = def.values?.map((v) => v.name.value) ?? [];
   return t(types.enum(members), {
     ...description(def),
     ...directivesToMeta(def.directives),
-  })
+  });
 }
 
 function convertUnion(def: UnionTypeDefinitionNode, declared: Set<string>): TypeRef {
-  const variants = (def.types ?? []).map((nt) => convertNamedType(nt.name.value, declared))
+  const variants = (def.types ?? []).map((nt) => convertNamedType(nt.name.value, declared));
   return t(types.union(variants), {
     ...description(def),
     ...directivesToMeta(def.directives),
     unionName: def.name.value,
-  })
+  });
 }
 
 function convertScalar(def: ScalarTypeDefinitionNode): TypeRef {
-  const name = def.name.value
-  const builtin = builtinScalars[name]
-  const base = builtin !== undefined ? builtin() : t(types.unknown, { graphqlScalar: name })
-  const meta = { ...description(def), ...directivesToMeta(def.directives) }
-  return Object.keys(meta).length > 0 ? withMeta(base, meta) : base
+  const name = def.name.value;
+  const builtin = builtinScalars[name];
+  const base = builtin !== undefined ? builtin() : t(types.unknown, { graphqlScalar: name });
+  const meta = { ...description(def), ...directivesToMeta(def.directives) };
+  return Object.keys(meta).length > 0 ? withMeta(base, meta) : base;
 }
 
 /**
@@ -251,37 +264,37 @@ function convertScalar(def: ScalarTypeDefinitionNode): TypeRef {
  * definitions are ignored; this ingester only reads type shapes.
  */
 export function fromGraphql(sdl: string): Record<string, TypeRef> {
-  const doc = parse(sdl)
-  const declared = collectDeclaredNames(doc)
-  const result: Record<string, TypeRef> = {}
+  const doc = parse(sdl);
+  const declared = collectDeclaredNames(doc);
+  const result: Record<string, TypeRef> = {};
 
   for (const def of doc.definitions) {
     switch (def.kind) {
       case Kind.OBJECT_TYPE_DEFINITION:
-        result[def.name.value] = convertObjectLike(def, declared, "type")
-        break
+        result[def.name.value] = convertObjectLike(def, declared, "type");
+        break;
       case Kind.INPUT_OBJECT_TYPE_DEFINITION:
-        result[def.name.value] = convertObjectLike(def, declared, "input")
-        break
+        result[def.name.value] = convertObjectLike(def, declared, "input");
+        break;
       case Kind.INTERFACE_TYPE_DEFINITION:
-        result[def.name.value] = convertObjectLike(def, declared, "interface")
-        break
+        result[def.name.value] = convertObjectLike(def, declared, "interface");
+        break;
       case Kind.ENUM_TYPE_DEFINITION:
-        result[def.name.value] = convertEnum(def)
-        break
+        result[def.name.value] = convertEnum(def);
+        break;
       case Kind.UNION_TYPE_DEFINITION:
-        result[def.name.value] = convertUnion(def, declared)
-        break
+        result[def.name.value] = convertUnion(def, declared);
+        break;
       case Kind.SCALAR_TYPE_DEFINITION:
-        result[def.name.value] = convertScalar(def)
-        break
+        result[def.name.value] = convertScalar(def);
+        break;
       default:
         // Schema definitions, directive definitions, extensions, and
         // executable (operation/fragment) definitions carry no standalone
         // type shape of their own — skipped.
-        break
+        break;
     }
   }
 
-  return result
+  return result;
 }

@@ -30,14 +30,7 @@ function withParams<P>(req: Request, params: P): ReqWithParams<P> {
 }
 
 // Closed verb union: a typo like "GETT" is a COMPILE ERROR in `methods`.
-export type Method =
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "PATCH"
-  | "DELETE"
-  | "HEAD"
-  | "OPTIONS";
+export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 // --- path consumption, read straight off the Request's URL -----------------
 
@@ -130,9 +123,7 @@ export function param<K extends string, Q extends Record<K, string>>(
  *   - HEAD with GET present      -> run GET, return its response with null body
  *   - OPTIONS (if not in table)  -> 204 + Allow
  */
-export function methods<P = {}>(
-  table: Partial<Record<Method, Handler<P>>>,
-): Handler<P> {
+export function methods<P = {}>(table: Partial<Record<Method, Handler<P>>>): Handler<P> {
   const verbs = Object.keys(table) as Method[];
   const allow = verbs.join(", ");
   return async (req) => {

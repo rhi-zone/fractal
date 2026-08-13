@@ -50,11 +50,11 @@
 //   packages/http-api-projector/src/project.ts                 — sibling projection (structural mirror)
 //   packages/api-tree/src/tree.ts                 — extractToolSchemas (schema source)
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SourceMap } from "@rhi-zone/fractal-api-tree"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { SourceMap } from "@rhi-zone/fractal-api-tree";
 
 // ============================================================================
 // Types
@@ -71,13 +71,13 @@ import type { SourceMap } from "@rhi-zone/fractal-api-tree"
  * NO hint key — the MCP model should not infer "not read-only" from absence.
  */
 export type McpAnnotations = {
-  readonly readOnlyHint?: boolean
-  readonly destructiveHint?: boolean
-  readonly idempotentHint?: boolean
-  readonly openWorldHint?: boolean
-  readonly title?: string
-  readonly [key: string]: unknown
-}
+  readonly readOnlyHint?: boolean;
+  readonly destructiveHint?: boolean;
+  readonly idempotentHint?: boolean;
+  readonly openWorldHint?: boolean;
+  readonly title?: string;
+  readonly [key: string]: unknown;
+};
 
 /**
  * MCP Tool descriptor — one per leaf node in the Node tree.
@@ -89,9 +89,9 @@ export type McpAnnotations = {
  * second source.
  */
 export type McpTool = {
-  readonly name: string
-  readonly description: string
-  readonly inputSchema: Record<string, unknown>
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: Record<string, unknown>;
   /**
    * Derived-from-type output schema (from the same `SchemaMap` `inputSchema`
    * comes from), present only when it's `{ type: "object", ... }` — the
@@ -103,8 +103,8 @@ export type McpTool = {
    * entirely when no schema was derived, or the derived schema isn't
    * object-shaped.
    */
-  readonly outputSchema?: Record<string, unknown>
-  readonly annotations?: McpAnnotations
+  readonly outputSchema?: Record<string, unknown>;
+  readonly annotations?: McpAnnotations;
   /**
    * True when the handler's output is a `stream` TypeRef kind
    * (`AsyncIterable<T>` — see `@rhi-zone/fractal-api-tree`'s `StreamEffect`
@@ -117,7 +117,7 @@ export type McpTool = {
    * absent this tool's output schema hints at neither, in which case the key
    * is omitted (unknown is not `false`).
    */
-  readonly streaming?: boolean
+  readonly streaming?: boolean;
   /**
    * True when the handler's output is a `page` TypeRef kind (`CursorPage<T>`
    * / `OffsetPage<T>` — see `@rhi-zone/fractal-api-tree`'s `Page<T>` doc),
@@ -126,9 +126,9 @@ export type McpTool = {
    * model pagination; only `page.ts`'s TypeRef-kind convention does). Omitted
    * when the derived output schema carries no such marker.
    */
-  readonly paginated?: boolean
+  readonly paginated?: boolean;
   /** Which pagination convention (`Page<T>`'s two variants) `paginated: true` uses. Present only alongside `paginated: true`. */
-  readonly pageStyle?: "cursor" | "offset"
+  readonly pageStyle?: "cursor" | "offset";
   /**
    * Lifecycle flag: the operation is slated for removal. Derived from the
    * tree-level `meta.tags.deprecated` tag (see api-tree/src/tags.ts) — the
@@ -138,8 +138,8 @@ export type McpTool = {
    * field/annotation, so this is carried as an open descriptor key a client
    * may choose to surface.
    */
-  readonly deprecated?: boolean
-}
+  readonly deprecated?: boolean;
+};
 
 /**
  * Derived-from-type facts for one tool, keyed by tool name. Produced at build
@@ -148,7 +148,7 @@ export type McpTool = {
  * schema is involved.
  */
 export type ToolSchema = {
-  readonly inputSchema?: Record<string, unknown>
+  readonly inputSchema?: Record<string, unknown>;
   /**
    * Derived-from-type output schema. Already produced by
    * `@rhi-zone/fractal-api-tree`'s `extractToolSchemas` (same shape
@@ -159,12 +159,12 @@ export type ToolSchema = {
    * being assigned verbatim (which would violate the MCP spec's
    * object-shaped `outputSchema` constraint).
    */
-  readonly outputSchema?: Record<string, unknown>
-  readonly description?: string
-}
+  readonly outputSchema?: Record<string, unknown>;
+  readonly description?: string;
+};
 
 /** Map of tool name → derived schema/description (from codegen). */
-export type SchemaMap = Readonly<Record<string, ToolSchema>>
+export type SchemaMap = Readonly<Record<string, ToolSchema>>;
 
 /**
  * A dispatch entry: the leaf's handler plus its `meta.mcp.sourceMap` (empty
@@ -173,19 +173,19 @@ export type SchemaMap = Readonly<Record<string, ToolSchema>>
  * `packages/api-tree/src/input.ts`.
  */
 export type Dispatch = {
-  readonly handler: Handler
-  readonly sourceMap: SourceMap
+  readonly handler: Handler;
+  readonly sourceMap: SourceMap;
   /** The leaf's own `LeafMeta` — carried through for consumers (e.g. `server.ts`'s
    * middleware context) that need dispatch-time access to it without a second
    * tree walk. */
-  readonly meta: LeafMeta
-}
+  readonly meta: LeafMeta;
+};
 
 /** Options for `toTools`. */
 export type ToToolsOptions = {
   /** Tool-name → derived input schema + JSDoc description (from codegen). */
-  readonly schemas?: SchemaMap
-}
+  readonly schemas?: SchemaMap;
+};
 
 // ============================================================================
 // Annotation hints from the tag lattice
@@ -199,13 +199,13 @@ export type ToToolsOptions = {
  * This preserves three-valued semantics: unknown ≠ false.
  */
 function hintsFromTags(tags: Tags): Record<string, boolean> {
-  const r = resolveTags(tags)
-  const hints: Record<string, boolean> = {}
-  if (r.readOnly !== undefined) hints.readOnlyHint = r.readOnly
-  if (r.destructive !== undefined) hints.destructiveHint = r.destructive
-  if (r.idempotent !== undefined) hints.idempotentHint = r.idempotent
-  if (r.openWorld !== undefined) hints.openWorldHint = r.openWorld
-  return hints
+  const r = resolveTags(tags);
+  const hints: Record<string, boolean> = {};
+  if (r.readOnly !== undefined) hints.readOnlyHint = r.readOnly;
+  if (r.destructive !== undefined) hints.destructiveHint = r.destructive;
+  if (r.idempotent !== undefined) hints.idempotentHint = r.idempotent;
+  if (r.openWorld !== undefined) hints.openWorldHint = r.openWorld;
+  return hints;
 }
 
 // ============================================================================
@@ -214,18 +214,18 @@ function hintsFromTags(tags: Tags): Record<string, boolean> {
 
 /** A vendor-extended JSON Schema carrying type-ir's `x-stream`/`x-page-style` markers (json-schema.ts's `stream`/`page` projections). */
 type KindTaggedSchema = Record<string, unknown> & {
-  readonly ["x-stream"]?: boolean
-  readonly ["x-page-style"]?: "cursor" | "offset"
-  readonly items?: Record<string, unknown> | false
-}
+  readonly ["x-stream"]?: boolean;
+  readonly ["x-page-style"]?: "cursor" | "offset";
+  readonly items?: Record<string, unknown> | false;
+};
 
 /** `unwrapKindSchema`'s result: the recovered kind facts, plus the schema to use for `McpTool.outputSchema` (only when that's itself object-shaped — see module doc). */
 type KindInfo = {
-  readonly outputSchema?: Record<string, unknown>
-  readonly streaming: boolean
-  readonly paginated: boolean
-  readonly pageStyle?: "cursor" | "offset"
-}
+  readonly outputSchema?: Record<string, unknown>;
+  readonly streaming: boolean;
+  readonly paginated: boolean;
+  readonly pageStyle?: "cursor" | "offset";
+};
 
 /**
  * Recover `stream`/`page` TypeRef-kind facts from a derived output schema —
@@ -240,35 +240,37 @@ type KindInfo = {
  * gate applied by callers.
  */
 function unwrapKindSchema(schema: Record<string, unknown> | undefined): KindInfo {
-  const tagged = schema as KindTaggedSchema | undefined
+  const tagged = schema as KindTaggedSchema | undefined;
   if (tagged?.["x-stream"] === true) {
-    const item = tagged.items
+    const item = tagged.items;
     return {
       ...(item !== undefined && item !== false ? { outputSchema: item } : {}),
       streaming: true,
       paginated: false,
-    }
+    };
   }
-  const pageStyle = tagged?.["x-page-style"]
+  const pageStyle = tagged?.["x-page-style"];
   if (pageStyle !== undefined) {
-    const item = tagged?.items
+    const item = tagged?.items;
     return {
       ...(item !== undefined && item !== false ? { outputSchema: item } : {}),
       streaming: false,
       paginated: true,
       pageStyle,
-    }
+    };
   }
   return {
     ...(schema !== undefined ? { outputSchema: schema } : {}),
     streaming: false,
     paginated: false,
-  }
+  };
 }
 
 /** True when `schema` is object-shaped — the only shape MCP's `outputSchema` field accepts (`@modelcontextprotocol/sdk`'s `ToolSchema`). */
-function isObjectSchema(schema: Record<string, unknown> | undefined): schema is Record<string, unknown> {
-  return schema !== undefined && schema.type === "object"
+function isObjectSchema(
+  schema: Record<string, unknown> | undefined,
+): schema is Record<string, unknown> {
+  return schema !== undefined && schema.type === "object";
 }
 
 // ============================================================================
@@ -286,23 +288,23 @@ function isObjectSchema(schema: Record<string, unknown> | undefined): schema is 
 /** `meta.mcp` fields valid at LEAF position only. Standard keys are typed; any other key passes through untouched (open bag, not a fixed schema — see the DU + interpreter design philosophy). */
 export type McpLeafMetaProperties = {
   /** Full tool-name override (prefix ignored when set), or resource name override. */
-  readonly name?: string
+  readonly name?: string;
   /** Description text override. */
-  readonly description?: string
+  readonly description?: string;
   /** Emits `annotations.title`. */
-  readonly title?: string
+  readonly title?: string;
   /** Merged over tag-derived hints (override wins per key). Tools only. */
-  readonly annotations?: McpAnnotations
+  readonly annotations?: McpAnnotations;
   /**
    * Leaf discriminator: "tool" (default, omitted = "tool") | "resource" | "prompt".
    * See project.ts's three walks (`projectTools`, `projectResources`,
    * `projectPrompts`), each skipping leaves not tagged for its own surface.
    */
-  readonly as?: "tool" | "resource" | "prompt"
+  readonly as?: "tool" | "resource" | "prompt";
   /** Full resource URI override (derived-from-tree-position URI ignored when set). */
-  readonly uri?: string
+  readonly uri?: string;
   /** Resource MIME type override; defaults to "application/json". Resources only. */
-  readonly mimeType?: string
+  readonly mimeType?: string;
   /**
    * Per-param source overrides for this leaf's input assembly (see
    * `packages/api-tree/src/input.ts`). Lets a tree author pull a field from a
@@ -312,26 +314,26 @@ export type McpLeafMetaProperties = {
    * argument/uri-variable convention. Tools, resource templates, and
    * prompts only (fixed resources take no input).
    */
-  readonly sourceMap?: SourceMap
-  readonly [key: string]: unknown
-}
+  readonly sourceMap?: SourceMap;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `McpLeafMetaProperties` under the `mcp` key — extend `LeafMeta` with this in a deployment's augmentation file. */
 export type McpLeafMeta = {
-  readonly mcp?: McpLeafMetaProperties
-}
+  readonly mcp?: McpLeafMetaProperties;
+};
 
 /** `meta.mcp` fields valid at BRANCH position only. */
 export type McpBranchMetaProperties = {
   /** This node's own contribution to the tool-name/resource-URI prefix. */
-  readonly segment?: string
-  readonly [key: string]: unknown
-}
+  readonly segment?: string;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `McpBranchMetaProperties` under the `mcp` key — extend `BranchMeta` with this in a deployment's augmentation file. */
 export type McpBranchMeta = {
-  readonly mcp?: McpBranchMetaProperties
-}
+  readonly mcp?: McpBranchMetaProperties;
+};
 
 /**
  * Safely extract the open `meta.mcp` bag. Accepts the INTERSECTION of both
@@ -342,10 +344,12 @@ export type McpBranchMeta = {
  * roles' field sets don't overlap (no field means two different things at
  * the two positions).
  */
-export function getMcpMeta(meta: McpLeafMeta & McpBranchMeta): McpLeafMetaProperties & McpBranchMetaProperties {
-  const m = meta.mcp
-  if (typeof m !== "object" || m === null) return {}
-  return m
+export function getMcpMeta(
+  meta: McpLeafMeta & McpBranchMeta,
+): McpLeafMetaProperties & McpBranchMetaProperties {
+  const m = meta.mcp;
+  if (typeof m !== "object" || m === null) return {};
+  return m;
 }
 
 // ============================================================================
@@ -356,9 +360,9 @@ export function getMcpMeta(meta: McpLeafMeta & McpBranchMeta): McpLeafMetaProper
  * map for dispatch (server.ts's `createMcpServer` resolves tool calls
  * through this map instead of re-walking the tree per call). */
 export type ProjectToolsResult = {
-  readonly tools: McpTool[]
-  readonly handlers: ReadonlyMap<string, Dispatch>
-}
+  readonly tools: McpTool[];
+  readonly handlers: ReadonlyMap<string, Dispatch>;
+};
 
 /**
  * Walk a Node tree and produce a flat array of MCP tool descriptors, plus
@@ -385,8 +389,8 @@ export type ProjectToolsResult = {
  * @param opts  - Optional derived `schemas` map (from @rhi-zone/fractal-type-ir).
  */
 export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsResult {
-  const schemas = opts.schemas ?? {}
-  const handlers = new Map<string, Dispatch>()
+  const schemas = opts.schemas ?? {};
+  const handlers = new Map<string, Dispatch>();
 
   // Build one McpTool (+ register its dispatch handler) for a leaf node at a
   // fully-resolved `name` — factored out of the loop below so the SAME
@@ -396,18 +400,22 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
   // branch below, and api-tree/tree.ts's `walkNodeType` fix this mirrors).
   // `descriptionFallback` is the last-resort description text (the tree key
   // for an ordinary leaf; the fallback's own `name` when there is no key).
-  const buildTool = (child: Node, name: string, descriptionFallback: string): McpTool | undefined => {
-    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
+  const buildTool = (
+    child: Node,
+    name: string,
+    descriptionFallback: string,
+  ): McpTool | undefined => {
+    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
 
     // meta.mcp.as discriminates the leaf's target surface. Omitted or
     // "tool" → project as a tool (this walk); "resource" / "prompt" →
     // skip here (projected by projectResources / projectPrompts).
-    if (mcp.as !== undefined && mcp.as !== "tool") return undefined
+    if (mcp.as !== undefined && mcp.as !== "tool") return undefined;
 
     // meta.mcp.name overrides the derived name entirely
-    const resolvedName = typeof mcp.name === "string" ? mcp.name : name
+    const resolvedName = typeof mcp.name === "string" ? mcp.name : name;
 
-    const derived = schemas[resolvedName]
+    const derived = schemas[resolvedName];
 
     // Description: meta.mcp.description > meta.description > JSDoc-derived
     // (from codegen) > descriptionFallback.
@@ -418,28 +426,28 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
           ? child.meta.description
           : typeof derived?.description === "string"
             ? derived.description
-            : descriptionFallback
+            : descriptionFallback;
 
     // Hints derived from the tag lattice (three-valued), the leaf's own tags only
-    const baseHints = hintsFromTags((child.meta.tags ?? {}) as Tags)
+    const baseHints = hintsFromTags((child.meta.tags ?? {}) as Tags);
 
     // meta.mcp.annotations overrides individual hint keys
     const annotationOverride: Record<string, unknown> =
       typeof mcp.annotations === "object" && mcp.annotations !== null
         ? (mcp.annotations as Record<string, unknown>)
-        : {}
+        : {};
 
     // meta.mcp.title → annotations.title
     const titleEntry: Record<string, string> =
-      typeof mcp.title === "string" ? { title: mcp.title } : {}
+      typeof mcp.title === "string" ? { title: mcp.title } : {};
 
-    const annotationsMerged = { ...baseHints, ...annotationOverride, ...titleEntry }
+    const annotationsMerged = { ...baseHints, ...annotationOverride, ...titleEntry };
     const annotations: McpAnnotations | undefined =
-      Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined
+      Object.keys(annotationsMerged).length > 0 ? annotationsMerged : undefined;
 
     // deprecated: tree-level meta.tags.deprecated, three-valued (omit unless true)
-    const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
-    const deprecated = resolved.deprecated === true
+    const resolved = resolveTags((child.meta.tags ?? {}) as Tags);
+    const deprecated = resolved.deprecated === true;
 
     // stream/page kind recovery from the derived output schema (see
     // `unwrapKindSchema`'s doc) — an explicit `meta.tags.streaming`
@@ -447,11 +455,15 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
     // matching `resolveTags`'s own authored-over-inferred precedence for
     // its `outputType` parameter. `paginated` has no tag-lattice
     // equivalent to prioritize over, so it's schema-derived only.
-    const kind = unwrapKindSchema(derived?.outputSchema)
-    const streaming = resolved.streaming ?? (kind.streaming ? true : undefined)
-    const outputSchema = isObjectSchema(kind.outputSchema) ? kind.outputSchema : undefined
+    const kind = unwrapKindSchema(derived?.outputSchema);
+    const streaming = resolved.streaming ?? (kind.streaming ? true : undefined);
+    const outputSchema = isObjectSchema(kind.outputSchema) ? kind.outputSchema : undefined;
 
-    handlers.set(resolvedName, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
+    handlers.set(resolvedName, {
+      handler: child.handler as Handler,
+      sourceMap: mcp.sourceMap ?? {},
+      meta: child.meta,
+    });
 
     return {
       name: resolvedName,
@@ -461,33 +473,38 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
       ...(outputSchema !== undefined ? { outputSchema } : {}),
       ...(annotations !== undefined ? { annotations } : {}),
       ...(streaming !== undefined ? { streaming } : {}),
-      ...(kind.paginated ? { paginated: true, ...(kind.pageStyle !== undefined ? { pageStyle: kind.pageStyle } : {}) } : {}),
+      ...(kind.paginated
+        ? {
+            paginated: true,
+            ...(kind.pageStyle !== undefined ? { pageStyle: kind.pageStyle } : {}),
+          }
+        : {}),
       ...(deprecated ? { deprecated: true } : {}),
-    }
-  }
+    };
+  };
 
   const walk = (n: Node, prefix: string): McpTool[] => {
-    const out: McpTool[] = []
+    const out: McpTool[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
         // ── Leaf node: this is a callable → build an MCP tool ──────────────
-        const name = prefix.length > 0 ? `${prefix}_${key}` : key
-        const tool = buildTool(child, name, key)
-        if (tool !== undefined) out.push(tool)
+        const name = prefix.length > 0 ? `${prefix}_${key}` : key;
+        const tool = buildTool(child, name, key);
+        if (tool !== undefined) out.push(tool);
       } else {
         // ── Branch child ────────────────────────────────────────────────────
         // Static child: use meta.mcp.segment override or the tree key
-        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
-        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
-        out.push(...walk(child, seg))
+        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
+        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
+        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg;
+        out.push(...walk(child, seg));
       }
     }
 
     if (n.fallback !== undefined) {
       // fallback: contribute its name (e.g. "userId") as the segment
-      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
 
       // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
       // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
@@ -497,18 +514,18 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
       // extraction: when the subtree TYPE is itself a leaf, build its tool
       // directly at `seg` (no extra segment beyond the fallback's own name).
       if (isLeaf(n.fallback.subtree)) {
-        const tool = buildTool(n.fallback.subtree, seg, n.fallback.name)
-        if (tool !== undefined) out.push(tool)
+        const tool = buildTool(n.fallback.subtree, seg, n.fallback.name);
+        if (tool !== undefined) out.push(tool);
       } else {
-        out.push(...walk(n.fallback.subtree, seg))
+        out.push(...walk(n.fallback.subtree, seg));
       }
     }
 
-    return out
-  }
+    return out;
+  };
 
-  const tools = walk(n, "")
-  return { tools, handlers }
+  const tools = walk(n, "");
+  return { tools, handlers };
 }
 
 /**
@@ -520,7 +537,7 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
  * @param opts  - Optional derived `schemas` map (from @rhi-zone/fractal-type-ir).
  */
 export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
-  return projectTools(n, opts).tools
+  return projectTools(n, opts).tools;
 }
 
 // ============================================================================
@@ -541,10 +558,10 @@ export function toTools(n: Node, opts: ToToolsOptions = {}): McpTool[] {
 
 /** A fixed MCP resource — one concrete, addressable URI. */
 export type McpResource = {
-  readonly uri: string
-  readonly name: string
-  readonly description: string
-  readonly mimeType: string
+  readonly uri: string;
+  readonly name: string;
+  readonly description: string;
+  readonly mimeType: string;
   /**
    * See `McpTool.streaming` — derived the same way (tag-only here: resource
    * reads have no derived output `SchemaMap` entry to recover an `x-stream`
@@ -554,62 +571,62 @@ export type McpResource = {
    * whether this hint is set (server.ts's `collectStreamedResourceContents`)
    * — this field only affects what `resources/list` advertises up front.
    */
-  readonly streaming?: boolean
+  readonly streaming?: boolean;
   /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
-  readonly deprecated?: boolean
-}
+  readonly deprecated?: boolean;
+};
 
 /** An MCP resource template — a URI carrying `{var}` placeholders bound at read time. */
 export type McpResourceTemplate = {
-  readonly uriTemplate: string
-  readonly name: string
-  readonly description: string
-  readonly mimeType: string
+  readonly uriTemplate: string;
+  readonly name: string;
+  readonly description: string;
+  readonly mimeType: string;
   /** See `McpResource.streaming`. */
-  readonly streaming?: boolean
+  readonly streaming?: boolean;
   /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
-  readonly deprecated?: boolean
-}
+  readonly deprecated?: boolean;
+};
 
 /** A compiled URI template: matches a concrete read URI and binds its captured segments. */
 export type ResourceTemplateHandler = {
-  readonly uriTemplate: string
-  readonly paramNames: readonly string[]
-  readonly mimeType: string
-  readonly pattern: RegExp
-  readonly handler: Handler
+  readonly uriTemplate: string;
+  readonly paramNames: readonly string[];
+  readonly mimeType: string;
+  readonly pattern: RegExp;
+  readonly handler: Handler;
   /** The leaf's `meta.mcp.sourceMap` (empty when none declared). See `Dispatch`. */
-  readonly sourceMap: SourceMap
+  readonly sourceMap: SourceMap;
   /** The leaf's own `LeafMeta` — see `Dispatch.meta`. */
-  readonly meta: LeafMeta
-}
+  readonly meta: LeafMeta;
+};
 
 /** Fixed-resource dispatch entry: the leaf's handler plus its `LeafMeta`. Fixed
  * resources take no input (no sourceMap — see `ProjectResourcesResult`). */
 export type ResourceDispatch = {
-  readonly handler: Handler
-  readonly meta: LeafMeta
-}
+  readonly handler: Handler;
+  readonly meta: LeafMeta;
+};
 
 /** Options for `projectResources`. */
 export type ProjectResourcesOptions = {
   /** URI scheme prefix for derived URIs. Defaults to `"resource://"`. */
-  readonly scheme?: string
-}
+  readonly scheme?: string;
+};
 
 /** `projectResources`'s full result: descriptor arrays plus dispatch tables. */
 export type ProjectResourcesResult = {
-  readonly resources: McpResource[]
-  readonly resourceTemplates: McpResourceTemplate[]
+  readonly resources: McpResource[];
+  readonly resourceTemplates: McpResourceTemplate[];
   /** Fixed-resource dispatch: URI → handler + meta (no template variables to bind). */
-  readonly handlers: ReadonlyMap<string, ResourceDispatch>
+  readonly handlers: ReadonlyMap<string, ResourceDispatch>;
   /** Template-resource dispatch: tried in order against a concrete read URI. */
-  readonly templateHandlers: readonly ResourceTemplateHandler[]
-}
+  readonly templateHandlers: readonly ResourceTemplateHandler[];
+};
 
 /** Escape a string for literal inclusion inside a `RegExp` pattern. */
 function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -619,19 +636,19 @@ function escapeRegExp(s: string): string {
  * URI's captured segments back to named handler input fields.
  */
 function compileUriTemplate(uriTemplate: string): { pattern: RegExp; paramNames: string[] } {
-  const paramNames: string[] = []
-  let patternSource = ""
-  let lastIndex = 0
-  const varPattern = /\{([^}]+)\}/g
-  let match: RegExpExecArray | null
+  const paramNames: string[] = [];
+  let patternSource = "";
+  let lastIndex = 0;
+  const varPattern = /\{([^}]+)\}/g;
+  let match: RegExpExecArray | null;
   while ((match = varPattern.exec(uriTemplate)) !== null) {
-    patternSource += escapeRegExp(uriTemplate.slice(lastIndex, match.index))
-    patternSource += "([^/]+)"
-    paramNames.push(match[1]!)
-    lastIndex = match.index + match[0].length
+    patternSource += escapeRegExp(uriTemplate.slice(lastIndex, match.index));
+    patternSource += "([^/]+)";
+    paramNames.push(match[1]!);
+    lastIndex = match.index + match[0].length;
   }
-  patternSource += escapeRegExp(uriTemplate.slice(lastIndex))
-  return { pattern: new RegExp(`^${patternSource}$`), paramNames }
+  patternSource += escapeRegExp(uriTemplate.slice(lastIndex));
+  return { pattern: new RegExp(`^${patternSource}$`), paramNames };
 }
 
 /**
@@ -656,10 +673,13 @@ function compileUriTemplate(uriTemplate: string): { pattern: RegExp; paramNames:
  * @param n     - The root node to walk.
  * @param opts  - Optional URI `scheme` (defaults to `"resource://"`).
  */
-export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): ProjectResourcesResult {
-  const scheme = opts.scheme ?? "resource://"
-  const handlers = new Map<string, ResourceDispatch>()
-  const templateHandlers: ResourceTemplateHandler[] = []
+export function projectResources(
+  n: Node,
+  opts: ProjectResourcesOptions = {},
+): ProjectResourcesResult {
+  const scheme = opts.scheme ?? "resource://";
+  const handlers = new Map<string, ResourceDispatch>();
+  const templateHandlers: ResourceTemplateHandler[] = [];
 
   // Build one resource-or-template descriptor (+ register its dispatch
   // handler) for a leaf node at fully-resolved `leafSegments` — factored out
@@ -676,32 +696,32 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
     defaultKey: string,
     hasFallback: boolean,
   ): { resource?: McpResource; resourceTemplate?: McpResourceTemplate } | undefined => {
-    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
+    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
 
     // Only leaves explicitly tagged for the resource surface are projected here.
-    if (mcp.as !== "resource") return undefined
+    if (mcp.as !== "resource") return undefined;
 
-    const derivedUri = `${scheme}${leafSegments.join("/")}`
-    const uri = typeof mcp.uri === "string" ? mcp.uri : derivedUri
+    const derivedUri = `${scheme}${leafSegments.join("/")}`;
+    const uri = typeof mcp.uri === "string" ? mcp.uri : derivedUri;
 
-    const name = typeof mcp.name === "string" ? mcp.name : defaultKey
+    const name = typeof mcp.name === "string" ? mcp.name : defaultKey;
 
     const description =
       typeof mcp.description === "string"
         ? mcp.description
         : typeof child.meta.description === "string"
           ? child.meta.description
-          : defaultKey
+          : defaultKey;
 
-    const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json"
+    const mimeType = typeof mcp.mimeType === "string" ? mcp.mimeType : "application/json";
 
     // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
-    const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
-    const deprecated = resolved.deprecated === true
-    const streaming = resolved.streaming
+    const resolved = resolveTags((child.meta.tags ?? {}) as Tags);
+    const deprecated = resolved.deprecated === true;
+    const streaming = resolved.streaming;
 
     if (hasFallback) {
-      const { pattern, paramNames } = compileUriTemplate(uri)
+      const { pattern, paramNames } = compileUriTemplate(uri);
       templateHandlers.push({
         uriTemplate: uri,
         paramNames,
@@ -710,7 +730,7 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
         handler: child.handler as Handler,
         sourceMap: mcp.sourceMap ?? {},
         meta: child.meta,
-      })
+      });
       return {
         resourceTemplate: {
           uriTemplate: uri,
@@ -720,10 +740,10 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
           ...(streaming !== undefined ? { streaming } : {}),
           ...(deprecated ? { deprecated: true } : {}),
         },
-      }
+      };
     }
 
-    handlers.set(uri, { handler: child.handler as Handler, meta: child.meta })
+    handlers.set(uri, { handler: child.handler as Handler, meta: child.meta });
     return {
       resource: {
         uri,
@@ -733,56 +753,56 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
         ...(streaming !== undefined ? { streaming } : {}),
         ...(deprecated ? { deprecated: true } : {}),
       },
-    }
-  }
+    };
+  };
 
   const walk = (
     n: Node,
     segments: readonly string[],
     hasFallback: boolean,
   ): { resources: McpResource[]; resourceTemplates: McpResourceTemplate[] } => {
-    const resources: McpResource[] = []
-    const resourceTemplates: McpResourceTemplate[] = []
+    const resources: McpResource[] = [];
+    const resourceTemplates: McpResourceTemplate[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const built = buildResource(child, [...segments, key], key, hasFallback)
-        if (built?.resource !== undefined) resources.push(built.resource)
-        if (built?.resourceTemplate !== undefined) resourceTemplates.push(built.resourceTemplate)
+        const built = buildResource(child, [...segments, key], key, hasFallback);
+        if (built?.resource !== undefined) resources.push(built.resource);
+        if (built?.resourceTemplate !== undefined) resourceTemplates.push(built.resourceTemplate);
       } else {
         // ── Branch child ────────────────────────────────────────────────────
-        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
-        const sub = walk(child, [...segments, rawSeg], hasFallback)
-        resources.push(...sub.resources)
-        resourceTemplates.push(...sub.resourceTemplates)
+        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
+        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
+        const sub = walk(child, [...segments, rawSeg], hasFallback);
+        resources.push(...sub.resources);
+        resourceTemplates.push(...sub.resourceTemplates);
       }
     }
 
     if (n.fallback !== undefined) {
       // fallback: contribute its name as a `{var}` template segment
-      const fallbackSegments = [...segments, `{${n.fallback.name}}`]
+      const fallbackSegments = [...segments, `{${n.fallback.name}}`];
 
       // See `projectTools`' identical fallback-leaf handling for why this
       // check exists: `fallback.subtree` may itself be a bare leaf, which
       // `walk` (branch-shaped: reads `.children`) would otherwise silently
       // drop.
       if (isLeaf(n.fallback.subtree)) {
-        const built = buildResource(n.fallback.subtree, fallbackSegments, n.fallback.name, true)
-        if (built?.resource !== undefined) resources.push(built.resource)
-        if (built?.resourceTemplate !== undefined) resourceTemplates.push(built.resourceTemplate)
+        const built = buildResource(n.fallback.subtree, fallbackSegments, n.fallback.name, true);
+        if (built?.resource !== undefined) resources.push(built.resource);
+        if (built?.resourceTemplate !== undefined) resourceTemplates.push(built.resourceTemplate);
       } else {
-        const sub = walk(n.fallback.subtree, fallbackSegments, true)
-        resources.push(...sub.resources)
-        resourceTemplates.push(...sub.resourceTemplates)
+        const sub = walk(n.fallback.subtree, fallbackSegments, true);
+        resources.push(...sub.resources);
+        resourceTemplates.push(...sub.resourceTemplates);
       }
     }
 
-    return { resources, resourceTemplates }
-  }
+    return { resources, resourceTemplates };
+  };
 
-  const { resources, resourceTemplates } = walk(n, [], false)
-  return { resources, resourceTemplates, handlers, templateHandlers }
+  const { resources, resourceTemplates } = walk(n, [], false);
+  return { resources, resourceTemplates, handlers, templateHandlers };
 }
 
 // ============================================================================
@@ -800,33 +820,33 @@ export function projectResources(n: Node, opts: ProjectResourcesOptions = {}): P
 
 /** One argument an MCP prompt accepts. */
 export type McpPromptArgument = {
-  readonly name: string
-  readonly description?: string
-  readonly required?: boolean
-}
+  readonly name: string;
+  readonly description?: string;
+  readonly required?: boolean;
+};
 
 /** An MCP prompt descriptor — one per leaf tagged `meta.mcp.as: "prompt"`. */
 export type McpPrompt = {
-  readonly name: string
-  readonly description: string
-  readonly arguments?: McpPromptArgument[]
+  readonly name: string;
+  readonly description: string;
+  readonly arguments?: McpPromptArgument[];
   /** See `McpResource.streaming` — tag-only here too: prompts have no `outputSchema` equivalent to unwrap `x-stream` from (a prompt's derived schema, `ToolSchema.outputSchema`, describes the underlying handler's domain output, not the `GetPromptResult.messages` shape `collectStreamedMessages` produces). */
-  readonly streaming?: boolean
+  readonly streaming?: boolean;
   /** See `McpTool.deprecated` — derived from `meta.tags.deprecated`. */
-  readonly deprecated?: boolean
-}
+  readonly deprecated?: boolean;
+};
 
 /** Options for `projectPrompts`. */
 export type ProjectPromptsOptions = {
   /** Prompt-name → derived input schema + JSDoc description (from codegen). Same shape `projectTools` consumes. */
-  readonly schemas?: SchemaMap
-}
+  readonly schemas?: SchemaMap;
+};
 
 /** `projectPrompts`'s full result: the flat descriptor array plus a name→handler map for dispatch. */
 export type ProjectPromptsResult = {
-  readonly prompts: McpPrompt[]
-  readonly handlers: ReadonlyMap<string, Dispatch>
-}
+  readonly prompts: McpPrompt[];
+  readonly handlers: ReadonlyMap<string, Dispatch>;
+};
 
 /**
  * Derive MCP `PromptArgument[]` from a JSON-Schema `inputSchema`'s
@@ -835,22 +855,25 @@ export type ProjectPromptsResult = {
  * no `properties` (e.g. the `{ type: "object" }` placeholder, or no schema
  * supplied at all).
  */
-function argumentsFromSchema(schema: Record<string, unknown> | undefined): McpPromptArgument[] | undefined {
-  const properties = schema?.properties as Record<string, Record<string, unknown>> | undefined
-  if (properties === undefined || typeof properties !== "object") return undefined
+function argumentsFromSchema(
+  schema: Record<string, unknown> | undefined,
+): McpPromptArgument[] | undefined {
+  const properties = schema?.properties as Record<string, Record<string, unknown>> | undefined;
+  if (properties === undefined || typeof properties !== "object") return undefined;
 
-  const required = Array.isArray(schema?.required) ? (schema.required as unknown[]) : []
+  const required = Array.isArray(schema?.required) ? (schema.required as unknown[]) : [];
 
   const args = Object.entries(properties).map(([name, propSchema]) => {
-    const description = typeof propSchema.description === "string" ? propSchema.description : undefined
+    const description =
+      typeof propSchema.description === "string" ? propSchema.description : undefined;
     return {
       name,
       ...(description !== undefined ? { description } : {}),
       ...(required.includes(name) ? { required: true } : {}),
-    }
-  })
+    };
+  });
 
-  return args.length > 0 ? args : undefined
+  return args.length > 0 ? args : undefined;
 }
 
 /**
@@ -867,24 +890,28 @@ function argumentsFromSchema(schema: Record<string, unknown> | undefined): McpPr
  * @param opts  - Optional derived `schemas` map (same shape `projectTools` consumes).
  */
 export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): ProjectPromptsResult {
-  const schemas = opts.schemas ?? {}
-  const handlers = new Map<string, Dispatch>()
+  const schemas = opts.schemas ?? {};
+  const handlers = new Map<string, Dispatch>();
 
   // Build one McpPrompt (+ register its dispatch handler) for a leaf node at
   // a fully-resolved `name` — see `projectTools`' `buildTool` for why this
   // is factored out (same reason: a `fallback.subtree` may itself be a bare
   // leaf, which needs the identical construction at a name with no extra
   // segment beyond the fallback's own name).
-  const buildPrompt = (child: Node, name: string, descriptionFallback: string): McpPrompt | undefined => {
-    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
+  const buildPrompt = (
+    child: Node,
+    name: string,
+    descriptionFallback: string,
+  ): McpPrompt | undefined => {
+    const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
 
     // Only leaves explicitly tagged for the prompt surface are projected here.
-    if (mcp.as !== "prompt") return undefined
+    if (mcp.as !== "prompt") return undefined;
 
     // meta.mcp.name overrides the derived name entirely
-    const resolvedName = typeof mcp.name === "string" ? mcp.name : name
+    const resolvedName = typeof mcp.name === "string" ? mcp.name : name;
 
-    const derived = schemas[resolvedName]
+    const derived = schemas[resolvedName];
 
     // Description: meta.mcp.description > meta.description > JSDoc-derived
     // (from codegen) > descriptionFallback.
@@ -895,15 +922,19 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
           ? child.meta.description
           : typeof derived?.description === "string"
             ? derived.description
-            : descriptionFallback
+            : descriptionFallback;
 
-    const args = argumentsFromSchema(derived?.inputSchema)
+    const args = argumentsFromSchema(derived?.inputSchema);
 
     // deprecated/streaming: tree-level meta.tags, three-valued (omit unless asserted)
-    const resolved = resolveTags((child.meta.tags ?? {}) as Tags)
-    const deprecated = resolved.deprecated === true
+    const resolved = resolveTags((child.meta.tags ?? {}) as Tags);
+    const deprecated = resolved.deprecated === true;
 
-    handlers.set(resolvedName, { handler: child.handler as Handler, sourceMap: mcp.sourceMap ?? {}, meta: child.meta })
+    handlers.set(resolvedName, {
+      handler: child.handler as Handler,
+      sourceMap: mcp.sourceMap ?? {},
+      meta: child.meta,
+    });
 
     return {
       name: resolvedName,
@@ -911,44 +942,44 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
       ...(args !== undefined ? { arguments: args } : {}),
       ...(resolved.streaming !== undefined ? { streaming: resolved.streaming } : {}),
       ...(deprecated ? { deprecated: true } : {}),
-    }
-  }
+    };
+  };
 
   const walk = (n: Node, prefix: string): McpPrompt[] => {
-    const out: McpPrompt[] = []
+    const out: McpPrompt[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
         // Name: meta.mcp.name wins; else underscore-join prefix + leaf key (same as projectTools).
-        const name = prefix.length > 0 ? `${prefix}_${key}` : key
-        const prompt = buildPrompt(child, name, key)
-        if (prompt !== undefined) out.push(prompt)
+        const name = prefix.length > 0 ? `${prefix}_${key}` : key;
+        const prompt = buildPrompt(child, name, key);
+        if (prompt !== undefined) out.push(prompt);
       } else {
         // ── Branch child ────────────────────────────────────────────────────
-        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
-        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg
-        out.push(...walk(child, seg))
+        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
+        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
+        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg;
+        out.push(...walk(child, seg));
       }
     }
 
     if (n.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
 
       // See `projectTools`' identical fallback-leaf handling: `fallback.subtree`
       // may itself be a bare leaf, which `walk` (branch-shaped) would
       // otherwise silently drop.
       if (isLeaf(n.fallback.subtree)) {
-        const prompt = buildPrompt(n.fallback.subtree, seg, n.fallback.name)
-        if (prompt !== undefined) out.push(prompt)
+        const prompt = buildPrompt(n.fallback.subtree, seg, n.fallback.name);
+        if (prompt !== undefined) out.push(prompt);
       } else {
-        out.push(...walk(n.fallback.subtree, seg))
+        out.push(...walk(n.fallback.subtree, seg));
       }
     }
 
-    return out
-  }
+    return out;
+  };
 
-  const prompts = walk(n, "")
-  return { prompts, handlers }
+  const prompts = walk(n, "");
+  return { prompts, handlers };
 }

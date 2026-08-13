@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { isA, quote } from "./codegen-helpers.ts";
 
 // ============================================================================
 // Elixir projector — TypeRef -> idiomatic Elixir 1.17+ struct/typespec source,
@@ -102,55 +102,61 @@ import { isA, quote } from "./codegen-helpers.ts"
 // ============================================================================
 
 type FieldDecl = {
-  name: string
-  type: string
-  optional: boolean
-  comment?: string
-  deprecated?: boolean
-}
+  name: string;
+  type: string;
+  optional: boolean;
+  comment?: string;
+  deprecated?: boolean;
+};
 
 type Decl =
-  | { kind: "struct"; name: string; fields: FieldDecl[]; docstring?: string; deprecated?: string | true }
+  | {
+      kind: "struct";
+      name: string;
+      fields: FieldDecl[];
+      docstring?: string;
+      deprecated?: string | true;
+    }
   | { kind: "atoms"; name: string; members: readonly string[]; docstring?: string }
-  | { kind: "alias"; name: string; type: string; docstring?: string }
+  | { kind: "alias"; name: string; type: string; docstring?: string };
 
 interface Ctx {
-  decls: Decl[]
+  decls: Decl[];
   // Module names already emitted as a top-level `defmodule` — guards
   // against re-emitting the same nested type twice and against infinite
   // recursion for a directly self-referential object graph (mirrors
   // `python-dataclass.ts`'s `ctx.seen`; `ref`/named declarations are the
   // normal way to express recursion instead — see the `ref` handler below).
-  seen: Set<string>
+  seen: Set<string>;
 }
 
-type Converter = (shape: TypeShape, ref: TypeRef, ctxName: string, ctx: Ctx) => string
+type Converter = (shape: TypeShape, ref: TypeRef, ctxName: string, ctx: Ctx) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // A valid BARE Elixir atom/identifier: lowercase-or-underscore leading
 // character, alphanumerics/underscores after, optional trailing `?`/`!`.
 // Anything else needs the `:"quoted"` atom form (field names) or the
 // `"quoted": value` keyword form (map/struct keys) instead.
 function isBareAtomIdentifier(value: string): boolean {
-  return /^[a-z_][a-zA-Z0-9_]*[?!]?$/.test(value)
+  return /^[a-z_][a-zA-Z0-9_]*[?!]?$/.test(value);
 }
 
 // The `key` half of a `key: value` map/keyword/struct-field entry —
 // unquoted when `name` is already a legal bare atom, else the quoted-atom
 // keyword form Elixir accepts directly in that position (e.g. `"Content-Type": v`).
 function fieldKey(name: string): string {
-  return isBareAtomIdentifier(name) ? name : quote(name)
+  return isBareAtomIdentifier(name) ? name : quote(name);
 }
 
 // A standalone atom literal (e.g. for `@enforce_keys`/`defstruct`'s
 // no-default entries, and for enum members) — `:name` when bare, `:"name"`
 // otherwise.
 function atomLiteral(value: string): string {
-  return isBareAtomIdentifier(value) ? `:${value}` : `:${quote(value)}`
+  return isBareAtomIdentifier(value) ? `:${value}` : `:${quote(value)}`;
 }
 
 // Sanitizes an arbitrary field/context name into a legal Elixir module alias
@@ -160,10 +166,10 @@ function atomLiteral(value: string): string {
 // (e.g. `rust-serde.ts`'s `toSnakeCase`), just producing PascalCase instead
 // of snake_case since Elixir module aliases require an uppercase start.
 function moduleName(name: string): string {
-  const parts = name.split(/[^a-zA-Z0-9]+/).filter((part) => part.length > 0)
-  const pascal = parts.map((part) => part[0]!.toUpperCase() + part.slice(1)).join("")
-  if (pascal.length === 0) return "Anonymous"
-  return /^[0-9]/.test(pascal) ? `Type${pascal}` : pascal
+  const parts = name.split(/[^a-zA-Z0-9]+/).filter((part) => part.length > 0);
+  const pascal = parts.map((part) => part[0]!.toUpperCase() + part.slice(1)).join("");
+  if (pascal.length === 0) return "Anonymous";
+  return /^[0-9]/.test(pascal) ? `Type${pascal}` : pascal;
 }
 
 // True when `variant` is an object carrying a literal-string value for
@@ -171,11 +177,11 @@ function moduleName(name: string): string {
 // check `kotlin-kotlinx.ts`'s `discriminantValue` performs for its own
 // sealed-class encoding.
 function discriminantValue(variant: TypeRef, discriminator: string): string | undefined {
-  if (!isA(variant.shape.kind, "object")) return undefined
-  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator]
-  if (field === undefined || field.shape.kind !== "literal") return undefined
-  const value = (field.shape as TypeShape & { kind: "literal" }).value
-  return typeof value === "string" ? value : undefined
+  if (!isA(variant.shape.kind, "object")) return undefined;
+  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator];
+  if (field === undefined || field.shape.kind !== "literal") return undefined;
+  const value = (field.shape as TypeShape & { kind: "literal" }).value;
+  return typeof value === "string" ? value : undefined;
 }
 
 /** Declares (or reuses) a `defmodule <rawName> do ... end` struct for an
@@ -183,36 +189,41 @@ function discriminantValue(variant: TypeRef, discriminator: string): string | un
  * discriminated-union variant declaration (which needs to name each variant
  * from its discriminant tag rather than from field/array context). */
 function declareStruct(rawName: string, ref: TypeRef, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const name = moduleName(rawName)
-  if (ctx.seen.has(name)) return `${name}.t()`
-  ctx.seen.add(name)
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const name = moduleName(rawName);
+  if (ctx.seen.has(name)) return `${name}.t()`;
+  ctx.seen.add(name);
 
-  const required: FieldDecl[] = []
-  const optional: FieldDecl[] = []
+  const required: FieldDecl[] = [];
+  const optional: FieldDecl[] = [];
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const rawType = toElixirType(fieldRef, fieldName, ctx)
-    const isOptional = fieldRef.meta.optional === true
-    const isNullable = fieldRef.meta.nullable === true
+    const rawType = toElixirType(fieldRef, fieldName, ctx);
+    const isOptional = fieldRef.meta.optional === true;
+    const isNullable = fieldRef.meta.nullable === true;
     // `nullable` already appended `| nil` inside `toElixirType` — avoid
     // double-appending when the field is *also* omittable.
-    const fieldType = isOptional && !isNullable ? `${rawType} | nil` : rawType
-    const description = typeof fieldRef.meta.description === "string" ? fieldRef.meta.description : undefined
-    const deprecated = fieldRef.meta.deprecated === true
-    const decl: FieldDecl = { name: fieldName, type: fieldType, optional: isOptional }
-    if (description !== undefined) decl.comment = description
-    if (deprecated) decl.deprecated = true
-    ;(isOptional ? optional : required).push(decl)
+    const fieldType = isOptional && !isNullable ? `${rawType} | nil` : rawType;
+    const description =
+      typeof fieldRef.meta.description === "string" ? fieldRef.meta.description : undefined;
+    const deprecated = fieldRef.meta.deprecated === true;
+    const decl: FieldDecl = { name: fieldName, type: fieldType, optional: isOptional };
+    if (description !== undefined) decl.comment = description;
+    if (deprecated) decl.deprecated = true;
+    (isOptional ? optional : required).push(decl);
   }
 
-  const docstring = typeof ref.meta.description === "string" ? ref.meta.description : undefined
+  const docstring = typeof ref.meta.description === "string" ? ref.meta.description : undefined;
   const deprecated =
-    typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : ref.meta.deprecated === true ? true : undefined
-  const decl: Decl = { kind: "struct", name, fields: [...required, ...optional] }
-  if (docstring !== undefined) decl.docstring = docstring
-  if (deprecated !== undefined) decl.deprecated = deprecated
-  ctx.decls.push(decl)
-  return `${name}.t()`
+    typeof ref.meta.deprecated === "string"
+      ? ref.meta.deprecated
+      : ref.meta.deprecated === true
+        ? true
+        : undefined;
+  const decl: Decl = { kind: "struct", name, fields: [...required, ...optional] };
+  if (docstring !== undefined) decl.docstring = docstring;
+  if (deprecated !== undefined) decl.deprecated = deprecated;
+  ctx.decls.push(decl);
+  return `${name}.t()`;
 }
 
 const handlers: Record<string, Converter> = {
@@ -269,46 +280,47 @@ const handlers: Record<string, Converter> = {
   // responsible for `className` already being a resolvable Elixir alias.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `list(${toElixirType(s.element, ctxName, ctx)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `list(${toElixirType(s.element, ctxName, ctx)})`;
   },
   tuple: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    const parts = s.elements.map((element, i) => toElixirType(element, `${ctxName}${i + 1}`, ctx))
-    return `{${parts.join(", ")}}`
+    const s = shape as TypeShape & { kind: "tuple" };
+    const parts = s.elements.map((element, i) => toElixirType(element, `${ctxName}${i + 1}`, ctx));
+    return `{${parts.join(", ")}}`;
   },
   // No native async-stream construct — `Enumerable.t()` (the protocol every
   // lazy/eager collection implements) is the closest broad analogue, same
   // honest-degrade reasoning `ruby-sorbet.ts` uses for its own `Enumerator`
   // stream fallback.
   stream: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `Enumerable.t(${toElixirType(s.element, ctxName, ctx)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `Enumerable.t(${toElixirType(s.element, ctxName, ctx)})`;
   },
   // No native pagination construct — degrades to the element list, same
   // convention every other structural projector in this package uses.
   page: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `list(${toElixirType(s.element, ctxName, ctx)})`
+    const s = shape as TypeShape & { kind: "page" };
+    return `list(${toElixirType(s.element, ctxName, ctx)})`;
   },
   map: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "map" }
-    const key = toElixirType(s.key, `${ctxName}Key`, ctx)
-    const value = toElixirType(s.value, `${ctxName}Value`, ctx)
-    return `%{${key} => ${value}}`
+    const s = shape as TypeShape & { kind: "map" };
+    const key = toElixirType(s.key, `${ctxName}Key`, ctx);
+    const value = toElixirType(s.value, `${ctxName}Value`, ctx);
+    return `%{${key} => ${value}}`;
   },
   union: (shape, ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "union" }
-    if (s.variants.length === 0) return "any()"
-    const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
-    const allObjects = s.variants.every((variant) => isA(variant.shape.kind, "object"))
+    const s = shape as TypeShape & { kind: "union" };
+    if (s.variants.length === 0) return "any()";
+    const discriminator =
+      typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
+    const allObjects = s.variants.every((variant) => isA(variant.shape.kind, "object"));
     if (discriminator !== undefined && allObjects) {
       const parts = s.variants.map((variant, i) => {
-        const tag = discriminantValue(variant, discriminator)
-        const variantName = tag !== undefined ? tag : `Variant${i + 1}`
-        return declareStruct(variantName, variant, ctx)
-      })
-      return [...new Set(parts)].join(" | ")
+        const tag = discriminantValue(variant, discriminator);
+        const variantName = tag !== undefined ? tag : `Variant${i + 1}`;
+        return declareStruct(variantName, variant, ctx);
+      });
+      return [...new Set(parts)].join(" | ");
     }
     // Elixir typespecs support inline `|` unions directly in any type
     // position (field, list element, …) — unlike Kotlin/Ruby, whose type
@@ -316,30 +328,32 @@ const handlers: Record<string, Converter> = {
     // one possible shape, a non-discriminated union here needs no promoted
     // wrapper module of its own; only object/enum VARIANTS still need one
     // (handled recursively by their own handlers below).
-    const parts = s.variants.map((variant, i) => toElixirType(variant, `${ctxName}Variant${i + 1}`, ctx))
-    return [...new Set(parts)].join(" | ")
+    const parts = s.variants.map((variant, i) =>
+      toElixirType(variant, `${ctxName}Variant${i + 1}`, ctx),
+    );
+    return [...new Set(parts)].join(" | ");
   },
   // No literal-value typespec for strings (Erlang/Elixir's type system has
   // no string-singleton type the way TS/Python's `Literal[...]` do) —
   // degrades to `String.t()`. Integers, atoms (`nil`/booleans) DO have
   // native literal-typespec forms, so those render exactly.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "nil"
-    if (typeof s.value === "string") return "String.t()"
-    if (typeof s.value === "boolean") return s.value ? "true" : "false"
-    return Number.isInteger(s.value) ? String(s.value) : "float()"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "nil";
+    if (typeof s.value === "string") return "String.t()";
+    if (typeof s.value === "boolean") return s.value ? "true" : "false";
+    return Number.isInteger(s.value) ? String(s.value) : "float()";
   },
   enum: (shape, ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    const name = moduleName(ctxName)
-    if (ctx.seen.has(name)) return `${name}.t()`
-    ctx.seen.add(name)
-    const docstring = typeof ref.meta.description === "string" ? ref.meta.description : undefined
-    const decl: Decl = { kind: "atoms", name, members: s.members }
-    if (docstring !== undefined) decl.docstring = docstring
-    ctx.decls.push(decl)
-    return `${name}.t()`
+    const s = shape as TypeShape & { kind: "enum" };
+    const name = moduleName(ctxName);
+    if (ctx.seen.has(name)) return `${name}.t()`;
+    ctx.seen.add(name);
+    const docstring = typeof ref.meta.description === "string" ? ref.meta.description : undefined;
+    const decl: Decl = { kind: "atoms", name, members: s.members };
+    if (docstring !== undefined) decl.docstring = docstring;
+    ctx.decls.push(decl);
+    return `${name}.t()`;
   },
   ref: (shape) => `${(shape as TypeShape & { kind: "ref" }).target}.t()`,
   // No intersection construct in Elixir's type vocabulary; when every member
@@ -348,26 +362,26 @@ const handlers: Record<string, Converter> = {
   // structurally) — same convention `python-dataclass.ts`'s intersection
   // handler uses — otherwise degrades to `any()`.
   intersection: (shape, ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "intersection" }
+    const s = shape as TypeShape & { kind: "intersection" };
     if (s.members.length > 0 && s.members.every((member) => isA(member.shape.kind, "object"))) {
-      const merged: Record<string, TypeRef> = {}
+      const merged: Record<string, TypeRef> = {};
       for (const member of s.members) {
-        Object.assign(merged, (member.shape as TypeShape & { kind: "object" }).fields)
+        Object.assign(merged, (member.shape as TypeShape & { kind: "object" }).fields);
       }
-      const mergedRef: TypeRef = { shape: { kind: "object", fields: merged }, meta: ref.meta }
-      return declareStruct(ctxName, mergedRef, ctx)
+      const mergedRef: TypeRef = { shape: { kind: "object", fields: merged }, meta: ref.meta };
+      return declareStruct(ctxName, mergedRef, ctx);
     }
-    return "any()"
+    return "any()";
   },
   // https://hexdocs.pm/elixir/typespecs.html#anonymous-functions — Elixir's
   // `(params -> return)` anonymous-function typespec form. `thisType` has
   // no representation (Elixir functions don't rebind an implicit `self`),
   // so it's dropped, same as `ruby-sorbet.ts`'s `T.proc` handler.
   function: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p, i) => toElixirType(p.type, `${ctxName}Param${i + 1}`, ctx))
-    const returnType = toElixirType(s.returnType, `${ctxName}Return`, ctx)
-    return params.length === 0 ? `(-> ${returnType})` : `(${params.join(", ")} -> ${returnType})`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p, i) => toElixirType(p.type, `${ctxName}Param${i + 1}`, ctx));
+    const returnType = toElixirType(s.returnType, `${ctxName}Return`, ctx);
+    return params.length === 0 ? `(-> ${returnType})` : `(${params.join(", ")} -> ${returnType})`;
   },
   // `method` has no explicit entry — falls back to `function`'s `(... -> ...)`
   // rendering via `registerParent("method", "function")` (index.ts), same as
@@ -378,7 +392,7 @@ const handlers: Record<string, Converter> = {
   // struct field's type) — degrades to `any()`, same convention
   // `ruby-sorbet.ts`'s `interface -> T.untyped` handler uses.
   interface: leaf("any()"),
-}
+};
 
 /** Convert a `TypeRef` to an Elixir type EXPRESSION (e.g. `list(String.t())`,
  * `integer() | nil`, or a `<Module>.t()` reference for object/enum/
@@ -387,58 +401,61 @@ const handlers: Record<string, Converter> = {
  * needs to declare (sanitized via `moduleName`); side effects (new `Decl`s)
  * land on `ctx`. */
 export function toElixirType(ref: TypeRef, ctxName: string, ctx: Ctx): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  let type = converter === undefined ? "any()" : converter(ref.shape, ref, ctxName, ctx)
+  const converter = resolve(ref.shape.kind, handlers);
+  let type = converter === undefined ? "any()" : converter(ref.shape, ref, ctxName, ctx);
   if (ref.meta.nullable === true && !type.split(" | ").includes("nil")) {
-    type = `${type} | nil`
+    type = `${type} | nil`;
   }
-  return type
+  return type;
 }
 
 function renderDecl(decl: Decl): string {
-  const lines: string[] = [`defmodule ${decl.name} do`]
+  const lines: string[] = [`defmodule ${decl.name} do`];
   if (decl.kind !== "alias" || decl.docstring !== undefined) {
-    if (decl.docstring !== undefined) lines.push(`  @moduledoc ${quote(decl.docstring)}`)
+    if (decl.docstring !== undefined) lines.push(`  @moduledoc ${quote(decl.docstring)}`);
   }
 
   if (decl.kind === "struct") {
     if (decl.deprecated !== undefined) {
-      lines.push(`  # Deprecated${decl.deprecated === true ? "" : `: ${decl.deprecated}`}`)
+      lines.push(`  # Deprecated${decl.deprecated === true ? "" : `: ${decl.deprecated}`}`);
     }
-    const required = decl.fields.filter((f) => !f.optional)
-    const optional = decl.fields.filter((f) => f.optional)
+    const required = decl.fields.filter((f) => !f.optional);
+    const optional = decl.fields.filter((f) => f.optional);
     if (required.length > 0) {
-      lines.push(`  @enforce_keys [${required.map((f) => atomLiteral(f.name)).join(", ")}]`)
+      lines.push(`  @enforce_keys [${required.map((f) => atomLiteral(f.name)).join(", ")}]`);
     }
-    lines.push("  @derive Jason.Encoder")
+    lines.push("  @derive Jason.Encoder");
     const structEntries = [
       ...required.map((f) => atomLiteral(f.name)),
       ...optional.map((f) => `${fieldKey(f.name)}: nil`),
-    ]
-    lines.push(structEntries.length === 0 ? "  defstruct []" : `  defstruct [${structEntries.join(", ")}]`)
-    lines.push("")
+    ];
+    lines.push(
+      structEntries.length === 0 ? "  defstruct []" : `  defstruct [${structEntries.join(", ")}]`,
+    );
+    lines.push("");
     if (decl.fields.length === 0) {
-      lines.push("  @type t :: %__MODULE__{}")
+      lines.push("  @type t :: %__MODULE__{}");
     } else {
-      lines.push("  @type t :: %__MODULE__{")
-      const all = [...required, ...optional]
+      lines.push("  @type t :: %__MODULE__{");
+      const all = [...required, ...optional];
       all.forEach((f, i) => {
-        if (f.comment !== undefined) lines.push(`    # ${f.comment}`)
-        if (f.deprecated === true) lines.push("    # @deprecated")
-        const comma = i === all.length - 1 ? "" : ","
-        lines.push(`    ${fieldKey(f.name)}: ${f.type}${comma}`)
-      })
-      lines.push("  }")
+        if (f.comment !== undefined) lines.push(`    # ${f.comment}`);
+        if (f.deprecated === true) lines.push("    # @deprecated");
+        const comma = i === all.length - 1 ? "" : ",";
+        lines.push(`    ${fieldKey(f.name)}: ${f.type}${comma}`);
+      });
+      lines.push("  }");
     }
   } else if (decl.kind === "atoms") {
-    const members = decl.members.length === 0 ? "atom()" : decl.members.map(atomLiteral).join(" | ")
-    lines.push(`  @type t :: ${members}`)
+    const members =
+      decl.members.length === 0 ? "atom()" : decl.members.map(atomLiteral).join(" | ");
+    lines.push(`  @type t :: ${members}`);
   } else {
-    lines.push(`  @type t :: ${decl.type}`)
+    lines.push(`  @type t :: ${decl.type}`);
   }
 
-  lines.push("end")
-  return lines.join("\n")
+  lines.push("end");
+  return lines.join("\n");
 }
 
 /**
@@ -453,9 +470,9 @@ function renderDecl(decl: Decl): string {
  * projectors' default root name).
  */
 export function toElixir(ref: TypeRef, name = "Root"): string {
-  const ctx: Ctx = { decls: [], seen: new Set() }
-  const expr = toElixirType(ref, name, ctx)
-  const wrapperName = moduleName(name)
+  const ctx: Ctx = { decls: [], seen: new Set() };
+  const expr = toElixirType(ref, name, ctx);
+  const wrapperName = moduleName(name);
 
   // Object/enum/discriminated-union shapes already emit their own
   // `defmodule <wrapperName>` (via the `seen`-guarded pushes above) — no
@@ -463,10 +480,11 @@ export function toElixir(ref: TypeRef, name = "Root"): string {
   // plain unions, refs, …) gets wrapped in one now, since Elixir's
   // `@type`/`@moduledoc` have no legal bare-top-level-statement form to fall
   // back to the way `python-dataclass.ts`/`kotlin-kotlinx.ts` can.
-  const hasOwnDeclaration = expr === `${wrapperName}.t()` && ctx.decls.some((decl) => decl.name === wrapperName)
+  const hasOwnDeclaration =
+    expr === `${wrapperName}.t()` && ctx.decls.some((decl) => decl.name === wrapperName);
   if (!hasOwnDeclaration) {
-    ctx.decls.push({ kind: "alias", name: wrapperName, type: expr })
+    ctx.decls.push({ kind: "alias", name: wrapperName, type: expr });
   }
 
-  return `${ctx.decls.map(renderDecl).join("\n\n")}\n`
+  return `${ctx.decls.map(renderDecl).join("\n\n")}\n`;
 }

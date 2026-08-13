@@ -32,11 +32,17 @@
 // machinery exists because compiled validator FUNCTIONS need custom control
 // flow per shape; a schema is just data.
 
-import type ts from "typescript"
-import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
-import { createExtractorProgram } from "./extract.ts"
-import { extractToolSchemas, extractToolTypeRefs, type SchemaMap, type ToolSchema, type ToolTypeInfo } from "./tree.ts"
-import type { JsonSchema } from "./extract.ts"
+import type ts from "typescript";
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema";
+import { createExtractorProgram } from "./extract.ts";
+import {
+  extractToolSchemas,
+  extractToolTypeRefs,
+  type SchemaMap,
+  type ToolSchema,
+  type ToolTypeInfo,
+} from "./tree.ts";
+import type { JsonSchema } from "./extract.ts";
 import {
   checkCache,
   computeLeafFingerprint,
@@ -44,7 +50,7 @@ import {
   writeCacheMetadata,
   type CacheLocationOptions,
   type CachedBuildOutcome,
-} from "./cache.ts"
+} from "./cache.ts";
 
 /**
  * Extract every leaf op's derived JSON-Schema from `entryFile` and render it
@@ -57,9 +63,9 @@ import {
  * kind) or twice per entry.
  */
 export function buildSchemaModuleSource(entryFile: string, program?: ts.Program): string {
-  const programOpt = program === undefined ? {} : { program }
-  const schemas = extractToolSchemas(entryFile, programOpt)
-  return renderSchemaModule(schemas)
+  const programOpt = program === undefined ? {} : { program };
+  const schemas = extractToolSchemas(entryFile, programOpt);
+  return renderSchemaModule(schemas);
 }
 
 /** Render a `SchemaMap` value to TS module source — split out from
@@ -73,15 +79,15 @@ function renderSchemaModule(schemas: SchemaMap): string {
     "",
     `export const schemas: SchemaMap = ${JSON.stringify(schemas, null, 2)}`,
     "",
-  ]
-  return lines.join("\n")
+  ];
+  return lines.join("\n");
 }
 
 /**
  * Build the schema module for `entryFile` and write it to `outFile`.
  */
 export async function writeSchemaModule(entryFile: string, outFile: string): Promise<void> {
-  await Bun.write(outFile, buildSchemaModuleSource(entryFile))
+  await Bun.write(outFile, buildSchemaModuleSource(entryFile));
 }
 
 // ============================================================================
@@ -94,12 +100,12 @@ export async function writeSchemaModule(entryFile: string, outFile: string): Pro
 // ============================================================================
 
 export type SchemaCarryForwardState = {
-  readonly leafFingerprints: Readonly<Record<string, string>>
-  readonly leafArtifacts: Readonly<Record<string, unknown>>
-}
+  readonly leafFingerprints: Readonly<Record<string, string>>;
+  readonly leafArtifacts: Readonly<Record<string, unknown>>;
+};
 
 function isToolSchema(v: unknown): v is ToolSchema {
-  return typeof v === "object" && v !== null && "inputSchema" in v
+  return typeof v === "object" && v !== null && "inputSchema" in v;
 }
 
 /** One leaf's derived `ToolSchema` — mirrors `extractToolSchemas`'s own
@@ -111,15 +117,15 @@ function toolSchemaFrom(info: ToolTypeInfo): ToolSchema {
     inputSchema: toJsonSchema(info.input) as JsonSchema,
     ...(info.output !== undefined ? { outputSchema: toJsonSchema(info.output) as JsonSchema } : {}),
     ...(info.description !== undefined ? { description: info.description } : {}),
-  }
+  };
 }
 
 export type SchemaIncrementalResult = {
-  readonly source: string
-  readonly leafFingerprints: Record<string, string>
-  readonly leafArtifacts: Record<string, ToolSchema>
-  readonly changedLeaves: readonly string[]
-}
+  readonly source: string;
+  readonly leafFingerprints: Record<string, string>;
+  readonly leafArtifacts: Record<string, ToolSchema>;
+  readonly changedLeaves: readonly string[];
+};
 
 /**
  * `buildSchemaModuleSource`'s Tier-2 sibling: extracts every leaf's TypeRef
@@ -133,28 +139,37 @@ export function buildSchemaModuleSourceIncremental(
   program: ts.Program | undefined,
   prior: SchemaCarryForwardState | undefined,
 ): SchemaIncrementalResult {
-  const programOpt = program === undefined ? {} : { program }
-  const types = extractToolTypeRefs(entryFile, programOpt)
+  const programOpt = program === undefined ? {} : { program };
+  const types = extractToolTypeRefs(entryFile, programOpt);
 
-  const leafFingerprints: Record<string, string> = {}
-  const leafArtifacts: Record<string, ToolSchema> = {}
-  const changedLeaves: string[] = []
+  const leafFingerprints: Record<string, string> = {};
+  const leafArtifacts: Record<string, ToolSchema> = {};
+  const changedLeaves: string[] = [];
 
   for (const [name, info] of Object.entries(types)) {
-    const fingerprint = computeLeafFingerprint(entryFile, { input: info.input, output: info.output })
-    leafFingerprints[name] = fingerprint
+    const fingerprint = computeLeafFingerprint(entryFile, {
+      input: info.input,
+      output: info.output,
+    });
+    leafFingerprints[name] = fingerprint;
 
-    const priorArtifact = prior?.leafArtifacts[name]
-    const reusable = prior !== undefined && prior.leafFingerprints[name] === fingerprint && isToolSchema(priorArtifact)
+    const priorArtifact = prior?.leafArtifacts[name];
+    const reusable =
+      prior !== undefined &&
+      prior.leafFingerprints[name] === fingerprint &&
+      isToolSchema(priorArtifact);
 
-    leafArtifacts[name] = reusable && priorArtifact !== undefined && isToolSchema(priorArtifact) ? priorArtifact : (() => {
-      changedLeaves.push(name)
-      return toolSchemaFrom(info)
-    })()
+    leafArtifacts[name] =
+      reusable && priorArtifact !== undefined && isToolSchema(priorArtifact)
+        ? priorArtifact
+        : (() => {
+            changedLeaves.push(name);
+            return toolSchemaFrom(info);
+          })();
   }
 
-  const source = renderSchemaModule(leafArtifacts)
-  return { source, leafFingerprints, leafArtifacts, changedLeaves }
+  const source = renderSchemaModule(leafArtifacts);
+  return { source, leafFingerprints, leafArtifacts, changedLeaves };
 }
 
 // ============================================================================
@@ -175,23 +190,23 @@ export function buildSchemaModuleCached(
   entryFile: string,
   outFile: string,
   options?: {
-    readonly program?: ts.Program
-    readonly force?: boolean
-    readonly reachable?: ReadonlySet<string>
+    readonly program?: ts.Program;
+    readonly force?: boolean;
+    readonly reachable?: ReadonlySet<string>;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
   if (!options?.force) {
-    const check = checkCache(entryFile, outFile, options)
-    if (check.hit) return { status: "hit" }
+    const check = checkCache(entryFile, outFile, options);
+    if (check.hit) return { status: "hit" };
   }
-  const program = options?.program ?? createExtractorProgram(entryFile)
-  const prior = readCarryForwardState(entryFile, outFile, options)
-  const built = buildSchemaModuleSourceIncremental(entryFile, program, prior)
+  const program = options?.program ?? createExtractorProgram(entryFile);
+  const prior = readCarryForwardState(entryFile, outFile, options);
+  const built = buildSchemaModuleSourceIncremental(entryFile, program, prior);
   writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
-  })
-  return { status: "built", result: built.source, program }
+  });
+  return { status: "built", result: built.source, program };
 }
 
 /**
@@ -202,11 +217,11 @@ export async function writeSchemaModuleCached(
   entryFile: string,
   outFile: string,
   options?: {
-    readonly program?: ts.Program
-    readonly force?: boolean
+    readonly program?: ts.Program;
+    readonly force?: boolean;
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
-  const outcome = buildSchemaModuleCached(entryFile, outFile, options)
-  if (outcome.status === "built") await Bun.write(outFile, outcome.result)
-  return outcome
+  const outcome = buildSchemaModuleCached(entryFile, outFile, options);
+  if (outcome.status === "built") await Bun.write(outFile, outcome.result);
+  return outcome;
 }

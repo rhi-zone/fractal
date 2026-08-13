@@ -43,10 +43,10 @@
 // deterministic" tier only; live-fetched real-world sourcing is explicitly
 // out of scope here.
 
-import { t, types, type TypeRef } from "./index.ts"
-import { nullable } from "./derive.ts"
-import { datetime } from "./kinds/date-time.ts"
-import { opt, obj } from "./test-fixtures.ts"
+import { t, types, type TypeRef } from "./index.ts";
+import { nullable } from "./derive.ts";
+import { datetime } from "./kinds/date-time.ts";
+import { opt, obj } from "./test-fixtures.ts";
 
 // ============================================================================
 // Corpus 1 — GitHub REST API "issue" resource (trimmed).
@@ -65,21 +65,21 @@ const githubUser = obj({
   id: t(types.integer),
   type: t(types.enum(["User", "Bot", "Organization"])),
   site_admin: t(types.boolean),
-})
+});
 
 const githubLabel = obj({
   id: t(types.integer),
   name: t(types.string),
   color: t(types.string),
   default: t(types.boolean),
-})
+});
 
 const githubMilestone = obj({
   number: t(types.integer),
   title: t(types.string),
   state: t(types.enum(["open", "closed"])),
   due_on: nullable(datetime()),
-})
+});
 
 export const githubIssueSchema: TypeRef = obj({
   id: t(types.integer),
@@ -98,22 +98,33 @@ export const githubIssueSchema: TypeRef = obj({
   updated_at: datetime(),
   closed_at: nullable(datetime()),
   pull_request: opt(obj({ url: t(types.string), merged_at: nullable(datetime()) })),
-})
+});
 
 export const githubIssueSamples: unknown[] = [
   {
-    id: 1001, number: 42, title: "Bug: crash on empty input", state: "open",
-    locked: false, comments: 3,
+    id: 1001,
+    number: 42,
+    title: "Bug: crash on empty input",
+    state: "open",
+    locked: false,
+    comments: 3,
     user: { login: "alice", id: 501, type: "User", site_admin: false },
     assignees: [{ login: "bob", id: 502, type: "User", site_admin: false }],
     labels: [{ id: 1, name: "bug", color: "d73a4a", default: true }],
     milestone: null,
     body: "Steps to reproduce: pass an empty array.",
-    created_at: "2024-01-05T10:15:00Z", updated_at: "2024-01-06T09:00:00Z", closed_at: null,
+    created_at: "2024-01-05T10:15:00Z",
+    updated_at: "2024-01-06T09:00:00Z",
+    closed_at: null,
   },
   {
-    id: 1002, number: 43, title: "Feature: dark mode", state: "closed", state_reason: "completed",
-    locked: false, comments: 12,
+    id: 1002,
+    number: 43,
+    title: "Feature: dark mode",
+    state: "closed",
+    state_reason: "completed",
+    locked: false,
+    comments: 12,
     user: { login: "carol", id: 503, type: "User", site_admin: false },
     assignees: [],
     labels: [
@@ -122,32 +133,56 @@ export const githubIssueSamples: unknown[] = [
     ],
     milestone: { number: 3, title: "v2.0", state: "open", due_on: "2024-06-01T00:00:00Z" },
     body: null,
-    created_at: "2024-01-02T08:00:00Z", updated_at: "2024-02-01T12:00:00Z", closed_at: "2024-02-01T12:00:00Z",
+    created_at: "2024-01-02T08:00:00Z",
+    updated_at: "2024-02-01T12:00:00Z",
+    closed_at: "2024-02-01T12:00:00Z",
   },
   {
-    id: 1003, number: 44, title: "Docs: fix typo in README", state: "closed", state_reason: "completed",
-    locked: false, comments: 1,
+    id: 1003,
+    number: 44,
+    title: "Docs: fix typo in README",
+    state: "closed",
+    state_reason: "completed",
+    locked: false,
+    comments: 1,
     user: { login: "dave", id: 504, type: "Bot", site_admin: false },
     assignees: [{ login: "alice", id: 501, type: "User", site_admin: false }],
     labels: [],
     milestone: null,
     body: "s/teh/the/",
-    created_at: "2024-01-10T00:00:00Z", updated_at: "2024-01-10T01:00:00Z", closed_at: "2024-01-10T01:00:00Z",
-    pull_request: { url: "https://api.github.com/repos/org/repo/pulls/44", merged_at: "2024-01-10T01:00:00Z" },
+    created_at: "2024-01-10T00:00:00Z",
+    updated_at: "2024-01-10T01:00:00Z",
+    closed_at: "2024-01-10T01:00:00Z",
+    pull_request: {
+      url: "https://api.github.com/repos/org/repo/pulls/44",
+      merged_at: "2024-01-10T01:00:00Z",
+    },
   },
   {
-    id: 1004, number: 45, title: "Question: how to configure X", state: "closed", state_reason: "not_planned",
-    locked: true, comments: 0,
+    id: 1004,
+    number: 45,
+    title: "Question: how to configure X",
+    state: "closed",
+    state_reason: "not_planned",
+    locked: true,
+    comments: 0,
     user: { login: "eve", id: 505, type: "User", site_admin: false },
     assignees: [],
     labels: [{ id: 4, name: "question", color: "d876e3", default: true }],
     milestone: null,
     body: null,
-    created_at: "2023-12-20T14:00:00Z", updated_at: "2023-12-22T09:00:00Z", closed_at: "2023-12-22T09:00:00Z",
+    created_at: "2023-12-20T14:00:00Z",
+    updated_at: "2023-12-22T09:00:00Z",
+    closed_at: "2023-12-22T09:00:00Z",
   },
   {
-    id: 1005, number: 46, title: "Regression in v1.9", state: "open", state_reason: null,
-    locked: false, comments: 7,
+    id: 1005,
+    number: 46,
+    title: "Regression in v1.9",
+    state: "open",
+    state_reason: null,
+    locked: false,
+    comments: 7,
     user: { login: "frank", id: 506, type: "User", site_admin: true },
     assignees: [
       { login: "alice", id: 501, type: "User", site_admin: false },
@@ -159,22 +194,38 @@ export const githubIssueSamples: unknown[] = [
     ],
     milestone: { number: 3, title: "v2.0", state: "open", due_on: null },
     body: "Reintroduced from #980.",
-    created_at: "2024-02-11T16:20:00Z", updated_at: "2024-02-12T08:00:00Z", closed_at: null,
+    created_at: "2024-02-11T16:20:00Z",
+    updated_at: "2024-02-12T08:00:00Z",
+    closed_at: null,
   },
   {
-    id: 1006, number: 47, title: "Add CI workflow", state: "closed", state_reason: "completed",
-    locked: false, comments: 4,
+    id: 1006,
+    number: 47,
+    title: "Add CI workflow",
+    state: "closed",
+    state_reason: "completed",
+    locked: false,
+    comments: 4,
     user: { login: "grace", id: 507, type: "Organization", site_admin: false },
     assignees: [],
     labels: [{ id: 6, name: "ci", color: "0e8a16", default: false }],
     milestone: null,
     body: "",
-    created_at: "2024-01-15T00:00:00Z", updated_at: "2024-01-20T00:00:00Z", closed_at: "2024-01-20T00:00:00Z",
-    pull_request: { url: "https://api.github.com/repos/org/repo/pulls/47", merged_at: "2024-01-20T00:00:00Z" },
+    created_at: "2024-01-15T00:00:00Z",
+    updated_at: "2024-01-20T00:00:00Z",
+    closed_at: "2024-01-20T00:00:00Z",
+    pull_request: {
+      url: "https://api.github.com/repos/org/repo/pulls/47",
+      merged_at: "2024-01-20T00:00:00Z",
+    },
   },
   {
-    id: 1007, number: 48, title: "Memory leak under load", state: "open",
-    locked: false, comments: 20,
+    id: 1007,
+    number: 48,
+    title: "Memory leak under load",
+    state: "open",
+    locked: false,
+    comments: 20,
     user: { login: "heidi", id: 508, type: "User", site_admin: false },
     assignees: [{ login: "frank", id: 506, type: "User", site_admin: true }],
     labels: [
@@ -184,51 +235,83 @@ export const githubIssueSamples: unknown[] = [
     ],
     milestone: { number: 4, title: "v2.1", state: "open", due_on: "2024-08-01T00:00:00Z" },
     body: "Heap grows unbounded after ~10k requests.",
-    created_at: "2024-02-20T11:11:00Z", updated_at: "2024-02-21T10:00:00Z", closed_at: null,
+    created_at: "2024-02-20T11:11:00Z",
+    updated_at: "2024-02-21T10:00:00Z",
+    closed_at: null,
   },
   {
-    id: 1008, number: 49, title: "Typo in CLI help text", state: "closed", state_reason: "completed",
-    locked: false, comments: 0,
+    id: 1008,
+    number: 49,
+    title: "Typo in CLI help text",
+    state: "closed",
+    state_reason: "completed",
+    locked: false,
+    comments: 0,
     user: { login: "ivan", id: 509, type: "User", site_admin: false },
     assignees: [],
     labels: [{ id: 8, name: "good first issue", color: "7057ff", default: false }],
     milestone: null,
     body: null,
-    created_at: "2024-01-25T00:00:00Z", updated_at: "2024-01-25T02:00:00Z", closed_at: "2024-01-25T02:00:00Z",
+    created_at: "2024-01-25T00:00:00Z",
+    updated_at: "2024-01-25T02:00:00Z",
+    closed_at: "2024-01-25T02:00:00Z",
     pull_request: { url: "https://api.github.com/repos/org/repo/pulls/49", merged_at: null },
   },
   {
-    id: 1009, number: 50, title: "Support Node 22", state: "open",
-    locked: false, comments: 2,
+    id: 1009,
+    number: 50,
+    title: "Support Node 22",
+    state: "open",
+    locked: false,
+    comments: 2,
     user: { login: "judy", id: 510, type: "User", site_admin: false },
     assignees: [],
     labels: [],
     milestone: { number: 4, title: "v2.1", state: "open", due_on: null },
     body: "Tracking issue.",
-    created_at: "2024-03-01T00:00:00Z", updated_at: "2024-03-01T00:00:00Z", closed_at: null,
+    created_at: "2024-03-01T00:00:00Z",
+    updated_at: "2024-03-01T00:00:00Z",
+    closed_at: null,
   },
   {
-    id: 1010, number: 51, title: "Flaky test: retries.spec.ts", state: "closed", state_reason: "completed",
-    locked: false, comments: 6,
+    id: 1010,
+    number: 51,
+    title: "Flaky test: retries.spec.ts",
+    state: "closed",
+    state_reason: "completed",
+    locked: false,
+    comments: 6,
     user: { login: "alice", id: 501, type: "User", site_admin: false },
     assignees: [{ login: "dave", id: 504, type: "Bot", site_admin: false }],
     labels: [{ id: 9, name: "flaky-test", color: "bfdadc", default: false }],
     milestone: null,
     body: "Fails ~1 in 20 CI runs.",
-    created_at: "2024-02-05T00:00:00Z", updated_at: "2024-02-06T00:00:00Z", closed_at: "2024-02-06T00:00:00Z",
-    pull_request: { url: "https://api.github.com/repos/org/repo/pulls/51", merged_at: "2024-02-06T00:00:00Z" },
+    created_at: "2024-02-05T00:00:00Z",
+    updated_at: "2024-02-06T00:00:00Z",
+    closed_at: "2024-02-06T00:00:00Z",
+    pull_request: {
+      url: "https://api.github.com/repos/org/repo/pulls/51",
+      merged_at: "2024-02-06T00:00:00Z",
+    },
   },
   {
-    id: 1011, number: 52, title: "Vendor lock-in concerns", state: "closed", state_reason: "not_planned",
-    locked: true, comments: 15,
+    id: 1011,
+    number: 52,
+    title: "Vendor lock-in concerns",
+    state: "closed",
+    state_reason: "not_planned",
+    locked: true,
+    comments: 15,
     user: { login: "kevin", id: 511, type: "User", site_admin: false },
     assignees: [],
     labels: [{ id: 10, name: "discussion", color: "c5def5", default: false }],
     milestone: null,
     body: null,
-    created_at: "2023-11-01T00:00:00Z", updated_at: "2023-11-15T00:00:00Z", closed_at: "2023-11-15T00:00:00Z",
+    created_at: "2023-11-01T00:00:00Z",
+    updated_at: "2023-11-15T00:00:00Z",
+    closed_at: "2023-11-15T00:00:00Z",
   },
-]
+];
 
 // ============================================================================
 // Corpus 2 — npm `package.json`-shaped documents. Directly echoes JSONoid's
@@ -260,83 +343,123 @@ export const packageJsonSchema: TypeRef = obj({
   type: opt(t(types.enum(["commonjs", "module"]))),
   repository: opt(obj({ type: t(types.string), url: t(types.string) })),
   author: opt(t(types.string)),
-})
+});
 
 export const packageJsonSamples: unknown[] = [
   { name: "left-pad", version: "1.3.0", license: "WTFPL" },
   {
-    name: "chalk", version: "5.3.0", description: "Terminal string styling done right",
-    license: "MIT", type: "module", main: "source/index.js", types: "index.d.ts",
+    name: "chalk",
+    version: "5.3.0",
+    description: "Terminal string styling done right",
+    license: "MIT",
+    type: "module",
+    main: "source/index.js",
+    types: "index.d.ts",
     engines: { node: "^12.17.0 || ^14.13 || >=16.0.0" },
     keywords: ["color", "colour", "colors", "terminal", "console"],
   },
   {
-    name: "express", version: "4.19.2", description: "Fast, unopinionated, minimalist web framework",
-    license: "MIT", main: "index.js",
-    dependencies: { "body-parser": "1.20.2", "cookie": "0.6.0", "debug": "2.6.9" },
-    devDependencies: { "eslint": "8.34.0", "mocha": "10.2.0" },
+    name: "express",
+    version: "4.19.2",
+    description: "Fast, unopinionated, minimalist web framework",
+    license: "MIT",
+    main: "index.js",
+    dependencies: { "body-parser": "1.20.2", cookie: "0.6.0", debug: "2.6.9" },
+    devDependencies: { eslint: "8.34.0", mocha: "10.2.0" },
     engines: { node: ">= 0.10.0" },
     scripts: { test: "mocha --require test/support/env --reporter spec" },
     repository: { type: "git", url: "https://github.com/expressjs/express.git" },
   },
   {
-    name: "@rhi-zone/widget", version: "0.4.1", private: true, license: "UNLICENSED",
-    type: "module", main: "./dist/index.cjs", module: "./dist/index.js", types: "./dist/index.d.ts",
+    name: "@rhi-zone/widget",
+    version: "0.4.1",
+    private: true,
+    license: "UNLICENSED",
+    type: "module",
+    main: "./dist/index.cjs",
+    module: "./dist/index.js",
+    types: "./dist/index.d.ts",
     exports: { ".": "./dist/index.js", "./package.json": "./package.json" },
     scripts: { build: "tsc -b", test: "bun test" },
-    dependencies: { "zod": "^3.22.0" },
-    devDependencies: { "typescript": "^5.4.0" },
+    dependencies: { zod: "^3.22.0" },
+    devDependencies: { typescript: "^5.4.0" },
   },
   {
-    name: "typescript", version: "5.4.5", description: "TypeScript is a language for application scale JavaScript development",
-    license: "Apache-2.0", main: "./lib/typescript.js", types: "./lib/typescript.d.ts",
+    name: "typescript",
+    version: "5.4.5",
+    description: "TypeScript is a language for application scale JavaScript development",
+    license: "Apache-2.0",
+    main: "./lib/typescript.js",
+    types: "./lib/typescript.d.ts",
     bin: { tsc: "./bin/tsc", tsserver: "./bin/tsserver" },
     engines: { node: ">=14.17" },
     keywords: ["TypeScript", "Microsoft", "compiler", "language", "javascript"],
   },
   {
-    name: "my-cli-tool", version: "1.0.0", description: "A small CLI",
-    bin: { "my-cli": "./bin/cli.js" }, files: ["bin", "lib"],
-    dependencies: { "commander": "^11.0.0" },
+    name: "my-cli-tool",
+    version: "1.0.0",
+    description: "A small CLI",
+    bin: { "my-cli": "./bin/cli.js" },
+    files: ["bin", "lib"],
+    dependencies: { commander: "^11.0.0" },
   },
   {
-    name: "react", version: "18.2.0", description: "React is a JavaScript library for building user interfaces",
-    license: "MIT", main: "index.js",
+    name: "react",
+    version: "18.2.0",
+    description: "React is a JavaScript library for building user interfaces",
+    license: "MIT",
+    main: "index.js",
     dependencies: { "loose-envify": "^1.1.0" },
     engines: { node: ">=0.10.0" },
     repository: { type: "git", url: "https://github.com/facebook/react.git" },
   },
   {
-    name: "internal-monorepo-root", version: "0.0.0", private: true,
+    name: "internal-monorepo-root",
+    version: "0.0.0",
+    private: true,
     scripts: { build: "turbo run build", lint: "turbo run lint", test: "turbo run test" },
-    devDependencies: { "turbo": "^1.13.0" },
+    devDependencies: { turbo: "^1.13.0" },
     author: "Rhizone Contributors",
   },
   {
-    name: "peer-dep-example", version: "2.1.0", license: "MIT",
-    peerDependencies: { "react": ">=16.8.0" },
-    devDependencies: { "react": "^18.2.0" },
+    name: "peer-dep-example",
+    version: "2.1.0",
+    license: "MIT",
+    peerDependencies: { react: ">=16.8.0" },
+    devDependencies: { react: "^18.2.0" },
     keywords: ["react", "hook"],
   },
   {
-    name: "vite", version: "5.2.0", description: "Native-ESM powered web dev build tool",
-    license: "MIT", type: "module", main: "./index.cjs", module: "./dist/node/index.js", types: "./dist/node/index.d.ts",
+    name: "vite",
+    version: "5.2.0",
+    description: "Native-ESM powered web dev build tool",
+    license: "MIT",
+    type: "module",
+    main: "./index.cjs",
+    module: "./dist/node/index.js",
+    types: "./dist/node/index.d.ts",
     exports: { ".": "./index.cjs", "./client": "./client.d.ts" },
     bin: { vite: "bin/vite.js" },
     engines: { node: "^18.0.0 || >=20.0.0" },
-    dependencies: { "esbuild": "^0.20.1", "postcss": "^8.4.36", "rollup": "^4.13.0" },
+    dependencies: { esbuild: "^0.20.1", postcss: "^8.4.36", rollup: "^4.13.0" },
   },
   {
-    name: "tiny-utils", version: "0.1.0", description: "Tiny grab-bag of utilities",
+    name: "tiny-utils",
+    version: "0.1.0",
+    description: "Tiny grab-bag of utilities",
     author: "Someone <someone@example.com>",
   },
   {
-    name: "scoped-private-tool", version: "3.2.1", private: true, license: "SEE LICENSE IN LICENSE.md",
-    main: "dist/index.js", files: ["dist"],
-    dependencies: { "lodash": "^4.17.21" },
+    name: "scoped-private-tool",
+    version: "3.2.1",
+    private: true,
+    license: "SEE LICENSE IN LICENSE.md",
+    main: "dist/index.js",
+    files: ["dist"],
+    dependencies: { lodash: "^4.17.21" },
     scripts: { prepublishOnly: "npm run build", build: "rollup -c" },
   },
-]
+];
 
 // ============================================================================
 // Corpus 3 — Stripe-style discriminated webhook event payloads. Each sample
@@ -355,7 +478,7 @@ const chargeSucceededEvent = obj({
     currency: t(types.string),
     paid: t(types.boolean),
   }),
-})
+});
 
 const chargeFailedEvent = obj({
   type: t(types.literal("charge.failed")),
@@ -366,7 +489,7 @@ const chargeFailedEvent = obj({
     failure_code: t(types.string),
     failure_message: t(types.string),
   }),
-})
+});
 
 const customerCreatedEvent = obj({
   type: t(types.literal("customer.created")),
@@ -375,7 +498,7 @@ const customerCreatedEvent = obj({
     email: t(types.string),
     name: nullable(t(types.string)),
   }),
-})
+});
 
 const invoicePaymentSucceededEvent = obj({
   type: t(types.literal("invoice.payment_succeeded")),
@@ -385,7 +508,7 @@ const invoicePaymentSucceededEvent = obj({
     amount_paid: t(types.integer),
     subscription: nullable(t(types.string)),
   }),
-})
+});
 
 const subscriptionDeletedEvent = obj({
   type: t(types.literal("customer.subscription.deleted")),
@@ -394,7 +517,7 @@ const subscriptionDeletedEvent = obj({
     customer: t(types.string),
     status: t(types.enum(["canceled", "incomplete_expired"])),
   }),
-})
+});
 
 export const stripeEventSchema: TypeRef = obj({
   id: t(types.string),
@@ -409,7 +532,7 @@ export const stripeEventSchema: TypeRef = obj({
       subscriptionDeletedEvent,
     ]),
   ),
-})
+});
 
 // NOTE on shape: like `discriminatedUnionSchema` in inference-eval.ts, the
 // union lives on a nested field (`event`) rather than at the corpus root —
@@ -421,59 +544,128 @@ export const stripeEventSchema: TypeRef = obj({
 // the code path DU detection actually supports.
 export const stripeEventSamples: unknown[] = [
   {
-    id: "evt_1", created: 1700000000, livemode: false,
-    event: { type: "charge.succeeded", data: { id: "ch_1", amount: 2000, currency: "usd", paid: true } },
+    id: "evt_1",
+    created: 1700000000,
+    livemode: false,
+    event: {
+      type: "charge.succeeded",
+      data: { id: "ch_1", amount: 2000, currency: "usd", paid: true },
+    },
   },
   {
-    id: "evt_2", created: 1700000100, livemode: false,
-    event: { type: "charge.failed", data: { id: "ch_2", amount: 500, currency: "usd", failure_code: "card_declined", failure_message: "Your card was declined." } },
+    id: "evt_2",
+    created: 1700000100,
+    livemode: false,
+    event: {
+      type: "charge.failed",
+      data: {
+        id: "ch_2",
+        amount: 500,
+        currency: "usd",
+        failure_code: "card_declined",
+        failure_message: "Your card was declined.",
+      },
+    },
   },
   {
-    id: "evt_3", created: 1700000200, livemode: true,
-    event: { type: "customer.created", data: { id: "cus_1", email: "a@example.com", name: "Alice" } },
+    id: "evt_3",
+    created: 1700000200,
+    livemode: true,
+    event: {
+      type: "customer.created",
+      data: { id: "cus_1", email: "a@example.com", name: "Alice" },
+    },
   },
   {
-    id: "evt_4", created: 1700000300, livemode: true,
-    event: { type: "invoice.payment_succeeded", data: { id: "in_1", customer: "cus_1", amount_paid: 1999, subscription: "sub_1" } },
+    id: "evt_4",
+    created: 1700000300,
+    livemode: true,
+    event: {
+      type: "invoice.payment_succeeded",
+      data: { id: "in_1", customer: "cus_1", amount_paid: 1999, subscription: "sub_1" },
+    },
   },
   {
-    id: "evt_5", created: 1700000400, livemode: false,
-    event: { type: "customer.subscription.deleted", data: { id: "sub_2", customer: "cus_2", status: "canceled" } },
+    id: "evt_5",
+    created: 1700000400,
+    livemode: false,
+    event: {
+      type: "customer.subscription.deleted",
+      data: { id: "sub_2", customer: "cus_2", status: "canceled" },
+    },
   },
   {
-    id: "evt_6", created: 1700000500, livemode: false,
-    event: { type: "charge.succeeded", data: { id: "ch_3", amount: 15000, currency: "eur", paid: true } },
+    id: "evt_6",
+    created: 1700000500,
+    livemode: false,
+    event: {
+      type: "charge.succeeded",
+      data: { id: "ch_3", amount: 15000, currency: "eur", paid: true },
+    },
   },
   {
-    id: "evt_7", created: 1700000600, livemode: true,
+    id: "evt_7",
+    created: 1700000600,
+    livemode: true,
     event: { type: "customer.created", data: { id: "cus_3", email: "b@example.com", name: null } },
   },
   {
-    id: "evt_8", created: 1700000700, livemode: false,
-    event: { type: "charge.failed", data: { id: "ch_4", amount: 799, currency: "usd", failure_code: "insufficient_funds", failure_message: "Your card has insufficient funds." } },
+    id: "evt_8",
+    created: 1700000700,
+    livemode: false,
+    event: {
+      type: "charge.failed",
+      data: {
+        id: "ch_4",
+        amount: 799,
+        currency: "usd",
+        failure_code: "insufficient_funds",
+        failure_message: "Your card has insufficient funds.",
+      },
+    },
   },
   {
-    id: "evt_9", created: 1700000800, livemode: true,
-    event: { type: "invoice.payment_succeeded", data: { id: "in_2", customer: "cus_3", amount_paid: 4900, subscription: null } },
+    id: "evt_9",
+    created: 1700000800,
+    livemode: true,
+    event: {
+      type: "invoice.payment_succeeded",
+      data: { id: "in_2", customer: "cus_3", amount_paid: 4900, subscription: null },
+    },
   },
   {
-    id: "evt_10", created: 1700000900, livemode: false,
-    event: { type: "customer.subscription.deleted", data: { id: "sub_3", customer: "cus_1", status: "incomplete_expired" } },
+    id: "evt_10",
+    created: 1700000900,
+    livemode: false,
+    event: {
+      type: "customer.subscription.deleted",
+      data: { id: "sub_3", customer: "cus_1", status: "incomplete_expired" },
+    },
   },
   {
-    id: "evt_11", created: 1700001000, livemode: true,
-    event: { type: "charge.succeeded", data: { id: "ch_5", amount: 3200, currency: "usd", paid: true } },
+    id: "evt_11",
+    created: 1700001000,
+    livemode: true,
+    event: {
+      type: "charge.succeeded",
+      data: { id: "ch_5", amount: 3200, currency: "usd", paid: true },
+    },
   },
   {
-    id: "evt_12", created: 1700001100, livemode: false,
-    event: { type: "customer.created", data: { id: "cus_4", email: "c@example.com", name: "Carol" } },
+    id: "evt_12",
+    created: 1700001100,
+    livemode: false,
+    event: {
+      type: "customer.created",
+      data: { id: "cus_4", email: "c@example.com", name: "Carol" },
+    },
   },
-]
+];
 
 export interface RealisticCorpus {
-  readonly name: string
-  readonly samples: unknown[]
-  readonly schema: TypeRef
+  readonly name: string;
+  readonly samples: unknown[];
+  readonly schema: TypeRef;
 }
 
 /** The three hand-typed corpora this module produces — see module doc for what each models and why. */
@@ -481,4 +673,4 @@ export const realisticCorpora: readonly RealisticCorpus[] = [
   { name: "GitHub Issue", samples: githubIssueSamples, schema: githubIssueSchema },
   { name: "npm package.json", samples: packageJsonSamples, schema: packageJsonSchema },
   { name: "Stripe-style webhook event", samples: stripeEventSamples, schema: stripeEventSchema },
-]
+];

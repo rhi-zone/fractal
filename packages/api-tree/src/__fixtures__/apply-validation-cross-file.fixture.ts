@@ -11,7 +11,7 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { applyValidation } from "./apply-validation-stub.fixture.ts"
-import { projectedElsewhere } from "./apply-validation-projected.fixture.ts"
+import { applyValidation } from "./apply-validation-stub.fixture.ts";
+import { projectedElsewhere } from "./apply-validation-projected.fixture.ts";
 
-export const elsewhere = applyValidation("elsewhere", projectedElsewhere)
+export const elsewhere = applyValidation("elsewhere", projectedElsewhere);

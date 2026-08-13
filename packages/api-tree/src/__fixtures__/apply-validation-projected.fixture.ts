@@ -6,11 +6,11 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "../node.ts"
-import { fakeProjection, type FakeRoute } from "./apply-validation-route.fixture.ts"
+import { api, op } from "../node.ts";
+import { fakeProjection, type FakeRoute } from "./apply-validation-route.fixture.ts";
 
 const tree = api({
   list: op((_input: { limit?: number }) => ({ items: [] as string[] })),
-})
+});
 
-export const projectedElsewhere: FakeRoute = fakeProjection(tree)
+export const projectedElsewhere: FakeRoute = fakeProjection(tree);

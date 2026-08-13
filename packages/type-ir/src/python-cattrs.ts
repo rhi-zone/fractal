@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, quote } from "./codegen-helpers.ts";
 
 // ============================================================================
 // cattrs projector — TypeRef -> `@attrs.define`-decorated class definitions,
@@ -66,60 +66,60 @@ const KNOWN_FIELD_META = new Set([
   // NOT included: "multipleOf" — attrs (which cattrs' classes are built on)
   // has no built-in multiple-of validator, same as python-attrs.ts — falls
   // through to the generic unrecognized-metadata stub below.
-])
+]);
 
 type FieldDecl = {
-  name: string
-  type: string
-  hasDefault: boolean
-  defaultExpr: string
-  isMutableDefault: boolean
-  validatorExprs: string[]
-  extraValidatorFn?: { name: string; lines: string[] }
-  metadataKwargs: string[]
-  onSetattrFrozen: boolean
-  comment?: string
-}
+  name: string;
+  type: string;
+  hasDefault: boolean;
+  defaultExpr: string;
+  isMutableDefault: boolean;
+  validatorExprs: string[];
+  extraValidatorFn?: { name: string; lines: string[] };
+  metadataKwargs: string[];
+  onSetattrFrozen: boolean;
+  comment?: string;
+};
 
 type Decl =
   | {
-      kind: "class"
-      name: string
-      docstring?: string
-      frozen: boolean
-      fields: FieldDecl[]
-      postInitStub?: string[]
+      kind: "class";
+      name: string;
+      docstring?: string;
+      frozen: boolean;
+      fields: FieldDecl[];
+      postInitStub?: string[];
     }
   | { kind: "enum"; name: string; members: readonly string[] }
-  | { kind: "protocol"; name: string; methodLines: string[] }
+  | { kind: "protocol"; name: string; methodLines: string[] };
 
 interface Ctx {
-  decls: Decl[]
+  decls: Decl[];
   // Guards against re-emitting the same nested class twice and against
   // infinite recursion on a self-referential object graph — same role as
   // python-attrs.ts's `seen`.
-  seen: Set<string>
-  typingImports: Set<string>
-  needsAttrs: boolean
-  needsEnum: boolean
-  needsCattrs: boolean
-  discriminatedUnionStubs: string[]
+  seen: Set<string>;
+  typingImports: Set<string>;
+  needsAttrs: boolean;
+  needsEnum: boolean;
+  needsCattrs: boolean;
+  discriminatedUnionStubs: string[];
 }
 
-type Converter = (shape: TypeShape, ref: TypeRef, ctxName: string, ctx: Ctx) => string
+type Converter = (shape: TypeShape, ref: TypeRef, ctxName: string, ctx: Ctx) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Python `Enum` member names must be valid identifiers — sanitize a member
 // value (which may be an arbitrary string, e.g. "in-progress") into one,
 // keeping the original string as the member's value.
 function enumMemberName(value: string): string {
-  const sanitized = value.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase()
-  const named = sanitized.length === 0 ? "VALUE" : sanitized
-  return /^[0-9]/.test(named) ? `_${named}` : named
+  const sanitized = value.replace(/[^a-zA-Z0-9]+/g, "_").toUpperCase();
+  const named = sanitized.length === 0 ? "VALUE" : sanitized;
+  return /^[0-9]/.test(named) ? `_${named}` : named;
 }
 
 // Render a `meta.default` value (JSON-ish: string/number/boolean/null/array/
@@ -127,20 +127,20 @@ function enumMemberName(value: string): string {
 // (for mutable values, see `isMutableDefault` below) inside an
 // `attrs.field(factory=lambda: ...)`.
 function pythonLiteral(value: unknown): string {
-  if (value === null || value === undefined) return "None"
-  if (typeof value === "boolean") return value ? "True" : "False"
-  if (typeof value === "number") return String(value)
-  if (typeof value === "string") return quote(value)
-  if (Array.isArray(value)) return `[${value.map(pythonLiteral).join(", ")}]`
+  if (value === null || value === undefined) return "None";
+  if (typeof value === "boolean") return value ? "True" : "False";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return quote(value);
+  if (Array.isArray(value)) return `[${value.map(pythonLiteral).join(", ")}]`;
   if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-    return `{${entries.map(([k, v]) => `${quote(k)}: ${pythonLiteral(v)}`).join(", ")}}`
+    const entries = Object.entries(value as Record<string, unknown>);
+    return `{${entries.map(([k, v]) => `${quote(k)}: ${pythonLiteral(v)}`).join(", ")}}`;
   }
-  return "None"
+  return "None";
 }
 
 function isMutableLiteral(value: unknown): boolean {
-  return Array.isArray(value) || (typeof value === "object" && value !== null)
+  return Array.isArray(value) || (typeof value === "object" && value !== null);
 }
 
 // Build the `attrs.validators.*` call expressions implied by a TypeRef's
@@ -149,25 +149,31 @@ function isMutableLiteral(value: unknown): boolean {
 // (identical to python-attrs.ts — cattrs adds nothing here, see the
 // file-header comment).
 function fieldValidators(meta: Readonly<Record<string, unknown>>): string[] {
-  const validators: string[] = []
-  if (typeof meta.minLength === "number") validators.push(`attrs.validators.min_len(${meta.minLength})`)
-  if (typeof meta.maxLength === "number") validators.push(`attrs.validators.max_len(${meta.maxLength})`)
-  if (typeof meta.pattern === "string") validators.push(`attrs.validators.matches_re(${quote(meta.pattern)})`)
-  if (typeof meta.minimum === "number") validators.push(`attrs.validators.ge(${meta.minimum})`)
-  if (typeof meta.maximum === "number") validators.push(`attrs.validators.le(${meta.maximum})`)
-  if (typeof meta.exclusiveMinimum === "number") validators.push(`attrs.validators.gt(${meta.exclusiveMinimum})`)
-  if (typeof meta.exclusiveMaximum === "number") validators.push(`attrs.validators.lt(${meta.exclusiveMaximum})`)
-  return validators
+  const validators: string[] = [];
+  if (typeof meta.minLength === "number")
+    validators.push(`attrs.validators.min_len(${meta.minLength})`);
+  if (typeof meta.maxLength === "number")
+    validators.push(`attrs.validators.max_len(${meta.maxLength})`);
+  if (typeof meta.pattern === "string")
+    validators.push(`attrs.validators.matches_re(${quote(meta.pattern)})`);
+  if (typeof meta.minimum === "number") validators.push(`attrs.validators.ge(${meta.minimum})`);
+  if (typeof meta.maximum === "number") validators.push(`attrs.validators.le(${meta.maximum})`);
+  if (typeof meta.exclusiveMinimum === "number")
+    validators.push(`attrs.validators.gt(${meta.exclusiveMinimum})`);
+  if (typeof meta.exclusiveMaximum === "number")
+    validators.push(`attrs.validators.lt(${meta.exclusiveMaximum})`);
+  return validators;
 }
 
 // `attrs.field(metadata={...})` entries — attrs' own place for
 // non-validating field data, since (unlike Pydantic's `Field()`) attrs has
 // no dedicated `description`/`deprecated` keyword.
 function fieldMetadataKwargs(meta: Readonly<Record<string, unknown>>): string[] {
-  const entries: string[] = []
-  if (typeof meta.description === "string") entries.push(`"description": ${quote(meta.description)}`)
-  if (meta.deprecated === true) entries.push(`"deprecated": True`)
-  return entries
+  const entries: string[] = [];
+  if (typeof meta.description === "string")
+    entries.push(`"description": ${quote(meta.description)}`);
+  if (meta.deprecated === true) entries.push(`"deprecated": True`);
+  return entries;
 }
 
 // Meta keys left over once every convention this projector knows how to
@@ -177,7 +183,7 @@ function fieldMetadataKwargs(meta: Readonly<Record<string, unknown>>): string[] 
 // validation intent this projector has no declarative way to express —
 // surfaced as a validator stub rather than silently dropped.
 function unrecognizedMeta(meta: Readonly<Record<string, unknown>>): string[] {
-  return Object.keys(meta).filter((key) => !KNOWN_FIELD_META.has(key))
+  return Object.keys(meta).filter((key) => !KNOWN_FIELD_META.has(key));
 }
 
 // Unlike python-attrs.ts's generic advisory comment, this projector actually
@@ -186,7 +192,7 @@ function unrecognizedMeta(meta: Readonly<Record<string, unknown>>): string[] {
 // in the module preamble (see `toCattrs` below), the stub can point straight
 // at it instead of describing the mechanism abstractly.
 function discriminatorComment(propertyName: string, aliasName: string): string {
-  return `  # discriminated by ${quote(propertyName)} — see the converter.register_structure_hook stub for ${aliasName} below`
+  return `  # discriminated by ${quote(propertyName)} — see the converter.register_structure_hook stub for ${aliasName} below`;
 }
 
 function discriminatorStub(aliasName: string, propertyName: string): string {
@@ -197,7 +203,7 @@ function discriminatorStub(aliasName: string, propertyName: string): string {
     `#     ${aliasName},`,
     `#     lambda v, _: converter.structure(v, _VARIANT_BY_${propertyName.toUpperCase()}[v[${quote(propertyName)}]]),`,
     `# )`,
-  ].join("\n")
+  ].join("\n");
 }
 
 const handlers: Record<string, Converter> = {
@@ -209,31 +215,33 @@ const handlers: Record<string, Converter> = {
   null: leaf("None"),
   void: leaf("None"),
   unknown: (_shape, _ref, _ctxName, ctx) => {
-    ctx.typingImports.add("Any")
-    return "Any"
+    ctx.typingImports.add("Any");
+    return "Any";
   },
   never: (_shape, _ref, _ctxName, ctx) => {
-    ctx.typingImports.add("NoReturn")
-    return "NoReturn"
+    ctx.typingImports.add("NoReturn");
+    return "NoReturn";
   },
   object: (shape, ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "object" }
-    const name = capitalize(ctxName)
-    if (ctx.seen.has(name)) return name
-    ctx.seen.add(name)
-    ctx.needsAttrs = true
+    const s = shape as TypeShape & { kind: "object" };
+    const name = capitalize(ctxName);
+    if (ctx.seen.has(name)) return name;
+    ctx.seen.add(name);
+    ctx.needsAttrs = true;
 
-    const fields: FieldDecl[] = []
+    const fields: FieldDecl[] = [];
     for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
-      const rawType = toCattrsType(fieldRef, capitalize(fieldName), ctx)
-      const isOptional = fieldRef.meta.optional === true
-      const hasExplicitDefault = fieldRef.meta.default !== undefined
+      const rawType = toCattrsType(fieldRef, capitalize(fieldName), ctx);
+      const isOptional = fieldRef.meta.optional === true;
+      const hasExplicitDefault = fieldRef.meta.default !== undefined;
       // `nullable` already wrapped `rawType` in `| None` inside toCattrsType
       // — avoid double-wrapping when the field is *also* omittable.
       const fieldType =
-        isOptional && fieldRef.meta.nullable !== true && !rawType.endsWith("| None") ? `${rawType} | None` : rawType
+        isOptional && fieldRef.meta.nullable !== true && !rawType.endsWith("| None")
+          ? `${rawType} | None`
+          : rawType;
 
-      const extra = unrecognizedMeta(fieldRef.meta)
+      const extra = unrecognizedMeta(fieldRef.meta);
       const extraValidatorFn =
         extra.length > 0
           ? {
@@ -243,19 +251,22 @@ const handlers: Record<string, Converter> = {
                 `    # TODO: unmodeled validation metadata on "${fieldName}": ${extra.join(", ")}`,
               ],
             }
-          : undefined
+          : undefined;
 
-      const builtinValidators = fieldValidators(fieldRef.meta)
-      const validatorExprs = extraValidatorFn === undefined ? builtinValidators : [...builtinValidators, extraValidatorFn.name]
+      const builtinValidators = fieldValidators(fieldRef.meta);
+      const validatorExprs =
+        extraValidatorFn === undefined
+          ? builtinValidators
+          : [...builtinValidators, extraValidatorFn.name];
 
-      const hasDefault = isOptional || hasExplicitDefault
-      const defaultExpr = hasExplicitDefault ? pythonLiteral(fieldRef.meta.default) : "None"
-      const isMutableDefault = hasExplicitDefault && isMutableLiteral(fieldRef.meta.default)
+      const hasDefault = isOptional || hasExplicitDefault;
+      const defaultExpr = hasExplicitDefault ? pythonLiteral(fieldRef.meta.default) : "None";
+      const isMutableDefault = hasExplicitDefault && isMutableLiteral(fieldRef.meta.default);
 
       const comment =
         fieldRef.shape.kind === "union" && typeof fieldRef.meta.discriminator === "string"
           ? discriminatorComment(fieldRef.meta.discriminator, `${name}${capitalize(fieldName)}`)
-          : undefined
+          : undefined;
 
       let field: FieldDecl = {
         name: fieldName,
@@ -266,29 +277,29 @@ const handlers: Record<string, Converter> = {
         validatorExprs,
         metadataKwargs: fieldMetadataKwargs(fieldRef.meta),
         onSetattrFrozen: fieldRef.meta.readonly === true,
-      }
-      if (extraValidatorFn !== undefined) field = { ...field, extraValidatorFn }
-      if (comment !== undefined) field = { ...field, comment }
-      fields.push(field)
+      };
+      if (extraValidatorFn !== undefined) field = { ...field, extraValidatorFn };
+      if (comment !== undefined) field = { ...field, comment };
+      fields.push(field);
     }
 
-    const objectExtra = unrecognizedMeta(ref.meta)
+    const objectExtra = unrecognizedMeta(ref.meta);
     const postInitStub =
       objectExtra.length > 0
         ? [
             "    def __attrs_post_init__(self) -> None:",
             `        # TODO: unmodeled validation metadata on "${name}": ${objectExtra.join(", ")}`,
           ]
-        : undefined
+        : undefined;
 
-    const frozen = ref.meta.readonly === true
-    const docstring = typeof ref.meta.description === "string" ? ref.meta.description : undefined
+    const frozen = ref.meta.readonly === true;
+    const docstring = typeof ref.meta.description === "string" ? ref.meta.description : undefined;
 
-    let decl: Decl = { kind: "class", name, frozen, fields }
-    if (docstring !== undefined) decl = { ...decl, docstring }
-    if (postInitStub !== undefined) decl = { ...decl, postInitStub }
-    ctx.decls.push(decl)
-    return name
+    let decl: Decl = { kind: "class", name, frozen, fields };
+    if (docstring !== undefined) decl = { ...decl, docstring };
+    if (postInitStub !== undefined) decl = { ...decl, postInitStub };
+    ctx.decls.push(decl);
+    return name;
   },
   // A class instance carries only nominal identity (className/source), never
   // structure (see type-ir's TypeKinds.instance doc comment) — the caller
@@ -296,63 +307,65 @@ const handlers: Record<string, Converter> = {
   // same convention as python-attrs.ts's `instance` handler.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `list[${toCattrsType(s.element, ctxName, ctx)}]`
+    const s = shape as TypeShape & { kind: "array" };
+    return `list[${toCattrsType(s.element, ctxName, ctx)}]`;
   },
   tuple: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    const parts = s.elements.map((element, i) => toCattrsType(element, `${ctxName}${i + 1}`, ctx))
-    return `tuple[${parts.join(", ")}]`
+    const s = shape as TypeShape & { kind: "tuple" };
+    const parts = s.elements.map((element, i) => toCattrsType(element, `${ctxName}${i + 1}`, ctx));
+    return `tuple[${parts.join(", ")}]`;
   },
   // No native async-stream construct in the language itself; `AsyncIterator`
   // (typing / collections.abc) is the idiomatic equivalent of an
   // `async function` producing values over time — same as
   // python-attrs.ts's stream handler.
   stream: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    ctx.typingImports.add("AsyncIterator")
-    return `AsyncIterator[${toCattrsType(s.element, ctxName, ctx)}]`
+    const s = shape as TypeShape & { kind: "stream" };
+    ctx.typingImports.add("AsyncIterator");
+    return `AsyncIterator[${toCattrsType(s.element, ctxName, ctx)}]`;
   },
   // No pagination convention in Python's standard vocabulary — degrades
   // honestly to `list[T]` over the page's element type, same as the other
   // Python variants' page handler.
   page: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `list[${toCattrsType(s.element, ctxName, ctx)}]`
+    const s = shape as TypeShape & { kind: "page" };
+    return `list[${toCattrsType(s.element, ctxName, ctx)}]`;
   },
   map: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "map" }
-    const key = toCattrsType(s.key, `${ctxName}Key`, ctx)
-    const value = toCattrsType(s.value, `${ctxName}Value`, ctx)
-    return `dict[${key}, ${value}]`
+    const s = shape as TypeShape & { kind: "map" };
+    const key = toCattrsType(s.key, `${ctxName}Key`, ctx);
+    const value = toCattrsType(s.value, `${ctxName}Value`, ctx);
+    return `dict[${key}, ${value}]`;
   },
   union: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const parts = s.variants.map((variant, i) => toCattrsType(variant, `${ctxName}Variant${i + 1}`, ctx))
-    const unique = [...new Set(parts)]
-    if (unique.length === 1) return unique[0]!
-    ctx.typingImports.add("Union")
-    return `Union[${unique.join(", ")}]`
+    const s = shape as TypeShape & { kind: "union" };
+    const parts = s.variants.map((variant, i) =>
+      toCattrsType(variant, `${ctxName}Variant${i + 1}`, ctx),
+    );
+    const unique = [...new Set(parts)];
+    if (unique.length === 1) return unique[0]!;
+    ctx.typingImports.add("Union");
+    return `Union[${unique.join(", ")}]`;
   },
   literal: (shape, _ref, _ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "None"
-    ctx.typingImports.add("Literal")
-    if (typeof s.value === "string") return `Literal[${quote(s.value)}]`
-    if (typeof s.value === "boolean") return `Literal[${s.value ? "True" : "False"}]`
-    return `Literal[${s.value}]`
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "None";
+    ctx.typingImports.add("Literal");
+    if (typeof s.value === "string") return `Literal[${quote(s.value)}]`;
+    if (typeof s.value === "boolean") return `Literal[${s.value ? "True" : "False"}]`;
+    return `Literal[${s.value}]`;
   },
   // Plain `Enum` (not Pydantic's `(str, Enum)`) — attrs/cattrs carry no
   // JSON-encoding opinion of their own to motivate string-backing, same as
   // python-attrs.ts's enum handler.
   enum: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    const name = `${capitalize(ctxName)}Enum`
-    if (ctx.seen.has(name)) return name
-    ctx.seen.add(name)
-    ctx.needsEnum = true
-    ctx.decls.push({ kind: "enum", name, members: s.members })
-    return name
+    const s = shape as TypeShape & { kind: "enum" };
+    const name = `${capitalize(ctxName)}Enum`;
+    if (ctx.seen.has(name)) return name;
+    ctx.seen.add(name);
+    ctx.needsEnum = true;
+    ctx.decls.push({ kind: "enum", name, members: s.members });
+    return name;
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // No intersection construct in Python's type vocabulary; when every member
@@ -361,49 +374,53 @@ const handlers: Record<string, Converter> = {
   // means structurally) — otherwise this degrades to `Any`, same fallback
   // the other Python variants' intersection handler uses.
   intersection: (shape, ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "intersection" }
+    const s = shape as TypeShape & { kind: "intersection" };
     if (s.members.length > 0 && s.members.every((member) => member.shape.kind === "object")) {
-      const merged: Record<string, TypeRef> = {}
+      const merged: Record<string, TypeRef> = {};
       for (const member of s.members) {
-        Object.assign(merged, (member.shape as TypeShape & { kind: "object" }).fields)
+        Object.assign(merged, (member.shape as TypeShape & { kind: "object" }).fields);
       }
-      const mergedShape: TypeShape = { kind: "object", fields: merged }
-      return handlers.object!(mergedShape, ref, ctxName, ctx)
+      const mergedShape: TypeShape = { kind: "object", fields: merged };
+      return handlers.object!(mergedShape, ref, ctxName, ctx);
     }
-    ctx.typingImports.add("Any")
-    return "Any"
+    ctx.typingImports.add("Any");
+    return "Any";
   },
   function: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "function" }
-    ctx.typingImports.add("Callable")
-    const params = s.params.map((param, i) => toCattrsType(param.type, `${ctxName}Param${i + 1}`, ctx))
-    const returnType = toCattrsType(s.returnType, `${ctxName}Return`, ctx)
-    return `Callable[[${params.join(", ")}], ${returnType}]`
+    const s = shape as TypeShape & { kind: "function" };
+    ctx.typingImports.add("Callable");
+    const params = s.params.map((param, i) =>
+      toCattrsType(param.type, `${ctxName}Param${i + 1}`, ctx),
+    );
+    const returnType = toCattrsType(s.returnType, `${ctxName}Return`, ctx);
+    return `Callable[[${params.join(", ")}], ${returnType}]`;
   },
   // `method` has no explicit entry — falls back to `function`'s Callable[...]
   // rendering via `registerParent("method", "function")` (index.ts), same as
   // the other Python variants' standalone-method fallback.
   interface: (shape, _ref, ctxName, ctx) => {
-    const s = shape as TypeShape & { kind: "interface" }
-    const name = capitalize(ctxName)
-    if (ctx.seen.has(name)) return name
-    ctx.seen.add(name)
-    ctx.typingImports.add("Protocol")
-    const methodLines: string[] = []
+    const s = shape as TypeShape & { kind: "interface" };
+    const name = capitalize(ctxName);
+    if (ctx.seen.has(name)) return name;
+    ctx.seen.add(name);
+    ctx.typingImports.add("Protocol");
+    const methodLines: string[] = [];
     for (const [methodName, methodRef] of Object.entries(s.methods)) {
       const m = methodRef.shape as TypeShape & {
-        kind: "method" | "function"
-        params: readonly { name: string; type: TypeRef }[]
-        returnType: TypeRef
-      }
-      const params = m.params.map((p) => `${p.name}: ${toCattrsType(p.type, capitalize(p.name), ctx)}`)
-      const returnType = toCattrsType(m.returnType, `${capitalize(methodName)}Return`, ctx)
-      methodLines.push(`    def ${methodName}(self, ${params.join(", ")}) -> ${returnType}: ...`)
+        kind: "method" | "function";
+        params: readonly { name: string; type: TypeRef }[];
+        returnType: TypeRef;
+      };
+      const params = m.params.map(
+        (p) => `${p.name}: ${toCattrsType(p.type, capitalize(p.name), ctx)}`,
+      );
+      const returnType = toCattrsType(m.returnType, `${capitalize(methodName)}Return`, ctx);
+      methodLines.push(`    def ${methodName}(self, ${params.join(", ")}) -> ${returnType}: ...`);
     }
-    ctx.decls.push({ kind: "protocol", name, methodLines })
-    return name
+    ctx.decls.push({ kind: "protocol", name, methodLines });
+    return name;
   },
-}
+};
 
 /** Convert a `TypeRef` to an attrs/cattrs-flavored Python type *expression*
  * (e.g. `list[str]`, `int | None`, or a class name for object/enum shapes) —
@@ -411,64 +428,76 @@ const handlers: Record<string, Converter> = {
  * names any nested class/enum this call generates (capitalized per Python
  * convention); side effects (new `Decl`s, imports) land on `ctx`. */
 export function toCattrsType(ref: TypeRef, ctxName: string, ctx: Ctx): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  let type: string
+  const converter = resolve(ref.shape.kind, handlers);
+  let type: string;
   if (converter === undefined) {
-    ctx.typingImports.add("Any")
-    type = "Any"
+    ctx.typingImports.add("Any");
+    type = "Any";
   } else {
-    type = converter(ref.shape, ref, ctxName, ctx)
+    type = converter(ref.shape, ref, ctxName, ctx);
   }
   if (ref.meta.nullable === true) {
-    type = `${type} | None`
+    type = `${type} | None`;
   }
-  return type
+  return type;
 }
 
 function renderDecl(decl: Decl): string[] {
   if (decl.kind === "enum") {
-    const lines = [`class ${decl.name}(Enum):`]
-    for (const member of decl.members) lines.push(`    ${enumMemberName(member)} = ${quote(member)}`)
-    return lines
+    const lines = [`class ${decl.name}(Enum):`];
+    for (const member of decl.members)
+      lines.push(`    ${enumMemberName(member)} = ${quote(member)}`);
+    return lines;
   }
   if (decl.kind === "protocol") {
-    const lines = [`class ${decl.name}(Protocol):`]
-    lines.push(...(decl.methodLines.length > 0 ? decl.methodLines : ["    ..."]))
-    return lines
+    const lines = [`class ${decl.name}(Protocol):`];
+    lines.push(...(decl.methodLines.length > 0 ? decl.methodLines : ["    ..."]));
+    return lines;
   }
 
-  const lines: string[] = []
+  const lines: string[] = [];
   // Per-field validator stub functions must exist at module scope before the
   // class that references them via `validator=`.
   for (const field of decl.fields) {
-    if (field.extraValidatorFn !== undefined) lines.push(...field.extraValidatorFn.lines, "")
+    if (field.extraValidatorFn !== undefined) lines.push(...field.extraValidatorFn.lines, "");
   }
 
-  lines.push(`@attrs.define(${decl.frozen ? "frozen=True" : ""})`, `class ${decl.name}:`)
-  if (decl.docstring !== undefined) lines.push(`    ${quote(decl.docstring)}`)
+  lines.push(`@attrs.define(${decl.frozen ? "frozen=True" : ""})`, `class ${decl.name}:`);
+  if (decl.docstring !== undefined) lines.push(`    ${quote(decl.docstring)}`);
   if (decl.fields.length === 0 && decl.docstring === undefined && decl.postInitStub === undefined) {
-    lines.push("    pass")
-    return lines
+    lines.push("    pass");
+    return lines;
   }
   for (const field of decl.fields) {
-    const kwargs: string[] = []
+    const kwargs: string[] = [];
     if (field.hasDefault) {
-      kwargs.push(field.isMutableDefault ? `factory=lambda: ${field.defaultExpr}` : `default=${field.defaultExpr}`)
+      kwargs.push(
+        field.isMutableDefault
+          ? `factory=lambda: ${field.defaultExpr}`
+          : `default=${field.defaultExpr}`,
+      );
     }
-    if (field.validatorExprs.length === 1) kwargs.push(`validator=${field.validatorExprs[0]}`)
-    else if (field.validatorExprs.length > 1) kwargs.push(`validator=attrs.validators.and_(${field.validatorExprs.join(", ")})`)
-    if (field.metadataKwargs.length > 0) kwargs.push(`metadata={${field.metadataKwargs.join(", ")}}`)
-    if (field.onSetattrFrozen) kwargs.push("on_setattr=attrs.setters.frozen")
+    if (field.validatorExprs.length === 1) kwargs.push(`validator=${field.validatorExprs[0]}`);
+    else if (field.validatorExprs.length > 1)
+      kwargs.push(`validator=attrs.validators.and_(${field.validatorExprs.join(", ")})`);
+    if (field.metadataKwargs.length > 0)
+      kwargs.push(`metadata={${field.metadataKwargs.join(", ")}}`);
+    if (field.onSetattrFrozen) kwargs.push("on_setattr=attrs.setters.frozen");
 
     // A single non-mutable `default=...` kwarg is exactly what a plain
     // `= <literal>` class-body assignment already means — `attrs.field()`
     // is only needed once something beyond a plain default is in play.
-    const needsField = kwargs.length > 0 && !(kwargs.length === 1 && kwargs[0]!.startsWith("default="))
-    const assignment = needsField ? ` = attrs.field(${kwargs.join(", ")})` : field.hasDefault ? ` = ${field.defaultExpr}` : ""
-    lines.push(`    ${field.name}: ${field.type}${assignment}${field.comment ?? ""}`)
+    const needsField =
+      kwargs.length > 0 && !(kwargs.length === 1 && kwargs[0]!.startsWith("default="));
+    const assignment = needsField
+      ? ` = attrs.field(${kwargs.join(", ")})`
+      : field.hasDefault
+        ? ` = ${field.defaultExpr}`
+        : "";
+    lines.push(`    ${field.name}: ${field.type}${assignment}${field.comment ?? ""}`);
   }
-  if (decl.postInitStub !== undefined) lines.push("", ...decl.postInitStub)
-  return lines
+  if (decl.postInitStub !== undefined) lines.push("", ...decl.postInitStub);
+  return lines;
 }
 
 /**
@@ -491,13 +520,13 @@ export function toCattrs(ref: TypeRef, name = "Root"): string {
     needsEnum: false,
     needsCattrs: true,
     discriminatedUnionStubs: [],
-  }
-  const expr = toCattrsType(ref, name, ctx)
+  };
+  const expr = toCattrsType(ref, name, ctx);
 
   // Object/enum/interface shapes already emit a top-level class named `expr`
   // (via the `seen`-guarded push in their handlers above) — no separate alias
   // needed. Everything else gets `name = <expr>`.
-  const hasOwnDeclaration = ctx.decls.some((decl) => decl.name === expr)
+  const hasOwnDeclaration = ctx.decls.some((decl) => decl.name === expr);
 
   // A discriminator stub is only synthesized for the top-level `ref` itself
   // (the one case with a `name` in scope to hang the stub's comment off of).
@@ -505,33 +534,43 @@ export function toCattrs(ref: TypeRef, name = "Root"): string {
   // the inline `discriminatorComment` pointing back at this stub's sibling
   // handling in a real caller-assembled file — see the field-level `comment`
   // set in the `object` handler above.
-  const stubs: string[] = []
-  if (!hasOwnDeclaration && ref.shape.kind === "union" && typeof ref.meta.discriminator === "string") {
-    stubs.push(discriminatorStub(name, ref.meta.discriminator))
+  const stubs: string[] = [];
+  if (
+    !hasOwnDeclaration &&
+    ref.shape.kind === "union" &&
+    typeof ref.meta.discriminator === "string"
+  ) {
+    stubs.push(discriminatorStub(name, ref.meta.discriminator));
   }
 
-  const lines: string[] = ["from __future__ import annotations"]
-  if (ctx.needsEnum) lines.push("from enum import Enum")
-  const typingNames = [...ctx.typingImports].sort()
-  if (typingNames.length > 0) lines.push(`from typing import ${typingNames.join(", ")}`)
-  if (ctx.needsAttrs) lines.push("import attrs")
-  lines.push("import cattrs")
-  lines.push("")
+  const lines: string[] = ["from __future__ import annotations"];
+  if (ctx.needsEnum) lines.push("from enum import Enum");
+  const typingNames = [...ctx.typingImports].sort();
+  if (typingNames.length > 0) lines.push(`from typing import ${typingNames.join(", ")}`);
+  if (ctx.needsAttrs) lines.push("import attrs");
+  lines.push("import cattrs");
+  lines.push("");
 
-  const body: string[] = []
+  const body: string[] = [];
   for (const decl of ctx.decls) {
-    body.push(...renderDecl(decl), "")
+    body.push(...renderDecl(decl), "");
   }
   if (!hasOwnDeclaration) {
     const comment =
-      ref.shape.kind === "union" && typeof ref.meta.discriminator === "string" ? discriminatorComment(ref.meta.discriminator, name) : ""
-    body.push(`${name} = ${expr}${comment}`, "")
+      ref.shape.kind === "union" && typeof ref.meta.discriminator === "string"
+        ? discriminatorComment(ref.meta.discriminator, name)
+        : "";
+    body.push(`${name} = ${expr}${comment}`, "");
   }
-  if (stubs.length > 0) body.push(...stubs, "")
+  if (stubs.length > 0) body.push(...stubs, "");
 
-  body.push("converter = cattrs.Converter()")
-  body.push("# converter.structure(data, " + name + ") / converter.unstructure(obj) are the (de)serialization entry points")
-  lines.push(...body)
+  body.push("converter = cattrs.Converter()");
+  body.push(
+    "# converter.structure(data, " +
+      name +
+      ") / converter.unstructure(obj) are the (de)serialization entry points",
+  );
+  lines.push(...body);
 
-  return `${lines.join("\n").trimEnd()}\n`
+  return `${lines.join("\n").trimEnd()}\n`;
 }

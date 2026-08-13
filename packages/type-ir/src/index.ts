@@ -6,15 +6,15 @@
 // src/kinds/common.ts for the full pre-1.0 vocabulary bundled with this
 // package.
 export interface TypeKinds {
-  boolean: { readonly kind: "boolean" }
-  number: { readonly kind: "number" }
-  integer: { readonly kind: "integer" }
-  string: { readonly kind: "string" }
-  null: { readonly kind: "null" }
-  void: { readonly kind: "void" }
-  unknown: { readonly kind: "unknown" }
-  never: { readonly kind: "never" }
-  object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> }
+  boolean: { readonly kind: "boolean" };
+  number: { readonly kind: "number" };
+  integer: { readonly kind: "integer" };
+  string: { readonly kind: "string" };
+  null: { readonly kind: "null" };
+  void: { readonly kind: "void" };
+  unknown: { readonly kind: "unknown" };
+  never: { readonly kind: "never" };
+  object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> };
   // A class instance — purely nominal, carrying only class identity
   // (`className`/`declarationFile`), never structure. Deliberately NOT a
   // subtype of `object` (see `parents` below): a class's fields are only
@@ -33,11 +33,11 @@ export interface TypeKinds {
   // `declarationFile` (the declaring file's path) is the SAME concept
   // `meta.declarationFile` names, so the two are aligned on that one field.
   instance: {
-    readonly kind: "instance"
-    readonly className: string
-    readonly declarationFile: string
-  }
-  array: { readonly kind: "array"; readonly element: TypeRef }
+    readonly kind: "instance";
+    readonly className: string;
+    readonly declarationFile: string;
+  };
+  array: { readonly kind: "array"; readonly element: TypeRef };
   // An asynchronously-produced sequence of values — TypeScript's
   // `AsyncIterable<T>`/`AsyncGenerator<T, TReturn, TNext>` (and the
   // `AsyncIterableIterator<T>` an `async function*` returns), or a server-
@@ -52,7 +52,7 @@ export interface TypeKinds {
   // `instance`/`interface` use elsewhere in this file), since a stream's
   // element type is still the closest structural analogue once the
   // asynchrony/laziness itself can't be preserved.
-  stream: { readonly kind: "stream"; readonly element: TypeRef }
+  stream: { readonly kind: "stream"; readonly element: TypeRef };
   // A paginated collection — TypeScript's `CursorPage<T>`/`OffsetPage<T>`/
   // `Page<T>` convention (`@rhi-zone/fractal-api-tree`'s pagination types): a
   // handler returning one of these shapes (or `Promise<...>` of one) signals
@@ -66,11 +66,11 @@ export interface TypeKinds {
   // projector that can't express pagination natively degrades to its
   // array/list equivalent over `element` (the page's item type), same
   // honest-degrade convention `stream` uses.
-  page: { readonly kind: "page"; readonly element: TypeRef; readonly style: "cursor" | "offset" }
-  tuple: { readonly kind: "tuple"; readonly elements: readonly TypeRef[] }
-  map: { readonly kind: "map"; readonly key: TypeRef; readonly value: TypeRef }
-  union: { readonly kind: "union"; readonly variants: readonly TypeRef[] }
-  literal: { readonly kind: "literal"; readonly value: string | number | boolean | null }
+  page: { readonly kind: "page"; readonly element: TypeRef; readonly style: "cursor" | "offset" };
+  tuple: { readonly kind: "tuple"; readonly elements: readonly TypeRef[] };
+  map: { readonly kind: "map"; readonly key: TypeRef; readonly value: TypeRef };
+  union: { readonly kind: "union"; readonly variants: readonly TypeRef[] };
+  literal: { readonly kind: "literal"; readonly value: string | number | boolean | null };
   // A closed set of string members with no associated payload — the same
   // information a `union` of same-valued `literal` strings would carry, kept
   // as a distinct kind because most target languages have a native construct
@@ -80,9 +80,9 @@ export interface TypeKinds {
   // and mixed-type enums (e.g. a TS numeric enum) don't fit this kind and
   // lower to `union` of `literal` instead (see
   // `from-typescript.ts`'s union-lowering: search "numeric TS enums").
-  enum: { readonly kind: "enum"; readonly members: readonly string[] }
-  ref: { readonly kind: "ref"; readonly target: string }
-  intersection: { readonly kind: "intersection"; readonly members: readonly TypeRef[] }
+  enum: { readonly kind: "enum"; readonly members: readonly string[] };
+  ref: { readonly kind: "ref"; readonly target: string };
+  intersection: { readonly kind: "intersection"; readonly members: readonly TypeRef[] };
   // A callable type: ordered parameters, a return type, and an optional
   // `this` binding (present for class methods and other functions with an
   // explicit/implicit `this` — e.g. `types.instance("ClassName", declarationFile)`;
@@ -91,11 +91,11 @@ export interface TypeKinds {
   // `instance` (which stays purely nominal); this kind is for callable types
   // that appear in type positions (callback params, fields, etc.).
   function: {
-    readonly kind: "function"
-    readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-    readonly returnType: TypeRef
-    readonly thisType?: TypeRef
-  }
+    readonly kind: "function";
+    readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+    readonly returnType: TypeRef;
+    readonly thisType?: TypeRef;
+  };
   // A callable that belongs to a type's contract — not a standalone callable
   // (that's `function`), but the shape of one entry in a service/interface's
   // method surface. Same fields as `function` (params/returnType/thisType)
@@ -106,11 +106,11 @@ export interface TypeKinds {
   // RPCs, Cap'n Proto interface methods, TypeScript method-signature syntax
   // vs. arrow-function syntax) can special-case it.
   method: {
-    readonly kind: "method"
-    readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-    readonly returnType: TypeRef
-    readonly thisType?: TypeRef
-  }
+    readonly kind: "method";
+    readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+    readonly returnType: TypeRef;
+    readonly thisType?: TypeRef;
+  };
   // A type that carries methods — the equivalent of Protobuf's `service` or
   // Cap'n Proto's `interface`: not data, a contract of callable operations.
   // Structural (no name of its own — naming is a declaration concern, same as
@@ -120,17 +120,17 @@ export interface TypeKinds {
   // are not `object` fields, and projectors that can't express a service
   // surface must degrade explicitly rather than silently rendering an object.
   interface: {
-    readonly kind: "interface"
-    readonly methods: Readonly<Record<string, TypeRef>>
-  }
+    readonly kind: "interface";
+    readonly methods: Readonly<Record<string, TypeRef>>;
+  };
 }
 
-export type TypeShape = TypeKinds[keyof TypeKinds]
+export type TypeShape = TypeKinds[keyof TypeKinds];
 
 export type TypeRef = {
-  readonly shape: TypeShape
-  readonly meta: Readonly<Record<string, unknown>>
-}
+  readonly shape: TypeShape;
+  readonly meta: Readonly<Record<string, unknown>>;
+};
 
 // `meta` is an open bag — these are conventions read by consumers, not
 // hard-typed fields (see design-philosophy: open metadata bag over fixed
@@ -201,35 +201,32 @@ const parents: Record<string, string | null> = {
   method: "function",
   // NOT a subtype of `object` — see TypeKinds.interface doc comment above.
   interface: null,
-}
+};
 
 export function registerParent(kind: string, parent: string | null): void {
-  parents[kind] = parent
+  parents[kind] = parent;
 }
 
 export function ancestors(kind: string): string[] {
-  const chain: string[] = []
-  let current = parents[kind] ?? undefined
+  const chain: string[] = [];
+  let current = parents[kind] ?? undefined;
   while (current !== undefined) {
-    chain.push(current)
-    current = parents[current] ?? undefined
+    chain.push(current);
+    current = parents[current] ?? undefined;
   }
-  return chain
+  return chain;
 }
 
-export function resolve<T>(
-  kind: string,
-  handlers: Record<string, T>,
-): T | undefined {
-  if (kind in handlers) return handlers[kind]
+export function resolve<T>(kind: string, handlers: Record<string, T>): T | undefined {
+  if (kind in handlers) return handlers[kind];
   for (const ancestor of ancestors(kind)) {
-    if (ancestor in handlers) return handlers[ancestor]
+    if (ancestor in handlers) return handlers[ancestor];
   }
-  return undefined
+  return undefined;
 }
 
 export function t(shape: TypeShape, meta?: Record<string, unknown>): TypeRef {
-  return { shape, meta: meta ?? {} }
+  return { shape, meta: meta ?? {} };
 }
 
 export const types = {
@@ -242,10 +239,12 @@ export const types = {
   unknown: { kind: "unknown" } as const,
   never: { kind: "never" } as const,
   object: (fields: Record<string, TypeRef>) => ({ kind: "object", fields }) as const,
-  instance: (className: string, declarationFile: string) => ({ kind: "instance", className, declarationFile }) as const,
+  instance: (className: string, declarationFile: string) =>
+    ({ kind: "instance", className, declarationFile }) as const,
   array: (element: TypeRef) => ({ kind: "array", element }) as const,
   stream: (element: TypeRef) => ({ kind: "stream", element }) as const,
-  page: (element: TypeRef, style: "cursor" | "offset") => ({ kind: "page", element, style }) as const,
+  page: (element: TypeRef, style: "cursor" | "offset") =>
+    ({ kind: "page", element, style }) as const,
   tuple: (elements: readonly TypeRef[]) => ({ kind: "tuple", elements }) as const,
   map: (key: TypeRef, value: TypeRef) => ({ kind: "map", key, value }) as const,
   union: (variants: readonly TypeRef[]) => ({ kind: "union", variants }) as const,
@@ -270,9 +269,19 @@ export const types = {
       ? ({ kind: "method", params, returnType } as const)
       : ({ kind: "method", params, returnType, thisType } as const),
   interface: (methods: Record<string, TypeRef>) => ({ kind: "interface", methods }) as const,
-}
+};
 
-export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "./derive.ts"
+export {
+  partial,
+  required,
+  pick,
+  omit,
+  extend,
+  nullable,
+  withMeta,
+  deepPartial,
+  deepRequired,
+} from "./derive.ts";
 
 // ============================================================================
 // TypeRefDocument — a self-contained TypeRef plus named definitions.
@@ -295,13 +304,13 @@ export { partial, required, pick, omit, extend, nullable, withMeta, deepPartial,
 // ============================================================================
 
 export type TypeRefDocument = {
-  readonly root: TypeRef
-  readonly defs: Readonly<Record<string, TypeRef>>
-}
+  readonly root: TypeRef;
+  readonly defs: Readonly<Record<string, TypeRef>>;
+};
 
 /** Wrap a bare `TypeRef` (optionally with `defs`) into a `TypeRefDocument`. */
 export function typeRefDocument(root: TypeRef, defs?: Record<string, TypeRef>): TypeRefDocument {
-  return { root, defs: defs ?? {} }
+  return { root, defs: defs ?? {} };
 }
 
 /** Duck-types `v` as a `TypeRef` — every `TypeRef` carries `shape.kind` +
@@ -310,14 +319,14 @@ export function typeRefDocument(root: TypeRef, defs?: Record<string, TypeRef>): 
  * `childTypeRefs` to walk an arbitrary (possibly extension-registered) kind's
  * shape generically, without a per-kind switch. */
 function isTypeRef(v: unknown): v is TypeRef {
-  if (typeof v !== "object" || v === null) return false
-  const shape = (v as { shape?: unknown }).shape
+  if (typeof v !== "object" || v === null) return false;
+  const shape = (v as { shape?: unknown }).shape;
   return (
     "meta" in v &&
     typeof shape === "object" &&
     shape !== null &&
     typeof (shape as { kind?: unknown }).kind === "string"
-  )
+  );
 }
 
 /**
@@ -332,25 +341,29 @@ function isTypeRef(v: unknown): v is TypeRef {
  * contribute no children here — walking root+defs can never cycle structurally.
  */
 export function childTypeRefs(shape: TypeShape): TypeRef[] {
-  const out: TypeRef[] = []
+  const out: TypeRef[] = [];
   for (const value of Object.values(shape)) {
     if (isTypeRef(value)) {
-      out.push(value)
+      out.push(value);
     } else if (Array.isArray(value)) {
       for (const item of value) {
         if (isTypeRef(item)) {
-          out.push(item)
-        } else if (typeof item === "object" && item !== null && isTypeRef((item as { type?: unknown }).type)) {
-          out.push((item as { type: TypeRef }).type)
+          out.push(item);
+        } else if (
+          typeof item === "object" &&
+          item !== null &&
+          isTypeRef((item as { type?: unknown }).type)
+        ) {
+          out.push((item as { type: TypeRef }).type);
         }
       }
     } else if (typeof value === "object" && value !== null) {
       for (const nested of Object.values(value)) {
-        if (isTypeRef(nested)) out.push(nested)
+        if (isTypeRef(nested)) out.push(nested);
       }
     }
   }
-  return out
+  return out;
 }
 
 /** Count of TypeRef nodes in a subtree (the node itself + every descendant
@@ -359,9 +372,9 @@ export function childTypeRefs(shape: TypeShape): TypeRef[] {
  * extractor) to decide whether a reused type is big enough to be worth sharing
  * via `defs` rather than inlining at every use site. */
 export function nodeCount(node: TypeRef): number {
-  let count = 1
-  for (const child of childTypeRefs(node.shape)) count += nodeCount(child)
-  return count
+  let count = 1;
+  for (const child of childTypeRefs(node.shape)) count += nodeCount(child);
+  return count;
 }
 
 /** Resolve a `{ kind: "ref"; target }` TypeRef against a document's `defs`.
@@ -370,13 +383,13 @@ export function nodeCount(node: TypeRef): number {
  * at all, which simply never contains a ref in the first place for callers
  * that don't produce one). Non-ref input is returned unchanged. */
 export function resolveRef(doc: TypeRefDocument, ref: TypeRef): TypeRef {
-  if (ref.shape.kind !== "ref") return ref
-  const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target
-  const resolved = doc.defs[target]
+  if (ref.shape.kind !== "ref") return ref;
+  const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target;
+  const resolved = doc.defs[target];
   if (resolved === undefined) {
-    throw new Error(`resolveRef: unresolved ref target "${target}" (no such entry in defs)`)
+    throw new Error(`resolveRef: unresolved ref target "${target}" (no such entry in defs)`);
   }
-  return resolved
+  return resolved;
 }
 
 /** Per-node context handed to a `walkTypeRef` visitor. */
@@ -387,13 +400,13 @@ export interface WalkContext {
    * `childTypeRefs`); a visitor that manually resolves a ref via
    * `resolveRef` and walks the result can use `isRecursionTarget` on that
    * resolved node to detect having come full circle. */
-  ancestors: readonly TypeRef[]
+  ancestors: readonly TypeRef[];
   /** `resolveRef(doc, ref)` bound to this walk's document. */
-  resolveRef(ref: TypeRef): TypeRef
+  resolveRef(ref: TypeRef): TypeRef;
   /** True when `node` is reference-equal to one of `ancestors` — i.e.
    * revisiting it (typically after a caller-driven `resolveRef`) would
    * recurse infinitely. */
-  isRecursionTarget(node: TypeRef): boolean
+  isRecursionTarget(node: TypeRef): boolean;
 }
 
 /**
@@ -406,20 +419,23 @@ export interface WalkContext {
  * effects, e.g. the extractor's use-count tracking or compile.ts's per-def
  * codegen).
  */
-export function walkTypeRef(doc: TypeRefDocument, visitor: (node: TypeRef, ctx: WalkContext) => void): void {
-  const boundResolveRef = (ref: TypeRef) => resolveRef(doc, ref)
+export function walkTypeRef(
+  doc: TypeRefDocument,
+  visitor: (node: TypeRef, ctx: WalkContext) => void,
+): void {
+  const boundResolveRef = (ref: TypeRef) => resolveRef(doc, ref);
   function visit(node: TypeRef, ancestors: readonly TypeRef[]): void {
     const ctx: WalkContext = {
       ancestors,
       resolveRef: boundResolveRef,
       isRecursionTarget: (n) => ancestors.includes(n),
-    }
-    visitor(node, ctx)
-    const nextAncestors = [...ancestors, node]
-    for (const child of childTypeRefs(node.shape)) visit(child, nextAncestors)
+    };
+    visitor(node, ctx);
+    const nextAncestors = [...ancestors, node];
+    for (const child of childTypeRefs(node.shape)) visit(child, nextAncestors);
   }
-  visit(doc.root, [])
-  for (const name of Object.keys(doc.defs)) visit(doc.defs[name]!, [])
+  visit(doc.root, []);
+  for (const name of Object.keys(doc.defs)) visit(doc.defs[name]!, []);
 }
 
 // ============================================================================
@@ -435,7 +451,7 @@ export function walkTypeRef(doc: TypeRefDocument, visitor: (node: TypeRef, ctx: 
 // concern, not type-ir's.
 // ============================================================================
 
-export { compileValidator, typeRefToString, type ValidationError } from "./compile.ts"
+export { compileValidator, typeRefToString, type ValidationError } from "./compile.ts";
 
 // Wire profiles + staged validation (Wire -> ValidWire -> T -> valid T) — see
 // docs/design/wire-profiles-and-staged-validation.md and compile.ts's own
@@ -469,9 +485,9 @@ export {
   type WireProfile,
   wireTypeText,
   wireValidatorKey,
-} from "./compile.ts"
+} from "./compile.ts";
 
-export { compileDefsBlock, type CompiledDefsBlock } from "./compile.ts"
+export { compileDefsBlock, type CompiledDefsBlock } from "./compile.ts";
 
 // `WireOf<T, Profile>` — the type-level mirror of the above, for a custom
 // decoder's authoring-site typing (function-form `encodingMap`, decision 3
@@ -479,4 +495,4 @@ export { compileDefsBlock, type CompiledDefsBlock } from "./compile.ts"
 // wire-of.ts's own module doc for why this is a separate file from
 // compile.ts (profile NAMES, not `WireProfile` VALUES — a purely
 // type-level concern with no runtime counterpart at all).
-export { type WireOf, type WireProfileName } from "./wire-of.ts"
+export { type WireOf, type WireProfileName } from "./wire-of.ts";

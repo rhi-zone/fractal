@@ -58,12 +58,12 @@ Enumeration projections (OpenAPI, CLI help) walk the tree collecting leaves.
 The verb helper **bundle** (e.g. `methods({ read, replace, remove })`) applies
 the tag-to-verb mapping at tree-build time. The mapping itself:
 
-| tags | verb |
-| --- | --- |
-| `readOnly` | GET |
-| `idempotent ∧ ¬readOnly ∧ ¬destructive` | PUT |
-| `idempotent ∧ destructive` | DELETE |
-| *(else)* | POST |
+| tags                                    | verb   |
+| --------------------------------------- | ------ |
+| `readOnly`                              | GET    |
+| `idempotent ∧ ¬readOnly ∧ ¬destructive` | PUT    |
+| `idempotent ∧ destructive`              | DELETE |
+| _(else)_                                | POST   |
 
 Verb is derived from tags at projection time — never stored as a separate key.
 

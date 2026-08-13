@@ -25,8 +25,7 @@ describe("function category", () => {
 
 describe("Result", () => {
   it("map / bind short-circuit on error", () => {
-    const half = (n: number): Result<number, string> =>
-      n % 2 === 0 ? ok(n / 2) : err("odd");
+    const half = (n: number): Result<number, string> => (n % 2 === 0 ? ok(n / 2) : err("odd"));
     expect(map(ok(4), (n) => n + 1)).toEqual({ kind: "ok", value: 5 });
     expect(bind(ok(8), half)).toEqual({ kind: "ok", value: 4 });
     expect(bind(ok(7), half)).toEqual({ kind: "err", error: "odd" });
@@ -36,8 +35,7 @@ describe("Result", () => {
   it("composeK threads a fallible chain", () => {
     const parse = (s: string): Result<number, string> =>
       Number.isNaN(Number(s)) ? err("nan") : ok(Number(s));
-    const recip = (n: number): Result<number, string> =>
-      n === 0 ? err("div0") : ok(1 / n);
+    const recip = (n: number): Result<number, string> => (n === 0 ? err("div0") : ok(1 / n));
     const f = composeK(parse)(recip);
     expect(f("4")).toEqual({ kind: "ok", value: 0.25 });
     expect(f("0")).toEqual({ kind: "err", error: "div0" });
@@ -65,4 +63,3 @@ describe("collect (applicative)", () => {
     expect(run({ x: "" })).toEqual({ kind: "err", error: "empty" });
   });
 });
-

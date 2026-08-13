@@ -6,7 +6,7 @@ Reference target: `/home/me/git/rhizone/server-less`, Rust, workspace `version =
 
 **Correction up front.** A prior read claimed server-less "infers structure from names / the
 type-graph." That conflates two different things. Structure (the tree) is **authored
-explicitly** by the developer via Rust `impl` blocks and mount methods; it is *not* inferred.
+explicitly** by the developer via Rust `impl` blocks and mount methods; it is _not_ inferred.
 Name-based inference exists but is confined to **per-leaf HTTP defaults** (verb + REST path),
 not to the tree. The tree is real and explicit; see §1.
 
@@ -14,7 +14,7 @@ not to the tree. The tree is real and explicit; see §1.
 
 ## 1. THE TREE — explicit, authored as impl blocks + `&T` mount methods
 
-**What it really is.** There is no separate tree DSL, config, or builder object. The tree *is*
+**What it really is.** There is no separate tree DSL, config, or builder object. The tree _is_
 the Rust type graph, made explicit by two authoring acts:
 
 - **A node** = one `impl` block carrying a protocol attribute (`#[http]`, `#[mcp]`, `#[cli]`, …).
@@ -50,7 +50,7 @@ by method name. Depth is unbounded (mounts recurse into child types).
   method makes the parent's router/tool-list include the child, "scoped under the mount method's
   name."
 
-**Protocol-neutral or HTTP-shaped?** The *authoring* is protocol-neutral: the same impl blocks
+**Protocol-neutral or HTTP-shaped?** The _authoring_ is protocol-neutral: the same impl blocks
 and the same `&T` mount methods drive every projection. But there is **no single reified tree
 object** at runtime — each protocol macro independently re-walks the block (via
 `extract_methods`/`partition_methods`) and emits its **own** composition trait, and each imposes
@@ -70,7 +70,7 @@ the prefixing/addressing rule is per-projection.
 
 **On "`&T` → HttpMount".** `HttpMount` (`crates/server-less-core/src/lib.rs:291-306`) is the
 HTTP-specific trait auto-implemented by `#[http]` on a node; its `http_mount_router` +
-`http_mount_openapi_paths` are what a parent calls when it hits a `&T` mount method. It is *not*
+`http_mount_openapi_paths` are what a parent calls when it hits a `&T` mount method. It is _not_
 the tree — it is HTTP's realization of one mount edge. Each protocol has a sibling trait
 (`McpNamespace`, `JsonRpcMount`, `WsMount`, `CliSubcommand`).
 
@@ -107,17 +107,17 @@ Metadata attaches at three levels, all as Rust attribute macros:
   (`crates/server-less-macros/src/http.rs:193-199`).
 - Cross-protocol `name` override is read from **any** protocol attr by
   `extract_wire_name`, scanning a fixed whitelist `PROTOCOL_ATTRS = ["server","cli","http","mcp",
-  "jsonrpc","grpc","ws","graphql","tool"]` (`crates/server-less-parse/src/lib.rs:353-387`).
+"jsonrpc","grpc","ws","graphql","tool"]` (`crates/server-less-parse/src/lib.rs:353-387`).
 
 **Open or closed?** **Closed.** Every attribute parser hard-codes its valid-key set and
-*rejects* unknown keys with a "did you mean" diagnostic:
+_rejects_ unknown keys with a "did you mean" diagnostic:
 
 - `#[param]`: `VALID` array + `meta.error("unknown attribute …")`
   (`crates/server-less-parse/src/lib.rs:688-719`).
 - `#[server]`: `KNOWN_SERVER_FLAGS` + `validate_server_attrs` errors on unknown
   (`server_attrs.rs:14,30-59`).
 - `#[response]`: valid set + error (`openapi_gen.rs:155-172`).
-- The recognized protocol-attr *names* are themselves a fixed list (`PROTOCOL_ATTRS`,
+- The recognized protocol-attr _names_ are themselves a fixed list (`PROTOCOL_ATTRS`,
   `lib.rs:354`).
 
 A new projection **cannot** introduce a new metadata key or a new protocol attribute without
@@ -182,7 +182,7 @@ Three concerns, and where each lives:
 2. **Per-op projection metadata:** the attribute args of §2 — orthogonal knobs (`#[route]`,
    `#[response]`, `#[param(query|path|header)]`, `#[cli(default|hidden)]`, `#[server(skip|hidden)]`).
 3. **Typed data (truth):** the function signature — param types, return type, and doc comments.
-   Schemas and descriptions are *always* derived from these, never restated in metadata
+   Schemas and descriptions are _always_ derived from these, never restated in metadata
    (`extract_docs`, `parse_return_type`, `CliManualNode` schemas). This matches the fractal tenet
    "types + JSDoc are the single source of truth for the data."
 
@@ -191,9 +191,9 @@ Three concerns, and where each lives:
 - **No single reified tree.** Each protocol re-derives structure and owns its own mount trait
   (`HttpMount`, `McpNamespace`, `JsonRpcMount`, `WsMount`, `CliSubcommand`;
   `core/src/lib.rs:126-306`) and its own prefix convention. The neutral tree exists only as a
-  shared *parsing pass*, not as a shared *object*. Add a protocol ⇒ add a mount trait + re-walk.
+  shared _parsing pass_, not as a shared _object_. Add a protocol ⇒ add a mount trait + re-walk.
 - **Name-inference couples data-naming to projection behavior.** HTTP verb/path/method-location
-  are inferred from the *method name* and *param names* (`is_id` ⇒ `/{id}` and CLI-positional:
+  are inferred from the _method name_ and _param names_ (`is_id` ⇒ `/{id}` and CLI-positional:
   `parse/src/lib.rs:778-779`, `1126-1130`). Renaming a function or a param silently changes the
   HTTP surface. Structure-truth (naming) and projection are not fully decoupled — the name is
   overloaded as both identity and routing hint.
@@ -213,18 +213,18 @@ Three concerns, and where each lives:
 Ignoring Rust-macros-vs-TS-codegen (not a real difference), the substantive deltas:
 
 1. **CLOSED metadata vs OPEN metadata — the biggest gap.** fractal wants an op to carry an
-   *arbitrary, extensible* metadata bag; a *new projection defines new keys without touching the
-   core*. server-less is the opposite: every key and every protocol-attr name is a hard-coded
+   _arbitrary, extensible_ metadata bag; a _new projection defines new keys without touching the
+   core_. server-less is the opposite: every key and every protocol-attr name is a hard-coded
    whitelist that errors on unknowns (`param` VALID `parse/src/lib.rs:688-691`; `server`
    `server_attrs.rs:14`; `response` `openapi_gen.rs:155`; `PROTOCOL_ATTRS` `parse/src/lib.rs:354`).
-   Adding gRPC-only or MCP-only metadata means editing shared crates. server-less *ignores*
-   unrecognized-*by-this-projection* keys (each macro reads only its own attrs), which is the
-   "projection reads keys it knows, ignores the rest" tenet — but the *universe* of keys is
+   Adding gRPC-only or MCP-only metadata means editing shared crates. server-less _ignores_
+   unrecognized-_by-this-projection_ keys (each macro reads only its own attrs), which is the
+   "projection reads keys it knows, ignores the rest" tenet — but the _universe_ of keys is
    fixed centrally. fractal wants the universe itself open.
 
 2. **No reified, shared tree object.** fractal's "tree" is a first-class structure a projection
    consumes. server-less's tree is an authoring convention + N independent re-derivations, one
-   composition trait per protocol. There is no single artifact a *new* projection can consume
+   composition trait per protocol. There is no single artifact a _new_ projection can consume
    without re-implementing traversal and its own mount trait.
 
 3. **Op identity is not a plain value.** fractal: "an operation is just a function `T => U`
@@ -234,9 +234,9 @@ Ignoring Rust-macros-vs-TS-codegen (not a real difference), the substantive delt
 
 4. **Name-based inference is load-bearing, not just a convenience.** fractal wants defaults "from
    the types where obvious." server-less leans harder: HTTP verb, REST path, `/{id}` segments,
-   and CLI positionality are all inferred from *method/param names* (`infer_http_method`/
+   and CLI positionality are all inferred from _method/param names_ (`infer_http_method`/
    `infer_path` `core/src/lib.rs:554-673`; `is_id` `parse/src/lib.rs:1126-1130`). That is
-   inference from *names*, not from *types* — a different, more fragile source than fractal's
+   inference from _names_, not from _types_ — a different, more fragile source than fractal's
    "types are truth."
 
 **Where server-less matches fractal well (don't manufacture a gap):** ops are plain typed

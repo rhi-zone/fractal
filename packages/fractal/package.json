@@ -2,21 +2,24 @@
   "name": "@rhi-zone/fractal",
   "version": "0.1.0-alpha.0",
   "description": "Umbrella entry point — the api()/op() function core on the package root, one subpath per protocol projection (./http, ./cli, ./json-rpc, ./graphql, ./mcp). Pure re-export facade, no runtime code of its own",
+  "keywords": [
+    "api",
+    "cli",
+    "graphql",
+    "http",
+    "json-rpc",
+    "mcp",
+    "projector",
+    "umbrella"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/fractal"
   },
-  "keywords": [
-    "api",
-    "projector",
-    "http",
-    "graphql",
-    "mcp",
-    "cli",
-    "json-rpc",
-    "umbrella"
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -48,17 +51,23 @@
       "import": "./dist/mcp.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@rhi-zone/fractal-cli-api-projector": "workspace:*",
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
     "@rhi-zone/fractal-json-rpc-api-projector": "workspace:*"
+  },
+  "devDependencies": {
+    "@rhi-zone/fractal-graphql-api-projector": "workspace:*",
+    "@rhi-zone/fractal-mcp-api-projector": "workspace:*"
   },
   "peerDependencies": {
     "@rhi-zone/fractal-graphql-api-projector": "^0.1.0-alpha.0",
@@ -72,16 +81,7 @@
       "optional": true
     }
   },
-  "devDependencies": {
-    "@rhi-zone/fractal-graphql-api-projector": "workspace:*",
-    "@rhi-zone/fractal-mcp-api-projector": "workspace:*"
-  },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:watch": "bun test --watch"
-  },
-  "publishConfig": {
-    "access": "public"
+  "engines": {
+    "node": ">=20"
   }
 }

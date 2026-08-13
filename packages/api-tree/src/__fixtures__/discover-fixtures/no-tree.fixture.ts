@@ -9,7 +9,7 @@
 // Not a test file (no `.test.ts`), so bun test skips it.
 
 export function double(n: number): number {
-  return n * 2
+  return n * 2;
 }
 
-export const greeting = "hello"
+export const greeting = "hello";

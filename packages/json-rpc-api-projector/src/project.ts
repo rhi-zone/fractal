@@ -49,19 +49,19 @@
 //   packages/api-tree/src/tags.ts                     — tag lattice (resolveTags)
 //   docs/design/router-model.md                       — Node Shape, Dispatch, fallback
 
-import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc"
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SourceMap } from "@rhi-zone/fractal-api-tree"
+import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc";
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { SourceMap } from "@rhi-zone/fractal-api-tree";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 /** JSON Schema, kept as an open bag — same convention as every other projector's schema types. */
-export type JsonSchema = Record<string, unknown>
+export type JsonSchema = Record<string, unknown>;
 
 /**
  * One method's full JSON-RPC descriptor — one per leaf node in the Node
@@ -69,53 +69,53 @@ export type JsonSchema = Record<string, unknown>
  * derivation and the tag -> metadata mapping.
  */
 export type JsonRpcMethod = {
-  readonly name: string
-  readonly description: string
-  readonly paramsSchema: JsonSchema
-  readonly resultSchema?: JsonSchema
-  readonly errorSchema: JsonSchema
-  readonly readOnly?: boolean
-  readonly destructive?: boolean
-  readonly idempotent?: boolean
+  readonly name: string;
+  readonly description: string;
+  readonly paramsSchema: JsonSchema;
+  readonly resultSchema?: JsonSchema;
+  readonly errorSchema: JsonSchema;
+  readonly readOnly?: boolean;
+  readonly destructive?: boolean;
+  readonly idempotent?: boolean;
   /** True when the method's handler returns an `AsyncIterable` — its
    * result is delivered as JSON-RPC Notifications over the WebSocket
    * transport (server.ts), not a single `result` response. Derived from
    * `meta.tags.streaming` (three-valued; see `resolveTags`) — an explicit
    * tag always wins over the schema's own `x-stream` marker, matching how
    * `resolveTags` itself prioritizes an authored tag over a derived one. */
-  readonly streaming?: boolean
+  readonly streaming?: boolean;
   /** Lifecycle flag — see `McpTool.deprecated`'s doc (mcp-api-projector/src/project.ts) for the shared three-valued-tag reasoning. */
-  readonly deprecated?: boolean
-}
+  readonly deprecated?: boolean;
+};
 
 /** Derived-from-type facts for one method, keyed by its dot-joined name. Same shape MCP's `ToolSchema` carries, plus `outputSchema` (which api-tree's `extractToolSchemas` already produces but MCP doesn't consume). */
 export type MethodSchema = {
-  readonly paramsSchema?: JsonSchema
-  readonly resultSchema?: JsonSchema
-  readonly description?: string
-}
+  readonly paramsSchema?: JsonSchema;
+  readonly resultSchema?: JsonSchema;
+  readonly description?: string;
+};
 
 /** Map of method name -> derived schema/description (from codegen). */
-export type SchemaMap = Readonly<Record<string, MethodSchema>>
+export type SchemaMap = Readonly<Record<string, MethodSchema>>;
 
 /** A dispatch entry: the leaf's handler plus its `meta.jsonrpc.sourceMap` (empty when the leaf declares no overrides) and its own `LeafMeta`. */
 export type Dispatch = {
-  readonly handler: Handler
-  readonly sourceMap: SourceMap
-  readonly meta: LeafMeta
-}
+  readonly handler: Handler;
+  readonly sourceMap: SourceMap;
+  readonly meta: LeafMeta;
+};
 
 /** Options for `projectMethods`/`toMethods`. */
 export type ProjectMethodsOptions = {
   /** Method-name -> derived params/result schema + description (from codegen). */
-  readonly schemas?: SchemaMap
-}
+  readonly schemas?: SchemaMap;
+};
 
 /** `projectMethods`'s full result: the flat descriptor array plus the name -> handler dispatch table (server.ts resolves calls through this, not a second tree walk). */
 export type ProjectMethodsResult = {
-  readonly methods: JsonRpcMethod[]
-  readonly handlers: ReadonlyMap<string, Dispatch>
-}
+  readonly methods: JsonRpcMethod[];
+  readonly handlers: ReadonlyMap<string, Dispatch>;
+};
 
 // ============================================================================
 // meta.jsonrpc open bag
@@ -132,32 +132,32 @@ export type ProjectMethodsResult = {
 /** `meta.jsonrpc` fields valid at LEAF position only. */
 export type JsonRpcLeafMetaProperties = {
   /** Full method-name override (dot-prefix ignored when set). */
-  readonly name?: string
+  readonly name?: string;
   /** Description text override. */
-  readonly description?: string
+  readonly description?: string;
   /** Narrows the JSON-RPC error envelope's `data` field for this method (see `jsonRpcErrorSchema`). */
-  readonly errorDataSchema?: JsonSchema
+  readonly errorDataSchema?: JsonSchema;
   /** Per-param source overrides for this leaf's input assembly (see `packages/api-tree/src/input.ts`). Params not listed here resolve from the `"params"` store by their own name. */
-  readonly sourceMap?: SourceMap
-  readonly [key: string]: unknown
-}
+  readonly sourceMap?: SourceMap;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `JsonRpcLeafMetaProperties` under the `jsonrpc` key — extend `LeafMeta` with this in a deployment's augmentation file. */
 export type JsonRpcLeafMeta = {
-  readonly jsonrpc?: JsonRpcLeafMetaProperties
-}
+  readonly jsonrpc?: JsonRpcLeafMetaProperties;
+};
 
 /** `meta.jsonrpc` fields valid at BRANCH position only. */
 export type JsonRpcBranchMetaProperties = {
   /** This node's own contribution to the dot-joined method-name prefix. */
-  readonly segment?: string
-  readonly [key: string]: unknown
-}
+  readonly segment?: string;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `JsonRpcBranchMetaProperties` under the `jsonrpc` key — extend `BranchMeta` with this in a deployment's augmentation file. */
 export type JsonRpcBranchMeta = {
-  readonly jsonrpc?: JsonRpcBranchMetaProperties
-}
+  readonly jsonrpc?: JsonRpcBranchMetaProperties;
+};
 
 /**
  * Safely extract the open `meta.jsonrpc` bag. Accepts the intersection of
@@ -166,10 +166,12 @@ export type JsonRpcBranchMeta = {
  * (reading `.segment`) at different call sites below; the intersection is
  * safe because the two roles' field sets don't overlap.
  */
-export function getJsonRpcMeta(meta: JsonRpcLeafMeta & JsonRpcBranchMeta): JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties {
-  const j = meta.jsonrpc
-  if (typeof j !== "object" || j === null) return {}
-  return j
+export function getJsonRpcMeta(
+  meta: JsonRpcLeafMeta & JsonRpcBranchMeta,
+): JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties {
+  const j = meta.jsonrpc;
+  if (typeof j !== "object" || j === null) return {};
+  return j;
 }
 
 // ============================================================================
@@ -177,15 +179,17 @@ export function getJsonRpcMeta(meta: JsonRpcLeafMeta & JsonRpcBranchMeta): JsonR
 // ============================================================================
 
 /** Derive the three-valued readOnly/destructive/idempotent fields from a Tags bag (the leaf's OWN meta.tags) — omits a key entirely when its resolved value is unknown (undefined), same convention as MCP's `hintsFromTags`. */
-function tagFields(tags: Tags): Pick<JsonRpcMethod, "readOnly" | "destructive" | "idempotent" | "streaming" | "deprecated"> {
-  const r = resolveTags(tags)
-  const out: Record<string, boolean> = {}
-  if (r.readOnly !== undefined) out.readOnly = r.readOnly
-  if (r.destructive !== undefined) out.destructive = r.destructive
-  if (r.idempotent !== undefined) out.idempotent = r.idempotent
-  if (r.streaming !== undefined) out.streaming = r.streaming
-  if (r.deprecated !== undefined) out.deprecated = r.deprecated
-  return out
+function tagFields(
+  tags: Tags,
+): Pick<JsonRpcMethod, "readOnly" | "destructive" | "idempotent" | "streaming" | "deprecated"> {
+  const r = resolveTags(tags);
+  const out: Record<string, boolean> = {};
+  if (r.readOnly !== undefined) out.readOnly = r.readOnly;
+  if (r.destructive !== undefined) out.destructive = r.destructive;
+  if (r.idempotent !== undefined) out.idempotent = r.idempotent;
+  if (r.streaming !== undefined) out.streaming = r.streaming;
+  if (r.deprecated !== undefined) out.deprecated = r.deprecated;
+  return out;
 }
 
 // ============================================================================
@@ -208,8 +212,8 @@ function tagFields(tags: Tags): Pick<JsonRpcMethod, "readOnly" | "destructive" |
  * @param opts  - Optional derived `schemas` map (from codegen).
  */
 export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): ProjectMethodsResult {
-  const schemas = opts.schemas ?? {}
-  const handlers = new Map<string, Dispatch>()
+  const schemas = opts.schemas ?? {};
+  const handlers = new Map<string, Dispatch>();
 
   // Build one JsonRpcMethod (+ register its dispatch handler) for a leaf
   // node at a fully-resolved `name` — factored out so the SAME construction
@@ -221,10 +225,10 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
   // description text (the tree key for an ordinary leaf; the fallback's own
   // `name` when there is no key).
   const buildMethod = (child: Node, name: string, descriptionFallback: string): JsonRpcMethod => {
-    const jr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
-    const resolvedName = typeof jr.name === "string" ? jr.name : name
+    const jr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta);
+    const resolvedName = typeof jr.name === "string" ? jr.name : name;
 
-    const derived = schemas[resolvedName]
+    const derived = schemas[resolvedName];
 
     const description =
       typeof jr.description === "string"
@@ -233,11 +237,15 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
           ? child.meta.description
           : typeof derived?.description === "string"
             ? derived.description
-            : descriptionFallback
+            : descriptionFallback;
 
-    const errorSchema = jsonRpcErrorSchema(jr.errorDataSchema)
+    const errorSchema = jsonRpcErrorSchema(jr.errorDataSchema);
 
-    handlers.set(resolvedName, { handler: child.handler as Handler, sourceMap: jr.sourceMap ?? {}, meta: child.meta })
+    handlers.set(resolvedName, {
+      handler: child.handler as Handler,
+      sourceMap: jr.sourceMap ?? {},
+      meta: child.meta,
+    });
 
     return {
       name: resolvedName,
@@ -246,26 +254,26 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
       ...(derived?.resultSchema !== undefined ? { resultSchema: derived.resultSchema } : {}),
       errorSchema,
       ...tagFields((child.meta.tags ?? {}) as Tags),
-    }
-  }
+    };
+  };
 
   const walk = (n: Node, prefix: string): JsonRpcMethod[] => {
-    const out: JsonRpcMethod[] = []
+    const out: JsonRpcMethod[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const name = prefix.length > 0 ? `${prefix}.${key}` : key
-        out.push(buildMethod(child, name, key))
+        const name = prefix.length > 0 ? `${prefix}.${key}` : key;
+        out.push(buildMethod(child, name, key));
       } else {
-        const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta)
-        const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key
-        const seg = prefix.length > 0 ? `${prefix}.${rawSeg}` : rawSeg
-        out.push(...walk(child, seg))
+        const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta);
+        const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key;
+        const seg = prefix.length > 0 ? `${prefix}.${rawSeg}` : rawSeg;
+        out.push(...walk(child, seg));
       }
     }
 
     if (n.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}.${n.fallback.name}` : n.fallback.name
+      const seg = prefix.length > 0 ? `${prefix}.${n.fallback.name}` : n.fallback.name;
 
       // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
       // not just a branch (`api({...})`) — walking it as a branch here
@@ -274,20 +282,20 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
       // itself is a leaf, build its method directly at `seg` (no extra
       // segment beyond the fallback's own name).
       if (isLeaf(n.fallback.subtree)) {
-        out.push(buildMethod(n.fallback.subtree, seg, n.fallback.name))
+        out.push(buildMethod(n.fallback.subtree, seg, n.fallback.name));
       } else {
-        out.push(...walk(n.fallback.subtree, seg))
+        out.push(...walk(n.fallback.subtree, seg));
       }
     }
 
-    return out
-  }
+    return out;
+  };
 
-  const methods = walk(n, "")
-  return { methods, handlers }
+  const methods = walk(n, "");
+  return { methods, handlers };
 }
 
 /** Walk a Node tree and produce a flat array of JSON-RPC method descriptors. See `projectMethods` for the full walk. */
 export function toMethods(n: Node, opts: ProjectMethodsOptions = {}): JsonRpcMethod[] {
-  return projectMethods(n, opts).methods
+  return projectMethods(n, opts).methods;
 }

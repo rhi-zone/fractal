@@ -29,19 +29,19 @@ almost certainly not inside the dev shell — `cd` back into the repo (direnv) o
 
 Workspaces (`package.json`):
 
-| Package | Role |
-|---|---|
-| `packages/fractal` | Umbrella facade (`@rhi-zone/fractal`) — no runtime code of its own; re-exports the core on the package root and one subpath per protocol projection |
-| `packages/api-tree` | Core: `api()`/`op()` tree constructors, `Node`/`Handler`/`Meta`, `Result`, the tag lattice, source-level schema extraction, codegen CLI |
-| `packages/type-ir` | Type IR — subtyping hierarchy + open metadata bag; ingests and projects 20+ formats (JSON Schema, OpenAPI, SQL DDL, Protobuf, Zod, per-language serialization libraries, doc-site references, ...) |
-| `packages/http-api-projector` | HTTP projection of the api-tree — router, OpenAPI 3.1, typed client |
-| `packages/graphql-api-projector` | GraphQL projection — SDL, resolver dispatch, subscriptions, typed client |
-| `packages/mcp-api-projector` | MCP projection — tools, resources, prompts, sampling |
-| `packages/cli-api-projector` | CLI projection — subcommand dispatch, shell completions, streaming |
-| `packages/json-rpc-api-projector` | JSON-RPC 2.0 projection — HTTP POST + WebSocket transports, batch requests, typed client |
-| `packages/auth-oidc` | Generic OIDC/JWT auth adapter (server-side JWKS validation + client-side token lifecycle) |
-| `packages/playground` | Browser playground (Vite + Solid) exercising type-ir's ingestor/projector matrix live |
-| `examples/library-api` | End-to-end example tree, projected through HTTP + MCP + codegen, used as a living integration test |
+| Package                           | Role                                                                                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/fractal`                | Umbrella facade (`@rhi-zone/fractal`) — no runtime code of its own; re-exports the core on the package root and one subpath per protocol projection                                                |
+| `packages/api-tree`               | Core: `api()`/`op()` tree constructors, `Node`/`Handler`/`Meta`, `Result`, the tag lattice, source-level schema extraction, codegen CLI                                                            |
+| `packages/type-ir`                | Type IR — subtyping hierarchy + open metadata bag; ingests and projects 20+ formats (JSON Schema, OpenAPI, SQL DDL, Protobuf, Zod, per-language serialization libraries, doc-site references, ...) |
+| `packages/http-api-projector`     | HTTP projection of the api-tree — router, OpenAPI 3.1, typed client                                                                                                                                |
+| `packages/graphql-api-projector`  | GraphQL projection — SDL, resolver dispatch, subscriptions, typed client                                                                                                                           |
+| `packages/mcp-api-projector`      | MCP projection — tools, resources, prompts, sampling                                                                                                                                               |
+| `packages/cli-api-projector`      | CLI projection — subcommand dispatch, shell completions, streaming                                                                                                                                 |
+| `packages/json-rpc-api-projector` | JSON-RPC 2.0 projection — HTTP POST + WebSocket transports, batch requests, typed client                                                                                                           |
+| `packages/auth-oidc`              | Generic OIDC/JWT auth adapter (server-side JWKS validation + client-side token lifecycle)                                                                                                          |
+| `packages/playground`             | Browser playground (Vite + Solid) exercising type-ir's ingestor/projector matrix live                                                                                                              |
+| `examples/library-api`            | End-to-end example tree, projected through HTTP + MCP + codegen, used as a living integration test                                                                                                 |
 
 type-ir and the framework packages are independent: type-ir is useful standalone as a
 conversion library; the framework packages depend on it for their type-shape output but
@@ -116,6 +116,7 @@ projector/interpreter only needs to handle the variants it recognizes — a clos
 would force a core change every time a new format needs a new case.
 
 **type-ir projectors vs framework projectors** — don't confuse the two:
+
 - A **type-ir projector** (`packages/type-ir/src/*.ts`) turns a `TypeRef` into source text
   or a document for one target: a language's native types, a serialization library's
   annotated classes, a schema/IDL format, a doc-site reference page. Pure function:
@@ -129,7 +130,7 @@ would force a core change every time a new format needs a new case.
 fixed schema. Projections read the keys they recognize and ignore the rest — this is what
 lets a new projector introduce a new metadata key without touching the core. Where keys have
 expected semantics (`nullable`, `optional`, `default`, `constraints`, `http.dispatch`, ...),
-that's a documented and tested *convention*, not an IR-enforced contract — violate it and
+that's a documented and tested _convention_, not an IR-enforced contract — violate it and
 nothing stops you, but nothing guarantees the result works either.
 
 Read `docs/design/design-philosophy.md` in full before non-trivial architectural changes;
@@ -185,7 +186,7 @@ and read `docs/design/design-philosophy.md`'s "routing is the API structure" sec
 
 ## Code style
 
-- Comments are for *why*, not *what* — rationale, spec citations, and cross-references to
+- Comments are for _why_, not _what_ — rationale, spec citations, and cross-references to
   sibling projectors, not restating what the next line of code does. Every projector cites
   the relevant spec section(s) it implements, inline, near the top of the file: projector
   output needs to be auditable against the standard without hunting for the section, which

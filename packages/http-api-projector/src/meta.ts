@@ -17,17 +17,17 @@
 // }
 // ```
 
-import type { HttpLeafMetaProperties, HttpSharedMetaProperties } from "./project.ts"
-import type { OpenApiLeafMetaProperties, OpenApiSharedMetaProperties } from "./openapi.ts"
+import type { HttpLeafMetaProperties, HttpSharedMetaProperties } from "./project.ts";
+import type { OpenApiLeafMetaProperties, OpenApiSharedMetaProperties } from "./openapi.ts";
 
 /** This package's `meta` fields valid at BOTH leaf and branch position — `http` (project.ts) + `openapi` (openapi.ts) namespaces combined. */
 export interface HttpSharedMeta {
-  readonly http?: HttpSharedMetaProperties
-  readonly openapi?: OpenApiSharedMetaProperties
+  readonly http?: HttpSharedMetaProperties;
+  readonly openapi?: OpenApiSharedMetaProperties;
 }
 
 /** This package's `meta` fields valid at LEAF (operation) position — `http` (project.ts) + `openapi` (openapi.ts) namespaces combined. */
 export interface HttpLeafMeta {
-  readonly http?: HttpLeafMetaProperties
-  readonly openapi?: OpenApiLeafMetaProperties
+  readonly http?: HttpLeafMetaProperties;
+  readonly openapi?: OpenApiLeafMetaProperties;
 }

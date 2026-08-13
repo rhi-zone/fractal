@@ -10,7 +10,7 @@
 // they apply to `overallF1` and any sub-axis F1 from inference-eval.ts
 // without inference-eval.ts needing to know how a bootstrap works.
 
-export type Rng = () => number
+export type Rng = () => number;
 
 /**
  * mulberry32 — small, fast, seedable PRNG. Returns a `() => number in
@@ -19,50 +19,50 @@ export type Rng = () => number
  * well-tested generator rather than each rolling their own.
  */
 export function mulberry32(seed: number): Rng {
-  let a = seed >>> 0
+  let a = seed >>> 0;
   return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let x = Math.imul(a ^ (a >>> 15), 1 | a)
-    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296
-  }
+    a = (a + 0x6d2b79f5) | 0;
+    let x = Math.imul(a ^ (a >>> 15), 1 | a);
+    x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 export function mean(values: readonly number[]): number {
-  return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length
+  return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 /** Sample standard deviation (n-1 denominator). 0 for fewer than 2 values. */
 export function stddev(values: readonly number[]): number {
-  if (values.length < 2) return 0
-  const m = mean(values)
-  const variance = values.reduce((sum, v) => sum + (v - m) ** 2, 0) / (values.length - 1)
-  return Math.sqrt(variance)
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  const variance = values.reduce((sum, v) => sum + (v - m) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
 }
 
 function resample<T>(values: readonly T[], rng: Rng): T[] {
-  const out: T[] = new Array(values.length)
-  for (let i = 0; i < values.length; i++) out[i] = values[Math.floor(rng() * values.length)]!
-  return out
+  const out: T[] = new Array(values.length);
+  for (let i = 0; i < values.length; i++) out[i] = values[Math.floor(rng() * values.length)]!;
+  return out;
 }
 
 function quantile(sorted: readonly number[], q: number): number {
-  if (sorted.length === 0) return 0
-  if (sorted.length === 1) return sorted[0]!
-  const pos = q * (sorted.length - 1)
-  const lo = Math.floor(pos)
-  const hi = Math.ceil(pos)
-  if (lo === hi) return sorted[lo]!
-  const frac = pos - lo
-  return sorted[lo]! * (1 - frac) + sorted[hi]! * frac
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0]!;
+  const pos = q * (sorted.length - 1);
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return sorted[lo]!;
+  const frac = pos - lo;
+  return sorted[lo]! * (1 - frac) + sorted[hi]! * frac;
 }
 
 export interface ConfidenceInterval {
-  readonly point: number
-  readonly low: number
-  readonly high: number
+  readonly point: number;
+  readonly low: number;
+  readonly high: number;
   /** The confidence level used, e.g. 0.95. */
-  readonly level: number
+  readonly level: number;
 }
 
 /**
@@ -77,26 +77,26 @@ export function bootstrapCI(
   rng: Rng,
   options?: { readonly resamples?: number; readonly level?: number },
 ): ConfidenceInterval {
-  const level = options?.level ?? 0.95
-  const point = mean(values)
-  if (values.length === 0) return { point, low: point, high: point, level }
-  const resamples = options?.resamples ?? 2000
-  const means: number[] = new Array(resamples)
-  for (let i = 0; i < resamples; i++) means[i] = mean(resample(values, rng))
-  means.sort((a, b) => a - b)
-  const alpha = (1 - level) / 2
-  return { point, low: quantile(means, alpha), high: quantile(means, 1 - alpha), level }
+  const level = options?.level ?? 0.95;
+  const point = mean(values);
+  if (values.length === 0) return { point, low: point, high: point, level };
+  const resamples = options?.resamples ?? 2000;
+  const means: number[] = new Array(resamples);
+  for (let i = 0; i < resamples; i++) means[i] = mean(resample(values, rng));
+  means.sort((a, b) => a - b);
+  const alpha = (1 - level) / 2;
+  return { point, low: quantile(means, alpha), high: quantile(means, 1 - alpha), level };
 }
 
 export interface PairedBootstrapResult {
   /** mean(a) - mean(b) on the original (unresampled) paired differences. */
-  readonly meanDiff: number
+  readonly meanDiff: number;
   /** Two-sided bootstrap p-value: fraction of resampled mean-diffs at or across zero from `meanDiff`'s sign. */
-  readonly pValue: number
+  readonly pValue: number;
   /** Bootstrap confidence interval on the paired difference, at `level` (default 0.95). */
-  readonly ci: ConfidenceInterval
+  readonly ci: ConfidenceInterval;
   /** `pValue < alpha` (default alpha 0.05). */
-  readonly significant: boolean
+  readonly significant: boolean;
 }
 
 /**
@@ -118,36 +118,38 @@ export function pairedBootstrapTest(
   options?: { readonly resamples?: number; readonly level?: number; readonly alpha?: number },
 ): PairedBootstrapResult {
   if (a.length !== b.length) {
-    throw new Error(`pairedBootstrapTest: paired series must have equal length (got ${a.length} and ${b.length})`)
+    throw new Error(
+      `pairedBootstrapTest: paired series must have equal length (got ${a.length} and ${b.length})`,
+    );
   }
-  const level = options?.level ?? 0.95
-  const alpha = options?.alpha ?? 0.05
-  const diffs = a.map((v, i) => v - b[i]!)
-  const meanDiff = mean(diffs)
+  const level = options?.level ?? 0.95;
+  const alpha = options?.alpha ?? 0.05;
+  const diffs = a.map((v, i) => v - b[i]!);
+  const meanDiff = mean(diffs);
 
   if (diffs.length === 0) {
-    return { meanDiff, pValue: 1, ci: { point: 0, low: 0, high: 0, level }, significant: false }
+    return { meanDiff, pValue: 1, ci: { point: 0, low: 0, high: 0, level }, significant: false };
   }
 
-  const resamples = options?.resamples ?? 2000
-  const resampledMeans: number[] = new Array(resamples)
-  for (let i = 0; i < resamples; i++) resampledMeans[i] = mean(resample(diffs, rng))
-  resampledMeans.sort((a2, b2) => a2 - b2)
+  const resamples = options?.resamples ?? 2000;
+  const resampledMeans: number[] = new Array(resamples);
+  for (let i = 0; i < resamples; i++) resampledMeans[i] = mean(resample(diffs, rng));
+  resampledMeans.sort((a2, b2) => a2 - b2);
 
   // Two-sided p-value via the "shift to null" method: how much of the
   // resampled-difference distribution, recentered at 0, is as extreme as
   // the observed |meanDiff| in either direction.
-  const centered = resampledMeans.map((m) => m - meanDiff)
-  const countAsExtreme = centered.filter((m) => Math.abs(m) >= Math.abs(meanDiff)).length
-  const pValue = Math.min(1, countAsExtreme / resamples)
+  const centered = resampledMeans.map((m) => m - meanDiff);
+  const countAsExtreme = centered.filter((m) => Math.abs(m) >= Math.abs(meanDiff)).length;
+  const pValue = Math.min(1, countAsExtreme / resamples);
 
-  const ciAlpha = (1 - level) / 2
+  const ciAlpha = (1 - level) / 2;
   const ci: ConfidenceInterval = {
     point: meanDiff,
     low: quantile(resampledMeans, ciAlpha),
     high: quantile(resampledMeans, 1 - ciAlpha),
     level,
-  }
+  };
 
-  return { meanDiff, pValue, ci, significant: pValue < alpha }
+  return { meanDiff, pValue, ci, significant: pValue < alpha };
 }

@@ -12,7 +12,7 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { applyValidation } from "./apply-validation-stub.fixture.ts"
-import { tree } from "./sharing-input.fixture.ts"
+import { applyValidation } from "./apply-validation-stub.fixture.ts";
+import { tree } from "./sharing-input.fixture.ts";
 
-export const validated = applyValidation("wire-tree", tree, "mcp")
+export const validated = applyValidation("wire-tree", tree, "mcp");

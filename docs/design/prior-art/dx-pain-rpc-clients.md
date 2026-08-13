@@ -1,6 +1,6 @@
 # Typed RPC/API Clients — Cross-Ecosystem DX Pain Points
 
-A survey of what it actually feels like to *call* an API through a typed TypeScript client —
+A survey of what it actually feels like to _call_ an API through a typed TypeScript client —
 tRPC, Eden Treaty, OpenAPI-generated clients, GraphQL clients, and the smaller RPC-adjacent
 libraries (ts-rest, Zodios, feTS). Scoped to the client/consumer experience specifically:
 invocation ergonomics, error handling, cache/invalidation, type narrowing, and where the
@@ -17,7 +17,7 @@ actually said hurts, with sources.
 ## tRPC client
 
 The full write-up is in [dx-pain-trpc.md](./dx-pain-trpc.md); this section extracts what's
-specifically about *calling* procedures rather than defining them.
+specifically about _calling_ procedures rather than defining them.
 
 - **Errors don't reach local error handlers the way users expect.** Developers report that
   `useQuery`/`useMutation` errors from tRPC's TanStack Query integration bubble to error
@@ -28,7 +28,7 @@ specifically about *calling* procedures rather than defining them.
   ("how can i handle errors when using createTRPCReact?");
   [github.com/trpc/trpc discussion #2036](https://github.com/trpc/trpc/discussions/2036)
   ("Global Client Error Handling").
-- **No structured, inferable error *shape* on the client** — only a message string and a
+- **No structured, inferable error _shape_ on the client** — only a message string and a
   fixed `TRPCError` code enum, so a caller can't type-narrow "this failed because of a
   validation error" vs. "this failed because of a business rule" without parsing the message.
   Evidence: [trpc/trpc issue #3438](https://github.com/trpc/trpc/issues/3438) ("feat:
@@ -85,7 +85,7 @@ this section extracts and extends the client-calling-experience items.
   [elysiajs/elysia discussion #432](https://github.com/elysiajs/elysia/discussions/432).
 - **Request `body` types resolve to `any` in Eden Treaty on routes where Eden Fetch (the
   non-proxy sibling client) gets correct types** — meaning which client flavor you use for
-  the *same* route changes whether you get type safety on the call, and this is not
+  the _same_ route changes whether you get type safety on the call, and this is not
   documented as an expected divergence. Evidence:
   [elysiajs/elysia issue #1666](https://github.com/elysiajs/elysia/issues/1666).
 - **Path segments can go missing in the generated call surface.** A server route nested under
@@ -178,7 +178,7 @@ step and error-handling conventions.
   for continuously-regenerated clients need a migration plan. Evidence:
   [WorkOS — Stainless alternatives](https://workos.com/blog/stainless-alternatives).
 - **openapi-generator's `typescript-fetch` target has its own error-shape gaps**: consumers
-  have asked for the generated client to actually surface the error *message* the server
+  have asked for the generated client to actually surface the error _message_ the server
   sent rather than a generic failure, and middleware `onError` hooks don't fire for common
   statuses like 401. Evidence:
   [OpenAPITools/openapi-generator issue #17988](https://github.com/OpenAPITools/openapi-generator/issues/17988);
@@ -330,7 +330,7 @@ to any one library:
   dominant symptom across all three.
 - **Monorepo/build-topology fragility is a recurring, usually undocumented failure mode**
   for the live-inference clients specifically (tRPC needs the client to import the server's
-  router *type*; Eden Treaty degrades to `any` across mismatched path aliases) — the
+  router _type_; Eden Treaty degrades to `any` across mismatched path aliases) — the
   "zero-ceremony, just call it" pitch depends on infrastructure (shared tsconfig, monorepo or
   published types package) that isn't part of the pitch itself and isn't visible until it
   silently stops working.

@@ -44,8 +44,8 @@
 // is a fixed, single check on `sources.validate`, not a re-introduction of
 // the removed interceptable-array abstraction.
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node";
 import {
   composeErrorEncoders,
   isCursorPage,
@@ -55,11 +55,23 @@ import {
   isStreamChunk,
   isStreamProgress,
   matchKind,
-} from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, Page, ServiceStores } from "@rhi-zone/fractal-api-tree"
-import type { HttpLeafMeta, HttpSharedMeta } from "./project.ts"
-import { BUILTIN_HTTP_STORE_NAMES, httpStores, primaryStoreForMethod, assemble, parseRequestBody, runStandardSchema } from "./decode.ts"
-import type { HttpStoreBag, SourceMap, StandardSchemaV1 } from "./decode.ts"
+} from "@rhi-zone/fractal-api-tree";
+import type {
+  DetectionOptions,
+  ErrorEncoder,
+  Page,
+  ServiceStores,
+} from "@rhi-zone/fractal-api-tree";
+import type { HttpLeafMeta, HttpSharedMeta } from "./project.ts";
+import {
+  BUILTIN_HTTP_STORE_NAMES,
+  httpStores,
+  primaryStoreForMethod,
+  assemble,
+  parseRequestBody,
+  runStandardSchema,
+} from "./decode.ts";
+import type { HttpStoreBag, SourceMap, StandardSchemaV1 } from "./decode.ts";
 
 // `HttpLeafMeta`/`HttpSharedMeta` are type-only imports from
 // project.ts, which VALUE-imports from this file (`naiveTransform`,
@@ -78,8 +90,8 @@ import type { HttpStoreBag, SourceMap, StandardSchemaV1 } from "./decode.ts"
 // constituents — no casts needed to pass a `SharedMeta`/`LeafMeta` value
 // into either, only to read a field off an expression whose OWN declared
 // type doesn't carry it.
-export type RouteMeta = SharedMeta & HttpSharedMeta
-export type RouteLeafMeta = LeafMeta & HttpLeafMeta
+export type RouteMeta = SharedMeta & HttpSharedMeta;
+export type RouteLeafMeta = LeafMeta & HttpLeafMeta;
 
 // ============================================================================
 // Sources — declarative per-route decode configuration. Real, protocol-
@@ -89,9 +101,9 @@ export type RouteLeafMeta = LeafMeta & HttpLeafMeta
 
 export type Sources = {
   /** per-param overrides — e.g. `{ apiKey: { store: "header", key: "x-api-key" } }` */
-  readonly sourceMap?: SourceMap
+  readonly sourceMap?: SourceMap;
   /** explicit list of param names to extract (when absent, bulk-collects all available values) */
-  readonly paramNames?: readonly string[]
+  readonly paramNames?: readonly string[];
   /**
    * The leaf's own pre-moveTo ancestor fallback-name chain, stamped by
    * `naiveTransform` at the EARLIEST point in the pipeline — before any
@@ -120,17 +132,17 @@ export type Sources = {
    * empty authored set, correctly excluding it from any implicit path
    * binding.
    */
-  readonly authoredPathParams?: readonly string[]
+  readonly authoredPathParams?: readonly string[];
   /** optional reshape after assembly, before the handler sees the input */
-  readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>
+  readonly transform?: (bag: Record<string, unknown>) => Record<string, unknown>;
   /**
    * A Standard Schema (https://standardschema.dev/) validator attached via
    * `http.validate()` (verbs.ts) — run by `runRoute` against the assembled
    * input, after decode/transform and before the handler. See
    * `http.validate()`'s own doc comment for the full contract.
    */
-  readonly validate?: StandardSchemaV1
-}
+  readonly validate?: StandardSchemaV1;
+};
 
 // ============================================================================
 // HttpRoute type + constructor
@@ -147,12 +159,15 @@ export type Sources = {
  */
 export type HttpRoute<H extends Handler = Handler> = {
   readonly methods?: Readonly<
-    Record<string, { readonly handler: H; readonly meta: RouteLeafMeta; readonly sources?: Sources }>
-  >
-  readonly children?: Readonly<Record<string, HttpRoute>>
-  readonly fallback?: { readonly name: string; readonly subtree: HttpRoute }
-  readonly meta: RouteMeta
-}
+    Record<
+      string,
+      { readonly handler: H; readonly meta: RouteLeafMeta; readonly sources?: Sources }
+    >
+  >;
+  readonly children?: Readonly<Record<string, HttpRoute>>;
+  readonly fallback?: { readonly name: string; readonly subtree: HttpRoute };
+  readonly meta: RouteMeta;
+};
 
 /**
  * Runtime brand for `HttpRoute` values — lets `makeRouter` distinguish an
@@ -161,28 +176,30 @@ export type HttpRoute<H extends Handler = Handler> = {
  * route produced by `httpRoute()` (and therefore by `naiveTransform` and the
  * rewriters, which all go through it) carries the brand.
  */
-const routeBrand = new WeakSet<object>()
+const routeBrand = new WeakSet<object>();
 
 /** Construct an `HttpRoute` value. Registers the value for `isHttpRoute`. */
 export function httpRoute(def: {
-  methods?: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> | undefined
-  children?: Record<string, HttpRoute> | undefined
-  fallback?: { name: string; subtree: HttpRoute } | undefined
-  meta?: RouteMeta | undefined
+  methods?:
+    | Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }>
+    | undefined;
+  children?: Record<string, HttpRoute> | undefined;
+  fallback?: { name: string; subtree: HttpRoute } | undefined;
+  meta?: RouteMeta | undefined;
 }): HttpRoute {
   const route: HttpRoute = {
     ...(def.methods !== undefined ? { methods: def.methods } : {}),
     ...(def.children !== undefined ? { children: def.children } : {}),
     ...(def.fallback !== undefined ? { fallback: def.fallback } : {}),
     meta: def.meta ?? {},
-  }
-  routeBrand.add(route)
-  return route
+  };
+  routeBrand.add(route);
+  return route;
 }
 
 /** True when `v` is an `HttpRoute` produced by `httpRoute()`. */
 export function isHttpRoute(v: unknown): v is HttpRoute {
-  return typeof v === "object" && v !== null && routeBrand.has(v)
+  return typeof v === "object" && v !== null && routeBrand.has(v);
 }
 
 // ============================================================================
@@ -196,11 +213,11 @@ export function isHttpRoute(v: unknown): v is HttpRoute {
 // ============================================================================
 
 function sourceMapOf(meta: RouteLeafMeta): SourceMap | undefined {
-  return meta.http?.sourceMap
+  return meta.http?.sourceMap;
 }
 
 function validateOf(meta: RouteLeafMeta): StandardSchemaV1 | undefined {
-  return meta.http?.validate
+  return meta.http?.validate;
 }
 
 /**
@@ -211,19 +228,26 @@ function validateOf(meta: RouteLeafMeta): StandardSchemaV1 | undefined {
  * TypeScript can't know two calls return the same result).
  */
 function buildSources(meta: RouteLeafMeta, authoredPathParams: readonly string[]): Sources {
-  const sourceMap = sourceMapOf(meta)
-  const validate = validateOf(meta)
+  const sourceMap = sourceMapOf(meta);
+  const validate = validateOf(meta);
   return {
     ...(sourceMap !== undefined ? { sourceMap } : {}),
     ...(validate !== undefined ? { validate } : {}),
     authoredPathParams,
-  }
+  };
 }
 
 function paginatedDirectiveOf(
   meta: RouteLeafMeta,
-): { readonly style?: "cursor" | "offset"; readonly inputCursorParam?: string; readonly inputOffsetParam?: string; readonly inputLimitParam?: string } | undefined {
-  return meta.http?.paginated
+):
+  | {
+      readonly style?: "cursor" | "offset";
+      readonly inputCursorParam?: string;
+      readonly inputOffsetParam?: string;
+      readonly inputLimitParam?: string;
+    }
+  | undefined {
+  return meta.http?.paginated;
 }
 
 // ============================================================================
@@ -261,17 +285,28 @@ function paginatedDirectiveOf(
  * something knowable from `N`'s static shape, so the type can't narrow it to
  * "present" the way `handler`/`meta` are.
  */
-export type NaiveRoute<N extends Node> =
-  & (N extends { readonly handler: infer H extends Handler }
-      ? { readonly methods: { readonly POST: { readonly handler: H; readonly meta: RouteLeafMeta; readonly sources?: Sources } } }
-      : {})
-  & (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-      ? { readonly children: { readonly [K in keyof C]: NaiveRoute<C[K]> } }
-      : {})
-  & (N extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends Node } }
-      ? { readonly fallback: { readonly name: Nm; readonly subtree: NaiveRoute<S> } }
-      : {})
-  & { readonly meta: RouteMeta }
+export type NaiveRoute<N extends Node> = (N extends { readonly handler: infer H extends Handler }
+  ? {
+      readonly methods: {
+        readonly POST: {
+          readonly handler: H;
+          readonly meta: RouteLeafMeta;
+          readonly sources?: Sources;
+        };
+      };
+    }
+  : {}) &
+  (N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+    ? { readonly children: { readonly [K in keyof C]: NaiveRoute<C[K]> } }
+    : {}) &
+  (N extends {
+    readonly fallback: {
+      readonly name: infer Nm extends string;
+      readonly subtree: infer S extends Node;
+    };
+  }
+    ? { readonly fallback: { readonly name: Nm; readonly subtree: NaiveRoute<S> } }
+    : {}) & { readonly meta: RouteMeta };
 
 /**
  * Recursive worker behind `naiveTransform` — threads `authoredAncestors`, the
@@ -284,7 +319,10 @@ export type NaiveRoute<N extends Node> =
  * (an extra field on the already-optional `sources` object), so the public
  * entry point below just calls this with `[]`.
  */
-function naiveTransformNode<N extends Node>(node: N, authoredAncestors: readonly string[]): NaiveRoute<N> {
+function naiveTransformNode<N extends Node>(
+  node: N,
+  authoredAncestors: readonly string[],
+): NaiveRoute<N> {
   const methods = isLeaf(node)
     ? {
         POST: {
@@ -293,23 +331,31 @@ function naiveTransformNode<N extends Node>(node: N, authoredAncestors: readonly
           sources: buildSources(node.meta, authoredAncestors),
         },
       }
-    : undefined
-  const children = node.children !== undefined
-    ? Object.fromEntries(
-        Object.entries(node.children).map(([key, child]) => [key, naiveTransformNode(child, authoredAncestors)]),
-      )
-    : undefined
-  const fallback = node.fallback !== undefined
-    ? {
-        name: node.fallback.name,
-        subtree: naiveTransformNode(node.fallback.subtree, [...authoredAncestors, node.fallback.name]),
-      }
-    : undefined
-  return httpRoute({ methods, children, fallback, meta: node.meta }) as NaiveRoute<N>
+    : undefined;
+  const children =
+    node.children !== undefined
+      ? Object.fromEntries(
+          Object.entries(node.children).map(([key, child]) => [
+            key,
+            naiveTransformNode(child, authoredAncestors),
+          ]),
+        )
+      : undefined;
+  const fallback =
+    node.fallback !== undefined
+      ? {
+          name: node.fallback.name,
+          subtree: naiveTransformNode(node.fallback.subtree, [
+            ...authoredAncestors,
+            node.fallback.name,
+          ]),
+        }
+      : undefined;
+  return httpRoute({ methods, children, fallback, meta: node.meta }) as NaiveRoute<N>;
 }
 
 export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
-  return naiveTransformNode(node, [])
+  return naiveTransformNode(node, []);
 }
 
 // ============================================================================
@@ -342,14 +388,16 @@ export function naiveTransform<N extends Node>(node: N): NaiveRoute<N> {
  * rewriter reaching for it via the package export.
  */
 export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): HttpRoute {
-  const mapped = fn(route)
-  const children = mapped.children !== undefined
-    ? Object.fromEntries(Object.entries(mapped.children).map(([k, c]) => [k, mapRoute(c, fn)]))
-    : undefined
-  const fallback = mapped.fallback !== undefined
-    ? { name: mapped.fallback.name, subtree: mapRoute(mapped.fallback.subtree, fn) }
-    : undefined
-  return httpRoute({ methods: mapped.methods, children, fallback, meta: mapped.meta })
+  const mapped = fn(route);
+  const children =
+    mapped.children !== undefined
+      ? Object.fromEntries(Object.entries(mapped.children).map(([k, c]) => [k, mapRoute(c, fn)]))
+      : undefined;
+  const fallback =
+    mapped.fallback !== undefined
+      ? { name: mapped.fallback.name, subtree: mapRoute(mapped.fallback.subtree, fn) }
+      : undefined;
+  return httpRoute({ methods: mapped.methods, children, fallback, meta: mapped.meta });
 }
 
 // ============================================================================
@@ -370,28 +418,36 @@ export function mapRoute(route: HttpRoute, fn: (node: HttpRoute) => HttpRoute): 
  * member, so the handler type comes through with full precision even though
  * the key is no longer tracked.
  */
-export type ApplyMethodsRoute<R extends HttpRoute> =
-  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: RouteLeafMeta }>> }
-      ? { readonly methods: Readonly<Record<string, M[keyof M]>> }
-      : {})
-  & (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
-      ? { readonly children: { readonly [K in keyof C]: ApplyMethodsRoute<C[K]> } }
-      : {})
-  & (R extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } }
-      ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyMethodsRoute<S> } }
-      : {})
-  & { readonly meta: RouteMeta }
+export type ApplyMethodsRoute<R extends HttpRoute> = (R extends {
+  readonly methods: infer M extends Readonly<
+    Record<string, { readonly handler: Handler; readonly meta: RouteLeafMeta }>
+  >;
+}
+  ? { readonly methods: Readonly<Record<string, M[keyof M]>> }
+  : {}) &
+  (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
+    ? { readonly children: { readonly [K in keyof C]: ApplyMethodsRoute<C[K]> } }
+    : {}) &
+  (R extends {
+    readonly fallback: {
+      readonly name: infer Nm extends string;
+      readonly subtree: infer S extends HttpRoute;
+    };
+  }
+    ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyMethodsRoute<S> } }
+    : {}) & { readonly meta: RouteMeta };
 
 export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R> {
   return mapRoute(route, (node) => {
-    let methods = node.methods
+    let methods = node.methods;
     if (methods !== undefined) {
-      const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> = {}
-      let changed = false
+      const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> =
+        {};
+      let changed = false;
       for (const [key, entry] of Object.entries(methods)) {
-        const method = entry.meta.http?.method
-        const newKey = method !== undefined ? method.toUpperCase() : key
-        if (newKey !== key) changed = true
+        const method = entry.meta.http?.method;
+        const newKey = method !== undefined ? method.toUpperCase() : key;
+        if (newKey !== key) changed = true;
         // No stripping: `meta.http.method` stays on the entry's meta after
         // the rename — the flat design's "resolved shape = authored shape"
         // means this is informational, not a directive to consume (see
@@ -402,12 +458,17 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
         // already dedupes by function VALUE, not by meta object identity,
         // so this doesn't change its correctness (see that function's own
         // doc comment).
-        rebuilt[newKey] = entry
+        rebuilt[newKey] = entry;
       }
-      methods = changed ? rebuilt : methods
+      methods = changed ? rebuilt : methods;
     }
-    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
-  }) as ApplyMethodsRoute<R>
+    return httpRoute({
+      methods,
+      children: node.children,
+      fallback: node.fallback,
+      meta: node.meta,
+    });
+  }) as ApplyMethodsRoute<R>;
 }
 
 // ============================================================================
@@ -438,58 +499,54 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
 // already-present `fallback.name` at the target position when one exists.
 // ============================================================================
 
-type PendingMove = { readonly targetPath: readonly string[]; readonly subtree: HttpRoute }
+type PendingMove = { readonly targetPath: readonly string[]; readonly subtree: HttpRoute };
 
 function resolveMoveTo(itemPath: readonly string[], path: string): string[] {
-  if (path === ".") return [...itemPath]
-  const out = [...itemPath]
+  if (path === ".") return [...itemPath];
+  const out = [...itemPath];
   for (const tok of path.split("/").filter((t) => t.length > 0)) {
-    if (tok === ".") continue
-    else if (tok === "..") out.pop()
-    else out.push(tok)
+    if (tok === ".") continue;
+    else if (tok === "..") out.pop();
+    else out.push(tok);
   }
-  return out
+  return out;
 }
 
-function detach(
-  route: HttpRoute,
-  path: readonly string[],
-  moves: PendingMove[],
-): HttpRoute {
-  let children = route.children
+function detach(route: HttpRoute, path: readonly string[], moves: PendingMove[]): HttpRoute {
+  let children = route.children;
   if (children !== undefined) {
-    const rebuilt: Record<string, HttpRoute> = {}
+    const rebuilt: Record<string, HttpRoute> = {};
     for (const [key, child] of Object.entries(children)) {
-      const childPath = [...path, key]
-      const moveTo = child.meta.http?.moveTo
+      const childPath = [...path, key];
+      const moveTo = child.meta.http?.moveTo;
       if (moveTo !== undefined) {
-        const target = resolveMoveTo(childPath, moveTo)
+        const target = resolveMoveTo(childPath, moveTo);
         // No stripping: `meta.http.moveTo` stays on the moved subtree's own
         // meta after the move — informational, not a directive to consume
         // (see project.ts's module doc / applyMethods's own doc comment for
         // the same "resolved shape = authored shape" reasoning).
-        moves.push({ targetPath: target, subtree: detach(child, childPath, moves) })
-        continue
+        moves.push({ targetPath: target, subtree: detach(child, childPath, moves) });
+        continue;
       }
-      rebuilt[key] = detach(child, childPath, moves)
+      rebuilt[key] = detach(child, childPath, moves);
     }
-    children = rebuilt
+    children = rebuilt;
   }
 
-  let fallback = route.fallback
+  let fallback = route.fallback;
   if (fallback !== undefined) {
-    const childPath = [...path, "*"]
-    const moveTo = fallback.subtree.meta.http?.moveTo
+    const childPath = [...path, "*"];
+    const moveTo = fallback.subtree.meta.http?.moveTo;
     if (moveTo !== undefined) {
-      const target = resolveMoveTo(childPath, moveTo)
-      moves.push({ targetPath: target, subtree: detach(fallback.subtree, childPath, moves) })
-      fallback = undefined
+      const target = resolveMoveTo(childPath, moveTo);
+      moves.push({ targetPath: target, subtree: detach(fallback.subtree, childPath, moves) });
+      fallback = undefined;
     } else {
-      fallback = { name: fallback.name, subtree: detach(fallback.subtree, childPath, moves) }
+      fallback = { name: fallback.name, subtree: detach(fallback.subtree, childPath, moves) };
     }
   }
 
-  return httpRoute({ methods: route.methods, children, fallback, meta: route.meta })
+  return httpRoute({ methods: route.methods, children, fallback, meta: route.meta });
 }
 
 /**
@@ -502,14 +559,14 @@ function detach(
  * something a merge can silently resolve.
  */
 function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly string[]): HttpRoute {
-  const targetMethods = target.methods ?? {}
-  const incomingMethods = incoming.methods ?? {}
+  const targetMethods = target.methods ?? {};
+  const incomingMethods = incoming.methods ?? {};
   for (const method of Object.keys(incomingMethods)) {
     if (method in targetMethods) {
-      const displayPath = path.length === 0 ? "/" : `/${path.join("/")}`
+      const displayPath = path.length === 0 ? "/" : `/${path.join("/")}`;
       throw new Error(
         `applyMoveTo: conflicting route — ${method} ${displayPath} is defined by more than one node`,
-      )
+      );
     }
   }
   return httpRoute({
@@ -517,7 +574,7 @@ function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly stri
     children: { ...target.children, ...incoming.children },
     fallback: incoming.fallback ?? target.fallback,
     meta: target.meta,
-  })
+  });
 }
 
 /**
@@ -528,29 +585,34 @@ function mergeRoutes(target: HttpRoute, incoming: HttpRoute, path: readonly stri
  * isn't already present in the tree is created as a plain, empty `HttpRoute`
  * node so the walk can continue).
  */
-function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpRoute, fullPath: readonly string[]): HttpRoute {
-  if (targetPath.length === 0) return mergeRoutes(root, subtree, fullPath)
-  const [head, ...rest] = targetPath as [string, ...string[]]
+function insertAt(
+  root: HttpRoute,
+  targetPath: readonly string[],
+  subtree: HttpRoute,
+  fullPath: readonly string[],
+): HttpRoute {
+  if (targetPath.length === 0) return mergeRoutes(root, subtree, fullPath);
+  const [head, ...rest] = targetPath as [string, ...string[]];
 
   if (head === "*") {
-    const name = root.fallback?.name ?? "param"
-    const base = root.fallback?.subtree ?? httpRoute({ meta: {} })
+    const name = root.fallback?.name ?? "param";
+    const base = root.fallback?.subtree ?? httpRoute({ meta: {} });
     return httpRoute({
       methods: root.methods,
       children: root.children,
       fallback: { name, subtree: insertAt(base, rest, subtree, fullPath) },
       meta: root.meta,
-    })
+    });
   }
 
   // mkdir-p: create the intermediate node when it doesn't already exist.
-  const base = root.children?.[head] ?? httpRoute({ meta: {} })
+  const base = root.children?.[head] ?? httpRoute({ meta: {} });
   return httpRoute({
     methods: root.methods,
     children: { ...root.children, [head]: insertAt(base, rest, subtree, fullPath) },
     fallback: root.fallback,
     meta: root.meta,
-  })
+  });
 }
 
 /**
@@ -575,9 +637,9 @@ function insertAt(root: HttpRoute, targetPath: readonly string[], subtree: HttpR
  * because threading the generic through was skipped.
  */
 export function applyMoveTo(route: HttpRoute): HttpRoute {
-  const moves: PendingMove[] = []
-  const stripped = detach(route, [], moves)
-  return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree, m.targetPath), stripped)
+  const moves: PendingMove[] = [];
+  const stripped = detach(route, [], moves);
+  return moves.reduce((acc, m) => insertAt(acc, m.targetPath, m.subtree, m.targetPath), stripped);
 }
 
 // ============================================================================
@@ -589,16 +651,16 @@ export function applyMoveTo(route: HttpRoute): HttpRoute {
 // everything else about the handler is untouched.
 // ============================================================================
 
-const RESPONSE_OVERRIDE = Symbol("httpResponseOverride")
+const RESPONSE_OVERRIDE = Symbol("httpResponseOverride");
 
 export type ResponseOverride = {
-  readonly [RESPONSE_OVERRIDE]: true
-  readonly body: unknown
-  readonly init: ResponseInit
-}
+  readonly [RESPONSE_OVERRIDE]: true;
+  readonly body: unknown;
+  readonly init: ResponseInit;
+};
 
 export function isResponseOverride(v: unknown): v is ResponseOverride {
-  return typeof v === "object" && v !== null && RESPONSE_OVERRIDE in v
+  return typeof v === "object" && v !== null && RESPONSE_OVERRIDE in v;
 }
 
 function wrapResponse(
@@ -607,13 +669,13 @@ function wrapResponse(
   headers: Record<string, string> | undefined,
 ): Handler {
   return async (input: unknown) => {
-    const body: unknown = await handler(input)
-    const init: ResponseInit = {}
-    if (status !== undefined) init.status = status
-    if (headers !== undefined) init.headers = headers
-    const override: ResponseOverride = { [RESPONSE_OVERRIDE]: true, body, init }
-    return override
-  }
+    const body: unknown = await handler(input);
+    const init: ResponseInit = {};
+    if (status !== undefined) init.status = status;
+    if (headers !== undefined) init.headers = headers;
+    const override: ResponseOverride = { [RESPONSE_OVERRIDE]: true, body, init };
+    return override;
+  };
 }
 
 /**
@@ -628,33 +690,48 @@ function wrapResponse(
  * `methods` keeps the exact key set of `M` instead of widening to
  * `Record<string, ...>`.
  */
-type ResponseWrappedHandler = (input: unknown) => Promise<ResponseOverride>
+type ResponseWrappedHandler = (input: unknown) => Promise<ResponseOverride>;
 
-export type ApplyResponseRoute<R extends HttpRoute> =
-  & (R extends { readonly methods: infer M extends Readonly<Record<string, { readonly handler: Handler; readonly meta: RouteLeafMeta }>> }
-      ? { readonly methods: { readonly [K in keyof M]: { readonly handler: M[K]["handler"] | ResponseWrappedHandler; readonly meta: RouteLeafMeta } } }
-      : {})
-  & (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
-      ? { readonly children: { readonly [K in keyof C]: ApplyResponseRoute<C[K]> } }
-      : {})
-  & (R extends { readonly fallback: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } }
-      ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyResponseRoute<S> } }
-      : {})
-  & { readonly meta: RouteMeta }
+export type ApplyResponseRoute<R extends HttpRoute> = (R extends {
+  readonly methods: infer M extends Readonly<
+    Record<string, { readonly handler: Handler; readonly meta: RouteLeafMeta }>
+  >;
+}
+  ? {
+      readonly methods: {
+        readonly [K in keyof M]: {
+          readonly handler: M[K]["handler"] | ResponseWrappedHandler;
+          readonly meta: RouteLeafMeta;
+        };
+      };
+    }
+  : {}) &
+  (R extends { readonly children: infer C extends Readonly<Record<string, HttpRoute>> }
+    ? { readonly children: { readonly [K in keyof C]: ApplyResponseRoute<C[K]> } }
+    : {}) &
+  (R extends {
+    readonly fallback: {
+      readonly name: infer Nm extends string;
+      readonly subtree: infer S extends HttpRoute;
+    };
+  }
+    ? { readonly fallback: { readonly name: Nm; readonly subtree: ApplyResponseRoute<S> } }
+    : {}) & { readonly meta: RouteMeta };
 
 export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute<R> {
   return mapRoute(route, (node) => {
-    let methods = node.methods
+    let methods = node.methods;
     if (methods !== undefined) {
-      const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> = {}
-      let changed = false
+      const rebuilt: Record<string, { handler: Handler; meta: RouteLeafMeta; sources?: Sources }> =
+        {};
+      let changed = false;
       for (const [key, entry] of Object.entries(methods)) {
-        const response = entry.meta.http?.response
+        const response = entry.meta.http?.response;
         if (response === undefined) {
-          rebuilt[key] = entry
-          continue
+          rebuilt[key] = entry;
+          continue;
         }
-        changed = true
+        changed = true;
         rebuilt[key] = {
           handler: wrapResponse(entry.handler, response.status, response.headers),
           // No stripping: `meta.http.response` stays on the entry's meta
@@ -662,12 +739,17 @@ export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute
           // `applyMethods`'s own doc comment for the same reasoning).
           meta: entry.meta,
           ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
-        }
+        };
       }
-      methods = changed ? rebuilt : methods
+      methods = changed ? rebuilt : methods;
     }
-    return httpRoute({ methods, children: node.children, fallback: node.fallback, meta: node.meta })
-  }) as ApplyResponseRoute<R>
+    return httpRoute({
+      methods,
+      children: node.children,
+      fallback: node.fallback,
+      meta: node.meta,
+    });
+  }) as ApplyResponseRoute<R>;
 }
 
 // ============================================================================
@@ -677,7 +759,7 @@ export function applyResponse<R extends HttpRoute>(route: R): ApplyResponseRoute
 export function composeTransforms(
   ...transforms: Array<(r: HttpRoute) => HttpRoute>
 ): (r: HttpRoute) => HttpRoute {
-  return (r) => transforms.reduce((acc, t) => t(acc), r)
+  return (r) => transforms.reduce((acc, t) => t(acc), r);
 }
 
 // ============================================================================
@@ -690,11 +772,11 @@ export function composeTransforms(
 // ============================================================================
 
 type RouteCandidate = {
-  readonly method: string
-  readonly handler: Handler
-  readonly meta: RouteLeafMeta
-  readonly slugs: Readonly<Record<string, string>>
-}
+  readonly method: string;
+  readonly handler: Handler;
+  readonly meta: RouteLeafMeta;
+  readonly slugs: Readonly<Record<string, string>>;
+};
 
 /**
  * Split a URL pathname into non-empty segments without the split+filter
@@ -702,15 +784,15 @@ type RouteCandidate = {
  * two arrays; this builds one).
  */
 export function splitPath(pathname: string): string[] {
-  const segs: string[] = []
-  let start = 0
+  const segs: string[] = [];
+  let start = 0;
   for (let i = 0; i <= pathname.length; i++) {
     if (i === pathname.length || pathname.charCodeAt(i) === 47 /* "/" */) {
-      if (i > start) segs.push(pathname.slice(start, i))
-      start = i + 1
+      if (i > start) segs.push(pathname.slice(start, i));
+      start = i + 1;
     }
   }
-  return segs
+  return segs;
 }
 
 /**
@@ -733,24 +815,24 @@ function collectRouteCandidates(
       handler: entry.handler,
       meta: entry.meta,
       slugs,
-    }))
+    }));
   }
-  const seg = segs[idx]!
-  const child = route.children?.[seg]
+  const seg = segs[idx]!;
+  const child = route.children?.[seg];
   if (child !== undefined) {
-    return collectRouteCandidates(child, segs, idx + 1, slugs)
+    return collectRouteCandidates(child, segs, idx + 1, slugs);
   }
   if (route.fallback !== undefined) {
-    slugs[route.fallback.name] = seg
-    return collectRouteCandidates(route.fallback.subtree, segs, idx + 1, slugs)
+    slugs[route.fallback.name] = seg;
+    return collectRouteCandidates(route.fallback.subtree, segs, idx + 1, slugs);
   }
-  return []
+  return [];
 }
 
 /** All candidate methods reachable at the exact path of `url`. */
 export function routeCandidatesForUrl(root: HttpRoute, url: string): RouteCandidate[] {
-  const segs = splitPath(new URL(url).pathname)
-  return collectRouteCandidates(root, segs, 0, {})
+  const segs = splitPath(new URL(url).pathname);
+  return collectRouteCandidates(root, segs, 0, {});
 }
 
 /**
@@ -766,22 +848,27 @@ function matchRoute(
   idx: number,
   method: string,
   slugs: Record<string, string>,
-): { entry: { handler: Handler; meta: RouteLeafMeta; sources?: Sources }; slugs: Record<string, string> } | undefined {
+):
+  | {
+      entry: { handler: Handler; meta: RouteLeafMeta; sources?: Sources };
+      slugs: Record<string, string>;
+    }
+  | undefined {
   if (idx === segs.length) {
-    const entry = route.methods?.[method]
-    if (entry === undefined) return undefined
-    return { entry, slugs }
+    const entry = route.methods?.[method];
+    if (entry === undefined) return undefined;
+    return { entry, slugs };
   }
-  const seg = segs[idx]!
-  const child = route.children?.[seg]
+  const seg = segs[idx]!;
+  const child = route.children?.[seg];
   if (child !== undefined) {
-    return matchRoute(child, segs, idx + 1, method, slugs)
+    return matchRoute(child, segs, idx + 1, method, slugs);
   }
   if (route.fallback !== undefined) {
-    slugs[route.fallback.name] = seg
-    return matchRoute(route.fallback.subtree, segs, idx + 1, method, slugs)
+    slugs[route.fallback.name] = seg;
+    return matchRoute(route.fallback.subtree, segs, idx + 1, method, slugs);
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -796,19 +883,19 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
     typeof v === "object" &&
     v !== null &&
     typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
-  )
+  );
 }
 
-const encoder = new TextEncoder()
+const encoder = new TextEncoder();
 
 /** Format one SSE frame: `event: <name>\ndata: <json>\n\n` (event line
  *  omitted for the unnamed/default event, matching the SSE spec). */
 function sseFrame(data: unknown, event?: string): Uint8Array {
-  const lines: string[] = []
-  if (event !== undefined) lines.push(`event: ${event}`)
-  lines.push(`data: ${JSON.stringify(data)}`)
-  lines.push("", "")
-  return encoder.encode(lines.join("\n"))
+  const lines: string[] = [];
+  if (event !== undefined) lines.push(`event: ${event}`);
+  lines.push(`data: ${JSON.stringify(data)}`);
+  lines.push("", "");
+  return encoder.encode(lines.join("\n"));
 }
 
 /**
@@ -826,41 +913,41 @@ function sseFrame(data: unknown, event?: string): Uint8Array {
 function streamAsSse(iterable: AsyncIterable<unknown>): Response {
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const iterator = iterable[Symbol.asyncIterator]()
+      const iterator = iterable[Symbol.asyncIterator]();
       try {
         for (;;) {
-          const step = await iterator.next()
+          const step = await iterator.next();
           if (step.done) {
-            controller.enqueue(sseFrame(step.value, "done"))
-            break
+            controller.enqueue(sseFrame(step.value, "done"));
+            break;
           }
-          const value: unknown = step.value
+          const value: unknown = step.value;
           if (isStreamProgress(value)) {
-            const { kind: _kind, ...progress } = value
-            controller.enqueue(sseFrame(progress, "progress"))
+            const { kind: _kind, ...progress } = value;
+            controller.enqueue(sseFrame(progress, "progress"));
           } else if (isStreamChunk(value)) {
-            controller.enqueue(sseFrame(value.data))
+            controller.enqueue(sseFrame(value.data));
           } else {
-            controller.enqueue(sseFrame(value))
+            controller.enqueue(sseFrame(value));
           }
         }
       } catch (error) {
-        controller.error(error)
-        return
+        controller.error(error);
+        return;
       }
-      controller.close()
+      controller.close();
     },
-  })
+  });
   return new Response(body, {
     status: 200,
     headers: { "Content-Type": "text/event-stream" },
-  })
+  });
 }
 
 function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
-  const headers = new Headers(init?.headers)
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json")
-  return new Response(JSON.stringify(value), { ...init, headers })
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  return new Response(JSON.stringify(value), { ...init, headers });
 }
 
 /**
@@ -887,9 +974,9 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
  *     via `jsonRouteResponse`.
  */
 function encodeOverride(override: ResponseOverride): Response {
-  const { body, init } = override
+  const { body, init } = override;
 
-  if (body instanceof Response) return body
+  if (body instanceof Response) return body;
 
   if (
     body instanceof ReadableStream ||
@@ -899,17 +986,17 @@ function encodeOverride(override: ResponseOverride): Response {
     body === null ||
     body === undefined
   ) {
-    return new Response(body as BodyInit | null | undefined, init)
+    return new Response(body as BodyInit | null | undefined, init);
   }
 
   if (typeof body === "string") {
-    const headers = new Headers(init?.headers)
-    const contentType = headers.get("Content-Type")
-    const isExplicitlyNonJson = contentType !== null && !contentType.includes("application/json")
-    if (isExplicitlyNonJson) return new Response(body, { ...init, headers })
+    const headers = new Headers(init?.headers);
+    const contentType = headers.get("Content-Type");
+    const isExplicitlyNonJson = contentType !== null && !contentType.includes("application/json");
+    if (isExplicitlyNonJson) return new Response(body, { ...init, headers });
   }
 
-  return jsonRouteResponse(body, init)
+  return jsonRouteResponse(body, init);
 }
 
 /**
@@ -947,17 +1034,17 @@ async function defaultDecode(
   sources?: Sources,
   serviceStores: ServiceStores = {} as ServiceStores,
 ): Promise<{ readonly input: unknown; readonly stores: HttpStoreBag }> {
-  const url = new URL(req.url)
-  const primary = primaryStoreForMethod(req.method)
+  const url = new URL(req.url);
+  const primary = primaryStoreForMethod(req.method);
 
   // Parse body for methods that conventionally carry one — Content-Type
   // drives which WHATWG parser handles it (see `parseRequestBody`).
-  let parsedBody: unknown = undefined
+  let parsedBody: unknown = undefined;
   if (primary === "body") {
-    parsedBody = await parseRequestBody(req)
+    parsedBody = await parseRequestBody(req);
   }
 
-  const stores = httpStores(req, slugs, parsedBody, serviceStores)
+  const stores = httpStores(req, slugs, parsedBody, serviceStores);
   // moveTo is purely an address transform — it must NOT affect input binding.
   // `slugs` here are the FINAL (post-moveTo) matched-tree's ancestor-fallback
   // captures; naively treating every one of them as implicitly path-bound
@@ -975,12 +1062,11 @@ async function defaultDecode(
   // For the dominant naiveTransform-derived case, an unmoved leaf's final
   // ancestor slugs and its authored slugs are identical, so this filter is a
   // no-op there — moveTo is the only thing that can make the two sets diverge.
-  const liveSlugNames = Object.keys(slugs)
-  const authored = sources?.authoredPathParams
-  const pathParamNames = authored !== undefined
-    ? liveSlugNames.filter((n) => authored.includes(n))
-    : liveSlugNames
-  const sourceMap = sources?.sourceMap ?? {}
+  const liveSlugNames = Object.keys(slugs);
+  const authored = sources?.authoredPathParams;
+  const pathParamNames =
+    authored !== undefined ? liveSlugNames.filter((n) => authored.includes(n)) : liveSlugNames;
+  const sourceMap = sources?.sourceMap ?? {};
 
   const paramNames =
     sources?.paramNames !== undefined && sources.paramNames.length > 0
@@ -994,16 +1080,16 @@ async function defaultDecode(
               : []),
             ...Object.keys(sourceMap),
           ]),
-        ]
+        ];
 
-  let bag = assemble(stores, paramNames, sourceMap, primary, pathParamNames)
+  let bag = assemble(stores, paramNames, sourceMap, primary, pathParamNames);
 
   // Optional transform after assembly
   if (sources?.transform !== undefined) {
-    bag = sources.transform(bag)
+    bag = sources.transform(bag);
   }
 
-  return { input: bag, stores }
+  return { input: bag, stores };
 }
 
 /**
@@ -1027,37 +1113,42 @@ async function defaultDecode(
  * body regardless, this header is a convenience on top, not the only way to
  * discover the next page.
  */
-function pageLinkHeader(req: Request, output: Page<unknown>, meta: RouteLeafMeta): string | undefined {
-  if (!output.hasMore) return undefined
-  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE") return undefined
+function pageLinkHeader(
+  req: Request,
+  output: Page<unknown>,
+  meta: RouteLeafMeta,
+): string | undefined {
+  if (!output.hasMore) return undefined;
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE") return undefined;
 
-  const directive = paginatedDirectiveOf(meta)
-  const cursorParam = directive?.inputCursorParam ?? "cursor"
-  const offsetParam = directive?.inputOffsetParam ?? "offset"
+  const directive = paginatedDirectiveOf(meta);
+  const cursorParam = directive?.inputCursorParam ?? "cursor";
+  const offsetParam = directive?.inputOffsetParam ?? "offset";
 
-  const url = new URL(req.url)
+  const url = new URL(req.url);
   if (isOffsetPage(output)) {
-    url.searchParams.set(offsetParam, String(output.offset + output.items.length))
+    url.searchParams.set(offsetParam, String(output.offset + output.items.length));
   } else if (isCursorPage(output) && output.cursor !== undefined) {
-    url.searchParams.set(cursorParam, output.cursor)
+    url.searchParams.set(cursorParam, output.cursor);
   } else {
-    return undefined
+    return undefined;
   }
-  return `<${url.toString()}>; rel="next"`
+  return `<${url.toString()}>; rel="next"`;
 }
 
 /** Default `encode`: a 200 JSON response, with a `Link: ...; rel="next"` header attached when `output` is page-shaped and has a next page (see `pageLinkHeader`). */
 function defaultEncode(output: unknown, req?: Request, meta?: RouteLeafMeta): Response {
   if (req !== undefined && meta !== undefined && isPageShape(output)) {
-    const link = pageLinkHeader(req, output, meta)
-    if (link !== undefined) return jsonRouteResponse(output, { status: 200, headers: { Link: link } })
+    const link = pageLinkHeader(req, output, meta);
+    if (link !== undefined)
+      return jsonRouteResponse(output, { status: 200, headers: { Link: link } });
   }
-  return jsonRouteResponse(output, { status: 200 })
+  return jsonRouteResponse(output, { status: 200 });
 }
 
 /** Default error encode: a 400 JSON response wrapping the error value. */
 function defaultEncodeError(error: unknown): Response {
-  return jsonRouteResponse({ error }, { status: 400 })
+  return jsonRouteResponse({ error }, { status: 400 });
 }
 
 // ============================================================================
@@ -1078,13 +1169,13 @@ function defaultEncodeError(error: unknown): Response {
 
 /** An error encoder's HTTP-specific target shape — status + optional body/headers. */
 export type HttpErrorResponse = {
-  readonly status: number
-  readonly body?: unknown
-  readonly headers?: Record<string, string>
-}
+  readonly status: number;
+  readonly body?: unknown;
+  readonly headers?: Record<string, string>;
+};
 
 /** `ErrorEncoder<E, HttpErrorResponse>` — maps a handler's error value to an HTTP response. */
-export type HttpErrorEncoder<E = unknown> = ErrorEncoder<E, HttpErrorResponse>
+export type HttpErrorEncoder<E = unknown> = ErrorEncoder<E, HttpErrorResponse>;
 
 /**
  * Same shape as `HttpErrorEncoder` — maps a THROWN error (caught in
@@ -1096,7 +1187,7 @@ export type HttpErrorEncoder<E = unknown> = ErrorEncoder<E, HttpErrorResponse>
  * `Error` instance. `undefined` (including when `thrownErrorEncoder` itself
  * is omitted) falls back to the existing 500 "internal server error".
  */
-export type ThrownErrorEncoder = HttpErrorEncoder
+export type ThrownErrorEncoder = HttpErrorEncoder;
 
 /**
  * Pre-built `HttpErrorEncoder`: maps error `kind` values to HTTP status
@@ -1110,20 +1201,20 @@ export type ThrownErrorEncoder = HttpErrorEncoder
 export function httpErrors<E = unknown>(mapping: Record<string, number>): HttpErrorEncoder<E> {
   const encoders = Object.entries(mapping).map(([kind, status]) =>
     matchKind<HttpErrorResponse>(kind, { status }),
-  )
-  const composed = composeErrorEncoders(...encoders)
+  );
+  const composed = composeErrorEncoders(...encoders);
   return (error) => {
-    const matched = composed(error)
-    if (matched === undefined) return undefined
-    return { status: matched.status, body: error }
-  }
+    const matched = composed(error);
+    if (matched === undefined) return undefined;
+    return { status: matched.status, body: error };
+  };
 }
 
 /** Encode an `HttpErrorResponse` into a `Response`. */
 function encodeHttpError(response: HttpErrorResponse): Response {
-  const init: ResponseInit = { status: response.status }
-  if (response.headers !== undefined) init.headers = response.headers
-  return jsonRouteResponse(response.body, init)
+  const init: ResponseInit = { status: response.status };
+  if (response.headers !== undefined) init.headers = response.headers;
+  return jsonRouteResponse(response.body, init);
 }
 
 /**
@@ -1143,11 +1234,14 @@ function encodeHttpError(response: HttpErrorResponse): Response {
  * only ever took the raw error, never route context, so there is nothing to
  * fabricate here; every caller passes exactly what it has.
  */
-export function encodeThrownError(error: unknown, thrownErrorEncoder?: ThrownErrorEncoder): Response {
-  const encoded = thrownErrorEncoder?.(error)
+export function encodeThrownError(
+  error: unknown,
+  thrownErrorEncoder?: ThrownErrorEncoder,
+): Response {
+  const encoded = thrownErrorEncoder?.(error);
   return encoded !== undefined
     ? encodeHttpError(encoded)
-    : jsonRouteResponse({ error: "internal server error" }, { status: 500 })
+    : jsonRouteResponse({ error: "internal server error" }, { status: 500 });
 }
 
 // ============================================================================
@@ -1175,7 +1269,7 @@ export function encodeThrownError(error: unknown, thrownErrorEncoder?: ThrownErr
  */
 export type HttpHandlerMiddleware = (
   next: (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>
+) => (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>;
 
 /**
  * Compose `middleware` around `base`, first entry outermost. An empty array
@@ -1185,11 +1279,11 @@ function composeHandlerMiddleware(
   middleware: readonly HttpHandlerMiddleware[],
   base: (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown>,
 ): (input: Record<string, unknown>, stores: HttpStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base
+  let wrapped = base;
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped)
+    wrapped = middleware[i]!(wrapped);
   }
-  return wrapped
+  return wrapped;
 }
 
 /**
@@ -1229,16 +1323,16 @@ export async function runRoute(
   thrownErrorEncoder?: ThrownErrorEncoder,
   serviceStores: ServiceStores = {} as ServiceStores,
 ): Promise<Response> {
-  const detectStreaming = detection?.streaming ?? true
-  const detectResult = detection?.result ?? true
-  let input: unknown
-  let stores: HttpStoreBag
+  const detectStreaming = detection?.streaming ?? true;
+  const detectResult = detection?.result ?? true;
+  let input: unknown;
+  let stores: HttpStoreBag;
   try {
-    const decoded = await defaultDecode(req, slugs, sources, serviceStores)
-    input = decoded.input
-    stores = decoded.stores
+    const decoded = await defaultDecode(req, slugs, sources, serviceStores);
+    input = decoded.input;
+    stores = decoded.stores;
   } catch {
-    return jsonRouteResponse({ error: "invalid request body" }, { status: 400 })
+    return jsonRouteResponse({ error: "invalid request body" }, { status: 400 });
   }
 
   try {
@@ -1255,32 +1349,33 @@ export async function runRoute(
     // falls through to this same try's catch block below, same as any other
     // unexpected handler-path failure.
     if (sources?.validate !== undefined) {
-      const result = await runStandardSchema(sources.validate, input)
+      const result = await runStandardSchema(sources.validate, input);
       if (!result.ok) {
         return jsonRouteResponse(
           { error: "validation failed", issues: result.issues },
           { status: 422 },
-        )
+        );
       }
-      input = result.value
+      input = result.value;
     }
 
     // Bridge the plain handler `(input) => result` into `F => F`'s base case
     // `(input, stores) => handler(input)` — the handler never sees `stores`,
     // structurally (see HttpHandlerMiddleware's module doc above).
     const base = (input: Record<string, unknown>, _stores: HttpStoreBag) =>
-      (handler as (input: Record<string, unknown>) => unknown | Promise<unknown>)(input)
-    const middleware = handlerMiddleware ?? []
-    const callHandler = middleware.length === 0
-      ? base
-      : composeHandlerMiddleware(middleware, base)
-    let output: unknown = await (callHandler(input as Record<string, unknown>, stores) as Promise<unknown>)
+      (handler as (input: Record<string, unknown>) => unknown | Promise<unknown>)(input);
+    const middleware = handlerMiddleware ?? [];
+    const callHandler = middleware.length === 0 ? base : composeHandlerMiddleware(middleware, base);
+    let output: unknown = await (callHandler(
+      input as Record<string, unknown>,
+      stores,
+    ) as Promise<unknown>);
 
     // Streaming: an async-iterable result (e.g. an async generator handler)
     // is streamed as Server-Sent Events instead of buffered — checked before
     // Result-unwrapping since neither a Result nor a ResponseOverride is an
     // async iterable, so there's no ambiguity between the three shapes.
-    if (detectStreaming && isAsyncIterable(output)) return streamAsSse(output)
+    if (detectStreaming && isAsyncIterable(output)) return streamAsSse(output);
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
     // the success and error paths before encoding — a 400, not the catch
@@ -1295,17 +1390,15 @@ export async function runRoute(
     // field with an unrelated value.
     if (detectResult && isResultShape(output)) {
       if (output.kind === "err") {
-        const encoded = errorEncoder?.(output.error)
-        return encoded !== undefined ? encodeHttpError(encoded) : defaultEncodeError(output.error)
+        const encoded = errorEncoder?.(output.error);
+        return encoded !== undefined ? encodeHttpError(encoded) : defaultEncodeError(output.error);
       }
-      output = output.value
+      output = output.value;
     }
 
-    return isResponseOverride(output)
-      ? encodeOverride(output)
-      : defaultEncode(output, req, meta)
+    return isResponseOverride(output) ? encodeOverride(output) : defaultEncode(output, req, meta);
   } catch (error) {
-    return encodeThrownError(error, thrownErrorEncoder)
+    return encodeThrownError(error, thrownErrorEncoder);
   }
 }
 
@@ -1334,24 +1427,24 @@ export async function runRoute(
 /** One thing wrong with a leaf method's declared param sources. */
 export type SourceCoverageProblem = {
   /** The route's mount path, with slug segments as `{name}` — e.g. `/books/{id}`. */
-  readonly path: string
-  readonly method: string
-  readonly param: string
-  readonly kind: "unknown-store" | "unused-override" | "unfillable-path"
+  readonly path: string;
+  readonly method: string;
+  readonly param: string;
+  readonly kind: "unknown-store" | "unused-override" | "unfillable-path";
   /** Human-readable statement of what's wrong with this param. */
-  readonly detail: string
-}
+  readonly detail: string;
+};
 
 /** Thrown by `checkRouteSourceCoverage` when a route tree has any coverage problem. Carries every problem found, not just the first. */
 export class SourceCoverageError extends Error {
-  readonly problems: readonly SourceCoverageProblem[]
+  readonly problems: readonly SourceCoverageProblem[];
   constructor(problems: readonly SourceCoverageProblem[]) {
     super(
       `HTTP route source coverage: ${problems.length} problem(s)\n` +
         problems.map((p) => `  ${p.method} ${p.path} — param "${p.param}": ${p.detail}`).join("\n"),
-    )
-    this.name = "SourceCoverageError"
-    this.problems = problems
+    );
+    this.name = "SourceCoverageError";
+    this.problems = problems;
   }
 }
 
@@ -1363,8 +1456,8 @@ export type SourceCoverageOptions = {
    * and builds them itself. No runtime value can enumerate an open interface's
    * merged members, so they are named here.
    */
-  readonly knownStores?: Iterable<string>
-}
+  readonly knownStores?: Iterable<string>;
+};
 
 /**
  * Walk `root` and collect every leaf method whose declared param sources don't
@@ -1422,40 +1515,46 @@ export function findRouteSourceCoverageProblems(
   root: HttpRoute,
   opts?: SourceCoverageOptions,
 ): readonly SourceCoverageProblem[] {
-  const known = new Set<string>([...BUILTIN_HTTP_STORE_NAMES, ...(opts?.knownStores ?? [])])
-  const problems: SourceCoverageProblem[] = []
+  const known = new Set<string>([...BUILTIN_HTTP_STORE_NAMES, ...(opts?.knownStores ?? [])]);
+  const problems: SourceCoverageProblem[] = [];
 
-  const visit = (route: HttpRoute, segments: readonly string[], pathParams: readonly string[]): void => {
-    const path = segments.length === 0 ? "/" : `/${segments.join("/")}`
+  const visit = (
+    route: HttpRoute,
+    segments: readonly string[],
+    pathParams: readonly string[],
+  ): void => {
+    const path = segments.length === 0 ? "/" : `/${segments.join("/")}`;
     for (const [method, entry] of Object.entries(route.methods ?? {})) {
-      const sources = entry.sources
-      const paramNames = sources?.paramNames
-      const sourceMap = sources?.sourceMap ?? {}
-      const authored = sources?.authoredPathParams
+      const sources = entry.sources;
+      const paramNames = sources?.paramNames;
+      const sourceMap = sources?.sourceMap ?? {};
+      const authored = sources?.authoredPathParams;
       if (paramNames !== undefined) {
-        const primary = primaryStoreForMethod(method)
+        const primary = primaryStoreForMethod(method);
         for (const param of paramNames) {
-          const authoredWantsIt = authored !== undefined && authored.includes(param)
-          const resolvesViaPath = authored !== undefined
-            ? authoredWantsIt && pathParams.includes(param)
-            : pathParams.includes(param)
-          if (resolvesViaPath) continue
+          const authoredWantsIt = authored !== undefined && authored.includes(param);
+          const resolvesViaPath =
+            authored !== undefined
+              ? authoredWantsIt && pathParams.includes(param)
+              : pathParams.includes(param);
+          if (resolvesViaPath) continue;
 
-          const override = sourceMap[param]
+          const override = sourceMap[param];
           if (override !== undefined) {
             if (override.store === "path") {
-              const key = override.key ?? param
+              const key = override.key ?? param;
               if (!pathParams.includes(key)) {
                 problems.push({
                   path,
                   method,
                   param,
                   kind: "unfillable-path",
-                  detail: `declared as path-sourced (key "${key}") via an explicit source override,`
-                    + ` but nothing at this leaf's projected position (${path}) supplies it`,
-                })
+                  detail:
+                    `declared as path-sourced (key "${key}") via an explicit source override,` +
+                    ` but nothing at this leaf's projected position (${path}) supplies it`,
+                });
               }
-              continue
+              continue;
             }
             if (!known.has(override.store)) {
               problems.push({
@@ -1463,11 +1562,12 @@ export function findRouteSourceCoverageProblems(
                 method,
                 param,
                 kind: "unknown-store",
-                detail: `reads from store "${override.store}", which no projector builds`
-                  + ` (known: ${[...known].sort().join(", ")})`,
-              })
+                detail:
+                  `reads from store "${override.store}", which no projector builds` +
+                  ` (known: ${[...known].sort().join(", ")})`,
+              });
             }
-            continue
+            continue;
           }
 
           if (authoredWantsIt) {
@@ -1480,10 +1580,11 @@ export function findRouteSourceCoverageProblems(
               method,
               param,
               kind: "unfillable-path",
-              detail: `authored as a local path slug, but moveTo relocated this leaf away from`
-                + ` a matching ancestor — its projected position (${path}) has no "${param}" segment`,
-            })
-            continue
+              detail:
+                `authored as a local path slug, but moveTo relocated this leaf away from` +
+                ` a matching ancestor — its projected position (${path}) has no "${param}" segment`,
+            });
+            continue;
           }
 
           // Not authored, not explicit-path-sourced — falls through to the
@@ -1495,9 +1596,10 @@ export function findRouteSourceCoverageProblems(
               method,
               param,
               kind: "unknown-store",
-              detail: `reads from store "${primary}", which no projector builds`
-                + ` (known: ${[...known].sort().join(", ")})`,
-            })
+              detail:
+                `reads from store "${primary}", which no projector builds` +
+                ` (known: ${[...known].sort().join(", ")})`,
+            });
           }
         }
         for (const param of Object.keys(sourceMap)) {
@@ -1507,26 +1609,31 @@ export function findRouteSourceCoverageProblems(
               method,
               param,
               kind: "unused-override",
-              detail: `has a source override but is not one of this route's params`
-                + ` (${paramNames.join(", ") || "none"}) — the override is never applied`,
-            })
+              detail:
+                `has a source override but is not one of this route's params` +
+                ` (${paramNames.join(", ") || "none"}) — the override is never applied`,
+            });
           }
         }
       }
     }
     for (const [name, child] of Object.entries(route.children ?? {})) {
-      visit(child, [...segments, name], pathParams)
+      visit(child, [...segments, name], pathParams);
     }
     if (route.fallback !== undefined) {
       // A fallback segment IS a path param: `matchRoute` binds the raw segment
       // to `fallback.name` as a slug, so every leaf below here can source that
       // name from "path".
-      visit(route.fallback.subtree, [...segments, `{${route.fallback.name}}`], [...pathParams, route.fallback.name])
+      visit(
+        route.fallback.subtree,
+        [...segments, `{${route.fallback.name}}`],
+        [...pathParams, route.fallback.name],
+      );
     }
-  }
+  };
 
-  visit(root, [], [])
-  return problems
+  visit(root, [], []);
+  return problems;
 }
 
 /**
@@ -1535,8 +1642,8 @@ export function findRouteSourceCoverageProblems(
  * `makeRouterFromRoute`, which calls it while building the dispatcher.
  */
 export function checkRouteSourceCoverage(root: HttpRoute, opts?: SourceCoverageOptions): void {
-  const problems = findRouteSourceCoverageProblems(root, opts)
-  if (problems.length > 0) throw new SourceCoverageError(problems)
+  const problems = findRouteSourceCoverageProblems(root, opts);
+  if (problems.length > 0) throw new SourceCoverageError(problems);
 }
 
 /**
@@ -1556,13 +1663,24 @@ export function makeRouterFromRoute(
   // Once, at wire time — not per request. This is the point at which mount
   // position and the codegen'd `paramNames` list both exist, which is exactly
   // why §6 puts the check here instead of at `op()`.
-  checkRouteSourceCoverage(root)
+  checkRouteSourceCoverage(root);
 
   return async (req) => {
-    const segs = splitPath(new URL(req.url).pathname)
-    const matched = matchRoute(root, segs, 0, req.method, {})
-    if (matched === undefined) return new Response("Not Found", { status: 404 })
+    const segs = splitPath(new URL(req.url).pathname);
+    const matched = matchRoute(root, segs, 0, req.method, {});
+    if (matched === undefined) return new Response("Not Found", { status: 404 });
 
-    return runRoute(req, matched.entry.handler, matched.entry.meta, matched.entry.sources, matched.slugs, handlerMiddleware, detection, errorEncoder, thrownErrorEncoder, serviceStores)
-  }
+    return runRoute(
+      req,
+      matched.entry.handler,
+      matched.entry.meta,
+      matched.entry.sources,
+      matched.slugs,
+      handlerMiddleware,
+      detection,
+      errorEncoder,
+      thrownErrorEncoder,
+      serviceStores,
+    );
+  };
 }

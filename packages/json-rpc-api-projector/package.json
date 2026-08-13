@@ -2,18 +2,21 @@
   "name": "@rhi-zone/fractal-json-rpc-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "JSON-RPC 2.0 method projection for the function-core tree — dot-joined method names, HTTP POST + WebSocket transports, batch requests, streaming via Notifications, typed client",
+  "keywords": [
+    "api",
+    "json-rpc",
+    "projector",
+    "rpc",
+    "websocket"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/json-rpc-api-projector"
   },
-  "keywords": [
-    "json-rpc",
-    "api",
-    "projector",
-    "websocket",
-    "rpc"
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -41,22 +44,19 @@
       "import": "./dist/wire.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "@rhi-zone/fractal-api-tree": "workspace:*",
-    "@rhi-zone/fractal-type-ir": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch"
   },
-  "publishConfig": {
-    "access": "public"
+  "dependencies": {
+    "@rhi-zone/fractal-api-tree": "workspace:*",
+    "@rhi-zone/fractal-type-ir": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -14,32 +14,32 @@
 // here so it's reachable from the package root, alongside
 // the rest of the Node/Op/Meta model which stays on "./node.ts" until the
 // two modules are merged.
-export { api, fallback, mergeMeta, op } from "./node.ts"
+export { api, fallback, mergeMeta, op } from "./node.ts";
 
 // `createDirectApi` — the zero-protocol-overhead projection: a nested proxy
 // that calls tree handlers in-process (no HTTP, no serialization). See
 // "./direct.ts" for the full doc.
-export { createDirectApi } from "./direct.ts"
-export type { AnyApi, DirectApi } from "./direct.ts"
+export { createDirectApi } from "./direct.ts";
+export type { AnyApi, DirectApi } from "./direct.ts";
 
 // `TypedClient` — the remote-client analogue of `DirectApi`, parameterized
 // over a projector-supplied `CallOpts` type for per-call transport options
 // (e.g. HTTP's `{ timeout, signal }`). Lives here (not in
 // http-api-projector) so it stays projector-agnostic — see "./typed-client.ts".
-export type { TypedClient } from "./typed-client.ts"
+export type { TypedClient } from "./typed-client.ts";
 
 // `TreeManifest` — flattens a Node tree into a map of dot-separated paths to
 // each leaf's `{ input; output }` contract. Sibling to `TypedClient` above,
 // but discards nesting entirely instead of preserving it — see
 // "./tree-manifest.ts" for the full doc, including why an HTTP-specific
 // manifest isn't implemented here.
-export type { TreeManifest } from "./tree-manifest.ts"
+export type { TreeManifest } from "./tree-manifest.ts";
 
 // Page<T> — the pagination convention (CursorPage/OffsetPage/Page + runtime
 // shape checks), sibling to StreamEffect<T> below. See "./page.ts" for the
 // full doc.
-export type { CursorPage, OffsetPage, Page } from "./page.ts"
-export { isCursorPage, isOffsetPage, isPageShape } from "./page.ts"
+export type { CursorPage, OffsetPage, Page } from "./page.ts";
+export { isCursorPage, isOffsetPage, isPageShape } from "./page.ts";
 
 // The input-source resolution mechanism — stores, sourceMap, and the
 // assembler that resolves each handler param to a store + key. Extracted
@@ -47,7 +47,7 @@ export { isCursorPage, isOffsetPage, isPageShape } from "./page.ts"
 // one pipeline instead of reimplementing it. Callers that need to report
 // where a param came from consult the sourceMap directly — see "./input.ts"
 // for the full doc.
-export { assemble, resolveSourceMap } from "./input.ts"
+export { assemble, resolveSourceMap } from "./input.ts";
 export type {
   CallerStoreShape,
   CoreStores,
@@ -67,7 +67,7 @@ export type {
   Store,
   StoreRegistry,
   Stores,
-} from "./input.ts"
+} from "./input.ts";
 
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on
@@ -93,12 +93,7 @@ export const compose =
 export function pipe<A>(a: A): A;
 export function pipe<A, B>(a: A, f: Fn<A, B>): B;
 export function pipe<A, B, C>(a: A, f: Fn<A, B>, g: Fn<B, C>): C;
-export function pipe<A, B, C, D>(
-  a: A,
-  f: Fn<A, B>,
-  g: Fn<B, C>,
-  h: Fn<C, D>,
-): D;
+export function pipe<A, B, C, D>(a: A, f: Fn<A, B>, g: Fn<B, C>, h: Fn<C, D>): D;
 export function pipe(a: unknown, ...fns: Fn<unknown, unknown>[]): unknown {
   return fns.reduce((acc, fn) => fn(acc), a);
 }
@@ -114,12 +109,8 @@ export type Result<T, E> =
 export const ok = <T>(value: T): Result<T, never> => ({ kind: "ok", value });
 export const err = <E>(error: E): Result<never, E> => ({ kind: "err", error });
 
-export const isOk = <T, E>(
-  r: Result<T, E>,
-): r is { kind: "ok"; value: T } => r.kind === "ok";
-export const isErr = <T, E>(
-  r: Result<T, E>,
-): r is { kind: "err"; error: E } => r.kind === "err";
+export const isOk = <T, E>(r: Result<T, E>): r is { kind: "ok"; value: T } => r.kind === "ok";
+export const isErr = <T, E>(r: Result<T, E>): r is { kind: "err"; error: E } => r.kind === "err";
 
 /**
  * Loose structural check: true when `v` matches the `Result` DU's shape at
@@ -145,17 +136,13 @@ export const map = <T, E, U>(r: Result<T, E>, f: (t: T) => U): Result<U, E> =>
 
 /** Monadic bind: run `f` on the success value, short-circuit on error. The
  *  primitive Kleisli composition is built from. */
-export const bind = <T, E, U>(
-  r: Result<T, E>,
-  f: (t: T) => Result<U, E>,
-): Result<U, E> => (r.kind === "ok" ? f(r.value) : r);
+export const bind = <T, E, U>(r: Result<T, E>, f: (t: T) => Result<U, E>): Result<U, E> =>
+  r.kind === "ok" ? f(r.value) : r;
 
 /** Fold a Result into a single value by matching both arms. The final encode
  *  stage `Result<T, E> => Response` is exactly `match(r, { ok, err })`. */
-export const match = <T, E, R>(
-  r: Result<T, E>,
-  arms: { ok: (t: T) => R; err: (e: E) => R },
-): R => (r.kind === "ok" ? arms.ok(r.value) : arms.err(r.error));
+export const match = <T, E, R>(r: Result<T, E>, arms: { ok: (t: T) => R; err: (e: E) => R }): R =>
+  r.kind === "ok" ? arms.ok(r.value) : arms.err(r.error);
 
 // ============================================================================
 // StreamEffect<T> — tagged values an async-generator handler can yield
@@ -199,8 +186,7 @@ export type StreamEffect<T = unknown> = StreamProgress | StreamChunk<T>;
  * of every yielded value.
  */
 export function isStreamEffect(value: unknown): value is StreamEffect {
-  if (typeof value !== "object" || value === null || !("kind" in value))
-    return false;
+  if (typeof value !== "object" || value === null || !("kind" in value)) return false;
   const kind = (value as { kind: unknown }).kind;
   return kind === "progress" || kind === "chunk";
 }
@@ -232,15 +218,13 @@ export type DetectionOptions = {
 
 /** True when `value` is specifically a `StreamProgress` effect. */
 export function isStreamProgress(value: unknown): value is StreamProgress {
-  if (typeof value !== "object" || value === null || !("kind" in value))
-    return false;
+  if (typeof value !== "object" || value === null || !("kind" in value)) return false;
   return (value as { kind: unknown }).kind === "progress";
 }
 
 /** True when `value` is specifically a `StreamChunk` effect. */
 export function isStreamChunk(value: unknown): value is StreamChunk {
-  if (typeof value !== "object" || value === null || !("kind" in value))
-    return false;
+  if (typeof value !== "object" || value === null || !("kind" in value)) return false;
   return (value as { kind: unknown }).kind === "chunk";
 }
 
@@ -258,7 +242,7 @@ export function isStreamChunk(value: unknown): value is StreamChunk {
  * caller to fall through to the next encoder (`composeErrorEncoders`) or the
  * projector's own default behavior.
  */
-export type ErrorEncoder<E, R> = (error: E) => R | undefined
+export type ErrorEncoder<E, R> = (error: E) => R | undefined;
 
 /**
  * Compose several `ErrorEncoder`s into one: tries each in order, returning
@@ -272,11 +256,11 @@ export function composeErrorEncoders<E, R>(
 ): (error: E) => R | undefined {
   return (error) => {
     for (const encoder of encoders) {
-      const result = encoder(error)
-      if (result !== undefined) return result
+      const result = encoder(error);
+      if (result !== undefined) return result;
     }
-    return undefined
-  }
+    return undefined;
+  };
 }
 
 /**
@@ -295,10 +279,10 @@ export function matchKind<R>(kind: string, response: R): ErrorEncoder<unknown, R
       "kind" in error &&
       (error as { kind: unknown }).kind === kind
     ) {
-      return response
+      return response;
     }
-    return undefined
-  }
+    return undefined;
+  };
 }
 
 // ============================================================================
@@ -319,18 +303,9 @@ export const composeK =
  *  runs them all and collects their outputs into a record — short-circuiting on
  *  the FIRST failure. This is the `buildOptions` mechanism: run each field's
  *  producer, gather the typed values. */
-export function collect<
-  I,
-  E,
-  F extends Record<string, (i: I) => Result<unknown, E>>,
->(
+export function collect<I, E, F extends Record<string, (i: I) => Result<unknown, E>>>(
   producers: F,
-): (
-  i: I,
-) => Result<
-  { [K in keyof F]: F[K] extends (i: I) => Result<infer V, E> ? V : never },
-  E
-> {
+): (i: I) => Result<{ [K in keyof F]: F[K] extends (i: I) => Result<infer V, E> ? V : never }, E> {
   const keys = Object.keys(producers);
   return (i) => {
     const out: Record<string, unknown> = {};

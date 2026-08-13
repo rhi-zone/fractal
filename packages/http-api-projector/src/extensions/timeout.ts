@@ -17,12 +17,12 @@
 // (e.g. with `createClientFromRoute`, or in codegen output) that wants a
 // fixed timeout without threading `ClientOptions.timeout` through.
 
-import type { ClientExtension, FetchImpl } from "../extension.ts"
+import type { ClientExtension, FetchImpl } from "../extension.ts";
 
 export type TimeoutOptions = {
   /** Timeout in milliseconds, applied via `AbortSignal.timeout`. */
-  readonly ms: number
-}
+  readonly ms: number;
+};
 
 /**
  * Fixed-timeout extension: aborts the request after `ms` milliseconds,
@@ -32,23 +32,27 @@ export type TimeoutOptions = {
  * createClient(node, { baseUrl, extensions: [timeout({ ms: 5000 })] })
  */
 export function timeout(options: TimeoutOptions): ClientExtension {
-  const { ms } = options
+  const { ms } = options;
 
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    const timeoutSignal = AbortSignal.timeout(ms)
-    // `Request.signal` is never `null` per spec (an unaborted default signal
-    // when the caller didn't pass one) — always combine.
-    const signal = AbortSignal.any([req.signal, timeoutSignal])
-    const timedReq = new Request(req, { signal })
-    try {
-      return await inner(timedReq)
-    } catch (err) {
-      if (err instanceof Error && err.name === "TimeoutError") {
-        throw new Error(`Request timed out after ${ms}ms: ${req.method} ${new URL(req.url).pathname}`)
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      const timeoutSignal = AbortSignal.timeout(ms);
+      // `Request.signal` is never `null` per spec (an unaborted default signal
+      // when the caller didn't pass one) — always combine.
+      const signal = AbortSignal.any([req.signal, timeoutSignal]);
+      const timedReq = new Request(req, { signal });
+      try {
+        return await inner(timedReq);
+      } catch (err) {
+        if (err instanceof Error && err.name === "TimeoutError") {
+          throw new Error(
+            `Request timed out after ${ms}ms: ${req.method} ${new URL(req.url).pathname}`,
+          );
+        }
+        throw err;
       }
-      throw err
-    }
-  }
+    };
 
   return {
     name: "timeout",
@@ -57,7 +61,7 @@ export function timeout(options: TimeoutOptions): ClientExtension {
       helpers: TIMEOUT_CODEGEN_HELPERS,
       wrap: (innerExpr) => `__withTimeout(${innerExpr}, ${JSON.stringify({ ms })})`,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -81,4 +85,4 @@ function __withTimeout(inner: typeof fetch, options: __TimeoutOptions): typeof f
       throw err
     }
   }) as typeof fetch
-}`.trim()
+}`.trim();

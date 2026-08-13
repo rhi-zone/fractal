@@ -6,4 +6,4 @@
 // carries `@modelcontextprotocol/sdk` as its own runtime dependency, which is
 // the single largest install a consumer can avoid by not asking for MCP.
 
-export * from "@rhi-zone/fractal-mcp-api-projector"
+export * from "@rhi-zone/fractal-mcp-api-projector";

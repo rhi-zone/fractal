@@ -1,10 +1,10 @@
-import { render } from "solid-js/web"
-import App from "./App.tsx"
-import "./styles.css"
+import { render } from "solid-js/web";
+import App from "./App.tsx";
+import "./styles.css";
 
-const root = document.getElementById("root")
+const root = document.getElementById("root");
 if (root === null) {
-  throw new Error("#root element missing from index.html")
+  throw new Error("#root element missing from index.html");
 }
 
-render(() => <App />, root)
+render(() => <App />, root);

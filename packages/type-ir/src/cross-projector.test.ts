@@ -7,57 +7,57 @@
 // entire projector matrix, so a regression that only shows up when several
 // kinds compose (e.g. an array-of-arrays inside a union inside an optional
 // field) has somewhere to surface.
-import { describe, expect, test } from "bun:test"
-import type { TypeRef } from "./index.ts"
-import { fixtures } from "./test-fixtures.ts"
+import { describe, expect, test } from "bun:test";
+import type { TypeRef } from "./index.ts";
+import { fixtures } from "./test-fixtures.ts";
 
-import { toZodDeclaration } from "./typescript-zod.ts"
-import { toPydantic } from "./python-pydantic.ts"
-import { toPython } from "./python-dataclass.ts"
-import { toAttrs } from "./python-attrs.ts"
-import { toGo } from "./go-encoding-json.ts"
-import { toRust } from "./rust-serde.ts"
-import { toJavaDeclaration } from "./java-jackson.ts"
-import { toGsonDeclaration } from "./java-gson.ts"
-import { toMoshi } from "./java-moshi.ts"
-import { toCSharp } from "./csharp-systemtextjson.ts"
-import { toCSharpNewtonsoft } from "./csharp-newtonsoft.ts"
-import { toSwift } from "./swift-codable.ts"
-import { toKotlin } from "./kotlin-kotlinx.ts"
-import { toDart } from "./dart-json-serializable.ts"
-import { toFreezed } from "./dart-freezed.ts"
-import { toObjC } from "./objc-foundation.ts"
-import { toCpp } from "./cpp-nlohmann.ts"
-import { toCrystal } from "./crystal-json-serializable.ts"
-import { toHaskell } from "./haskell-aeson.ts"
-import { toElm } from "./elm-json.ts"
-import { toFlow } from "./flow-native.ts"
-import { toPhp } from "./php-native.ts"
-import { toRuby } from "./ruby-sorbet.ts"
-import { toElixir } from "./elixir-jason.ts"
-import { toTypeDeclaration } from "./typescript-native.ts"
-import { toArkTypeDeclaration } from "./typescript-arktype.ts"
-import { toEffectSchemaDeclaration } from "./typescript-effect-schema.ts"
-import { toIoTsDeclaration } from "./typescript-io-ts.ts"
-import { toRuntypesDeclaration } from "./typescript-runtypes.ts"
-import { toSuperstructDeclaration } from "./typescript-superstruct.ts"
-import { toTypeBoxDeclaration } from "./typescript-typebox.ts"
-import { toValibotDeclaration } from "./typescript-valibot.ts"
-import { toYupDeclaration } from "./typescript-yup.ts"
-import { toJsonSchema } from "./json-schema.ts"
-import { toJsonSchema04 } from "./json-schema-04.ts"
-import { toJsonSchema07 } from "./json-schema-07.ts"
-import { toOpenApi30 } from "./openapi30.ts"
-import { toOpenApi20 } from "./openapi20.ts"
-import { toGraphQLType } from "./graphql.ts"
-import { toProtoMessage, renderProto } from "./protobuf.ts"
-import { toCapnpStruct, renderCapnp } from "./capnp.ts"
-import { toFlatBuffersTable, toFlatBuffersDeclarations } from "./flatbuffers.ts"
-import { toCreateTable } from "./sql.ts"
-import { toMssqlCreateTableFromRef } from "./sql-mssql.ts"
-import { toJtd } from "./jtd.ts"
-import { toStandardSchema } from "./standard-schema.ts"
-import { compileValidator } from "./compile.ts"
+import { toZodDeclaration } from "./typescript-zod.ts";
+import { toPydantic } from "./python-pydantic.ts";
+import { toPython } from "./python-dataclass.ts";
+import { toAttrs } from "./python-attrs.ts";
+import { toGo } from "./go-encoding-json.ts";
+import { toRust } from "./rust-serde.ts";
+import { toJavaDeclaration } from "./java-jackson.ts";
+import { toGsonDeclaration } from "./java-gson.ts";
+import { toMoshi } from "./java-moshi.ts";
+import { toCSharp } from "./csharp-systemtextjson.ts";
+import { toCSharpNewtonsoft } from "./csharp-newtonsoft.ts";
+import { toSwift } from "./swift-codable.ts";
+import { toKotlin } from "./kotlin-kotlinx.ts";
+import { toDart } from "./dart-json-serializable.ts";
+import { toFreezed } from "./dart-freezed.ts";
+import { toObjC } from "./objc-foundation.ts";
+import { toCpp } from "./cpp-nlohmann.ts";
+import { toCrystal } from "./crystal-json-serializable.ts";
+import { toHaskell } from "./haskell-aeson.ts";
+import { toElm } from "./elm-json.ts";
+import { toFlow } from "./flow-native.ts";
+import { toPhp } from "./php-native.ts";
+import { toRuby } from "./ruby-sorbet.ts";
+import { toElixir } from "./elixir-jason.ts";
+import { toTypeDeclaration } from "./typescript-native.ts";
+import { toArkTypeDeclaration } from "./typescript-arktype.ts";
+import { toEffectSchemaDeclaration } from "./typescript-effect-schema.ts";
+import { toIoTsDeclaration } from "./typescript-io-ts.ts";
+import { toRuntypesDeclaration } from "./typescript-runtypes.ts";
+import { toSuperstructDeclaration } from "./typescript-superstruct.ts";
+import { toTypeBoxDeclaration } from "./typescript-typebox.ts";
+import { toValibotDeclaration } from "./typescript-valibot.ts";
+import { toYupDeclaration } from "./typescript-yup.ts";
+import { toJsonSchema } from "./json-schema.ts";
+import { toJsonSchema04 } from "./json-schema-04.ts";
+import { toJsonSchema07 } from "./json-schema-07.ts";
+import { toOpenApi30 } from "./openapi30.ts";
+import { toOpenApi20 } from "./openapi20.ts";
+import { toGraphQLType } from "./graphql.ts";
+import { toProtoMessage, renderProto } from "./protobuf.ts";
+import { toCapnpStruct, renderCapnp } from "./capnp.ts";
+import { toFlatBuffersTable, toFlatBuffersDeclarations } from "./flatbuffers.ts";
+import { toCreateTable } from "./sql.ts";
+import { toMssqlCreateTableFromRef } from "./sql-mssql.ts";
+import { toJtd } from "./jtd.ts";
+import { toStandardSchema } from "./standard-schema.ts";
+import { compileValidator } from "./compile.ts";
 
 // ============================================================================
 // Fixtures — see test-fixtures.ts (shared with compile-check.test.ts)
@@ -116,9 +116,9 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   {
     name: "standard-schema",
     fn: (ref) => {
-      const schema = toStandardSchema(ref)
-      if (schema["~standard"].version !== 1) throw new Error("unexpected standard-schema version")
-      return `standard-schema:${schema["~standard"].vendor}`
+      const schema = toStandardSchema(ref);
+      if (schema["~standard"].version !== 1) throw new Error("unexpected standard-schema version");
+      return `standard-schema:${schema["~standard"].vendor}`;
     },
   },
   { name: "compile (AOT validator)", fn: (ref, name) => compileValidator(ref) + name },
@@ -152,7 +152,7 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   // record) accepts the TypeRef directly, so it can see and dispatch on a
   // union root the same way sql.ts's `toCreateTable` does.
   { name: "sql-mssql", fn: (ref, name) => toMssqlCreateTableFromRef(name, ref) },
-]
+];
 
 // Struct-shaped projectors that require an `object` root and cannot represent
 // a bare `union` root directly. Empty for now — every projector in the matrix
@@ -172,11 +172,11 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
 // Kept as a live mechanism (not deleted) so a future struct-only projector
 // added to the matrix has somewhere to register itself as `.todo` rather than
 // asserted to throw.
-const structOnlyProjectorNames = new Set<string>([])
+const structOnlyProjectorNames = new Set<string>([]);
 
 describe("cross-projector smoke tests", () => {
   for (const { name: fixtureName, ref } of fixtures) {
-    const isStructIncompatible = ref.shape.kind !== "object"
+    const isStructIncompatible = ref.shape.kind !== "object";
 
     describe(fixtureName, () => {
       for (const { name, fn } of projectors) {
@@ -185,20 +185,20 @@ describe("cross-projector smoke tests", () => {
             `${fixtureName} -> ${name} (root kind "${ref.shape.kind}" isn't struct-shaped; ` +
               `needs union/oneof synthesis support before this can go through ${name})`,
             () => {
-              const result = fn(ref, "Root")
-              expect(typeof result).toBe("string")
-              expect(result.length).toBeGreaterThan(0)
+              const result = fn(ref, "Root");
+              expect(typeof result).toBe("string");
+              expect(result.length).toBeGreaterThan(0);
             },
-          )
-          continue
+          );
+          continue;
         }
 
         test(`${fixtureName} -> ${name}`, () => {
-          const result = fn(ref, "Root")
-          expect(typeof result).toBe("string")
-          expect(result.length).toBeGreaterThan(0)
-        })
+          const result = fn(ref, "Root");
+          expect(typeof result).toBe("string");
+          expect(result.length).toBeGreaterThan(0);
+        });
       }
-    })
+    });
   }
-})
+});

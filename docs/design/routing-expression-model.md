@@ -221,8 +221,8 @@ path("users", {
     read: handler(getUser, { tags: { readOnly: true } }),
     update: handler(updateUser, { tags: { idempotent: true } }),
     remove: handler(deleteUser, { tags: { idempotent: true, destructive: true } }),
-  })
-})
+  }),
+});
 ```
 
 The HTTP projection derives: readOnly → GET, idempotent+destructive → DELETE,
@@ -267,12 +267,17 @@ Cross-cutting concerns (caller-context, audit, tracing) are higher-order functio
 
 ```ts
 // Caller-context: wraps Extract
-const withContext = (extract, buildCtx) =>
-  (matched) => ({ ...extract(matched), actor: buildCtx(matched.req) })
+const withContext = (extract, buildCtx) => (matched) => ({
+  ...extract(matched),
+  actor: buildCtx(matched.req),
+});
 
 // Audit: wraps Invoke
-const withAudit = (invoke, consumer) =>
-  (input, handler) => { const result = invoke(input, handler); consumer({ input, result }); return result }
+const withAudit = (invoke, consumer) => (input, handler) => {
+  const result = invoke(input, handler);
+  consumer({ input, result });
+  return result;
+};
 ```
 
 Each concern wraps one stage. Adding caller-context is wrapping Extract; adding audit is wrapping Invoke. The projection is composition of stages; each stage is independently wrappable.

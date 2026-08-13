@@ -1,5 +1,11 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart, toSnakeCaseAcronymAware } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import {
+  capitalize,
+  dartDeprecatedAnnotation,
+  dartDocComment,
+  quoteDart,
+  toSnakeCaseAcronymAware,
+} from "./codegen-helpers.ts";
 
 // built_value (https://pub.dev/packages/built_value) is Dart's older
 // code-generation package for immutable value types built around the
@@ -48,18 +54,18 @@ import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart, toSnak
 // built_value workaround.
 
 interface Ctx {
-  declarations: string[]
-  declaredNames: Set<string>
-  usesBuiltValue: boolean
-  usesBuiltCollection: boolean
+  declarations: string[];
+  declaredNames: Set<string>;
+  usesBuiltValue: boolean;
+  usesBuiltCollection: boolean;
 }
 
-type Converter = (shape: TypeShape, ctx: Ctx, hint: string) => string
+type Converter = (shape: TypeShape, ctx: Ctx, hint: string) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Dart style (https://dart.dev/effective-dart/style#identifiers): fields and
 // variables are lowerCamelCase. Converts snake_case/kebab-case/SCREAMING_SNAKE
@@ -68,22 +74,22 @@ const leaf =
 // dart-freezed.ts's `toLowerCamel`.
 function toLowerCamel(name: string): string {
   if (/[_\-\s]/.test(name)) {
-    const parts = name.split(/[_\-\s]+/).filter((p) => p.length > 0)
+    const parts = name.split(/[_\-\s]+/).filter((p) => p.length > 0);
     return parts
       .map((part, i) => {
-        const lower = part.toLowerCase()
-        return i === 0 ? lower : capitalize(lower)
+        const lower = part.toLowerCase();
+        return i === 0 ? lower : capitalize(lower);
       })
-      .join("")
+      .join("");
   }
   if (name.length > 0 && name === name.toUpperCase() && name !== name.toLowerCase()) {
-    return name.toLowerCase()
+    return name.toLowerCase();
   }
-  return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1)
+  return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1);
 }
 
 function isNullable(ref: TypeRef): boolean {
-  return ref.meta.optional === true || ref.meta.nullable === true
+  return ref.meta.optional === true || ref.meta.nullable === true;
 }
 
 // Scalar type name — identical to dart-freezed.ts's table (freezed and
@@ -114,57 +120,57 @@ const scalarHandlers: Record<string, Converter> = {
   never: leaf("Never"),
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "array" }
-    ctx.usesBuiltCollection = true
-    return `BuiltList<${dartType(s.element, ctx, `${hint}Item`)}>`
+    const s = shape as TypeShape & { kind: "array" };
+    ctx.usesBuiltCollection = true;
+    return `BuiltList<${dartType(s.element, ctx, `${hint}Item`)}>`;
   },
   stream: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `Stream<${dartType(s.element, ctx, `${hint}Item`)}>`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `Stream<${dartType(s.element, ctx, `${hint}Item`)}>`;
   },
   page: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "page" }
-    ctx.usesBuiltCollection = true
-    return `BuiltList<${dartType(s.element, ctx, `${hint}Item`)}>`
+    const s = shape as TypeShape & { kind: "page" };
+    ctx.usesBuiltCollection = true;
+    return `BuiltList<${dartType(s.element, ctx, `${hint}Item`)}>`;
   },
   tuple: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `(${s.elements.map((element, i) => dartType(element, ctx, `${hint}${i}`)).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `(${s.elements.map((element, i) => dartType(element, ctx, `${hint}${i}`)).join(", ")})`;
   },
   map: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "map" }
-    ctx.usesBuiltCollection = true
-    return `BuiltMap<${dartType(s.key, ctx, `${hint}Key`)}, ${dartType(s.value, ctx, `${hint}Value`)}>`
+    const s = shape as TypeShape & { kind: "map" };
+    ctx.usesBuiltCollection = true;
+    return `BuiltMap<${dartType(s.key, ctx, `${hint}Key`)}, ${dartType(s.value, ctx, `${hint}Value`)}>`;
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "bool"
-    if (s.value === null) return "Null"
-    return Number.isInteger(s.value) ? "int" : "double"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "bool";
+    if (s.value === null) return "Null";
+    return Number.isInteger(s.value) ? "int" : "double";
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   intersection: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "dynamic" : dartType(first, ctx, hint)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "dynamic" : dartType(first, ctx, hint);
   },
   function: leaf("Function"),
   interface: leaf("dynamic"),
-}
+};
 
 function dartTypeName(ref: TypeRef, ctx: Ctx, hint: string): string {
-  const kind = ref.shape.kind
-  if (kind === "object") return emitClass(hint, ref, ctx)
-  if (kind === "enum") return emitEnum(hint, ref, ctx)
-  if (kind === "union") return emitUnion(hint, ref, ctx)
-  const converter = resolve(kind, scalarHandlers)
-  return converter === undefined ? "dynamic" : converter(ref.shape, ctx, hint)
+  const kind = ref.shape.kind;
+  if (kind === "object") return emitClass(hint, ref, ctx);
+  if (kind === "enum") return emitEnum(hint, ref, ctx);
+  if (kind === "union") return emitUnion(hint, ref, ctx);
+  const converter = resolve(kind, scalarHandlers);
+  return converter === undefined ? "dynamic" : converter(ref.shape, ctx, hint);
 }
 
 function dartType(ref: TypeRef, ctx: Ctx, hint: string): string {
-  const base = dartTypeName(ref, ctx, hint)
-  return isNullable(ref) ? `${base}?` : base
+  const base = dartTypeName(ref, ctx, hint);
+  return isNullable(ref) ? `${base}?` : base;
 }
 
 /**
@@ -174,10 +180,10 @@ function dartType(ref: TypeRef, ctx: Ctx, hint: string): string {
  * in place of dart-freezed.ts's constructor-parameter block.
  */
 function fieldGetter(fieldName: string, fieldRef: TypeRef, ctx: Ctx, hintBase: string): string {
-  const dartName = toLowerCamel(fieldName)
-  const fieldHint = `${hintBase}${capitalize(dartName)}`
-  const fieldType = dartType(fieldRef, ctx, fieldHint)
-  return `${dartDocComment(fieldRef.meta, "  ")}  ${fieldType} get ${dartName};\n`
+  const dartName = toLowerCamel(fieldName);
+  const fieldHint = `${hintBase}${capitalize(dartName)}`;
+  const fieldType = dartType(fieldRef, ctx, fieldHint);
+  return `${dartDocComment(fieldRef.meta, "  ")}  ${fieldType} get ${dartName};\n`;
 }
 
 /**
@@ -188,32 +194,34 @@ function fieldGetter(fieldName: string, fieldRef: TypeRef, ctx: Ctx, hintBase: s
  * `factory Foo([updates]) = _$Foo;` constructor a caller actually invokes.
  */
 function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
-  ctx.usesBuiltValue = true
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
+  ctx.usesBuiltValue = true;
 
-  const shape = ref.shape as TypeShape & { kind: "object" }
+  const shape = ref.shape as TypeShape & { kind: "object" };
   const getters = Object.entries(shape.fields)
     .map(([fieldName, fieldRef]) => fieldGetter(fieldName, fieldRef, ctx, capitalize(name)))
-    .join("")
+    .join("");
 
-  const serializerName = `_$${toLowerCamel(name)}Serializer`
+  const serializerName = `_$${toLowerCamel(name)}Serializer`;
 
-  const lines: string[] = []
-  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}abstract class ${name} implements Built<${name}, ${name}Builder> {`)
+  const lines: string[] = [];
+  lines.push(
+    `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}abstract class ${name} implements Built<${name}, ${name}Builder> {`,
+  );
   if (getters.length > 0) {
-    lines.push("")
-    lines.push(getters.trimEnd())
+    lines.push("");
+    lines.push(getters.trimEnd());
   }
-  lines.push("")
-  lines.push(`  static Serializer<${name}> get serializer => ${serializerName};`)
-  lines.push("")
-  lines.push(`  ${name}._();`)
-  lines.push(`  factory ${name}([void Function(${name}Builder) updates]) = _$${name};`)
-  lines.push("}")
+  lines.push("");
+  lines.push(`  static Serializer<${name}> get serializer => ${serializerName};`);
+  lines.push("");
+  lines.push(`  ${name}._();`);
+  lines.push(`  factory ${name}([void Function(${name}Builder) updates]) = _$${name};`);
+  lines.push("}");
 
-  ctx.declarations.push(lines.join("\n"))
-  return name
+  ctx.declarations.push(lines.join("\n"));
+  return name;
 }
 
 // Dart enums (https://dart.dev/language/enums) with a `value` slot carrying
@@ -223,11 +231,13 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
 // ceremony needed for a simple string-backed enum), so nothing built_value-
 // specific changes here.
 function emitEnum(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
 
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`).join(",\n")
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const members = shape.members
+    .map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`)
+    .join(",\n");
 
   const decl = `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}enum ${name} {
 ${members};
@@ -241,14 +251,14 @@ ${members};
       );
 
   String toJson() => value;
-}`
-  ctx.declarations.push(decl)
-  return name
+}`;
+  ctx.declarations.push(decl);
+  return name;
 }
 
 function variantClassName(baseName: string, variant: TypeRef, index: number): string {
-  if (typeof variant.meta.typeName === "string") return capitalize(variant.meta.typeName)
-  return `${baseName}Variant${index}`
+  if (typeof variant.meta.typeName === "string") return capitalize(variant.meta.typeName);
+  return `${baseName}Variant${index}`;
 }
 
 /**
@@ -262,30 +272,31 @@ function variantClassName(baseName: string, variant: TypeRef, index: number): st
  * way freezed's sealed class does.
  */
 function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
 
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator =
+    typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
 
   const variantNames = shape.variants.map((variant, index) => {
-    const className = variantClassName(name, variant, index)
+    const className = variantClassName(name, variant, index);
     if (variant.shape.kind === "object") {
-      return emitClass(className, variant, ctx)
+      return emitClass(className, variant, ctx);
     }
-    return dartType(variant, ctx, className)
-  })
+    return dartType(variant, ctx, className);
+  });
 
   const comment =
     discriminator !== undefined
       ? ` // discriminated by ${quoteDart(discriminator)} — built_value has no native sealed-union support;` +
         ` dispatch manually on this field across the variant classes below (or model as a single class with a nullable field per variant)`
-      : " // built_value has no native union support; the variant classes below share no common supertype"
+      : " // built_value has no native union support; the variant classes below share no common supertype";
 
-  const uniqueNames = [...new Set(variantNames)]
-  const decl = `${dartDocComment(ref.meta)}typedef ${name} = ${uniqueNames.length === 1 ? uniqueNames[0] : "Object"};${comment}`
-  ctx.declarations.push(decl)
-  return name
+  const uniqueNames = [...new Set(variantNames)];
+  const decl = `${dartDocComment(ref.meta)}typedef ${name} = ${uniqueNames.length === 1 ? uniqueNames[0] : "Object"};${comment}`;
+  ctx.declarations.push(decl);
+  return name;
 }
 
 /**
@@ -299,25 +310,30 @@ function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
  * only emitted when actually used.
  */
 export function toBuiltValue(ref: TypeRef, name = "GeneratedType"): string {
-  const ctx: Ctx = { declarations: [], declaredNames: new Set(), usesBuiltValue: false, usesBuiltCollection: false }
+  const ctx: Ctx = {
+    declarations: [],
+    declaredNames: new Set(),
+    usesBuiltValue: false,
+    usesBuiltCollection: false,
+  };
 
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   if (kind === "object" || kind === "enum" || kind === "union") {
-    dartTypeName(ref, ctx, name)
+    dartTypeName(ref, ctx, name);
   } else {
-    ctx.declarations.push(`typedef ${name} = ${dartType(ref, ctx, name)};`)
+    ctx.declarations.push(`typedef ${name} = ${dartType(ref, ctx, name)};`);
   }
 
-  const body = ctx.declarations.join("\n\n")
-  const fileBase = toSnakeCaseAcronymAware(name)
+  const body = ctx.declarations.join("\n\n");
+  const fileBase = toSnakeCaseAcronymAware(name);
   const imports = [
     ctx.usesBuiltValue ? "import 'package:built_value/built_value.dart';" : "",
     ctx.usesBuiltValue ? "import 'package:built_value/serializer.dart';" : "",
     ctx.usesBuiltCollection ? "import 'package:built_collection/built_collection.dart';" : "",
     body.includes("Uint8List") ? "import 'dart:typed_data';" : "",
     ctx.usesBuiltValue ? `part '${fileBase}.g.dart';` : "",
-  ].filter((line) => line.length > 0)
-  const header = imports.length > 0 ? `${imports.join("\n")}\n\n` : ""
+  ].filter((line) => line.length > 0);
+  const header = imports.length > 0 ? `${imports.join("\n")}\n\n` : "";
 
-  return `${header}${body}\n`
+  return `${header}${body}\n`;
 }

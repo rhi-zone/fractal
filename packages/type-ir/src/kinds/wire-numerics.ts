@@ -3,5 +3,5 @@
 // Composite: fixed-width int + float kinds, as commonly needed together for
 // wire formats (protobuf, Avro, TypeBox, …).
 
-export * from "./int-widths.ts"
-export * from "./float-widths.ts"
+export * from "./int-widths.ts";
+export * from "./float-widths.ts";

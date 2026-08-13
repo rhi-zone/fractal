@@ -28,38 +28,38 @@ model-invocation split out because it is ~11% of the corpus and categorically di
 
 ## THE KEY NUMBER
 
-| | count | % of 178 |
-|---|---|---|
-| **CLEAR dominant primary effect** | **174** | **97.8%** |
-| **Genuinely AMBIGUOUS (no dominant)** | **4** | **2.2%** |
+|                                       | count   | % of 178  |
+| ------------------------------------- | ------- | --------- |
+| **CLEAR dominant primary effect**     | **174** | **97.8%** |
+| **Genuinely AMBIGUOUS (no dominant)** | **4**   | **2.2%**  |
 
 Strict reading (only true dispatch-multiplexers, dropping the one borderline orchestration)
 gives **3 ambiguous (1.7%)**. Either way: **~98% of ops have a single dominant intended
-effect.** The 77% multi-effect number is real but measures effect-*atoms*, not intents.
+effect.** The 77% multi-effect number is real but measures effect-_atoms_, not intents.
 
 ---
 
 ## Primary-effect distribution (over 178)
 
-| Primary kind | count | % |
-|---|---|---|
-| external-invoke (gateway / subprocess / agent-spawn / daemon / notify-send) | 40 | 22.5% |
-| create | 39 | 21.9% |
-| read (query / view / diagnostic / get) | 34 | 19.1% |
-| update-in-place | 30 | 16.9% |
-| model-invocation (LLM is the deliverable) | 19 | 10.7% |
-| replace (wipe+recreate / self-replace / rebuild-overwrite / migrate) | 5 | 2.8% |
-| delete | 4 | 2.2% |
-| pure-compute (no I/O) | 3 | 1.7% |
-| **AMBIGUOUS** | 4 | 2.2% |
+| Primary kind                                                                | count | %     |
+| --------------------------------------------------------------------------- | ----- | ----- |
+| external-invoke (gateway / subprocess / agent-spawn / daemon / notify-send) | 40    | 22.5% |
+| create                                                                      | 39    | 21.9% |
+| read (query / view / diagnostic / get)                                      | 34    | 19.1% |
+| update-in-place                                                             | 30    | 16.9% |
+| model-invocation (LLM is the deliverable)                                   | 19    | 10.7% |
+| replace (wipe+recreate / self-replace / rebuild-overwrite / migrate)        | 5     | 2.8%  |
+| delete                                                                      | 4     | 2.2%  |
+| pure-compute (no I/O)                                                       | 3     | 1.7%  |
+| **AMBIGUOUS**                                                               | 4     | 2.2%  |
 
 Grouping: the CRUD-shaped persistence primaries (read+create+update+delete+replace) = **112
 (63%)**. The procedure-invocation primaries (external-invoke + model) = **59 (33%)**. Pure
-compute = 3. So even a plain verb model captures the *primary* of ~63% directly and the rest
+compute = 3. So even a plain verb model captures the _primary_ of ~63% directly and the rest
 as "invoke external procedure X" — a single verb each.
 
 **Multi-effect (77%) vs multi-primary (2.2%).** These are different measurements. Most ops
-that carry 2+ effect atoms carry exactly one *intended* effect plus infrastructure. Example:
+that carry 2+ effect atoms carry exactly one _intended_ effect plus infrastructure. Example:
 a the consumer app "guarded state transition + announce" op reads (load, infra), mutates (PRIMARY),
 and publishes a domain event (incidental outbox mirror) — three atoms, one intent.
 
@@ -70,13 +70,13 @@ and publishes a domain event (incidental outbox mirror) — three atoms, one int
 Does multi-effect / ambiguity concentrate in event-sourced + AI apps, leaving CLI / plain
 ops clean single-primary? **The data says NO** — ambiguity does not track multi-effect at all.
 
-| Architecture | ops | clear | ambiguous | % clear | ~multi-effect (v2) |
-|---|---|---|---|---|---|
-| event-sourced (the consumer app) | 99 | 97 | 2 | 98.0% | ~70% |
-| AI-heavy (curilo) | 26 | 24 | 2 | 92.3% | ~88% |
-| CLI (normalize/reincarnate/rescribe/myenv) | 35 | 35 | 0 | 100% | normalize 100% |
-| daemon/pipeline (interconnect/chub) | 10 | 10 | 0 | 100% | high |
-| plain HTTP (cch) | 8 | 8 | 0 | 100% | mixed |
+| Architecture                               | ops | clear | ambiguous | % clear | ~multi-effect (v2) |
+| ------------------------------------------ | --- | ----- | --------- | ------- | ------------------ |
+| event-sourced (the consumer app)           | 99  | 97    | 2         | 98.0%   | ~70%               |
+| AI-heavy (curilo)                          | 26  | 24    | 2         | 92.3%   | ~88%               |
+| CLI (normalize/reincarnate/rescribe/myenv) | 35  | 35    | 0         | 100%    | normalize 100%     |
+| daemon/pipeline (interconnect/chub)        | 10  | 10    | 0         | 100%    | high               |
+| plain HTTP (cch)                           | 8   | 8     | 0         | 100%    | mixed              |
 
 **The killer datum: `normalize` is 100% multi-effect (v2: "0 single-effect ops") yet 100%
 single-PRIMARY and 0% ambiguous.** Every normalize op reads source + does a subprocess/write/
@@ -91,7 +91,7 @@ of curilo's 13 LLM ops have a crystal-clear primary (model-invocation). The even
 is 98% clean. So the original 77% was **a corpus-fact about incidental outbox/cache/read
 atoms, not evidence about intents**, and it was not a skew artifact either — the skew
 hypothesis (that ambiguity hides in event-sourced/AI) is also not supported; genuine ambiguity
-is a flat ~0–8% everywhere and is about *param/event dispatch*, not app architecture.
+is a flat ~0–8% everywhere and is about _param/event dispatch_, not app architecture.
 
 ---
 
@@ -117,7 +117,7 @@ so no single static verb fits. None is ambiguous because of "too many effects."
    `get_questions` is read; `submit_answers` is model+create. Two co-equal intents behind one
    `action`. `supabase/functions/run-spot-check/index.ts:30`
 
-4. **handleInboundTurn** (the consumer app, *borderline*) — "orchestrates one inbound conversational
+4. **handleInboundTurn** (the consumer app, _borderline_) — "orchestrates one inbound conversational
    turn: resolve/idle-close conversation, idempotency-replay, append customer turn, compose
    LLM stance reply (or escalate), record assistant turn, flip mode, emit reply events." Five
    effects. Arguably dominant = produce the reply (model-invocation), which is why it is the
@@ -133,10 +133,11 @@ The v2 doc's single strongest evidence for "no single kind" was:
 
 Under primary/incidental analysis this collapses to one intent. Doc: "on lesson completion:
 derives score, **logs event, increments skill thread, invalidates dashboard caches**."
+
 - reads = load session (infrastructure)
-- creates = *logs event* (incidental audit)
+- creates = _logs event_ (incidental audit)
 - **mutates = increments the skill thread (PRIMARY — the reason the op exists)**
-- deletes = *invalidates dashboard caches* (incidental cache-bust)
+- deletes = _invalidates dashboard caches_ (incidental cache-bust)
 
 Strip the audit-log and cache-invalidation incidentals and the "whole write quartet" is a
 single `update-in-place`. `award-progress` is the best demonstration that the v2 conclusion
@@ -159,10 +160,11 @@ primaries fall into a small verb-like set led by external-invoke/create/read/upd
 CRUD-plus-invoke, exactly as the critique predicted.
 
 Two honest caveats that preserve part of the v2 finding:
+
 - The **incidental effect vector is real and load-bearing** — deferred domain-event/outbox
   emission is the most common incidental in the consumer app and has no CRUD slot. The right model is
   **primary verb + incidental effect set**, not "pick one atom and discard the rest." So v2
-  was right that a bare single-atom label is lossy; it was wrong that there is *no* dominant.
+  was right that a bare single-atom label is lossy; it was wrong that there is _no_ dominant.
 - The genuine ambiguity that exists (~2%) is not caused by effect count or by app
   architecture — it is caused by **endpoints that dispatch on a param/event type**. That is a
   routing/interface concern (one URL doing two jobs), addressable by splitting the endpoint,

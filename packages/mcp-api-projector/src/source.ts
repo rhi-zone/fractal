@@ -9,8 +9,8 @@
 // shared generic to MCP's own store names and wraps the result under
 // `meta.mcp`.
 
-import { resolveSourceMap } from "@rhi-zone/fractal-api-tree"
-import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree"
+import { resolveSourceMap } from "@rhi-zone/fractal-api-tree";
+import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree";
 
 /**
  * MCP's own store names — the stores `mcp.source()`'s map accepts:
@@ -23,7 +23,7 @@ import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tr
  * is (http-api-projector/src/decode.ts) — MCP has no equivalent extension
  * point today, and this design doesn't introduce one.
  */
-export type McpStoreName = "argument" | "uri-variable" | "caller"
+export type McpStoreName = "argument" | "uri-variable" | "caller";
 
 /**
  * `mcp.source(map)` — declares which MCP store (`argument`, `uri-variable`,
@@ -47,8 +47,8 @@ export type McpStoreName = "argument" | "uri-variable" | "caller"
 export function source<const M extends SourceMapInput<McpStoreName>>(
   map: M,
 ): { readonly mcp: { readonly sourceMap: ResolvedSourceMap<M> } } {
-  return { mcp: { sourceMap: resolveSourceMap(map) } }
+  return { mcp: { sourceMap: resolveSourceMap(map) } };
 }
 
 /** `mcp.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs.ts). */
-export const mcp = { source }
+export const mcp = { source };

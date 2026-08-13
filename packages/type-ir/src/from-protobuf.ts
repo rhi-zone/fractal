@@ -31,10 +31,20 @@
 // single-schema shape the way `fromJsonSchema` does for JSON Schema's
 // single-root convention.
 
-import protobuf from "protobufjs"
-import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts"
-import { capitalize } from "./codegen-helpers.ts"
-import { bytes, datetime, duration, float32, float64, int32, int64, uint32, uint64 } from "./kinds/common.ts"
+import protobuf from "protobufjs";
+import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts";
+import { capitalize } from "./codegen-helpers.ts";
+import {
+  bytes,
+  datetime,
+  duration,
+  float32,
+  float64,
+  int32,
+  int64,
+  uint32,
+  uint64,
+} from "./kinds/common.ts";
 
 // ============================================================================
 // Descriptor types — the JSON mapping of google/protobuf/descriptor.proto,
@@ -62,64 +72,64 @@ export type ProtoFieldType =
   | "TYPE_SFIXED32"
   | "TYPE_SFIXED64"
   | "TYPE_SINT32"
-  | "TYPE_SINT64"
+  | "TYPE_SINT64";
 
 export type ProtoFieldDescriptor = {
-  readonly name: string
-  readonly number: number
-  readonly type: ProtoFieldType
+  readonly name: string;
+  readonly number: number;
+  readonly type: ProtoFieldType;
   /** Set for TYPE_MESSAGE/TYPE_ENUM — the referenced type's name, optionally
    * dotted/leading-dot-qualified (`.pkg.Outer.Inner`), per descriptor.proto
    * convention. `parseProtoText` emits the bare identifier as written. */
-  readonly typeName?: string
-  readonly label?: "LABEL_OPTIONAL" | "LABEL_REPEATED"
+  readonly typeName?: string;
+  readonly label?: "LABEL_OPTIONAL" | "LABEL_REPEATED";
   /** proto3's explicit `optional` keyword (`FieldDescriptorProto.proto3_optional`
    * — JSON name `proto3Optional`), distinct from `label`: a singular proto3
    * field is implicitly presence-untracked unless this is set. */
-  readonly proto3Optional?: boolean
-  readonly oneofIndex?: number
-  readonly options?: { readonly deprecated?: boolean }
-  readonly description?: string
-}
+  readonly proto3Optional?: boolean;
+  readonly oneofIndex?: number;
+  readonly options?: { readonly deprecated?: boolean };
+  readonly description?: string;
+};
 
 export type ProtoEnumValueDescriptor = {
-  readonly name: string
-  readonly number: number
-  readonly description?: string
-}
+  readonly name: string;
+  readonly number: number;
+  readonly description?: string;
+};
 
 export type ProtoEnumDescriptor = {
-  readonly name: string
-  readonly value: readonly ProtoEnumValueDescriptor[]
-  readonly description?: string
-}
+  readonly name: string;
+  readonly value: readonly ProtoEnumValueDescriptor[];
+  readonly description?: string;
+};
 
 export type ProtoOneofDescriptor = {
-  readonly name: string
-}
+  readonly name: string;
+};
 
 export type ProtoMessageDescriptor = {
-  readonly name: string
-  readonly field?: readonly ProtoFieldDescriptor[]
-  readonly nestedType?: readonly ProtoMessageDescriptor[]
-  readonly enumType?: readonly ProtoEnumDescriptor[]
-  readonly oneofDecl?: readonly ProtoOneofDescriptor[]
+  readonly name: string;
+  readonly field?: readonly ProtoFieldDescriptor[];
+  readonly nestedType?: readonly ProtoMessageDescriptor[];
+  readonly enumType?: readonly ProtoEnumDescriptor[];
+  readonly oneofDecl?: readonly ProtoOneofDescriptor[];
   /** `mapEntry: true` marks the synthetic 2-field (`key`/`value`) message
    * proto3 generates for every `map<K, V>` field — see "Maps":
    * https://protobuf.dev/programming-guides/proto3/#maps. Such messages are
    * resolved inline into a `map` TypeRef by field conversion and are never
    * themselves added to `defs` (they're a compiler artifact, not a
    * user-facing type). */
-  readonly options?: { readonly mapEntry?: boolean; readonly deprecated?: boolean }
-  readonly description?: string
-}
+  readonly options?: { readonly mapEntry?: boolean; readonly deprecated?: boolean };
+  readonly description?: string;
+};
 
 export type ProtoFileDescriptor = {
-  readonly name?: string
-  readonly package?: string
-  readonly messageType?: readonly ProtoMessageDescriptor[]
-  readonly enumType?: readonly ProtoEnumDescriptor[]
-}
+  readonly name?: string;
+  readonly package?: string;
+  readonly messageType?: readonly ProtoMessageDescriptor[];
+  readonly enumType?: readonly ProtoEnumDescriptor[];
+};
 
 // ============================================================================
 // Scalar + well-known type tables
@@ -153,11 +163,11 @@ const scalarHandlers: Record<ProtoFieldType, (() => TypeRef) | undefined> = {
   TYPE_SFIXED64: () => int64(),
   TYPE_SINT32: () => int32(),
   TYPE_SINT64: () => int64(),
-}
+};
 
 function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
-  if (Object.keys(extra).length === 0) return ref
-  return { shape: ref.shape, meta: { ...ref.meta, ...extra } }
+  if (Object.keys(extra).length === 0) return ref;
+  return { shape: ref.shape, meta: { ...ref.meta, ...extra } };
 }
 
 // Well-known types: https://protobuf.dev/reference/protobuf/google.protobuf/
@@ -183,7 +193,7 @@ const wellKnownHandlers: Record<string, () => TypeRef> = {
   "google.protobuf.FloatValue": () => withMeta(float32(), { nullable: true }),
   "google.protobuf.DoubleValue": () => withMeta(float64(), { nullable: true }),
   "google.protobuf.BytesValue": () => withMeta(bytes(), { nullable: true }),
-}
+};
 
 // ============================================================================
 // Registry — flatten the file's message/enum tree into dotted-path entries
@@ -192,21 +202,31 @@ const wellKnownHandlers: Record<string, () => TypeRef> = {
 // against a single flat lookup instead of a tree walk per reference.
 // ============================================================================
 
-type RegistryEntry = { readonly kind: "message"; readonly descriptor: ProtoMessageDescriptor } | { readonly kind: "enum"; readonly descriptor: ProtoEnumDescriptor }
+type RegistryEntry =
+  | { readonly kind: "message"; readonly descriptor: ProtoMessageDescriptor }
+  | { readonly kind: "enum"; readonly descriptor: ProtoEnumDescriptor };
 
-function registerMessages(list: readonly ProtoMessageDescriptor[], prefix: string, registry: Map<string, RegistryEntry>): void {
+function registerMessages(
+  list: readonly ProtoMessageDescriptor[],
+  prefix: string,
+  registry: Map<string, RegistryEntry>,
+): void {
   for (const m of list) {
-    const qualified = prefix === "" ? m.name : `${prefix}.${m.name}`
-    registry.set(qualified, { kind: "message", descriptor: m })
-    if (m.nestedType !== undefined) registerMessages(m.nestedType, qualified, registry)
-    if (m.enumType !== undefined) registerEnums(m.enumType, qualified, registry)
+    const qualified = prefix === "" ? m.name : `${prefix}.${m.name}`;
+    registry.set(qualified, { kind: "message", descriptor: m });
+    if (m.nestedType !== undefined) registerMessages(m.nestedType, qualified, registry);
+    if (m.enumType !== undefined) registerEnums(m.enumType, qualified, registry);
   }
 }
 
-function registerEnums(list: readonly ProtoEnumDescriptor[], prefix: string, registry: Map<string, RegistryEntry>): void {
+function registerEnums(
+  list: readonly ProtoEnumDescriptor[],
+  prefix: string,
+  registry: Map<string, RegistryEntry>,
+): void {
   for (const e of list) {
-    const qualified = prefix === "" ? e.name : `${prefix}.${e.name}`
-    registry.set(qualified, { kind: "enum", descriptor: e })
+    const qualified = prefix === "" ? e.name : `${prefix}.${e.name}`;
+    registry.set(qualified, { kind: "enum", descriptor: e });
   }
 }
 
@@ -223,23 +243,29 @@ function registerEnums(list: readonly ProtoEnumDescriptor[], prefix: string, reg
  * producing a dangling `ref` — rather than throwing, matching this package's
  * other ingesters' honest-degrade convention for unrecognized input.
  */
-function resolveTypeName(raw: string, registry: Map<string, RegistryEntry>, selfPath: string, pkg?: string): string {
-  let name = raw.replace(/^\./, "")
-  if (pkg !== undefined && pkg !== "" && name.startsWith(`${pkg}.`)) name = name.slice(pkg.length + 1)
-  if (registry.has(name)) return name
+function resolveTypeName(
+  raw: string,
+  registry: Map<string, RegistryEntry>,
+  selfPath: string,
+  pkg?: string,
+): string {
+  let name = raw.replace(/^\./, "");
+  if (pkg !== undefined && pkg !== "" && name.startsWith(`${pkg}.`))
+    name = name.slice(pkg.length + 1);
+  if (registry.has(name)) return name;
 
-  const parts = selfPath === "" ? [] : selfPath.split(".")
+  const parts = selfPath === "" ? [] : selfPath.split(".");
   for (let i = parts.length; i >= 0; i--) {
-    const candidate = [...parts.slice(0, i), name].join(".")
-    if (registry.has(candidate)) return candidate
+    const candidate = [...parts.slice(0, i), name].join(".");
+    if (registry.has(candidate)) return candidate;
   }
 
-  const suffix = `.${name}`
+  const suffix = `.${name}`;
   for (const key of registry.keys()) {
-    if (key === name || key.endsWith(suffix)) return key
+    if (key === name || key.endsWith(suffix)) return key;
   }
 
-  return name
+  return name;
 }
 
 // ============================================================================
@@ -247,42 +273,53 @@ function resolveTypeName(raw: string, registry: Map<string, RegistryEntry>, self
 // ============================================================================
 
 /** The field's value type, unwrapped (no repeated/optional applied yet). */
-function fieldBaseType(field: ProtoFieldDescriptor, registry: Map<string, RegistryEntry>, selfPath: string, pkg?: string): TypeRef {
-  const scalar = scalarHandlers[field.type]
-  if (scalar !== undefined) return scalar()
+function fieldBaseType(
+  field: ProtoFieldDescriptor,
+  registry: Map<string, RegistryEntry>,
+  selfPath: string,
+  pkg?: string,
+): TypeRef {
+  const scalar = scalarHandlers[field.type];
+  if (scalar !== undefined) return scalar();
 
   // TYPE_MESSAGE or TYPE_ENUM (or, from parseProtoText, any non-scalar
   // identifier tagged TYPE_MESSAGE regardless of which it actually is — see
   // parseProtoText's doc comment. Resolution below reads the registry
   // entry's ACTUAL kind, so a mistagged TYPE_MESSAGE that's really an enum
   // still resolves correctly.)
-  const rawTypeName = field.typeName ?? ""
-  const strippedFull = rawTypeName.replace(/^\./, "")
-  const wellKnown = wellKnownHandlers[strippedFull]
-  if (wellKnown !== undefined) return wellKnown()
+  const rawTypeName = field.typeName ?? "";
+  const strippedFull = rawTypeName.replace(/^\./, "");
+  const wellKnown = wellKnownHandlers[strippedFull];
+  if (wellKnown !== undefined) return wellKnown();
 
-  const resolvedName = resolveTypeName(rawTypeName, registry, selfPath, pkg)
-  const entry = registry.get(resolvedName)
+  const resolvedName = resolveTypeName(rawTypeName, registry, selfPath, pkg);
+  const entry = registry.get(resolvedName);
 
   if (entry?.kind === "message" && entry.descriptor.options?.mapEntry === true) {
-    const keyField = entry.descriptor.field?.find((f) => f.name === "key")
-    const valueField = entry.descriptor.field?.find((f) => f.name === "value")
-    const keyType = keyField !== undefined ? fieldBaseType(keyField, registry, resolvedName, pkg) : t(types.string)
-    const valueType = valueField !== undefined ? fieldBaseType(valueField, registry, resolvedName, pkg) : t(types.unknown)
-    return t(types.map(keyType, valueType))
+    const keyField = entry.descriptor.field?.find((f) => f.name === "key");
+    const valueField = entry.descriptor.field?.find((f) => f.name === "value");
+    const keyType =
+      keyField !== undefined
+        ? fieldBaseType(keyField, registry, resolvedName, pkg)
+        : t(types.string);
+    const valueType =
+      valueField !== undefined
+        ? fieldBaseType(valueField, registry, resolvedName, pkg)
+        : t(types.unknown);
+    return t(types.map(keyType, valueType));
   }
 
   // Message, enum, or unresolved — all become a `ref` (an unresolved name
   // becomes a dangling ref, per resolveTypeName's doc comment).
-  return t(types.ref(resolvedName))
+  return t(types.ref(resolvedName));
 }
 
 function fieldMeta(field: ProtoFieldDescriptor): Record<string, unknown> {
-  const meta: Record<string, unknown> = {}
-  if (field.proto3Optional === true) meta.optional = true
-  if (field.options?.deprecated === true) meta.deprecated = true
-  if (typeof field.description === "string") meta.description = field.description
-  return meta
+  const meta: Record<string, unknown> = {};
+  if (field.proto3Optional === true) meta.optional = true;
+  if (field.options?.deprecated === true) meta.deprecated = true;
+  if (typeof field.description === "string") meta.description = field.description;
+  return meta;
 }
 
 /** Full field type: base type + repeated wrapping + meta. Exported standalone
@@ -296,19 +333,20 @@ export function fromProtoField(
   selfPath = "",
   pkg?: string,
 ): TypeRef {
-  const base = fieldBaseType(field, registry, selfPath, pkg)
+  const base = fieldBaseType(field, registry, selfPath, pkg);
   // Map fields carry LABEL_REPEATED at the descriptor level too (§ "Maps" —
   // a map field IS internally `repeated MapEntry`), but they're not an
   // array of TypeRef — `fieldBaseType` already resolved them straight to a
   // `map` TypeRef, so repeated-wrapping is skipped for that shape.
-  const wrapped = field.label === "LABEL_REPEATED" && base.shape.kind !== "map" ? t(types.array(base)) : base
-  return withMeta(wrapped, fieldMeta(field))
+  const wrapped =
+    field.label === "LABEL_REPEATED" && base.shape.kind !== "map" ? t(types.array(base)) : base;
+  return withMeta(wrapped, fieldMeta(field));
 }
 
 function enumToTypeRef(descriptor: ProtoEnumDescriptor): TypeRef {
-  const meta: Record<string, unknown> = {}
-  if (typeof descriptor.description === "string") meta.description = descriptor.description
-  return t(types.enum(descriptor.value.map((v) => v.name)), meta)
+  const meta: Record<string, unknown> = {};
+  if (typeof descriptor.description === "string") meta.description = descriptor.description;
+  return t(types.enum(descriptor.value.map((v) => v.name)), meta);
 }
 
 function messageToTypeRef(
@@ -317,7 +355,7 @@ function messageToTypeRef(
   selfPath: string,
   pkg?: string,
 ): TypeRef {
-  const fields: Record<string, TypeRef> = {}
+  const fields: Record<string, TypeRef> = {};
 
   // Group fields by oneofIndex (proto3 "Using Oneof":
   // https://protobuf.dev/programming-guides/proto3/#oneof) — each oneof
@@ -325,35 +363,38 @@ function messageToTypeRef(
   // its member fields' types (each variant tagged with the original proto
   // field name/number in meta, since `union.variants` carries only TypeRefs,
   // no names).
-  const oneofFields = new Map<number, ProtoFieldDescriptor[]>()
-  const plainFields: ProtoFieldDescriptor[] = []
+  const oneofFields = new Map<number, ProtoFieldDescriptor[]>();
+  const plainFields: ProtoFieldDescriptor[] = [];
   for (const field of descriptor.field ?? []) {
     if (field.oneofIndex !== undefined) {
-      const group = oneofFields.get(field.oneofIndex) ?? []
-      group.push(field)
-      oneofFields.set(field.oneofIndex, group)
+      const group = oneofFields.get(field.oneofIndex) ?? [];
+      group.push(field);
+      oneofFields.set(field.oneofIndex, group);
     } else {
-      plainFields.push(field)
+      plainFields.push(field);
     }
   }
 
   for (const field of plainFields) {
-    fields[field.name] = fromProtoField(field, registry, selfPath, pkg)
+    fields[field.name] = fromProtoField(field, registry, selfPath, pkg);
   }
 
-  const oneofDecl = descriptor.oneofDecl ?? []
+  const oneofDecl = descriptor.oneofDecl ?? [];
   for (const [index, groupFields] of oneofFields) {
-    const oneofName = oneofDecl[index]?.name ?? `oneof${index}`
+    const oneofName = oneofDecl[index]?.name ?? `oneof${index}`;
     const variants = groupFields.map((field) =>
-      withMeta(fromProtoField(field, registry, selfPath, pkg), { protoFieldName: field.name, protoFieldNumber: field.number }),
-    )
+      withMeta(fromProtoField(field, registry, selfPath, pkg), {
+        protoFieldName: field.name,
+        protoFieldNumber: field.number,
+      }),
+    );
     // A oneof may be entirely unset — it's inherently optional presence.
-    fields[oneofName] = withMeta(t(types.union(variants)), { optional: true })
+    fields[oneofName] = withMeta(t(types.union(variants)), { optional: true });
   }
 
-  const meta: Record<string, unknown> = {}
-  if (typeof descriptor.description === "string") meta.description = descriptor.description
-  return t(types.object(fields), meta)
+  const meta: Record<string, unknown> = {};
+  if (typeof descriptor.description === "string") meta.description = descriptor.description;
+  return t(types.object(fields), meta);
 }
 
 // ============================================================================
@@ -370,26 +411,29 @@ function messageToTypeRef(
  * real-world .proto files) round-trip without infinite inlining.
  */
 export function fromProtoDescriptor(file: ProtoFileDescriptor): TypeRefDocument {
-  const registry = new Map<string, RegistryEntry>()
-  registerMessages(file.messageType ?? [], "", registry)
-  registerEnums(file.enumType ?? [], "", registry)
+  const registry = new Map<string, RegistryEntry>();
+  registerMessages(file.messageType ?? [], "", registry);
+  registerEnums(file.enumType ?? [], "", registry);
 
-  const defs: Record<string, TypeRef> = {}
+  const defs: Record<string, TypeRef> = {};
   for (const [name, entry] of registry) {
     if (entry.kind === "message") {
       // Synthetic map-entry messages are resolved inline by `fieldBaseType`
       // and are never a user-facing named type — see ProtoMessageDescriptor's
       // `options.mapEntry` doc comment.
-      if (entry.descriptor.options?.mapEntry === true) continue
-      defs[name] = messageToTypeRef(entry.descriptor, registry, name, file.package)
+      if (entry.descriptor.options?.mapEntry === true) continue;
+      defs[name] = messageToTypeRef(entry.descriptor, registry, name, file.package);
     } else {
-      defs[name] = enumToTypeRef(entry.descriptor)
+      defs[name] = enumToTypeRef(entry.descriptor);
     }
   }
 
-  const topNames = [...(file.messageType ?? []).map((m) => m.name), ...(file.enumType ?? []).map((e) => e.name)]
-  const root = topNames.length > 0 ? t(types.ref(topNames[0]!)) : t(types.unknown)
-  return typeRefDocument(root, defs)
+  const topNames = [
+    ...(file.messageType ?? []).map((m) => m.name),
+    ...(file.enumType ?? []).map((e) => e.name),
+  ];
+  const root = topNames.length > 0 ? t(types.ref(topNames[0]!)) : t(types.unknown);
+  return typeRefDocument(root, defs);
 }
 
 // ============================================================================
@@ -412,7 +456,7 @@ const protoKeywordToType: Record<string, ProtoFieldType> = {
   bool: "TYPE_BOOL",
   string: "TYPE_STRING",
   bytes: "TYPE_BYTES",
-}
+};
 
 /** Resolve a bare type-string token from `protobufjs`'s reflection tree (a
  * `Field#type`/`MapField#keyType`, always unqualified as written — parsing
@@ -428,14 +472,16 @@ const protoKeywordToType: Record<string, ProtoFieldType> = {
  * first use), and `fromProtoDescriptor`'s registry-based resolution already
  * handles that scoping. */
 function resolveTokenType(token: string): { type: ProtoFieldType; typeName?: string } {
-  const scalar = protoKeywordToType[token]
-  if (scalar !== undefined) return { type: scalar }
-  return { type: "TYPE_MESSAGE", typeName: token }
+  const scalar = protoKeywordToType[token];
+  if (scalar !== undefined) return { type: scalar };
+  return { type: "TYPE_MESSAGE", typeName: token };
 }
 
-function fieldOptionsOf(options: { readonly [k: string]: unknown } | undefined): { deprecated?: boolean } | undefined {
-  if (options?.deprecated === true) return { deprecated: true }
-  return undefined
+function fieldOptionsOf(
+  options: { readonly [k: string]: unknown } | undefined,
+): { deprecated?: boolean } | undefined {
+  if (options?.deprecated === true) return { deprecated: true };
+  return undefined;
 }
 
 /** Convert a `protobufjs` map field into its `ProtoFieldDescriptor` plus the
@@ -445,19 +491,32 @@ function fieldOptionsOf(options: { readonly [k: string]: unknown } | undefined):
  * doesn't materialize as a nested type the way real `descriptor.proto` JSON
  * does, so it's synthesized here to keep both `parseProtoText` and
  * `fromProtoDescriptor` working from the same descriptor shape. */
-function convertMapField(field: InstanceType<typeof protobuf.MapField>): { field: ProtoFieldDescriptor; entry: ProtoMessageDescriptor } {
-  const entryName = `${capitalize(field.name)}Entry`
-  const keyResolved = resolveTokenType(field.keyType)
-  const valueResolved = resolveTokenType(field.type)
+function convertMapField(field: InstanceType<typeof protobuf.MapField>): {
+  field: ProtoFieldDescriptor;
+  entry: ProtoMessageDescriptor;
+} {
+  const entryName = `${capitalize(field.name)}Entry`;
+  const keyResolved = resolveTokenType(field.keyType);
+  const valueResolved = resolveTokenType(field.type);
   const entry: ProtoMessageDescriptor = {
     name: entryName,
     options: { mapEntry: true },
     field: [
-      { name: "key", number: 1, type: keyResolved.type, ...(keyResolved.typeName !== undefined ? { typeName: keyResolved.typeName } : {}) },
-      { name: "value", number: 2, type: valueResolved.type, ...(valueResolved.typeName !== undefined ? { typeName: valueResolved.typeName } : {}) },
+      {
+        name: "key",
+        number: 1,
+        type: keyResolved.type,
+        ...(keyResolved.typeName !== undefined ? { typeName: keyResolved.typeName } : {}),
+      },
+      {
+        name: "value",
+        number: 2,
+        type: valueResolved.type,
+        ...(valueResolved.typeName !== undefined ? { typeName: valueResolved.typeName } : {}),
+      },
     ],
-  }
-  const options = fieldOptionsOf(field.options)
+  };
+  const options = fieldOptionsOf(field.options);
   const descriptor: ProtoFieldDescriptor = {
     name: field.name,
     number: field.id,
@@ -466,8 +525,8 @@ function convertMapField(field: InstanceType<typeof protobuf.MapField>): { field
     label: "LABEL_REPEATED",
     ...(typeof field.comment === "string" ? { description: field.comment } : {}),
     ...(options !== undefined ? { options } : {}),
-  }
-  return { field: descriptor, entry }
+  };
+  return { field: descriptor, entry };
 }
 
 /** Convert a `protobufjs` message field into a `ProtoFieldDescriptor`.
@@ -478,11 +537,15 @@ function convertMapField(field: InstanceType<typeof protobuf.MapField>): { field
  * oneofs are excluded from `oneofIndexOf` (see `convertMessage`), so a field
  * belonging to one falls through to the plain `proto3Optional: true` case
  * here rather than an `oneofIndex`. */
-function convertField(field: InstanceType<typeof protobuf.Field>, oneofIndexOf: ReadonlyMap<InstanceType<typeof protobuf.OneOf>, number>): ProtoFieldDescriptor {
-  const resolved = resolveTokenType(field.type)
-  const proto3Optional = field.options?.proto3_optional === true
-  const oneofIndex = !proto3Optional && field.partOf !== null ? oneofIndexOf.get(field.partOf) : undefined
-  const options = fieldOptionsOf(field.options)
+function convertField(
+  field: InstanceType<typeof protobuf.Field>,
+  oneofIndexOf: ReadonlyMap<InstanceType<typeof protobuf.OneOf>, number>,
+): ProtoFieldDescriptor {
+  const resolved = resolveTokenType(field.type);
+  const proto3Optional = field.options?.proto3_optional === true;
+  const oneofIndex =
+    !proto3Optional && field.partOf !== null ? oneofIndexOf.get(field.partOf) : undefined;
+  const options = fieldOptionsOf(field.options);
   return {
     name: field.name,
     number: field.id,
@@ -493,41 +556,45 @@ function convertField(field: InstanceType<typeof protobuf.Field>, oneofIndexOf: 
     ...(oneofIndex !== undefined ? { oneofIndex } : {}),
     ...(typeof field.comment === "string" ? { description: field.comment } : {}),
     ...(options !== undefined ? { options } : {}),
-  }
+  };
 }
 
 function convertEnum(node: InstanceType<typeof protobuf.Enum>): ProtoEnumDescriptor {
   const value: ProtoEnumValueDescriptor[] = Object.entries(node.values).map(([name, number]) => {
-    const description = node.comments[name]
-    return { name, number, ...(typeof description === "string" ? { description } : {}) }
-  })
-  return { name: node.name, value, ...(typeof node.comment === "string" ? { description: node.comment } : {}) }
+    const description = node.comments[name];
+    return { name, number, ...(typeof description === "string" ? { description } : {}) };
+  });
+  return {
+    name: node.name,
+    value,
+    ...(typeof node.comment === "string" ? { description: node.comment } : {}),
+  };
 }
 
 function convertMessage(node: InstanceType<typeof protobuf.Type>): ProtoMessageDescriptor {
-  const nestedType: ProtoMessageDescriptor[] = []
-  const enumType: ProtoEnumDescriptor[] = []
+  const nestedType: ProtoMessageDescriptor[] = [];
+  const enumType: ProtoEnumDescriptor[] = [];
   for (const nested of node.nestedArray) {
-    if (nested instanceof protobuf.Type) nestedType.push(convertMessage(nested))
-    else if (nested instanceof protobuf.Enum) enumType.push(convertEnum(nested))
+    if (nested instanceof protobuf.Type) nestedType.push(convertMessage(nested));
+    else if (nested instanceof protobuf.Enum) enumType.push(convertEnum(nested));
     // Other nested kinds (nested services) aren't message/enum schema — see
     // parseProtoText's doc comment on why services are out of scope here.
   }
 
   // Real (user-declared) oneofs only — see convertField's doc comment on why
   // proto3's synthetic `optional`-field oneofs are excluded.
-  const realOneofs = node.oneofsArray.filter((o) => !o.isProto3Optional)
-  const oneofDecl: ProtoOneofDescriptor[] = realOneofs.map((o) => ({ name: o.name }))
-  const oneofIndexOf = new Map(realOneofs.map((o, i) => [o, i] as const))
+  const realOneofs = node.oneofsArray.filter((o) => !o.isProto3Optional);
+  const oneofDecl: ProtoOneofDescriptor[] = realOneofs.map((o) => ({ name: o.name }));
+  const oneofIndexOf = new Map(realOneofs.map((o, i) => [o, i] as const));
 
-  const field: ProtoFieldDescriptor[] = []
+  const field: ProtoFieldDescriptor[] = [];
   for (const f of node.fieldsArray) {
     if (f instanceof protobuf.MapField) {
-      const converted = convertMapField(f)
-      field.push(converted.field)
-      nestedType.push(converted.entry)
+      const converted = convertMapField(f);
+      field.push(converted.field);
+      nestedType.push(converted.entry);
     } else {
-      field.push(convertField(f, oneofIndexOf))
+      field.push(convertField(f, oneofIndexOf));
     }
   }
 
@@ -538,7 +605,7 @@ function convertMessage(node: InstanceType<typeof protobuf.Type>): ProtoMessageD
     enumType,
     oneofDecl,
     ...(typeof node.comment === "string" ? { description: node.comment } : {}),
-  }
+  };
 }
 
 /**
@@ -584,41 +651,42 @@ function convertMessage(node: InstanceType<typeof protobuf.Type>): ProtoMessageD
  * `nestedArray` here would double-count its nested messages, which
  * `convertMessage`'s own recursion already handles.
  */
-function collectTopLevelDeclarations(
-  ns: InstanceType<typeof protobuf.Namespace>,
-): { types: InstanceType<typeof protobuf.Type>[]; enums: InstanceType<typeof protobuf.Enum>[] } {
-  const types: InstanceType<typeof protobuf.Type>[] = []
-  const enums: InstanceType<typeof protobuf.Enum>[] = []
+function collectTopLevelDeclarations(ns: InstanceType<typeof protobuf.Namespace>): {
+  types: InstanceType<typeof protobuf.Type>[];
+  enums: InstanceType<typeof protobuf.Enum>[];
+} {
+  const types: InstanceType<typeof protobuf.Type>[] = [];
+  const enums: InstanceType<typeof protobuf.Enum>[] = [];
   for (const node of ns.nestedArray) {
-    if (node instanceof protobuf.Type) types.push(node)
-    else if (node instanceof protobuf.Enum) enums.push(node)
+    if (node instanceof protobuf.Type) types.push(node);
+    else if (node instanceof protobuf.Enum) enums.push(node);
     else if (node instanceof protobuf.Namespace) {
-      const nested = collectTopLevelDeclarations(node)
-      types.push(...nested.types)
-      enums.push(...nested.enums)
+      const nested = collectTopLevelDeclarations(node);
+      types.push(...nested.types);
+      enums.push(...nested.enums);
     }
     // Other nested kinds (Service) aren't message/enum schema — same
     // out-of-scope rationale as convertMessage's nested-node walk above.
   }
-  return { types, enums }
+  return { types, enums };
 }
 
 export function parseProtoText(source: string): ProtoFileDescriptor {
-  const withSyntax = /^\s*syntax\s*=/m.test(source) ? source : `syntax = "proto3";\n${source}`
-  const parsed = protobuf.parse(withSyntax, { keepCase: true, alternateCommentMode: true })
+  const withSyntax = /^\s*syntax\s*=/m.test(source) ? source : `syntax = "proto3";\n${source}`;
+  const parsed = protobuf.parse(withSyntax, { keepCase: true, alternateCommentMode: true });
 
-  const { types, enums } = collectTopLevelDeclarations(parsed.root)
-  const messageType: ProtoMessageDescriptor[] = types.map(convertMessage)
-  const enumType: ProtoEnumDescriptor[] = enums.map(convertEnum)
+  const { types, enums } = collectTopLevelDeclarations(parsed.root);
+  const messageType: ProtoMessageDescriptor[] = types.map(convertMessage);
+  const enumType: ProtoEnumDescriptor[] = enums.map(convertEnum);
 
   return {
     ...(parsed.package !== undefined ? { package: parsed.package } : {}),
     messageType,
     enumType,
-  }
+  };
 }
 
 /** Convenience: parse `.proto` text and convert it in one call. */
 export function fromProtoText(source: string): TypeRefDocument {
-  return fromProtoDescriptor(parseProtoText(source))
+  return fromProtoDescriptor(parseProtoText(source));
 }

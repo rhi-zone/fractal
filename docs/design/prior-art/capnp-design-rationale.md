@@ -17,12 +17,12 @@ not "another schema IDL" competing for market share, it is the same designer
 re-deriving the problem after watching the first design fail at Google's scale,
 in production, over years. Where the two designs diverge, the divergence is a
 recorded lesson, not a stylistic preference. Note also that Cap'n Proto is
-explicitly *not* Google-affiliated — it was built independently, which is part
+explicitly _not_ Google-affiliated — it was built independently, which is part
 of why the FAQ can be this candid about protobuf's failure modes ("Things like
 this have actually happened. At Google. Many times.").
 
 The headline architectural bet, stated on the intro page: **there is no
-encoding/decoding step**. The wire format *is* the in-memory format. "Cap'n
+encoding/decoding step**. The wire format _is_ the in-memory format. "Cap'n
 Proto gets a perfect score [in benchmarks] because there is no
 encoding/decoding step. The Cap'n Proto encoding is appropriate both as a data
 interchange format and an in-memory representation, so once your structure is
@@ -40,15 +40,15 @@ verbatim from these pages unless otherwise marked.
 ## 1. The `required` field disaster — and why validation was ripped out of the schema layer entirely
 
 This is the most concrete, most-cited lesson, and it comes with a specific
-incident narrative in the Cap'n Proto FAQ (question: *"How do I make a field
-'required', like in Protocol Buffers?"*):
+incident narrative in the Cap'n Proto FAQ (question: _"How do I make a field
+'required', like in Protocol Buffers?"_):
 
 > "You don't. You may find this surprising, but the 'required' keyword in
 > Protocol Buffers turned out to be a horrible mistake."
 
 The mechanism of failure, as described:
 
-- `required` fields were encoded identically to optional ones — the *only*
+- `required` fields were encoded identically to optional ones — the _only_
   difference was that the generated parser raised an error if a required field
   was absent. Validation was baked into the deserializer, not layered on top of
   it.
@@ -65,7 +65,7 @@ The incident: Alice and Bob exchange messages through a message-bus
 infrastructure that parses every message just to read routing envelope fields,
 without caring about payload content. Alice's team deprecates a required field
 deep in a nested message and marks it optional; they update Bob and test
-Alice↔Bob directly — but the *bus* in the test environment happens to run a
+Alice↔Bob directly — but the _bus_ in the test environment happens to run a
 newer build than the one in production. In prod, the bus still runs an older
 protobuf definition that still marks the field required. The moment Alice
 stops sending it:
@@ -110,7 +110,7 @@ Instead, the FAQ offers two composable mechanisms, and is explicit that they
 have different costs:
 
 - **Union with `Void`**: `union { age @0 :Int32; ageUnknown @1 :Void; }` — this
-  is *true* presence/absence, distinguishable from any valid value, but "still
+  is _true_ presence/absence, distinguishable from any valid value, but "still
   takes space on the wire, and in fact takes an extra 16 bits of space for the
   union tag."
 - **Sentinel default value**: give the field "a bogus default value and
@@ -119,8 +119,8 @@ have different costs:
   nullable-scalar designs usually want to avoid.
 - **Pointer fields are different in kind**: they start out `null`
   unconditionally, and nullness is queryable via a generated `hasFoo()`
-  accessor. Critically: `getFoo()` on a null pointer *silently returns the
-  default value* — "which is indistinguishable from a legitimate value, so
+  accessor. Critically: `getFoo()` on a null pointer _silently returns the
+  default value_ — "which is indistinguishable from a legitimate value, so
   checking `hasFoo()` is in fact the only way to detect nullness." This is a
   sharp, documented wart: the ergonomic accessor and the presence check are two
   different API surfaces, and using only the former silently discards
@@ -135,7 +135,7 @@ Void), and default-value elision (packing) — and require the schema author to
 pick explicitly which one they mean, rather than offering one keyword that
 silently means "some blend of the above."
 
-## 3. Unions: deliberately *not* first-class types, and why
+## 3. Unions: deliberately _not_ first-class types, and why
 
 Cap'n Proto unions are syntactically a property of a struct's fields, not a
 free-standing type — `union { ... }` can only be declared inside a struct.
@@ -155,7 +155,7 @@ regret:
 2. **Free-standing unions are an evolution dead end.** Worked example given: a
    parser-token type is naturally a union (keyword | identifier | numeric
    literal | quoted string | ...). If it's a top-level type, and later you need
-   to attach a line/column number to *every* token instance regardless of
+   to attach a line/column number to _every_ token instance regardless of
    variant, "this is impossible without updating all users of the type,
    because the new information ought to apply to all token instances, not just
    specific members of the union." An embedded union lives inside a struct
@@ -163,7 +163,7 @@ regret:
    fields to the struct later on."
 
 3. **Retroactive unionization.** Because union members share the parent
-   struct's field-number space, an *existing*, already-shipped field can later
+   struct's field-number space, an _existing_, already-shipped field can later
    be absorbed into a newly-declared union (as long as it becomes the
    lowest-numbered — hence default — member and every other union member is
    new) "without changing its layout. This allows you to continue being able
@@ -190,20 +190,20 @@ convention is to declare an explicit lowest-numbered `unset` member.
 
 Protobuf's `group` feature was widely considered a mistake and was removed
 going into proto3. Cap'n Proto brings groups back, and the docs address this
-head-on (*"Wait, weren't groups considered a misfeature in Protobufs? Why did
-you do this again?"*):
+head-on (_"Wait, weren't groups considered a misfeature in Protobufs? Why did
+you do this again?"_):
 
 > "They are useful in unions, which Protobufs did not have. Meanwhile, you
 > cannot have a 'repeated group' in Cap'n Proto, which was the case that got
 > into the most trouble with Protobufs."
 
 So the diagnosis is precise: it wasn't "groups" as a namespacing concept that
-was the problem, it was specifically *repeated* groups (an ambiguous,
+was the problem, it was specifically _repeated_ groups (an ambiguous,
 poorly-specified interaction between grouping and list-of-message semantics).
 Cap'n Proto keeps the namespacing utility and removes the one composition that
 caused trouble.
 
-A group is explicitly *not* a separate object — "a group is not a separate
+A group is explicitly _not_ a separate object — "a group is not a separate
 object from its containing struct: the fields are numbered in the same space
 as the containing struct's fields, and are laid out exactly the same as if
 they hadn't been grouped at all. Essentially, a group is just a namespace."
@@ -224,7 +224,7 @@ preference: "allowing parameters to have non-pointer types would mean that
 different parameterizations of a struct could have completely different
 layouts, which would excessively complicate the Cap'n Proto implementation."
 Since every pointer type is uniformly one word wide on the wire regardless of
-what it points to, a generic struct's *own* layout is identical no matter what
+what it points to, a generic struct's _own_ layout is identical no matter what
 it's parameterized with — the type parameter only affects how the pointed-to
 data is interpreted, never where the pointer itself sits in the parent
 struct. This is the same "layout must be computable from lower-numbered
@@ -252,7 +252,7 @@ reasons given, and they compound:
    in space that was previously padding, messages written by old binaries
    that do not know about this field will still have its default value set
    correctly — because it is always zero." Old writers, ignorant of the new
-   field, leave that byte range as zero padding; because zero *is* XOR'd
+   field, leave that byte range as zero padding; because zero _is_ XOR'd
    default, that reads back as "unset → default" for free, with no explicit
    versioning logic required at read time.
 
@@ -261,52 +261,55 @@ doing double duty as the mechanism that makes forward-compatible reads free.
 
 ## 7. Schema evolution: an explicit, exhaustively enumerated safety contract
 
-Cap'n Proto's `language.html` has a section, *"Evolving Your Protocol,"* that
+Cap'n Proto's `language.html` has a section, _"Evolving Your Protocol,"_ that
 is unusually precise for an IDL doc — it draws three separate tiers rather
 than a vague "additive changes are fine":
 
 **Tier 1 — safe, and canonical-encoding-preserving:**
+
 - New types/constants/aliases anywhere (no encoding effect).
 - New fields/enumerants/methods, provided each new member's ordinal number is
   strictly greater than all previous members' numbers.
 - New method parameters, appended at the end, required to carry default
   values.
-- Source-level member reordering, as long as the *declared numbers* don't
+- Source-level member reordering, as long as the _declared numbers_ don't
   move — the number is the real identity, not declaration position.
 - Renaming any symbolic name, as long as the numeric ID stays fixed (an
   explicit ID can be pinned via `capnp compile -ocapnp` if renaming a type
   that previously relied on an implicit, name-derived ID — see §8).
 - Moving a type to a different lexical scope, if its ID is explicit.
-- Moving an *existing* field into a **new** group or union, provided all
+- Moving an _existing_ field into a **new** group or union, provided all
   other members of that group/union are new — with an explicitly flagged
   forward-compat caveat: an old reader that doesn't know about the new union
   wrapper may see garbage or throw if it tries to read the original field
-  directly on a message where a *new* union member was set instead. The
+  directly on a message where a _new_ union member was set instead. The
   advice given is operational: only use the new members when talking to
   peers known to understand the union.
 - Promoting a non-generic type to generic, or adding new generic parameters,
   provided all existing use sites are rewritten to bind the new parameter(s)
   explicitly to what they previously hardcoded.
 
-**Tier 2 — safe for wire compatibility but *not* canonicalization-preserving**
+**Tier 2 — safe for wire compatibility but _not_ canonicalization-preserving**
 (flagged as unsafe specifically for consumers relying on canonical form, e.g.
 cryptographic signing over canonical bytes):
+
 - `List(T)` for primitive/blob/list `T` may be upgraded to `List(U)` where `U`
   is a struct whose `@0` field has type `T` — a documented escape hatch for
   "I forgot to let each list element carry extra data," avoiding the
-  "parallel lists" anti-pattern. Explicit carve-out: `List(Bool)` may *not* be
+  "parallel lists" anti-pattern. Explicit carve-out: `List(Bool)` may _not_ be
   upgraded this way — "implementing this for bit lists has proven
   unreasonably expensive" (a scar from an actual implementation attempt, not
   a design purity argument).
 
 **Tier 3 — explicitly unsafe, enumerated rather than left implicit:**
+
 - Changing a field/method/enumerant's number.
 - Changing a field or parameter's type or default value.
 - Changing a type's ID.
 - Renaming a type that lacks an explicit ID (implicit IDs are name-derived).
 - Moving a type to a new scope/file without an explicit ID (implicit IDs are
   scope-derived too).
-- Moving an existing field into or out of an *existing* (already-shipped)
+- Moving an existing field into or out of an _existing_ (already-shipped)
   union, or merging two or more existing fields into one new union.
 
 The document also flags that these guarantees are native-encoding-only:
@@ -315,7 +318,7 @@ useful to transcode Cap'n Proto types to other formats, like JSON, which may
 have different rules (e.g., field names cannot change in JSON)" — i.e. the
 evolution contract is a property of the wire format, and any lossy/renaming
 projection to another representation (JSON, a REST API, etc.) must define and
-honor its *own*, generally stricter, evolution contract. This is directly
+honor its _own_, generally stricter, evolution contract. This is directly
 relevant to a type IR that projects to multiple targets — compatibility
 guarantees don't transitively survive a projection unless the projection is
 specifically designed to preserve them.
@@ -325,7 +328,7 @@ specifically designed to preserve them.
 Every field/enumerant/method carries an explicit ordinal number (assigned at
 declaration, `@N`), and every top-level type/file carries a 64-bit ID (either
 explicit or implicitly derived by hashing parent-scope-ID + declared name).
-The rationale given for *not* relying on a purely symbolic namespace (the more
+The rationale given for _not_ relying on a purely symbolic namespace (the more
 conventional "package.Type" approach most IDLs use):
 
 > "Programmers often feel the need to change symbolic names and organization
@@ -366,7 +369,7 @@ reuse) and §7 (additive evolution) both work — it recurs as the load-bearing
 rule across nearly every "why is X safe to evolve" answer in the docs.
 
 The introduction page states the tradeoff plainly rather than hiding it:
-fixed-width fields, unset-optional slots, and padding *do* waste wire bytes
+fixed-width fields, unset-optional slots, and padding _do_ waste wire bytes
 relative to protobuf's tag/varint scheme — "Yes." — but Cap'n Proto ships a
 purpose-built zero-allocation "packing" compression pass that specifically
 targets these zero-byte runs, claiming parity or better vs. protobuf's size
@@ -386,7 +389,7 @@ whether this reintroduces the "eliminated" parsing cost by another name: "No.
 Compared to Protobuf decoding, the time spent validating pointers while
 traversing a Cap'n Proto message is negligible." This is a quantitative claim
 about the cost model, not just a correctness claim — the design bet is that
-*bounds-checking pointers lazily as they're followed* is asymptotically
+_bounds-checking pointers lazily as they're followed_ is asymptotically
 cheaper than protobuf's eager full-message parse, while still being
 memory-safe.
 
@@ -417,7 +420,7 @@ pressure to flatten elegant object interfaces into a single "God" interface
 taking path strings (`Filesystem.read(path, ...)`) purely to avoid the
 latency — at the cost of reimplementing path parsing, caching, and ad hoc
 authorization by hand. Cap'n Proto's fix is that every call returns a promise
-immediately, and a promise supports being used as the *target or argument* of
+immediately, and a promise supports being used as the _target or argument_ of
 a further call before it resolves — the client can send `bar()` addressed to
 "whatever `foo()` will return" in the same round trip as `foo()` itself,
 letting a dependent call chain collapse to one round trip regardless of depth
@@ -441,7 +444,7 @@ latency and unreliability. ... If remote calls look the same as local calls,
 there is no opportunity to introduce promise pipelining, and latency is
 inevitable." This is a strong, falsifiable claim worth flagging explicitly as
 an opinionated position rather than settled consensus: that transparent
-RPC-as-local-calls is not just an ergonomics tradeoff but a *categorical*
+RPC-as-local-calls is not just an ergonomics tradeoff but a _categorical_
 dead end for latency, because the promise/pipelining API surface is
 irreducibly different from a synchronous local-call surface.
 
@@ -480,13 +483,13 @@ design, independent of Cap'n Proto's specific syntax:
    own declaration and earlier-numbered members, never later ones" recurs
    as the justification for union safety (§3), generic-parameter safety (§5),
    default-value backfill via padding (§6), and the wire format's
-   traversability (§9). This suggests a type IR benefits from picking *one*
+   traversability (§9). This suggests a type IR benefits from picking _one_
    such ordering/identity invariant early and deriving every "is this change
    safe" rule from it mechanically, rather than special-casing safety per
    construct.
 
 4. **Where an older, deprecated feature (groups) is resurrected, the
-   rationale names the *specific* narrow failure mode of the old version
+   rationale names the _specific_ narrow failure mode of the old version
    (repeated groups) rather than re-litigating the feature wholesale** (§4).
    This is a useful discipline: "X was a mistake" claims decay into folklore
    unless someone writes down exactly which composition of X was the
@@ -497,6 +500,6 @@ design, independent of Cap'n Proto's specific syntax:
    rather than being deflected** — the FAQ format itself ("Wait, why...",
    "Isn't this...", "Didn't CORBA prove...") is structured around
    anticipated objections. This is a documentation-generation lesson as much
-   as a design one: recording *why the obvious alternative was rejected*,
+   as a design one: recording _why the obvious alternative was rejected_,
    next to the design, is what makes the rationale durable instead of tribal
    knowledge that erodes as the original team moves on.

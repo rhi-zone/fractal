@@ -42,11 +42,11 @@
 //     wins over an exclude on the same file — the override is visible in
 //     the caller's own options object, not a silent ordering accident.
 
-import * as fs from "node:fs"
-import * as path from "node:path"
-import type ts from "typescript"
-import { createExtractorProgram } from "./extract.ts"
-import { hasTreeExport } from "./tree.ts"
+import * as fs from "node:fs";
+import * as path from "node:path";
+import type ts from "typescript";
+import { createExtractorProgram } from "./extract.ts";
+import { hasTreeExport } from "./tree.ts";
 
 /**
  * One matcher against a candidate's absolute path. A `string` is an EXACT
@@ -59,7 +59,7 @@ import { hasTreeExport } from "./tree.ts"
  * walk already covers the any-depth-wildcard case; a `RegExp` covers
  * everything finer).
  */
-export type PathMatcher = string | RegExp
+export type PathMatcher = string | RegExp;
 
 /** Options for `findEntryFiles` — see the module doc above for the overall design. */
 export type FindEntryFilesOptions = {
@@ -70,7 +70,7 @@ export type FindEntryFilesOptions = {
    * `extensions` (below, default `[".ts"]`), always excluding `.d.ts` files
    * and files ending `.test.ts`/`.spec.ts` regardless of `extensions`.
    */
-  readonly roots: string | readonly string[]
+  readonly roots: string | readonly string[];
   /**
    * Matchers that FORCE-ADD files regardless of `hasTreeExport` autodetection
    * — applied AFTER `exclude`, so an explicit include always wins over an
@@ -87,7 +87,7 @@ export type FindEntryFilesOptions = {
    * deliberate bypass of detection, for a file whose export shape detection
    * doesn't recognize, or to hand-pin an entry.
    */
-  readonly include?: readonly PathMatcher[]
+  readonly include?: readonly PathMatcher[];
   /**
    * Matchers applied against the AUTODETECTED candidate set (files found by
    * scanning `roots` that also pass `hasTreeExport`) — a match REMOVES that
@@ -95,10 +95,10 @@ export type FindEntryFilesOptions = {
    * file a consumer wants to skip even though it technically has a tree
    * export. See `include` above for the override ordering.
    */
-  readonly exclude?: readonly PathMatcher[]
+  readonly exclude?: readonly PathMatcher[];
   /** Override the default `[".ts"]` extension filter. `.d.ts` files and
    * `.test.ts`/`.spec.ts` files are always excluded regardless of this. */
-  readonly extensions?: readonly string[]
+  readonly extensions?: readonly string[];
   /**
    * Reuse an already-built `ts.Program` for the `hasTreeExport` detection
    * pass instead of building a fresh one over the scanned candidates —
@@ -115,55 +115,55 @@ export type FindEntryFilesOptions = {
    * internally via `createExtractorProgram(candidates)` (the multi-root
    * form).
    */
-  readonly program?: ts.Program
-}
+  readonly program?: ts.Program;
+};
 
 /** Directory names always skipped during the recursive scan. */
-const SKIPPED_DIR_NAMES = new Set(["node_modules", "dist", ".git"])
+const SKIPPED_DIR_NAMES = new Set(["node_modules", "dist", ".git"]);
 
 /** POSIX-normalize an absolute path for `RegExp` matching (Windows path
  * separators would otherwise make a `RegExp` pattern written with `/`
  * silently never match). */
 function toPosix(absPath: string): string {
-  return absPath.split(path.sep).join("/")
+  return absPath.split(path.sep).join("/");
 }
 
 /** True when `name` (a single path segment) should never be descended into
  * / considered — `node_modules`/`dist`/`.git`, or any dotfile/dotdir. */
 function isSkippedName(name: string): boolean {
-  return SKIPPED_DIR_NAMES.has(name) || name.startsWith(".")
+  return SKIPPED_DIR_NAMES.has(name) || name.startsWith(".");
 }
 
 /** True when `fileName` (a bare basename) passes the extension/suffix
  * filter — one of `extensions`, but never a `.d.ts`, `.test.ts`, or
  * `.spec.ts` file regardless. */
 function matchesExtension(fileName: string, extensions: readonly string[]): boolean {
-  if (fileName.endsWith(".d.ts")) return false
-  if (fileName.endsWith(".test.ts") || fileName.endsWith(".spec.ts")) return false
-  return extensions.some((ext) => fileName.endsWith(ext))
+  if (fileName.endsWith(".d.ts")) return false;
+  if (fileName.endsWith(".test.ts") || fileName.endsWith(".spec.ts")) return false;
+  return extensions.some((ext) => fileName.endsWith(ext));
 }
 
 /** Recursively scan `root` for files passing the skip-dir/extension filters. */
 function scanDir(root: string, extensions: readonly string[]): string[] {
-  const out: string[] = []
-  const entries = fs.existsSync(root) ? fs.readdirSync(root, { withFileTypes: true }) : []
+  const out: string[] = [];
+  const entries = fs.existsSync(root) ? fs.readdirSync(root, { withFileTypes: true }) : [];
   for (const entry of entries) {
-    if (isSkippedName(entry.name)) continue
-    const full = path.join(root, entry.name)
+    if (isSkippedName(entry.name)) continue;
+    const full = path.join(root, entry.name);
     if (entry.isDirectory()) {
-      out.push(...scanDir(full, extensions))
+      out.push(...scanDir(full, extensions));
     } else if (entry.isFile() && matchesExtension(entry.name, extensions)) {
-      out.push(full)
+      out.push(full);
     }
   }
-  return out
+  return out;
 }
 
 /** True when `matcher` matches `absPath` — a `string` matches by exact
  * (resolved) equality, a `RegExp` by `.test()` against the POSIX form. */
 function matches(matcher: PathMatcher, absPath: string): boolean {
-  if (typeof matcher === "string") return path.resolve(matcher) === absPath
-  return matcher.test(toPosix(absPath))
+  if (typeof matcher === "string") return path.resolve(matcher) === absPath;
+  return matcher.test(toPosix(absPath));
 }
 
 /**
@@ -183,37 +183,37 @@ function matches(matcher: PathMatcher, absPath: string): boolean {
  *   5. Dedupe, sort, return.
  */
 export function findEntryFiles(options: FindEntryFilesOptions): string[] {
-  const roots = Array.isArray(options.roots) ? options.roots : [options.roots as string]
-  const extensions = options.extensions ?? [".ts"]
+  const roots = Array.isArray(options.roots) ? options.roots : [options.roots as string];
+  const extensions = options.extensions ?? [".ts"];
 
-  const candidates = roots.flatMap((root) => scanDir(path.resolve(root), extensions))
+  const candidates = roots.flatMap((root) => scanDir(path.resolve(root), extensions));
 
   const autodetected =
     candidates.length === 0
       ? []
       : (() => {
-          const program = options.program ?? createExtractorProgram(candidates)
-          return candidates.filter((f) => hasTreeExport(f, program))
-        })()
+          const program = options.program ?? createExtractorProgram(candidates);
+          return candidates.filter((f) => hasTreeExport(f, program));
+        })();
 
   const excluded = new Set(
     autodetected.filter((f) => (options.exclude ?? []).some((m) => matches(m, f))),
-  )
-  const selected = new Set(autodetected.filter((f) => !excluded.has(f)))
+  );
+  const selected = new Set(autodetected.filter((f) => !excluded.has(f)));
 
   for (const matcher of options.include ?? []) {
     if (typeof matcher === "string") {
-      const resolved = path.resolve(matcher)
+      const resolved = path.resolve(matcher);
       if (!fs.existsSync(resolved)) {
-        throw new Error(`findEntryFiles: include path does not exist: ${resolved}`)
+        throw new Error(`findEntryFiles: include path does not exist: ${resolved}`);
       }
-      selected.add(resolved)
+      selected.add(resolved);
     } else {
       for (const f of candidates) {
-        if (matcher.test(toPosix(f))) selected.add(f)
+        if (matcher.test(toPosix(f))) selected.add(f);
       }
     }
   }
 
-  return [...selected].sort()
+  return [...selected].sort();
 }

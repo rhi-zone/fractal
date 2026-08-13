@@ -16,7 +16,7 @@ a plain TS type/interface, and a compile-time transformer reads that type throug
 TypeScript Compiler API and emits a specialized, non-generic JavaScript function that
 performs validation/serialization/schema-generation for exactly that type. Calls like
 `typia.is<T>(x)`, `typia.assert<T>(x)`, `typia.validate<T>(x)`, `typia.json.stringify<T>(x)`
-are AST nodes that the transformer *replaces* with generated code before `tsc` ever
+are AST nodes that the transformer _replaces_ with generated code before `tsc` ever
 type-checks the file — at runtime there is no `typia` type-analysis happening, just the
 already-generated function (this is what backs the "20,000x faster than class-validator"
 claims: it's AOT-compiled per-type code, not a runtime schema interpreter).
@@ -25,7 +25,7 @@ claims: it's AOT-compiled per-type code, not a runtime schema interpreter).
 does not run third-party transformers, so typia requires a patched compiler pipeline:
 `ts-patch` (patches `node_modules/typescript` at install time) or `ttypescript`/`ttsc`,
 plus bundler-specific plumbing (`@typia/unplugin` / community `unplugin-typia`, wrapping
-Vite, Webpack, Rollup, esbuild, Next.js). Babel and SWC cannot run a TS *type-checking*
+Vite, Webpack, Rollup, esbuild, Next.js). Babel and SWC cannot run a TS _type-checking_
 transformer at all (they strip types without resolving them), so for those toolchains
 typia falls back to a "generation mode": `typia generate` pre-expands `typia.xxx<T>()`
 calls into literal `.ts` source files ahead of time, which are then checked in and
@@ -54,10 +54,11 @@ TS-level normalization work and means two structurally-different tag intersectio
 otherwise-identical base types are not interchangeable (see "Type tag composition" below).
 
 **Stated/structural limitations** (from typia's own docs and issue tracker, not opinion):
+
 - Generic type parameters cannot be resolved indirectly — `typia.assertEquals<T>()` inside
   a function generic over `T` fails at compile time with "non-specified generic argument,"
   because the transformer needs a concrete type at the call site, not a parameter that's
-  concrete only at each *call's* call site. Every validated type must be spelled out
+  concrete only at each _call's_ call site. Every validated type must be spelled out
   literally at some point the transformer can see.
 - Types with no sound total order (`any`, `Function`, `Set`, `Map`, `WeakSet`, `WeakMap`,
   or unions of multiple object types) are rejected at compile time for comparison
@@ -138,7 +139,7 @@ otherwise-identical base types are not interchangeable (see "Type tag compositio
   revive comment parsing — an extra, separate patch step stacked on top of ts-patch.
 - **Framework-specific compiler assumptions break in edge/SSR runtimes.** React Server
   Components triggered an error tied to how typia's transform interacts with `"use
-  server"`/`"use strict"` directive placement and blank-line handling around them; Svelte
+server"`/`"use strict"` directive placement and blank-line handling around them; Svelte
   5 had its own separate transform error. Both required point patches. Evidence:
   [samchon/typia#1410](https://github.com/samchon/typia/issues/1410) ("Got an error with
   react server components in v0.7"); [samchon/typia#1409](https://github.com/samchon/typia/issues/1409)

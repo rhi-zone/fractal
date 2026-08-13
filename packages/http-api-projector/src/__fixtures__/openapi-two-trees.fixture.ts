@@ -9,8 +9,8 @@
 // `Node` value came from, so it throws unless `opts.treeId` disambiguates.
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "../verbs.ts"
+import { api, op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "../verbs.ts";
 
 export const catalogTree = api({
   widgets: op(
@@ -18,7 +18,7 @@ export const catalogTree = api({
     (input: { catalogName: string }) => ({ id: "c1", ...input }),
     http.post,
   ),
-})
+});
 
 export const inventoryTree = api({
   widgets: op(
@@ -26,4 +26,4 @@ export const inventoryTree = api({
     (input: { warehouseId: string; quantity: number }) => ({ id: "i1", ...input }),
     http.post,
   ),
-})
+});

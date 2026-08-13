@@ -52,9 +52,9 @@ Each macro parses its OWN top-level args with its OWN local `const VALID` list a
 unknown args — the whitelist is per-macro, not central:
 
 - `http.rs:257` — `VALID = &["prefix","openapi","name","description","version","homepage","debug","trace"]`
-- `mcp.rs:90`  — `VALID = &["namespace"]`
+- `mcp.rs:90` — `VALID = &["namespace"]`
 - `grpc.rs:83` — `VALID = &["package","schema"]`
-- `ws.rs:292`  — `VALID = &["path"]`
+- `ws.rs:292` — `VALID = &["path"]`
 - `cli.rs:272` — its own `VALID` list
 
 So top-level projection attribute parsing is **decentralized**: each projection crate-file owns
@@ -62,18 +62,18 @@ its own keys and its own error message.
 
 ### The centralized part (shared method/param attrs)
 
-`server-less-parse` DOES centralize the *shared, cross-projection* attributes, each with a
+`server-less-parse` DOES centralize the _shared, cross-projection_ attributes, each with a
 hardcoded `VALID` list that errors on unknown keys:
 
 - `#[param(...)]` — parsed in `server-less-parse/src/lib.rs:585` (`parse_param_attrs`); unknown
   key -> hard error against `VALID = ["name","default","query","path","body","header","short",
-  "help","positional","env","file_key","nested","serde","env_prefix"]` (`lib.rs:690-712`).
+"help","positional","env","file_key","nested","serde","env_prefix"]` (`lib.rs:690-712`).
 - `#[route(...)]` — parsed in `server-less-macros/src/openapi_gen.rs:37`; unknown key -> hard
   error against a `VALID` list (`openapi_gen.rs:78`).
 - `#[response(...)]` — parsed in `openapi_gen.rs:126`; unknown key -> hard error
   (`openapi_gen.rs:154`).
 
-These are the *shared vocabulary* every projection reuses, not per-projection keys.
+These are the _shared vocabulary_ every projection reuses, not per-projection keys.
 
 ## 3. Decisive test: adding a brand-new projection `#[foo]`
 
@@ -93,7 +93,7 @@ machinery:
 
 - If `#[foo(name = "...")]` should feed the shared wire-name extraction, add `"foo"` to
   `PROTOCOL_ATTRS` (`lib.rs:354`). Otherwise `foo` can read its own `name` locally and skip this.
-- If `#[foo]` wants to introduce a NEW *param-level* key (e.g. `#[param(foo_only = ...)]`), that
+- If `#[foo]` wants to introduce a NEW _param-level_ key (e.g. `#[param(foo_only = ...)]`), that
   is impossible without editing `parse_param_attrs`'s central `VALID` in `server-less-parse`.
   Reusing the existing `#[param]`/`#[route]`/`#[response]` keys as-is needs no edit.
 
@@ -103,7 +103,7 @@ Namespacing is by the **outer attribute path**. Each macro only inspects its own
 idents and strips them before re-emitting the impl; it leaves other projections' attributes
 alone. E.g. `strip_http_attrs` (`http.rs:288-308`) retains everything except
 `route`/`response`/`http`/`param` — it does NOT touch `#[cli]`/`#[mcp]`/`#[server]`, so stacked
-projections coexist. A macro errors only on unknown keys *within its own attribute*
+projections coexist. A macro errors only on unknown keys _within its own attribute_
 (`#[http(bogus)]` -> error at `http.rs:257`), never on a sibling projection's attribute.
 
 `extract_wire_name` is deliberately tolerant even inside a protocol attr: non-`name` keys are
@@ -112,12 +112,12 @@ consumed and ignored (`lib.rs:377-379`), so `#[http(prefix="/x")]` doesn't confu
 
 ## VERDICT: MIXED — open for new projections, with a small central seam
 
-- **OPEN (per-projection):** A new projection and all of *its own* top-level metadata keys are
+- **OPEN (per-projection):** A new projection and all of _its own_ top-level metadata keys are
   self-contained — new file + macro registration, zero core edits. Each projection owns its own
   parser and its own `VALID` whitelist (http.rs:257, mcp.rs:90, grpc.rs:83, ws.rs:292). Projections
   coexist by path-namespacing and never error on each other's attributes.
 - **GATED (central):** (a) `PROTOCOL_ATTRS` (`lib.rs:354`) is a fixed 9-element list — but it only
-  gates the *shared `name=` wire-name convenience*, not recognition in general, and it *ignores*
+  gates the _shared `name=` wire-name convenience_, not recognition in general, and it _ignores_
   (never errors on) unknown attrs. (b) The shared cross-projection attrs `#[param]`, `#[route]`,
   `#[response]` have centralized hardcoded key whitelists in server-less-parse / openapi_gen; you
   cannot add a NEW key to those shared attributes without editing core.
@@ -134,6 +134,6 @@ cannot add keys without editing core, cite `PROTOCOL_ATTRS`") is **largely wrong
   top-level keys OPEN.
 
 The author is right that parsers are per-projection. The one true "closed" residue is the
-*shared* vocabulary: `PROTOCOL_ATTRS`'s `name` convenience and the central `param`/`route`/
+_shared_ vocabulary: `PROTOCOL_ATTRS`'s `name` convenience and the central `param`/`route`/
 `response` key lists. A new projection that stays within its own attribute namespace is OPEN;
-extending the *shared* attributes requires core edits.
+extending the _shared_ attributes requires core edits.

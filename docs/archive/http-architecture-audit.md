@@ -23,7 +23,7 @@
 
 **Where it lives:** `verbFromTags()` in `packages/http-api-projector/src/project.ts:77-94`.
 
-**Assessment:** **Already composable.** `verbFromTags` is a pure, standalone function — it reads `meta.http.verb` first (override wins, `project.ts:79-83`), then falls through to `resolveTags(meta.tags)` (`project.ts:85-93`). It has no side-effects and no coupling to `buildRoutes` except being called from it. The three-valued lattice lives in `packages/api-tree/src/tags.ts:117-142` (`resolveTags`, `effectiveTags`). 
+**Assessment:** **Already composable.** `verbFromTags` is a pure, standalone function — it reads `meta.http.verb` first (override wins, `project.ts:79-83`), then falls through to `resolveTags(meta.tags)` (`project.ts:85-93`). It has no side-effects and no coupling to `buildRoutes` except being called from it. The three-valued lattice lives in `packages/api-tree/src/tags.ts:117-142` (`resolveTags`, `effectiveTags`).
 
 `effectiveTags` (`tags.ts:158-170`) is the closest-wins ancestor-merge across the node path and is called inline in `buildRoutes` before invoking `verbFromTags` (`project.ts:205`, `264-266`, `318-321`). This is correct separation: tag inheritance is a core concern, verb derivation is an HTTP concern, and they compose via a clean data handoff.
 
@@ -51,7 +51,7 @@ const condition: MatchCondition =
     ? { kind: "header", name: dispatch.name, value: matchValue }
     : dispatch.by === "query"
       ? { kind: "query", name: dispatch.name, value: matchValue }
-      : { kind: "contentType", value: matchValue }
+      : { kind: "contentType", value: matchValue };
 ```
 
 `"method"` is a separate special case (project.ts:194-231). `DispatchMarker` (`project.ts:470-474`) is a closed discriminated union of exactly four variants: `"method" | { by: "header" } | { by: "query" } | { by: "contentType" }`.
@@ -99,10 +99,12 @@ The segment logic: `http.segment ?? inferSegment(name)` (`project.ts:329, 335`).
 The handler's input is assembled as:
 
 ```ts
-const input: Record<string, unknown> = { ...params }       // path params (provenance-blind)
-for (const [k, v] of url.searchParams) { input[k] = v }   // all query params merged flat
+const input: Record<string, unknown> = { ...params }; // path params (provenance-blind)
+for (const [k, v] of url.searchParams) {
+  input[k] = v;
+} // all query params merged flat
 // if Content-Type includes application/json:
-Object.assign(input, body)                                  // body fields merged flat
+Object.assign(input, body); // body fields merged flat
 ```
 
 Path params, query params, and JSON body fields are all merged into one flat object — **provenance-blind by design** (see `node.ts:43` comment: "handler sees one flat input"). Header values are NOT automatically extracted into the input; header dispatch is used only for routing selection, not for exposing header values to the handler.
@@ -119,13 +121,14 @@ Path params, query params, and JSON body fields are all merged into one flat obj
 
 ```ts
 // project.ts:421-425
-const result: unknown = await (matched.handler(input) as Promise<unknown>)
-return jsonResponse(result)            // status 200, Content-Type: application/json
+const result: unknown = await (matched.handler(input) as Promise<unknown>);
+return jsonResponse(result); // status 200, Content-Type: application/json
 // ...
-return jsonResponse({ error: String(e) }, { status: 500 })  // unhandled throw → 500
+return jsonResponse({ error: String(e) }, { status: 500 }); // unhandled throw → 500
 ```
 
 `jsonResponse` is a pure standalone helper (`project.ts:433-439`). However, there is no `encodeOk`/`encodeErr` concept — the router hard-codes JSON serialization of whatever the handler returns and wraps throws as `{ error: "..." }` strings with 500. There is no:
+
 - Status derivation from a `Result<T, E>` wrapper.
 - Content-type negotiation.
 - Per-route encoder.
@@ -167,13 +170,13 @@ return jsonResponse({ error: String(e) }, { status: 500 })  // unhandled throw �
 
 All keys are declared in `HttpMeta` (`project.ts:476-489`) and parsed by the private `getHttpMeta()` helper (`project.ts:492-521`):
 
-| Key | Type | Consumer | Purpose |
-|---|---|---|---|
-| `verb` | `string` | `verbFromTags()` (via `getHttpMeta`) | Override tag-derived verb |
-| `segment` | `string` | `buildRoutes()` | Override inferred path segment |
-| `legacyPath` | `string` | `buildRoutes()` (DEBT) | Full-path override, bypasses tree walk |
-| `dispatch` | `DispatchMarker` | `buildRoutes()` | Signals non-segment dispatch on this node's children |
-| `when` | `string` | `buildRoutes()` | Per-child match-value override for attribute dispatch |
+| Key          | Type             | Consumer                             | Purpose                                               |
+| ------------ | ---------------- | ------------------------------------ | ----------------------------------------------------- |
+| `verb`       | `string`         | `verbFromTags()` (via `getHttpMeta`) | Override tag-derived verb                             |
+| `segment`    | `string`         | `buildRoutes()`                      | Override inferred path segment                        |
+| `legacyPath` | `string`         | `buildRoutes()` (DEBT)               | Full-path override, bypasses tree walk                |
+| `dispatch`   | `DispatchMarker` | `buildRoutes()`                      | Signals non-segment dispatch on this node's children  |
+| `when`       | `string`         | `buildRoutes()`                      | Per-child match-value override for attribute dispatch |
 
 **Read by ONE monolith or per-concern?**
 
@@ -190,17 +193,17 @@ The `getHttpMeta()` parser is called four times — all inside `buildRoutes()` (
 
 ### Monolith vs Already-Composable
 
-| Concern | Status |
-|---|---|
-| Structural routing (tree walk) | **Monolith** — interleaved with dispatch/collision in `buildRoutes` |
-| Verb resolution | **Already composable** — `verbFromTags()` is a standalone pure fn |
-| Dispatch condition construction | **Monolith** — closed `if/else if` factory in `buildRoutes` |
-| Dispatch condition evaluation (runtime) | **Monolith** — closed `if/else if` chain in `matchConditions` |
-| Path/segment + param assignment | **Mostly composable** — helpers standalone, duplication in `buildRoutes` |
-| Per-param location (input assembly) | **Monolith** — inlined in `makeRouter` |
-| Response encoding | **Proto-composable** — `jsonResponse` standalone but no encoder plug-point |
-| Layers (autoMethod, CORS) | **Already composable** — `(inner: Fetch) => Fetch` wrappers |
-| Collision detection | **Fine as-is** — build-time, correctly placed |
+| Concern                                 | Status                                                                     |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| Structural routing (tree walk)          | **Monolith** — interleaved with dispatch/collision in `buildRoutes`        |
+| Verb resolution                         | **Already composable** — `verbFromTags()` is a standalone pure fn          |
+| Dispatch condition construction         | **Monolith** — closed `if/else if` factory in `buildRoutes`                |
+| Dispatch condition evaluation (runtime) | **Monolith** — closed `if/else if` chain in `matchConditions`              |
+| Path/segment + param assignment         | **Mostly composable** — helpers standalone, duplication in `buildRoutes`   |
+| Per-param location (input assembly)     | **Monolith** — inlined in `makeRouter`                                     |
+| Response encoding                       | **Proto-composable** — `jsonResponse` standalone but no encoder plug-point |
+| Layers (autoMethod, CORS)               | **Already composable** — `(inner: Fetch) => Fetch` wrappers                |
+| Collision detection                     | **Fine as-is** — build-time, correctly placed                              |
 
 ### Priority 1 (Highest): Dispatch Matcher — Open Plug-Point
 
@@ -213,17 +216,14 @@ Replace the closed `DispatchMarker` union + the condition factory inside `buildR
 ```ts
 // A condition builder: given the dispatch marker config and the child's
 // match value (derived from child key or `when` override), returns a MatchCondition.
-export type ConditionBuilder<TSpec> = (
-  spec: TSpec,
-  matchValue: string,
-) => MatchCondition
+export type ConditionBuilder<TSpec> = (spec: TSpec, matchValue: string) => MatchCondition;
 
 // An open registry entry: identifies a dispatch flavor by the `by` key,
 // carries its ConditionBuilder.
 export type DispatchPlugin<TSpec = unknown> = {
-  readonly by: string  // discriminant; "method" stays special-cased
-  readonly buildCondition: ConditionBuilder<TSpec>
-}
+  readonly by: string; // discriminant; "method" stays special-cased
+  readonly buildCondition: ConditionBuilder<TSpec>;
+};
 ```
 
 `buildRoutes` (or a successor) receives a `plugins: readonly DispatchPlugin[]` argument and uses it to look up the builder for `dispatch.by` instead of the hard-coded `if/else if`. Unknown `by` keys throw at build time.
@@ -233,14 +233,14 @@ export type DispatchPlugin<TSpec = unknown> = {
 Replace the closed `matchConditions` switch with a `ConditionEvaluator` registry:
 
 ```ts
-export type ConditionEvaluator = (cond: MatchCondition, req: Request) => boolean
+export type ConditionEvaluator = (cond: MatchCondition, req: Request) => boolean;
 
 // Each plugin also carries its runtime evaluator.
 export type DispatchPlugin<TSpec = unknown> = {
-  readonly by: string
-  readonly buildCondition: ConditionBuilder<TSpec>
-  readonly evaluateCondition: ConditionEvaluator
-}
+  readonly by: string;
+  readonly buildCondition: ConditionBuilder<TSpec>;
+  readonly evaluateCondition: ConditionEvaluator;
+};
 ```
 
 `matchConditions` iterates conditions, looks up the evaluator for `cond.kind` in the plugin registry, and calls it. Unknown kinds throw (fixing the current silent-pass bug).
@@ -250,9 +250,9 @@ export type DispatchPlugin<TSpec = unknown> = {
 ```ts
 // Option A: open discriminant — plugins define their own cond.kind values
 export type MatchCondition = {
-  readonly kind: string
-  readonly [key: string]: unknown
-}
+  readonly kind: string;
+  readonly [key: string]: unknown;
+};
 
 // Option B: typed sum + opaque escape hatch
 export type MatchCondition =
@@ -260,7 +260,7 @@ export type MatchCondition =
   | { readonly kind: "header"; readonly name: string; readonly value: string }
   | { readonly kind: "query"; readonly name: string; readonly value: string }
   | { readonly kind: "contentType"; readonly value: string }
-  | { readonly kind: string; readonly payload: unknown }  // plugin-opaque
+  | { readonly kind: string; readonly payload: unknown }; // plugin-opaque
 ```
 
 Option A is simpler; Option B preserves typed built-ins at the cost of a union.
@@ -290,7 +290,10 @@ const dateMatcher: DispatchPlugin<{ field: string }> = {
 Extract the body of `makeRouter`'s input-assembly block (`project.ts:400-419`) into:
 
 ```ts
-export type InputAssembler = (req: Request, params: Record<string, string>) => Promise<Record<string, unknown>>
+export type InputAssembler = (
+  req: Request,
+  params: Record<string, string>,
+) => Promise<Record<string, unknown>>;
 ```
 
 Default implementation covers the current behavior (path + query + JSON body). Alternative implementations (e.g. multipart, form-encoded, schema-validated) can be injected without touching `makeRouter`. This is low-risk and straightforward.
@@ -300,7 +303,11 @@ Default implementation covers the current behavior (path + query + JSON body). A
 When `Result<T, E>` encoding lands, extract:
 
 ```ts
-export type ResponseEncoder = (result: unknown, req: Request, meta: Meta) => Response | Promise<Response>
+export type ResponseEncoder = (
+  result: unknown,
+  req: Request,
+  meta: Meta,
+) => Response | Promise<Response>;
 ```
 
 Pass to `makeRouter`. Default is the current `jsonResponse(result)` behavior. This keeps `makeRouter` runtime-agnostic as format needs grow.
@@ -333,21 +340,21 @@ The condition factory block (`project.ts:257-263`, `292-299`) is replaced by a p
 
 ## Appendix: File-Line Reference Summary
 
-| Claim | File:Line |
-|---|---|
-| `buildRoutes` signature | `project.ts:181-186` |
-| Method-dispatch branch | `project.ts:194-231` |
-| Non-method attribute dispatch branch | `project.ts:233-307` |
-| Closed condition factory | `project.ts:257-263`, `292-299` |
-| `matchConditions` closed evaluator | `project.ts:356-371` |
-| `DispatchMarker` closed union | `project.ts:470-474` |
-| `HttpMeta` key definitions | `project.ts:476-489` |
-| `getHttpMeta` parser | `project.ts:492-521` |
-| `verbFromTags` standalone | `project.ts:77-94` |
-| Input assembly in `makeRouter` | `project.ts:400-419` |
-| `jsonResponse` standalone | `project.ts:433-439` |
-| `autoMethodLayer` composable wrapper | `layers.ts:34-82` |
-| `corsLayer` composable factory | `layers.ts:113-169` |
-| `createFetch` composition sequence | `preset.ts:46-61` |
-| `effectiveTags` tag inheritance | `tags.ts:158-170` |
-| `resolveTags` lattice | `tags.ts:117-142` |
+| Claim                                | File:Line                       |
+| ------------------------------------ | ------------------------------- |
+| `buildRoutes` signature              | `project.ts:181-186`            |
+| Method-dispatch branch               | `project.ts:194-231`            |
+| Non-method attribute dispatch branch | `project.ts:233-307`            |
+| Closed condition factory             | `project.ts:257-263`, `292-299` |
+| `matchConditions` closed evaluator   | `project.ts:356-371`            |
+| `DispatchMarker` closed union        | `project.ts:470-474`            |
+| `HttpMeta` key definitions           | `project.ts:476-489`            |
+| `getHttpMeta` parser                 | `project.ts:492-521`            |
+| `verbFromTags` standalone            | `project.ts:77-94`              |
+| Input assembly in `makeRouter`       | `project.ts:400-419`            |
+| `jsonResponse` standalone            | `project.ts:433-439`            |
+| `autoMethodLayer` composable wrapper | `layers.ts:34-82`               |
+| `corsLayer` composable factory       | `layers.ts:113-169`             |
+| `createFetch` composition sequence   | `preset.ts:46-61`               |
+| `effectiveTags` tag inheritance      | `tags.ts:158-170`               |
+| `resolveTags` lattice                | `tags.ts:117-142`               |

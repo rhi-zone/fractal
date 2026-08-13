@@ -20,33 +20,32 @@
 //
 // STANDALONE — does not import the packages.
 
-export {}
+export {};
 
 // ============================================================================
 // Sentinel
 // ============================================================================
 
-const PASS = Symbol("fractal.Pass")
-type Pass = typeof PASS
-const pass: Pass = PASS
+const PASS = Symbol("fractal.Pass");
+type Pass = typeof PASS;
+const pass: Pass = PASS;
 
 // ============================================================================
 // Core request type (HTTP-flavored)
 // ============================================================================
 
 type Req<P extends Record<string, unknown> = Record<string, never>> = {
-  path: string[]
-  method: string
-  query: Record<string, string>
-  headers: Record<string, string>
-  params: P
-  body?: () => Promise<unknown>
-}
+  path: string[];
+  method: string;
+  query: Record<string, string>;
+  headers: Record<string, string>;
+  params: P;
+  body?: () => Promise<unknown>;
+};
 
-type Handler<
-  P extends Record<string, unknown> = Record<string, never>,
-  Res = unknown,
-> = (req: Req<P>) => Promise<Res | Pass>
+type Handler<P extends Record<string, unknown> = Record<string, never>, Res = unknown> = (
+  req: Req<P>,
+) => Promise<Res | Pass>;
 
 // ============================================================================
 // TMeta — tightened meta types preserving literal structure.
@@ -68,27 +67,27 @@ type Handler<
 //   typed aliases for the concrete shapes used in conditionals.
 // ============================================================================
 
-type TLeafMeta<Res = unknown> = { kind: "leaf"; _res: Res }
+type TLeafMeta<Res = unknown> = { kind: "leaf"; _res: Res };
 
 type TBodyMeta<T, Child> = {
-  kind: "body"
-  _bodyType: T
-  child: Child
-}
+  kind: "body";
+  _bodyType: T;
+  child: Child;
+};
 
 // TNodeShape: lazy interface breaks the circular type alias problem.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface TNodeShape extends TNode<any, any, any> {}
 
 type TMethodsMeta<Verbs extends Record<string, TNodeShape>> = {
-  kind: "methods"
-  verbs: Verbs
-}
+  kind: "methods";
+  verbs: Verbs;
+};
 
 type TParamSpec<K extends string, Child extends TNodeShape> = {
-  name: K
-  child: Child
-}
+  name: K;
+  child: Child;
+};
 
 // TRouteMeta: the both-and combinator's meta.
 // Holds all three slots in ONE meta node.
@@ -103,11 +102,11 @@ type TRouteMeta<
   ParamK extends string,
   ParamChild extends TNodeShape,
 > = {
-  kind: "route"
-  collection: Collection
-  children: Children
-  param: TParamSpec<ParamK, ParamChild> | undefined
-}
+  kind: "route";
+  collection: Collection;
+  children: Children;
+  param: TParamSpec<ParamK, ParamChild> | undefined;
+};
 
 // TMeta: the closed discriminated union of all meta shapes.
 //
@@ -129,52 +128,43 @@ type TMeta =
   | TMethodsMeta<any>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | TRouteMeta<any, any, any, any>
-  | { kind: string }
+  | { kind: string };
 
 // ============================================================================
 // TNode<P, Res, M>
 // ============================================================================
 
-type TNode<
-  P extends Record<string, unknown>,
-  Res,
-  M extends TMeta = TMeta,
-> = {
-  meta: M
-  handler: Handler<P, Res>
-}
+type TNode<P extends Record<string, unknown>, Res, M extends TMeta = TMeta> = {
+  meta: M;
+  handler: Handler<P, Res>;
+};
 
 // ============================================================================
 // Combinators
 // ============================================================================
 
-function leaf<
-  P extends Record<string, unknown> = Record<string, never>,
-  Res = unknown,
->(fn: (req: Req<P>) => Promise<Res>): TNode<P, Res, TLeafMeta<Res>> {
-  return { meta: { kind: "leaf", _res: undefined as unknown as Res }, handler: fn }
+function leaf<P extends Record<string, unknown> = Record<string, never>, Res = unknown>(
+  fn: (req: Req<P>) => Promise<Res>,
+): TNode<P, Res, TLeafMeta<Res>> {
+  return { meta: { kind: "leaf", _res: undefined as unknown as Res }, handler: fn };
 }
 
-function methods<
-  T extends Record<string, TNodeShape>,
->(table: T): TNode<Record<string, never>, unknown, TMethodsMeta<T>> {
+function methods<T extends Record<string, TNodeShape>>(
+  table: T,
+): TNode<Record<string, never>, unknown, TMethodsMeta<T>> {
   return {
     meta: { kind: "methods", verbs: table },
     handler: async (req: Req<Record<string, never>>) => {
-      if (req.path.length > 0) return pass
-      const n = table[req.method] as TNodeShape | undefined
-      if (n === undefined) return pass
+      if (req.path.length > 0) return pass;
+      const n = table[req.method] as TNodeShape | undefined;
+      if (n === undefined) return pass;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return n.handler(req as Req<any>)
+      return n.handler(req as Req<any>);
     },
-  }
+  };
 }
 
-function body<
-  T,
-  P extends Record<string, unknown>,
-  Res,
->(
+function body<T, P extends Record<string, unknown>, Res>(
   parse: (raw: unknown) => T | Promise<T>,
   inner: (req: Req<P> & { body: T }) => Promise<Res | Pass>,
 ): TNode<P, Res, TBodyMeta<T, TLeafMeta<Res>>> {
@@ -185,13 +175,13 @@ function body<
       child: { kind: "leaf", _res: undefined as unknown as Res },
     },
     handler: async (req) => {
-      const rawBody: unknown = req.body !== undefined ? await req.body() : undefined
-      const parseResult = parse(rawBody)
-      const parsed: T = (parseResult instanceof Promise ? await parseResult : parseResult) as T
-      const enriched = { ...req, body: parsed } as unknown as Req<P> & { body: T }
-      return inner(enriched)
+      const rawBody: unknown = req.body !== undefined ? await req.body() : undefined;
+      const parseResult = parse(rawBody);
+      const parsed: T = (parseResult instanceof Promise ? await parseResult : parseResult) as T;
+      const enriched = { ...req, body: parsed } as unknown as Req<P> & { body: T };
+      return inner(enriched);
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -215,9 +205,9 @@ type RouteOptions<
   ParamK extends string,
   ParamChild extends TNodeShape,
 > = {
-  children?: Children
-  param?: TParamSpec<ParamK, ParamChild>
-}
+  children?: Children;
+  param?: TParamSpec<ParamK, ParamChild>;
+};
 
 // Implementation of route()
 function route<
@@ -228,7 +218,7 @@ function route<
 >(
   collection: Collection,
   options?: RouteOptions<Children, ParamK, ParamChild>,
-): TNode<Record<string, never>, unknown, TRouteMeta<Collection, Children, ParamK, ParamChild>>
+): TNode<Record<string, never>, unknown, TRouteMeta<Collection, Children, ParamK, ParamChild>>;
 
 function route<
   Children extends Record<string, TNodeShape>,
@@ -237,37 +227,41 @@ function route<
 >(
   collection: undefined,
   options: RouteOptions<Children, ParamK, ParamChild>,
-): TNode<Record<string, never>, unknown, TRouteMeta<undefined, Children, ParamK, ParamChild>>
+): TNode<Record<string, never>, unknown, TRouteMeta<undefined, Children, ParamK, ParamChild>>;
 
 function route(
   collection: TNodeShape | undefined,
   options: RouteOptions<Record<string, TNodeShape>, string, TNodeShape> = {},
-): TNode<Record<string, never>, unknown, TRouteMeta<TNodeShape | undefined, Record<string, TNodeShape>, string, TNodeShape>> {
-  const children = options.children ?? {}
-  const paramSpec = options.param
+): TNode<
+  Record<string, never>,
+  unknown,
+  TRouteMeta<TNodeShape | undefined, Record<string, TNodeShape>, string, TNodeShape>
+> {
+  const children = options.children ?? {};
+  const paramSpec = options.param;
 
   const meta: TRouteMeta<TNodeShape | undefined, Record<string, TNodeShape>, string, TNodeShape> = {
     kind: "route",
     collection,
     children,
     param: paramSpec,
-  }
+  };
 
   const handler: Handler<Record<string, never>, unknown> = async (req) => {
-    const [seg, ...rest] = req.path
+    const [seg, ...rest] = req.path;
 
     // Path exhausted → collection
     if (seg === undefined) {
-      if (collection === undefined) return pass
+      if (collection === undefined) return pass;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return collection.handler({ ...req, path: [] } as Req<any>)
+      return collection.handler({ ...req, path: [] } as Req<any>);
     }
 
     // Exact child match
-    const exactChild = children[seg] as TNodeShape | undefined
+    const exactChild = children[seg] as TNodeShape | undefined;
     if (exactChild !== undefined) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return exactChild.handler({ ...req, path: rest } as Req<any>)
+      return exactChild.handler({ ...req, path: rest } as Req<any>);
     }
 
     // Param fallthrough
@@ -276,15 +270,15 @@ function route(
         ...req,
         path: rest,
         params: { ...(req.params as object), [paramSpec.name]: seg },
-      }
+      };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return paramSpec.child.handler(enriched as Req<any>)
+      return paramSpec.child.handler(enriched as Req<any>);
     }
 
-    return pass
-  }
+    return pass;
+  };
 
-  return { meta, handler }
+  return { meta, handler };
 }
 
 // ============================================================================
@@ -324,33 +318,33 @@ type ClientOfVerbNode<N> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   N extends TNode<any, infer Res, TBodyMeta<infer T, any>>
     ? (body: T) => Promise<Res>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    : N extends TNode<any, infer Res, any>
+    : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      N extends TNode<any, infer Res, any>
       ? () => Promise<Res>
-      : never
+      : never;
 
 // MethodsClient<Verbs>: { [verb]: callable }
 // Only iterates literal keys — no string-index fallback added.
 type MethodsClient<Verbs extends Record<string, TNodeShape>> = {
-  [K in keyof Verbs & string]: ClientOfVerbNode<Verbs[K]>
-}
+  [K in keyof Verbs & string]: ClientOfVerbNode<Verbs[K]>;
+};
 
 // ClientOf: the top-level client derivation entry point.
 // Uses `any` for P/Res to avoid contravariance rejection on Handler<P>.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ClientOf<N> = N extends TNode<any, any, infer M> ? ClientOfMeta<M> : never
+type ClientOf<N> = N extends TNode<any, any, infer M> ? ClientOfMeta<M> : never;
 
 // ClientOfMeta<M>: recursive derivation of the client surface from a meta type
 type ClientOfMeta<M extends TMeta> =
   M extends TLeafMeta<infer Res>
     ? () => Promise<Res>
-  : M extends TBodyMeta<infer T, TLeafMeta<infer Res>>
-    ? (body: T) => Promise<Res>
-  : M extends TMethodsMeta<infer Verbs>
-    ? MethodsClient<Verbs>
-  : M extends TRouteMeta<infer Collection, infer Children, infer _ParamK, infer ParamChild>
-    ? RouteClient<Collection, Children, ParamChild>
-  : never
+    : M extends TBodyMeta<infer T, TLeafMeta<infer Res>>
+      ? (body: T) => Promise<Res>
+      : M extends TMethodsMeta<infer Verbs>
+        ? MethodsClient<Verbs>
+        : M extends TRouteMeta<infer Collection, infer Children, infer _ParamK, infer ParamChild>
+          ? RouteClient<Collection, Children, ParamChild>
+          : never;
 
 // RouteClient: the callable-object hybrid
 //
@@ -365,25 +359,23 @@ type ClientOfMeta<M extends TMeta> =
 // When param is absent (ParamChild = never), ParamCallable = Record<never,never>
 // (contributes nothing, no callable aspect).
 
-type ParamCallable<ParamChild extends TNodeShape> =
-  [ParamChild] extends [never]
-    ? Record<never, never>
-    : (value: string) => ClientOf<ParamChild>
+type ParamCallable<ParamChild extends TNodeShape> = [ParamChild] extends [never]
+  ? Record<never, never>
+  : (value: string) => ClientOf<ParamChild>;
 
-type CollectionPart<Collection extends TNodeShape | undefined> =
-  Collection extends TNodeShape
-    ? ClientOf<Collection>
-    : Record<never, never>
+type CollectionPart<Collection extends TNodeShape | undefined> = Collection extends TNodeShape
+  ? ClientOf<Collection>
+  : Record<never, never>;
 
 type ChildrenPart<Children extends Record<string, TNodeShape>> = {
-  [K in keyof Children & string]: ClientOf<Children[K]>
-}
+  [K in keyof Children & string]: ClientOf<Children[K]>;
+};
 
 type RouteClient<
   Collection extends TNodeShape | undefined,
   Children extends Record<string, TNodeShape>,
   ParamChild extends TNodeShape,
-> = ParamCallable<ParamChild> & CollectionPart<Collection> & ChildrenPart<Children>
+> = ParamCallable<ParamChild> & CollectionPart<Collection> & ChildrenPart<Children>;
 
 // ============================================================================
 // RUNTIME: makeClient
@@ -405,20 +397,20 @@ function makeClientImpl(
   node: TNode<any, any, any>,
   ctx: { path: string[]; params: Record<string, string> },
 ): unknown {
-  const meta = node.meta
+  const meta = node.meta;
 
   if (meta.kind === "leaf") {
     return async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const req: Req<any> = { path: [], method: "GET", query: {}, headers: {}, params: ctx.params }
-      const res = await node.handler(req)
-      if (res === pass) throw new Error(`[path-bothand] no match at leaf`)
-      return res
-    }
+      const req: Req<any> = { path: [], method: "GET", query: {}, headers: {}, params: ctx.params };
+      const res = await node.handler(req);
+      if (res === pass) throw new Error(`[path-bothand] no match at leaf`);
+      return res;
+    };
   }
 
   if (meta.kind === "body") {
-    return ((bodyArg: unknown) => {
+    return (bodyArg: unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const req: Req<any> = {
         path: [],
@@ -427,19 +419,19 @@ function makeClientImpl(
         headers: {},
         params: ctx.params,
         body: () => Promise.resolve(bodyArg),
-      }
+      };
       return node.handler(req).then((res) => {
-        if (res === pass) throw new Error(`[path-bothand] no match at body node`)
-        return res
-      })
-    })
+        if (res === pass) throw new Error(`[path-bothand] no match at body node`);
+        return res;
+      });
+    };
   }
 
   if (meta.kind === "methods") {
-    const verbsMeta = (meta as unknown as TMethodsMeta<Record<string, TNodeShape>>).verbs
-    const obj: Record<string, unknown> = {}
+    const verbsMeta = (meta as unknown as TMethodsMeta<Record<string, TNodeShape>>).verbs;
+    const obj: Record<string, unknown> = {};
     for (const [verb, child] of Object.entries(verbsMeta)) {
-      const childMeta = child.meta
+      const childMeta = child.meta;
       if (childMeta.kind === "body") {
         obj[verb] = (bodyArg: unknown) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -450,12 +442,12 @@ function makeClientImpl(
             headers: {},
             params: ctx.params,
             body: () => Promise.resolve(bodyArg),
-          }
+          };
           return node.handler(req).then((res) => {
-            if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`)
-            return res
-          })
-        }
+            if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`);
+            return res;
+          });
+        };
       } else {
         obj[verb] = () => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -465,45 +457,52 @@ function makeClientImpl(
             query: {},
             headers: {},
             params: ctx.params,
-          }
+          };
           return node.handler(req).then((res) => {
-            if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`)
-            return res
-          })
-        }
+            if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`);
+            return res;
+          });
+        };
       }
     }
-    return obj
+    return obj;
   }
 
   if (meta.kind === "route") {
-    const routeMeta = meta as unknown as TRouteMeta<TNodeShape | undefined, Record<string, TNodeShape>, string, TNodeShape>
+    const routeMeta = meta as unknown as TRouteMeta<
+      TNodeShape | undefined,
+      Record<string, TNodeShape>,
+      string,
+      TNodeShape
+    >;
 
     // Build the callable function (param slot) or a no-op function
-    let clientFn: (value: string) => unknown
+    let clientFn: (value: string) => unknown;
 
     if (routeMeta.param !== undefined) {
-      const { name: paramName, child: paramChild } = routeMeta.param
+      const { name: paramName, child: paramChild } = routeMeta.param;
       clientFn = (value: string) =>
         makeClientImpl(paramChild, {
           path: [...ctx.path, value],
           params: { ...ctx.params, [paramName]: value },
-        })
+        });
     } else {
-      clientFn = () => { throw new Error(`[path-bothand] this route node has no param fallthrough`) }
+      clientFn = () => {
+        throw new Error(`[path-bothand] this route node has no param fallthrough`);
+      };
     }
 
     // JS: functions are objects — cast and attach properties
-    const clientObj = clientFn as unknown as Record<string, unknown>
+    const clientObj = clientFn as unknown as Record<string, unknown>;
 
     // Attach collection method props
     if (routeMeta.collection !== undefined) {
-      const collMeta = routeMeta.collection.meta
+      const collMeta = routeMeta.collection.meta;
       if (collMeta.kind === "methods") {
-        const verbsMeta = (collMeta as unknown as TMethodsMeta<Record<string, TNodeShape>>).verbs
-        const collHandler = routeMeta.collection.handler
+        const verbsMeta = (collMeta as unknown as TMethodsMeta<Record<string, TNodeShape>>).verbs;
+        const collHandler = routeMeta.collection.handler;
         for (const [verb, child] of Object.entries(verbsMeta)) {
-          const childMeta = child.meta
+          const childMeta = child.meta;
           if (childMeta.kind === "body") {
             clientObj[verb] = (bodyArg: unknown) => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -514,12 +513,12 @@ function makeClientImpl(
                 headers: {},
                 params: ctx.params,
                 body: () => Promise.resolve(bodyArg),
-              }
+              };
               return collHandler(req).then((res) => {
-                if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`)
-                return res
-              })
-            }
+                if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`);
+                return res;
+              });
+            };
           } else {
             clientObj[verb] = () => {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -529,12 +528,12 @@ function makeClientImpl(
                 query: {},
                 headers: {},
                 params: ctx.params,
-              }
+              };
               return collHandler(req).then((res) => {
-                if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`)
-                return res
-              })
-            }
+                if (res === pass) throw new Error(`[path-bothand] 404 ${verb}`);
+                return res;
+              });
+            };
           }
         }
       }
@@ -542,13 +541,13 @@ function makeClientImpl(
 
     // Attach exact-child props
     for (const [seg, child] of Object.entries(routeMeta.children)) {
-      clientObj[seg] = makeClientImpl(child, { path: [...ctx.path, seg], params: ctx.params })
+      clientObj[seg] = makeClientImpl(child, { path: [...ctx.path, seg], params: ctx.params });
     }
 
-    return clientObj
+    return clientObj;
   }
 
-  throw new Error(`[path-bothand] unknown meta kind: ${(meta as { kind: string }).kind}`)
+  throw new Error(`[path-bothand] unknown meta kind: ${(meta as { kind: string }).kind}`);
 }
 
 // Typed wrapper: provides the generic ClientOfMeta<M> return type for call sites.
@@ -558,7 +557,7 @@ function makeClient<M extends TMeta>(
   node: TNode<any, any, M>,
   ctx: { path: string[]; params: Record<string, string> } = { path: [], params: {} },
 ): ClientOfMeta<M> {
-  return makeClientImpl(node, ctx) as ClientOfMeta<M>
+  return makeClientImpl(node, ctx) as ClientOfMeta<M>;
 }
 
 // ============================================================================
@@ -567,12 +566,12 @@ function makeClient<M extends TMeta>(
 // exact-child ops at prefix/seg, param ops at prefix/{name}.
 // ============================================================================
 
-type OpenApiParam = { name: string; in: "path"; schema: { type: string } }
+type OpenApiParam = { name: string; in: "path"; schema: { type: string } };
 type OpenApiOperation = {
-  parameters: OpenApiParam[]
-  requestBody?: { content: { "application/json": { schema: unknown } } }
-}
-type OpenApiPaths = Record<string, Record<string, OpenApiOperation>>
+  parameters: OpenApiParam[];
+  requestBody?: { content: { "application/json": { schema: unknown } } };
+};
+type OpenApiPaths = Record<string, Record<string, OpenApiOperation>>;
 
 function walk(
   meta: TMeta,
@@ -580,73 +579,78 @@ function walk(
 ): OpenApiPaths {
   switch (meta.kind) {
     case "leaf": {
-      if (!ctx.method) return {}
-      const op: OpenApiOperation = { parameters: [...ctx.params] }
-      return { [ctx.prefix || "/"]: { [ctx.method]: op } }
+      if (!ctx.method) return {};
+      const op: OpenApiOperation = { parameters: [...ctx.params] };
+      return { [ctx.prefix || "/"]: { [ctx.method]: op } };
     }
 
     case "body": {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sub = walk((meta as TBodyMeta<unknown, any>).child as TMeta, ctx)
+      const sub = walk((meta as TBodyMeta<unknown, any>).child as TMeta, ctx);
       for (const verbs of Object.values(sub)) {
         for (const op of Object.values(verbs)) {
-          op.requestBody = { content: { "application/json": { schema: { type: "object" } } } }
+          op.requestBody = { content: { "application/json": { schema: { type: "object" } } } };
         }
       }
-      return sub
+      return sub;
     }
 
     case "methods": {
-      const merged: OpenApiPaths = {}
-      const verbsMeta = (meta as unknown as TMethodsMeta<Record<string, TNodeShape>>).verbs
+      const merged: OpenApiPaths = {};
+      const verbsMeta = (meta as unknown as TMethodsMeta<Record<string, TNodeShape>>).verbs;
       for (const [verb, child] of Object.entries(verbsMeta)) {
-        const sub = walk(child.meta, { ...ctx, method: verb.toLowerCase() })
+        const sub = walk(child.meta, { ...ctx, method: verb.toLowerCase() });
         for (const [p, verbs] of Object.entries(sub)) {
-          merged[p] = { ...(merged[p] ?? {}), ...verbs }
+          merged[p] = { ...(merged[p] ?? {}), ...verbs };
         }
       }
-      return merged
+      return merged;
     }
 
     case "route": {
-      const routeMeta = meta as unknown as TRouteMeta<TNodeShape | undefined, Record<string, TNodeShape>, string, TNodeShape>
-      const merged: OpenApiPaths = {}
+      const routeMeta = meta as unknown as TRouteMeta<
+        TNodeShape | undefined,
+        Record<string, TNodeShape>,
+        string,
+        TNodeShape
+      >;
+      const merged: OpenApiPaths = {};
 
       // Collection: walk at current prefix
       if (routeMeta.collection !== undefined) {
-        const collSub = walk(routeMeta.collection.meta, ctx)
+        const collSub = walk(routeMeta.collection.meta, ctx);
         for (const [p, verbs] of Object.entries(collSub)) {
-          merged[p] = { ...(merged[p] ?? {}), ...verbs }
+          merged[p] = { ...(merged[p] ?? {}), ...verbs };
         }
       }
 
       // Exact children
       for (const [seg, child] of Object.entries(routeMeta.children)) {
-        const sub = walk(child.meta, { ...ctx, prefix: `${ctx.prefix}/${seg}` })
+        const sub = walk(child.meta, { ...ctx, prefix: `${ctx.prefix}/${seg}` });
         for (const [p, verbs] of Object.entries(sub)) {
-          merged[p] = { ...(merged[p] ?? {}), ...verbs }
+          merged[p] = { ...(merged[p] ?? {}), ...verbs };
         }
       }
 
       // Param fallthrough
       if (routeMeta.param !== undefined) {
-        const { name, child } = routeMeta.param
-        const newParam: OpenApiParam = { name, in: "path", schema: { type: "string" } }
+        const { name, child } = routeMeta.param;
+        const newParam: OpenApiParam = { name, in: "path", schema: { type: "string" } };
         const sub = walk(child.meta, {
           ...ctx,
           prefix: `${ctx.prefix}/{${name}}`,
           params: [...ctx.params, newParam],
-        })
+        });
         for (const [p, verbs] of Object.entries(sub)) {
-          merged[p] = { ...(merged[p] ?? {}), ...verbs }
+          merged[p] = { ...(merged[p] ?? {}), ...verbs };
         }
       }
 
-      return merged
+      return merged;
     }
 
     default:
-      return {}
+      return {};
   }
 }
 
@@ -662,60 +666,53 @@ function walk(
 // ============================================================================
 
 interface Todo {
-  id: number
-  title: string
-  done: boolean
+  id: number;
+  title: string;
+  done: boolean;
 }
-type CreateInput = { title: string }
+type CreateInput = { title: string };
 
-let nextId = 1
-const store: Todo[] = [
-  { id: nextId++, title: 'fractal both-and example', done: false },
-]
+let nextId = 1;
+const store: Todo[] = [{ id: nextId++, title: "fractal both-and example", done: false }];
 
 function parseCreate(raw: unknown): CreateInput {
   if (
-    typeof raw === 'object' && raw !== null &&
-    typeof (raw as Record<string, unknown>)['title'] === 'string'
+    typeof raw === "object" &&
+    raw !== null &&
+    typeof (raw as Record<string, unknown>)["title"] === "string"
   ) {
-    return { title: (raw as Record<string, unknown>)['title'] as string }
+    return { title: (raw as Record<string, unknown>)["title"] as string };
   }
-  throw new Error(`expected {title:string}, got ${JSON.stringify(raw)}`)
+  throw new Error(`expected {title:string}, got ${JSON.stringify(raw)}`);
 }
 
-const listLeaf = leaf<Record<string, never>, Todo[]>(async () => [...store])
+const listLeaf = leaf<Record<string, never>, Todo[]>(async () => [...store]);
 
-const createNode = body<CreateInput, Record<string, never>, Todo>(
-  parseCreate,
-  async (req) => {
-    const todo: Todo = { id: nextId++, title: req.body.title, done: false }
-    store.push(todo)
-    return todo
-  },
-)
+const createNode = body<CreateInput, Record<string, never>, Todo>(parseCreate, async (req) => {
+  const todo: Todo = { id: nextId++, title: req.body.title, done: false };
+  store.push(todo);
+  return todo;
+});
 
 const getByIdLeaf = leaf<{ id: string }, Todo | null>(
   async (req) => store.find((t) => t.id === Number(req.params.id)) ?? null,
-)
+);
 
-const idSubtree = methods({ GET: getByIdLeaf })
+const idSubtree = methods({ GET: getByIdLeaf });
 
 // The both-and route node:
 //   collection = methods({ GET: list, POST: create })
 //   no exact children
 //   param = { name: 'id', child: methods({ GET: getById }) }
-const todosRoute = route(
-  methods({ GET: listLeaf, POST: createNode }),
-  {
-    param: {
-      name: 'id' as const,
-      child: idSubtree,
-    },
+const todosRoute = route(methods({ GET: listLeaf, POST: createNode }), {
+  param: {
+    name: "id" as const,
+    child: idSubtree,
   },
-)
+});
 
 // Top-level: route with no collection, one exact child "todos"
-const appTree = route(undefined, { children: { todos: todosRoute } })
+const appTree = route(undefined, { children: { todos: todosRoute } });
 
 // ============================================================================
 // TYPE PROBE: the callable-object hybrid client surface
@@ -730,27 +727,27 @@ const appTree = route(undefined, { children: { todos: todosRoute } })
 // i.e. client.todos is callable AND has .GET() and .POST(body) properties.
 // ============================================================================
 
-const client = makeClient(appTree)
+const client = makeClient(appTree);
 
-type AppTree = typeof appTree
-type AppClient = ClientOf<AppTree>
-type _ = AppClient
+type AppTree = typeof appTree;
+type AppClient = ClientOf<AppTree>;
+type _ = AppClient;
 
 // ============================================================================
 // POSITIVE ASSERTIONS (compile-time type checking + runtime)
 // ============================================================================
 
 // client.todos.GET() → Promise<Todo[]>
-const todosListResult: Promise<Todo[]> = client.todos.GET()
+const todosListResult: Promise<Todo[]> = client.todos.GET();
 
 // client.todos.POST({title}) → Promise<Todo>
-const todosCreateResult: Promise<Todo> = client.todos.POST({ title: "new todo" })
+const todosCreateResult: Promise<Todo> = client.todos.POST({ title: "new todo" });
 
 // client.todos('1') → sub-client for item
-const todoByIdClient = client.todos('1')
+const todoByIdClient = client.todos("1");
 
 // client.todos('1').GET() → Promise<Todo | null>
-const todoById1Result: Promise<Todo | null> = todoByIdClient.GET()
+const todoById1Result: Promise<Todo | null> = todoByIdClient.GET();
 
 // ============================================================================
 // NEGATIVE ASSERTIONS — @ts-expect-error probes
@@ -759,19 +756,19 @@ const todoById1Result: Promise<Todo | null> = todoByIdClient.GET()
 
 // NEG-1: Wrong body type to POST (number instead of CreateInput)
 // @ts-expect-error [NEG-1: number is not assignable to CreateInput]
-const _neg1: Promise<Todo> = false && client.todos.POST(42)
+const _neg1: Promise<Todo> = false && client.todos.POST(42);
 
 // NEG-2: Wrong param type to todos callable (number instead of string)
 // @ts-expect-error [NEG-2: number is not assignable to string]
-const _neg2 = false && client.todos(42)
+const _neg2 = false && client.todos(42);
 
 // NEG-3: Nonexistent verb on todos collection (DELETE not in table)
 // @ts-expect-error [NEG-3: DELETE does not exist on todos client surface]
-const _neg3 = false && client.todos.DELETE()
+const _neg3 = false && client.todos.DELETE();
 
 // NEG-4: Nonexistent exact child on app root (nonexistent not in children)
 // @ts-expect-error [NEG-4: nonexistent does not exist on appTree client]
-const _neg4 = false && client.nonexistent
+const _neg4 = false && client.nonexistent;
 
 // ============================================================================
 // DISCHARGE STILL HOLDS
@@ -787,33 +784,34 @@ const _neg4 = false && client.nonexistent
 // {id:string} — the type system preserves string-pinning through TNode.
 // ============================================================================
 
-const _g1NumberLeaf = leaf<{ id: number }, string>(async (req) => String(req.params.id))
-const _g1StringLeaf = leaf<{ id: string }, string>(async (req) => req.params.id)
+const _g1NumberLeaf = leaf<{ id: number }, string>(async (req) => String(req.params.id));
+const _g1StringLeaf = leaf<{ id: string }, string>(async (req) => req.params.id);
 
 // Discharge: TNode<{id:string},...> is assignable to itself
-const _dischargeOk: TNode<{ id: string }, string, TLeafMeta<string>> = _g1StringLeaf
+const _dischargeOk: TNode<{ id: string }, string, TLeafMeta<string>> = _g1StringLeaf;
 
 // G1: TNode<{id:number},...> is NOT assignable to TNode<{id:string},...>
 // @ts-expect-error [DISCHARGE-G1: TNode<{id:number}> not assignable to TNode<{id:string}>]
-const _dischargeG1Fail: TNode<{ id: string }, string, TLeafMeta<string>> = _g1NumberLeaf
+const _dischargeG1Fail: TNode<{ id: string }, string, TLeafMeta<string>> = _g1NumberLeaf;
 
 // ============================================================================
 // walk(meta) → OpenAPI fragment + deep-equal assertion
 // ============================================================================
 
 function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
-  const aKeys = Object.keys(a as object).sort()
-  const bKeys = Object.keys(b as object).sort()
-  if (aKeys.join(',') !== bKeys.join(',')) return false
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  const aKeys = Object.keys(a as object).sort();
+  const bKeys = Object.keys(b as object).sort();
+  if (aKeys.join(",") !== bKeys.join(",")) return false;
   for (const k of aKeys) {
-    if (!deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false
+    if (!deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+      return false;
   }
-  return true
+  return true;
 }
 
-const fragment = walk(appTree.meta)
+const fragment = walk(appTree.meta);
 
 const expectedFragment: OpenApiPaths = {
   "/todos": {
@@ -826,56 +824,58 @@ const expectedFragment: OpenApiPaths = {
   "/todos/{id}": {
     get: { parameters: [{ name: "id", in: "path", schema: { type: "string" } }] },
   },
-}
+};
 
 // ============================================================================
 // RUNTIME
 // ============================================================================
 
-console.log("=== spike/path-bothand.ts — both-and route + callable-object client ===\n")
-console.log("--- Positive assertions (runtime) ---")
+console.log("=== spike/path-bothand.ts — both-and route + callable-object client ===\n");
+console.log("--- Positive assertions (runtime) ---");
 
-const r1 = await todosListResult
-console.log("client.todos.GET()                    →", JSON.stringify(r1))
+const r1 = await todosListResult;
+console.log("client.todos.GET()                    →", JSON.stringify(r1));
 
-const r2 = await todosCreateResult
-console.log("client.todos.POST({title:'new todo'}) →", JSON.stringify(r2))
+const r2 = await todosCreateResult;
+console.log("client.todos.POST({title:'new todo'}) →", JSON.stringify(r2));
 
-const r3 = await todoById1Result
-console.log("client.todos('1').GET()               →", JSON.stringify(r3))
+const r3 = await todoById1Result;
+console.log("client.todos('1').GET()               →", JSON.stringify(r3));
 
-const r4 = await client.todos.GET()
-console.log("client.todos.GET() after POST         →", JSON.stringify(r4))
+const r4 = await client.todos.GET();
+console.log("client.todos.GET() after POST         →", JSON.stringify(r4));
 
-const r5 = await client.todos('9999').GET()
-console.log("client.todos('9999').GET()            →", r5, "(null expected)")
+const r5 = await client.todos("9999").GET();
+console.log("client.todos('9999').GET()            →", r5, "(null expected)");
 
-console.log("\n--- @ts-expect-error negatives (compile-time) ---")
-console.log("NEG-1: .todos.POST(42)       wrong body type   — @ts-expect-error consumed")
-console.log("NEG-2: .todos(42)            wrong param type  — @ts-expect-error consumed")
-console.log("NEG-3: .todos.DELETE()       nonexistent verb  — @ts-expect-error consumed")
-console.log("NEG-4: .nonexistent          nonexistent child — @ts-expect-error consumed")
-console.log("DISCHARGE-G1: TNode<{id:number}> not assignable to TNode<{id:string}> — @ts-expect-error consumed")
+console.log("\n--- @ts-expect-error negatives (compile-time) ---");
+console.log("NEG-1: .todos.POST(42)       wrong body type   — @ts-expect-error consumed");
+console.log("NEG-2: .todos(42)            wrong param type  — @ts-expect-error consumed");
+console.log("NEG-3: .todos.DELETE()       nonexistent verb  — @ts-expect-error consumed");
+console.log("NEG-4: .nonexistent          nonexistent child — @ts-expect-error consumed");
+console.log(
+  "DISCHARGE-G1: TNode<{id:number}> not assignable to TNode<{id:string}> — @ts-expect-error consumed",
+);
 
-console.log("\n--- walk(meta) → OpenAPI fragment ---")
-console.log(JSON.stringify(fragment, null, 2))
-console.log("\nExpected:")
-console.log(JSON.stringify(expectedFragment, null, 2))
+console.log("\n--- walk(meta) → OpenAPI fragment ---");
+console.log(JSON.stringify(fragment, null, 2));
+console.log("\nExpected:");
+console.log(JSON.stringify(expectedFragment, null, 2));
 
-const walkOk = deepEqual(fragment, expectedFragment)
-console.log("\nwalk() deep-equal:", walkOk ? "PASS ✓" : "FAIL ✗")
+const walkOk = deepEqual(fragment, expectedFragment);
+console.log("\nwalk() deep-equal:", walkOk ? "PASS ✓" : "FAIL ✗");
 
 if (!walkOk) {
-  console.error("WALK MISMATCH")
-  throw new Error("WALK MISMATCH — see diff above")
+  console.error("WALK MISMATCH");
+  throw new Error("WALK MISMATCH — see diff above");
 }
 
-console.log("\n--- Type probe: AppClient ---")
-console.log("type AppClient = ClientOf<AppTree>")
-console.log("client.todos: callable-object hybrid")
-console.log("  client.todos.GET()    → Promise<Todo[]>")
-console.log("  client.todos.POST(b)  → Promise<Todo>  (b: CreateInput)")
-console.log("  client.todos('1')     → sub-client { GET(): Promise<Todo|null> }")
-console.log("  client.todos('1').GET() → Promise<Todo|null>")
+console.log("\n--- Type probe: AppClient ---");
+console.log("type AppClient = ClientOf<AppTree>");
+console.log("client.todos: callable-object hybrid");
+console.log("  client.todos.GET()    → Promise<Todo[]>");
+console.log("  client.todos.POST(b)  → Promise<Todo>  (b: CreateInput)");
+console.log("  client.todos('1')     → sub-client { GET(): Promise<Todo|null> }");
+console.log("  client.todos('1').GET() → Promise<Todo|null>");
 
-console.log("\n=== DONE ===")
+console.log("\n=== DONE ===");

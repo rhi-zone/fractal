@@ -108,7 +108,7 @@ checks) rather than the shape of a normal unit test:
 1. **`compile-check.test.ts` (exists today, in regular CI).** Real-compiler
    verification for ~15 general-purpose-language projectors. Currently
    the single most expensive thing in the `check` job (§2), and runs
-   twice per invocation. This is the *already-built* version of the same
+   twice per invocation. This is the _already-built_ version of the same
    pattern the docgen bar-(C) proposal would add for doc-site tooling —
    `docs/roadmap.md` §851-859 explicitly frames bar-(C) as "the same shape
    of verification this roadmap's 'Testing & Quality' section already
@@ -179,15 +179,15 @@ current state, not a recommendation among the options above.
 
 ### What would move vs. stay (pending §3/§5 decisions)
 
-| Item | Today | Proposed |
-|---|---|---|
-| Typecheck | `ci.yml` `check` job | stays in regular CI |
-| Unit/property/smoke test suites (excl. compile-check) | `ci.yml` `check` job | stays in regular CI |
-| Playground build | `ci.yml` `check` job | stays in regular CI |
-| `build-packages` (tsc -b, 8 packages) | `ci.yml` `build-packages` job | stays in regular CI (no expensive-cost evidence found, §2) |
-| `compile-check.test.ts` (real-compiler, ~15 languages) | `ci.yml` `check` job, runs twice | open — candidate to move, see §5 |
-| Doc-site bar-(C) real-tool verification | not built | proposed pre-release-only |
-| Battle-testing / real-world corpora | not built | proposed pre-release-only |
+| Item                                                   | Today                            | Proposed                                                   |
+| ------------------------------------------------------ | -------------------------------- | ---------------------------------------------------------- |
+| Typecheck                                              | `ci.yml` `check` job             | stays in regular CI                                        |
+| Unit/property/smoke test suites (excl. compile-check)  | `ci.yml` `check` job             | stays in regular CI                                        |
+| Playground build                                       | `ci.yml` `check` job             | stays in regular CI                                        |
+| `build-packages` (tsc -b, 8 packages)                  | `ci.yml` `build-packages` job    | stays in regular CI (no expensive-cost evidence found, §2) |
+| `compile-check.test.ts` (real-compiler, ~15 languages) | `ci.yml` `check` job, runs twice | open — candidate to move, see §5                           |
+| Doc-site bar-(C) real-tool verification                | not built                        | proposed pre-release-only                                  |
+| Battle-testing / real-world corpora                    | not built                        | proposed pre-release-only                                  |
 
 ## 5. Open questions for the project owner
 
@@ -198,7 +198,7 @@ current state, not a recommendation among the options above.
   language wouldn't surface until the pre-release run, no longer on every
   push/PR. Orthogonal fix available either way: collapsing the duplicate
   run (`Test` step already covers it; the separate `Compile-check
-  generated code` step is redundant per its own comment) recovers some
+generated code` step is redundant per its own comment) recovers some
   time in regular CI regardless of the move decision.
 - **What triggers the new workflow** — tag push, manual dispatch, release
   branch, or a combination (§4)? Depends in part on whether/when the
@@ -207,7 +207,7 @@ current state, not a recommendation among the options above.
 - **Does doc-site bar-(C) verification get built into the pre-release
   workflow directly, or built first as a normal (but pre-release-scoped)
   test file the workflow then runs** — mirroring how `compile-check.
-  test.ts` is a normal `bun test` file that regular CI happens to invoke,
+test.ts` is a normal `bun test` file that regular CI happens to invoke,
   vs. being bespoke workflow-only logic? Affects whether it's exercisable
   locally via `nix develop --command bun test` the same way compile-check
   is today.

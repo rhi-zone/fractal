@@ -11,11 +11,11 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "../node.ts"
+import { api, op } from "../node.ts";
 
 export default api({
   ping: op(
     /** Ping the default-exported tree. */
     (_input: { count: number }) => ({ pong: _input.count }),
   ),
-})
+});

@@ -2,7 +2,7 @@
 
 Sometimes there's no declared schema — only example data. [`docs/guide/ingestion.md`](./ingestion.md)
 covers the format-parsing importers (JSON Schema, JTD, Zod, …) — reading a
-*declared* schema and converting it to a `TypeRef`. This page covers the
+_declared_ schema and converting it to a `TypeRef`. This page covers the
 opposite problem: **guessing** a `TypeRef` from raw JSON values, when no
 declared schema exists to parse.
 
@@ -13,7 +13,7 @@ declared schema exists to parse.
   values, unifying evidence across the corpus.
 
 A third module, `inference-eval.ts`, infers nothing — it measures how good
-the other two are, by running inference *backwards* from a known-good schema
+the other two are, by running inference _backwards_ from a known-good schema
 (§3). Both inferrers produce ordinary `TypeRef`s; nothing downstream needs
 to know whether a `TypeRef` came from parsing a schema or guessing one.
 
@@ -34,8 +34,8 @@ consequences follow, both enforced in code:
 - **Integer width narrowing** picks the tightest fixed-width kind covering
   the value, checked tightest-to-widest with unsigned preferred at each
   width: `uint8 [0,255]`, `int8 [-128,127]`, `uint16 [0,65535]`, `int16
-  [-32768,32767]`, `uint32 [0,4294967295]`, `int32
-  [-2147483648,2147483647]`, then `uint64`/`int64` by sign for larger safe
+[-32768,32767]`, `uint32 [0,4294967295]`, `int32
+[-2147483648,2147483647]`, then `uint64`/`int64` by sign for larger safe
   integers. A fractional value never narrows — it stays `number`.
 
 **String format detection** runs four conservative regexes in order, first
@@ -57,7 +57,7 @@ Objects infer field-by-field. Arrays are ambiguous between "fixed tuple" and
   elements differ — a field in every element is required, in only some is
   `optional: true` — but only once the array has at least `arrayThreshold`
   elements; below that it's a `tuple` of per-element types.
-- **Arrays of scalars/other arrays**: homogeneous *and* `>= arrayThreshold`
+- **Arrays of scalars/other arrays**: homogeneous _and_ `>= arrayThreshold`
   elements → `array<T>`. Otherwise (heterogeneous, or homogeneous but too
   short to be confident it isn't a fixed-arity tuple) → `tuple`.
 
@@ -65,12 +65,12 @@ Objects infer field-by-field. Arrays are ambiguous between "fixed tuple" and
 
 ```ts
 export interface InferConfig {
-  arrayThreshold?: number         // default: 3
-  narrowIntegerWidth?: boolean    // default: true
-  detectStringFormats?: boolean   // default: true
-  leafHeuristics?: LeafHeuristic[] // default: []
+  arrayThreshold?: number; // default: 3
+  narrowIntegerWidth?: boolean; // default: true
+  detectStringFormats?: boolean; // default: true
+  leafHeuristics?: LeafHeuristic[]; // default: []
 }
-type LeafHeuristic = (value: unknown) => TypeRef | undefined
+type LeafHeuristic = (value: unknown) => TypeRef | undefined;
 ```
 
 `leafHeuristics` run in order, at every node (leaves and containers alike),
@@ -82,23 +82,25 @@ touching default behavior.
 ### Example
 
 ```ts
-import { fromJson } from "@rhi-zone/fractal-type-ir/from-json"
+import { fromJson } from "@rhi-zone/fractal-type-ir/from-json";
 
 fromJson({
   id: 42,
   email: "a@b.com",
   createdAt: "2024-03-01T12:00:00Z",
   tags: ["x", "y", "z"],
-})
+});
 ```
 
 ```ts
-t(types.object({
-  id: uint8(),
-  email: t(types.string, { format: "email" }),
-  createdAt: datetime(),
-  tags: t(types.array(t(types.string))),
-}))
+t(
+  types.object({
+    id: uint8(),
+    email: t(types.string, { format: "email" }),
+    createdAt: datetime(),
+    tags: t(types.array(t(types.string))),
+  }),
+);
 ```
 
 `id: 42` narrows to `uint8`. `email`/`createdAt` hit the format regexes.
@@ -141,7 +143,7 @@ Passes run in this fixed order over the merged type:
 3. Discriminated-union detection (`detectDiscriminatedUnions`, default `true`).
 4. Dict detection (`detectDicts`, default `true`).
 5. General structural union splitting (`splitDissimilarObjects`, default
-   `true`) — runs *after* dict detection, so a dict's ever-growing key set
+   `true`) — runs _after_ dict detection, so a dict's ever-growing key set
    (which looks exactly as "dissimilar" under Jaccard distance as a genuine
    split) gets first refusal.
 6. Dirty-data detection (`detectDirtyData`, default **`false`**).
@@ -153,7 +155,7 @@ Passes run in this fixed order over the merged type:
 signals, conservative when they disagree:
 
 - **K == 1** (every sample shares one value): true only once `N >=
-  literalMinSamples` (default **5**, higher than `enumMinSamples` —
+literalMinSamples` (default **5**, higher than `enumMinSamples` —
   committing to "exactly one value ever" is a stronger claim than a small
   closed set, and a corpus barely past `enumMinSamples` hasn't had much
   chance to show a second value).
@@ -188,7 +190,7 @@ This threshold is much lower than general splitting's `objectSplitThreshold`
 separate populations — far less field-set disagreement is needed to
 corroborate structural distinctness. DU detection fires from an array field
 of union-shaped objects, and directly at object-typed positions — a
-root-level corpus whose *top-level* values are themselves union members is a
+root-level corpus whose _top-level_ values are themselves union members is a
 known gap (documented in `inference-eval.ts`'s test fixtures, §3).
 
 **Example:** a `shapes` array mixing `{kind:"circle",radius}`,
@@ -207,9 +209,9 @@ keyGrowth   = lastCount - firstCount
 growthRatio = keyGrowth / sampleCount
 ```
 
-If **`growthRatio > 0.5`** *and* `lastCount > commonKeys.size + 2`, the
+If **`growthRatio > 0.5`** _and_ `lastCount > commonKeys.size + 2`, the
 position is dict-shaped. Requires `dictMinSamples` (default **3**) values
-and that many object samples to fire. Keys common to *every* sample become
+and that many object samples to fire. Keys common to _every_ sample become
 fixed record fields (mixed shape: `meta.additionalPropertyType` carries the
 dict-entry value type); with no stable keys at all, the whole position
 becomes `map(string, T)`.
@@ -268,20 +270,22 @@ to the per-value `fromJson` pass phase 1 runs underneath.
 ### Example
 
 ```ts
-import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus"
+import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus";
 
 fromJsonCorpus([
   { id: 1, name: "a" },
   { id: 2, name: "b", nickname: "bee" },
-])
+]);
 ```
 
 ```ts
-t(types.object({
-  id: uint8(),
-  name: t(types.string),
-  nickname: t(types.string, { optional: true }),
-}))
+t(
+  types.object({
+    id: uint8(),
+    name: t(types.string),
+    nickname: t(types.string, { optional: true }),
+  }),
+);
 ```
 
 ## 3. The evaluation harness — `inference-eval.ts`
@@ -331,7 +335,7 @@ schema --(generateCorpus)--> synthetic values --(fromJsonCorpus)-->
 
 - **`runEvaluation(cases, sizes?)`** — drives labeled `EvalCase`s through
   generate → infer → score at each size in `sizes` (default `[5, 10, 50,
-  100, 500]`), averaging per size (`bySize`) — this is how the harness
+100, 500]`), averaging per size (`bySize`) — this is how the harness
   answers "how much corpus does quality need before it stabilizes."
   `defaultLabeledCases` reuses schemas already trusted by cross-projector/
   compile-check test suites (`ecommerceOrder`, `apiResponse`, `kitchenSink`,
@@ -360,7 +364,7 @@ on `enumMinSamples`/`dictMinSamples` (3) before firing, and grow more
 confident with more samples — `literalMinSamples` (5) exists specifically
 because a single-value field at low N can't be distinguished from "haven't
 seen variation yet." DU detection and general splitting need
-`objectSplitMinSamples` (5) or DU's 3-element floor, *and* real corroborating
+`objectSplitMinSamples` (5) or DU's 3-element floor, _and_ real corroborating
 structural difference — these are the signals most likely to need a larger
 corpus before stabilizing. When in doubt, run `runEvaluation` at a few sizes
 for a schema shaped like the target data rather than guess.

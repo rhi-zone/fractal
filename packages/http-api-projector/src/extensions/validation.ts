@@ -42,16 +42,21 @@
 //     invalid enum values) — stripping fixes "the server sent MORE than
 //     expected", not "the server sent something WRONG".
 
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import type { ClientExtension, CodegenOperationInfo, DecodeContext, DecodedResponse } from "../extension.ts"
-import { ClientError } from "../client-error.ts"
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
+import type {
+  ClientExtension,
+  CodegenOperationInfo,
+  DecodeContext,
+  DecodedResponse,
+} from "../extension.ts";
+import { ClientError } from "../client-error.ts";
 
 // ============================================================================
 // Public API
 // ============================================================================
 
-export type ValidationMode = "throw" | "warn" | "strip"
+export type ValidationMode = "throw" | "warn" | "strip";
 
 export type ValidationOptions = {
   /**
@@ -64,23 +69,23 @@ export type ValidationOptions = {
    * `attachOperation` before this extension ever sees an operation, via
    * `resultHelpers`'s `CodegenOperationInfo[]` argument.
    */
-  readonly schemas?: SchemaMap
+  readonly schemas?: SchemaMap;
   /** Failure behavior — see module doc. Defaults to `"throw"`. */
-  readonly mode?: ValidationMode
-}
+  readonly mode?: ValidationMode;
+};
 
 /** Thrown (in `"throw"`/`"strip"` mode) when a response body fails schema validation. */
 export class ValidationError extends ClientError {
   /** One human-readable message per failed field/path (e.g. `"$.title: expected string, got number"`). */
-  readonly details: readonly string[]
+  readonly details: readonly string[];
   /** The `SchemaMap` key of the operation whose response failed, when known. */
-  readonly codegenName?: string | undefined
+  readonly codegenName?: string | undefined;
 
   constructor(status: number, body: unknown, details: readonly string[], codegenName?: string) {
-    super(status, body)
-    this.name = "ValidationError"
-    this.details = details
-    this.codegenName = codegenName
+    super(status, body);
+    this.name = "ValidationError";
+    this.details = details;
+    this.codegenName = codegenName;
   }
 }
 
@@ -99,47 +104,50 @@ export class ValidationError extends ClientError {
  * generateClient(route, schemas, { extensions: [validation()] })
  */
 export function validation(options: ValidationOptions = {}): ClientExtension {
-  const { schemas, mode = "throw" } = options
+  const { schemas, mode = "throw" } = options;
 
   const decodeResponse = (res: Response, ctx: DecodeContext): DecodedResponse | undefined => {
-    if (!res.ok) return undefined // non-2xx: let the default/errors() path handle it
-    const ct = res.headers.get("Content-Type") ?? ""
-    if (!ct.includes("application/json")) return undefined
-    const codegenName = ctx.codegenName
-    const schema = codegenName !== undefined ? schemas?.[codegenName]?.outputSchema : undefined
-    if (schema === undefined) return undefined // no known schema for this operation — nothing to check
+    if (!res.ok) return undefined; // non-2xx: let the default/errors() path handle it
+    const ct = res.headers.get("Content-Type") ?? "";
+    if (!ct.includes("application/json")) return undefined;
+    const codegenName = ctx.codegenName;
+    const schema = codegenName !== undefined ? schemas?.[codegenName]?.outputSchema : undefined;
+    if (schema === undefined) return undefined; // no known schema for this operation — nothing to check
 
-    const value = res.json().then((body) => runValidation(body, schema, mode, res.status, codegenName))
-    return { value }
-  }
+    const value = res
+      .json()
+      .then((body) => runValidation(body, schema, mode, res.status, codegenName));
+    return { value };
+  };
 
   // Populated by `resultHelpers` (called once, with the full operation list,
   // BEFORE `wrapResult` runs per-operation — see codegen.ts's `render`) with
   // every operation that actually has an output schema to validate, so
   // `wrapResult` knows whether to wrap a given call at all.
-  const schemaConstNames = new Map<string, string>()
+  const schemaConstNames = new Map<string, string>();
 
   const resultHelpers = (operations: readonly CodegenOperationInfo[]): string | undefined => {
     const withSchema = operations.filter(
-      (op): op is CodegenOperationInfo & { responseSchema: JsonSchema } => op.responseSchema !== undefined,
-    )
-    if (withSchema.length === 0) return undefined
+      (op): op is CodegenOperationInfo & { responseSchema: JsonSchema } =>
+        op.responseSchema !== undefined,
+    );
+    if (withSchema.length === 0) return undefined;
 
-    const consts: string[] = []
+    const consts: string[] = [];
     for (const op of withSchema) {
-      const constName = `__SCHEMA_${op.codegenName}`
-      schemaConstNames.set(op.codegenName, constName)
-      consts.push(`const ${constName}: unknown = ${JSON.stringify(op.responseSchema)}`)
+      const constName = `__SCHEMA_${op.codegenName}`;
+      schemaConstNames.set(op.codegenName, constName);
+      consts.push(`const ${constName}: unknown = ${JSON.stringify(op.responseSchema)}`);
     }
 
-    return [VALIDATION_CODEGEN_HELPERS, ...consts].join("\n\n")
-  }
+    return [VALIDATION_CODEGEN_HELPERS, ...consts].join("\n\n");
+  };
 
   const wrapResult = (innerExpr: string, codegenName: string): string => {
-    const constName = schemaConstNames.get(codegenName)
-    if (constName === undefined) return innerExpr // no schema for this operation — pass through unchanged
-    return `${innerExpr}.then((__v: unknown) => __validate(__v, ${constName}, ${JSON.stringify(mode)}, "${codegenName}"))`
-  }
+    const constName = schemaConstNames.get(codegenName);
+    if (constName === undefined) return innerExpr; // no schema for this operation — pass through unchanged
+    return `${innerExpr}.then((__v: unknown) => __validate(__v, ${constName}, ${JSON.stringify(mode)}, "${codegenName}"))`;
+  };
 
   return {
     name: "validation",
@@ -148,7 +156,7 @@ export function validation(options: ValidationOptions = {}): ClientExtension {
       resultHelpers,
       wrapResult,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -159,113 +167,129 @@ export function validation(options: ValidationOptions = {}): ClientExtension {
 // ============================================================================
 
 /** Collect one message per structural mismatch found in `value` against `schema`, rooted at `path`. */
-function collectValidationErrors(value: unknown, schema: JsonSchema, path: string, out: string[]): void {
+function collectValidationErrors(
+  value: unknown,
+  schema: JsonSchema,
+  path: string,
+  out: string[],
+): void {
   if ("const" in schema) {
     if (value !== schema.const) {
-      out.push(`${path}: expected constant ${JSON.stringify(schema.const)}, got ${JSON.stringify(value)}`)
+      out.push(
+        `${path}: expected constant ${JSON.stringify(schema.const)}, got ${JSON.stringify(value)}`,
+      );
     }
-    return
+    return;
   }
 
   if (Array.isArray(schema.enum)) {
     if (!(schema.enum as readonly unknown[]).includes(value)) {
-      out.push(`${path}: expected one of ${JSON.stringify(schema.enum)}, got ${JSON.stringify(value)}`)
+      out.push(
+        `${path}: expected one of ${JSON.stringify(schema.enum)}, got ${JSON.stringify(value)}`,
+      );
     }
-    return
+    return;
   }
 
-  const anyOf = schema.anyOf ?? schema.oneOf
+  const anyOf = schema.anyOf ?? schema.oneOf;
   if (Array.isArray(anyOf)) {
     const matches = anyOf.some((s) => {
-      const branchErrors: string[] = []
-      collectValidationErrors(value, s, path, branchErrors)
-      return branchErrors.length === 0
-    })
+      const branchErrors: string[] = [];
+      collectValidationErrors(value, s, path, branchErrors);
+      return branchErrors.length === 0;
+    });
     if (!matches && anyOf.length > 0) {
-      out.push(`${path}: value matched none of ${anyOf.length} allowed variants`)
+      out.push(`${path}: value matched none of ${anyOf.length} allowed variants`);
     }
-    return
+    return;
   }
 
-  const type = schema.type
-  if (type === undefined) return // no type constraint on this (sub-)schema — nothing more we can check
+  const type = schema.type;
+  if (type === undefined) return; // no type constraint on this (sub-)schema — nothing more we can check
 
   if (value === null) {
     // `JsonSchema.type` has no "null" variant — a nullable field is
     // represented as `anyOf`/`oneOf` with a `{ const: null }` branch
     // (handled above, before `type` is even consulted), so reaching here
     // with `value === null` and a concrete `type` is always a mismatch.
-    out.push(`${path}: unexpected null`)
-    return
+    out.push(`${path}: unexpected null`);
+    return;
   }
   if (value === undefined) {
-    out.push(`${path}: missing value`)
-    return
+    out.push(`${path}: missing value`);
+    return;
   }
 
   switch (type) {
     case "object": {
       if (typeof value !== "object" || Array.isArray(value)) {
-        out.push(`${path}: expected object, got ${describeType(value)}`)
-        return
+        out.push(`${path}: expected object, got ${describeType(value)}`);
+        return;
       }
-      const obj = value as Record<string, unknown>
+      const obj = value as Record<string, unknown>;
       for (const key of schema.required ?? []) {
-        if (!(key in obj) || obj[key] === undefined) out.push(`${path}.${key}: missing required field`)
+        if (!(key in obj) || obj[key] === undefined)
+          out.push(`${path}.${key}: missing required field`);
       }
       if (schema.properties !== undefined) {
         for (const [key, propSchema] of Object.entries(schema.properties)) {
-          if (key in obj && obj[key] !== undefined) collectValidationErrors(obj[key], propSchema, `${path}.${key}`, out)
+          if (key in obj && obj[key] !== undefined)
+            collectValidationErrors(obj[key], propSchema, `${path}.${key}`, out);
         }
       }
-      return
+      return;
     }
     case "array": {
       if (!Array.isArray(value)) {
-        out.push(`${path}: expected array, got ${describeType(value)}`)
-        return
+        out.push(`${path}: expected array, got ${describeType(value)}`);
+        return;
       }
       if (schema.items !== undefined && schema.items !== false) {
-        value.forEach((item, i) => collectValidationErrors(item, schema.items as JsonSchema, `${path}[${i}]`, out))
+        value.forEach((item, i) =>
+          collectValidationErrors(item, schema.items as JsonSchema, `${path}[${i}]`, out),
+        );
       }
-      return
+      return;
     }
     case "string":
-      if (typeof value !== "string") out.push(`${path}: expected string, got ${describeType(value)}`)
-      return
+      if (typeof value !== "string")
+        out.push(`${path}: expected string, got ${describeType(value)}`);
+      return;
     case "number":
-      if (typeof value !== "number") out.push(`${path}: expected number, got ${describeType(value)}`)
-      return
+      if (typeof value !== "number")
+        out.push(`${path}: expected number, got ${describeType(value)}`);
+      return;
     case "boolean":
-      if (typeof value !== "boolean") out.push(`${path}: expected boolean, got ${describeType(value)}`)
-      return
+      if (typeof value !== "boolean")
+        out.push(`${path}: expected boolean, got ${describeType(value)}`);
+      return;
     default:
-      return
+      return;
   }
 }
 
 function describeType(value: unknown): string {
-  if (value === null) return "null"
-  if (Array.isArray(value)) return "array"
-  return typeof value
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
 }
 
 /** Remove fields not declared in `schema.properties` (recursively) — the `"strip"` mode's own pass. */
 function stripToSchema(value: unknown, schema: JsonSchema): unknown {
   if (schema.type === "object" && schema.properties !== undefined) {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) return value
-    const out: Record<string, unknown> = {}
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+    const out: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      const propSchema = schema.properties[key]
-      if (propSchema !== undefined) out[key] = stripToSchema(v, propSchema)
+      const propSchema = schema.properties[key];
+      if (propSchema !== undefined) out[key] = stripToSchema(v, propSchema);
     }
-    return out
+    return out;
   }
   if (schema.type === "array" && schema.items !== undefined && schema.items !== false) {
-    if (!Array.isArray(value)) return value
-    return value.map((v) => stripToSchema(v, schema.items as JsonSchema))
+    if (!Array.isArray(value)) return value;
+    return value.map((v) => stripToSchema(v, schema.items as JsonSchema));
   }
-  return value
+  return value;
 }
 
 function runValidation(
@@ -275,18 +299,18 @@ function runValidation(
   status: number,
   codegenName: string | undefined,
 ): unknown {
-  const value = mode === "strip" ? stripToSchema(body, schema) : body
-  const errors: string[] = []
-  collectValidationErrors(value, schema, "$", errors)
+  const value = mode === "strip" ? stripToSchema(body, schema) : body;
+  const errors: string[] = [];
+  collectValidationErrors(value, schema, "$", errors);
 
-  if (errors.length === 0) return value
+  if (errors.length === 0) return value;
   if (mode === "warn") {
     console.warn(
       `[validation] response${codegenName !== undefined ? ` for "${codegenName}"` : ""} failed schema validation:\n${errors.join("\n")}`,
-    )
-    return value
+    );
+    return value;
   }
-  throw new ValidationError(status, body, errors, codegenName)
+  throw new ValidationError(status, body, errors, codegenName);
 }
 
 // ============================================================================
@@ -421,4 +445,4 @@ function __validate(body: unknown, schema: unknown, mode: "throw" | "warn" | "st
     return value
   }
   throw new ValidationError(body, errors, codegenName)
-}`.trim()
+}`.trim();

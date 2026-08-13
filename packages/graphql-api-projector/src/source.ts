@@ -9,8 +9,8 @@
 // shared generic to GraphQL's own store names and wraps the result under
 // `meta.graphql`.
 
-import { resolveSourceMap } from "@rhi-zone/fractal-api-tree"
-import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree"
+import { resolveSourceMap } from "@rhi-zone/fractal-api-tree";
+import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree";
 
 /**
  * GraphQL's own store names — the stores `graphql.source()`'s map accepts:
@@ -23,7 +23,7 @@ import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tr
  * is (http-api-projector/src/decode.ts) — GraphQL has no equivalent
  * extension point today, and this design doesn't introduce one.
  */
-export type GraphQLStoreName = "argument" | "caller"
+export type GraphQLStoreName = "argument" | "caller";
 
 /**
  * `graphql.source(map)` — declares which GraphQL store (`argument`,
@@ -46,8 +46,8 @@ export type GraphQLStoreName = "argument" | "caller"
 export function source<const M extends SourceMapInput<GraphQLStoreName>>(
   map: M,
 ): { readonly graphql: { readonly sourceMap: ResolvedSourceMap<M> } } {
-  return { graphql: { sourceMap: resolveSourceMap(map) } }
+  return { graphql: { sourceMap: resolveSourceMap(map) } };
 }
 
 /** `graphql.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs.ts). */
-export const graphql = { source }
+export const graphql = { source };

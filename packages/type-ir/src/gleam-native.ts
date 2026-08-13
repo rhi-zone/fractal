@@ -41,8 +41,8 @@
 //     a leaf in a flat namespace. `intersection`, `instance`, and `interface`
 //     all have to degrade or synthesize accordingly (see their handlers
 //     below).
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts";
 
 // ============================================================================
 // naming — Gleam requires snake_case for field labels/values, PascalCase for
@@ -65,29 +65,48 @@ import { toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codeg
 // `r#ident`, so a collision is resolved with a trailing underscore, the same
 // safe fallback used where no native escape exists).
 const GLEAM_KEYWORDS = new Set([
-  "as", "assert", "auto", "case", "const", "delegate", "derive", "echo", "else",
-  "fn", "if", "implement", "import", "let", "macro", "opaque", "panic", "pub",
-  "test", "todo", "type", "use",
-])
+  "as",
+  "assert",
+  "auto",
+  "case",
+  "const",
+  "delegate",
+  "derive",
+  "echo",
+  "else",
+  "fn",
+  "if",
+  "implement",
+  "import",
+  "let",
+  "macro",
+  "opaque",
+  "panic",
+  "pub",
+  "test",
+  "todo",
+  "type",
+  "use",
+]);
 
 function escapeGleamIdent(snakeName: string): string {
-  return GLEAM_KEYWORDS.has(snakeName) ? `${snakeName}_` : snakeName
+  return GLEAM_KEYWORDS.has(snakeName) ? `${snakeName}_` : snakeName;
 }
 
 function fieldLabel(name: string): string {
-  return escapeGleamIdent(toSnakeCaseStripSeparators(name))
+  return escapeGleamIdent(toSnakeCaseStripSeparators(name));
 }
 
 // ============================================================================
 // bare (inline) type-expression rendering
 // ============================================================================
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("Bool"),
@@ -114,44 +133,47 @@ const handlers: Record<string, Converter> = {
   // imported elsewhere, same convention rust-serde.ts's `instance` uses.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `List(${toGleamType(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `List(${toGleamType(s.element)})`;
   },
   // No streaming construct in Gleam's type system — materializes to List(T),
   // same honest-degrade convention rust-serde.ts/protobuf.ts use for `stream`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `List(${toGleamType(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `List(${toGleamType(s.element)})`;
   },
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `List(${toGleamType(s.element)})`
+    const s = shape as TypeShape & { kind: "page" };
+    return `List(${toGleamType(s.element)})`;
   },
   // `#(a, b, ...)` — Gleam tuples have no arity cap (unlike Elm's 2/3-element
   // limit), so every arity renders directly.
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `#(${s.elements.map(toGleamType).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `#(${s.elements.map(toGleamType).join(", ")})`;
   },
   // Dict(k, v) from gleam/dict.
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Dict(${toGleamType(s.key)}, ${toGleamType(s.value)})`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Dict(${toGleamType(s.key)}, ${toGleamType(s.value)})`;
   },
   // No naming context here — see the `bareType`/hoisting path below for the
   // real (named) declaration-generating case used inside field/element
   // positions that DO carry a name hint.
-  object: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic"),
-  enum: (_shape, meta) => (typeof meta.enumName === "string" ? toPascalCaseStripSeparators(meta.enumName) : "Dynamic"),
-  union: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic"),
+  object: (_shape, meta) =>
+    typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic",
+  enum: (_shape, meta) =>
+    typeof meta.enumName === "string" ? toPascalCaseStripSeparators(meta.enumName) : "Dynamic",
+  union: (_shape, meta) =>
+    typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic",
   // Gleam has no literal-value type — degrades to the literal's base type,
   // the same lossy convention rust-serde.ts's `literal` handler uses.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "Nil"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "Bool"
-    return Number.isInteger(s.value) ? "Int" : "Float"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "Nil";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "Bool";
+    return Number.isInteger(s.value) ? "Int" : "Float";
   },
   ref: (shape) => toPascalCaseStripSeparators((shape as TypeShape & { kind: "ref" }).target),
   // No struct-merge/mixin construct in Gleam, and (unlike elm-json.ts, which
@@ -162,9 +184,9 @@ const handlers: Record<string, Converter> = {
   // identical reason (Rust's field-position hoisting doesn't special-case
   // `intersection` either).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "Dynamic" : toGleamType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "Dynamic" : toGleamType(first);
   },
   // Gleam function TYPES: `fn(ParamType, ...) -> ReturnType` — no parameter
   // names in type position (https://tour.gleam.run/functions/functions/'s
@@ -174,9 +196,12 @@ const handlers: Record<string, Converter> = {
   // typescript.ts/flow-native.ts use for `this` in structural function
   // types.
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = [...(s.thisType === undefined ? [] : [s.thisType]), ...s.params.map((p) => p.type)]
-    return `fn(${params.map(toGleamType).join(", ")}) -> ${toGleamType(s.returnType)}`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = [
+      ...(s.thisType === undefined ? [] : [s.thisType]),
+      ...s.params.map((p) => p.type),
+    ];
+    return `fn(${params.map(toGleamType).join(", ")}) -> ${toGleamType(s.returnType)}`;
   },
   // `method` has no explicit entry — falls back to `function`'s fn(...) ->
   // R syntax via `registerParent("method", "function")` in index.ts (same
@@ -188,8 +213,9 @@ const handlers: Record<string, Converter> = {
   // a record of function-typed fields is a faithful (if unenforced —
   // there's no vtable/dispatch, just a plain value) rendering rather than an
   // opaque degrade. Hoisted like `object` — see `bareType` below.
-  interface: (_shape, meta) => (typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic"),
-}
+  interface: (_shape, meta) =>
+    typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic",
+};
 
 /** `meta.optional` (may be absent from the wire) and `meta.nullable` (present
  * but may carry JSON `null`) both collapse onto Gleam's single `Option(T)` —
@@ -200,9 +226,9 @@ const handlers: Record<string, Converter> = {
  * same two flags onto Rust's single `Option<T>` for the same reason (no
  * missing-vs-null distinction in the target). */
 export function toGleamType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const base = converter === undefined ? "Dynamic" : converter(ref.shape, ref.meta)
-  return ref.meta.optional === true || ref.meta.nullable === true ? `Option(${base})` : base
+  const converter = resolve(ref.shape.kind, handlers);
+  const base = converter === undefined ? "Dynamic" : converter(ref.shape, ref.meta);
+  return ref.meta.optional === true || ref.meta.nullable === true ? `Option(${base})` : base;
 }
 
 // ============================================================================
@@ -216,97 +242,109 @@ export function toGleamType(ref: TypeRef): string {
 // ============================================================================
 
 function bareType(nameHint: string, ref: TypeRef, decls: string[]): string {
-  const kind = ref.shape.kind
-  const name = toPascalCaseStripSeparators(nameHint)
+  const kind = ref.shape.kind;
+  const name = toPascalCaseStripSeparators(nameHint);
   if (kind === "object") {
-    decls.push(buildRecord(name, ref, decls))
-    return name
+    decls.push(buildRecord(name, ref, decls));
+    return name;
   }
   if (kind === "enum") {
-    decls.push(buildEnum(name, ref))
-    return name
+    decls.push(buildEnum(name, ref));
+    return name;
   }
   if (kind === "union") {
     decls.push(
       typeof ref.meta.discriminator === "string"
         ? buildTaggedUnion(name, ref, decls)
         : buildPositionalUnion(name, ref, decls),
-    )
-    return name
+    );
+    return name;
   }
   if (kind === "interface") {
-    decls.push(buildInterfaceRecord(name, ref))
-    return name
+    decls.push(buildInterfaceRecord(name, ref));
+    return name;
   }
   if (kind === "array" || kind === "stream" || kind === "page") {
-    const s = ref.shape as TypeShape & { kind: "array" | "stream" | "page" }
-    const elementKind = s.element.shape.kind
-    if (elementKind === "object" || elementKind === "enum" || elementKind === "union" || elementKind === "interface") {
-      return `List(${bareType(nameHint, s.element, decls)})`
+    const s = ref.shape as TypeShape & { kind: "array" | "stream" | "page" };
+    const elementKind = s.element.shape.kind;
+    if (
+      elementKind === "object" ||
+      elementKind === "enum" ||
+      elementKind === "union" ||
+      elementKind === "interface"
+    ) {
+      return `List(${bareType(nameHint, s.element, decls)})`;
     }
-    return `List(${toGleamType(s.element)})`
+    return `List(${toGleamType(s.element)})`;
   }
-  const converter = resolve(kind, handlers)
-  return converter === undefined ? "Dynamic" : converter(ref.shape, ref.meta)
+  const converter = resolve(kind, handlers);
+  return converter === undefined ? "Dynamic" : converter(ref.shape, ref.meta);
 }
 
 /** Field type honoring `optional`/`nullable`'s single-`Option` collapse (see
  * `toGleamType`), but hoisting nested object/enum/union/interface under a
  * name derived from the field itself. */
 function fieldType(nameHint: string, fieldRef: TypeRef, decls: string[]): string {
-  const bare = bareType(nameHint, fieldRef, decls)
-  return fieldRef.meta.optional === true || fieldRef.meta.nullable === true ? `Option(${bare})` : bare
+  const bare = bareType(nameHint, fieldRef, decls);
+  return fieldRef.meta.optional === true || fieldRef.meta.nullable === true
+    ? `Option(${bare})`
+    : bare;
 }
 
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
-  const lines: string[] = []
-  const description = typeof meta.description === "string" ? meta.description : undefined
+  const lines: string[] = [];
+  const description = typeof meta.description === "string" ? meta.description : undefined;
   if (description !== undefined) {
-    for (const line of description.split("\n")) lines.push(`/// ${line}`)
+    for (const line of description.split("\n")) lines.push(`/// ${line}`);
   }
-  const deprecated = meta.deprecated
+  const deprecated = meta.deprecated;
   if (deprecated === true) {
-    lines.push(`@deprecated("Deprecated.")`)
+    lines.push(`@deprecated("Deprecated.")`);
   } else if (typeof deprecated === "string") {
-    lines.push(`@deprecated(${JSON.stringify(deprecated)})`)
+    lines.push(`@deprecated(${JSON.stringify(deprecated)})`);
   }
-  return lines
+  return lines;
 }
 
 function buildRecord(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const entries = Object.entries(shape.fields)
-  const lines = [...docComment(ref.meta), `pub type ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const entries = Object.entries(shape.fields);
+  const lines = [...docComment(ref.meta), `pub type ${name} {`];
   if (entries.length === 0) {
-    lines.push(`  ${name}`)
+    lines.push(`  ${name}`);
   } else {
-    const fields = entries.map(([fieldName, fieldRef]) => `${fieldLabel(fieldName)}: ${fieldType(`${name}${toPascalCaseStripSeparators(fieldName)}`, fieldRef, decls)}`)
-    lines.push(`  ${name}(${fields.join(", ")})`)
+    const fields = entries.map(
+      ([fieldName, fieldRef]) =>
+        `${fieldLabel(fieldName)}: ${fieldType(`${name}${toPascalCaseStripSeparators(fieldName)}`, fieldRef, decls)}`,
+    );
+    lines.push(`  ${name}(${fields.join(", ")})`);
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /** A record of function-typed fields — see the `interface` handler above for
  * why this is a faithful rendering rather than an opaque degrade. */
 function buildInterfaceRecord(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "interface" }
-  const entries = Object.entries(shape.methods)
-  const lines = [...docComment(ref.meta), `pub type ${name} {`]
-  const fields = entries.map(([methodName, methodRef]) => `${fieldLabel(methodName)}: ${toGleamType(methodRef)}`)
-  lines.push(fields.length === 0 ? `  ${name}` : `  ${name}(${fields.join(", ")})`)
-  lines.push("}")
-  return lines.join("\n")
+  const shape = ref.shape as TypeShape & { kind: "interface" };
+  const entries = Object.entries(shape.methods);
+  const lines = [...docComment(ref.meta), `pub type ${name} {`];
+  const fields = entries.map(
+    ([methodName, methodRef]) => `${fieldLabel(methodName)}: ${toGleamType(methodRef)}`,
+  );
+  lines.push(fields.length === 0 ? `  ${name}` : `  ${name}(${fields.join(", ")})`);
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function buildEnum(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [...docComment(ref.meta), `pub type ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const lines = [...docComment(ref.meta), `pub type ${name} {`];
   for (const member of shape.members) {
-    lines.push(`  ${toPascalCaseStripSeparators(member)}`)
+    lines.push(`  ${toPascalCaseStripSeparators(member)}`);
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /** A tagged union: every variant is an `object` sharing `meta.discriminator`
@@ -322,33 +360,38 @@ function buildEnum(name: string, ref: TypeRef): string {
  * `VariantN` name instead of aborting the whole union, so every union is
  * still representable. */
 function buildTaggedUnion(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = ref.meta.discriminator as string
-  const lines = [...docComment(ref.meta), `pub type ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator = ref.meta.discriminator as string;
+  const lines = [...docComment(ref.meta), `pub type ${name} {`];
 
   shape.variants.forEach((variant, i) => {
     if (variant.shape.kind !== "object") {
-      lines.push(`  ${name}Variant${i}(${bareType(`${name}Variant${i}`, variant, decls)})`)
-      return
+      lines.push(`  ${name}Variant${i}(${bareType(`${name}Variant${i}`, variant, decls)})`);
+      return;
     }
-    const variantShape = variant.shape as TypeShape & { kind: "object" }
-    const tagField = variantShape.fields[discriminator]
+    const variantShape = variant.shape as TypeShape & { kind: "object" };
+    const tagField = variantShape.fields[discriminator];
     const tagValue =
-      tagField !== undefined && tagField.shape.kind === "literal" && typeof (tagField.shape as { value: unknown }).value === "string"
+      tagField !== undefined &&
+      tagField.shape.kind === "literal" &&
+      typeof (tagField.shape as { value: unknown }).value === "string"
         ? ((tagField.shape as { value: string }).value as string)
-        : `Variant${i}`
-    const ctorName = toPascalCaseStripSeparators(tagValue)
-    const otherFields = Object.entries(variantShape.fields).filter(([k]) => k !== discriminator)
+        : `Variant${i}`;
+    const ctorName = toPascalCaseStripSeparators(tagValue);
+    const otherFields = Object.entries(variantShape.fields).filter(([k]) => k !== discriminator);
     if (otherFields.length === 0) {
-      lines.push(`  ${ctorName}`)
-      return
+      lines.push(`  ${ctorName}`);
+      return;
     }
-    const fields = otherFields.map(([fieldName, fieldRef]) => `${fieldLabel(fieldName)}: ${fieldType(`${name}${ctorName}${toPascalCaseStripSeparators(fieldName)}`, fieldRef, decls)}`)
-    lines.push(`  ${ctorName}(${fields.join(", ")})`)
-  })
+    const fields = otherFields.map(
+      ([fieldName, fieldRef]) =>
+        `${fieldLabel(fieldName)}: ${fieldType(`${name}${ctorName}${toPascalCaseStripSeparators(fieldName)}`, fieldRef, decls)}`,
+    );
+    lines.push(`  ${ctorName}(${fields.join(", ")})`);
+  });
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /** The general (untagged) union fallback — one positionally-named
@@ -360,14 +403,14 @@ function buildTaggedUnion(name: string, ref: TypeRef, decls: string[]): string {
  * type, so a union with no shared discriminator has no encoding other than a
  * synthesized tag. */
 function buildPositionalUnion(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const lines = [...docComment(ref.meta), `pub type ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const lines = [...docComment(ref.meta), `pub type ${name} {`];
   shape.variants.forEach((variant, i) => {
-    const ctorName = `Variant${i}`
-    lines.push(`  ${ctorName}(${bareType(`${name}${ctorName}`, variant, decls)})`)
-  })
-  lines.push("}")
-  return lines.join("\n")
+    const ctorName = `Variant${i}`;
+    lines.push(`  ${ctorName}(${bareType(`${name}${ctorName}`, variant, decls)})`);
+  });
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /**
@@ -385,23 +428,26 @@ function buildPositionalUnion(name: string, ref: TypeRef, decls: string[]): stri
  * assembling its own declarations) can plug into their own source.
  */
 export function toGleam(ref: TypeRef, name?: string): string {
-  if (name === undefined) return toGleamType(ref)
+  if (name === undefined) return toGleamType(ref);
 
-  const decls: string[] = []
-  const typeName = toPascalCaseStripSeparators(name)
-  const kind = ref.shape.kind
-  let mainDecl: string
+  const decls: string[] = [];
+  const typeName = toPascalCaseStripSeparators(name);
+  const kind = ref.shape.kind;
+  let mainDecl: string;
   if (kind === "object") {
-    mainDecl = buildRecord(typeName, ref, decls)
+    mainDecl = buildRecord(typeName, ref, decls);
   } else if (kind === "interface") {
-    mainDecl = buildInterfaceRecord(typeName, ref)
+    mainDecl = buildInterfaceRecord(typeName, ref);
   } else if (kind === "enum") {
-    mainDecl = buildEnum(typeName, ref)
+    mainDecl = buildEnum(typeName, ref);
   } else if (kind === "union") {
-    mainDecl = typeof ref.meta.discriminator === "string" ? buildTaggedUnion(typeName, ref, decls) : buildPositionalUnion(typeName, ref, decls)
+    mainDecl =
+      typeof ref.meta.discriminator === "string"
+        ? buildTaggedUnion(typeName, ref, decls)
+        : buildPositionalUnion(typeName, ref, decls);
   } else {
-    mainDecl = [...docComment(ref.meta), `pub type ${typeName} = ${toGleamType(ref)}`].join("\n")
+    mainDecl = [...docComment(ref.meta), `pub type ${typeName} = ${toGleamType(ref)}`].join("\n");
   }
 
-  return [...decls, mainDecl].join("\n\n")
+  return [...decls, mainDecl].join("\n\n");
 }

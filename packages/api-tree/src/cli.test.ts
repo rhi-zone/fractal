@@ -6,129 +6,131 @@
 // explicit "(cache hit)" signal (not just "ran fast"), and `--force` /
 // touching a dependency defeat that signal.
 
-import { describe, expect, it, afterEach, beforeEach } from "bun:test"
-import * as fs from "node:fs"
-import * as path from "node:path"
+import { describe, expect, it, afterEach, beforeEach } from "bun:test";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-const CLI = `${import.meta.dir}/cli.ts`
-const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
-const WIRE_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation.fixture.ts`
-const DEP_FIXTURE = `${import.meta.dir}/__fixtures__/result-reexport.fixture.ts`
-const TMP_DIR = `${import.meta.dir}/__fixtures__/.cli-test-tmp`
+const CLI = `${import.meta.dir}/cli.ts`;
+const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`;
+const WIRE_FIXTURE = `${import.meta.dir}/__fixtures__/wire-apply-validation.fixture.ts`;
+const DEP_FIXTURE = `${import.meta.dir}/__fixtures__/result-reexport.fixture.ts`;
+const TMP_DIR = `${import.meta.dir}/__fixtures__/.cli-test-tmp`;
 
 beforeEach(() => {
-  fs.mkdirSync(TMP_DIR, { recursive: true })
-})
+  fs.mkdirSync(TMP_DIR, { recursive: true });
+});
 
 afterEach(() => {
-  fs.rmSync(TMP_DIR, { recursive: true, force: true })
-})
+  fs.rmSync(TMP_DIR, { recursive: true, force: true });
+});
 
-async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const proc = Bun.spawn(["bun", CLI, ...args], { stdout: "pipe", stderr: "pipe" })
+async function runCli(
+  args: string[],
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(["bun", CLI, ...args], { stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
-  ])
-  return { stdout, stderr, exitCode }
+  ]);
+  return { stdout, stderr, exitCode };
 }
 
 describe("cli.ts — build/watch/check cache behavior end-to-end", () => {
   it("build: first run builds, second run reports an explicit cache hit", async () => {
-    const outFile = path.join(TMP_DIR, "out.ts")
+    const outFile = path.join(TMP_DIR, "out.ts");
 
-    const first = await runCli(["build", FIXTURE, "-o", outFile])
-    expect(first.exitCode).toBe(0)
+    const first = await runCli(["build", FIXTURE, "-o", outFile]);
+    expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("built");
-    expect(first.stdout).not.toContain("cache hit")
+    expect(first.stdout).not.toContain("cache hit");
 
-    const second = await runCli(["build", FIXTURE, "-o", outFile])
-    expect(second.exitCode).toBe(0)
-    expect(second.stdout).toContain("cache hit")
-  }, 30_000)
+    const second = await runCli(["build", FIXTURE, "-o", outFile]);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toContain("cache hit");
+  }, 30_000);
 
   it("build --force rebuilds even when the cache is a hit", async () => {
-    const outFile = path.join(TMP_DIR, "out-force.ts")
-    await runCli(["build", FIXTURE, "-o", outFile])
-    const cached = await runCli(["build", FIXTURE, "-o", outFile])
-    expect(cached.stdout).toContain("cache hit")
+    const outFile = path.join(TMP_DIR, "out-force.ts");
+    await runCli(["build", FIXTURE, "-o", outFile]);
+    const cached = await runCli(["build", FIXTURE, "-o", outFile]);
+    expect(cached.stdout).toContain("cache hit");
 
-    const forced = await runCli(["build", FIXTURE, "-o", outFile, "--force"])
-    expect(forced.exitCode).toBe(0)
-    expect(forced.stdout).toContain("built")
-    expect(forced.stdout).not.toContain("cache hit")
-  }, 30_000)
+    const forced = await runCli(["build", FIXTURE, "-o", outFile, "--force"]);
+    expect(forced.exitCode).toBe(0);
+    expect(forced.stdout).toContain("built");
+    expect(forced.stdout).not.toContain("cache hit");
+  }, 30_000);
 
   it("check: reports a cache hit without rebuilding when nothing changed", async () => {
-    const outFile = path.join(TMP_DIR, "out-check.ts")
-    await runCli(["build", FIXTURE, "-o", outFile])
-    const check = await runCli(["check", FIXTURE, "-o", outFile])
-    expect(check.exitCode).toBe(0)
-    expect(check.stdout).toContain("cache hit")
-  }, 30_000)
+    const outFile = path.join(TMP_DIR, "out-check.ts");
+    await runCli(["build", FIXTURE, "-o", outFile]);
+    const check = await runCli(["check", FIXTURE, "-o", outFile]);
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain("cache hit");
+  }, 30_000);
 
   it("touching a dependency file invalidates the cache for a subsequent build", async () => {
-    const outFile = path.join(TMP_DIR, "out-dep.ts")
+    const outFile = path.join(TMP_DIR, "out-dep.ts");
     await runCli(["build", FIXTURE, "-o", outFile]);
-    const cached = await runCli(["build", FIXTURE, "-o", outFile])
-    expect(cached.stdout).toContain("cache hit")
+    const cached = await runCli(["build", FIXTURE, "-o", outFile]);
+    expect(cached.stdout).toContain("cache hit");
 
-    const original = fs.readFileSync(DEP_FIXTURE, "utf8")
+    const original = fs.readFileSync(DEP_FIXTURE, "utf8");
     try {
-      fs.writeFileSync(DEP_FIXTURE, `${original}\n// cli-test perturbation\n`)
-      const rebuilt = await runCli(["build", FIXTURE, "-o", outFile])
-      expect(rebuilt.stdout).toContain("built")
-      expect(rebuilt.stdout).not.toContain("cache hit")
+      fs.writeFileSync(DEP_FIXTURE, `${original}\n// cli-test perturbation\n`);
+      const rebuilt = await runCli(["build", FIXTURE, "-o", outFile]);
+      expect(rebuilt.stdout).toContain("built");
+      expect(rebuilt.stdout).not.toContain("cache hit");
     } finally {
-      fs.writeFileSync(DEP_FIXTURE, original)
+      fs.writeFileSync(DEP_FIXTURE, original);
     }
-  }, 30_000)
+  }, 30_000);
 
   it("build-schema/check-schema get the same cache treatment as build/check", async () => {
-    const outFile = path.join(TMP_DIR, "out-schema.ts")
-    const first = await runCli(["build-schema", FIXTURE, "-o", outFile])
-    expect(first.exitCode).toBe(0)
-    expect(first.stdout).toContain("built")
-    const source = fs.readFileSync(outFile, "utf8")
-    expect(source).toContain("export const schemas")
+    const outFile = path.join(TMP_DIR, "out-schema.ts");
+    const first = await runCli(["build-schema", FIXTURE, "-o", outFile]);
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain("built");
+    const source = fs.readFileSync(outFile, "utf8");
+    expect(source).toContain("export const schemas");
 
-    const second = await runCli(["build-schema", FIXTURE, "-o", outFile])
-    expect(second.stdout).toContain("cache hit")
+    const second = await runCli(["build-schema", FIXTURE, "-o", outFile]);
+    expect(second.stdout).toContain("cache hit");
 
-    const check = await runCli(["check-schema", FIXTURE, "-o", outFile])
-    expect(check.exitCode).toBe(0)
-    expect(check.stdout).toContain("cache hit")
-  }, 30_000)
+    const check = await runCli(["check-schema", FIXTURE, "-o", outFile]);
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain("cache hit");
+  }, 30_000);
 
   it("build/check get the same cache treatment over applyValidation call sites that name a protocol", async () => {
     // Phase D (docs/design/wire-profiles-and-staged-validation.md) retired
     // the separate `build-wire`/`check-wire` subcommands — `build`/`check`
     // themselves now run the (sole) staged wire-profile pipeline, covering
     // every applyValidation call site, 2-arg or 3-arg alike.
-    const outFile = path.join(TMP_DIR, "out-wire.ts")
-    const first = await runCli(["build", WIRE_FIXTURE, "-o", outFile])
-    expect(first.exitCode).toBe(0)
-    expect(first.stdout).toContain("built")
-    const source = fs.readFileSync(outFile, "utf8")
-    expect(source).toContain("export const applyValidation")
+    const outFile = path.join(TMP_DIR, "out-wire.ts");
+    const first = await runCli(["build", WIRE_FIXTURE, "-o", outFile]);
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain("built");
+    const source = fs.readFileSync(outFile, "utf8");
+    expect(source).toContain("export const applyValidation");
 
-    const second = await runCli(["build", WIRE_FIXTURE, "-o", outFile])
-    expect(second.stdout).toContain("cache hit")
+    const second = await runCli(["build", WIRE_FIXTURE, "-o", outFile]);
+    expect(second.stdout).toContain("cache hit");
 
-    const check = await runCli(["check", WIRE_FIXTURE, "-o", outFile])
-    expect(check.exitCode).toBe(0)
-    expect(check.stdout).toContain("cache hit")
-  }, 30_000)
+    const check = await runCli(["check", WIRE_FIXTURE, "-o", outFile]);
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain("cache hit");
+  }, 30_000);
 
   it("--cache-dir relocates cache metadata away from the default <output>.cache.json sibling", async () => {
-    const outFile = path.join(TMP_DIR, "out-cachedir.ts")
-    const cacheDir = path.join(TMP_DIR, "pool")
-    await runCli(["build", FIXTURE, "-o", outFile, "--cache-dir", cacheDir])
-    expect(fs.existsSync(`${outFile}.cache.json`)).toBe(false)
-    expect(fs.existsSync(path.join(cacheDir, "out-cachedir.ts.cache.json"))).toBe(true)
+    const outFile = path.join(TMP_DIR, "out-cachedir.ts");
+    const cacheDir = path.join(TMP_DIR, "pool");
+    await runCli(["build", FIXTURE, "-o", outFile, "--cache-dir", cacheDir]);
+    expect(fs.existsSync(`${outFile}.cache.json`)).toBe(false);
+    expect(fs.existsSync(path.join(cacheDir, "out-cachedir.ts.cache.json"))).toBe(true);
 
-    const second = await runCli(["build", FIXTURE, "-o", outFile, "--cache-dir", cacheDir])
-    expect(second.stdout).toContain("cache hit")
-  }, 30_000)
-})
+    const second = await runCli(["build", FIXTURE, "-o", outFile, "--cache-dir", cacheDir]);
+    expect(second.stdout).toContain("cache hit");
+  }, 30_000);
+});

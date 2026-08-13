@@ -2,20 +2,23 @@
   "name": "@rhi-zone/fractal-ffi-ir",
   "version": "0.1.0-alpha.0",
   "description": "FFI intermediate representation: boundary-crossing modules/resources/function signatures over type-ir TypeRefs, plus ownership-discipline metadata — projectable to C, JS/wasm-bindgen, WIT, and other FFI targets",
+  "keywords": [
+    "bindings",
+    "codegen",
+    "ffi",
+    "ffi-ir",
+    "rust-c-abi",
+    "wasm-bindgen",
+    "wit"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/ffi-ir"
   },
-  "keywords": [
-    "ffi-ir",
-    "ffi",
-    "bindings",
-    "codegen",
-    "wasm-bindgen",
-    "wit",
-    "rust-c-abi"
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -75,21 +78,18 @@
       "import": "./dist/ruby-ffi.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "@rhi-zone/fractal-type-ir": "workspace:*"
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "test:watch": "bun test --watch"
   },
-  "publishConfig": {
-    "access": "public"
+  "dependencies": {
+    "@rhi-zone/fractal-type-ir": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -22,55 +22,55 @@
 // redaction set; pass a custom `logger`/`redactHeaders` only when you don't
 // also need codegen support for it.
 
-import type { ClientExtension, FetchImpl } from "../extension.ts"
+import type { ClientExtension, FetchImpl } from "../extension.ts";
 
-export type LogLevel = "debug" | "info" | "warn" | "none"
+export type LogLevel = "debug" | "info" | "warn" | "none";
 
 export type LogEntry =
   | {
-      readonly kind: "request"
-      readonly requestId: string
-      readonly method: string
-      readonly url: string
-      readonly headers?: Readonly<Record<string, string>>
-      readonly bodySize?: number
+      readonly kind: "request";
+      readonly requestId: string;
+      readonly method: string;
+      readonly url: string;
+      readonly headers?: Readonly<Record<string, string>>;
+      readonly bodySize?: number;
     }
   | {
-      readonly kind: "response"
-      readonly requestId: string
-      readonly method: string
-      readonly url: string
-      readonly status: number
-      readonly headers?: Readonly<Record<string, string>>
-      readonly durationMs: number
+      readonly kind: "response";
+      readonly requestId: string;
+      readonly method: string;
+      readonly url: string;
+      readonly status: number;
+      readonly headers?: Readonly<Record<string, string>>;
+      readonly durationMs: number;
     }
   | {
-      readonly kind: "error"
-      readonly requestId: string
-      readonly method: string
-      readonly url: string
-      readonly error: unknown
-      readonly durationMs: number
-    }
+      readonly kind: "error";
+      readonly requestId: string;
+      readonly method: string;
+      readonly url: string;
+      readonly error: unknown;
+      readonly durationMs: number;
+    };
 
 export type LoggingOptions = {
   /** Minimum detail logged. Default `"info"`. */
-  readonly level?: LogLevel
+  readonly level?: LogLevel;
   /**
    * Sink invoked with each `LogEntry`. Defaults to `console.log` for
    * `"request"`/`"response"` entries and `console.error` for `"error"`
    * entries. Runtime-only — ignored by codegen (see module doc).
    */
-  readonly logger?: (entry: LogEntry) => void
+  readonly logger?: (entry: LogEntry) => void;
   /**
    * Given a lowercased header name, return `true` to redact its value as
    * `"[REDACTED]"`. Runtime-only — ignored by codegen (see module doc).
    * Defaults to `DEFAULT_SENSITIVE_HEADERS`.
    */
-  readonly redactHeaders?: (headerName: string) => boolean
-}
+  readonly redactHeaders?: (headerName: string) => boolean;
+};
 
-const DEFAULT_LEVEL: LogLevel = "info"
+const DEFAULT_LEVEL: LogLevel = "info";
 
 /** Case-insensitive default set of headers redacted in logged output. */
 export const DEFAULT_SENSITIVE_HEADERS: ReadonlySet<string> = new Set([
@@ -78,39 +78,48 @@ export const DEFAULT_SENSITIVE_HEADERS: ReadonlySet<string> = new Set([
   "cookie",
   "set-cookie",
   "x-api-key",
-])
+]);
 
 function defaultRedact(headerName: string): boolean {
-  return DEFAULT_SENSITIVE_HEADERS.has(headerName.toLowerCase())
+  return DEFAULT_SENSITIVE_HEADERS.has(headerName.toLowerCase());
 }
 
-function redactedHeaders(headers: Headers, shouldRedact: (name: string) => boolean): Record<string, string> {
-  const out: Record<string, string> = {}
+function redactedHeaders(
+  headers: Headers,
+  shouldRedact: (name: string) => boolean,
+): Record<string, string> {
+  const out: Record<string, string> = {};
   headers.forEach((value, name) => {
-    out[name] = shouldRedact(name) ? "[REDACTED]" : value
-  })
-  return out
+    out[name] = shouldRedact(name) ? "[REDACTED]" : value;
+  });
+  return out;
 }
 
 function defaultLogger(entry: LogEntry): void {
   if (entry.kind === "error") {
-    console.error(`[${entry.requestId}] ${entry.method} ${entry.url} failed after ${entry.durationMs}ms`, entry.error)
-    return
+    console.error(
+      `[${entry.requestId}] ${entry.method} ${entry.url} failed after ${entry.durationMs}ms`,
+      entry.error,
+    );
+    return;
   }
   if (entry.kind === "request") {
-    console.log(`[${entry.requestId}] --> ${entry.method} ${entry.url}`, entry)
-    return
+    console.log(`[${entry.requestId}] --> ${entry.method} ${entry.url}`, entry);
+    return;
   }
-  console.log(`[${entry.requestId}] <-- ${entry.status} ${entry.method} ${entry.url} (${entry.durationMs}ms)`, entry)
+  console.log(
+    `[${entry.requestId}] <-- ${entry.status} ${entry.method} ${entry.url} (${entry.durationMs}ms)`,
+    entry,
+  );
 }
 
 function bodySize(req: Request): number | undefined {
-  const contentLength = req.headers.get("Content-Length")
-  return contentLength !== null ? Number(contentLength) : undefined
+  const contentLength = req.headers.get("Content-Length");
+  return contentLength !== null ? Number(contentLength) : undefined;
 }
 
 function generateRequestId(): string {
-  return Math.random().toString(36).slice(2, 10)
+  return Math.random().toString(36).slice(2, 10);
 }
 
 /**
@@ -123,54 +132,59 @@ function generateRequestId(): string {
  * createClient(node, { baseUrl, extensions: [logging({ level: "info" })] })
  */
 export function logging(options: LoggingOptions = {}): ClientExtension {
-  const level = options.level ?? DEFAULT_LEVEL
-  const log = options.logger ?? defaultLogger
-  const shouldRedact = options.redactHeaders ?? defaultRedact
+  const level = options.level ?? DEFAULT_LEVEL;
+  const log = options.logger ?? defaultLogger;
+  const shouldRedact = options.redactHeaders ?? defaultRedact;
 
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    if (level === "none") return inner(req)
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      if (level === "none") return inner(req);
 
-    const requestId = generateRequestId()
-    const method = req.method
-    const url = req.url
-    const start = performance.now()
+      const requestId = generateRequestId();
+      const method = req.method;
+      const url = req.url;
+      const start = performance.now();
 
-    if (level === "debug" || level === "info") {
-      const size = bodySize(req)
-      log({
-        kind: "request",
-        requestId,
-        method,
-        url,
-        ...(level === "debug"
-          ? { headers: redactedHeaders(req.headers, shouldRedact), ...(size !== undefined ? { bodySize: size } : {}) }
-          : {}),
-      })
-    }
-
-    try {
-      const res = await inner(req)
-      const durationMs = performance.now() - start
       if (level === "debug" || level === "info") {
+        const size = bodySize(req);
         log({
-          kind: "response",
+          kind: "request",
           requestId,
           method,
           url,
-          status: res.status,
-          durationMs,
-          ...(level === "debug" ? { headers: redactedHeaders(res.headers, shouldRedact) } : {}),
-        })
-      } else if (level === "warn" && !res.ok) {
-        log({ kind: "response", requestId, method, url, status: res.status, durationMs })
+          ...(level === "debug"
+            ? {
+                headers: redactedHeaders(req.headers, shouldRedact),
+                ...(size !== undefined ? { bodySize: size } : {}),
+              }
+            : {}),
+        });
       }
-      return res
-    } catch (error) {
-      const durationMs = performance.now() - start
-      log({ kind: "error", requestId, method, url, error, durationMs })
-      throw error
-    }
-  }
+
+      try {
+        const res = await inner(req);
+        const durationMs = performance.now() - start;
+        if (level === "debug" || level === "info") {
+          log({
+            kind: "response",
+            requestId,
+            method,
+            url,
+            status: res.status,
+            durationMs,
+            ...(level === "debug" ? { headers: redactedHeaders(res.headers, shouldRedact) } : {}),
+          });
+        } else if (level === "warn" && !res.ok) {
+          log({ kind: "response", requestId, method, url, status: res.status, durationMs });
+        }
+        return res;
+      } catch (error) {
+        const durationMs = performance.now() - start;
+        log({ kind: "error", requestId, method, url, error, durationMs });
+        throw error;
+      }
+    };
 
   return {
     name: "logging",
@@ -179,7 +193,7 @@ export function logging(options: LoggingOptions = {}): ClientExtension {
       helpers: LOGGING_CODEGEN_HELPERS,
       wrap: (innerExpr) => `__withLogging(${innerExpr}, ${JSON.stringify({ level })})`,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -240,4 +254,4 @@ function __withLogging(inner: typeof fetch, options: __LoggingOptions): typeof f
       throw error
     }
   }) as typeof fetch
-}`.trim()
+}`.trim();

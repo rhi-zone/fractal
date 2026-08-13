@@ -11,7 +11,7 @@
 
 ## The idea
 
-A standalone capability that generates *fabricated* data across an entire
+A standalone capability that generates _fabricated_ data across an entire
 schema graph — not one isolated type at a time, but a whole backend's worth
 of entities — while keeping cross-entity references consistent: if generated
 entity A has a field that is "a reference to entity B," the generated value
@@ -43,11 +43,11 @@ far side of:
   There is no fabricated data anywhere in it; every response is whatever the
   real handler actually computes. It is a signature adapter, not a data
   generator.
-- **This idea** is reading (b): given only a tree's *declared shapes*
+- **This idea** is reading (b): given only a tree's _declared shapes_
   (`SchemaMap`/`TypeRef`s for requests and responses), with no real handler
   behind them at all (or deliberately not exercising the real one — e.g.
   because it would hit a real database, or the handler doesn't exist yet),
-  synthesize plausible sample data and serve *that*. `mocked-fetch-backend.md`
+  synthesize plausible sample data and serve _that_. `mocked-fetch-backend.md`
   named this exact gap explicitly: reading (b) "needs a data-fabrication
   step schema-in/sample-out, which is exactly the general-purpose-mock-
   data-generator shape... not just a wrapper over `createFetch`" — this doc
@@ -64,7 +64,7 @@ adjacent prior art rather than something to duplicate or replace.
 The **new** difficulty this idea introduces that `toDropInFetch` never had
 to face at all: `toDropInFetch` needed no data model, because it never
 generates data — it only forwards to real handlers. This idea's whole job
-*is* generating data, and generating it in a way that stays internally
+_is_ generating data, and generating it in a way that stays internally
 consistent across entities, which is a different kind of problem (schema-
 graph-aware synthesis) than anything already built in this codebase.
 
@@ -77,14 +77,14 @@ assume either way. Verified this session by reading source, not inferred:
 structural/recursive-type marker, not a data-relation concept.**
 `{ kind: "ref"; target: string }` resolves against a `TypeRefDocument`'s
 `defs: Record<string, TypeRef>` (`resolveRef`, index.ts) — it exists so a
-type can refer to another *named type definition* (e.g. a recursive type
+type can refer to another _named type definition_ (e.g. a recursive type
 referring to itself, or shared substructure), the same thing OpenAPI's
-`$ref`/JSON Schema's `$ref` do. It says nothing about *data* identity —
+`$ref`/JSON Schema's `$ref` do. It says nothing about _data_ identity —
 there is no notion anywhere in `TypeKinds` of "this field's runtime value is
 expected to equal another entity's id field." Confirmed by reading
 `childTypeRefs`/`resolveRef`/`walkTypeRef` in full: every mechanism here
-operates on the *type* graph (which shapes reference which other shapes),
-never on an *instance*-level foreign-key-style relationship between two
+operates on the _type_ graph (which shapes reference which other shapes),
+never on an _instance_-level foreign-key-style relationship between two
 separately-generated records.
 
 **`http-api-projector`'s `HttpRoute` (`packages/http-api-projector/src/route.ts`)
@@ -93,7 +93,7 @@ carries no entity-relationship metadata either.** A route's `meta`/
 params, tags, etc.) — nothing that names "this operation's request/response
 schema is keyed on entity X" or relates one operation's schema to another's.
 There is no entity concept above the level of individual request/response
-`TypeRef`s at all; api-tree models *routes*, not a schema-wide entity graph.
+`TypeRef`s at all; api-tree models _routes_, not a schema-wide entity graph.
 
 **One directly relevant, currently-inert precedent: `from-sql.ts` already
 parses real foreign-key constraints, but nothing consumes them.**
@@ -137,7 +137,7 @@ belongs in the core IR** — that stays the user's opt-in choice — but fractal
 could ship "a fully featured toolkit of utilities" for building a fake
 backend on top of whatever a user declares. Separately, they pointed out
 fractal already has newtype/branded-type support usable for database ids,
-and asked whether *that* — rather than a new FK-shaped metadata key — could
+and asked whether _that_ — rather than a new FK-shaped metadata key — could
 double as the relation-detection mechanism: if entity A's id field is typed
 `UserId` (a newtype/brand) and entity B has a field also typed `UserId`,
 does that structural type-match already tell you B references A, with no
@@ -156,7 +156,7 @@ type is represented as an ordinary base-shape `TypeRef` carrying
 extracting a TS type like `type UserId = string & { __brand: "UserId" }` or
 the `unique symbol`-tagged form fractal itself uses for `Uuid`/`Uri`/`Email`
 (`packages/type-ir/src/kinds/semantic-strings.ts:23-56`). Those three names
-specifically get *promoted* to real registered `TypeKinds` (`uuid`, `uri`,
+specifically get _promoted_ to real registered `TypeKinds` (`uuid`, `uri`,
 `email`, subtyped under `string`); every other brand name, including a
 hypothetical `UserId`, falls through to the generic `meta.brand` string with
 **no registry, no uniqueness enforcement, no namespacing** — two unrelated
@@ -175,10 +175,10 @@ and never cross-referenced against `meta.brand` anywhere in the codebase.
 
 **Feasibility of the two-part inference the project owner asked about:**
 
-- *(a) "F is the id, inferred from F's type being a newtype."* Not reliable
+- _(a) "F is the id, inferred from F's type being a newtype."_ Not reliable
   from brand identity alone. `meta.brand` is symmetric — the exact same
   brand string is expected to appear on both an owning entity's id field
-  *and* every other entity's field that references it (that symmetry is the
+  _and_ every other entity's field that references it (that symmetry is the
   whole premise of the matching idea), so nothing in the type itself
   distinguishes "this is the primary identifier" from "this is a borrowed
   reference to someone else's identifier." Telling the two apart needs one
@@ -187,15 +187,15 @@ and never cross-referenced against `meta.brand` anywhere in the codebase.
   `id`) or an explicit marker — the existing SQL-only `meta.primaryKey` key,
   generalized outside the SQL path, is the natural candidate since it
   already means exactly this.
-- *(b) "B relates to A, inferred from B's field type matching A's id
-  field's type."* Not derivable from the IR as it stands today, for the
-  same root reason as (a): nothing marks which entity *owns* a given brand
+- _(b) "B relates to A, inferred from B's field type matching A's id
+  field's type."_ Not derivable from the IR as it stands today, for the
+  same root reason as (a): nothing marks which entity _owns_ a given brand
   as its primary identifier. If both entity A (`id: UserId`) and, say,
   entity C (`createdBy: UserId`) exist, and B has a field typed `UserId`,
   brand-string matching alone cannot tell whether B references A or C —
   ownership isn't information the IR captures anywhere, brand-based or
   otherwise.
-- *(c) Minimal addition that would make it work, and where it hangs.* Given
+- _(c) Minimal addition that would make it work, and where it hangs._ Given
   the IR's existing generic `meta: Record<string, unknown>` bag on every
   `TypeRef` (`index.ts`), the same "conventions over contracts" mechanism
   `meta.references`/`meta.primaryKey` already use, the missing piece is a
@@ -204,7 +204,7 @@ and never cross-referenced against `meta.brand` anywhere in the codebase.
   extractor, whatever) can mark "this field is entity E's primary
   identifier," paired with the field's existing `meta.brand`. Once that one
   marker exists, brand-string equality genuinely does become a usable,
-  low-effort relation-detection mechanism for every *other* field sharing
+  low-effort relation-detection mechanism for every _other_ field sharing
   that brand — no per-relationship FK annotation required, unlike
   `meta.references` which has to be declared on every referencing field
   individually. That is a real reduction in declaration burden compared to
@@ -217,10 +217,10 @@ and never cross-referenced against `meta.brand` anywhere in the codebase.
   relation-modeling becomes mandatory or built into the IR itself.
 
 **Net assessment: newtype/brand matching is a real, feasible mechanism, but
-it is a *refinement* of the declaration question (open question 2), not a
+it is a _refinement_ of the declaration question (open question 2), not a
 replacement for declaring something.** It does not let the generator infer
 relations from zero extra information — that was checked directly and does
-not hold, per (a)/(b) above. What it changes is *how little* has to be
+not hold, per (a)/(b) above. What it changes is _how little_ has to be
 declared: one ownership marker per entity's id field, reusing brand types
 schemas may well already have for other reasons, versus one FK annotation
 per referencing field. Whether that's the toolkit's actual mechanism, versus
@@ -232,8 +232,8 @@ this section narrows the design space, it doesn't close it.
 
 Surveyed for how other ecosystems solve "generate fake data across a schema
 graph while keeping foreign-key-shaped references consistent." The tools
-split cleanly into two families by *where the relation information comes
-from*, which maps directly onto the open question above.
+split cleanly into two families by _where the relation information comes
+from_, which maps directly onto the open question above.
 
 **Family 1 — relations read from a real schema that already has them
 (SQL/ORM schemas with actual FK constraints).**
@@ -271,14 +271,14 @@ of any real schema (closer to this idea's likely shape, since the IR has no
 real FK constraints to read from for non-SQL sources).**
 
 - **[@mswjs/data](https://github.com/mswjs/data)** is the most directly
-  relevant precedent for the *playground backend* use case: an in-memory,
+  relevant precedent for the _playground backend_ use case: an in-memory,
   ORM-inspired data-modeling library meant to pair with MSW request
   handlers. Models are hand-declared with explicit `oneOf()`/`manyOf()`
   relation properties (its own take on belongsTo/hasMany), and the library
   then provides Prisma-like relational querying (`.findFirst`, nested
   `where`, populated relations) over the resulting in-memory store — i.e.
   it does not infer relations from any external schema; the relations
-  *are* the schema, hand-authored specifically for mocking purposes.
+  _are_ the schema, hand-authored specifically for mocking purposes.
 - **[Mirage JS](https://miragejs.com/docs/main-concepts/relationships/)**
   (and its Ember-CLI-Mirage predecessor) is the closest existing analogue to
   "fabricate a whole fake backend with relational integrity, serve it over
@@ -300,7 +300,7 @@ real FK constraints to read from for non-SQL sources).**
   built-in mock mode both generate a single schema's worth of sample data
   well, including semantic hints (`faker:`/`chance:` keyword extensions
   telling the generator "this string field should look like an email/name/
-  etc."), but neither has any concept of a *second* schema's data needing to
+  etc."), but neither has any concept of a _second_ schema's data needing to
   agree with the first's. Confirms that fabricating one entity's shape in
   isolation is the already-solved part of this problem (fractal's IR already
   has semantically-tagged kinds like `uuid`/`email` that a fabricator could
@@ -317,7 +317,7 @@ mocking-specific model (Family 2 — the more likely shape here, and it
 directly parallels the `meta.references`-generalization vs.
 separately-declared-relations fork the IR-verification section above
 already surfaced as open). No surveyed tool infers referential structure
-from an *unconstrained* schema format (bare JSON Schema/OpenAPI/GraphQL SDL)
+from an _unconstrained_ schema format (bare JSON Schema/OpenAPI/GraphQL SDL)
 the way this idea would need to for non-SQL fractal sources — which is
 itself useful negative evidence: if fractal wants relation-aware fabrication
 for e.g. an OpenAPI-sourced tree, some explicit relation-declaration
@@ -330,7 +330,7 @@ share an implementation; laid out here as genuinely separable, per prior
 art landing on different sides of a similar split:
 
 - **Playground backend (use case 1).** Needs: a full in-memory relational
-  data *store* (generate once, keep serving consistent reads/writes across
+  data _store_ (generate once, keep serving consistent reads/writes across
   a session — Mirage's/`@mswjs/data`'s shape), served behind something
   `fetch`-shaped so it can plug into a UI the way `toDropInFetch` already
   plugs a real router in. Naturally long-lived per playground session
@@ -339,7 +339,7 @@ art landing on different sides of a similar split:
   behave — Mirage's model store does this; a one-shot fabrication would
   not).
 - **Runnable doc snippets (use case 2).** Needs: fabricated data that's
-  *reproducible* (the snippet in the doc and the data backing it need to
+  _reproducible_ (the snippet in the doc and the data backing it need to
   match every time a reader runs it — points at drizzle-seed's seeded-PRNG
   determinism as the relevant prior-art property, not at its SQL-specific
   mechanism) but not necessarily long-lived or stateful across requests the
@@ -387,7 +387,7 @@ owner's call, not resolved:
    ids, while the out-of-band option works regardless of how a schema
    types its ids.
 3. **Inference vs. declaration.** Even with a declaration mechanism chosen,
-   should the generator attempt to *infer* likely relations for sources that
+   should the generator attempt to _infer_ likely relations for sources that
    don't declare them at all (e.g. heuristically treating a field literally
    named `authorId` as a probable reference to an `Author` entity's `id`),
    the way none of the surveyed prior art actually does for unconstrained
@@ -400,7 +400,7 @@ owner's call, not resolved:
    the same fallback (i.e. whether cyclic entity references are expected in
    practice for the schemas this would run against) isn't established here.
 5. **Determinism/seeding contract**, particularly for use case 2: does a
-   given doc snippet need the *exact same* fabricated values on every run
+   given doc snippet need the _exact same_ fabricated values on every run
    (a fixed seed baked into the doc build), or merely internally-consistent
    values that can differ run to run? This affects whether doc snippets
    embed a seed as part of their generated output.
@@ -433,7 +433,7 @@ owner's call, not resolved:
   parsing (currently inert; see the IR-verification section above) and
   `meta.primaryKey`, the SQL-scoped precedent the newtype/brand follow-up
   section proposes generalizing.
-- `packages/type-ir/src/sql.ts` — the TypeRef→SQL projector that does *not*
+- `packages/type-ir/src/sql.ts` — the TypeRef→SQL projector that does _not_
   currently read `meta.references` back out; confirms the capture is
   one-way today.
 - `packages/type-ir/src/kinds/semantic-strings.ts` — `uuid`/`email`/etc.

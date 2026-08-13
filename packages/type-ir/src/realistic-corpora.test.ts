@@ -13,23 +13,23 @@
 // data gets, not to lock in a number. Assertions below are limited to
 // structural sanity (finite scores in [0, 1]) plus a `console.log` of the
 // full report so the actual numbers are visible in test output.
-import { describe, expect, test } from "bun:test"
-import { fromJsonCorpus } from "./from-json-corpus.ts"
-import { scoreInference } from "./inference-eval.ts"
-import { realisticCorpora } from "./realistic-corpora.ts"
+import { describe, expect, test } from "bun:test";
+import { fromJsonCorpus } from "./from-json-corpus.ts";
+import { scoreInference } from "./inference-eval.ts";
+import { realisticCorpora } from "./realistic-corpora.ts";
 
 function assertValidReport(score: ReturnType<typeof scoreInference>): void {
-  expect(Number.isFinite(score.overallF1)).toBe(true)
-  expect(score.overallF1).toBeGreaterThanOrEqual(0)
-  expect(score.overallF1).toBeLessThanOrEqual(1)
+  expect(Number.isFinite(score.overallF1)).toBe(true);
+  expect(score.overallF1).toBeGreaterThanOrEqual(0);
+  expect(score.overallF1).toBeLessThanOrEqual(1);
 }
 
 describe("realistic corpora — hand-typed samples scored against hand-authored ground truth", () => {
   for (const corpus of realisticCorpora) {
     test(`${corpus.name}: fromJsonCorpus output scores against ground truth`, () => {
-      const inferred = fromJsonCorpus(corpus.samples)
-      const score = scoreInference(corpus.schema, inferred)
-      assertValidReport(score)
+      const inferred = fromJsonCorpus(corpus.samples);
+      const score = scoreInference(corpus.schema, inferred);
+      assertValidReport(score);
 
       console.log(
         `[realistic-corpora] ${corpus.name} (n=${corpus.samples.length}): ` +
@@ -40,16 +40,16 @@ describe("realistic corpora — hand-typed samples scored against hand-authored 
           `enumMemberFidelity.f1=${score.enumMemberFidelity.f1.toFixed(2)} ` +
           `dictDetection.f1=${score.dictDetection.f1.toFixed(2)} ` +
           `unionFidelity.f1=${score.unionFidelity.f1.toFixed(2)}`,
-      )
-    })
+      );
+    });
   }
 
   test("all three corpora run without throwing and produce a well-formed report", () => {
     for (const corpus of realisticCorpora) {
-      const inferred = fromJsonCorpus(corpus.samples)
-      const score = scoreInference(corpus.schema, inferred)
-      assertValidReport(score)
-      expect(score.fields.length).toBeGreaterThan(0)
+      const inferred = fromJsonCorpus(corpus.samples);
+      const score = scoreInference(corpus.schema, inferred);
+      assertValidReport(score);
+      expect(score.fields.length).toBeGreaterThan(0);
     }
-  })
-})
+  });
+});

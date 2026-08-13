@@ -28,12 +28,12 @@ subscription support over a WebSocket transport, and `createGraphQLClient`/
 ## Usage
 
 ```ts
-import { toSDL } from "@rhi-zone/fractal-graphql-api-projector"
-import { createHttpGraphQLServer } from "@rhi-zone/fractal-graphql-api-projector/presets"
-import { api } from "./tree.ts"
+import { toSDL } from "@rhi-zone/fractal-graphql-api-projector";
+import { createHttpGraphQLServer } from "@rhi-zone/fractal-graphql-api-projector/presets";
+import { api } from "./tree.ts";
 
-const sdl = toSDL(api)
-const server = createHttpGraphQLServer(api)
+const sdl = toSDL(api);
+const server = createHttpGraphQLServer(api);
 ```
 
 ## Install

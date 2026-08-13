@@ -1,4 +1,4 @@
-import { GlobalRegistrator } from "@happy-dom/global-registrator"
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 // Must register the DOM globals before anything below touches `document`/
 // `window` — react-dom/client's `createRoot` needs a real DOM to mount into,
@@ -8,18 +8,18 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator"
 // throws if `.register()` runs twice — guard against whichever test file
 // happens to import (and register) first.
 try {
-  GlobalRegistrator.register()
+  GlobalRegistrator.register();
 } catch {
   // already registered by another test file in this same process
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { describe, expect, test } from "bun:test"
-import { act } from "react"
-import { createRoot } from "react-dom/client"
-import { ApiExplorer } from "./api-explorer.tsx"
-import { ApiExplorerFetchProvider } from "./fetch-context.tsx"
+import { describe, expect, test } from "bun:test";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { ApiExplorer } from "./api-explorer.tsx";
+import { ApiExplorerFetchProvider } from "./fetch-context.tsx";
 
 // ============================================================================
 // Real-verification test: renders <ApiExplorer/> into a real (happy-dom) DOM,
@@ -46,63 +46,63 @@ import { ApiExplorerFetchProvider } from "./fetch-context.tsx"
 // already has its own node_modules) — not at this test file's location.
 // ============================================================================
 
-import { api, op } from "../../api-tree/src/index.ts"
-import { http } from "../../http-api-projector/src/verbs.ts"
-import { createFetch, toDropInFetch } from "../../http-api-projector/src/preset.ts"
+import { api, op } from "../../api-tree/src/index.ts";
+import { http } from "../../http-api-projector/src/verbs.ts";
+import { createFetch, toDropInFetch } from "../../http-api-projector/src/preset.ts";
 
-const books = [{ id: "1", title: "Fractal Reference" }]
+const books = [{ id: "1", title: "Fractal Reference" }];
 
 const tree = api({
   books: api({
     list: op(() => books, http.get),
   }),
-})
+});
 
-const realFetch = toDropInFetch(createFetch(tree))
+const realFetch = toDropInFetch(createFetch(tree));
 
 async function flush(times = 5): Promise<void> {
   await act(async () => {
     for (let i = 0; i < times; i++) {
       // eslint-disable-next-line no-await-in-loop
-      await Promise.resolve()
+      await Promise.resolve();
     }
-  })
+  });
 }
 
 describe("ApiExplorer", () => {
   test("Send issues a real request through the provided fetch and renders the real response", async () => {
-    const container = document.createElement("div")
-    document.body.appendChild(container)
-    const root = createRoot(container)
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
 
     act(() => {
       root.render(
         <ApiExplorerFetchProvider fetch={realFetch}>
           <ApiExplorer method="GET" path="/books/list" responseSchema={{ type: "array" }} />
         </ApiExplorerFetchProvider>,
-      )
-    })
+      );
+    });
 
-    const button = container.querySelector("button")
-    expect(button).not.toBeNull()
-    expect(button?.textContent).toBe("Send")
+    const button = container.querySelector("button");
+    expect(button).not.toBeNull();
+    expect(button?.textContent).toBe("Send");
 
     await act(async () => {
-      button?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
-      await flush()
-    })
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await flush();
+    });
 
-    const responseEl = container.querySelector('[data-testid="api-explorer-response"]')
-    expect(responseEl).not.toBeNull()
-    expect(responseEl?.textContent).toContain("200")
+    const responseEl = container.querySelector('[data-testid="api-explorer-response"]');
+    expect(responseEl).not.toBeNull();
+    expect(responseEl?.textContent).toContain("200");
 
-    const bodyEl = container.querySelector(".api-explorer-response-body")
-    const parsed = JSON.parse(bodyEl?.textContent ?? "null")
-    expect(parsed).toEqual(books)
+    const bodyEl = container.querySelector(".api-explorer-response-body");
+    const parsed = JSON.parse(bodyEl?.textContent ?? "null");
+    expect(parsed).toEqual(books);
 
-    root.unmount()
-    container.remove()
-  })
+    root.unmount();
+    container.remove();
+  });
 
   test("a route with a {param} segment renders one input per param, defaulted into the shown request URL", async () => {
     // Wildcard path params are authored via a tree `fallback` (see
@@ -127,30 +127,30 @@ describe("ApiExplorer", () => {
           },
         },
       ),
-    })
-    const fetchImpl = toDropInFetch(createFetch(echoTree))
+    });
+    const fetchImpl = toDropInFetch(createFetch(echoTree));
 
-    const container = document.createElement("div")
-    document.body.appendChild(container)
-    const root = createRoot(container)
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
 
     act(() => {
       root.render(
         <ApiExplorerFetchProvider fetch={fetchImpl}>
           <ApiExplorer method="GET" path="/items/{id}" responseSchema={{ type: "object" }} />
         </ApiExplorerFetchProvider>,
-      )
-    })
+      );
+    });
 
-    const input = container.querySelector("input")
-    expect(input).not.toBeNull()
-    expect(input?.placeholder).toBe("id")
+    const input = container.querySelector("input");
+    expect(input).not.toBeNull();
+    expect(input?.placeholder).toBe("id");
     // No value entered yet: the empty-param interpolation this test can't
     // simulate typing into is the same `interpolatePath(path, {})` case
     // path-template.test.ts asserts directly ("/books/{id}" -> "/books/").
-    expect(container.querySelector(".api-explorer-path")?.textContent).toBe("/items/")
+    expect(container.querySelector(".api-explorer-path")?.textContent).toBe("/items/");
 
-    root.unmount()
-    container.remove()
-  })
-})
+    root.unmount();
+    container.remove();
+  });
+});

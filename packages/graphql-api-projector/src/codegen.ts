@@ -48,13 +48,19 @@
 //   packages/http-api-projector/src/codegen.ts       — sibling codegen (structural mirror, JSON-Schema flavored)
 //   packages/api-tree/src/tree.ts                    — extractToolTypeRefs (produces the FieldTypeMap this module consumes)
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toTypeScript } from "@rhi-zone/fractal-type-ir/typescript-native"
-import { buildDocument, selectionSetFor } from "./client.ts"
-import { argsFromInput, camelJoin, deriveOperationType, getGraphQLMeta, underscoreJoin } from "./project.ts"
-import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toTypeScript } from "@rhi-zone/fractal-type-ir/typescript-native";
+import { buildDocument, selectionSetFor } from "./client.ts";
+import {
+  argsFromInput,
+  camelJoin,
+  deriveOperationType,
+  getGraphQLMeta,
+  underscoreJoin,
+} from "./project.ts";
+import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts";
 
 // ============================================================================
 // Public API
@@ -62,12 +68,12 @@ import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./projec
 
 export type GraphQLCodegenOptions = {
   /** Underscore-joined tree-path → derived input/output TypeRefs — the same `FieldTypeMap` `projectGraphQL`/`createGraphQLServer`/`createGraphQLClient` accept. Drives argument/return types. */
-  readonly types?: FieldTypeMap
+  readonly types?: FieldTypeMap;
   /** Named type declarations a `ref`-kind output TypeRef may target — needed to expand a `ref` field into a real selection set instead of degrading to `__typename`. Same registry `createGraphQLClient`'s `opts.namedTypes` accepts. */
-  readonly namedTypes?: Readonly<Record<string, TypeRef>>
+  readonly namedTypes?: Readonly<Record<string, TypeRef>>;
   /** Name of the emitted `Client` type and factory return type. Defaults to "Client". */
-  readonly clientName?: string
-}
+  readonly clientName?: string;
+};
 
 /**
  * Generate standalone TypeScript client source from a `Node` tree. The
@@ -83,10 +89,10 @@ export type GraphQLCodegenOptions = {
  * omitted.
  */
 export function generateGraphQLClient(tree: Node, opts: GraphQLCodegenOptions = {}): string {
-  const types = opts.types ?? {}
-  const namedTypes = opts.namedTypes ?? {}
-  const root = buildTree(tree, [], [], types, namedTypes)
-  return render(root, opts.clientName ?? "Client")
+  const types = opts.types ?? {};
+  const namedTypes = opts.namedTypes ?? {};
+  const root = buildTree(tree, [], [], types, namedTypes);
+  return render(root, opts.clientName ?? "Client");
 }
 
 // ============================================================================
@@ -94,27 +100,27 @@ export function generateGraphQLClient(tree: Node, opts: GraphQLCodegenOptions = 
 // ============================================================================
 
 type OperationEntry = {
-  readonly memberName: string
-  readonly baseName: string
-  readonly operationType: OperationType
-  readonly fieldName: string
+  readonly memberName: string;
+  readonly baseName: string;
+  readonly operationType: OperationType;
+  readonly fieldName: string;
   /** Query-nesting path (ancestor tree path, incl. fallback-name segments) — `[]` for flat Mutation/Subscription. */
-  readonly path: readonly string[]
+  readonly path: readonly string[];
   /** Full ordered arg list (captured-fallback first, then declared) — same order `project.ts`'s `buildField`/`buildDispatch` and `client.ts`'s `buildLeaf` use. */
-  readonly args: readonly Arg[]
+  readonly args: readonly Arg[];
   /** Subset of `args` names sourced from an ancestor fallback's closure parameter, not the leaf's own `input`. */
-  readonly capturedNames: ReadonlySet<string>
-  readonly hasInput: boolean
-  readonly inputTypeRef?: TypeRef
-  readonly outputTypeRef?: TypeRef
-  readonly document: string
-}
+  readonly capturedNames: ReadonlySet<string>;
+  readonly hasInput: boolean;
+  readonly inputTypeRef?: TypeRef;
+  readonly outputTypeRef?: TypeRef;
+  readonly document: string;
+};
 
 type ClientTreeNode = {
-  readonly children: Map<string, ClientTreeNode>
-  param?: { readonly name: string; readonly subtree: ClientTreeNode }
-  readonly operations: Map<string, OperationEntry>
-}
+  readonly children: Map<string, ClientTreeNode>;
+  param?: { readonly name: string; readonly subtree: ClientTreeNode };
+  readonly operations: Map<string, OperationEntry>;
+};
 
 /**
  * Walk a `Node` tree into a `ClientTreeNode`, computing each leaf's
@@ -128,18 +134,18 @@ function buildTree(
   types: FieldTypeMap,
   namedTypes: Readonly<Record<string, TypeRef>>,
 ): ClientTreeNode {
-  const out: ClientTreeNode = { children: new Map(), operations: new Map() }
+  const out: ClientTreeNode = { children: new Map(), operations: new Map() };
 
   for (const [key, child] of Object.entries(node.children ?? {})) {
     if (isLeaf(child)) {
-      out.operations.set(key, buildLeafEntry(child, path, key, capturedArgs, types, namedTypes))
+      out.operations.set(key, buildLeafEntry(child, path, key, capturedArgs, types, namedTypes));
     } else {
-      out.children.set(key, buildTree(child, [...path, key], capturedArgs, types, namedTypes))
+      out.children.set(key, buildTree(child, [...path, key], capturedArgs, types, namedTypes));
     }
   }
 
   if (node.fallback !== undefined) {
-    const { name, subtree } = node.fallback
+    const { name, subtree } = node.fallback;
     out.param = {
       name,
       subtree: buildTree(
@@ -149,10 +155,10 @@ function buildTree(
         types,
         namedTypes,
       ),
-    }
+    };
   }
 
-  return out
+  return out;
 }
 
 function buildLeafEntry(
@@ -163,26 +169,30 @@ function buildLeafEntry(
   types: FieldTypeMap,
   namedTypes: Readonly<Record<string, TypeRef>>,
 ): OperationEntry {
-  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
-  const lookupKey = [...path, key].reduce(underscoreJoin, "")
-  const typeInfo = types[lookupKey]
-  const operationType = deriveOperationType(child.meta, typeInfo?.output)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta);
+  const lookupKey = [...path, key].reduce(underscoreJoin, "");
+  const typeInfo = types[lookupKey];
+  const operationType = deriveOperationType(child.meta, typeInfo?.output);
 
-  const declaredArgs = argsFromInput(typeInfo?.input)
-  const declaredNames = new Set(declaredArgs.map((a) => a.name))
+  const declaredArgs = argsFromInput(typeInfo?.input);
+  const declaredNames = new Set(declaredArgs.map((a) => a.name));
   // Same merge order/precedence as project.ts's buildField/buildDispatch and
   // client.ts's buildLeaf: captured (fallback) args first, a declared arg
   // with a colliding name wins.
-  const captured = capturedArgs.filter((a) => !declaredNames.has(a.name))
-  const args = [...captured, ...declaredArgs]
-  const capturedNames = new Set(captured.map((a) => a.name))
+  const captured = capturedArgs.filter((a) => !declaredNames.has(a.name));
+  const args = [...captured, ...declaredArgs];
+  const capturedNames = new Set(captured.map((a) => a.name));
 
   const fieldName =
-    typeof gql.name === "string" ? gql.name : operationType === "query" ? key : [...path, key].reduce(camelJoin, "")
-  const fieldPath = operationType === "query" ? path : []
+    typeof gql.name === "string"
+      ? gql.name
+      : operationType === "query"
+        ? key
+        : [...path, key].reduce(camelJoin, "");
+  const fieldPath = operationType === "query" ? path : [];
 
-  const selection = selectionSetFor(typeInfo?.output, namedTypes)
-  const document = buildDocument(operationType, fieldPath, fieldName, args, selection)
+  const selection = selectionSetFor(typeInfo?.output, namedTypes);
+  const document = buildDocument(operationType, fieldPath, fieldName, args, selection);
 
   return {
     memberName: key,
@@ -193,10 +203,12 @@ function buildLeafEntry(
     args,
     capturedNames,
     hasInput: declaredArgs.length > 0,
-    ...(declaredArgs.length > 0 && typeInfo?.input !== undefined ? { inputTypeRef: typeInfo.input } : {}),
+    ...(declaredArgs.length > 0 && typeInfo?.input !== undefined
+      ? { inputTypeRef: typeInfo.input }
+      : {}),
     ...(typeInfo?.output !== undefined ? { outputTypeRef: typeInfo.output } : {}),
     document,
-  }
+  };
 }
 
 // ============================================================================
@@ -205,12 +217,14 @@ function buildLeafEntry(
 
 /** A valid bare JS identifier, or a quoted string literal key otherwise. */
 function safeKey(key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 
 /** A bare property-access expression, or bracket notation when `key` isn't a valid identifier. */
 function propAccess(obj: string, key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? `${obj}.${key}` : `${obj}[${JSON.stringify(key)}]`
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)
+    ? `${obj}.${key}`
+    : `${obj}[${JSON.stringify(key)}]`;
 }
 
 function pascalCase(part: string): string {
@@ -218,12 +232,12 @@ function pascalCase(part: string): string {
     .split(/[^A-Za-z0-9]+/)
     .filter((s) => s.length > 0)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("")
+    .join("");
 }
 
 /** `"books_add"` -> `"BooksAdd"` — base name for that op's `<Base>Input`/`<Base>Output` and `<Base>Document`. */
 function typeBaseName(lookupKey: string): string {
-  return lookupKey.split("_").map(pascalCase).join("") || "Root"
+  return lookupKey.split("_").map(pascalCase).join("") || "Root";
 }
 
 // ============================================================================
@@ -231,25 +245,27 @@ function typeBaseName(lookupKey: string): string {
 // ============================================================================
 
 function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
-  const nextIndent = indent + "  "
-  const lines: string[] = []
+  const nextIndent = indent + "  ";
+  const lines: string[] = [];
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`)
+    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`);
   }
 
   if (node.param !== undefined) {
-    const { name, subtree } = node.param
-    lines.push(`${nextIndent}readonly ${safeKey(name)}: (${name}: string) => ${nodeTypeLiteral(subtree, nextIndent)}`)
+    const { name, subtree } = node.param;
+    lines.push(
+      `${nextIndent}readonly ${safeKey(name)}: (${name}: string) => ${nodeTypeLiteral(subtree, nextIndent)}`,
+    );
   }
 
   for (const [memberName, entry] of node.operations) {
-    const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown"
-    const sig = entry.hasInput ? `(input: ${entry.baseName}Input)` : `()`
-    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => Promise<${outputType}>`)
+    const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown";
+    const sig = entry.hasInput ? `(input: ${entry.baseName}Input)` : `()`;
+    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => Promise<${outputType}>`);
   }
 
-  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
+  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
 }
 
 // ============================================================================
@@ -258,21 +274,23 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
 // ============================================================================
 
 function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
-  const nextIndent = indent + "  "
-  const lines: string[] = []
+  const nextIndent = indent + "  ";
+  const lines: string[] = [];
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent)},`)
+    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent)},`);
   }
 
   if (node.param !== undefined) {
-    const { name, subtree } = node.param
-    lines.push(`${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent)}),`)
+    const { name, subtree } = node.param;
+    lines.push(
+      `${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent)}),`,
+    );
   }
 
   for (const [memberName, entry] of node.operations) {
-    const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown"
-    const params = entry.hasInput ? `input: ${entry.baseName}Input` : ``
+    const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown";
+    const params = entry.hasInput ? `input: ${entry.baseName}Input` : ``;
     const variablesLit =
       entry.args.length === 0
         ? "{}"
@@ -282,16 +300,16 @@ function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
                 ? `${safeKey(a.name)}: ${a.name}`
                 : `${safeKey(a.name)}: ${propAccess("input", a.name)}`,
             )
-            .join(", ")} }`
-    const pathLit = JSON.stringify(entry.path)
+            .join(", ")} }`;
+    const pathLit = JSON.stringify(entry.path);
     lines.push(
       `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
         `__call(transport, ${entry.baseName}Document, ${variablesLit}, ${pathLit}, ` +
         `${JSON.stringify(entry.fieldName)}, ${JSON.stringify(entry.operationType)}) as Promise<${outputType}>,`,
-    )
+    );
   }
 
-  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
+  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
 }
 
 // ============================================================================
@@ -299,10 +317,10 @@ function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
 // ============================================================================
 
 function collectOperations(node: ClientTreeNode, out: OperationEntry[] = []): OperationEntry[] {
-  for (const entry of node.operations.values()) out.push(entry)
-  for (const child of node.children.values()) collectOperations(child, out)
-  if (node.param !== undefined) collectOperations(node.param.subtree, out)
-  return out
+  for (const entry of node.operations.values()) out.push(entry);
+  for (const child of node.children.values()) collectOperations(child, out);
+  if (node.param !== undefined) collectOperations(node.param.subtree, out);
+  return out;
 }
 
 // ============================================================================
@@ -310,28 +328,28 @@ function collectOperations(node: ClientTreeNode, out: OperationEntry[] = []): Op
 // ============================================================================
 
 function render(root: ClientTreeNode, clientName: string): string {
-  const entries = collectOperations(root)
+  const entries = collectOperations(root);
 
-  const typeDecls: string[] = []
-  const documentDecls: string[] = []
-  const seenBases = new Set<string>()
+  const typeDecls: string[] = [];
+  const documentDecls: string[] = [];
+  const seenBases = new Set<string>();
   for (const entry of entries) {
     // Two distinct leaves could in principle share a base name only if
     // `meta.graphql.name` overrides collide across positions — guard against
     // emitting duplicate declarations (same convention as HTTP codegen).
-    if (seenBases.has(entry.baseName)) continue
-    seenBases.add(entry.baseName)
+    if (seenBases.has(entry.baseName)) continue;
+    seenBases.add(entry.baseName);
     if (entry.hasInput && entry.inputTypeRef !== undefined) {
-      typeDecls.push(`export type ${entry.baseName}Input = ${toTypeScript(entry.inputTypeRef)}`)
+      typeDecls.push(`export type ${entry.baseName}Input = ${toTypeScript(entry.inputTypeRef)}`);
     }
     if (entry.outputTypeRef !== undefined) {
-      typeDecls.push(`export type ${entry.baseName}Output = ${toTypeScript(entry.outputTypeRef)}`)
+      typeDecls.push(`export type ${entry.baseName}Output = ${toTypeScript(entry.outputTypeRef)}`);
     }
-    documentDecls.push(`const ${entry.baseName}Document = ${JSON.stringify(entry.document)}`)
+    documentDecls.push(`const ${entry.baseName}Document = ${JSON.stringify(entry.document)}`);
   }
 
-  const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`
-  const factoryBody = nodeRuntimeLiteral(root, "  ")
+  const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`;
+  const factoryBody = nodeRuntimeLiteral(root, "  ");
 
   return (
     [
@@ -346,7 +364,7 @@ function render(root: ClientTreeNode, clientName: string): string {
         `}`,
       ].join("\n"),
     ].join("\n\n") + "\n"
-  )
+  );
 }
 
 // ============================================================================
@@ -355,7 +373,7 @@ function render(root: ClientTreeNode, clientName: string): string {
 
 const HEADER =
   "// @generated by @rhi-zone/fractal-graphql-api-projector's client codegen — do not edit\n" +
-  "// Standalone: no imports, depends only on the transport function passed to createClient."
+  "// Standalone: no imports, depends only on the transport function passed to createClient.";
 
 const RUNTIME_HELPERS = `
 /** One GraphQL error entry, as \`errors[]\` conventionally carries it. */
@@ -424,4 +442,4 @@ async function __call(
     throw new GraphQLClientError(result.errors)
   }
   return __unwrapData(result.data, path, fieldName, operationType)
-}`.trim()
+}`.trim();

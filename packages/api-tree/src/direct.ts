@@ -26,8 +26,8 @@
 //   packages/http-api-projector/src/client.ts     — the HTTP-backed analogue
 //   packages/http-api-projector/src/route.ts       — defaultDecode (slug-seeding precedent)
 
-import { isLeaf } from "./node.ts"
-import type { Handler, Node } from "./node.ts"
+import { isLeaf } from "./node.ts";
+import type { Handler, Node } from "./node.ts";
 
 // A leaf's callable form (`(input?) => Promise<unknown>`) and a branch's
 // object form are structurally incompatible as a TS union for property
@@ -36,7 +36,7 @@ import type { Handler, Node } from "./node.ts"
 // Callers index into it dynamically; internal builders cast to `AnyApi` at
 // each return site (mirrors `buildClientNode`'s own `as AnyClient` casts).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyApi = Record<string, any>
+export type AnyApi = Record<string, any>;
 
 /**
  * The fully typed shape of `createDirectApi(tree)`, computed recursively
@@ -60,30 +60,36 @@ export type AnyApi = Record<string, any>
  * no real tree node can be both callable and have properties attached. The
  * fallback part intersects with whichever of the two applies.
  */
-export type DirectApi<N extends Node, Slugs extends string = never> =
-  (N extends { readonly handler: infer H extends Handler }
-    ? // Callable part — subtract accumulated slug keys from handler input
-      H extends (input: infer I) => infer R
-      ? keyof Omit<I, Slugs> extends never
-        ? () => Promise<Awaited<R>>
-        : (input: Omit<I, Slugs>) => Promise<Awaited<R>>
-      : H extends () => infer R
-        ? () => Promise<Awaited<R>>
-        : never
-    : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-      ? // Children part — pass slugs through
-        { readonly [K in keyof C]: DirectApi<C[K], Slugs> }
-      : unknown)
+export type DirectApi<N extends Node, Slugs extends string = never> = (N extends {
+  readonly handler: infer H extends Handler;
+}
+  ? // Callable part — subtract accumulated slug keys from handler input
+    H extends (input: infer I) => infer R
+    ? keyof Omit<I, Slugs> extends never
+      ? () => Promise<Awaited<R>>
+      : (input: Omit<I, Slugs>) => Promise<Awaited<R>>
+    : H extends () => infer R
+      ? () => Promise<Awaited<R>>
+      : never
+  : N extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+    ? // Children part — pass slugs through
+      { readonly [K in keyof C]: DirectApi<C[K], Slugs> }
+    : unknown) &
   // Fallback part — accumulate the fallback name into Slugs for the subtree
-  & (N extends { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
+  (N extends {
+    readonly fallback: {
+      readonly name: infer Name extends string;
+      readonly subtree: infer S extends Node;
+    };
+  }
     ? { readonly [K in Name]: (slugValue: string) => DirectApi<S, Slugs | Name> }
-    : unknown)
+    : unknown);
 
-type Slugs = Readonly<Record<string, string>>
+type Slugs = Readonly<Record<string, string>>;
 
 /** True for a plain mergeable object — not null, not an array. */
 function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /**
@@ -94,41 +100,41 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  * non-object inputs, which a slug bag can't merge into).
  */
 function withSlugs(slugs: Slugs, input: unknown): unknown {
-  if (Object.keys(slugs).length === 0) return input
-  if (input === undefined) return { ...slugs }
-  if (isPlainObject(input)) return { ...slugs, ...input }
-  return input
+  if (Object.keys(slugs).length === 0) return input;
+  if (input === undefined) return { ...slugs };
+  if (isPlainObject(input)) return { ...slugs, ...input };
+  return input;
 }
 
 /** Wrap a leaf's handler as an async callable: `(input?) => Promise<unknown>`. */
 function makeCaller(node: Node, slugs: Slugs): (input?: unknown) => Promise<unknown> {
   return async (input?: unknown): Promise<unknown> => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return await node.handler!(withSlugs(slugs, input))
-  }
+    return await node.handler!(withSlugs(slugs, input));
+  };
 }
 
 function buildApi(tree: Node, slugs: Slugs): AnyApi {
-  const hasChildren = tree.children !== undefined && Object.keys(tree.children).length > 0
-  const hasFallback = tree.fallback !== undefined
+  const hasChildren = tree.children !== undefined && Object.keys(tree.children).length > 0;
+  const hasFallback = tree.fallback !== undefined;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const base: any = isLeaf(tree) ? makeCaller(tree, slugs) : {}
+  const base: any = isLeaf(tree) ? makeCaller(tree, slugs) : {};
 
   if (hasChildren) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     for (const [key, child] of Object.entries(tree.children!)) {
-      base[key] = buildApi(child, slugs)
+      base[key] = buildApi(child, slugs);
     }
   }
 
   if (hasFallback) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const { name, subtree } = tree.fallback!
-    base[name] = (slugValue: string): AnyApi => buildApi(subtree, { ...slugs, [name]: slugValue })
+    const { name, subtree } = tree.fallback!;
+    base[name] = (slugValue: string): AnyApi => buildApi(subtree, { ...slugs, [name]: slugValue });
   }
 
-  return base as AnyApi
+  return base as AnyApi;
 }
 
 /**
@@ -145,5 +151,5 @@ function buildApi(tree: Node, slugs: Slugs): AnyApi {
  *   collapses to zero args.
  */
 export function createDirectApi<N extends Node>(tree: N): DirectApi<N> {
-  return buildApi(tree, {}) as DirectApi<N>
+  return buildApi(tree, {}) as DirectApi<N>;
 }

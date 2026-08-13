@@ -1,5 +1,5 @@
-import { type TypeRef, type TypeShape } from "@rhi-zone/fractal-type-ir"
-import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts"
+import { type TypeRef, type TypeShape } from "@rhi-zone/fractal-type-ir";
+import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts";
 
 // ffi-ir -> Melange (https://melange.re) `external`-declaration projector.
 //
@@ -95,28 +95,80 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 // mirrors rescript-native.ts's own RESERVED set, adjusted for OCaml's
 // (slightly different) keyword list.
 const RESERVED = new Set([
-  "and", "as", "asr", "assert", "begin", "class", "constraint", "do", "done", "downto", "else",
-  "end", "exception", "external", "false", "for", "fun", "function", "functor", "if", "in",
-  "include", "inherit", "initializer", "land", "lazy", "let", "lor", "lsl", "lsr", "lxor", "match",
-  "method", "mod", "module", "mutable", "new", "nonrec", "object", "of", "open", "or", "private",
-  "rec", "sig", "struct", "then", "to", "true", "try", "type", "val", "virtual", "when", "while",
+  "and",
+  "as",
+  "asr",
+  "assert",
+  "begin",
+  "class",
+  "constraint",
+  "do",
+  "done",
+  "downto",
+  "else",
+  "end",
+  "exception",
+  "external",
+  "false",
+  "for",
+  "fun",
+  "function",
+  "functor",
+  "if",
+  "in",
+  "include",
+  "inherit",
+  "initializer",
+  "land",
+  "lazy",
+  "let",
+  "lor",
+  "lsl",
+  "lsr",
+  "lxor",
+  "match",
+  "method",
+  "mod",
+  "module",
+  "mutable",
+  "new",
+  "nonrec",
+  "object",
+  "of",
+  "open",
+  "or",
+  "private",
+  "rec",
+  "sig",
+  "struct",
+  "then",
+  "to",
+  "true",
+  "try",
+  "type",
+  "val",
+  "virtual",
+  "when",
+  "while",
   "with",
-])
+]);
 
 /** Valid-identifier check + sanitized fallback for an OCaml value/label
  * name (must start lowercase-or-underscore) — mirrors rescript-native.ts's
  * `sanitizeLabel`/`fieldLabel` pair, since OCaml's identifier-start rule is
  * the same as ReScript's. */
 function sanitizeLower(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_")
-  const lowered = /^[A-Z]/.test(cleaned) ? cleaned.charAt(0).toLowerCase() + cleaned.slice(1) : cleaned
-  const prefixed = /^[a-z_]/.test(lowered) ? lowered : `_${lowered}`
-  return prefixed || "_"
+  const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_");
+  const lowered = /^[A-Z]/.test(cleaned)
+    ? cleaned.charAt(0).toLowerCase() + cleaned.slice(1)
+    : cleaned;
+  const prefixed = /^[a-z_]/.test(lowered) ? lowered : `_${lowered}`;
+  return prefixed || "_";
 }
 
 function ocamlLabel(name: string): string {
-  const label = sanitizeLower(name)
-  return RESERVED.has(label) ? `${label}_` : label
+  const label = sanitizeLower(name);
+  return RESERVED.has(label) ? `${label}_` : label;
 }
 
 // `@rhi-zone/fractal-type-ir/codegen-helpers` is an internal (unexported)
@@ -132,18 +184,18 @@ function splitWords(name: string): string[] {
     .replace(/[_\-\s]+/g, " ")
     .trim()
     .split(" ")
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
 function toPascalCaseFromWords(name: string): string {
   return splitWords(name)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join("")
+    .join("");
 }
 
 function toCamelCaseFromWords(name: string): string {
-  const pascal = toPascalCaseFromWords(name)
-  return pascal.length === 0 ? pascal : pascal.charAt(0).toLowerCase() + pascal.slice(1)
+  const pascal = toPascalCaseFromWords(name);
+  return pascal.length === 0 ? pascal : pascal.charAt(0).toLowerCase() + pascal.slice(1);
 }
 
 // ============================================================================
@@ -154,55 +206,57 @@ function toCamelCaseFromWords(name: string): string {
 // ============================================================================
 
 interface Ctx {
-  decls: string[]
-  used: Set<string>
-  names: Map<TypeRef, string>
+  decls: string[];
+  used: Set<string>;
+  names: Map<TypeRef, string>;
 }
 
 function newCtx(): Ctx {
-  return { decls: [], used: new Set(), names: new Map() }
+  return { decls: [], used: new Set(), names: new Map() };
 }
 
 function freshName(ctx: Ctx, hint: string): string {
-  const base = toCamelCaseFromWords(hint) || "anonymous"
+  const base = toCamelCaseFromWords(hint) || "anonymous";
   if (!ctx.used.has(base)) {
-    ctx.used.add(base)
-    return base
+    ctx.used.add(base);
+    return base;
   }
-  let n = 2
-  while (ctx.used.has(`${base}${n}`)) n++
-  const name = `${base}${n}`
-  ctx.used.add(name)
-  return name
+  let n = 2;
+  while (ctx.used.has(`${base}${n}`)) n++;
+  const name = `${base}${n}`;
+  ctx.used.add(name);
+  return name;
 }
 
 function hoistedName(ctx: Ctx, ref: TypeRef, nameHint: string): string {
-  const cached = ctx.names.get(ref)
-  if (cached !== undefined) return cached
-  const name = freshName(ctx, nameHint)
-  ctx.names.set(ref, name)
-  ctx.decls.push(generateNamedType(ref, name, ctx))
-  return name
+  const cached = ctx.names.get(ref);
+  if (cached !== undefined) return cached;
+  const name = freshName(ctx, nameHint);
+  ctx.names.set(ref, name);
+  ctx.decls.push(generateNamedType(ref, name, ctx));
+  return name;
 }
 
 function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
-  const shape = ref.shape
+  const shape = ref.shape;
   if (shape.kind === "object") {
-    const s = shape as TypeShape & { kind: "object" }
+    const s = shape as TypeShape & { kind: "object" };
     const fields = Object.entries(s.fields).map(([fieldName, fieldRef]) => {
-      const label = ocamlLabel(fieldName)
-      const fieldType = melangeType(fieldRef, ctx, `${name}_${fieldName}`)
-      const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-      return `  ${label} : ${optional ? `${fieldType} option` : fieldType};`
-    })
-    return [`type ${name} = {`, ...fields, "}"].join("\n")
+      const label = ocamlLabel(fieldName);
+      const fieldType = melangeType(fieldRef, ctx, `${name}_${fieldName}`);
+      const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+      return `  ${label} : ${optional ? `${fieldType} option` : fieldType};`;
+    });
+    return [`type ${name} = {`, ...fields, "}"].join("\n");
   }
   if (shape.kind === "enum") {
-    const s = shape as TypeShape & { kind: "enum" }
-    const ctors = s.members.map((m) => `  | ${toPascalCaseFromWords(m)}`)
-    return [`type ${name} =`, ...ctors].join("\n")
+    const s = shape as TypeShape & { kind: "enum" };
+    const ctors = s.members.map((m) => `  | ${toPascalCaseFromWords(m)}`);
+    return [`type ${name} =`, ...ctors].join("\n");
   }
-  throw new Error(`melange.ts: cannot hoist type-ir kind "${shape.kind}" — outside this file's minimal data-shape subset`)
+  throw new Error(
+    `melange.ts: cannot hoist type-ir kind "${shape.kind}" — outside this file's minimal data-shape subset`,
+  );
 }
 
 // ============================================================================
@@ -217,29 +271,31 @@ const PRIMITIVES: Readonly<Record<string, string>> = {
   string: "string",
   null: "unit",
   void: "unit",
-}
+};
 
 function melangeType(ref: TypeRef, ctx: Ctx, nameHint: string): string {
-  const shape = ref.shape
-  if (shape.kind in PRIMITIVES) return PRIMITIVES[shape.kind]!
+  const shape = ref.shape;
+  if (shape.kind in PRIMITIVES) return PRIMITIVES[shape.kind]!;
   if (shape.kind === "array") {
-    const s = shape as TypeShape & { kind: "array" }
-    return `${melangeType(s.element, ctx, `${nameHint}Item`)} array`
+    const s = shape as TypeShape & { kind: "array" };
+    return `${melangeType(s.element, ctx, `${nameHint}Item`)} array`;
   }
   if (shape.kind === "ref") {
-    const s = shape as TypeShape & { kind: "ref" }
+    const s = shape as TypeShape & { kind: "ref" };
     // Convention (see index.ts's own doc comment on `resourceRef`): a `ref`
     // TypeRef carrying `meta.ownership.kind === "resource"` or wrapped by
     // `withOwnership(..., ownership.opaqueHandle(...))` names a resource
     // declared elsewhere in the enclosing module — `buildResource` below
     // generates that resource as its own OCaml module with an abstract
     // `type t`, so a reference to it renders as `<ResourceModule>.t`.
-    return `${toPascalCaseFromWords(s.target)}.t`
+    return `${toPascalCaseFromWords(s.target)}.t`;
   }
   if (shape.kind === "object" || shape.kind === "enum") {
-    return hoistedName(ctx, ref, nameHint)
+    return hoistedName(ctx, ref, nameHint);
   }
-  throw new Error(`melange.ts: unsupported type-ir kind "${shape.kind}" — outside this file's minimal data-shape subset`)
+  throw new Error(
+    `melange.ts: unsupported type-ir kind "${shape.kind}" — outside this file's minimal data-shape subset`,
+  );
 }
 
 /** Renders one parameter's Melange type, applying `option` for
@@ -247,8 +303,8 @@ function melangeType(ref: TypeRef, ctx: Ctx, nameHint: string): string {
  * projector (wasm-bindgen.ts, wit.ts) already applies at parameter/return
  * position. */
 function paramType(ref: TypeRef, ctx: Ctx, nameHint: string): string {
-  const base = melangeType(ref, ctx, nameHint)
-  return ref.meta.optional === true || ref.meta.nullable === true ? `${base} option` : base
+  const base = melangeType(ref, ctx, nameHint);
+  return ref.meta.optional === true || ref.meta.nullable === true ? `${base} option` : base;
 }
 
 // ============================================================================
@@ -265,8 +321,8 @@ function paramType(ref: TypeRef, ctx: Ctx, nameHint: string): string {
  * TypeRef's discipline, it doesn't transform.
  */
 function requireSupportedOwnership(ref: TypeRef, where: string): void {
-  const discipline = ref.meta.ownership as { readonly kind: string } | undefined
-  if (discipline === undefined) return
+  const discipline = ref.meta.ownership as { readonly kind: string } | undefined;
+  if (discipline === undefined) return;
   if (discipline.kind === "refcount" || discipline.kind === "resource") {
     throw new Error(
       `toMelange: unsupported ownership discipline "${discipline.kind}" for the Melange/JS target at ${where} — ` +
@@ -276,7 +332,7 @@ function requireSupportedOwnership(ref: TypeRef, where: string): void {
           : "no host JS/Melange runtime exists to enforce WIT-style lend-count-and-trap semantics") +
         '. Melange/JS in this projector implements only "copy" and "opaque-handle" — project this value to a target ' +
         "that natively supports this discipline instead (C for opaque-handle+free-fn done manually, WIT for resource+own/borrow).",
-    )
+    );
   }
 }
 
@@ -285,7 +341,7 @@ function requireSupportedOwnership(ref: TypeRef, where: string): void {
 // ============================================================================
 
 function docComment(meta: Readonly<Record<string, unknown>>): string {
-  return typeof meta.description === "string" ? `(** ${meta.description} *)\n` : ""
+  return typeof meta.description === "string" ? `(** ${meta.description} *)\n` : "";
 }
 
 /**
@@ -305,16 +361,17 @@ function buildFunction(
   ctx: Ctx,
   jsModule: string | undefined,
 ): string {
-  for (const p of shape.params) requireSupportedOwnership(p.type, `parameter "${p.name}"`)
-  requireSupportedOwnership(shape.returnType, "return type")
+  for (const p of shape.params) requireSupportedOwnership(p.type, `parameter "${p.name}"`);
+  requireSupportedOwnership(shape.returnType, "return type");
 
-  const label = ocamlLabel(name)
-  const paramTypes = shape.params.map((p) => paramType(p.type, ctx, `${name}_${p.name}`))
-  const returnType = paramType(shape.returnType, ctx, `${name}Result`)
-  const arrowChain = [...paramTypes, returnType.length > 0 ? returnType : "unit"]
-  const signature = arrowChain.length === 1 ? `unit -> ${arrowChain[0]}` : arrowChain.join(" -> ")
-  const attr = jsModule === undefined ? "[@@mel.val]" : `[@@mel.module ${JSON.stringify(jsModule)}]`
-  return `${docComment(meta)}external ${label} : ${signature} = ${JSON.stringify(name)} ${attr}`
+  const label = ocamlLabel(name);
+  const paramTypes = shape.params.map((p) => paramType(p.type, ctx, `${name}_${p.name}`));
+  const returnType = paramType(shape.returnType, ctx, `${name}Result`);
+  const arrowChain = [...paramTypes, returnType.length > 0 ? returnType : "unit"];
+  const signature = arrowChain.length === 1 ? `unit -> ${arrowChain[0]}` : arrowChain.join(" -> ");
+  const attr =
+    jsModule === undefined ? "[@@mel.val]" : `[@@mel.module ${JSON.stringify(jsModule)}]`;
+  return `${docComment(meta)}external ${label} : ${signature} = ${JSON.stringify(name)} ${attr}`;
 }
 
 /**
@@ -334,14 +391,14 @@ function buildMethod(
   ctx: Ctx,
   receiverType: string,
 ): string {
-  for (const p of shape.params) requireSupportedOwnership(p.type, `parameter "${p.name}"`)
-  requireSupportedOwnership(shape.returnType, "return type")
+  for (const p of shape.params) requireSupportedOwnership(p.type, `parameter "${p.name}"`);
+  requireSupportedOwnership(shape.returnType, "return type");
 
-  const label = ocamlLabel(name)
-  const paramTypes = shape.params.map((p) => paramType(p.type, ctx, `${name}_${p.name}`))
-  const returnType = paramType(shape.returnType, ctx, `${name}Result`)
-  const arrowChain = [receiverType, ...paramTypes, returnType]
-  return `${docComment(meta)}external ${label} : ${arrowChain.join(" -> ")} = ${JSON.stringify(name)} [@@mel.send]`
+  const label = ocamlLabel(name);
+  const paramTypes = shape.params.map((p) => paramType(p.type, ctx, `${name}_${p.name}`));
+  const returnType = paramType(shape.returnType, ctx, `${name}Result`);
+  const arrowChain = [receiverType, ...paramTypes, returnType];
+  return `${docComment(meta)}external ${label} : ${arrowChain.join(" -> ")} = ${JSON.stringify(name)} [@@mel.send]`;
 }
 
 // ============================================================================
@@ -364,43 +421,61 @@ function buildMethod(
  * emit no extra free-function binding — nothing to add beyond the abstract
  * type and its methods).
  */
-function buildResource(name: string, shape: FfiShape & { kind: "resource" }, meta: Readonly<Record<string, unknown>>, ctx: Ctx): string {
-  const discipline = (meta.ownership as { readonly kind: string; readonly freeFn?: string } | undefined)
-  if (discipline !== undefined && (discipline.kind === "refcount" || discipline.kind === "resource")) {
+function buildResource(
+  name: string,
+  shape: FfiShape & { kind: "resource" },
+  meta: Readonly<Record<string, unknown>>,
+  ctx: Ctx,
+): string {
+  const discipline = meta.ownership as
+    | { readonly kind: string; readonly freeFn?: string }
+    | undefined;
+  if (
+    discipline !== undefined &&
+    (discipline.kind === "refcount" || discipline.kind === "resource")
+  ) {
     throw new Error(
       `toMelange: unsupported ownership discipline "${discipline.kind}" for the Melange/JS target on resource "${name}" — ` +
         'Melange/JS in this projector implements only "copy" and "opaque-handle" for resource declarations (see the file-level doc comment)',
-    )
+    );
   }
 
-  const moduleName = toPascalCaseFromWords(name)
-  const description = docComment(meta)
-  const methods = Object.entries(shape.methods).map(([methodName, methodRef]) => buildResourceMethod(methodName, methodRef, ctx))
+  const moduleName = toPascalCaseFromWords(name);
+  const description = docComment(meta);
+  const methods = Object.entries(shape.methods).map(([methodName, methodRef]) =>
+    buildResourceMethod(methodName, methodRef, ctx),
+  );
 
-  const freeFn = discipline?.kind === "opaque-handle" ? discipline.freeFn : undefined
+  const freeFn = discipline?.kind === "opaque-handle" ? discipline.freeFn : undefined;
   const freeBinding =
     freeFn === undefined
       ? []
-      : [`external ${ocamlLabel(freeFn)} : t -> unit = ${JSON.stringify(freeFn)} [@@mel.send]`]
+      : [`external ${ocamlLabel(freeFn)} : t -> unit = ${JSON.stringify(freeFn)} [@@mel.send]`];
 
-  const body = ["type t", ...freeBinding, ...methods].join("\n\n")
-  return [`${description}module ${moduleName} = struct`, indent2(body), "end"].join("\n")
+  const body = ["type t", ...freeBinding, ...methods].join("\n\n");
+  return [`${description}module ${moduleName} = struct`, indent2(body), "end"].join("\n");
 }
 
 function buildResourceMethod(methodName: string, methodRef: FfiRef, ctx: Ctx): string {
-  const kind = methodRef.shape.kind
+  const kind = methodRef.shape.kind;
   if (kind !== "method" && kind !== "function") {
-    throw new Error(`toMelange: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`)
+    throw new Error(
+      `toMelange: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`,
+    );
   }
-  const shape = methodRef.shape as FfiShape & { kind: "method"; params: readonly FfiParam[]; returnType: TypeRef }
-  return buildMethod(methodName, { ...shape, kind: "method" }, methodRef.meta, ctx, "t")
+  const shape = methodRef.shape as FfiShape & {
+    kind: "method";
+    params: readonly FfiParam[];
+    returnType: TypeRef;
+  };
+  return buildMethod(methodName, { ...shape, kind: "method" }, methodRef.meta, ctx, "t");
 }
 
 function indent2(block: string, prefix = "  "): string {
   return block
     .split("\n")
     .map((line) => (line.length === 0 ? line : `${prefix}${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 // ============================================================================
@@ -418,13 +493,15 @@ function indent2(block: string, prefix = "  "): string {
  * runtime import behind it.
  */
 function buildModule(name: string, shape: FfiShape & { kind: "module" }, ctx: Ctx): string {
-  const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) => renderFfi(resRef, resName, ctx))
+  const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) =>
+    renderFfi(resRef, resName, ctx),
+  );
   const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) => {
-    const fnShape = fnRef.shape as FfiShape & { kind: "function" }
-    return buildFunction(fnName, fnShape, fnRef.meta, ctx, name)
-  })
-  const body = [...resourceDecls, ...functionDecls].join("\n\n")
-  return [`module ${toPascalCaseFromWords(name)} = struct`, indent2(body), "end"].join("\n")
+    const fnShape = fnRef.shape as FfiShape & { kind: "function" };
+    return buildFunction(fnName, fnShape, fnRef.meta, ctx, name);
+  });
+  const body = [...resourceDecls, ...functionDecls].join("\n\n");
+  return [`module ${toPascalCaseFromWords(name)} = struct`, indent2(body), "end"].join("\n");
 }
 
 // ============================================================================
@@ -432,7 +509,7 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }, ctx: Ct
 // ============================================================================
 
 function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
+  return kind === target || ancestors(kind).includes(target);
 }
 
 /** Dispatch shared by `toMelangeFfi` (which additionally prepends hoisted
@@ -440,25 +517,39 @@ function isA(kind: string, target: string): boolean {
  * one `ctx` across its nested resources/functions so hoisted names are
  * collected once for the whole module rather than duplicated per member). */
 function renderFfi(ref: FfiRef, name: string, ctx: Ctx): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   if (kind === "function") {
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta, ctx, undefined)
+    return buildFunction(
+      name,
+      ref.shape as FfiShape & { kind: "function" },
+      ref.meta,
+      ctx,
+      undefined,
+    );
   }
   if (kind === "method") {
     throw new Error(
       `toMelangeFfi: a top-level "method" needs its receiver's resource type — call this via a "resource"'s methods map instead`,
-    )
+    );
   }
   if (kind === "resource") {
-    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta, ctx)
+    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta, ctx);
   }
   if (kind === "module") {
-    return buildModule(name, ref.shape as FfiShape & { kind: "module" }, ctx)
+    return buildModule(name, ref.shape as FfiShape & { kind: "module" }, ctx);
   }
   if (isA(kind, "function")) {
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta, ctx, undefined)
+    return buildFunction(
+      name,
+      ref.shape as FfiShape & { kind: "function" },
+      ref.meta,
+      ctx,
+      undefined,
+    );
   }
-  throw new Error(`toMelangeFfi: unhandled ffi-ir kind "${kind}" (no handler and no known ancestor)`)
+  throw new Error(
+    `toMelangeFfi: unhandled ffi-ir kind "${kind}" (no handler and no known ancestor)`,
+  );
 }
 
 /**
@@ -473,9 +564,9 @@ export function toMelangeFfi(ref: FfiRef, name?: string): string {
   if (name === undefined) {
     throw new Error(
       `toMelangeFfi: "${ref.shape.kind}" requires a name — Melange externals/modules are named declarations, not anonymous inline types`,
-    )
+    );
   }
-  const ctx = newCtx()
-  const rendered = renderFfi(ref, name, ctx)
-  return ctx.decls.length === 0 ? rendered : [...ctx.decls, rendered].join("\n\n")
+  const ctx = newCtx();
+  const rendered = renderFfi(ref, name, ctx);
+  return ctx.decls.length === 0 ? rendered : [...ctx.decls, rendered].join("\n\n");
 }

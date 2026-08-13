@@ -1,31 +1,31 @@
-import { createMemo, createSignal, type Component } from "solid-js"
-import Editor from "./Editor.tsx"
-import { convert } from "./convert.ts"
-import { inputFormats, outputFormats, inputFormatById, outputFormatById } from "./formats.ts"
+import { createMemo, createSignal, type Component } from "solid-js";
+import Editor from "./Editor.tsx";
+import { convert } from "./convert.ts";
+import { inputFormats, outputFormats, inputFormatById, outputFormatById } from "./formats.ts";
 
 const App: Component = () => {
-  const [inputFormatId, setInputFormatId] = createSignal(inputFormats[0]!.id)
-  const [outputFormatId, setOutputFormatId] = createSignal(outputFormats[0]!.id)
-  const [source, setSource] = createSignal(inputFormats[0]!.sample ?? "")
+  const [inputFormatId, setInputFormatId] = createSignal(inputFormats[0]!.id);
+  const [outputFormatId, setOutputFormatId] = createSignal(outputFormats[0]!.id);
+  const [source, setSource] = createSignal(inputFormats[0]!.sample ?? "");
 
-  const inputFormat = createMemo(() => inputFormatById(inputFormatId())!)
-  const outputFormat = createMemo(() => outputFormatById(outputFormatId())!)
+  const inputFormat = createMemo(() => inputFormatById(inputFormatId())!);
+  const outputFormat = createMemo(() => outputFormatById(outputFormatId())!);
 
   const result = createMemo<{ output: string; error: string | undefined }>(() => {
     try {
-      return { output: convert(inputFormatId(), outputFormatId(), source()), error: undefined }
+      return { output: convert(inputFormatId(), outputFormatId(), source()), error: undefined };
     } catch (err) {
-      return { output: "", error: err instanceof Error ? err.message : String(err) }
+      return { output: "", error: err instanceof Error ? err.message : String(err) };
     }
-  })
+  });
 
   function onInputFormatChange(id: string): void {
-    setInputFormatId(id)
+    setInputFormatId(id);
     // Loading a fresh sample on format switch is the common case (exploring
     // what each format looks like); a user who's already typed real content
     // into the pane keeps it — only an empty/untouched buffer gets replaced.
     if (source().trim().length === 0) {
-      setSource(inputFormatById(id)?.sample ?? "")
+      setSource(inputFormatById(id)?.sample ?? "");
     }
   }
 
@@ -73,7 +73,7 @@ const App: Component = () => {
         </section>
       </main>
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;

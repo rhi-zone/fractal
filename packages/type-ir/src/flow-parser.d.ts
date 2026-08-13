@@ -9,21 +9,24 @@
 // declaration attempting to model flow-parser's full ESTree-ish output shape.
 declare module "flow-parser" {
   export interface FlowParserOptions {
-    readonly babel?: boolean
-    readonly allowReturnOutsideFunction?: boolean
-    readonly assertOperator?: boolean
-    readonly flow?: "all" | "detect"
-    readonly enableExperimentalComponentSyntax?: boolean
-    readonly enableExperimentalFlowMatchSyntax?: boolean
-    readonly enableExperimentalFlowRecordSyntax?: boolean
-    readonly reactRuntimeTarget?: "18" | "19"
-    readonly sourceFilename?: string | null
-    readonly sourceType?: "module" | "script" | "unambiguous"
-    readonly throwOnParseErrors?: boolean
-    readonly tokens?: boolean
-    readonly types?: boolean
-    readonly transformOptions?: Record<string, unknown>
+    readonly babel?: boolean;
+    readonly allowReturnOutsideFunction?: boolean;
+    readonly assertOperator?: boolean;
+    readonly flow?: "all" | "detect";
+    readonly enableExperimentalComponentSyntax?: boolean;
+    readonly enableExperimentalFlowMatchSyntax?: boolean;
+    readonly enableExperimentalFlowRecordSyntax?: boolean;
+    readonly reactRuntimeTarget?: "18" | "19";
+    readonly sourceFilename?: string | null;
+    readonly sourceType?: "module" | "script" | "unambiguous";
+    readonly throwOnParseErrors?: boolean;
+    readonly tokens?: boolean;
+    readonly types?: boolean;
+    readonly transformOptions?: Record<string, unknown>;
   }
 
-  export function parse(code: string, options?: FlowParserOptions): { readonly type: "Program"; readonly body: readonly unknown[] }
+  export function parse(
+    code: string,
+    options?: FlowParserOptions,
+  ): { readonly type: "Program"; readonly body: readonly unknown[] };
 }

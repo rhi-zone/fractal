@@ -1,10 +1,10 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 
 // JSON Schema draft-07: https://json-schema.org/draft-07/json-schema-release-notes
 // Differences from draft 2020-12 handled below: tuples (items array + additionalItems),
 // $ref target (#/definitions/...), and never (boolean `false` schema, since draft-07
 // permits boolean schemas).
-export type JsonSchema07 = Record<string, unknown>
+export type JsonSchema07 = Record<string, unknown>;
 
 const passthroughKeys = [
   "minimum",
@@ -22,33 +22,37 @@ const passthroughKeys = [
   // in draft-06. (draft-04 has neither — see json-schema-04.ts.)
   "readOnly",
   "writeOnly",
-] as const
+] as const;
 
-function withMeta(schema: JsonSchema07, meta: Readonly<Record<string, unknown>>, complex: boolean): JsonSchema07 {
-  let result = schema
+function withMeta(
+  schema: JsonSchema07,
+  meta: Readonly<Record<string, unknown>>,
+  complex: boolean,
+): JsonSchema07 {
+  let result = schema;
 
   if (meta.nullable === true) {
     if (complex) {
-      result = { anyOf: [result, { type: "null" }] }
+      result = { anyOf: [result, { type: "null" }] };
     } else if (typeof result.type === "string") {
-      result = { ...result, type: [result.type, "null"] }
+      result = { ...result, type: [result.type, "null"] };
     } else {
-      result = { anyOf: [result, { type: "null" }] }
+      result = { anyOf: [result, { type: "null" }] };
     }
   }
 
-  if (typeof meta.description === "string") result = { ...result, description: meta.description }
-  if (meta.deprecated === true) result = { ...result, deprecated: true }
-  if (meta.default !== undefined) result = { ...result, default: meta.default }
+  if (typeof meta.description === "string") result = { ...result, description: meta.description };
+  if (meta.deprecated === true) result = { ...result, deprecated: true };
+  if (meta.default !== undefined) result = { ...result, default: meta.default };
   // draft-07 §10.4: "examples" is an array of example values (distinct from
   // OAS's singular "example").
-  if (Array.isArray(meta.examples)) result = { ...result, examples: meta.examples }
+  if (Array.isArray(meta.examples)) result = { ...result, examples: meta.examples };
 
   for (const key of passthroughKeys) {
-    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }
+    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] };
   }
 
-  return result
+  return result;
 }
 
 // Infers the JSON Schema `type` for an enum's members from their actual
@@ -60,24 +64,24 @@ function withMeta(schema: JsonSchema07, meta: Readonly<Record<string, unknown>>,
 // (`type` is optional; `enum` alone still constrains to the listed values).
 function enumSchema(members: readonly unknown[]): JsonSchema07 {
   if (members.length > 0 && members.every((m) => typeof m === "boolean")) {
-    return { type: "boolean", enum: [...members] }
+    return { type: "boolean", enum: [...members] };
   }
   if (members.length > 0 && members.every((m) => typeof m === "number")) {
-    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number"
-    return { type, enum: [...members] }
+    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number";
+    return { type, enum: [...members] };
   }
   if (members.length > 0 && members.every((m) => typeof m === "string")) {
-    return { type: "string", enum: [...members] }
+    return { type: "string", enum: [...members] };
   }
-  return { enum: [...members] }
+  return { enum: [...members] };
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema07
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema07;
 
 const leaf =
   (schema: JsonSchema07): Converter =>
   () =>
-    schema
+    schema;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf({ type: "boolean" }),
@@ -101,70 +105,70 @@ const handlers: Record<string, Converter> = {
   unknown: leaf({}),
   never: leaf(false as unknown as JsonSchema07),
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
-    const properties: Record<string, JsonSchema07> = {}
-    const required: string[] = []
+    const s = shape as TypeShape & { kind: "object" };
+    const properties: Record<string, JsonSchema07> = {};
+    const required: string[] = [];
     for (const [name, field] of Object.entries(s.fields)) {
-      let propSchema = toJsonSchema07(field)
+      let propSchema = toJsonSchema07(field);
       // draft-07 §10: `readOnly` is a per-schema annotation, driven by the
       // `meta.readonly` open-metadata-bag convention set on the field's own
       // TypeRef.
-      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true }
-      properties[name] = propSchema
-      if (field.meta.optional !== true) required.push(name)
+      if (field.meta.readonly === true) propSchema = { ...propSchema, readOnly: true };
+      properties[name] = propSchema;
+      if (field.meta.optional !== true) required.push(name);
     }
-    const schema: JsonSchema07 = { type: "object", properties }
-    if (required.length > 0) schema.required = required
-    return schema
+    const schema: JsonSchema07 = { type: "object", properties };
+    if (required.length > 0) schema.required = required;
+    return schema;
   },
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return { type: "array", items: toJsonSchema07(s.element) }
+    const s = shape as TypeShape & { kind: "array" };
+    return { type: "array", items: toJsonSchema07(s.element) };
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return { type: "array", items: s.elements.map(toJsonSchema07), additionalItems: false }
+    const s = shape as TypeShape & { kind: "tuple" };
+    return { type: "array", items: s.elements.map(toJsonSchema07), additionalItems: false };
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return { type: "object", additionalProperties: toJsonSchema07(s.value) }
+    const s = shape as TypeShape & { kind: "map" };
+    return { type: "object", additionalProperties: toJsonSchema07(s.value) };
   },
   // draft-07 has no streaming/async-sequence vocabulary either — same
   // `array`-of-element degrade as json-schema.ts (latest draft), carrying
   // `x-stream: true`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return { type: "array", items: toJsonSchema07(s.element), "x-stream": true }
+    const s = shape as TypeShape & { kind: "stream" };
+    return { type: "array", items: toJsonSchema07(s.element), "x-stream": true };
   },
   // draft-07 §9.2.1.3 defines `oneOf` (exactly one variant matches) but no
   // `discriminator` keyword; the OpenAPI-originated `discriminator: { propertyName }`
   // shape is a widely-recognized extension (carried by `meta.discriminator`, an open
   // metadata bag convention — see CLAUDE.md), same as json-schema.ts's latest projector.
   union: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const variants = s.variants.map(toJsonSchema07)
+    const s = shape as TypeShape & { kind: "union" };
+    const variants = s.variants.map(toJsonSchema07);
     if (typeof meta.discriminator === "string") {
-      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } }
+      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } };
     }
-    return { anyOf: variants }
+    return { anyOf: variants };
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    return { const: s.value }
+    const s = shape as TypeShape & { kind: "literal" };
+    return { const: s.value };
   },
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return enumSchema(s.members)
+    const s = shape as TypeShape & { kind: "enum" };
+    return enumSchema(s.members);
   },
   ref: (shape) => {
-    const s = shape as TypeShape & { kind: "ref" }
-    return { $ref: `#/definitions/${s.target}` }
+    const s = shape as TypeShape & { kind: "ref" };
+    return { $ref: `#/definitions/${s.target}` };
   },
   // draft-07 §9.2.1.1 `allOf`: every listed schema must validate — the
   // faithful encoding of a structural intersection (mixin composition).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    return { allOf: s.members.map(toJsonSchema07) }
+    const s = shape as TypeShape & { kind: "intersection" };
+    return { allOf: s.members.map(toJsonSchema07) };
   },
   // draft-07 has no callable-type vocabulary either — same honest degradation
   // json-schema.ts (latest draft) uses: an untyped schema carrying
@@ -176,7 +180,7 @@ const handlers: Record<string, Converter> = {
   // draft-07 has no service/interface-with-methods vocabulary either —
   // degrade to an untyped object schema carrying `x-interface: true`.
   interface: leaf({ type: "object", "x-interface": true }),
-}
+};
 
 const complexKinds = new Set([
   "object",
@@ -189,11 +193,11 @@ const complexKinds = new Set([
   "function",
   "method",
   "interface",
-])
+]);
 
 export function toJsonSchema07(ref: TypeRef): JsonSchema07 {
-  const converter = resolve(ref.shape.kind, handlers)
-  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta)
-  const complex = complexKinds.has(ref.shape.kind)
-  return withMeta(schema, ref.meta, complex)
+  const converter = resolve(ref.shape.kind, handlers);
+  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta);
+  const complex = complexKinds.has(ref.shape.kind);
+  return withMeta(schema, ref.meta, complex);
 }

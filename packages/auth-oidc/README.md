@@ -29,24 +29,24 @@ ahead of expiry, and re-fetches on `onUnauthorized`.
 ## Usage
 
 ```ts
-import { oidc } from "@rhi-zone/fractal-auth-oidc"
-import { authLayer, authMiddleware, authExtension } from "@rhi-zone/fractal-api-tree/auth"
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+import { oidc } from "@rhi-zone/fractal-auth-oidc";
+import { authLayer, authMiddleware, authExtension } from "@rhi-zone/fractal-api-tree/auth";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
 
 // Server: validate incoming Bearer tokens against the issuer's JWKS
-const auth = oidc.server({ issuer: "https://auth.example.com", audience: "my-api" })
+const auth = oidc.server({ issuer: "https://auth.example.com", audience: "my-api" });
 const fetch = createFetch(tree, {
   als: { storage, init: authLayer(auth) },
   middleware: [authMiddleware(auth)], // optional: 401 on missing/invalid token
-})
+});
 
 // Client: acquire and refresh tokens for calling another fractal service
 const clientAuth = oidc.client({
   tokenEndpoint: "https://auth.example.com/oauth/token",
   clientId: "my-client",
   clientSecret: "secret",
-})
-createClient(node, { baseUrl, extensions: [authExtension(clientAuth)] })
+});
+createClient(node, { baseUrl, extensions: [authExtension(clientAuth)] });
 ```
 
 ## Install

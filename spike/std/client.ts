@@ -72,45 +72,40 @@ type MethodsEntry<
 // are the only case that recurses+intersects — and nesting DEPTH, not route
 // COUNT, bounds that. A flat app pays zero intersection cost.
 type FlatPath<R extends Record<string, unknown>, Pre extends string, P> = {
-  readonly [K in keyof R & string as EntryKey<R[K], `${Pre}/${K}`>]: EntryVal<
-    R[K],
-    P
-  >;
+  readonly [K in keyof R & string as EntryKey<R[K], `${Pre}/${K}`>]: EntryVal<R[K], P>;
 } & NestedPath<R, Pre, P>;
 
 // the structural key a single record entry contributes (leaf/param fast path).
-type EntryKey<Child, Pre extends string> = Child extends MethodsMeta<
-  string,
-  Record<string, { i: unknown; o: unknown }>
->
-  ? NormKey<Pre>
-  : Child extends ParamMeta<infer N, unknown, MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>>
-    ? NormKey<`${Pre}/{${N}}`>
-    : never; // nested → handled by NestedPath, excluded from the fast map
+type EntryKey<Child, Pre extends string> =
+  Child extends MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
+    ? NormKey<Pre>
+    : Child extends ParamMeta<
+          infer N,
+          unknown,
+          MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
+        >
+      ? NormKey<`${Pre}/{${N}}`>
+      : never; // nested → handled by NestedPath, excluded from the fast map
 
 // the value (the per-verb sig record) for a leaf/param entry.
-type EntryVal<Child, P> = Child extends MethodsMeta<infer Verbs, infer IO>
-  ? VerbRec<Verbs, IO, P>
-  : Child extends ParamMeta<
-        infer N,
-        infer T,
-        MethodsMeta<infer Verbs, infer IO>
-      >
-    ? VerbRec<Verbs, IO, P & { readonly [K in N]: T }>
-    : never;
+type EntryVal<Child, P> =
+  Child extends MethodsMeta<infer Verbs, infer IO>
+    ? VerbRec<Verbs, IO, P>
+    : Child extends ParamMeta<infer N, infer T, MethodsMeta<infer Verbs, infer IO>>
+      ? VerbRec<Verbs, IO, P & { readonly [K in N]: T }>
+      : never;
 
 // the only entries that need the slow recurse+intersect path: a record key whose
 // child is itself a `path`/`choice`/`prefix`/`param→non-methods` (splits 1→many).
-type NestedPath<R extends Record<string, unknown>, Pre extends string, P> =
-  UnionToIntersection<
-    {
-      readonly [K in keyof R & string]: R[K] extends
-        | MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
-        | ParamMeta<string, unknown, MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>>
-        ? never // leaf/param fast-path handled above
-        : Walk<R[K], `${Pre}/${K}`, P>;
-    }[keyof R & string]
-  >;
+type NestedPath<R extends Record<string, unknown>, Pre extends string, P> = UnionToIntersection<
+  {
+    readonly [K in keyof R & string]: R[K] extends
+      | MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>
+      | ParamMeta<string, unknown, MethodsMeta<string, Record<string, { i: unknown; o: unknown }>>>
+      ? never // leaf/param fast-path handled above
+      : Walk<R[K], `${Pre}/${K}`, P>;
+  }[keyof R & string]
+>;
 
 // FLAT map over the choice alt UNION — one mapped-type pass over `Alts[number]`,
 // keyed by each alt. THE load-bearing move: a choice of N endpoints is a single
@@ -120,11 +115,7 @@ type FlatChoice<Alt, Pre extends string, P> = UnionToIntersection<
 >;
 
 // per-verb signature record for one endpoint.
-type VerbRec<
-  Verbs extends string,
-  IO extends Record<string, { i: unknown; o: unknown }>,
-  P,
-> = {
+type VerbRec<Verbs extends string, IO extends Record<string, { i: unknown; o: unknown }>, P> = {
   readonly [V in Verbs as Lowercase<V>]: Sig<
     P,
     V extends keyof IO ? IO[V]["i"] : never,
@@ -134,24 +125,21 @@ type VerbRec<
 
 // ---- call signature for one endpoint ---------------------------------------
 type HasKeys<T> = keyof T extends never ? false : true;
-type Args<P, I> = (HasKeys<P> extends true
-  ? { readonly params: P }
-  : Record<never, never>) &
+type Args<P, I> = (HasKeys<P> extends true ? { readonly params: P } : Record<never, never>) &
   ([I] extends [never] ? Record<never, never> : { readonly body: I });
 type Sig<P, I, O> = keyof Args<P, I> extends never
   ? () => Promise<Awaited<O>>
   : (args: Args<P, I>) => Promise<Awaited<O>>;
 
-type UnionToIntersection<U> = (
-  U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
   ? I
   : never;
 
 /** The typed client surface, derived by walking the app's `.meta` tree. */
-export type Client<App> = App extends Reflected<infer M>
-  ? Walk<M, "", Record<never, never>>
-  : never;
+export type Client<App> =
+  App extends Reflected<infer M> ? Walk<M, "", Record<never, never>> : never;
 
 // ============================================================================
 // RUNTIME — mirror the type walk over the meta DATA, building the surface. Each
@@ -172,8 +160,7 @@ export function inProcess(app: Handler<{}>): Transport {
     // fully-discharged root, so it carries no outstanding param obligation.
     (req as Request & { params: {} }).params = {};
     return (
-      (await app(req as Request & { params: {} })) ??
-      new Response("Not Found", { status: 404 })
+      (await app(req as Request & { params: {} })) ?? new Response("Not Found", { status: 404 })
     );
   };
 }
@@ -216,9 +203,7 @@ function build(
           // 204/empty bodies (e.g. auto-HEAD) → undefined; else parse JSON/text.
           const ct = res.headers.get("Content-Type") ?? "";
           if (res.status === 204) return undefined;
-          return ct.includes("application/json")
-            ? res.json()
-            : res.text();
+          return ct.includes("application/json") ? res.json() : res.text();
         };
       }
       return;

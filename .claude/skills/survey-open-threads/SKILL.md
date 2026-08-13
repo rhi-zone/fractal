@@ -11,17 +11,17 @@ Find every open workstream across the rhi ecosystem, separate the **live** from 
 
 There are **two distinct outputs**, never one:
 
-1. **Registry entries** — `docs/open-threads/<slug>.md`, one file per surviving thread, plus a line in `docs/open-threads/index.md`. These are durable open *questions/arcs* that aren't expected to close soon.
-2. **WIP snapshot** — a single timestamped report of what is *actively* in motion right now (dirty trees, unpushed commits, recent sessions). This is a perishable photograph, not registry material. Hand it to the user; do not file it.
+1. **Registry entries** — `docs/open-threads/<slug>.md`, one file per surviving thread, plus a line in `docs/open-threads/index.md`. These are durable open _questions/arcs_ that aren't expected to close soon.
+2. **WIP snapshot** — a single timestamped report of what is _actively_ in motion right now (dirty trees, unpushed commits, recent sessions). This is a perishable photograph, not registry material. Hand it to the user; do not file it.
 
 ## The liveness discriminator (the one judgment that matters)
 
-The open-threads registry is filtered by **liveness, not scope**. File a thread if it is **open work not expected to complete soon** — a large arc, a paused or abandoned session, a parked design question — regardless of whether it touches one repo or many. A single-repo question can belong here if it's a genuine unresolved design fork; a multi-repo question does *not* belong here if it already landed.
+The open-threads registry is filtered by **liveness, not scope**. File a thread if it is **open work not expected to complete soon** — a large arc, a paused or abandoned session, a parked design question — regardless of whether it touches one repo or many. A single-repo question can belong here if it's a genuine unresolved design fork; a multi-repo question does _not_ belong here if it already landed.
 
 For every candidate, decide one of three:
 
 - **LIVE** → file it (registry or, if cleanly single-repo and tractable, that repo's `TODO.md`).
-- **DEAD / SUPERSEDED / MOOT** → record one line in the run report saying *why* it's dead (so the next run doesn't re-surface it), then drop it.
+- **DEAD / SUPERSEDED / MOOT** → record one line in the run report saying _why_ it's dead (so the next run doesn't re-surface it), then drop it.
 - **DONE** → the work landed; archive with a one-line pointer to where it landed.
 
 A candidate is only LIVE after the freshness re-check (Step 5) confirms it. Sessions age; "the assistant offered to do X" is not evidence X is still undone.
@@ -38,7 +38,7 @@ Determine the window first. Default: last 60 days (the corpus density cliff and 
 
 ### Step 1 — Scope B: the WIP snapshot (do this first, it's the cheap ground truth)
 
-Photograph what is in motion *right now*. For every repo in the ecosystem table (`docs/about.md` is the source of truth for the list):
+Photograph what is in motion _right now_. For every repo in the ecosystem table (`docs/about.md` is the source of truth for the list):
 
 ```bash
 # dirty state + unpushed-commit count, per repo
@@ -118,7 +118,7 @@ Note: the only prior art for plan-file access in this ecosystem (`normalize`'s `
 
 ### Step 4 — Scope C2: soft-abandoned sessions (the dominant, easily-missed population)
 
-Sessions where the assistant's final message *implies more work* and the user simply moved on. Forward-looking sign-offs are **not** closers. This is the largest and most overlooked bucket.
+Sessions where the assistant's final message _implies more work_ and the user simply moved on. Forward-looking sign-offs are **not** closers. This is the largest and most overlooked bucket.
 
 Extract the final assistant message of each in-window interactive session and pattern-match the tail:
 
@@ -135,7 +135,7 @@ Half of the true positives are recoverable as "the work persisted via commit/TOD
 
 ### Step 5 — Freshness / liveness re-check (mandatory before filing anything LIVE)
 
-Sessions are stale photographs. Before promoting *any* candidate from Steps 2–4 to LIVE, verify against current reality:
+Sessions are stale photographs. Before promoting _any_ candidate from Steps 2–4 to LIVE, verify against current reality:
 
 - **"Verify X landed"** — if a tail said "8 commits ready to push" or "Want me to implement the warning diagnostics?", check the repo: `git -C <repo> log --oneline --since=<session-date>`, grep the code, read the current `TODO.md`. If it landed → mark DONE, archive. If still absent → LIVE.
 - **Successor sessions** — did a later session pick up the thread? `normalize sessions list --project <p> --since <session-date>`. If a successor resolved it → DONE/SUPERSEDED.
@@ -170,9 +170,12 @@ Use a clear functional slug for the filename; **do not invent project-style name
 ---
 
 ## The question
-## Working answer        (or "none")
+
+## Working answer (or "none")
+
 ## What's still open
-## Cross-project angle    (why it lives here, if applicable)
+
+## Cross-project angle (why it lives here, if applicable)
 ```
 
 Then add a one-line entry to `docs/open-threads/index.md` under `## Threads`, linking the new file with a one-sentence gloss.

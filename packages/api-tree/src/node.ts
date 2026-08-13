@@ -23,8 +23,8 @@
 //   docs/design/router-model.md — Node Shape (settled node shape + fallback)
 // ============================================================================
 
-import type { Tags } from "./tags.ts"
-import type { MismatchedEncodingMapDecoders, UncoveredSourceParams } from "./input.ts"
+import type { Tags } from "./tags.ts";
+import type { MismatchedEncodingMapDecoders, UncoveredSourceParams } from "./input.ts";
 
 // ============================================================================
 // Core types
@@ -59,12 +59,12 @@ export interface SharedMeta {
    * precedence chain: `meta.mcp.description > meta.description >
    * derived.description > ...`. Read at both leaf and branch position.
    */
-  description?: string
+  description?: string;
 }
 
 /** Meta carried by a LEAF node (an `op()` result). */
 export interface LeafMeta extends SharedMeta {
-  tags?: Tags
+  tags?: Tags;
 }
 
 /** Meta carried by a BRANCH node (an `api()` result). */
@@ -86,7 +86,7 @@ export interface BranchMeta extends SharedMeta {}
  * docs/design/typed-store-spec.md §8's "plausibly with the `HasRequiredKeys`
  * conditional-arity technique `op()`/`api()` already use" is this reuse.
  */
-export type HasRequiredKeys<T> = {} extends T ? false : true
+export type HasRequiredKeys<T> = {} extends T ? false : true;
 
 // ============================================================================
 // Type-level meta merge — mirrors `mergeRecords`'/`mergeMeta`'s runtime
@@ -100,7 +100,7 @@ export type HasRequiredKeys<T> = {} extends T ? false : true
 // ============================================================================
 
 /** Force eager evaluation of a mapped/intersection type into a plain object type. */
-type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
+type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
 
 /**
  * `T`, intersected with an index signature — makes `op()`/`api()`'s own
@@ -134,7 +134,7 @@ type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
  *     uniform and avoids a conditional split whose two branches would
  *     otherwise need to agree on assignability by different mechanisms.
  */
-type Widen<T> = T & { readonly [key: string]: unknown }
+type Widen<T> = T & { readonly [key: string]: unknown };
 
 /**
  * Merge two meta VALUES at the type level, matching `mergeRecords`: arrays
@@ -200,7 +200,7 @@ type MergeMetaValue<A, B, Depth extends readonly unknown[] = []> = B extends und
               ? B
               : MergeTwoMeta<A, B, [...Depth, unknown]>
             : B
-        : B
+        : B;
 
 /**
  * True when key `K` is optional on BOTH `A` and `B` — the only case where
@@ -208,7 +208,7 @@ type MergeMetaValue<A, B, Depth extends readonly unknown[] = []> = B extends und
  * supplies it, the merge always will too, regardless of the other side).
  */
 type IsOptionalOnBoth<A, B, K extends keyof A & keyof B> =
-  {} extends Pick<A, K> ? ({} extends Pick<B, K> ? true : false) : false
+  {} extends Pick<A, K> ? ({} extends Pick<B, K> ? true : false) : false;
 
 /**
  * Merge two meta OBJECTS at the type level, key by key, via `MergeMetaValue`.
@@ -224,25 +224,24 @@ type IsOptionalOnBoth<A, B, K extends keyof A & keyof B> =
  * optional-in-the-merge piece (`IsOptionalOnBoth`) so THEIR modifier is
  * correct too, not just copied from whichever side happened to be picked.
  */
-type MergeTwoMeta<A, B, Depth extends readonly unknown[] = []> =
-  & Omit<A, keyof B>
-  & Omit<B, keyof A>
-  & {
-      [K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? never : K]:
-        // `NonNullable` — a key present in the merged object always has a
-        // defined value (`mergeRecords` never assigns `undefined` itself;
-        // it `continue`s past it), even though `MergeMetaValue<A[K], B[K]>`
-        // can otherwise carry a stray `| undefined` through from an
-        // optional-on-one-side source field. Required under
-        // `exactOptionalPropertyTypes`: a property typed `X | undefined`
-        // (present, but with an explicit `undefined` value type) is not the
-        // same thing as one typed `X` that merely happens to be optional.
-        NonNullable<MergeMetaValue<A[K], B[K], Depth>>
-    }
-  & {
-      [K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? K : never]?:
-        NonNullable<MergeMetaValue<A[K], B[K], Depth>>
-    }
+type MergeTwoMeta<A, B, Depth extends readonly unknown[] = []> = Omit<A, keyof B> &
+  Omit<B, keyof A> & {
+    [
+      K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? never : K
+    ]: // `NonNullable` — a key present in the merged object always has a
+    // defined value (`mergeRecords` never assigns `undefined` itself;
+    // it `continue`s past it), even though `MergeMetaValue<A[K], B[K]>`
+    // can otherwise carry a stray `| undefined` through from an
+    // optional-on-one-side source field. Required under
+    // `exactOptionalPropertyTypes`: a property typed `X | undefined`
+    // (present, but with an explicit `undefined` value type) is not the
+    // same thing as one typed `X` that merely happens to be optional.
+    NonNullable<MergeMetaValue<A[K], B[K], Depth>>;
+  } & {
+    [K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? K : never]?: NonNullable<
+      MergeMetaValue<A[K], B[K], Depth>
+    >;
+  };
 
 /**
  * Fold a tuple of meta contributions into their merged type, right-to-left
@@ -258,10 +257,10 @@ type FoldMeta<T extends readonly unknown[]> = T extends readonly []
     ? Only
     : T extends readonly [infer First, ...infer Rest extends readonly unknown[]]
       ? MergeTwoMeta<First, FoldMeta<Rest>>
-      : object
+      : object;
 
 /** `T`, or the merge-identity `object` when `T` is `undefined` — lets `FoldMetaList` (below) treat an absent contribution (`mergeMeta(undefined, ...)`) as a no-op, matching `mergeRecords`'s own `if (v === undefined) continue`. */
-type DefinedOr<T> = T extends undefined ? object : T
+type DefinedOr<T> = T extends undefined ? object : T;
 
 /**
  * `FoldMeta`'s counterpart for `mergeMeta`'s own public signature: same
@@ -279,11 +278,11 @@ type FoldMetaList<T extends readonly unknown[]> = T extends readonly []
     ? DefinedOr<Only>
     : T extends readonly [infer First, ...infer Rest extends readonly unknown[]]
       ? MergeTwoMeta<DefinedOr<First>, FoldMetaList<Rest>>
-      : object
+      : object;
 
 /** The bare callable on a leaf node. Provenance-blind: handler sees one flat input. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Handler<I = any, O = any> = (input: I) => O | Promise<O>
+export type Handler<I = any, O = any> = (input: I) => O | Promise<O>;
 
 /**
  * [CERTIFIED] One tree = grouping AND addressing.
@@ -354,21 +353,20 @@ export type Handler<I = any, O = any> = (input: I) => O | Promise<O>
  * directly at each call's own return type, never against this field.
  */
 export type Node<H extends Handler = Handler> = {
-  readonly handler?: H
-  readonly children?: Readonly<Record<string, Node>>
-  readonly fallback?: { readonly name: string; readonly subtree: Node }
-  readonly meta: SharedMeta & { readonly [key: string]: unknown }
-}
+  readonly handler?: H;
+  readonly children?: Readonly<Record<string, Node>>;
+  readonly fallback?: { readonly name: string; readonly subtree: Node };
+  readonly meta: SharedMeta & { readonly [key: string]: unknown };
+};
 
 // ============================================================================
 // Discriminators
 // ============================================================================
 
-export const isNode = (v: unknown): v is Node =>
-  typeof v === "object" && v !== null && "meta" in v
+export const isNode = (v: unknown): v is Node => typeof v === "object" && v !== null && "meta" in v;
 
 /** True when `n` is a leaf node (carries a handler). */
-export const isLeaf = (n: Node): boolean => n.handler !== undefined
+export const isLeaf = (n: Node): boolean => n.handler !== undefined;
 
 // ============================================================================
 // Meta merge
@@ -405,23 +403,31 @@ function mergeRecords(
   value: Record<string, unknown>,
   depth = 0,
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...existing }
+  const out: Record<string, unknown> = { ...existing };
   for (const [key, v] of Object.entries(value)) {
-    if (v === undefined) continue
-    const e = out[key]
+    if (v === undefined) continue;
+    const e = out[key];
     if (Array.isArray(e) && Array.isArray(v)) {
-      out[key] = [...e, ...v]
+      out[key] = [...e, ...v];
     } else if (
       depth < 2 &&
-      typeof e === "object" && e !== null && !Array.isArray(e) &&
-      typeof v === "object" && v !== null && !Array.isArray(v)
+      typeof e === "object" &&
+      e !== null &&
+      !Array.isArray(e) &&
+      typeof v === "object" &&
+      v !== null &&
+      !Array.isArray(v)
     ) {
-      out[key] = mergeRecords(e as Record<string, unknown>, v as Record<string, unknown>, depth + 1)
+      out[key] = mergeRecords(
+        e as Record<string, unknown>,
+        v as Record<string, unknown>,
+        depth + 1,
+      );
     } else {
-      out[key] = v
+      out[key] = v;
     }
   }
-  return out
+  return out;
 }
 
 /**
@@ -445,12 +451,12 @@ function mergeRecords(
 export function mergeMeta<const T extends readonly (object | undefined)[]>(
   ...metas: T
 ): Simplify<FoldMetaList<T>> {
-  let out: Record<string, unknown> = {}
+  let out: Record<string, unknown> = {};
   for (const m of metas) {
-    if (m === undefined) continue
-    out = mergeRecords(out, m as Record<string, unknown>)
+    if (m === undefined) continue;
+    out = mergeRecords(out, m as Record<string, unknown>);
   }
-  return out as Simplify<FoldMetaList<T>>
+  return out as Simplify<FoldMetaList<T>>;
 }
 
 // ============================================================================
@@ -530,9 +536,13 @@ export function mergeMeta<const T extends readonly (object | undefined)[]>(
  */
 type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
   ? R extends Promise<infer R2>
-    ? R2 extends { kind: "err"; error: infer E } ? E : never
-    : R extends { kind: "err"; error: infer E } ? E : never
-  : never
+    ? R2 extends { kind: "err"; error: infer E }
+      ? E
+      : never
+    : R extends { kind: "err"; error: infer E }
+      ? E
+      : never
+  : never;
 
 /**
  * `C` when every `source`-declared param name is one the handler `H` actually
@@ -572,39 +582,53 @@ type CheckedContributions<H, C extends readonly unknown[]> = [
     ? [MismatchedEncodingMapDecoders<H, FoldMeta<C>, "cli">] extends [never]
       ? C
       : C & {
-          readonly __cli_encodingMap_decoder_type_mismatch: MismatchedEncodingMapDecoders<H, FoldMeta<C>, "cli">
+          readonly __cli_encodingMap_decoder_type_mismatch: MismatchedEncodingMapDecoders<
+            H,
+            FoldMeta<C>,
+            "cli"
+          >;
         }
     : C & {
-        readonly __http_encodingMap_decoder_type_mismatch: MismatchedEncodingMapDecoders<H, FoldMeta<C>, "http">
+        readonly __http_encodingMap_decoder_type_mismatch: MismatchedEncodingMapDecoders<
+          H,
+          FoldMeta<C>,
+          "http"
+        >;
       }
   : C & {
-      readonly __source_declares_a_param_this_handler_does_not: UncoveredSourceParams<H, FoldMeta<C>>
-    }
+      readonly __source_declares_a_param_this_handler_does_not: UncoveredSourceParams<
+        H,
+        FoldMeta<C>
+      >;
+    };
 
 export function op<H extends Handler, const C extends readonly unknown[] = []>(
   fn: H,
   ...contributions: HasRequiredKeys<LeafMeta> extends true
-    ? FoldMeta<C> extends LeafMeta ? CheckedContributions<H, C> : [LeafMeta, ...LeafMeta[]]
+    ? FoldMeta<C> extends LeafMeta
+      ? CheckedContributions<H, C>
+      : [LeafMeta, ...LeafMeta[]]
     : CheckedContributions<H, C>
 ): Omit<Node, "handler" | "meta"> & {
-  readonly handler: H
-  readonly meta: Widen<Simplify<FoldMeta<C>>>
-  readonly __errorKind?: ExtractErrorKind<H>
+  readonly handler: H;
+  readonly meta: Widen<Simplify<FoldMeta<C>>>;
+  readonly __errorKind?: ExtractErrorKind<H>;
 } {
-  const meta = contributions.length === 0
-    ? {}
-    : contributions.length === 1
-      ? contributions[0]!
-      // `contributions` is validated (by the parameter's own conditional type,
-      // above) to fold into something satisfying `LeafMeta` by the time any
-      // call actually reaches here — the cast is only to cross `mergeMeta`'s
-      // `object | undefined` runtime-array constraint from the still-generic
-      // `C`, not a widening of what's already been typechecked at the call site.
-      : mergeMeta(...(contributions as readonly (object | undefined)[]))
+  const meta =
+    contributions.length === 0
+      ? {}
+      : contributions.length === 1
+        ? contributions[0]!
+        : // `contributions` is validated (by the parameter's own conditional type,
+          // above) to fold into something satisfying `LeafMeta` by the time any
+          // call actually reaches here — the cast is only to cross `mergeMeta`'s
+          // `object | undefined` runtime-array constraint from the still-generic
+          // `C`, not a widening of what's already been typechecked at the call site.
+          mergeMeta(...(contributions as readonly (object | undefined)[]));
   return { handler: fn, meta } as Omit<Node, "handler" | "meta"> & {
-    readonly handler: H
-    readonly meta: Widen<Simplify<FoldMeta<C>>>
-  }
+    readonly handler: H;
+    readonly meta: Widen<Simplify<FoldMeta<C>>>;
+  };
 }
 
 /**
@@ -680,19 +704,17 @@ export function api<
   ...rest: HasRequiredKeys<BranchMeta> extends true
     ? [opts: { meta: M; fallback?: F }]
     : [opts?: { meta?: M; fallback?: F }]
-): Omit<Node, "children" | "fallback" | "meta">
-  & { readonly children: C }
-  & { readonly meta: Widen<M extends undefined ? BranchMeta : Simplify<M>> }
-  & (F extends undefined ? object : { readonly fallback: F }) {
-  const opts = rest[0]
+): Omit<Node, "children" | "fallback" | "meta"> & { readonly children: C } & {
+  readonly meta: Widen<M extends undefined ? BranchMeta : Simplify<M>>;
+} & (F extends undefined ? object : { readonly fallback: F }) {
+  const opts = rest[0];
   return {
     ...(children !== undefined ? { children } : {}),
     ...(opts?.fallback !== undefined ? { fallback: opts.fallback } : {}),
     meta: opts?.meta ?? {},
-  } as Omit<Node, "children" | "fallback" | "meta">
-    & { readonly children: C }
-    & { readonly meta: Widen<M extends undefined ? BranchMeta : Simplify<M>> }
-    & (F extends undefined ? object : { readonly fallback: F })
+  } as Omit<Node, "children" | "fallback" | "meta"> & { readonly children: C } & {
+    readonly meta: Widen<M extends undefined ? BranchMeta : Simplify<M>>;
+  } & (F extends undefined ? object : { readonly fallback: F });
 }
 
 /**
@@ -736,19 +758,16 @@ export function api<
 export function fallback<const Name extends string, S extends Node<any>>(
   name: Name,
   subtree: S,
-): { readonly name: Name; readonly subtree: S }
+): { readonly name: Name; readonly subtree: S };
 export function fallback<
   const Name extends string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   C extends Readonly<Record<string, Node<any>>>,
->(
-  name: Name,
-  children: C,
-): { readonly name: Name; readonly subtree: ReturnType<typeof api<C>> }
+>(name: Name, children: C): { readonly name: Name; readonly subtree: ReturnType<typeof api<C>> };
 export function fallback(
   name: string,
   arg: Node | Readonly<Record<string, Node>>,
 ): { readonly name: string; readonly subtree: Node } {
-  const subtree = isNode(arg) ? arg : api(arg as Record<string, Node>)
-  return { name, subtree }
+  const subtree = isNode(arg) ? arg : api(arg as Record<string, Node>);
+  return { name, subtree };
 }

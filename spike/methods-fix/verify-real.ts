@@ -25,16 +25,12 @@ import { json } from "@rhi-zone/fractal-http-api-projector";
 import type { RouteUnion } from "../drift-guard/derive.ts";
 
 type Equals<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Expect<T extends true> = T;
 
 // ===== G1: literal verbs, no workaround =====
 const collection = methods({ GET: () => json([]), POST: () => json({}) });
-type CVerbs = typeof collection.meta extends MethodsMeta<infer V, infer _IO>
-  ? V
-  : never;
+type CVerbs = typeof collection.meta extends MethodsMeta<infer V, infer _IO> ? V : never;
 type _G1 = Expect<Equals<CVerbs, "GET" | "POST">>;
 // @ts-expect-error — must NOT widen to the full Method union.
 type _G1neg = Expect<Equals<CVerbs, Method>>;
@@ -43,11 +39,8 @@ type _G1neg = Expect<Equals<CVerbs, Method>>;
 const idLeaf = methods({
   GET: (req: Request & { params: { id: string } }) => json(req.params.id),
 });
-type IdLeafP = typeof idLeaf extends Handler<infer P>
-  ? P extends { id: string }
-    ? true
-    : false
-  : never;
+type IdLeafP =
+  typeof idLeaf extends Handler<infer P> ? (P extends { id: string } ? true : false) : never;
 // idLeaf's obligation includes {id}.
 type _G2 = Expect<IdLeafP>;
 // And param("id", …) discharges it (Omit<{id},"id"> => assignable to Handler<{}>).
@@ -58,10 +51,7 @@ void discharged;
 // Build a resource exactly like the scale gen — WITHOUT the old
 // `methods<P, typeof tbl>(tbl)` workaround.
 const app = path({
-  res0: choice(
-    methods({ GET: () => json([]), POST: () => json({}) }),
-    param("id", idLeaf),
-  ),
+  res0: choice(methods({ GET: () => json([]), POST: () => json({}) }), param("id", idLeaf)),
 });
 
 type Routes = RouteUnion<typeof app>;
@@ -70,13 +60,6 @@ type RouteKeys = Routes extends { k: infer K } ? K : never;
 // The param route's GET must appear as a LITERAL key "GET /res0/{id}" — only
 // possible if MethodsMeta carried the literal "GET" (not the full Method set,
 // which would have emitted POST/PUT/DELETE/… keys too).
-type _Drift = Expect<
-  Equals<
-    RouteKeys,
-    | "GET /res0"
-    | "POST /res0"
-    | "GET /res0/{id}"
-  >
->;
+type _Drift = Expect<Equals<RouteKeys, "GET /res0" | "POST /res0" | "GET /res0/{id}">>;
 
 export {};

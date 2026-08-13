@@ -2,18 +2,21 @@
   "name": "@rhi-zone/fractal-mcp-api-projector",
   "version": "0.1.0-alpha.0",
   "description": "MCP tool projection for the function-core tree — toTools, annotation hints derived from meta.tags",
+  "keywords": [
+    "api",
+    "mcp",
+    "model-context-protocol",
+    "projector",
+    "tools"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/mcp-api-projector"
   },
-  "keywords": [
-    "mcp",
-    "model-context-protocol",
-    "api",
-    "projector",
-    "tools"
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -25,11 +28,13 @@
       "import": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -38,12 +43,7 @@
   "devDependencies": {
     "@rhi-zone/fractal-http-api-projector": "workspace:*"
   },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:watch": "bun test --watch"
-  },
-  "publishConfig": {
-    "access": "public"
+  "engines": {
+    "node": ">=20"
   }
 }

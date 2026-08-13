@@ -64,8 +64,7 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
         >;
   };
 }
-export type InferOutput<S> =
-  S extends StandardSchemaV1<unknown, infer O> ? O : never;
+export type InferOutput<S> = S extends StandardSchemaV1<unknown, infer O> ? O : never;
 
 // ============================================================================
 // META — the inert DATA descriptor shapes. Each is a plain object literal a
@@ -122,17 +121,13 @@ export interface ChoiceMeta<Ms extends readonly unknown[]> {
 /** `methods(table)` with an inert verb-set meta. Runtime = std `methods`. */
 export function methods<
   P = {},
-  const T extends Partial<Record<Method, Handler<P>>> = Partial<
-    Record<Method, Handler<P>>
-  >,
->(
-  table: T,
-): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P> {
+  const T extends Partial<Record<Method, Handler<P>>> = Partial<Record<Method, Handler<P>>>,
+>(table: T): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P> {
   const verbs = Object.keys(table) as Extract<keyof T, string>[];
-  return withMeta<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P>(
-    methodsRT<P>(table),
-    { tag: "methods", verbs },
-  );
+  return withMeta<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, P>(methodsRT<P>(table), {
+    tag: "methods",
+    verbs,
+  });
 }
 
 // Per-verb input/output from the handlers in a methods table. A handler may be
@@ -140,10 +135,7 @@ export function methods<
 // phantom carries the typed body I and output O. Extracted in a single pass over
 // the table's KEYS (≤7 verbs) — never over N routes.
 type MethodsIO<T> = {
-  readonly [K in Extract<keyof T, string>]: T[K] extends ValidatedHandler<
-    infer I,
-    infer O
-  >
+  readonly [K in Extract<keyof T, string>]: T[K] extends ValidatedHandler<infer I, infer O>
     ? { i: I; o: O }
     : T[K] extends ReturnsHandler<infer O>
       ? { i: never; o: Awaited<O> }
@@ -153,22 +145,14 @@ type MethodsIO<T> = {
 /** `path(record)` with an inert record-of-meta. Runtime = std `path`. */
 export function path<
   P = {},
-  const R extends Record<string, Reflected<unknown, P>> = Record<
-    string,
-    Reflected<unknown, P>
-  >,
->(
-  routes: R,
-): Reflected<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>, P> {
+  const R extends Record<string, Reflected<unknown, P>> = Record<string, Reflected<unknown, P>>,
+>(routes: R): Reflected<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>, P> {
   const inner: Record<string, unknown> = {};
   for (const k of Object.keys(routes)) inner[k] = routes[k]!.meta;
-  return withMeta<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>, P>(
-    pathRT<P>(routes),
-    {
-      tag: "path",
-      routes: inner as { readonly [K in keyof R]: R[K]["meta"] },
-    },
-  );
+  return withMeta<PathMeta<{ readonly [K in keyof R]: R[K]["meta"] }>, P>(pathRT<P>(routes), {
+    tag: "path",
+    routes: inner as { readonly [K in keyof R]: R[K]["meta"] },
+  });
 }
 
 /** `mount(prefix, inner)` with an inert prefix meta. Runtime = std `mount`. */
@@ -188,13 +172,8 @@ export function mount<const Pre extends string, M, P = {}>(
  *  the meta keeps every alt's structure rather than collapsing to one handler. */
 export function choice<
   P = {},
-  const Hs extends readonly Reflected<unknown, P>[] = readonly Reflected<
-    unknown,
-    P
-  >[],
->(
-  ...alts: Hs
-): Reflected<ChoiceMeta<{ readonly [K in keyof Hs]: Hs[K]["meta"] }>, P> {
+  const Hs extends readonly Reflected<unknown, P>[] = readonly Reflected<unknown, P>[],
+>(...alts: Hs): Reflected<ChoiceMeta<{ readonly [K in keyof Hs]: Hs[K]["meta"] }>, P> {
   const metas = alts.map((a) => a.meta) as {
     readonly [K in keyof Hs]: Hs[K]["meta"];
   };
@@ -215,20 +194,11 @@ export function choice<
  * Overloads: bare `param("id")` → `{id: string}`; `param("id", codec)` →
  * `{id: InferOutput<codec>}` (the codec is type-only here — std doesn't decode).
  */
-export function param<
-  const N extends string,
-  M,
-  Q extends Record<N, string>,
->(
+export function param<const N extends string, M, Q extends Record<N, string>>(
   name: N,
   inner: Reflected<M, Q>,
 ): Reflected<ParamMeta<N, string, M>, Omit<Q, N>>;
-export function param<
-  const N extends string,
-  S,
-  M,
-  Q extends Record<N, string>,
->(
+export function param<const N extends string, S, M, Q extends Record<N, string>>(
   name: N,
   codec: StandardSchemaV1<string, S>,
   inner: Reflected<M, Q>,
@@ -284,27 +254,24 @@ export type ReturnsHandler<O> = Handler & { readonly [RETURNS]: O };
  */
 export function validated<S extends StandardSchemaV1<unknown, unknown>, O = unknown>(
   schema: S,
-  fn: (
-    value: InferOutput<S>,
-    req: Request,
-  ) => Response | undefined | Promise<Response | undefined>,
+  fn: (value: InferOutput<S>, req: Request) => Response | undefined | Promise<Response | undefined>,
 ): ValidatedHandler<InferOutput<S>, O> {
   const h: Handler = async (req) => {
     let raw: unknown;
     try {
       raw = await req.json();
     } catch {
-      return new Response(
-        JSON.stringify({ error: "INVALID_JSON" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "INVALID_JSON" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
     const r = await schema["~standard"].validate(raw);
     if ("issues" in r && r.issues !== undefined) {
-      return new Response(
-        JSON.stringify({ error: "VALIDATION", issues: r.issues }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      );
+      return new Response(JSON.stringify({ error: "VALIDATION", issues: r.issues }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
     return fn((r as { value: InferOutput<S> }).value, req);
   };

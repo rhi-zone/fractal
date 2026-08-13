@@ -14,7 +14,7 @@ pattern, and the `extra`-threading in MCP (commit `027baa6`).
 Middleware is `F => F`, where:
 
 ```ts
-type F = (input: Record<string, unknown>, stores: Stores) => Result
+type F = (input: Record<string, unknown>, stores: Stores) => Result;
 ```
 
 - `input` is the assembled, validated domain arguments — post-assembly,
@@ -146,8 +146,8 @@ loose-structural, exact-on-`kind` pattern `isResultShape` uses for `Result`.
 
 ### Per-projector interpretation
 
-| Effect | HTTP | MCP | CLI |
-|--------|------|-----|-----|
-| progress | SSE comment or custom event | `notifications/progress` | stderr |
-| chunk | chunked transfer / SSE data | partial content | JSONL line |
-| return value | final response / close | final tool result | final output |
+| Effect       | HTTP                        | MCP                      | CLI          |
+| ------------ | --------------------------- | ------------------------ | ------------ |
+| progress     | SSE comment or custom event | `notifications/progress` | stderr       |
+| chunk        | chunked transfer / SSE data | partial content          | JSONL line   |
+| return value | final response / close      | final tool result        | final output |

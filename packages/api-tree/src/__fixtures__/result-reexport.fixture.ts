@@ -5,4 +5,4 @@
 // TypeScript's aliasSymbol traces through re-exports to the original declaration
 // site, so isNominalResult() should pass even through this indirection.
 
-export type { Result } from "../index.ts"
+export type { Result } from "../index.ts";

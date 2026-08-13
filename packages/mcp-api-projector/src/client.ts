@@ -50,12 +50,16 @@
 //   packages/mcp-api-projector/src/server.ts     — createMcpServer (the dispatch this client mirrors)
 //   packages/http-api-projector/src/client.ts    — sibling runtime client (structural mirror)
 
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import type { CallToolResult, GetPromptResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js"
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { getMcpMeta } from "./project.ts"
-import type { McpBranchMeta, McpLeafMeta } from "./project.ts"
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type {
+  CallToolResult,
+  GetPromptResult,
+  ReadResourceResult,
+} from "@modelcontextprotocol/sdk/types.js";
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { getMcpMeta } from "./project.ts";
+import type { McpBranchMeta, McpLeafMeta } from "./project.ts";
 
 // ============================================================================
 // Public API types
@@ -63,11 +67,11 @@ import type { McpBranchMeta, McpLeafMeta } from "./project.ts"
 
 export type McpClientOptions = {
   /** URI scheme prefix for derived resource URIs. Must match what `createMcpServer` was built with (defaults to `"resource://"`, same default as `projectResources`). */
-  readonly resourceScheme?: string
-}
+  readonly resourceScheme?: string;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyMcpClient = Record<string, any>
+export type AnyMcpClient = Record<string, any>;
 
 /** Thrown when a tool call comes back with `isError: true`. */
 export class McpClientError extends Error {
@@ -75,8 +79,8 @@ export class McpClientError extends Error {
     message: string,
     readonly result: CallToolResult,
   ) {
-    super(message)
-    this.name = "McpClientError"
+    super(message);
+    this.name = "McpClientError";
   }
 }
 
@@ -94,34 +98,34 @@ export class McpClientError extends Error {
 
 function unwrapText(text: string): unknown {
   try {
-    return JSON.parse(text)
+    return JSON.parse(text);
   } catch {
-    return text
+    return text;
   }
 }
 
 function unwrapCallToolResult(result: CallToolResult): unknown {
   if (result.isError === true) {
-    const content = result.content as Array<{ type: string; text?: string }>
+    const content = result.content as Array<{ type: string; text?: string }>;
     const message =
       content.length > 0 && content[0]!.type === "text" && typeof content[0]!.text === "string"
         ? content[0]!.text
-        : "MCP tool call failed"
-    throw new McpClientError(message, result)
+        : "MCP tool call failed";
+    throw new McpClientError(message, result);
   }
-  const content = result.content as Array<{ type: string; text?: string }>
+  const content = result.content as Array<{ type: string; text?: string }>;
   if (content.length === 1 && content[0]!.type === "text" && typeof content[0]!.text === "string") {
-    return unwrapText(content[0]!.text)
+    return unwrapText(content[0]!.text);
   }
-  return result
+  return result;
 }
 
 function unwrapReadResourceResult(result: ReadResourceResult): unknown {
-  const contents = result.contents as Array<{ text?: string }>
+  const contents = result.contents as Array<{ text?: string }>;
   if (contents.length === 1 && typeof contents[0]!.text === "string") {
-    return unwrapText(contents[0]!.text)
+    return unwrapText(contents[0]!.text);
   }
-  return result
+  return result;
 }
 
 // ============================================================================
@@ -139,7 +143,7 @@ function unwrapReadResourceResult(result: ReadResourceResult): unknown {
 function substituteSlugs(template: string, slugValues: Readonly<Record<string, string>>): string {
   return template.replace(/\{([^}]+)\}/g, (match, name: string) =>
     Object.prototype.hasOwnProperty.call(slugValues, name) ? slugValues[name]! : match,
-  )
+  );
 }
 
 // ============================================================================
@@ -163,9 +167,9 @@ function makeToolCaller(
     const result = await client.callTool({
       name,
       arguments: { ...slugValues, ...((input ?? {}) as Record<string, unknown>) },
-    })
-    return unwrapCallToolResult(result as CallToolResult)
-  }
+    });
+    return unwrapCallToolResult(result as CallToolResult);
+  };
 }
 
 function makeResourceCaller(
@@ -174,10 +178,10 @@ function makeResourceCaller(
   slugValues: Readonly<Record<string, string>>,
 ): () => Promise<unknown> {
   return async (): Promise<unknown> => {
-    const uri = substituteSlugs(uriTemplate, slugValues)
-    const result = await client.readResource({ uri })
-    return unwrapReadResourceResult(result as ReadResourceResult)
-  }
+    const uri = substituteSlugs(uriTemplate, slugValues);
+    const result = await client.readResource({ uri });
+    return unwrapReadResourceResult(result as ReadResourceResult);
+  };
 }
 
 function makePromptCaller(
@@ -191,8 +195,8 @@ function makePromptCaller(
     return client.getPrompt({
       name,
       arguments: { ...slugValues, ...(args ?? {}) },
-    }) as Promise<GetPromptResult>
-  }
+    }) as Promise<GetPromptResult>;
+  };
 }
 
 // ============================================================================
@@ -214,30 +218,34 @@ function buildClientNode(
   client: Client,
   scheme: string,
 ): AnyMcpClient {
-  const out: AnyMcpClient = {}
+  const out: AnyMcpClient = {};
 
   for (const [key, child] of Object.entries(node.children ?? {})) {
     if (isLeaf(child)) {
-      const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-      const as = mcp.as ?? "tool"
+      const mcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
+      const as = mcp.as ?? "tool";
 
       if (as === "resource") {
-        const leafSegments = [...resourceSegments, key]
-        const derivedUri = `${scheme}${leafSegments.join("/")}`
-        const uriTemplate = typeof mcp.uri === "string" ? mcp.uri : derivedUri
-        out[key] = makeResourceCaller(client, uriTemplate, slugValues)
+        const leafSegments = [...resourceSegments, key];
+        const derivedUri = `${scheme}${leafSegments.join("/")}`;
+        const uriTemplate = typeof mcp.uri === "string" ? mcp.uri : derivedUri;
+        out[key] = makeResourceCaller(client, uriTemplate, slugValues);
       } else {
         const name =
-          typeof mcp.name === "string" ? mcp.name : toolPrefix.length > 0 ? `${toolPrefix}_${key}` : key
+          typeof mcp.name === "string"
+            ? mcp.name
+            : toolPrefix.length > 0
+              ? `${toolPrefix}_${key}`
+              : key;
         out[key] =
           as === "prompt"
             ? makePromptCaller(client, name, slugValues)
-            : makeToolCaller(client, name, slugValues)
+            : makeToolCaller(client, name, slugValues);
       }
     } else {
-      const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta)
-      const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key
-      const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${rawSeg}` : rawSeg
+      const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
+      const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
+      const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${rawSeg}` : rawSeg;
       out[key] = buildClientNode(
         child,
         childToolPrefix,
@@ -245,13 +253,13 @@ function buildClientNode(
         slugValues,
         client,
         scheme,
-      )
+      );
     }
   }
 
   if (node.fallback !== undefined) {
-    const { name, subtree } = node.fallback
-    const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${name}` : name
+    const { name, subtree } = node.fallback;
+    const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${name}` : name;
 
     // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
     // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
@@ -264,19 +272,19 @@ function buildClientNode(
     // one-off nested client object.
     out[name] = isLeaf(subtree)
       ? (value: string): unknown => {
-          const mcp = getMcpMeta(subtree.meta as McpLeafMeta & McpBranchMeta)
-          const as = mcp.as ?? "tool"
-          const leafSlugValues = { ...slugValues, [name]: value }
+          const mcp = getMcpMeta(subtree.meta as McpLeafMeta & McpBranchMeta);
+          const as = mcp.as ?? "tool";
+          const leafSlugValues = { ...slugValues, [name]: value };
           if (as === "resource") {
-            const leafSegments = [...resourceSegments, `{${name}}`]
-            const derivedUri = `${scheme}${leafSegments.join("/")}`
-            const uriTemplate = typeof mcp.uri === "string" ? mcp.uri : derivedUri
-            return makeResourceCaller(client, uriTemplate, leafSlugValues)
+            const leafSegments = [...resourceSegments, `{${name}}`];
+            const derivedUri = `${scheme}${leafSegments.join("/")}`;
+            const uriTemplate = typeof mcp.uri === "string" ? mcp.uri : derivedUri;
+            return makeResourceCaller(client, uriTemplate, leafSlugValues);
           }
-          const toolName = typeof mcp.name === "string" ? mcp.name : childToolPrefix
+          const toolName = typeof mcp.name === "string" ? mcp.name : childToolPrefix;
           return as === "prompt"
             ? makePromptCaller(client, toolName, leafSlugValues)
-            : makeToolCaller(client, toolName, leafSlugValues)
+            : makeToolCaller(client, toolName, leafSlugValues);
         }
       : (value: string): AnyMcpClient =>
           buildClientNode(
@@ -286,10 +294,10 @@ function buildClientNode(
             { ...slugValues, [name]: value },
             client,
             scheme,
-          )
+          );
   }
 
-  return out
+  return out;
 }
 
 // ============================================================================
@@ -323,7 +331,11 @@ function buildClientNode(
  * @param client - A connected MCP SDK `Client` instance.
  * @param opts - Optional: `resourceScheme` (must match the server's `projectResources` scheme, default `"resource://"`).
  */
-export function createMcpClient(tree: Node, client: Client, opts: McpClientOptions = {}): AnyMcpClient {
-  const scheme = opts.resourceScheme ?? "resource://"
-  return buildClientNode(tree, "", [], {}, client, scheme)
+export function createMcpClient(
+  tree: Node,
+  client: Client,
+  opts: McpClientOptions = {},
+): AnyMcpClient {
+  const scheme = opts.resourceScheme ?? "resource://";
+  return buildClientNode(tree, "", [], {}, client, scheme);
 }

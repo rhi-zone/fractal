@@ -9,8 +9,8 @@
 // shared generic to JSON-RPC's own store names and wraps the result under
 // `meta.jsonrpc`.
 
-import { resolveSourceMap } from "@rhi-zone/fractal-api-tree"
-import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree"
+import { resolveSourceMap } from "@rhi-zone/fractal-api-tree";
+import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree";
 
 /**
  * JSON-RPC's own store names — the stores `jsonrpc.source()`'s map accepts:
@@ -22,7 +22,7 @@ import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tr
  * is (http-api-projector/src/decode.ts) — JSON-RPC has no equivalent
  * extension point today, and this design doesn't introduce one.
  */
-export type JsonRpcStoreName = "params" | "caller"
+export type JsonRpcStoreName = "params" | "caller";
 
 /**
  * `jsonrpc.source(map)` — declares which JSON-RPC store (`params`,
@@ -44,8 +44,8 @@ export type JsonRpcStoreName = "params" | "caller"
 export function source<const M extends SourceMapInput<JsonRpcStoreName>>(
   map: M,
 ): { readonly jsonrpc: { readonly sourceMap: ResolvedSourceMap<M> } } {
-  return { jsonrpc: { sourceMap: resolveSourceMap(map) } }
+  return { jsonrpc: { sourceMap: resolveSourceMap(map) } };
 }
 
 /** `jsonrpc.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs.ts). */
-export const jsonrpc = { source }
+export const jsonrpc = { source };

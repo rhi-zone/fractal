@@ -28,23 +28,23 @@ import {
   jsonProfile,
   queryProfile,
   type WireProfile,
-} from "@rhi-zone/fractal-type-ir"
+} from "@rhi-zone/fractal-type-ir";
 
 /** The five wire protocols wire-profile derivation knows about, plus
  * `"identity"` for an in-process/already-typed value with no wire in
  * between (the strict posture `check`/`errors`/`parse` have always assumed —
  * see compile.ts's `identityProfile` doc comment). Re-exported by
  * `apply-validation.ts` as the third `applyValidation` argument's type. */
-export type ProtocolName = "http" | "cli" | "mcp" | "graphql" | "jsonrpc" | "identity"
+export type ProtocolName = "http" | "cli" | "mcp" | "graphql" | "jsonrpc" | "identity";
 
 /** A minimal `ParamSource`-shaped override — deliberately NOT imported from
  * `input.ts`'s `ParamSource` (this module only reads `store`/`key`
  * structurally, and importing the full type would pull codegen into a
  * runtime-shape dependency it doesn't otherwise need). */
-export type FieldSource = { readonly store: string; readonly key?: string }
+export type FieldSource = { readonly store: string; readonly key?: string };
 
 /** A leaf's per-protocol `sourceMap` override, field name -> source. */
-export type FieldSourceMap = Readonly<Record<string, FieldSource>>
+export type FieldSourceMap = Readonly<Record<string, FieldSource>>;
 
 /**
  * The result of deriving a leaf's wire profile for one protocol:
@@ -66,8 +66,11 @@ export type FieldSourceMap = Readonly<Record<string, FieldSource>>
  *     defaultProfile`.
  */
 export type FieldProfileDerivation =
-  | { readonly fieldProfiles: Readonly<Record<string, WireProfile>>; readonly defaultProfile: WireProfile }
-  | { readonly profile: WireProfile }
+  | {
+      readonly fieldProfiles: Readonly<Record<string, WireProfile>>;
+      readonly defaultProfile: WireProfile;
+    }
+  | { readonly profile: WireProfile };
 
 /** CLI store -> leaf encoding. All three (`flag`/`path`/`env`) map to
  * `argvProfile`-style encoding today — argv is uniform — but this is still a
@@ -76,7 +79,7 @@ export type FieldProfileDerivation =
  * back to `argvProfile` for any unrecognized/future store name, e.g. `caller`
  * — see `CliStoreName`, cli-api-projector/src/source.ts). */
 function cliStoreEncoding(_store: string): WireProfile {
-  return argvProfile
+  return argvProfile;
 }
 
 /** HTTP store -> leaf encoding: `body` is typed JSON (dates need an ISO-
@@ -86,7 +89,7 @@ function cliStoreEncoding(_store: string): WireProfile {
  * `HttpStoreRegistry` (http-api-projector/src/decode.ts) for the store name
  * set this mirrors. */
 function httpStoreEncoding(store: string): WireProfile {
-  return store === "body" ? jsonProfile : queryProfile
+  return store === "body" ? jsonProfile : queryProfile;
 }
 
 /**
@@ -102,9 +105,9 @@ function primaryStoreForMethod(method: string): "query" | "body" {
     case "GET":
     case "HEAD":
     case "DELETE":
-      return "query"
+      return "query";
     default:
-      return "body"
+      return "body";
   }
 }
 
@@ -140,15 +143,17 @@ export function deriveFieldProfiles(
   method: string | undefined,
   pathParamNames: ReadonlySet<string> | readonly string[],
 ): FieldProfileDerivation {
-  if (protocol === "identity") return { profile: identityProfile }
-  if (protocol === "mcp" || protocol === "graphql" || protocol === "jsonrpc") return { profile: jsonProfile }
+  if (protocol === "identity") return { profile: identityProfile };
+  if (protocol === "mcp" || protocol === "graphql" || protocol === "jsonrpc")
+    return { profile: jsonProfile };
 
-  const pathNames = pathParamNames instanceof Set ? pathParamNames : new Set(pathParamNames)
-  const storeEncoding = protocol === "cli" ? cliStoreEncoding : httpStoreEncoding
-  const fieldProfiles: Record<string, WireProfile> = {}
-  for (const name of pathNames) fieldProfiles[name] = storeEncoding("path")
-  for (const [field, source] of Object.entries(sourceMap ?? {})) fieldProfiles[field] = storeEncoding(source.store)
+  const pathNames = pathParamNames instanceof Set ? pathParamNames : new Set(pathParamNames);
+  const storeEncoding = protocol === "cli" ? cliStoreEncoding : httpStoreEncoding;
+  const fieldProfiles: Record<string, WireProfile> = {};
+  for (const name of pathNames) fieldProfiles[name] = storeEncoding("path");
+  for (const [field, source] of Object.entries(sourceMap ?? {}))
+    fieldProfiles[field] = storeEncoding(source.store);
 
-  const defaultStore = protocol === "cli" ? "flag" : primaryStoreForMethod(method ?? "GET")
-  return { fieldProfiles, defaultProfile: storeEncoding(defaultStore) }
+  const defaultStore = protocol === "cli" ? "flag" : primaryStoreForMethod(method ?? "GET");
+  return { fieldProfiles, defaultProfile: storeEncoding(defaultStore) };
 }

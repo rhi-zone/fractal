@@ -40,20 +40,20 @@
 // plus the `children` / `fallback` recursion both shapes share. A position
 // carrying both is handled too; neither shape is assumed.
 
-import { err } from "./index.ts"
-import { TAG_UNVALIDATED } from "./tags.ts"
-import type { GeneratedEntry } from "./build.ts"
-import type { ProtocolName } from "./wire-derive.ts"
+import { err } from "./index.ts";
+import { TAG_UNVALIDATED } from "./tags.ts";
+import type { GeneratedEntry } from "./build.ts";
+import type { ProtocolName } from "./wire-derive.ts";
 
 /** Re-exported for convenience: the generated-entry shape this mechanism
  * consumes is EXACTLY `wrapValidators`' own (build.ts) — one generated
  * validator module can feed either mechanism. Type-only import, so this file
  * pulls in none of build.ts's codegen machinery at runtime. */
-export type { GeneratedEntry }
+export type { GeneratedEntry };
 
 /** Re-exported for convenience — the type of `applyValidation`'s optional
  * third argument. See wire-derive.ts. */
-export type { ProtocolName }
+export type { ProtocolName };
 
 /**
  * outer key = the string key passed to `applyValidation(key, tree)`.
@@ -75,7 +75,7 @@ export type { ProtocolName }
  * per-protocol sibling a 3-argument call site (`applyValidation(key, tree,
  * protocol)`) resolves against instead.
  */
-export type ValidatorMap = Readonly<Record<string, Readonly<Record<string, GeneratedEntry>>>>
+export type ValidatorMap = Readonly<Record<string, Readonly<Record<string, GeneratedEntry>>>>;
 
 /**
  * The per-(key, path, protocol) sibling of `ValidatorMap` — what a 3-argument
@@ -98,7 +98,7 @@ export type ValidatorMap = Readonly<Record<string, Readonly<Record<string, Gener
  */
 export type WireValidatorMap = Readonly<
   Record<string, Readonly<Record<string, Readonly<Partial<Record<ProtocolName, GeneratedEntry>>>>>>
->
+>;
 
 /**
  * The property name a `createApplyValidation` result carries at the TYPE
@@ -110,7 +110,7 @@ export type WireValidatorMap = Readonly<
  * IS matched no matter what it was renamed to or how many re-export hops sit
  * between the generated module and the call site.
  */
-export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const
+export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const;
 
 /** `createApplyValidation`'s return type — see `APPLY_VALIDATION_BRAND` for
  * why it carries a phantom brand property. Generic in the tree type: the
@@ -126,15 +126,15 @@ export type ApplyValidation = {
    * the 2-arg-specific codegen route; an omitted `protocol` is now sugar for
    * `"identity"` at the codegen layer too).
    */
-  <T>(key: string, tree: T, protocol?: ProtocolName): T
+  <T>(key: string, tree: T, protocol?: ProtocolName): T;
   /** Phantom — never present at runtime. See `APPLY_VALIDATION_BRAND`. */
-  readonly __fractalApplyValidation?: true
-}
+  readonly __fractalApplyValidation?: true;
+};
 
 /** A handler in either recognized position — a `Node`'s own `handler`, or an
  * `HttpRoute` method entry's. Deliberately not `Handler` from node.ts: this
  * walk never assumes the value it found came from this package's model. */
-type AnyHandler = (input: unknown) => unknown
+type AnyHandler = (input: unknown) => unknown;
 
 /**
  * Wrap one handler: run `entry.parse(input, hooks)` first — `ok` calls the
@@ -158,15 +158,15 @@ function wrapHandler(
   hooks: Readonly<Record<string, (w: unknown) => unknown>> | undefined,
 ): AnyHandler {
   const wrapped: AnyHandler = async (input: unknown) => {
-    const result = entry.parse(input, hooks)
-    if (result.kind === "err") return err(result.errors)
-    return handler(result.value)
-  }
-  return wrapped
+    const result = entry.parse(input, hooks);
+    if (result.kind === "err") return err(result.errors);
+    return handler(result.value);
+  };
+  return wrapped;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -185,16 +185,16 @@ function readEncodingMapHooks(
   meta: unknown,
   protocol: ProtocolName,
 ): ReadonlyMap<string, (w: unknown) => unknown> {
-  const out = new Map<string, (w: unknown) => unknown>()
-  if (!isRecord(meta)) return out
-  const ns = meta[protocol]
-  if (!isRecord(ns)) return out
-  const encodingMap = ns["encodingMap"]
-  if (!isRecord(encodingMap)) return out
+  const out = new Map<string, (w: unknown) => unknown>();
+  if (!isRecord(meta)) return out;
+  const ns = meta[protocol];
+  if (!isRecord(ns)) return out;
+  const encodingMap = ns["encodingMap"];
+  if (!isRecord(encodingMap)) return out;
   for (const [field, value] of Object.entries(encodingMap)) {
-    if (typeof value === "function") out.set(field, value as (w: unknown) => unknown)
+    if (typeof value === "function") out.set(field, value as (w: unknown) => unknown);
   }
-  return out
+  return out;
 }
 
 /**
@@ -231,7 +231,7 @@ function resolveHooks(
   meta: unknown,
   protocol: ProtocolName | undefined,
 ): Readonly<Record<string, (w: unknown) => unknown>> | undefined {
-  const declared = entry.hookFields ?? []
+  const declared = entry.hookFields ?? [];
   if (protocol === undefined) {
     // A 2-arg `applyValidation(key, tree)` call never derives hook fields at
     // all (see `apply-validation-build.ts`'s extraction: the http/cli-only
@@ -243,12 +243,12 @@ function resolveHooks(
         `applyValidation: leaf ${JSON.stringify(leafPath)}'s generated entry expects hook fields ` +
           `${JSON.stringify(declared)}, but this leaf was wired with no explicit protocol. Custom-decoder ` +
           `hooks require a 3-arg applyValidation(key, tree, protocol) call — stale generated module?`,
-      )
+      );
     }
-    return undefined
+    return undefined;
   }
-  const actual = readEncodingMapHooks(meta, protocol)
-  const declaredSet = new Set(declared)
+  const actual = readEncodingMapHooks(meta, protocol);
+  const declaredSet = new Set(declared);
   for (const field of declaredSet) {
     if (!actual.has(field)) {
       throw new Error(
@@ -256,7 +256,7 @@ function resolveHooks(
           `${JSON.stringify(field)} (protocol ${JSON.stringify(protocol)}), but meta.${protocol}.encodingMap.${field} ` +
           `is not a function on the running tree. Stale generated module (re-run codegen) or the override was ` +
           `removed/renamed after the last codegen run.`,
-      )
+      );
     }
   }
   for (const field of actual.keys()) {
@@ -266,26 +266,26 @@ function resolveHooks(
           `meta.${protocol}.encodingMap.${field}, but its generated entry does not expect a hook for that field ` +
           `(hookFields: ${JSON.stringify(declared)}). Stale generated module — re-run codegen after authoring or ` +
           `changing this decoder, or the fused default for that field will run instead of this decoder.`,
-      )
+      );
     }
   }
-  if (actual.size === 0) return undefined
-  return Object.fromEntries(actual)
+  if (actual.size === 0) return undefined;
+  return Object.fromEntries(actual);
 }
 
 /** True when `meta` (a node's, or an `HttpRoute` method entry's) is tagged
  * `tags.unvalidated === true` — see `TAG_UNVALIDATED` (tags.ts). */
 function isTaggedUnvalidated(meta: unknown): boolean {
-  if (!isRecord(meta)) return false
-  const tags = meta["tags"]
-  return isRecord(tags) && tags[TAG_UNVALIDATED] === true
+  if (!isRecord(meta)) return false;
+  const tags = meta["tags"];
+  return isRecord(tags) && tags[TAG_UNVALIDATED] === true;
 }
 
 /** The fallback segment's rendering in a path key — `:name`, matching
  * `wrapValidators`/`extractRouteTypeRefs`. */
 function fallbackSegment(fallback: Record<string, unknown>): string | undefined {
-  const name = fallback["name"]
-  return typeof name === "string" ? `:${name}` : undefined
+  const name = fallback["name"];
+  return typeof name === "string" ? `:${name}` : undefined;
 }
 
 /**
@@ -304,22 +304,28 @@ function rewriteTree(
   path: readonly string[],
   visit: (node: Record<string, unknown>, path: readonly string[]) => Record<string, unknown>,
 ): unknown {
-  if (!isRecord(node)) return node
-  const out = visit(node, path)
-  const children = node["children"]
+  if (!isRecord(node)) return node;
+  const out = visit(node, path);
+  const children = node["children"];
   if (isRecord(children)) {
     out["children"] = Object.fromEntries(
-      Object.entries(children).map(([key, child]) => [key, rewriteTree(child, [...path, key], visit)]),
-    )
+      Object.entries(children).map(([key, child]) => [
+        key,
+        rewriteTree(child, [...path, key], visit),
+      ]),
+    );
   }
-  const fallback = node["fallback"]
+  const fallback = node["fallback"];
   if (isRecord(fallback)) {
-    const segment = fallbackSegment(fallback)
+    const segment = fallbackSegment(fallback);
     if (segment !== undefined) {
-      out["fallback"] = { ...fallback, subtree: rewriteTree(fallback["subtree"], [...path, segment], visit) }
+      out["fallback"] = {
+        ...fallback,
+        subtree: rewriteTree(fallback["subtree"], [...path, segment], visit),
+      };
     }
   }
-  return out
+  return out;
 }
 
 /**
@@ -330,16 +336,17 @@ function walkTreePositions(
   path: readonly string[],
   visit: (node: Record<string, unknown>, path: readonly string[]) => void,
 ): void {
-  if (!isRecord(node)) return
-  visit(node, path)
-  const children = node["children"]
+  if (!isRecord(node)) return;
+  visit(node, path);
+  const children = node["children"];
   if (isRecord(children)) {
-    for (const [key, child] of Object.entries(children)) walkTreePositions(child, [...path, key], visit)
+    for (const [key, child] of Object.entries(children))
+      walkTreePositions(child, [...path, key], visit);
   }
-  const fallback = node["fallback"]
+  const fallback = node["fallback"];
   if (isRecord(fallback)) {
-    const segment = fallbackSegment(fallback)
-    if (segment !== undefined) walkTreePositions(fallback["subtree"], [...path, segment], visit)
+    const segment = fallbackSegment(fallback);
+    if (segment !== undefined) walkTreePositions(fallback["subtree"], [...path, segment], visit);
   }
 }
 
@@ -371,26 +378,33 @@ function injectValidators(
   protocol: ProtocolName | undefined,
 ): unknown {
   return rewriteTree(tree, [], (node, path) => {
-    const entry = forKey[path.join("/")]
-    const out: Record<string, unknown> = { ...node }
-    if (entry === undefined) return out
-    const leafPath = path.join("/")
+    const entry = forKey[path.join("/")];
+    const out: Record<string, unknown> = { ...node };
+    if (entry === undefined) return out;
+    const leafPath = path.join("/");
     if (typeof node["handler"] === "function") {
-      const hooks = resolveHooks(leafPath, entry, node["meta"], protocol)
-      out["handler"] = wrapHandler(node["handler"] as AnyHandler, entry, hooks)
+      const hooks = resolveHooks(leafPath, entry, node["meta"], protocol);
+      out["handler"] = wrapHandler(node["handler"] as AnyHandler, entry, hooks);
     }
-    const methods = node["methods"]
+    const methods = node["methods"];
     if (isRecord(methods)) {
       out["methods"] = Object.fromEntries(
         Object.entries(methods).map(([verb, methodEntry]) => {
-          if (!isRecord(methodEntry) || typeof methodEntry["handler"] !== "function") return [verb, methodEntry]
-          const hooks = resolveHooks(`${leafPath}[${verb}]`, entry, methodEntry["meta"], protocol)
-          return [verb, { ...methodEntry, handler: wrapHandler(methodEntry["handler"] as AnyHandler, entry, hooks) }]
+          if (!isRecord(methodEntry) || typeof methodEntry["handler"] !== "function")
+            return [verb, methodEntry];
+          const hooks = resolveHooks(`${leafPath}[${verb}]`, entry, methodEntry["meta"], protocol);
+          return [
+            verb,
+            {
+              ...methodEntry,
+              handler: wrapHandler(methodEntry["handler"] as AnyHandler, entry, hooks),
+            },
+          ];
         }),
-      )
+      );
     }
-    return out
-  })
+    return out;
+  });
 }
 
 /** Flatten `wireValidators[key]` (path -> protocol -> entry) down to the
@@ -398,16 +412,18 @@ function injectValidators(
  * already know how to walk, keeping only the entries for `protocol` — the
  * bridge that lets a 3-arg call reuse both functions completely unchanged. */
 function flattenWireForKey(
-  forKey: Readonly<Record<string, Readonly<Partial<Record<ProtocolName, GeneratedEntry>>>>> | undefined,
+  forKey:
+    | Readonly<Record<string, Readonly<Partial<Record<ProtocolName, GeneratedEntry>>>>>
+    | undefined,
   protocol: ProtocolName,
 ): Readonly<Record<string, GeneratedEntry>> | undefined {
-  if (forKey === undefined) return undefined
-  const flat: Record<string, GeneratedEntry> = {}
+  if (forKey === undefined) return undefined;
+  const flat: Record<string, GeneratedEntry> = {};
   for (const [leafPath, byProtocol] of Object.entries(forKey)) {
-    const entry = byProtocol[protocol]
-    if (entry !== undefined) flat[leafPath] = entry
+    const entry = byProtocol[protocol];
+    if (entry !== undefined) flat[leafPath] = entry;
   }
-  return flat
+  return flat;
 }
 
 /**
@@ -436,8 +452,8 @@ function resolveForKey(
   validators: ValidatorMap,
   wireValidators: WireValidatorMap,
 ): Readonly<Record<string, GeneratedEntry>> | undefined {
-  if (protocol !== undefined) return flattenWireForKey(wireValidators[key], protocol)
-  return validators[key] ?? flattenWireForKey(wireValidators[key], "identity")
+  if (protocol !== undefined) return flattenWireForKey(wireValidators[key], protocol);
+  return validators[key] ?? flattenWireForKey(wireValidators[key], "identity");
 }
 
 /**
@@ -469,17 +485,17 @@ export function createApplyValidation(
   validators: ValidatorMap,
   wireValidators: WireValidatorMap = {},
 ): ApplyValidation {
-  const usedKeys = new Set<string>()
-  const applyValidation = <T,>(key: string, tree: T, protocol?: ProtocolName): T => {
+  const usedKeys = new Set<string>();
+  const applyValidation = <T>(key: string, tree: T, protocol?: ProtocolName): T => {
     if (usedKeys.has(key)) {
-      throw new Error(`applyValidation: key ${JSON.stringify(key)} has already been used`)
+      throw new Error(`applyValidation: key ${JSON.stringify(key)} has already been used`);
     }
-    usedKeys.add(key)
-    const forKey = resolveForKey(key, protocol, validators, wireValidators)
-    if (forKey === undefined) return tree
-    return injectValidators(tree, forKey, protocol) as T
-  }
-  return applyValidation
+    usedKeys.add(key);
+    const forKey = resolveForKey(key, protocol, validators, wireValidators);
+    if (forKey === undefined) return tree;
+    return injectValidators(tree, forKey, protocol) as T;
+  };
+  return applyValidation;
 }
 
 /**
@@ -492,8 +508,8 @@ export function createApplyValidation(
  * (a `key`-scoped codegen run).
  */
 export class UncoveredLeafError extends Error {
-  readonly key: string
-  readonly paths: readonly string[]
+  readonly key: string;
+  readonly paths: readonly string[];
   constructor(key: string, paths: readonly string[]) {
     super(
       `applyValidation: under key ${JSON.stringify(key)}, the following leaves have no ` +
@@ -501,10 +517,10 @@ export class UncoveredLeafError extends Error {
         `Fix by either regenerating this key's validators (re-run codegen — see ` +
         `@rhi-zone/fractal-api-tree's build/watch/check CLI), or tagging the leaf to ` +
         `opt it out explicitly: op(fn, { tags: { unvalidated: true } }).`,
-    )
-    this.name = "UncoveredLeafError"
-    this.key = key
-    this.paths = paths
+    );
+    this.name = "UncoveredLeafError";
+    this.key = key;
+    this.paths = paths;
   }
 }
 
@@ -522,27 +538,27 @@ function collectUncoveredLeaves(
   tree: unknown,
   forKey: Readonly<Record<string, GeneratedEntry>>,
 ): string[] {
-  const out: string[] = []
+  const out: string[] = [];
   walkTreePositions(tree, [], (node, path) => {
-    const key = path.join("/")
-    if (forKey[key] !== undefined) return
-    if (isTaggedUnvalidated(node["meta"])) return
+    const key = path.join("/");
+    if (forKey[key] !== undefined) return;
+    if (isTaggedUnvalidated(node["meta"])) return;
     if (typeof node["handler"] === "function") {
-      out.push(key)
-      return
+      out.push(key);
+      return;
     }
-    const methods = node["methods"]
-    if (!isRecord(methods)) return
+    const methods = node["methods"];
+    if (!isRecord(methods)) return;
     const handlerEntries = Object.values(methods).filter(
       (entry) => isRecord(entry) && typeof entry["handler"] === "function",
-    )
-    if (handlerEntries.length === 0) return
+    );
+    if (handlerEntries.length === 0) return;
     const allTagged = handlerEntries.every(
       (entry) => isRecord(entry) && isTaggedUnvalidated(entry["meta"]),
-    )
-    if (!allTagged) out.push(key)
-  })
-  return out
+    );
+    if (!allTagged) out.push(key);
+  });
+  return out;
 }
 
 /**
@@ -561,7 +577,8 @@ export function assertValidationCoverage(
   validators: ValidatorMap,
   options?: { readonly protocol?: ProtocolName; readonly wireValidators?: WireValidatorMap },
 ): void {
-  const forKey = resolveForKey(key, options?.protocol, validators, options?.wireValidators ?? {}) ?? {}
-  const uncovered = collectUncoveredLeaves(tree, forKey)
-  if (uncovered.length > 0) throw new UncoveredLeafError(key, uncovered)
+  const forKey =
+    resolveForKey(key, options?.protocol, validators, options?.wireValidators ?? {}) ?? {};
+  const uncovered = collectUncoveredLeaves(tree, forKey);
+  if (uncovered.length > 0) throw new UncoveredLeafError(key, uncovered);
 }

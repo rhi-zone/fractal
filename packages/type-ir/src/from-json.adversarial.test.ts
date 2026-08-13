@@ -13,28 +13,27 @@
 // CI) with a comment recording the minimal counterexample fast-check found.
 // Properties that pass stay as live `test(...)`.
 
-import { describe, expect, test } from "bun:test"
-import fc from "fast-check"
-import { t, types, ancestors, type TypeRef } from "./index.ts"
-import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts"
+import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+import { t, types, ancestors, type TypeRef } from "./index.ts";
+import { fromJsonCorpus, type CorpusInferConfig } from "./from-json-corpus.ts";
 
 // Single-value inference is the N=1 case of the one public entry point; there
 // is no separate single-value function. This file exercises that case.
 const inferOne = (value: unknown, config?: CorpusInferConfig): TypeRef =>
-  fromJsonCorpus([value], config)
-
+  fromJsonCorpus([value], config);
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
 function isSubkind(child: string, parent: string): boolean {
-  if (child === parent) return true
-  return ancestors(child).includes(parent)
+  if (child === parent) return true;
+  return ancestors(child).includes(parent);
 }
 
 function objectFields(ref: TypeRef): Record<string, TypeRef> {
-  return (ref.shape as { fields: Record<string, TypeRef> }).fields
+  return (ref.shape as { fields: Record<string, TypeRef> }).fields;
 }
 
 // Recursively check that `value` is a plausible inhabitant of `inferred`.
@@ -44,105 +43,108 @@ function objectFields(ref: TypeRef): Record<string, TypeRef> {
 // understand enum/DU/dict post-processing precisely — those are covered by
 // dedicated properties below.
 function inhabits(value: unknown, ref: TypeRef): string | null {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   // `unknown` is the top type in this IR — every JSON value inhabits it.
-  if (kind === "unknown") return null
+  if (kind === "unknown") return null;
 
   if (kind === "union") {
-    const variants = (ref.shape as { variants: readonly TypeRef[] }).variants
+    const variants = (ref.shape as { variants: readonly TypeRef[] }).variants;
     for (const v of variants) {
-      if (inhabits(value, v) === null) return null
+      if (inhabits(value, v) === null) return null;
     }
-    return `value ${JSON.stringify(value)} does not inhabit any union variant of ${JSON.stringify(ref.shape)}`
+    return `value ${JSON.stringify(value)} does not inhabit any union variant of ${JSON.stringify(ref.shape)}`;
   }
 
-  if (ref.meta.nullable === true && value === null) return null
+  if (ref.meta.nullable === true && value === null) return null;
 
-  if (value === null) return kind === "null" ? null : `null inferred as ${kind}`
-  if (typeof value === "boolean") return kind === "boolean" ? null : `boolean inferred as ${kind}`
+  if (value === null) return kind === "null" ? null : `null inferred as ${kind}`;
+  if (typeof value === "boolean") return kind === "boolean" ? null : `boolean inferred as ${kind}`;
 
   if (typeof value === "number") {
-    if (kind === "number") return null
+    if (kind === "number") return null;
     if (isSubkind(kind, "integer") || kind === "integer") {
-      return Number.isInteger(value) ? null : `fractional ${value} inferred as ${kind}`
+      return Number.isInteger(value) ? null : `fractional ${value} inferred as ${kind}`;
     }
-    if (kind === "literal") return null // literal numbers can appear post enum-detection
-    return `number ${value} inferred as ${kind}`
+    if (kind === "literal") return null; // literal numbers can appear post enum-detection
+    return `number ${value} inferred as ${kind}`;
   }
 
   if (typeof value === "string") {
-    if (kind === "string" || isSubkind(kind, "string")) return null
+    if (kind === "string" || isSubkind(kind, "string")) return null;
     if (kind === "enum") {
-      const members = (ref.shape as { members: readonly string[] }).members
-      return members.includes(value) ? null : `string "${value}" not in enum ${JSON.stringify(members)}`
+      const members = (ref.shape as { members: readonly string[] }).members;
+      return members.includes(value)
+        ? null
+        : `string "${value}" not in enum ${JSON.stringify(members)}`;
     }
-    if (kind === "literal") return null
-    return `string "${value}" inferred as ${kind}`
+    if (kind === "literal") return null;
+    return `string "${value}" inferred as ${kind}`;
   }
 
   if (Array.isArray(value)) {
     if (kind === "array") {
-      const el = (ref.shape as { element: TypeRef }).element
+      const el = (ref.shape as { element: TypeRef }).element;
       for (const item of value) {
-        const err = inhabits(item, el)
-        if (err !== null) return `array element mismatch: ${err}`
+        const err = inhabits(item, el);
+        if (err !== null) return `array element mismatch: ${err}`;
       }
-      return null
+      return null;
     }
     if (kind === "tuple") {
-      const els = (ref.shape as { elements: readonly TypeRef[] }).elements
-      if (els.length !== value.length) return `tuple length mismatch: value has ${value.length}, type has ${els.length}`
+      const els = (ref.shape as { elements: readonly TypeRef[] }).elements;
+      if (els.length !== value.length)
+        return `tuple length mismatch: value has ${value.length}, type has ${els.length}`;
       for (let i = 0; i < els.length; i++) {
-        const err = inhabits(value[i], els[i]!)
-        if (err !== null) return `tuple[${i}] mismatch: ${err}`
+        const err = inhabits(value[i], els[i]!);
+        if (err !== null) return `tuple[${i}] mismatch: ${err}`;
       }
-      return null
+      return null;
     }
-    return `array value inferred as ${kind}`
+    return `array value inferred as ${kind}`;
   }
 
   if (typeof value === "object") {
     if (kind === "object") {
-      const fields = objectFields(ref)
-      const additionalPropertyType = ref.meta.additionalPropertyType as TypeRef | undefined
+      const fields = objectFields(ref);
+      const additionalPropertyType = ref.meta.additionalPropertyType as TypeRef | undefined;
       for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
         if (key in fields) {
-          const err = inhabits(v, fields[key]!)
-          if (err !== null) return `field "${key}" mismatch: ${err}`
+          const err = inhabits(v, fields[key]!);
+          if (err !== null) return `field "${key}" mismatch: ${err}`;
         } else if (additionalPropertyType !== undefined) {
-          const err = inhabits(v, additionalPropertyType)
-          if (err !== null) return `dict entry "${key}" mismatch: ${err}`
+          const err = inhabits(v, additionalPropertyType);
+          if (err !== null) return `dict entry "${key}" mismatch: ${err}`;
         } else {
-          return `key "${key}" not in inferred object fields and no additionalPropertyType`
+          return `key "${key}" not in inferred object fields and no additionalPropertyType`;
         }
       }
       for (const [key, fieldRef] of Object.entries(fields)) {
         if (fieldRef.meta.optional !== true && !(key in (value as Record<string, unknown>))) {
-          return `required field "${key}" missing from value`
+          return `required field "${key}" missing from value`;
         }
       }
-      return null
+      return null;
     }
     if (kind === "map") {
-      const valueType = (ref.shape as { value: TypeRef }).value
+      const valueType = (ref.shape as { value: TypeRef }).value;
       for (const v of Object.values(value as Record<string, unknown>)) {
-        const err = inhabits(v, valueType)
-        if (err !== null) return `map entry mismatch: ${err}`
+        const err = inhabits(v, valueType);
+        if (err !== null) return `map entry mismatch: ${err}`;
       }
-      return null
+      return null;
     }
-    return `object value inferred as ${kind}`
+    return `object value inferred as ${kind}`;
   }
 
-  return null
+  return null;
 }
 
 // ---------------------------------------------------------------------------
 // Value-generating arbitraries — deep, adversarial JSON shapes
 // ---------------------------------------------------------------------------
 
-const plainKey = () => fc.stringMatching(/^[a-zA-Z][a-zA-Z0-9]{1,8}$/)
+const plainKey = () => fc.stringMatching(/^[a-zA-Z][a-zA-Z0-9]{1,8}$/);
 
 // A JSON value arbitrary that recurses to real depth (5+ levels): object ->
 // array -> object -> tuple-like array -> union-shaped leaf. fc.letrec wires
@@ -153,7 +155,10 @@ const { jsonDeep } = fc.letrec((tie) => ({
     { weight: 1, arbitrary: fc.constant(null) },
     { weight: 1, arbitrary: fc.boolean() },
     { weight: 1, arbitrary: fc.integer({ min: -1000, max: 1000 }) },
-    { weight: 1, arbitrary: fc.double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true }) },
+    {
+      weight: 1,
+      arbitrary: fc.double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true }),
+    },
     { weight: 1, arbitrary: fc.stringMatching(/^[A-Za-z]{2,12}$/) },
     {
       weight: 2,
@@ -161,10 +166,13 @@ const { jsonDeep } = fc.letrec((tie) => ({
     },
     {
       weight: 2,
-      arbitrary: fc.dictionary(plainKey(), tie("jsonDeep") as fc.Arbitrary<unknown>, { minKeys: 0, maxKeys: 4 }),
+      arbitrary: fc.dictionary(plainKey(), tie("jsonDeep") as fc.Arbitrary<unknown>, {
+        minKeys: 0,
+        maxKeys: 4,
+      }),
     },
   ),
-}))
+}));
 
 // ---------------------------------------------------------------------------
 // 1. Deep nesting — object > array > object > tuple > union, 5+ levels
@@ -174,20 +182,20 @@ describe("adversarial: deep nesting", () => {
   test("fromJson never crashes on 5+ level deep structures", () => {
     fc.assert(
       fc.property(jsonDeep, (value) => {
-        inferOne(value)
+        inferOne(value);
       }),
       { numRuns: 2000 },
-    )
-  })
+    );
+  });
 
   test("fromJsonCorpus never crashes on corpora of deep structures", () => {
     fc.assert(
       fc.property(fc.array(jsonDeep, { minLength: 1, maxLength: 30 }), (values) => {
-        fromJsonCorpus(values)
+        fromJsonCorpus(values);
       }),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   // Explicit 5-level construction: object -> array -> object -> tuple -> union leaf
   test("explicit 5-level nested structure infers without losing depth", () => {
@@ -198,13 +206,13 @@ describe("adversarial: deep nesting", () => {
           level3b: { level4: [{ level5: 1 }, { level5: 2 }, { level5: "three" }] },
         },
       ],
-    }
-    const inferred = inferOne(sample)
-    expect(inferred.shape.kind).toBe("object")
-    const err = inhabits(sample, inferred)
-    expect(err).toBeNull()
-  })
-})
+    };
+    const inferred = inferOne(sample);
+    expect(inferred.shape.kind).toBe("object");
+    const err = inhabits(sample, inferred);
+    expect(err).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 2. Mixed numeric types
@@ -214,68 +222,89 @@ describe("adversarial: mixed numeric types", () => {
   test("array mixing ints and floats infers as array<number> and accepts all elements", () => {
     fc.assert(
       fc.property(
-        fc.array(
-          fc.oneof(
-            fc.integer({ min: -1000, max: 1000 }),
-            fc.double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true })
-              .filter((n) => !Number.isInteger(n)),
+        fc
+          .array(
+            fc.oneof(
+              fc.integer({ min: -1000, max: 1000 }),
+              fc
+                .double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true })
+                .filter((n) => !Number.isInteger(n)),
+            ),
+            { minLength: 3, maxLength: 15 },
+          )
+          .filter(
+            (arr) => arr.some((n) => !Number.isInteger(n)) && arr.some((n) => Number.isInteger(n)),
           ),
-          { minLength: 3, maxLength: 15 },
-        ).filter((arr) => arr.some((n) => !Number.isInteger(n)) && arr.some((n) => Number.isInteger(n))),
         (arr) => {
-          const inferred = inferOne(arr)
-          const err = inhabits(arr, inferred)
+          const inferred = inferOne(arr);
+          const err = inhabits(arr, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         },
       ),
       { numRuns: 2000 },
-    )
-  })
+    );
+  });
 
   test("corpus with integer field in some samples, float field (same path) in others -> number, accepts all", () => {
     fc.assert(
       fc.property(
-        fc.array(
-          fc.oneof(
-            fc.integer({ min: -1000, max: 1000 }).map((n) => ({ x: n })),
-            fc.double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true })
-              .filter((n) => !Number.isInteger(n))
-              .map((n) => ({ x: n })),
+        fc
+          .array(
+            fc.oneof(
+              fc.integer({ min: -1000, max: 1000 }).map((n) => ({ x: n })),
+              fc
+                .double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true })
+                .filter((n) => !Number.isInteger(n))
+                .map((n) => ({ x: n })),
+            ),
+            { minLength: 3, maxLength: 20 },
+          )
+          .filter(
+            (samples) =>
+              samples.some((s) => Number.isInteger(s.x)) &&
+              samples.some((s) => !Number.isInteger(s.x)),
           ),
-          { minLength: 3, maxLength: 20 },
-        ).filter((samples) => samples.some((s) => Number.isInteger(s.x)) && samples.some((s) => !Number.isInteger(s.x))),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 1000 },
-    )
-  })
+    );
+  });
 
   test("width narrowing under mixed magnitude ints in one array (e.g. [1, 300, 70000])", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.integer({ min: -3_000_000_000, max: 3_000_000_000 }), { minLength: 3, maxLength: 10 }),
+        fc.array(fc.integer({ min: -3_000_000_000, max: 3_000_000_000 }), {
+          minLength: 3,
+          maxLength: 10,
+        }),
         (arr) => {
-          const inferred = inferOne(arr)
-          const err = inhabits(arr, inferred)
+          const inferred = inferOne(arr);
+          const err = inhabits(arr, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         },
       ),
       { numRuns: 1000 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 3. String format confusion
@@ -283,62 +312,69 @@ describe("adversarial: mixed numeric types", () => {
 
 describe("adversarial: string format confusion", () => {
   // Strings engineered to be near-misses on each format regex.
-  const almostUuid = () => fc.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{11}$/) // one hex digit short
-  const almostEmail = () => fc.stringMatching(/^[a-z]{2,8}@[a-z]{2,8}$/) // no TLD dot
-  const almostDate = () => fc.stringMatching(/^\d{4}-\d{2}-\d{3}$/) // extra digit
+  const almostUuid = () =>
+    fc.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{11}$/); // one hex digit short
+  const almostEmail = () => fc.stringMatching(/^[a-z]{2,8}@[a-z]{2,8}$/); // no TLD dot
+  const almostDate = () => fc.stringMatching(/^\d{4}-\d{2}-\d{3}$/); // extra digit
 
   test("near-miss format strings never crash and infer as plain string", () => {
     fc.assert(
       fc.property(fc.oneof(almostUuid(), almostEmail(), almostDate()), (s) => {
-        const inferred = inferOne(s)
+        const inferred = inferOne(s);
         // These are deliberately malformed vs. every format regex — must not
         // be misclassified as a semantic string subtype.
-        expect(inferred.shape.kind).toBe("string")
+        expect(inferred.shape.kind).toBe("string");
       }),
       { numRuns: 2000 },
-    )
-  })
+    );
+  });
 
   test("corpus: field is a valid email in some samples, plain string in others", () => {
     fc.assert(
       fc.property(
-        fc.array(
-          fc.oneof(
-            fc.tuple(fc.stringMatching(/^[a-z]{2,8}$/), fc.stringMatching(/^[a-z]{2,8}$/))
-              .map(([u, d]) => ({ f: `${u}@${d}.com` })),
-            fc.stringMatching(/^[A-Z][a-zA-Z]{2,10}$/).map((s) => ({ f: s })),
+        fc
+          .array(
+            fc.oneof(
+              fc
+                .tuple(fc.stringMatching(/^[a-z]{2,8}$/), fc.stringMatching(/^[a-z]{2,8}$/))
+                .map(([u, d]) => ({ f: `${u}@${d}.com` })),
+              fc.stringMatching(/^[A-Z][a-zA-Z]{2,10}$/).map((s) => ({ f: s })),
+            ),
+            { minLength: 3, maxLength: 20 },
+          )
+          .filter(
+            (samples) =>
+              samples.some((s) => s.f.includes("@")) && samples.some((s) => !s.f.includes("@")),
           ),
-          { minLength: 3, maxLength: 20 },
-        ).filter((samples) =>
-          samples.some((s) => s.f.includes("@")) && samples.some((s) => !s.f.includes("@")),
-        ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 1000 },
-    )
-  })
+    );
+  });
 
   test("format detection disagrees across samples at the same path (uuid vs date vs plain)", () => {
     const samples = [
       { f: "123e4567-e89b-12d3-a456-426614174000" },
       { f: "2026-01-01" },
       { f: "just a string" },
-    ]
-    const inferred = fromJsonCorpus(samples)
+    ];
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
-      expect(err).toBeNull()
+      const err = inhabits(s, inferred);
+      expect(err).toBeNull();
     }
-  })
-})
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 4. Union stress
@@ -357,16 +393,18 @@ describe("adversarial: union stress", () => {
           { minLength: 3, maxLength: 12 },
         ),
         (arr) => {
-          const inferred = inferOne(arr)
-          const err = inhabits(arr, inferred)
+          const inferred = inferOne(arr);
+          const err = inhabits(arr, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         },
       ),
       { numRuns: 1000 },
-    )
-  })
+    );
+  });
 
   test("discriminated union detected when a field cleanly partitions shapes", () => {
     const samples = [
@@ -376,13 +414,13 @@ describe("adversarial: union stress", () => {
       { type: "square", side: 4 },
       { type: "square", side: 5 },
       { type: "square", side: 6 },
-    ]
-    const inferred = fromJsonCorpus(samples)
+    ];
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
-      expect(err).toBeNull()
+      const err = inhabits(s, inferred);
+      expect(err).toBeNull();
     }
-  })
+  });
 
   test("corpus with different types at the same field path across samples never crashes and covers all", () => {
     fc.assert(
@@ -392,24 +430,28 @@ describe("adversarial: union stress", () => {
             fc.integer({ min: 0, max: 100 }).map((n) => ({ v: n })),
             fc.stringMatching(/^[a-z]{2,8}$/).map((s) => ({ v: s })),
             fc.boolean().map((b) => ({ v: b })),
-            fc.array(fc.integer({ min: 0, max: 10 }), { minLength: 0, maxLength: 3 }).map((a) => ({ v: a })),
+            fc
+              .array(fc.integer({ min: 0, max: 10 }), { minLength: 0, maxLength: 3 })
+              .map((a) => ({ v: a })),
           ),
           { minLength: 3, maxLength: 20 },
         ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 4b. Discriminant-free structural union splitting (generalized Jaccard
@@ -420,85 +462,125 @@ describe("adversarial: structural union splitting (no discriminant)", () => {
   test("property: root-level corpus of two disjoint object shapes always covers every sample, split or not", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.record({ a: fc.integer({ min: 0, max: 100 }), b: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 10 }),
-        fc.array(fc.record({ c: fc.boolean(), d: fc.integer({ min: 0, max: 10 }), e: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 10 }),
+        fc.array(
+          fc.record({ a: fc.integer({ min: 0, max: 100 }), b: fc.stringMatching(/^[a-z]{2,6}$/) }),
+          { minLength: 3, maxLength: 10 },
+        ),
+        fc.array(
+          fc.record({
+            c: fc.boolean(),
+            d: fc.integer({ min: 0, max: 10 }),
+            e: fc.stringMatching(/^[a-z]{2,6}$/),
+          }),
+          { minLength: 3, maxLength: 10 },
+        ),
         (groupA, groupB) => {
-          const samples = [...groupA, ...groupB]
-          const inferred = fromJsonCorpus(samples)
+          const samples = [...groupA, ...groupB];
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("property: sparse records (some samples with zero fields) never spuriously split and always cover every sample", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.boolean(), { minLength: 5, maxLength: 20 }).filter((mask) => mask.some((b) => b) && mask.some((b) => !b)),
+        fc
+          .array(fc.boolean(), { minLength: 5, maxLength: 20 })
+          .filter((mask) => mask.some((b) => b) && mask.some((b) => !b)),
         (mask) => {
-          const samples = mask.map((present) => (present ? { tag: "x" } : {}))
-          const inferred = fromJsonCorpus(samples)
-          expect(inferred.shape.kind).toBe("object")
+          const samples = mask.map((present) => (present ? { tag: "x" } : {}));
+          const inferred = fromJsonCorpus(samples);
+          expect(inferred.shape.kind).toBe("object");
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("property: array-of-objects with two disjoint shapes and no discriminant field always covers every element", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.record({ x: fc.integer({ min: 0, max: 100 }), y: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
-        fc.array(fc.record({ p: fc.boolean(), q: fc.integer({ min: 0, max: 10 }), r: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
+        fc.array(
+          fc.record({ x: fc.integer({ min: 0, max: 100 }), y: fc.stringMatching(/^[a-z]{2,6}$/) }),
+          { minLength: 3, maxLength: 8 },
+        ),
+        fc.array(
+          fc.record({
+            p: fc.boolean(),
+            q: fc.integer({ min: 0, max: 10 }),
+            r: fc.stringMatching(/^[a-z]{2,6}$/),
+          }),
+          { minLength: 3, maxLength: 8 },
+        ),
         (groupX, groupY) => {
-          const arr = [...groupX, ...groupY]
+          const arr = [...groupX, ...groupY];
           // Splitting is a corpus-level (resolveEvidence) pass — wrap the
           // single array as a one-sample corpus, same as the DU-detection
           // tests above, rather than calling single-value `fromJson`.
-          const inferred = fromJsonCorpus([arr])
-          const err = inhabits(arr, inferred)
+          const inferred = fromJsonCorpus([arr]);
+          const err = inhabits(arr, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  value: ${JSON.stringify(arr)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("splitDissimilarObjects: false always yields a single merged object, never a union, for a mixed-shape corpus", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.record({ a: fc.integer({ min: 0, max: 100 }), b: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
-        fc.array(fc.record({ c: fc.boolean(), d: fc.integer({ min: 0, max: 10 }), e: fc.stringMatching(/^[a-z]{2,6}$/) }), { minLength: 3, maxLength: 8 }),
+        fc.array(
+          fc.record({ a: fc.integer({ min: 0, max: 100 }), b: fc.stringMatching(/^[a-z]{2,6}$/) }),
+          { minLength: 3, maxLength: 8 },
+        ),
+        fc.array(
+          fc.record({
+            c: fc.boolean(),
+            d: fc.integer({ min: 0, max: 10 }),
+            e: fc.stringMatching(/^[a-z]{2,6}$/),
+          }),
+          { minLength: 3, maxLength: 8 },
+        ),
         (groupA, groupB) => {
-          const samples = [...groupA, ...groupB]
-          const inferred = fromJsonCorpus(samples, { splitDissimilarObjects: false })
-          expect(inferred.shape.kind).toBe("object")
+          const samples = [...groupA, ...groupB];
+          const inferred = fromJsonCorpus(samples, { splitDissimilarObjects: false });
+          expect(inferred.shape.kind).toBe("object");
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 5. Enum edge cases
@@ -506,77 +588,98 @@ describe("adversarial: structural union splitting (no discriminant)", () => {
 
 describe("adversarial: enum edge cases", () => {
   test("boolean-like string enum: exactly 2 distinct values", () => {
-    const samples = Array.from({ length: 10 }, (_, i) => ({ status: i % 2 === 0 ? "active" : "inactive" }))
-    const inferred = fromJsonCorpus(samples)
+    const samples = Array.from({ length: 10 }, (_, i) => ({
+      status: i % 2 === 0 ? "active" : "inactive",
+    }));
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
-      expect(err).toBeNull()
+      const err = inhabits(s, inferred);
+      expect(err).toBeNull();
     }
-  })
+  });
 
   test("late new variant: enum grows sublinearly then a new value appears at the end", () => {
     const samples = [
-      ...Array.from({ length: 20 }, (_, i) => ({ status: i % 3 === 0 ? "a" : i % 3 === 1 ? "b" : "c" })),
+      ...Array.from({ length: 20 }, (_, i) => ({
+        status: i % 3 === 0 ? "a" : i % 3 === 1 ? "b" : "c",
+      })),
       { status: "surprise" },
-    ]
-    const inferred = fromJsonCorpus(samples)
+    ];
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("integer enum at large magnitude (the 800xxx-style case)", () => {
-    const codes = [800001, 800002, 800003]
-    const samples = Array.from({ length: 12 }, (_, i) => ({ code: codes[i % 3]! }))
-    const inferred = fromJsonCorpus(samples)
+    const codes = [800001, 800002, 800003];
+    const samples = Array.from({ length: 12 }, (_, i) => ({ code: codes[i % 3]! }));
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("string enum member that is itself a valid email", () => {
     const samples = Array.from({ length: 12 }, (_, i) => ({
       role: ["admin", "editor", "admin@example.com"][i % 3]!,
-    }))
-    const inferred = fromJsonCorpus(samples)
+    }));
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("property: any corpus with a saturating small-K field infers a type covering every sample", () => {
     fc.assert(
       fc.property(
-        fc.tuple(
-          fc.array(fc.stringMatching(/^[a-z]{2,6}$/), { minLength: 2, maxLength: 5 }).map((a) => [...new Set(a)]).filter((a) => a.length >= 2),
-          fc.integer({ min: 6, max: 30 }),
-        ).chain(([members, n]) =>
-          fc.array(fc.integer({ min: 0, max: members.length - 1 }), { minLength: n, maxLength: n })
-            .map((idxs) => idxs.map((i) => ({ tag: members[i]! }))),
-        ),
+        fc
+          .tuple(
+            fc
+              .array(fc.stringMatching(/^[a-z]{2,6}$/), { minLength: 2, maxLength: 5 })
+              .map((a) => [...new Set(a)])
+              .filter((a) => a.length >= 2),
+            fc.integer({ min: 6, max: 30 }),
+          )
+          .chain(([members, n]) =>
+            fc
+              .array(fc.integer({ min: 0, max: members.length - 1 }), {
+                minLength: n,
+                maxLength: n,
+              })
+              .map((idxs) => idxs.map((i) => ({ tag: members[i]! }))),
+          ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 6. Dict vs record stress
@@ -587,26 +690,33 @@ describe("adversarial: dict vs record stress", () => {
     fc.assert(
       fc.property(
         fc.array(
-          fc.dictionary(fc.stringMatching(/^k[0-9]{1,3}$/), fc.integer({ min: 0, max: 100 }), { minKeys: 0, maxKeys: 5 })
+          fc
+            .dictionary(fc.stringMatching(/^k[0-9]{1,3}$/), fc.integer({ min: 0, max: 100 }), {
+              minKeys: 0,
+              maxKeys: 5,
+            })
             .map((varying) => ({ fixedA: 1, fixedB: "x", ...varying })),
           { minLength: 4, maxLength: 30 },
         ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("keys that are UUIDs (dict signal) never crash and cover all samples", () => {
-    const uuidLike = () => fc.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+    const uuidLike = () =>
+      fc.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     fc.assert(
       fc.property(
         fc.array(
@@ -614,70 +724,83 @@ describe("adversarial: dict vs record stress", () => {
           { minLength: 5, maxLength: 20 },
         ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("numeric-string keys (dict signal) never crash and cover all samples", () => {
     fc.assert(
       fc.property(
         fc.array(
-          fc.dictionary(fc.stringMatching(/^[0-9]{1,6}$/), fc.boolean(), { minKeys: 1, maxKeys: 6 }),
+          fc.dictionary(fc.stringMatching(/^[0-9]{1,6}$/), fc.boolean(), {
+            minKeys: 1,
+            maxKeys: 6,
+          }),
           { minLength: 5, maxLength: 20 },
         ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("key set saturates (record-like) vs keeps growing (dict-like) — both cover all samples", () => {
     fc.assert(
       fc.property(
         fc.boolean().chain((saturates) => {
-          const pool = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]
-          return fc.array(fc.integer({ min: 8, max: 40 }), { minLength: 1, maxLength: 1 }).map(([n]) => {
-            const samples: Record<string, number>[] = []
-            for (let i = 0; i < n!; i++) {
-              const keys = saturates ? pool.slice(0, 4) : pool.slice(0, Math.min(pool.length, 2 + (i % pool.length)))
-              const obj: Record<string, number> = {}
-              for (const k of keys) obj[k] = i
-              samples.push(obj)
-            }
-            return samples
-          })
+          const pool = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"];
+          return fc
+            .array(fc.integer({ min: 8, max: 40 }), { minLength: 1, maxLength: 1 })
+            .map(([n]) => {
+              const samples: Record<string, number>[] = [];
+              for (let i = 0; i < n!; i++) {
+                const keys = saturates
+                  ? pool.slice(0, 4)
+                  : pool.slice(0, Math.min(pool.length, 2 + (i % pool.length)));
+                const obj: Record<string, number> = {};
+                for (const k of keys) obj[k] = i;
+                samples.push(obj);
+              }
+              return samples;
+            });
         }),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 300 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 7. Optional field edge cases
@@ -689,53 +812,59 @@ describe("adversarial: optional field edge cases", () => {
       { a: { b: { c: { d: 1 } } } },
       { a: { b: { c: {} } } },
       { a: { b: { c: { d: 2 } } } },
-    ]
-    const inferred = fromJsonCorpus(samples)
+    ];
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("field present in exactly 1 of N samples is treated as optional and covers all", () => {
     fc.assert(
       fc.property(fc.integer({ min: 3, max: 30 }), (n) => {
-        const samples: Record<string, number>[] = Array.from({ length: n }, () => ({ base: 1 }))
-        samples[0]!.rare = 42
-        const inferred = fromJsonCorpus(samples)
+        const samples: Record<string, number>[] = Array.from({ length: n }, () => ({ base: 1 }));
+        samples[0]!.rare = 42;
+        const inferred = fromJsonCorpus(samples);
         for (const s of samples) {
-          const err = inhabits(s, inferred)
+          const err = inhabits(s, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         }
       }),
       { numRuns: 300 },
-    )
-  })
+    );
+  });
 
   test("field present in (N-1)/N samples is treated as optional and covers all", () => {
     fc.assert(
       fc.property(fc.integer({ min: 3, max: 30 }), (n) => {
         const samples: Record<string, number>[] = Array.from({ length: n }, (_, i) => {
-          const s: Record<string, number> = { base: 1 }
-          if (i !== 0) s.almostAlways = i
-          return s
-        })
-        const inferred = fromJsonCorpus(samples)
+          const s: Record<string, number> = { base: 1 };
+          if (i !== 0) s.almostAlways = i;
+          return s;
+        });
+        const inferred = fromJsonCorpus(samples);
         for (const s of samples) {
-          const err = inhabits(s, inferred)
+          const err = inhabits(s, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         }
       }),
       { numRuns: 300 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 8. Dirty data simulation
@@ -747,31 +876,33 @@ describe("adversarial: dirty data simulation", () => {
       fc.property(fc.integer({ min: 20, max: 100 }), (n) => {
         const samples: Record<string, unknown>[] = Array.from({ length: n }, (_, i) =>
           i % 20 === 0 ? { v: "oops" } : { v: i },
-        )
-        const inferred = fromJsonCorpus(samples)
+        );
+        const inferred = fromJsonCorpus(samples);
         for (const s of samples) {
-          const err = inhabits(s, inferred)
+          const err = inhabits(s, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(
+              `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
         }
       }),
       { numRuns: 200 },
-    )
-  })
+    );
+  });
 
   test("95% integers / 5% strings, detectDirtyData ON, does not crash and clean type still present in union/meta", () => {
     fc.assert(
       fc.property(fc.integer({ min: 20, max: 100 }), (n) => {
         const samples: Record<string, unknown>[] = Array.from({ length: n }, (_, i) =>
           i % 20 === 0 ? { v: "oops" } : { v: i },
-        )
+        );
         // Must not crash regardless of what shape falls out.
-        fromJsonCorpus(samples, { detectDirtyData: true })
+        fromJsonCorpus(samples, { detectDirtyData: true });
       }),
       { numRuns: 200 },
-    )
-  })
+    );
+  });
 
   test("one array element has a completely different shape from the rest", () => {
     const arr = [
@@ -780,12 +911,12 @@ describe("adversarial: dirty data simulation", () => {
       { id: 3, name: "c" },
       { totallyDifferent: true, nested: { x: 1 } },
       { id: 4, name: "d" },
-    ]
-    const inferred = inferOne(arr)
-    const err = inhabits(arr, inferred)
-    expect(err).toBeNull()
-  })
-})
+    ];
+    const inferred = inferOne(arr);
+    const err = inhabits(arr, inferred);
+    expect(err).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 9. Empty / degenerate cases
@@ -795,14 +926,20 @@ describe("adversarial: empty and degenerate cases", () => {
   test("empty arrays in corpus never crash", () => {
     fc.assert(
       fc.property(
-        fc.array(fc.oneof(fc.constant([]), fc.array(fc.integer({ min: 0, max: 10 }), { minLength: 1, maxLength: 5 })), { minLength: 1, maxLength: 20 }),
+        fc.array(
+          fc.oneof(
+            fc.constant([]),
+            fc.array(fc.integer({ min: 0, max: 10 }), { minLength: 1, maxLength: 5 }),
+          ),
+          { minLength: 1, maxLength: 20 },
+        ),
         (samples) => {
-          fromJsonCorpus(samples)
+          fromJsonCorpus(samples);
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("null fields mixed with typed fields never crash and cover all samples", () => {
     fc.assert(
@@ -815,48 +952,53 @@ describe("adversarial: empty and degenerate cases", () => {
           { minLength: 3, maxLength: 20 },
         ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("array of nulls never crashes", () => {
     fc.assert(
       fc.property(fc.array(fc.constant(null), { minLength: 0, maxLength: 10 }), (arr) => {
-        inferOne(arr)
+        inferOne(arr);
       }),
       { numRuns: 200 },
-    )
-  })
+    );
+  });
 
   test("object with only null values never crashes and covers the sample", () => {
     fc.assert(
       fc.property(
-        fc.dictionary(fc.stringMatching(/^[a-z]{2,6}$/), fc.constant(null), { minKeys: 1, maxKeys: 6 }),
+        fc.dictionary(fc.stringMatching(/^[a-z]{2,6}$/), fc.constant(null), {
+          minKeys: 1,
+          maxKeys: 6,
+        }),
         (obj) => {
-          const inferred = inferOne(obj)
-          const err = inhabits(obj, inferred)
-          expect(err).toBeNull()
+          const inferred = inferOne(obj);
+          const err = inhabits(obj, inferred);
+          expect(err).toBeNull();
         },
       ),
       { numRuns: 200 },
-    )
-  })
+    );
+  });
 
   test("deeply nested empty containers never crash", () => {
-    const value = { a: [{ b: [] }, { b: [] }, { b: {} }], c: {} }
-    expect(() => inferOne(value)).not.toThrow()
-    expect(() => fromJsonCorpus([value, value, value])).not.toThrow()
-  })
-})
+    const value = { a: [{ b: [] }, { b: [] }, { b: {} }], c: {} };
+    expect(() => inferOne(value)).not.toThrow();
+    expect(() => fromJsonCorpus([value, value, value])).not.toThrow();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 10. Large corpus
@@ -871,11 +1013,11 @@ describe("adversarial: empty and degenerate cases", () => {
 // fuzz harness (from-json.fuzz.test.ts) doesn't exercise.
 // ---------------------------------------------------------------------------
 
-const corpusFieldNames = ["id", "name", "tag", "count", "meta", "items", "flag", "ref"]
+const corpusFieldNames = ["id", "name", "tag", "count", "meta", "items", "flag", "ref"];
 
 interface LetrecTypes {
-  leaf: TypeRef
-  node: TypeRef
+  leaf: TypeRef;
+  node: TypeRef;
 }
 
 const { node: corpusTypeArb } = fc.letrec<LetrecTypes>((tie) => ({
@@ -891,43 +1033,52 @@ const { node: corpusTypeArb } = fc.letrec<LetrecTypes>((tie) => ({
     { weight: 3, arbitrary: tie("leaf") as fc.Arbitrary<TypeRef> },
     {
       weight: 2,
-      arbitrary: fc.tuple(
-        fc.shuffledSubarray(corpusFieldNames, { minLength: 1, maxLength: 4 }),
-        fc.array(tie("node") as fc.Arbitrary<TypeRef>, { minLength: 1, maxLength: 4 }),
-      ).map(([names, fieldTypes]) => {
-        const fields: Record<string, TypeRef> = {}
-        const count = Math.min(names.length, fieldTypes.length)
-        for (let i = 0; i < count; i++) fields[names[i]!] = fieldTypes[i]!
-        return t(types.object(fields))
-      }),
+      arbitrary: fc
+        .tuple(
+          fc.shuffledSubarray(corpusFieldNames, { minLength: 1, maxLength: 4 }),
+          fc.array(tie("node") as fc.Arbitrary<TypeRef>, { minLength: 1, maxLength: 4 }),
+        )
+        .map(([names, fieldTypes]) => {
+          const fields: Record<string, TypeRef> = {};
+          const count = Math.min(names.length, fieldTypes.length);
+          for (let i = 0; i < count; i++) fields[names[i]!] = fieldTypes[i]!;
+          return t(types.object(fields));
+        }),
     },
-    { weight: 1, arbitrary: (tie("node") as fc.Arbitrary<TypeRef>).map((el) => t(types.array(el))) },
+    {
+      weight: 1,
+      arbitrary: (tie("node") as fc.Arbitrary<TypeRef>).map((el) => t(types.array(el))),
+    },
   ) as fc.Arbitrary<TypeRef>,
-}))
+}));
 
 function arbValueForCorpusType(ref: TypeRef): fc.Arbitrary<unknown> {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   switch (kind) {
-    case "null": return fc.constant(null)
-    case "boolean": return fc.boolean()
-    case "integer": return fc.integer({ min: -10_000, max: 10_000 })
+    case "null":
+      return fc.constant(null);
+    case "boolean":
+      return fc.boolean();
+    case "integer":
+      return fc.integer({ min: -10_000, max: 10_000 });
     case "number":
-      return fc.double({ min: -10_000, max: 10_000, noNaN: true, noDefaultInfinity: true })
-    case "string": return fc.stringMatching(/^[A-Za-z0-9]{0,10}$/)
+      return fc.double({ min: -10_000, max: 10_000, noNaN: true, noDefaultInfinity: true });
+    case "string":
+      return fc.stringMatching(/^[A-Za-z0-9]{0,10}$/);
     case "object": {
-      const fields = objectFields(ref)
-      const entries = Object.entries(fields)
-      if (entries.length === 0) return fc.constant({})
-      const arbs: Record<string, fc.Arbitrary<unknown>> = {}
-      for (const [name, fieldRef] of entries) arbs[name] = arbValueForCorpusType(fieldRef)
-      return fc.record(arbs)
+      const fields = objectFields(ref);
+      const entries = Object.entries(fields);
+      if (entries.length === 0) return fc.constant({});
+      const arbs: Record<string, fc.Arbitrary<unknown>> = {};
+      for (const [name, fieldRef] of entries) arbs[name] = arbValueForCorpusType(fieldRef);
+      return fc.record(arbs);
     }
     case "array": {
-      const element = (ref.shape as { element: TypeRef }).element
-      return fc.array(arbValueForCorpusType(element), { minLength: 0, maxLength: 5 })
+      const element = (ref.shape as { element: TypeRef }).element;
+      return fc.array(arbValueForCorpusType(element), { minLength: 0, maxLength: 5 });
     }
     default:
-      return fc.constant(null)
+      return fc.constant(null);
   }
 }
 
@@ -936,52 +1087,54 @@ function arbValueForCorpusType(ref: TypeRef): fc.Arbitrary<unknown> {
 // verify fromJsonCorpus's merged type covers every sample.
 function arbTypeAndCorpus(): fc.Arbitrary<{ type: TypeRef; corpus: unknown[] }> {
   return corpusTypeArb.chain((type) =>
-    fc.array(arbValueForCorpusType(type), { minLength: 1, maxLength: 40 }).map((corpus) => ({ type, corpus })),
-  )
+    fc
+      .array(arbValueForCorpusType(type), { minLength: 1, maxLength: 40 })
+      .map((corpus) => ({ type, corpus })),
+  );
 }
 
 describe("adversarial: chained type+value corpus fuzzing", () => {
   test("fromJsonCorpus never crashes on chained type-driven corpora", () => {
     fc.assert(
       fc.property(arbTypeAndCorpus(), ({ corpus }) => {
-        fromJsonCorpus(corpus)
+        fromJsonCorpus(corpus);
       }),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("fromJsonCorpus is deterministic on chained type-driven corpora", () => {
     fc.assert(
       fc.property(arbTypeAndCorpus(), ({ corpus }) => {
-        const a = fromJsonCorpus(corpus)
-        const b = fromJsonCorpus(corpus)
-        expect(a).toEqual(b)
+        const a = fromJsonCorpus(corpus);
+        const b = fromJsonCorpus(corpus);
+        expect(a).toEqual(b);
       }),
       { numRuns: 300 },
-    )
-  })
+    );
+  });
 
   test("corpus-inferred type covers every sample in the chained corpus", () => {
     fc.assert(
       fc.property(arbTypeAndCorpus(), ({ type, corpus }) => {
-        const inferred = fromJsonCorpus(corpus)
+        const inferred = fromJsonCorpus(corpus);
         for (const sample of corpus) {
-          const err = inhabits(sample, inferred)
+          const err = inhabits(sample, inferred);
           if (err !== null) {
             throw new Error(
               `${err}\n` +
-              `  original type: ${JSON.stringify(type.shape)}\n` +
-              `  sample:        ${JSON.stringify(sample)}\n` +
-              `  corpus size:   ${corpus.length}\n` +
-              `  inferred:      ${JSON.stringify(inferred.shape)}`,
-            )
+                `  original type: ${JSON.stringify(type.shape)}\n` +
+                `  sample:        ${JSON.stringify(sample)}\n` +
+                `  corpus size:   ${corpus.length}\n` +
+                `  inferred:      ${JSON.stringify(inferred.shape)}`,
+            );
           }
         }
       }),
       { numRuns: 500 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 12. Miscellaneous adversarial edge cases — unsafe integers, missing
@@ -997,19 +1150,21 @@ describe("adversarial: misc numeric and structural edge cases", () => {
           fc.constant(-(Number.MAX_SAFE_INTEGER + 2)),
           fc.constant(1e21),
           fc.constant(-1e21),
-          fc.double({ min: 1e16, max: 1e21, noNaN: true, noDefaultInfinity: true }).filter(Number.isInteger),
+          fc
+            .double({ min: 1e16, max: 1e21, noNaN: true, noDefaultInfinity: true })
+            .filter(Number.isInteger),
         ),
         (n) => {
-          const inferred = inferOne(n)
-          const err = inhabits(n, inferred)
+          const inferred = inferOne(n);
+          const err = inhabits(n, inferred);
           if (err !== null) {
-            throw new Error(`${err}\n  value: ${n}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+            throw new Error(`${err}\n  value: ${n}\n  inferred: ${JSON.stringify(inferred.shape)}`);
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   // Previously FAILED — see packages/type-ir/src/from-json-corpus.ts,
   // walkAndDetectEnums. Enum detection replaced a field's TypeRef with
@@ -1028,41 +1183,47 @@ describe("adversarial: misc numeric and structural edge cases", () => {
           { minLength: 3, maxLength: 15 },
         ),
         (samples) => {
-          const inferred = fromJsonCorpus(samples)
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
+    );
+  });
 
   test("tuples of widely varying arity across the corpus never crash and cover all samples", () => {
     fc.assert(
       fc.property(
-        fc.array(
-          fc.array(fc.integer({ min: 0, max: 10 }), { minLength: 0, maxLength: 8 }),
-          { minLength: 3, maxLength: 15 },
-        ).filter((arrs) => new Set(arrs.map((a) => a.length)).size >= 2),
+        fc
+          .array(fc.array(fc.integer({ min: 0, max: 10 }), { minLength: 0, maxLength: 8 }), {
+            minLength: 3,
+            maxLength: 15,
+          })
+          .filter((arrs) => new Set(arrs.map((a) => a.length)).size >= 2),
         (arrs) => {
-          const samples = arrs.map((a) => ({ v: a }))
-          const inferred = fromJsonCorpus(samples)
+          const samples = arrs.map((a) => ({ v: a }));
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 500 },
-    )
-  })
-})
+    );
+  });
+});
 
 describe("adversarial: large corpus", () => {
   test("100+ sample corpus of moderately varied objects infers without blowing up", () => {
@@ -1080,36 +1241,35 @@ describe("adversarial: large corpus", () => {
         ),
         (samples) => {
           const cleaned = samples.map((s) => {
-            const { extra, ...rest } = s
-            return extra === undefined ? rest : { ...rest, extra }
-          })
-          const inferred = fromJsonCorpus(cleaned)
+            const { extra, ...rest } = s;
+            return extra === undefined ? rest : { ...rest, extra };
+          });
+          const inferred = fromJsonCorpus(cleaned);
           for (const s of cleaned) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 20 },
-    )
-  })
+    );
+  });
 
   test("determinism holds at large corpus size", () => {
     fc.assert(
-      fc.property(
-        fc.array(jsonDeep, { minLength: 100, maxLength: 150 }),
-        (samples) => {
-          const a = fromJsonCorpus(samples)
-          const b = fromJsonCorpus(samples)
-          expect(a).toEqual(b)
-        },
-      ),
+      fc.property(fc.array(jsonDeep, { minLength: 100, maxLength: 150 }), (samples) => {
+        const a = fromJsonCorpus(samples);
+        const b = fromJsonCorpus(samples);
+        expect(a).toEqual(b);
+      }),
       { numRuns: 10 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 13. K=1 literal detection — asymmetry and confidence scaling
@@ -1126,29 +1286,29 @@ describe("adversarial: large corpus", () => {
 
 describe("adversarial: K=1 literal/enum aggressiveness", () => {
   test("five identical zeros (N clears literalMinSamples) collapse to literal(0), not integer/uint8", () => {
-    const inferred = fromJsonCorpus([0, 0, 0, 0, 0])
-    expect(inferred.shape).toEqual({ kind: "literal", value: 0 })
-  })
+    const inferred = fromJsonCorpus([0, 0, 0, 0, 0]);
+    expect(inferred.shape).toEqual({ kind: "literal", value: 0 });
+  });
 
   test("three identical empty strings do NOT collapse (N=3 < literalMinSamples=5) — stays plain string", () => {
-    const inferred = fromJsonCorpus(["", "", ""])
-    expect(inferred.shape.kind).toBe("string")
-  })
+    const inferred = fromJsonCorpus(["", "", ""]);
+    expect(inferred.shape.kind).toBe("string");
+  });
 
   test("five identical empty strings collapse to literal(''), matching the integer K=1 path — symmetry fix", () => {
-    const inferred = fromJsonCorpus(["", "", "", "", ""])
-    expect(inferred.shape).toEqual({ kind: "literal", value: "" })
-  })
+    const inferred = fromJsonCorpus(["", "", "", "", ""]);
+    expect(inferred.shape).toEqual({ kind: "literal", value: "" });
+  });
 
   test("null repeated does NOT collapse to literal(null) — 'null' kind is unhandled by walkAndDetectEnums, so it passes through unchanged", () => {
-    const inferred = fromJsonCorpus([null, null, null, null, null])
-    expect(inferred.shape.kind).toBe("null")
-  })
+    const inferred = fromJsonCorpus([null, null, null, null, null]);
+    expect(inferred.shape.kind).toBe("null");
+  });
 
   test("boolean repeated does NOT collapse to literal(true) — 'boolean' kind is unhandled by walkAndDetectEnums, so it passes through unchanged", () => {
-    const inferred = fromJsonCorpus([true, true, true, true, true])
-    expect(inferred.shape.kind).toBe("boolean")
-  })
+    const inferred = fromJsonCorpus([true, true, true, true, true]);
+    expect(inferred.shape.kind).toBe("boolean");
+  });
 
   test("object with one constant field and one fully-varying field, at N=5: only the constant field is flattened, the varying field is untouched", () => {
     const samples = [
@@ -1157,30 +1317,30 @@ describe("adversarial: K=1 literal/enum aggressiveness", () => {
       { status: "active", id: 3 },
       { status: "active", id: 4 },
       { status: "active", id: 5 },
-    ]
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
+    ];
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
     // status: K=1, N=5 clears literalMinSamples -> literal (symmetric with integers now)
-    expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" })
+    expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" });
     // id: K=5, N=5 -> K>=N -> "every value unique", conclusive evidence AGAINST enum
-    expect(fields.id!.shape.kind).not.toBe("enum")
-    expect(fields.id!.shape.kind).not.toBe("union")
-    expect(fields.id!.shape.kind).not.toBe("literal")
+    expect(fields.id!.shape.kind).not.toBe("enum");
+    expect(fields.id!.shape.kind).not.toBe("union");
+    expect(fields.id!.shape.kind).not.toBe("literal");
     for (const s of samples) {
-      const err = inhabits(s, inferred)
-      expect(err).toBeNull()
+      const err = inhabits(s, inferred);
+      expect(err).toBeNull();
     }
-  })
+  });
 
   test("K=1 does NOT fire identically at N=3 and N=50 anymore — confidence now scales with sample size", () => {
-    const small = fromJsonCorpus(Array(3).fill(42))
-    const large = fromJsonCorpus(Array(50).fill(42))
+    const small = fromJsonCorpus(Array(3).fill(42));
+    const large = fromJsonCorpus(Array(50).fill(42));
     // N=3 is below literalMinSamples (5) — not enough evidence to commit.
-    expect(small.shape.kind).toBe("uint8")
+    expect(small.shape.kind).toBe("uint8");
     // N=50 clears the threshold comfortably — commits to literal.
-    expect(large.shape).toEqual({ kind: "literal", value: 42 })
-    expect(small.shape).not.toEqual(large.shape)
-  })
+    expect(large.shape).toEqual({ kind: "literal", value: 42 });
+    expect(small.shape).not.toEqual(large.shape);
+  });
 
   test("property: K=1 integer field collapses to literal once N clears literalMinSamples (5), regardless of corpus size beyond that", () => {
     fc.assert(
@@ -1188,13 +1348,13 @@ describe("adversarial: K=1 literal/enum aggressiveness", () => {
         fc.integer({ min: -1000, max: 1000 }),
         fc.integer({ min: 5, max: 200 }),
         (value, n) => {
-          const inferred = fromJsonCorpus(Array(n).fill(value))
-          expect(inferred.shape).toEqual({ kind: "literal", value })
+          const inferred = fromJsonCorpus(Array(n).fill(value));
+          expect(inferred.shape).toEqual({ kind: "literal", value });
         },
       ),
       { numRuns: 200 },
-    )
-  })
+    );
+  });
 
   test("property: K=1 integer field below literalMinSamples never collapses to literal", () => {
     fc.assert(
@@ -1202,14 +1362,14 @@ describe("adversarial: K=1 literal/enum aggressiveness", () => {
         fc.integer({ min: -1000, max: 1000 }),
         fc.integer({ min: 1, max: 4 }),
         (value, n) => {
-          const inferred = fromJsonCorpus(Array(n).fill(value))
-          expect(inferred.shape.kind).not.toBe("literal")
+          const inferred = fromJsonCorpus(Array(n).fill(value));
+          expect(inferred.shape.kind).not.toBe("literal");
         },
       ),
       { numRuns: 100 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 14. K=1 in arrays of objects
@@ -1223,9 +1383,9 @@ describe("adversarial: K=1 in arrays of objects", () => {
       { status: "active", id: 3 },
       { status: "active", id: 4 },
       { status: "active", id: 5 },
-    ]
-    const inferred = inferOne(samples)
-    expect(inferred.shape.kind).toBe("array")
+    ];
+    const inferred = inferOne(samples);
+    expect(inferred.shape.kind).toBe("array");
     // CORRECTED. This asserted `string` and its comment said the point was to
     // "confirm the two entry points disagree" — pinning the divergence as if it
     // were a feature. It was not: `fromJson` is now defined as the N=1 case of
@@ -1233,20 +1393,20 @@ describe("adversarial: K=1 in arrays of objects", () => {
     // `status` and a constant across all five clears `literalMinSamples`. The
     // old single-value path returned `string` only because it had no
     // cross-element evidence machinery, not because `string` was right here.
-    const el = (inferred.shape as { element: TypeRef }).element
-    const fields = objectFields(el)
-    expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" })
+    const el = (inferred.shape as { element: TypeRef }).element;
+    const fields = objectFields(el);
+    expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" });
 
-    const corpusInferred = fromJsonCorpus(samples)
-    const corpusFields = objectFields(corpusInferred)
-    expect(corpusFields.status!.shape).toEqual({ kind: "literal", value: "active" })
-    expect(corpusFields.id!.shape.kind).not.toBe("enum")
-    expect(corpusFields.id!.shape.kind).not.toBe("union")
-    expect(corpusFields.id!.shape.kind).not.toBe("literal")
+    const corpusInferred = fromJsonCorpus(samples);
+    const corpusFields = objectFields(corpusInferred);
+    expect(corpusFields.status!.shape).toEqual({ kind: "literal", value: "active" });
+    expect(corpusFields.id!.shape.kind).not.toBe("enum");
+    expect(corpusFields.id!.shape.kind).not.toBe("union");
+    expect(corpusFields.id!.shape.kind).not.toBe("literal");
     for (const s of samples) {
-      expect(inhabits(s, corpusInferred)).toBeNull()
+      expect(inhabits(s, corpusInferred)).toBeNull();
     }
-  })
+  });
 
   test("property: constant field in array-of-objects always saturates once N clears literalMinSamples, all-unique field never does", () => {
     fc.assert(
@@ -1254,27 +1414,29 @@ describe("adversarial: K=1 in arrays of objects", () => {
         fc.integer({ min: 5, max: 40 }),
         fc.stringMatching(/^[a-z]{2,8}$/),
         (n, constValue) => {
-          const samples = Array.from({ length: n }, (_, i) => ({ tag: constValue, idx: i }))
-          const inferred = fromJsonCorpus(samples)
-          const fields = objectFields(inferred)
+          const samples = Array.from({ length: n }, (_, i) => ({ tag: constValue, idx: i }));
+          const inferred = fromJsonCorpus(samples);
+          const fields = objectFields(inferred);
           // tag: K=1, N clears literalMinSamples -> saturates to literal
-          expect(fields.tag!.shape.kind).toBe("literal")
+          expect(fields.tag!.shape.kind).toBe("literal");
           // idx: every value 0..n-1 is unique -> K===N -> conclusive non-enum
-          expect(fields.idx!.shape.kind).not.toBe("enum")
-          expect(fields.idx!.shape.kind).not.toBe("union")
-          expect(fields.idx!.shape.kind).not.toBe("literal")
+          expect(fields.idx!.shape.kind).not.toBe("enum");
+          expect(fields.idx!.shape.kind).not.toBe("union");
+          expect(fields.idx!.shape.kind).not.toBe("literal");
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 300 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 15. Boundary between enum and not-enum
@@ -1297,15 +1459,15 @@ describe("adversarial: K=1 in arrays of objects", () => {
 
 describe("adversarial: enum/non-enum boundary thresholds", () => {
   function makeStringField(members: readonly string[], n: number): { tag: string }[] {
-    return Array.from({ length: n }, (_, i) => ({ tag: members[i % members.length]! }))
+    return Array.from({ length: n }, (_, i) => ({ tag: members[i % members.length]! }));
   }
 
   test("string field at exactly ratio=1/3 (K=3,N=9) IS enum — inclusive boundary", () => {
-    const samples = makeStringField(["a", "b", "c"], 9)
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
-  })
+    const samples = makeStringField(["a", "b", "c"], 9);
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] });
+  });
 
   // CORRECTED BEHAVIOUR. This asserted `string` under the old rule, which
   // could only clear the 1/3-1/2 band via integer clustering — so a string
@@ -1314,75 +1476,72 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
   // integer-only, not a principle. The coverage rule treats both alike:
   // a,b,c over 8 samples is 3/3/2, zero singletons, estimated coverage 1.0.
   test("string field at ratio=3/8=0.375 IS enum — every member repeats, coverage 1.0", () => {
-    const samples = makeStringField(["a", "b", "c"], 8)
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
-  })
+    const samples = makeStringField(["a", "b", "c"], 8);
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] });
+  });
 
   test("string field at exactly ratio=1/2 (K=4,N=8) is NOT enum — saturation boundary is exclusive (ratio < 0.5, not <=)", () => {
-    const samples = makeStringField(["a", "b", "c", "d"], 8)
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.tag!.shape.kind).toBe("string")
-  })
+    const samples = makeStringField(["a", "b", "c", "d"], 8);
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.tag!.shape.kind).toBe("string");
+  });
 
   // CORRECTED BEHAVIOUR, same reason as above: 3/2/2, zero singletons.
   test("string field at ratio=3/7≈0.4286 IS enum — zero singletons clears the coverage bar", () => {
-    const samples = makeStringField(["a", "b", "c"], 7)
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] })
-  })
+    const samples = makeStringField(["a", "b", "c"], 7);
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] });
+  });
 
   test("a singleton member drags coverage under the bar and withholds enum status", () => {
     // a,b,c repeat; "d" appears exactly once -> n1=1, N=10, coverage 0.9 is
     // not > the 0.9 bar's strictly-greater-than-or-equal test at 1-1/10=0.9,
     // so raise the bar slightly to show the mechanism rather than the tie.
-    const samples = [...makeStringField(["a", "b", "c"], 9), { tag: "d" }]
-    const inferred = fromJsonCorpus(samples, { enumCoverageBar: 0.95 })
-    const fields = objectFields(inferred)
-    expect(fields.tag!.shape.kind).toBe("string")
-  })
+    const samples = [...makeStringField(["a", "b", "c"], 9), { tag: "d" }];
+    const inferred = fromJsonCorpus(samples, { enumCoverageBar: 0.95 });
+    const fields = objectFields(inferred);
+    expect(fields.tag!.shape.kind).toBe("string");
+  });
 
   test("enum that saturates for 20 samples then gets one never-before-seen value at the very end still covers every sample (existing regression, re-verified at the exact K/N boundary)", () => {
     // 20 samples over {a,b,c} (K=3, N=20, ratio=0.15, strongly repetitive)
     // then a 21st distinct value pushes K to 4, N to 21 (ratio≈0.19) — still
     // strongly repetitive, so the heuristic should (and does) keep it enum.
-    const samples = [
-      ...makeStringField(["a", "b", "c"], 20),
-      { tag: "surprise" },
-    ]
-    const inferred = fromJsonCorpus(samples)
+    const samples = [...makeStringField(["a", "b", "c"], 20), { tag: "surprise" }];
+    const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("property: string field crossing from strongly-repetitive to borderline-non-enum as N grows at fixed K always covers every sample, even when the shape flips", () => {
     fc.assert(
-      fc.property(
-        fc.integer({ min: 3, max: 6 }),
-        fc.integer({ min: 6, max: 40 }),
-        (k, n) => {
-          const members = Array.from({ length: k }, (_, i) => `m${i}`)
-          const samples = makeStringField(members, n)
-          const inferred = fromJsonCorpus(samples)
-          for (const s of samples) {
-            const err = inhabits(s, inferred)
-            if (err !== null) {
-              throw new Error(`${err}\n  K=${k} N=${n}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
-            }
+      fc.property(fc.integer({ min: 3, max: 6 }), fc.integer({ min: 6, max: 40 }), (k, n) => {
+        const members = Array.from({ length: k }, (_, i) => `m${i}`);
+        const samples = makeStringField(members, n);
+        const inferred = fromJsonCorpus(samples);
+        for (const s of samples) {
+          const err = inhabits(s, inferred);
+          if (err !== null) {
+            throw new Error(
+              `${err}\n  K=${k} N=${n}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+            );
           }
-        },
-      ),
+        }
+      }),
       { numRuns: 300 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 16. Clustering signal interaction
@@ -1403,46 +1562,46 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
 
 describe("adversarial: clustering signal interaction", () => {
   function repeatToN<T>(base: readonly T[], n: number): T[] {
-    const out: T[] = []
-    while (out.length < n) out.push(...base)
-    return out.slice(0, n)
+    const out: T[] = [];
+    while (out.length < n) out.push(...base);
+    return out.slice(0, n);
   }
 
   test("genuinely clustered integers at borderline K/N ratio (0.4) become an enum via clustering corroboration", () => {
-    const base = [100, 101, 102, 200, 201, 202] // two tight clusters, big gap between
-    const values = repeatToN(base, 15) // K=6, N=15, ratio=0.4
-    const samples = values.map((v) => ({ code: v }))
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.code!.shape.kind).toBe("union")
-  })
+    const base = [100, 101, 102, 200, 201, 202]; // two tight clusters, big gap between
+    const values = repeatToN(base, 15); // K=6, N=15, ratio=0.4
+    const samples = values.map((v) => ({ code: v }));
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.code!.shape.kind).toBe("union");
+  });
 
   test("uniformly-spread integers with the SAME range and SAME K/N ratio as the clustered case above ALSO become an enum — the heuristic can't tell them apart", () => {
-    const base = [100, 120, 140, 160, 180, 200] // evenly spread, same range (100) as the clustered base
-    const values = repeatToN(base, 15) // K=6, N=15, ratio=0.4
-    const samples = values.map((v) => ({ code: v }))
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
+    const base = [100, 120, 140, 160, 180, 200]; // evenly spread, same range (100) as the clustered base
+    const values = repeatToN(base, 15); // K=6, N=15, ratio=0.4
+    const samples = values.map((v) => ({ code: v }));
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
     // Same shape.kind as the "genuinely clustered" case: the average-gap
     // check treats a real cluster and a uniform spread identically as long
     // as range and K match. This is the adversarial finding: "clustering"
     // corroboration is actually just a coarse range/K bound, not a test for
     // an actual bimodal/clustered distribution.
-    expect(fields.code!.shape.kind).toBe("union")
-  })
+    expect(fields.code!.shape.kind).toBe("union");
+  });
 
   // CORRECTED BEHAVIOUR. The old rule withheld enum status here via a
   // `K <= range/2` clustering test that has no empirical support — it rejects
   // 1,2,3,4 each seen 2-3 times, which is a bounded set by any reading. The
   // coverage rule accepts it: zero singletons, estimated coverage 1.0.
   test("dense small-range integers (1..4, K/N=0.4, every value repeated) DO become a literal union", () => {
-    const base = [1, 2, 3, 4]
-    const values = repeatToN(base, 10) // K=4, N=10, ratio=0.4, n1=0
-    const samples = values.map((v) => ({ code: v }))
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.code!.shape.kind).toBe("union")
-  })
+    const base = [1, 2, 3, 4];
+    const values = repeatToN(base, 10); // K=4, N=10, ratio=0.4, n1=0
+    const samples = values.map((v) => ({ code: v }));
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.code!.shape.kind).toBe("union");
+  });
 
   test("property: borderline-ratio integer fields (whether clustered, spread, or dense) always cover every sample in the corpus, regardless of which way the clustering signal falls", () => {
     fc.assert(
@@ -1451,24 +1610,28 @@ describe("adversarial: clustering signal interaction", () => {
         fc.integer({ min: 10, max: 30 }),
         (mode, n) => {
           const base =
-            mode === "clustered" ? [100, 101, 102, 500, 501, 502] :
-            mode === "spread" ? [100, 180, 260, 340, 420, 500] :
-            [10, 11, 12, 13]
-          const values = repeatToN(base, n)
-          const samples = values.map((v) => ({ code: v }))
-          const inferred = fromJsonCorpus(samples)
+            mode === "clustered"
+              ? [100, 101, 102, 500, 501, 502]
+              : mode === "spread"
+                ? [100, 180, 260, 340, 420, 500]
+                : [10, 11, 12, 13];
+          const values = repeatToN(base, n);
+          const samples = values.map((v) => ({ code: v }));
+          const inferred = fromJsonCorpus(samples);
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  mode=${mode} n=${n}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  mode=${mode} n=${n}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 300 },
-    )
-  })
-})
+    );
+  });
+});
 
 // ---------------------------------------------------------------------------
 // 17. Enum detection with optional fields
@@ -1487,53 +1650,64 @@ describe("adversarial: enum detection with optional fields", () => {
     const samples: { status?: string; other?: number }[] = [
       ...Array.from({ length: 9 }, (_, i) => ({ status: i % 2 === 0 ? "active" : "inactive" })),
       { other: 1 },
-    ]
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.status!.shape).toEqual({ kind: "enum", members: ["active", "inactive"] })
-    expect(fields.status!.meta.optional).toBe(true)
+    ];
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.status!.shape).toEqual({ kind: "enum", members: ["active", "inactive"] });
+    expect(fields.status!.meta.optional).toBe(true);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("integer field is K=1 constant AND optional (missing from one sample) — optional survives the literal collapse", () => {
     const samples: { v?: number; other?: number }[] = [
-      { v: 5 }, { v: 5 }, { v: 5 }, { v: 5 }, { v: 5 }, { other: 1 },
-    ]
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.v!.shape).toEqual({ kind: "literal", value: 5 })
-    expect(fields.v!.meta.optional).toBe(true)
+      { v: 5 },
+      { v: 5 },
+      { v: 5 },
+      { v: 5 },
+      { v: 5 },
+      { other: 1 },
+    ];
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.v!.shape).toEqual({ kind: "literal", value: 5 });
+    expect(fields.v!.meta.optional).toBe(true);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("integer field saturates to a K>1 union-of-literals enum AND is optional — optional survives the union collapse", () => {
     const samples: { code?: number; other?: number }[] = [
       ...Array.from({ length: 9 }, (_, i) => ({ code: i % 2 === 0 ? 1 : 2 })),
       { other: 1 },
-    ]
-    const inferred = fromJsonCorpus(samples)
-    const fields = objectFields(inferred)
-    expect(fields.code!.shape.kind).toBe("union")
-    const variants = (fields.code!.shape as { variants: readonly TypeRef[] }).variants
-    expect(variants.map((v) => (v.shape as { value: unknown }).value).sort()).toEqual([1, 2])
-    expect(fields.code!.meta.optional).toBe(true)
+    ];
+    const inferred = fromJsonCorpus(samples);
+    const fields = objectFields(inferred);
+    expect(fields.code!.shape.kind).toBe("union");
+    const variants = (fields.code!.shape as { variants: readonly TypeRef[] }).variants;
+    expect(variants.map((v) => (v.shape as { value: unknown }).value).sort()).toEqual([1, 2]);
+    expect(fields.code!.meta.optional).toBe(true);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("nested optional enum field (2 levels deep) preserves both nullable/optional meta and enum shape", () => {
     const samples: Record<string, unknown>[] = [
@@ -1546,18 +1720,20 @@ describe("adversarial: enum detection with optional fields", () => {
       { a: { status: "inactive" } },
       { a: { status: "active" } },
       { a: { status: "inactive" } },
-    ]
-    const inferred = fromJsonCorpus(samples)
-    const aFields = objectFields(objectFields(inferred).a!)
-    expect(aFields.status!.shape).toEqual({ kind: "enum", members: ["active", "inactive"] })
-    expect(aFields.status!.meta.optional).toBe(true)
+    ];
+    const inferred = fromJsonCorpus(samples);
+    const aFields = objectFields(objectFields(inferred).a!);
+    expect(aFields.status!.shape).toEqual({ kind: "enum", members: ["active", "inactive"] });
+    expect(aFields.status!.meta.optional).toBe(true);
     for (const s of samples) {
-      const err = inhabits(s, inferred)
+      const err = inhabits(s, inferred);
       if (err !== null) {
-        throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+        throw new Error(
+          `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+        );
       }
     }
-  })
+  });
 
   test("property: optional enum-shaped fields always cover every sample and always keep meta.optional=true", () => {
     fc.assert(
@@ -1565,24 +1741,26 @@ describe("adversarial: enum detection with optional fields", () => {
         fc.array(fc.constantFrom("a", "b", "c"), { minLength: 6, maxLength: 30 }),
         fc.integer({ min: 0, max: 5 }),
         (tagPool, missingCount) => {
-          const n = Math.max(tagPool.length, missingCount + 3)
+          const n = Math.max(tagPool.length, missingCount + 3);
           const samples: { tag?: string }[] = Array.from({ length: n }, (_, i) =>
             i < missingCount ? {} : { tag: tagPool[i % tagPool.length]! },
-          )
-          const inferred = fromJsonCorpus(samples)
-          const fields = objectFields(inferred)
+          );
+          const inferred = fromJsonCorpus(samples);
+          const fields = objectFields(inferred);
           if (missingCount > 0 && fields.tag !== undefined) {
-            expect(fields.tag.meta.optional).toBe(true)
+            expect(fields.tag.meta.optional).toBe(true);
           }
           for (const s of samples) {
-            const err = inhabits(s, inferred)
+            const err = inhabits(s, inferred);
             if (err !== null) {
-              throw new Error(`${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`)
+              throw new Error(
+                `${err}\n  sample: ${JSON.stringify(s)}\n  inferred: ${JSON.stringify(inferred.shape)}`,
+              );
             }
           }
         },
       ),
       { numRuns: 300 },
-    )
-  })
-})
+    );
+  });
+});

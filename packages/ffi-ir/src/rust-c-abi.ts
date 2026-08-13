@@ -1,6 +1,6 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toRustType } from "@rhi-zone/fractal-type-ir/rust-serde"
-import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toRustType } from "@rhi-zone/fractal-type-ir/rust-serde";
+import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // rust-c-abi: Rust source (`#[repr(C)]` structs, `#[no_mangle] pub
 // extern "C" fn` functions) as the emission side of a plain-C FFI boundary —
@@ -51,24 +51,67 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 const RUST_KEYWORDS = new Set([
-  "type", "struct", "enum", "fn", "let", "mut", "ref", "self", "super", "crate",
-  "mod", "pub", "use", "impl", "trait", "where", "loop", "while", "for", "if",
-  "else", "match", "return", "break", "continue", "as", "in", "move", "box",
-  "dyn", "abstract", "async", "await", "become", "const", "do", "extern",
-  "final", "macro", "override", "priv", "static", "try", "typeof", "unsafe",
-  "unsized", "virtual", "yield", "union",
-])
+  "type",
+  "struct",
+  "enum",
+  "fn",
+  "let",
+  "mut",
+  "ref",
+  "self",
+  "super",
+  "crate",
+  "mod",
+  "pub",
+  "use",
+  "impl",
+  "trait",
+  "where",
+  "loop",
+  "while",
+  "for",
+  "if",
+  "else",
+  "match",
+  "return",
+  "break",
+  "continue",
+  "as",
+  "in",
+  "move",
+  "box",
+  "dyn",
+  "abstract",
+  "async",
+  "await",
+  "become",
+  "const",
+  "do",
+  "extern",
+  "final",
+  "macro",
+  "override",
+  "priv",
+  "static",
+  "try",
+  "typeof",
+  "unsafe",
+  "unsized",
+  "virtual",
+  "yield",
+  "union",
+]);
 
 function escapeRustIdent(rustName: string): string {
-  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName
+  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName;
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 /**
@@ -87,23 +130,23 @@ function quote(value: string): string {
  *     silently approximating as a pointer or a copy.
  */
 export function toRustCAbiType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline === undefined || discipline.kind === "copy") return toRustType(ref)
-  if (discipline.kind === "opaque-handle") return `*mut ${toRustType(ref)}`
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline === undefined || discipline.kind === "copy") return toRustType(ref);
+  if (discipline.kind === "opaque-handle") return `*mut ${toRustType(ref)}`;
   throw new Error(
     `toRustCAbi: unsupported ownership discipline "${discipline.kind}" for C target — the C backend implements only "copy" and "opaque-handle" ` +
       '(docs/design/ffi-ir-architecture-options.md, Fork C "discipline-per-target: decided": no native C mechanism for refcounting or a resource/lend-count handle table; both are explicitly out of scope for this target, not an oversight)',
-  )
+  );
 }
 
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`${indent}/// ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`${indent}/// ${meta.description}`] : [];
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+  readonly returnType: TypeRef;
+};
 
 /** One `#[no_mangle] pub extern "C" fn` for a `function`/`method` shape.
  * `selfParam`, when given, is prepended as the receiver parameter (a
@@ -114,23 +157,29 @@ type FfiFunctionLike = {
  * position). Body is a `todo!()` stub — ffi-ir carries only the signature,
  * matching wasm-bindgen.ts's identical stub-body convention for the same
  * reason (no implementation in the IR to emit). */
-function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, selfParam?: string): string {
-  const params: string[] = []
-  if (selfParam !== undefined) params.push(`handle: *mut ${selfParam}`)
+function buildFunction(
+  fnName: string,
+  ref: FfiRef,
+  shape: FfiFunctionLike,
+  selfParam?: string,
+): string {
+  const params: string[] = [];
+  if (selfParam !== undefined) params.push(`handle: *mut ${selfParam}`);
   for (const p of shape.params) {
-    const ident = escapeRustIdent(toSnakeCase(p.name))
-    params.push(`${ident}: ${toRustCAbiType(p.type)}`)
+    const ident = escapeRustIdent(toSnakeCase(p.name));
+    params.push(`${ident}: ${toRustCAbiType(p.type)}`);
   }
 
-  const isVoidReturn = shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null"
-  const returnType = isVoidReturn ? "" : ` -> ${toRustCAbiType(shape.returnType)}`
+  const isVoidReturn =
+    shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null";
+  const returnType = isVoidReturn ? "" : ` -> ${toRustCAbiType(shape.returnType)}`;
 
-  const lines: string[] = [...docComment("", ref.meta)]
-  lines.push("#[no_mangle]")
-  lines.push(`pub extern "C" fn ${fnName}(${params.join(", ")})${returnType} {`)
-  lines.push(`    todo!(${quote(`implement ${fnName}`)})`)
-  lines.push("}")
-  return lines.join("\n")
+  const lines: string[] = [...docComment("", ref.meta)];
+  lines.push("#[no_mangle]");
+  lines.push(`pub extern "C" fn ${fnName}(${params.join(", ")})${returnType} {`);
+  lines.push(`    todo!(${quote(`implement ${fnName}`)})`);
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /** The Rustonomicon-documented opaque-struct idiom for a C-ABI handle: a
@@ -141,8 +190,14 @@ function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, self
  * (empty) layout is well-defined across the FFI boundary rather than left to
  * Rust's default unspecified-layout `repr(Rust)`. */
 function buildOpaqueStruct(name: string, ref: FfiRef): string {
-  const lines: string[] = [...docComment("", ref.meta), "#[repr(C)]", `pub struct ${name} {`, "    _private: [u8; 0],", "}"]
-  return lines.join("\n")
+  const lines: string[] = [
+    ...docComment("", ref.meta),
+    "#[repr(C)]",
+    `pub struct ${name} {`,
+    "    _private: [u8; 0],",
+    "}",
+  ];
+  return lines.join("\n");
 }
 
 /** The paired explicit free function cbindgen's opaque-pointer convention
@@ -166,7 +221,7 @@ function buildFreeFunction(freeFnName: string, structName: string): string {
     "        drop(Box::from_raw(handle));",
     "    }",
     "}",
-  ].join("\n")
+  ].join("\n");
 }
 
 function buildResource(
@@ -174,17 +229,17 @@ function buildResource(
   ref: FfiRef,
   shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
 ): string {
-  const resourceSnake = toSnakeCase(name)
-  const decls: string[] = [buildOpaqueStruct(name, ref)]
+  const resourceSnake = toSnakeCase(name);
+  const decls: string[] = [buildOpaqueStruct(name, ref)];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
-    const methodShape = methodRef.shape as FfiShape & { kind: "method" }
-    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`
-    decls.push(buildFunction(fnName, methodRef, methodShape, name))
+    const methodShape = methodRef.shape as FfiShape & { kind: "method" };
+    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`;
+    decls.push(buildFunction(fnName, methodRef, methodShape, name));
   }
 
-  decls.push(buildFreeFunction(`${resourceSnake}_free`, name))
-  return decls.join("\n\n")
+  decls.push(buildFreeFunction(`${resourceSnake}_free`, name));
+  return decls.join("\n\n");
 }
 
 /**
@@ -209,43 +264,53 @@ function buildResource(
  * its own target.
  */
 export function toRustCAbi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toRustCAbi: "function" requires a name — a C export is a named symbol, not an anonymous inline type')
+      throw new Error(
+        'toRustCAbi: "function" requires a name — a C export is a named symbol, not an anonymous inline type',
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    return buildFunction(toSnakeCase(name), ref, shape)
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    return buildFunction(toSnakeCase(name), ref, shape);
   }
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toRustCAbi: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error(
+        "toRustCAbi: \"method\" requires a name — the method's own key in its resource's methods map",
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "method" }
-    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`
-    return buildFunction(fnName, ref, shape, shape.receiver)
+    const shape = ref.shape as FfiShape & { kind: "method" };
+    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`;
+    return buildFunction(fnName, ref, shape, shape.receiver);
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiShape & { kind: "resource"; name: string; methods: Readonly<Record<string, FfiRef>> }
-    return buildResource(shape.name, ref, shape)
+    const shape = ref.shape as FfiShape & {
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    return buildResource(shape.name, ref, shape);
   }
 
   if (kind === "module") {
     const shape = ref.shape as FfiShape & {
-      kind: "module"
-      name: string
-      functions: Readonly<Record<string, FfiRef>>
-      resources: Readonly<Record<string, FfiRef>>
-    }
+      kind: "module";
+      name: string;
+      functions: Readonly<Record<string, FfiRef>>;
+      resources: Readonly<Record<string, FfiRef>>;
+    };
     const decls: string[] = [
       ...Object.entries(shape.functions).map(([fnName, fnRef]) => toRustCAbi(fnRef, fnName)),
       ...Object.entries(shape.resources).map(([resName, resRef]) => toRustCAbi(resRef, resName)),
-    ]
-    return decls.join("\n\n")
+    ];
+    return decls.join("\n\n");
   }
 
-  throw new Error(`toRustCAbi: unhandled ffi-ir kind "${kind}" — no C-ABI mapping implemented for this backend`)
+  throw new Error(
+    `toRustCAbi: unhandled ffi-ir kind "${kind}" — no C-ABI mapping implemented for this backend`,
+  );
 }

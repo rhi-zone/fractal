@@ -11,4 +11,4 @@
 // would simply be missing from the umbrella until someone noticed. There is
 // no logic in these modules to make the enumeration worth its maintenance.
 
-export * from "@rhi-zone/fractal-api-tree"
+export * from "@rhi-zone/fractal-api-tree";

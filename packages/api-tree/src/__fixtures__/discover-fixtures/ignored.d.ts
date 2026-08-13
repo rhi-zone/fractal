@@ -6,4 +6,4 @@
 // checked as a tree by this fixture's own test (the point is the file is
 // filtered out BEFORE `hasTreeExport` would ever run on it).
 
-export declare const tree: { readonly meta: object }
+export declare const tree: { readonly meta: object };

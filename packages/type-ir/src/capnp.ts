@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA } from "./codegen-helpers.ts";
 
 // Cap'n Proto schema language: https://capnproto.org/language.html
 // `deprecated` mirrors `description`'s shape: `true` (no reason given) or a
@@ -9,45 +9,57 @@ import { capitalize, isA } from "./codegen-helpers.ts"
 // `renderInterface` render it as a `# Deprecated` (or `# Deprecated: reason`)
 // line comment, same convention `description` already uses for its own `#`
 // comment.
-type Deprecated = true | string
+type Deprecated = true | string;
 
 export type CapnpStruct = {
-  name: string
-  fields: Array<{ name: string; type: string; ordinal: number; description?: string; deprecated?: Deprecated }>
+  name: string;
+  fields: Array<{
+    name: string;
+    type: string;
+    ordinal: number;
+    description?: string;
+    deprecated?: Deprecated;
+  }>;
   // An anonymous union (§ "Unions": https://capnproto.org/language.html#unions)
   // nested directly inside the struct — used to lower a union-rooted TypeRef,
   // where each variant becomes one arm of the union rather than a plain field.
-  unionFields?: Array<{ name: string; type: string; ordinal: number; description?: string; deprecated?: Deprecated }>
-  nestedStructs?: CapnpStruct[]
-  nestedEnums?: Array<{ name: string; values: readonly string[] }>
-  description?: string
-  deprecated?: Deprecated
-}
+  unionFields?: Array<{
+    name: string;
+    type: string;
+    ordinal: number;
+    description?: string;
+    deprecated?: Deprecated;
+  }>;
+  nestedStructs?: CapnpStruct[];
+  nestedEnums?: Array<{ name: string; values: readonly string[] }>;
+  description?: string;
+  deprecated?: Deprecated;
+};
 
 // Cap'n Proto interfaces (§ "Interfaces": https://capnproto.org/language.html#interfaces)
 // — `methodName @N (param :Type, ...) -> (result :Type, ...);`. Cap'n Proto
 // natively supports multiple named results; this projector always emits at
 // most one, named `result` (a `void`-returning method emits `-> ()`).
 export type CapnpMethod = {
-  name: string
-  ordinal: number
-  params: Array<{ name: string; type: string }>
-  results: Array<{ name: string; type: string }>
-}
+  name: string;
+  ordinal: number;
+  params: Array<{ name: string; type: string }>;
+  results: Array<{ name: string; type: string }>;
+};
 
 export type CapnpInterface = {
-  name: string
-  methods: CapnpMethod[]
-  description?: string
-  deprecated?: Deprecated
-}
+  name: string;
+  methods: CapnpMethod[];
+  description?: string;
+  deprecated?: Deprecated;
+};
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Built-in types: https://capnproto.org/language.html#built-in-types
 const handlers: Record<string, Converter> = {
@@ -82,16 +94,16 @@ const handlers: Record<string, Converter> = {
   // emitting a struct with no fields.
   instance: leaf("AnyPointer"),
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `List(${toCapnpType(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `List(${toCapnpType(s.element)})`;
   },
   // Cap'n Proto has no field-level streaming type (its streaming RPC support
   // — https://capnproto.org/language.html — is an experimental method-level
   // extension, not a value type constructible from a bare TypeRef) —
   // degrades to the same `List(T)` encoding `array` uses above.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `List(${toCapnpType(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `List(${toCapnpType(s.element)})`;
   },
   // No tuple construct (§ "Structs") — heterogeneous positional elements have
   // no direct encoding; toCapnpStruct special-cases tuple fields to hoist a
@@ -107,23 +119,23 @@ const handlers: Record<string, Converter> = {
   // for; lossy — degrades to an opaque pointer.
   union: leaf("AnyPointer"),
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "Void"
-    if (typeof s.value === "string") return "Text"
-    if (typeof s.value === "boolean") return "Bool"
-    return Number.isInteger(s.value) ? "Int64" : "Float64"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "Void";
+    if (typeof s.value === "string") return "Text";
+    if (typeof s.value === "boolean") return "Bool";
+    return Number.isInteger(s.value) ? "Int64" : "Float64";
   },
   enum: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`
+    const s = shape as TypeShape & { kind: "enum" };
+    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`;
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // No intersection/mixin construct (§ "Language Reference") — lossy: falls
   // back to the first member's type, dropping the rest.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "AnyPointer" : toCapnpType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "AnyPointer" : toCapnpType(first);
   },
   // Cap'n Proto has no callable-type construct — degrades honestly to
   // AnyPointer, same as `instance` above. (`method` falls back here too via
@@ -137,26 +149,26 @@ const handlers: Record<string, Converter> = {
   // AnyPointer same as `function`/`instance` above. `toCapnpInterface` is the
   // real encoding, used when an `interface` TypeRef is a top-level declaration.
   interface: leaf("AnyPointer"),
-}
+};
 
 // Reads `meta.deprecated` into the `Deprecated` shape struct/field/interface
 // builders below carry through to rendering — `true` (bare) or a string
 // (reason) pass through, anything else (absent, `false`) is "not deprecated".
 function readDeprecated(meta: Readonly<Record<string, unknown>>): Deprecated | undefined {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return true
-  if (typeof deprecated === "string") return deprecated
-  return undefined
+  const deprecated = meta.deprecated;
+  if (deprecated === true) return true;
+  if (typeof deprecated === "string") return deprecated;
+  return undefined;
 }
 
 export function toCapnpType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "AnyPointer" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "AnyPointer" : converter(ref.shape, ref.meta);
 }
 
 // Cap'n Proto style (§ "Naming"): enumerants are lowerCamelCase.
 function toLowerCamel(name: string): string {
-  return name.toLowerCase()
+  return name.toLowerCase();
 }
 
 /**
@@ -171,41 +183,55 @@ function toLowerCamel(name: string): string {
  * index.ts) when available, falling back to a positional `variantN` name.
  */
 function toCapnpUnionStruct(name: string, ref: TypeRef): CapnpStruct {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
-  const unionFields: CapnpStruct["fields"] = []
-  const nestedStructs: CapnpStruct[] = []
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator =
+    typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
+  const unionFields: CapnpStruct["fields"] = [];
+  const nestedStructs: CapnpStruct[] = [];
 
   shape.variants.forEach((variant, ordinal) => {
     const description: { description: string } | Record<string, never> =
-      typeof variant.meta.description === "string" ? { description: variant.meta.description } : {}
-    const deprecated = readDeprecated(variant.meta)
-    const deprecatedField: { deprecated: Deprecated } | Record<string, never> = deprecated === undefined ? {} : { deprecated }
+      typeof variant.meta.description === "string" ? { description: variant.meta.description } : {};
+    const deprecated = readDeprecated(variant.meta);
+    const deprecatedField: { deprecated: Deprecated } | Record<string, never> =
+      deprecated === undefined ? {} : { deprecated };
 
     if (isA(variant.shape.kind, "object")) {
-      const objShape = variant.shape as TypeShape & { kind: "object" }
-      let armName = `variant${ordinal}`
+      const objShape = variant.shape as TypeShape & { kind: "object" };
+      let armName = `variant${ordinal}`;
       if (discriminator !== undefined) {
-        const discField = objShape.fields[discriminator]
+        const discField = objShape.fields[discriminator];
         if (discField !== undefined && discField.shape.kind === "literal") {
-          const value = (discField.shape as TypeShape & { kind: "literal" }).value
-          if (typeof value === "string" && value.length > 0) armName = value
+          const value = (discField.shape as TypeShape & { kind: "literal" }).value;
+          if (typeof value === "string" && value.length > 0) armName = value;
         }
       }
-      const structName = capitalize(armName)
-      nestedStructs.push(toCapnpStruct(structName, variant))
-      unionFields.push({ name: armName, type: structName, ordinal, ...description, ...deprecatedField })
+      const structName = capitalize(armName);
+      nestedStructs.push(toCapnpStruct(structName, variant));
+      unionFields.push({
+        name: armName,
+        type: structName,
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     } else {
-      unionFields.push({ name: `variant${ordinal}`, type: toCapnpType(variant), ordinal, ...description, ...deprecatedField })
+      unionFields.push({
+        name: `variant${ordinal}`,
+        type: toCapnpType(variant),
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     }
-  })
+  });
 
-  const result: CapnpStruct = { name, fields: [], unionFields }
-  if (nestedStructs.length > 0) result.nestedStructs = nestedStructs
-  if (typeof ref.meta.description === "string") result.description = ref.meta.description
-  const structDeprecated = readDeprecated(ref.meta)
-  if (structDeprecated !== undefined) result.deprecated = structDeprecated
-  return result
+  const result: CapnpStruct = { name, fields: [], unionFields };
+  if (nestedStructs.length > 0) result.nestedStructs = nestedStructs;
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description;
+  const structDeprecated = readDeprecated(ref.meta);
+  if (structDeprecated !== undefined) result.deprecated = structDeprecated;
+  return result;
 }
 
 /**
@@ -216,54 +242,69 @@ function toCapnpUnionStruct(name: string, ref: TypeRef): CapnpStruct {
  * fields.
  */
 function buildTupleStruct(name: string, ref: TypeRef): CapnpStruct {
-  const shape = ref.shape as TypeShape & { kind: "tuple" }
+  const shape = ref.shape as TypeShape & { kind: "tuple" };
   const fields: CapnpStruct["fields"] = shape.elements.map((element, i) => ({
     name: `field${i}`,
     type: toCapnpType(element),
     ordinal: i,
-  }))
-  const result: CapnpStruct = { name, fields }
-  if (typeof ref.meta.description === "string") result.description = ref.meta.description
-  const structDeprecated = readDeprecated(ref.meta)
-  if (structDeprecated !== undefined) result.deprecated = structDeprecated
-  return result
+  }));
+  const result: CapnpStruct = { name, fields };
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description;
+  const structDeprecated = readDeprecated(ref.meta);
+  if (structDeprecated !== undefined) result.deprecated = structDeprecated;
+  return result;
 }
 
 export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
-  if (ref.shape.kind === "union") return toCapnpUnionStruct(name, ref)
-  if (ref.shape.kind === "tuple") return buildTupleStruct(name, ref)
+  if (ref.shape.kind === "union") return toCapnpUnionStruct(name, ref);
+  if (ref.shape.kind === "tuple") return buildTupleStruct(name, ref);
 
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const fields: CapnpStruct["fields"] = []
-  const nestedStructs: CapnpStruct[] = []
-  const nestedEnums: Array<{ name: string; values: readonly string[] }> = []
-  let ordinal = 0
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const fields: CapnpStruct["fields"] = [];
+  const nestedStructs: CapnpStruct[] = [];
+  const nestedEnums: Array<{ name: string; values: readonly string[] }> = [];
+  let ordinal = 0;
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     const description: { description: string } | Record<string, never> =
-      typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
-    const deprecated = readDeprecated(fieldRef.meta)
-    const deprecatedField: { deprecated: Deprecated } | Record<string, never> = deprecated === undefined ? {} : { deprecated }
+      typeof fieldRef.meta.description === "string"
+        ? { description: fieldRef.meta.description }
+        : {};
+    const deprecated = readDeprecated(fieldRef.meta);
+    const deprecatedField: { deprecated: Deprecated } | Record<string, never> =
+      deprecated === undefined ? {} : { deprecated };
     if (isA(fieldRef.shape.kind, "object")) {
-      const nestedName = capitalize(fieldName)
-      nestedStructs.push(toCapnpStruct(nestedName, fieldRef))
-      fields.push({ name: fieldName, type: nestedName, ordinal, ...description, ...deprecatedField })
+      const nestedName = capitalize(fieldName);
+      nestedStructs.push(toCapnpStruct(nestedName, fieldRef));
+      fields.push({
+        name: fieldName,
+        type: nestedName,
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     } else if (
       fieldRef.shape.kind === "array" &&
       isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
     ) {
-      const nestedName = capitalize(fieldName)
-      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-      nestedStructs.push(toCapnpStruct(nestedName, element))
-      fields.push({ name: fieldName, type: `List(${nestedName})`, ordinal, ...description, ...deprecatedField })
+      const nestedName = capitalize(fieldName);
+      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+      nestedStructs.push(toCapnpStruct(nestedName, element));
+      fields.push({
+        name: fieldName,
+        type: `List(${nestedName})`,
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     } else if (fieldRef.shape.kind === "enum") {
-      const enumName = capitalize(fieldName)
-      const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
-      nestedEnums.push({ name: enumName, values: members })
-      fields.push({ name: fieldName, type: enumName, ordinal, ...description, ...deprecatedField })
+      const enumName = capitalize(fieldName);
+      const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members;
+      nestedEnums.push({ name: enumName, values: members });
+      fields.push({ name: fieldName, type: enumName, ordinal, ...description, ...deprecatedField });
     } else if (fieldRef.shape.kind === "map") {
-      const mapShape = fieldRef.shape as TypeShape & { kind: "map" }
-      const entryName = `${capitalize(fieldName)}Entry`
+      const mapShape = fieldRef.shape as TypeShape & { kind: "map" };
+      const entryName = `${capitalize(fieldName)}Entry`;
       // No map built-in (§ "Language Reference"): the canonical workaround is
       // List(Entry) where Entry is a two-field key/value struct.
       const entryStruct: CapnpStruct = {
@@ -272,26 +313,44 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
           { name: "key", type: toCapnpType(mapShape.key), ordinal: 0 },
           { name: "value", type: toCapnpType(mapShape.value), ordinal: 1 },
         ],
-      }
-      nestedStructs.push(entryStruct)
-      fields.push({ name: fieldName, type: `List(${entryName})`, ordinal, ...description, ...deprecatedField })
+      };
+      nestedStructs.push(entryStruct);
+      fields.push({
+        name: fieldName,
+        type: `List(${entryName})`,
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     } else if (fieldRef.shape.kind === "tuple") {
-      const nestedName = capitalize(fieldName)
-      nestedStructs.push(buildTupleStruct(nestedName, fieldRef))
-      fields.push({ name: fieldName, type: nestedName, ordinal, ...description, ...deprecatedField })
+      const nestedName = capitalize(fieldName);
+      nestedStructs.push(buildTupleStruct(nestedName, fieldRef));
+      fields.push({
+        name: fieldName,
+        type: nestedName,
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     } else {
-      fields.push({ name: fieldName, type: toCapnpType(fieldRef), ordinal, ...description, ...deprecatedField })
+      fields.push({
+        name: fieldName,
+        type: toCapnpType(fieldRef),
+        ordinal,
+        ...description,
+        ...deprecatedField,
+      });
     }
-    ordinal++
+    ordinal++;
   }
 
-  const result: CapnpStruct = { name, fields }
-  if (nestedStructs.length > 0) result.nestedStructs = nestedStructs
-  if (nestedEnums.length > 0) result.nestedEnums = nestedEnums
-  if (typeof ref.meta.description === "string") result.description = ref.meta.description
-  const structDeprecated = readDeprecated(ref.meta)
-  if (structDeprecated !== undefined) result.deprecated = structDeprecated
-  return result
+  const result: CapnpStruct = { name, fields };
+  if (nestedStructs.length > 0) result.nestedStructs = nestedStructs;
+  if (nestedEnums.length > 0) result.nestedEnums = nestedEnums;
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description;
+  const structDeprecated = readDeprecated(ref.meta);
+  if (structDeprecated !== undefined) result.deprecated = structDeprecated;
+  return result;
 }
 
 /**
@@ -303,28 +362,28 @@ export function toCapnpStruct(name: string, ref: TypeRef): CapnpStruct {
  * needed here).
  */
 export function toCapnpInterface(name: string, ref: TypeRef): CapnpInterface {
-  const shape = ref.shape as TypeShape & { kind: "interface" }
-  const methods: CapnpMethod[] = []
-  let ordinal = 0
+  const shape = ref.shape as TypeShape & { kind: "interface" };
+  const methods: CapnpMethod[] = [];
+  let ordinal = 0;
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
     const m = methodRef.shape as TypeShape & {
-      kind: "method" | "function"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-    }
-    const params = m.params.map((p) => ({ name: p.name, type: toCapnpType(p.type) }))
-    const isVoid = m.returnType.shape.kind === "void"
-    const results = isVoid ? [] : [{ name: "result", type: toCapnpType(m.returnType) }]
-    methods.push({ name: methodName, ordinal, params, results })
-    ordinal++
+      kind: "method" | "function";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+    };
+    const params = m.params.map((p) => ({ name: p.name, type: toCapnpType(p.type) }));
+    const isVoid = m.returnType.shape.kind === "void";
+    const results = isVoid ? [] : [{ name: "result", type: toCapnpType(m.returnType) }];
+    methods.push({ name: methodName, ordinal, params, results });
+    ordinal++;
   }
 
-  const result: CapnpInterface = { name, methods }
-  if (typeof ref.meta.description === "string") result.description = ref.meta.description
-  const interfaceDeprecated = readDeprecated(ref.meta)
-  if (interfaceDeprecated !== undefined) result.deprecated = interfaceDeprecated
-  return result
+  const result: CapnpInterface = { name, methods };
+  if (typeof ref.meta.description === "string") result.description = ref.meta.description;
+  const interfaceDeprecated = readDeprecated(ref.meta);
+  if (interfaceDeprecated !== undefined) result.deprecated = interfaceDeprecated;
+  return result;
 }
 
 // Renders a `deprecated` marker as its own `#` line comment — `# Deprecated`
@@ -332,81 +391,85 @@ export function toCapnpInterface(name: string, ref: TypeRef): CapnpInterface {
 // line-comment convention `description` uses (Cap'n Proto has no native
 // deprecation annotation, § "Language Reference").
 function deprecatedCommentLine(deprecated: Deprecated | undefined, indent: string): string[] {
-  if (deprecated === undefined) return []
-  return [deprecated === true ? `${indent}# Deprecated` : `${indent}# Deprecated: ${deprecated}`]
+  if (deprecated === undefined) return [];
+  return [deprecated === true ? `${indent}# Deprecated` : `${indent}# Deprecated: ${deprecated}`];
 }
 
 function renderField(field: CapnpStruct["fields"][number], indent: string): string[] {
-  const lines: string[] = []
+  const lines: string[] = [];
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
   // comments immediately above the field are the idiomatic convention.
-  if (typeof field.description === "string") lines.push(`${indent}# ${field.description}`)
-  lines.push(...deprecatedCommentLine(field.deprecated, indent))
-  lines.push(`${indent}${field.name} @${field.ordinal} :${field.type};`)
-  return lines
+  if (typeof field.description === "string") lines.push(`${indent}# ${field.description}`);
+  lines.push(...deprecatedCommentLine(field.deprecated, indent));
+  lines.push(`${indent}${field.name} @${field.ordinal} :${field.type};`);
+  return lines;
 }
 
 function renderStruct(struct: CapnpStruct, depth: number): string[] {
-  const indent = "  ".repeat(depth)
-  const inner = "  ".repeat(depth + 1)
-  const lines: string[] = []
+  const indent = "  ".repeat(depth);
+  const inner = "  ".repeat(depth + 1);
+  const lines: string[] = [];
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
   // comments immediately above the struct are the idiomatic convention.
-  if (typeof struct.description === "string") lines.push(`${indent}# ${struct.description}`)
-  lines.push(...deprecatedCommentLine(struct.deprecated, indent))
-  lines.push(`${indent}struct ${struct.name} {`)
+  if (typeof struct.description === "string") lines.push(`${indent}# ${struct.description}`);
+  lines.push(...deprecatedCommentLine(struct.deprecated, indent));
+  lines.push(`${indent}struct ${struct.name} {`);
 
-  for (const field of struct.fields) lines.push(...renderField(field, inner))
+  for (const field of struct.fields) lines.push(...renderField(field, inner));
 
   if (struct.unionFields !== undefined && struct.unionFields.length > 0) {
-    const unionInner = "  ".repeat(depth + 2)
-    lines.push(`${inner}union {`)
-    for (const field of struct.unionFields) lines.push(...renderField(field, unionInner))
-    lines.push(`${inner}}`)
+    const unionInner = "  ".repeat(depth + 2);
+    lines.push(`${inner}union {`);
+    for (const field of struct.unionFields) lines.push(...renderField(field, unionInner));
+    lines.push(`${inner}}`);
   }
 
   for (const e of struct.nestedEnums ?? []) {
-    lines.push(`${inner}enum ${e.name} {`)
+    lines.push(`${inner}enum ${e.name} {`);
     // Cap'n Proto enums (§ "Enums"): ordinals are assigned sequentially starting at 0.
-    e.values.forEach((value, i) => lines.push(`${inner}  ${toLowerCamel(value)} @${i};`))
-    lines.push(`${inner}}`)
+    e.values.forEach((value, i) => lines.push(`${inner}  ${toLowerCamel(value)} @${i};`));
+    lines.push(`${inner}}`);
   }
 
-  for (const nested of struct.nestedStructs ?? []) lines.push(...renderStruct(nested, depth + 1))
+  for (const nested of struct.nestedStructs ?? []) lines.push(...renderStruct(nested, depth + 1));
 
-  lines.push(`${indent}}`)
-  return lines
+  lines.push(`${indent}}`);
+  return lines;
 }
 
 function renderMethodLine(method: CapnpMethod, indent: string): string {
-  const params = method.params.map((p) => `${p.name} :${p.type}`).join(", ")
-  const results = method.results.map((r) => `${r.name} :${r.type}`).join(", ")
-  return `${indent}${method.name} @${method.ordinal} (${params}) -> (${results});`
+  const params = method.params.map((p) => `${p.name} :${p.type}`).join(", ");
+  const results = method.results.map((r) => `${r.name} :${r.type}`).join(", ");
+  return `${indent}${method.name} @${method.ordinal} (${params}) -> (${results});`;
 }
 
 function renderInterface(iface: CapnpInterface, depth: number): string[] {
-  const indent = "  ".repeat(depth)
-  const inner = "  ".repeat(depth + 1)
-  const lines: string[] = []
+  const indent = "  ".repeat(depth);
+  const inner = "  ".repeat(depth + 1);
+  const lines: string[] = [];
   // Cap'n Proto has no doc-comment keyword (§ "Language Reference"); `#` line
   // comments immediately above the interface are the idiomatic convention.
-  if (typeof iface.description === "string") lines.push(`${indent}# ${iface.description}`)
-  lines.push(...deprecatedCommentLine(iface.deprecated, indent))
-  lines.push(`${indent}interface ${iface.name} {`)
-  for (const method of iface.methods) lines.push(renderMethodLine(method, inner))
-  lines.push(`${indent}}`)
-  return lines
+  if (typeof iface.description === "string") lines.push(`${indent}# ${iface.description}`);
+  lines.push(...deprecatedCommentLine(iface.deprecated, indent));
+  lines.push(`${indent}interface ${iface.name} {`);
+  for (const method of iface.methods) lines.push(renderMethodLine(method, inner));
+  lines.push(`${indent}}`);
+  return lines;
 }
 
-export function renderCapnp(structs: CapnpStruct[], id?: string, interfaces: CapnpInterface[] = []): string {
+export function renderCapnp(
+  structs: CapnpStruct[],
+  id?: string,
+  interfaces: CapnpInterface[] = [],
+): string {
   // File ID (§ "Files"): every .capnp file must declare a unique @0x... identifier.
-  const header = id !== undefined ? `@${id};` : "# @0x... (assign a unique ID)"
-  const lines = [header, ""]
+  const header = id !== undefined ? `@${id};` : "# @0x... (assign a unique ID)";
+  const lines = [header, ""];
   for (const struct of structs) {
-    lines.push(...renderStruct(struct, 0), "")
+    lines.push(...renderStruct(struct, 0), "");
   }
   for (const iface of interfaces) {
-    lines.push(...renderInterface(iface, 0), "")
+    lines.push(...renderInterface(iface, 0), "");
   }
-  return `${lines.join("\n").trimEnd()}\n`
+  return `${lines.join("\n").trimEnd()}\n`;
 }

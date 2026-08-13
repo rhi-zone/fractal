@@ -20,6 +20,7 @@ Use these terms exactly in every suggestion. Consistent language is the point. F
 - **Locality** — what maintainers get from depth: change, bugs, knowledge concentrated in one place.
 
 Key principles:
+
 - **Deletion test**: imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
 - **The interface is the test surface.**
 - **One adapter = hypothetical seam. Two adapters = real seam.**
@@ -69,6 +70,7 @@ Each entry:
 
 ```markdown
 ## TermName
+
 _Avoid:_ synonym or related term that's easily confused
 
 One-sentence definition that captures what makes this term precise.

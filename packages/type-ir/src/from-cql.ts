@@ -65,12 +65,12 @@
 // `meta.counter` boolean is also set directly on that column's TypeRef,
 // mirroring from-sql.ts's per-column `meta.primaryKey` boolean.
 
-import { t, types, type TypeRef } from "./index.ts"
-import { bytes, date, datetime, duration, time, uuid } from "./kinds/common.ts"
+import { t, types, type TypeRef } from "./index.ts";
+import { bytes, date, datetime, duration, time, uuid } from "./kinds/common.ts";
 
 function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
-  if (Object.keys(extra).length === 0) return ref
-  return { shape: ref.shape, meta: { ...ref.meta, ...extra } }
+  if (Object.keys(extra).length === 0) return ref;
+  return { shape: ref.shape, meta: { ...ref.meta, ...extra } };
 }
 
 // ============================================================================
@@ -81,106 +81,106 @@ function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
 // ============================================================================
 
 function splitTopLevel(text: string, sep: string): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let angleDepth = 0
-  let quote: string | null = null
-  let start = 0
+  const parts: string[] = [];
+  let depth = 0;
+  let angleDepth = 0;
+  let quote: string | null = null;
+  let start = 0;
   for (let i = 0; i < text.length; i++) {
-    const c = text[i]!
+    const c = text[i]!;
     if (quote !== null) {
       if (c === quote) {
         if (quote === "'" && text[i + 1] === "'") {
-          i++
-          continue
+          i++;
+          continue;
         }
-        quote = null
+        quote = null;
       }
-      continue
+      continue;
     }
-    if (c === "'" || c === '"') quote = c
-    else if (c === "(") depth++
-    else if (c === ")") depth--
-    else if (c === "<") angleDepth++
-    else if (c === ">") angleDepth = Math.max(0, angleDepth - 1)
+    if (c === "'" || c === '"') quote = c;
+    else if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (c === "<") angleDepth++;
+    else if (c === ">") angleDepth = Math.max(0, angleDepth - 1);
     else if (c === sep && depth === 0 && angleDepth === 0) {
-      parts.push(text.slice(start, i))
-      start = i + 1
+      parts.push(text.slice(start, i));
+      start = i + 1;
     }
   }
-  parts.push(text.slice(start))
-  return parts
+  parts.push(text.slice(start));
+  return parts;
 }
 
 function splitStatements(ddl: string): string[] {
   return splitTopLevel(ddl, ";")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+    .filter((s) => s.length > 0);
 }
 
 /** Extract the parenthesized text starting at `text[openIdx]` (must be `(`),
  * returning the inner text and how many characters (from the start of
  * `text`) were consumed through the matching close paren. */
 function extractBalancedParen(text: string, openIdx: number): { clause: string; consumed: number } {
-  let depth = 0
-  let quote: string | null = null
+  let depth = 0;
+  let quote: string | null = null;
   for (let i = openIdx; i < text.length; i++) {
-    const c = text[i]!
+    const c = text[i]!;
     if (quote !== null) {
       if (c === quote) {
         if (quote === "'" && text[i + 1] === "'") {
-          i++
-          continue
+          i++;
+          continue;
         }
-        quote = null
+        quote = null;
       }
-      continue
+      continue;
     }
-    if (c === "'" || c === '"') quote = c
-    else if (c === "(") depth++
+    if (c === "'" || c === '"') quote = c;
+    else if (c === "(") depth++;
     else if (c === ")") {
-      depth--
-      if (depth === 0) return { clause: text.slice(openIdx + 1, i), consumed: i + 1 }
+      depth--;
+      if (depth === 0) return { clause: text.slice(openIdx + 1, i), consumed: i + 1 };
     }
   }
-  return { clause: text.slice(openIdx + 1), consumed: text.length }
+  return { clause: text.slice(openIdx + 1), consumed: text.length };
 }
 
 function stripQuotes(name: string): string {
-  const m = /^"([^"]+)"$/.exec(name.trim())
-  return m !== null ? m[1]! : name.trim()
+  const m = /^"([^"]+)"$/.exec(name.trim());
+  return m !== null ? m[1]! : name.trim();
 }
 
 /** `[keyspace.]name` -> bare `name` (this module's map is keyed by
  * unqualified name, matching from-sql.ts's own convention for
  * `schema.table`-qualified SQL names). */
 function unqualify(name: string): string {
-  const parts = name.split(".")
-  return stripQuotes(parts[parts.length - 1]!)
+  const parts = name.split(".");
+  return stripQuotes(parts[parts.length - 1]!);
 }
 
 // ============================================================================
 // CREATE TABLE / CREATE TYPE statement extraction
 // ============================================================================
 
-const CREATE_TABLE_RE = /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]+)"|[\w.]+)\s*\(/i
-const CREATE_TYPE_RE = /^CREATE\s+TYPE\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]+)"|[\w.]+)\s*\(/i
+const CREATE_TABLE_RE = /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]+)"|[\w.]+)\s*\(/i;
+const CREATE_TYPE_RE = /^CREATE\s+TYPE\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]+)"|[\w.]+)\s*\(/i;
 
-type ParsedStatement = { kind: "table" | "type"; name: string; body: string; withClause: string }
+type ParsedStatement = { kind: "table" | "type"; name: string; body: string; withClause: string };
 
 function parseCreateStatement(stmt: string): ParsedStatement | undefined {
-  const trimmed = stmt.trim()
-  const tableMatch = CREATE_TABLE_RE.exec(trimmed)
-  const typeMatch = tableMatch === null ? CREATE_TYPE_RE.exec(trimmed) : null
-  const match = tableMatch ?? typeMatch
-  if (match === null) return undefined
+  const trimmed = stmt.trim();
+  const tableMatch = CREATE_TABLE_RE.exec(trimmed);
+  const typeMatch = tableMatch === null ? CREATE_TYPE_RE.exec(trimmed) : null;
+  const match = tableMatch ?? typeMatch;
+  if (match === null) return undefined;
 
-  const name = unqualify(match[1]!)
-  const openIdx = match[0].length - 1
-  const { clause: body, consumed } = extractBalancedParen(trimmed, openIdx)
-  const rest = trimmed.slice(consumed).trim()
+  const name = unqualify(match[1]!);
+  const openIdx = match[0].length - 1;
+  const { clause: body, consumed } = extractBalancedParen(trimmed, openIdx);
+  const rest = trimmed.slice(consumed).trim();
 
-  return { kind: tableMatch !== null ? "table" : "type", name, body, withClause: rest }
+  return { kind: tableMatch !== null ? "table" : "type", name, body, withClause: rest };
 }
 
 // ============================================================================
@@ -191,13 +191,13 @@ function parseCreateStatement(stmt: string): ParsedStatement | undefined {
  * `tuple<int, text>`, ...) into a type name and its angle-bracket type
  * arguments (top-level split on `,`, so nested `<...>` don't split early). */
 function parseCqlTypeText(raw: string): { name: string; args: string[] } {
-  const text = raw.trim()
-  const angleIdx = text.indexOf("<")
-  if (angleIdx < 0) return { name: text, args: [] }
-  const name = text.slice(0, angleIdx).trim()
-  const closeIdx = text.lastIndexOf(">")
-  const inner = closeIdx > angleIdx ? text.slice(angleIdx + 1, closeIdx) : ""
-  return { name, args: splitTopLevel(inner, ",").map((s) => s.trim()) }
+  const text = raw.trim();
+  const angleIdx = text.indexOf("<");
+  if (angleIdx < 0) return { name: text, args: [] };
+  const name = text.slice(0, angleIdx).trim();
+  const closeIdx = text.lastIndexOf(">");
+  const inner = closeIdx > angleIdx ? text.slice(angleIdx + 1, closeIdx) : "";
+  return { name, args: splitTopLevel(inner, ",").map((s) => s.trim()) };
 }
 
 /** CQL type expression -> TypeRef. `knownUdts` lets a bare name that matches
@@ -208,100 +208,100 @@ function parseCqlTypeText(raw: string): { name: string; args: string[] } {
  * best-effort basis regardless, since a bare lowercase identifier that isn't
  * one of CQL's native type keywords has no other plausible reading). */
 function mapCqlType(raw: string, knownUdts: Set<string>): TypeRef {
-  const { name, args } = parseCqlTypeText(raw)
-  const lower = name.toLowerCase()
+  const { name, args } = parseCqlTypeText(raw);
+  const lower = name.toLowerCase();
 
   switch (lower) {
     case "text":
     case "varchar":
     case "ascii":
-      return t(types.string)
+      return t(types.string);
 
     case "int":
-      return t(types.integer, { cqlType: "int" })
+      return t(types.integer, { cqlType: "int" });
 
     case "bigint":
-      return t(types.integer, { cqlType: "bigint" })
+      return t(types.integer, { cqlType: "bigint" });
 
     case "counter":
-      return t(types.integer, { cqlType: "counter", counter: true })
+      return t(types.integer, { cqlType: "counter", counter: true });
 
     case "smallint":
-      return t(types.integer, { cqlType: "smallint" })
+      return t(types.integer, { cqlType: "smallint" });
 
     case "tinyint":
-      return t(types.integer, { cqlType: "tinyint" })
+      return t(types.integer, { cqlType: "tinyint" });
 
     case "varint":
-      return t(types.integer, { cqlType: "varint" })
+      return t(types.integer, { cqlType: "varint" });
 
     case "float":
-      return t(types.number, { cqlType: "float" })
+      return t(types.number, { cqlType: "float" });
 
     case "double":
-      return t(types.number, { cqlType: "double" })
+      return t(types.number, { cqlType: "double" });
 
     case "decimal":
-      return t(types.number, { cqlType: "decimal" })
+      return t(types.number, { cqlType: "decimal" });
 
     case "boolean":
-      return t(types.boolean)
+      return t(types.boolean);
 
     case "blob":
-      return bytes()
+      return bytes();
 
     case "timestamp":
-      return datetime()
+      return datetime();
 
     case "date":
-      return date()
+      return date();
 
     case "time":
-      return time()
+      return time();
 
     case "duration":
-      return duration()
+      return duration();
 
     case "uuid":
-      return withMeta(uuid(), { cqlType: "uuid" })
+      return withMeta(uuid(), { cqlType: "uuid" });
 
     case "timeuuid":
-      return withMeta(uuid(), { cqlType: "timeuuid" })
+      return withMeta(uuid(), { cqlType: "timeuuid" });
 
     case "inet":
-      return t(types.string, { format: "inet" })
+      return t(types.string, { format: "inet" });
 
     case "list": {
-      const element = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown)
-      return t(types.array(element))
+      const element = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown);
+      return t(types.array(element));
     }
 
     case "set": {
-      const element = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown)
-      return withMeta(t(types.array(element)), { set: true })
+      const element = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown);
+      return withMeta(t(types.array(element)), { set: true });
     }
 
     case "map": {
-      const key = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown)
-      const value = args[1] !== undefined ? mapCqlType(args[1], knownUdts) : t(types.unknown)
-      return t(types.map(key, value))
+      const key = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown);
+      const value = args[1] !== undefined ? mapCqlType(args[1], knownUdts) : t(types.unknown);
+      return t(types.map(key, value));
     }
 
     case "tuple": {
-      const elements = args.map((a) => mapCqlType(a, knownUdts))
-      return t(types.tuple(elements))
+      const elements = args.map((a) => mapCqlType(a, knownUdts));
+      return t(types.tuple(elements));
     }
 
     case "frozen": {
-      const inner = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown)
-      return withMeta(inner, { frozen: true })
+      const inner = args[0] !== undefined ? mapCqlType(args[0], knownUdts) : t(types.unknown);
+      return withMeta(inner, { frozen: true });
     }
 
     default:
       // Bare identifier not one of CQL's native keywords: a UDT reference
       // (known or forward-declared — see doc comment above).
-      if (/^[A-Za-z_]\w*$/.test(name)) return t(types.ref(name))
-      return t(types.unknown, { cqlType: name })
+      if (/^[A-Za-z_]\w*$/.test(name)) return t(types.ref(name));
+      return t(types.unknown, { cqlType: name });
   }
 }
 
@@ -309,16 +309,16 @@ function mapCqlType(raw: string, knownUdts: Set<string>): TypeRef {
 // CREATE TABLE body parsing
 // ============================================================================
 
-type ColumnInfo = { name: string; ref: TypeRef; static: boolean }
+type ColumnInfo = { name: string; ref: TypeRef; static: boolean };
 
 type TableInfo = {
-  columns: ColumnInfo[]
-  partitionKey: string[]
-  clusteringKey: string[]
-}
+  columns: ColumnInfo[];
+  partitionKey: string[];
+  clusteringKey: string[];
+};
 
-const STATIC_RE = /\bSTATIC\b/i
-const PRIMARY_KEY_INLINE_RE = /\bPRIMARY\s+KEY\b/i
+const STATIC_RE = /\bSTATIC\b/i;
+const PRIMARY_KEY_INLINE_RE = /\bPRIMARY\s+KEY\b/i;
 
 /** Parse `PRIMARY KEY (...)`'s inner clause into partition-key + clustering-
  * key column lists. The first element is either a single column name (a
@@ -326,68 +326,71 @@ const PRIMARY_KEY_INLINE_RE = /\bPRIMARY\s+KEY\b/i
  * composite partition key); every element after it is a clustering column,
  * in declared order. */
 function parsePrimaryKeyClause(inner: string): { partitionKey: string[]; clusteringKey: string[] } {
-  const parts = splitTopLevel(inner, ",").map((s) => s.trim())
-  if (parts.length === 0) return { partitionKey: [], clusteringKey: [] }
+  const parts = splitTopLevel(inner, ",").map((s) => s.trim());
+  if (parts.length === 0) return { partitionKey: [], clusteringKey: [] };
 
-  const first = parts[0]!
+  const first = parts[0]!;
   if (first.startsWith("(")) {
-    const { clause } = extractBalancedParen(first, 0)
-    const partitionKey = splitTopLevel(clause, ",").map((s) => stripQuotes(s.trim()))
-    const clusteringKey = parts.slice(1).map((s) => stripQuotes(s.trim()))
-    return { partitionKey, clusteringKey }
+    const { clause } = extractBalancedParen(first, 0);
+    const partitionKey = splitTopLevel(clause, ",").map((s) => stripQuotes(s.trim()));
+    const clusteringKey = parts.slice(1).map((s) => stripQuotes(s.trim()));
+    return { partitionKey, clusteringKey };
   }
 
   return {
     partitionKey: [stripQuotes(first)],
     clusteringKey: parts.slice(1).map((s) => stripQuotes(s.trim())),
-  }
+  };
 }
 
-function parseColumnDef(item: string, knownUdts: Set<string>): { column: ColumnInfo; inlinePrimaryKey: boolean } | undefined {
-  const nameMatch = /^(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/.exec(item.trim())
-  if (nameMatch === null) return undefined
-  const name = nameMatch[1] ?? nameMatch[2]!
-  let rest = nameMatch[3]!.trim()
+function parseColumnDef(
+  item: string,
+  knownUdts: Set<string>,
+): { column: ColumnInfo; inlinePrimaryKey: boolean } | undefined {
+  const nameMatch = /^(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/.exec(item.trim());
+  if (nameMatch === null) return undefined;
+  const name = nameMatch[1] ?? nameMatch[2]!;
+  let rest = nameMatch[3]!.trim();
 
-  const isStatic = STATIC_RE.test(rest)
-  rest = rest.replace(STATIC_RE, "").trim()
+  const isStatic = STATIC_RE.test(rest);
+  rest = rest.replace(STATIC_RE, "").trim();
 
-  const inlinePk = PRIMARY_KEY_INLINE_RE.test(rest)
-  rest = rest.replace(PRIMARY_KEY_INLINE_RE, "").trim()
+  const inlinePk = PRIMARY_KEY_INLINE_RE.test(rest);
+  rest = rest.replace(PRIMARY_KEY_INLINE_RE, "").trim();
 
-  const ref = mapCqlType(rest, knownUdts)
+  const ref = mapCqlType(rest, knownUdts);
 
   return {
     column: { name: stripQuotes(name), ref, static: isStatic },
     inlinePrimaryKey: inlinePk,
-  }
+  };
 }
 
 function parseTableBody(body: string, knownUdts: Set<string>): TableInfo {
-  const table: TableInfo = { columns: [], partitionKey: [], clusteringKey: [] }
+  const table: TableInfo = { columns: [], partitionKey: [], clusteringKey: [] };
 
   for (const item of splitTopLevel(body, ",")) {
-    const trimmed = item.trim()
-    if (trimmed.length === 0) continue
+    const trimmed = item.trim();
+    if (trimmed.length === 0) continue;
 
     if (/^PRIMARY\s+KEY\b/i.exec(trimmed) !== null) {
-      const openIdx = trimmed.indexOf("(")
+      const openIdx = trimmed.indexOf("(");
       if (openIdx >= 0) {
-        const { clause } = extractBalancedParen(trimmed, openIdx)
-        const { partitionKey, clusteringKey } = parsePrimaryKeyClause(clause)
-        table.partitionKey.push(...partitionKey)
-        table.clusteringKey.push(...clusteringKey)
+        const { clause } = extractBalancedParen(trimmed, openIdx);
+        const { partitionKey, clusteringKey } = parsePrimaryKeyClause(clause);
+        table.partitionKey.push(...partitionKey);
+        table.clusteringKey.push(...clusteringKey);
       }
-      continue
+      continue;
     }
 
-    const parsed = parseColumnDef(trimmed, knownUdts)
-    if (parsed === undefined) continue
-    table.columns.push(parsed.column)
-    if (parsed.inlinePrimaryKey) table.partitionKey.push(parsed.column.name)
+    const parsed = parseColumnDef(trimmed, knownUdts);
+    if (parsed === undefined) continue;
+    table.columns.push(parsed.column);
+    if (parsed.inlinePrimaryKey) table.partitionKey.push(parsed.column.name);
   }
 
-  return table
+  return table;
 }
 
 // ============================================================================
@@ -396,16 +399,16 @@ function parseTableBody(body: string, knownUdts: Set<string>): TableInfo {
 // ============================================================================
 
 function parseUdtBody(body: string, knownUdts: Set<string>): Record<string, TypeRef> {
-  const fields: Record<string, TypeRef> = {}
+  const fields: Record<string, TypeRef> = {};
   for (const item of splitTopLevel(body, ",")) {
-    const trimmed = item.trim()
-    if (trimmed.length === 0) continue
-    const nameMatch = /^(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/.exec(trimmed)
-    if (nameMatch === null) continue
-    const name = stripQuotes(nameMatch[1] ?? nameMatch[2]!)
-    fields[name] = mapCqlType(nameMatch[3]!.trim(), knownUdts)
+    const trimmed = item.trim();
+    if (trimmed.length === 0) continue;
+    const nameMatch = /^(?:"([^"]+)"|(\S+))\s+([\s\S]+)$/.exec(trimmed);
+    if (nameMatch === null) continue;
+    const name = stripQuotes(nameMatch[1] ?? nameMatch[2]!);
+    fields[name] = mapCqlType(nameMatch[3]!.trim(), knownUdts);
   }
-  return fields
+  return fields;
 }
 
 // ============================================================================
@@ -417,16 +420,16 @@ function parseUdtBody(body: string, knownUdts: Set<string>): Record<string, Type
 // ============================================================================
 
 function parseClusteringOrder(withClause: string): Record<string, "ASC" | "DESC"> | undefined {
-  const m = /CLUSTERING\s+ORDER\s+BY\s*\(([^)]*)\)/i.exec(withClause)
-  if (m === null) return undefined
-  const order: Record<string, "ASC" | "DESC"> = {}
+  const m = /CLUSTERING\s+ORDER\s+BY\s*\(([^)]*)\)/i.exec(withClause);
+  if (m === null) return undefined;
+  const order: Record<string, "ASC" | "DESC"> = {};
   for (const part of splitTopLevel(m[1]!, ",")) {
-    const colMatch = /^\s*(?:"([^"]+)"|(\S+))\s+(ASC|DESC)\s*$/i.exec(part)
-    if (colMatch === null) continue
-    const col = stripQuotes(colMatch[1] ?? colMatch[2]!)
-    order[col] = colMatch[3]!.toUpperCase() as "ASC" | "DESC"
+    const colMatch = /^\s*(?:"([^"]+)"|(\S+))\s+(ASC|DESC)\s*$/i.exec(part);
+    if (colMatch === null) continue;
+    const col = stripQuotes(colMatch[1] ?? colMatch[2]!);
+    order[col] = colMatch[3]!.toUpperCase() as "ASC" | "DESC";
   }
-  return Object.keys(order).length > 0 ? order : undefined
+  return Object.keys(order).length > 0 ? order : undefined;
 }
 
 // ============================================================================
@@ -447,46 +450,46 @@ function parseClusteringOrder(withClause: string): Record<string, "ASC" | "DESC"
 export function fromCql(ddl: string): Record<string, TypeRef> {
   const statements = splitStatements(ddl)
     .map(parseCreateStatement)
-    .filter((s): s is ParsedStatement => s !== undefined)
+    .filter((s): s is ParsedStatement => s !== undefined);
 
-  const knownUdts = new Set(statements.filter((s) => s.kind === "type").map((s) => s.name))
+  const knownUdts = new Set(statements.filter((s) => s.kind === "type").map((s) => s.name));
 
-  const result: Record<string, TypeRef> = {}
+  const result: Record<string, TypeRef> = {};
 
   for (const stmt of statements) {
     if (stmt.kind === "type") {
-      const fields = parseUdtBody(stmt.body, knownUdts)
-      result[stmt.name] = t(types.object(fields))
-      continue
+      const fields = parseUdtBody(stmt.body, knownUdts);
+      result[stmt.name] = t(types.object(fields));
+      continue;
     }
 
-    const table = parseTableBody(stmt.body, knownUdts)
+    const table = parseTableBody(stmt.body, knownUdts);
 
-    const partitionSet = new Set(table.partitionKey)
-    const clusteringSet = new Set(table.clusteringKey)
-    const isCounterTable = table.columns.some((c) => c.ref.meta.counter === true)
+    const partitionSet = new Set(table.partitionKey);
+    const clusteringSet = new Set(table.clusteringKey);
+    const isCounterTable = table.columns.some((c) => c.ref.meta.counter === true);
 
-    const fields: Record<string, TypeRef> = {}
+    const fields: Record<string, TypeRef> = {};
     for (const col of table.columns) {
-      const meta: Record<string, unknown> = {}
-      if (partitionSet.has(col.name)) meta.partitionKey = true
-      if (clusteringSet.has(col.name)) meta.clusteringKey = true
-      if (col.static) meta.static = true
-      fields[col.name] = withMeta(col.ref, meta)
+      const meta: Record<string, unknown> = {};
+      if (partitionSet.has(col.name)) meta.partitionKey = true;
+      if (clusteringSet.has(col.name)) meta.clusteringKey = true;
+      if (col.static) meta.static = true;
+      fields[col.name] = withMeta(col.ref, meta);
     }
 
     const tableMeta: Record<string, unknown> = {
       partitionKey: table.partitionKey,
       primaryKey: [...table.partitionKey, ...table.clusteringKey],
-    }
-    if (table.clusteringKey.length > 0) tableMeta.clusteringKey = table.clusteringKey
-    if (isCounterTable) tableMeta.counterTable = true
+    };
+    if (table.clusteringKey.length > 0) tableMeta.clusteringKey = table.clusteringKey;
+    if (isCounterTable) tableMeta.counterTable = true;
 
-    const clusteringOrder = parseClusteringOrder(stmt.withClause)
-    if (clusteringOrder !== undefined) tableMeta.clusteringOrder = clusteringOrder
+    const clusteringOrder = parseClusteringOrder(stmt.withClause);
+    if (clusteringOrder !== undefined) tableMeta.clusteringOrder = clusteringOrder;
 
-    result[stmt.name] = t(types.object(fields), tableMeta)
+    result[stmt.name] = t(types.object(fields), tableMeta);
   }
 
-  return result
+  return result;
 }

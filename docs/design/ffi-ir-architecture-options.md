@@ -21,7 +21,7 @@
 ## 0. Trigger for this document
 
 The user's framing (verbatim): "really we'd want to design and build something like
-type-ir for ffi *in general*, not just `* -> js`, but also at least `* -> c`,
+type-ir for ffi _in general_, not just `* -> js`, but also at least `* -> c`,
 possibly (?) also `* -> wasm/wit`." Since the parent survey was written, a concrete
 data point was added to the codebase:
 [VERIFIED-LOCAL] `packages/type-ir/src/wasm-bindgen.ts` (455 lines, read in full) is
@@ -30,7 +30,7 @@ explicit design: plain functions, structs, and fieldless/string-discriminant enu
 only — `union`, `tuple`, `map`, `intersection`, and `method`/`interface` (receiver
 types) all throw rather than degrade, because (per the file's own header comment,
 `wasm-bindgen.ts:1-51`) wasm-bindgen's ABI is "a hard wall, not a best-effort data
-shape" and a silent lossy degrade there would be a *compiled, wrong* output, not
+shape" and a silent lossy degrade there would be a _compiled, wrong_ output, not
 just an imprecise one — a materially different risk than the lossy degrades every
 other projector in the package uses for pure-data formats. This is the concrete
 "how far does one narrow, single-target-pair FFI projector get you, and where does
@@ -48,12 +48,12 @@ it hit a wall" data point the rest of this document reasons from.
   needs an explicit `#[repr(C)]` (or `#[repr(u8)]`/`#[repr(align(N))]`/
   `#[repr(packed)]`) annotation on the Rust side. cbindgen does not infer a C-safe
   layout for a type that doesn't already declare one; it reads the annotation and
-  projects it. This is a *stronger* precondition than type-ir's projectors
+  projects it. This is a _stronger_ precondition than type-ir's projectors
   currently have anywhere: type-ir projects from IR shape alone, with no concept of
   "does this shape have a stable ABI layout at all."
 - **Enums: two representation strategies, chosen by the Rust source, not the
   generator.** Fieldless enums project to a `#[repr(u8/u16/...)]` integer-backed C
-  enum directly. Enums *with* per-variant data use RFC 2195's tagged-union
+  enum directly. Enums _with_ per-variant data use RFC 2195's tagged-union
   strategy — a C struct pairing a discriminant tag with a union of per-variant
   payload structs — and the exact layout differs between `#[repr(C)]` (simpler,
   less compact) and `#[repr(u8)]` (more compact) source annotations. The
@@ -105,7 +105,7 @@ it hit a wall" data point the rest of this document reasons from.
 explicit answer to "does this type have a stable ABI layout," because unlike
 JS (wasm-bindgen, via `JsValue` indirection) or WIT (via the Canonical ABI, see §2),
 C has no fallback opaque-value primitive built into the language itself — cbindgen's
-opaque-pointer pattern is a *convention* the generator and hand-written glue code
+opaque-pointer pattern is a _convention_ the generator and hand-written glue code
 maintain, not a language-level safety net. An IR node for "this type's C
 representation is: (a) a `#[repr(C)]`-equivalent inline layout, or (b) an opaque
 handle behind a pointer, with free/dup functions declared explicitly" is the
@@ -138,8 +138,8 @@ one source language the way cbindgen (Rust-only) and wasm-bindgen (Rust-only) ar
 - **`resource` — a first-class ownership primitive, not a metadata annotation.**
   "A resource is a handle to some entity that exists outside of the component...
   entities that can't or shouldn't be copied: entities that should be passed by
-  reference rather than by value." Ownership is expressed *in the type position
-  itself*, not as a side annotation: an unqualified resource name in a signature
+  reference rather than by value." Ownership is expressed _in the type position
+  itself_, not as a side annotation: an unqualified resource name in a signature
   means an **owned handle** (ownership transfers across the call), while
   `borrow<resource-name>` explicitly means a **borrowed handle**, valid only for
   the duration of that call. Resources expose behavior only through
@@ -148,11 +148,11 @@ one source language the way cbindgen (Rust-only) and wasm-bindgen (Rust-only) ar
   the parent survey's Q1 lays out (bindings-generation-survey.md §4, Q1 a/b/c):
   WIT's answer is neither "don't model ownership" (a) nor "an open metadata-bag
   annotation" (b) nor exactly "a separate parallel IR" (c) — it's **a distinct type
-  *constructor*, `resource`, with owned-vs-borrowed as a call-site type
+  _constructor_, `resource`, with owned-vs-borrowed as a call-site type
   qualifier**, which is a fourth shape the parent survey's Q1 didn't enumerate.
 - **Async is a first-class function qualifier, with two dedicated compound types
   for streaming data.** Functions may be declared `async` (`handle: async
-  func(...) -> result<response, error-code>;`), signaling the call may suspend;
+func(...) -> result<response, error-code>;`), signaling the call may suspend;
   bindings generators are expected to emit the target language's native async
   idiom (Rust `async fn`, JS `Promise`-returning function). Separately, `stream<T>`
   (values delivered incrementally as available) and `future<T>` (a single
@@ -195,7 +195,7 @@ one source language the way cbindgen (Rust-only) and wasm-bindgen (Rust-only) ar
 
 **Why this is the most directly relevant precedent in the survey so far:** WIT is
 the only one of the four tools surveyed (uniffi, wasm-bindgen, diplomat — parent
-survey §3 — plus cbindgen and WIT here) that was *designed from the start* as a
+survey §3 — plus cbindgen and WIT here) that was _designed from the start_ as a
 multi-language, source-language-agnostic interface IR rather than a
 Rust-source-to-N-targets generator. It is the one piece of prior art that answers
 "what does a general boundary-crossing IR's type vocabulary look like" with an
@@ -206,14 +206,14 @@ implementation choice.
 
 ## 3. Cross-referencing all five tools against the parent survey's open axes
 
-| Axis | cbindgen (C) | WIT | uniffi (parent §3) | wasm-bindgen (parent §3 + `wasm-bindgen.ts`) | diplomat (parent §3) |
-|---|---|---|---|---|---|
-| Ownership | opaque pointer + hand-written free fn; no in-tool convention **[VERIFIED, partial]** | `resource` type + `borrow<T>` qualifier, first-class **[VERIFIED]** | opaque handle + generated destructor **[UNVERIFIED]** | `JsValue` index-table indirection **[VERIFIED, partial]** | "borrow-safety" named as a goal, mechanism unconfirmed **[UNVERIFIED]** |
-| Enums-with-data | tagged union, strategy fixed by source `#[repr(...)]` **[VERIFIED]** | `variant` (payload-bearing), `enum` = payload-free special case **[VERIFIED]** | not confirmed this session | THROWS — out of scope, no dynamic-union mapping attempted **[VERIFIED-LOCAL, `wasm-bindgen.ts:172-175`]** | not confirmed this session |
-| Generics | monomorphize manually per instantiation; no generic functions at all **[VERIFIED]** | no generics in the fetched type vocabulary **[not addressed in this fetch — absence, not confirmed exclusion]** | not confirmed this session | not modeled; type-ir itself has no generic node (parent §1) | not confirmed this session |
-| Async | not applicable (C has no async calling convention) | `async` function qualifier + `stream<T>`/`future<T>` as separate data types **[VERIFIED]** | not confirmed this session | not confirmed this session (parent §3 flags this explicitly unresolved) | not confirmed this session |
-| Errors | not modeled — C convention (error code / out-param) left to author | `result<T, E>` as ordinary data; per-language idiom mapping unconfirmed **[VERIFIED type, UNVERIFIED mapping]** | `Result<T,E>` → native exception **[UNVERIFIED]** | not confirmed this session | not confirmed this session |
-| Layout precondition | explicit `#[repr(C)]` required per type, no inference **[VERIFIED]** | Canonical ABI, standardized once — mechanism not confirmed this session **[UNVERIFIED mechanism]** | n/a (handle-based) | `JsValue` sidesteps in-memory layout entirely for non-POD | n/a |
+| Axis                | cbindgen (C)                                                                         | WIT                                                                                                             | uniffi (parent §3)                                    | wasm-bindgen (parent §3 + `wasm-bindgen.ts`)                                                              | diplomat (parent §3)                                                    |
+| ------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Ownership           | opaque pointer + hand-written free fn; no in-tool convention **[VERIFIED, partial]** | `resource` type + `borrow<T>` qualifier, first-class **[VERIFIED]**                                             | opaque handle + generated destructor **[UNVERIFIED]** | `JsValue` index-table indirection **[VERIFIED, partial]**                                                 | "borrow-safety" named as a goal, mechanism unconfirmed **[UNVERIFIED]** |
+| Enums-with-data     | tagged union, strategy fixed by source `#[repr(...)]` **[VERIFIED]**                 | `variant` (payload-bearing), `enum` = payload-free special case **[VERIFIED]**                                  | not confirmed this session                            | THROWS — out of scope, no dynamic-union mapping attempted **[VERIFIED-LOCAL, `wasm-bindgen.ts:172-175`]** | not confirmed this session                                              |
+| Generics            | monomorphize manually per instantiation; no generic functions at all **[VERIFIED]**  | no generics in the fetched type vocabulary **[not addressed in this fetch — absence, not confirmed exclusion]** | not confirmed this session                            | not modeled; type-ir itself has no generic node (parent §1)                                               | not confirmed this session                                              |
+| Async               | not applicable (C has no async calling convention)                                   | `async` function qualifier + `stream<T>`/`future<T>` as separate data types **[VERIFIED]**                      | not confirmed this session                            | not confirmed this session (parent §3 flags this explicitly unresolved)                                   | not confirmed this session                                              |
+| Errors              | not modeled — C convention (error code / out-param) left to author                   | `result<T, E>` as ordinary data; per-language idiom mapping unconfirmed **[VERIFIED type, UNVERIFIED mapping]** | `Result<T,E>` → native exception **[UNVERIFIED]**     | not confirmed this session                                                                                | not confirmed this session                                              |
+| Layout precondition | explicit `#[repr(C)]` required per type, no inference **[VERIFIED]**                 | Canonical ABI, standardized once — mechanism not confirmed this session **[UNVERIFIED mechanism]**              | n/a (handle-based)                                    | `JsValue` sidesteps in-memory layout entirely for non-POD                                                 | n/a                                                                     |
 
 Observation this table supports (not new evidence, a synthesis of the rows above):
 **every one of the five tools reaches essentially the same fork** — a type either
@@ -225,7 +225,7 @@ wasm-bindgen's `JsValue` table, uniffi's opaque handle). This two-way split
 recurring independently across five tools with no shared lineage is the strongest
 single piece of cross-tool evidence in either survey document for "an FFI-IR needs
 at least this one binary distinction, no matter which targets it serves" — though
-whether that observation should shape the IR's *node vocabulary* (a `layoutKind:
+whether that observation should shape the IR's _node vocabulary_ (a `layoutKind:
 "inline" | "opaque"` field, or equivalent) or stay purely a target-projector
 concern is still an open fork, addressed as Fork D below.
 
@@ -240,30 +240,30 @@ Each fork lists options with costs; none is picked.
 - **A1. Extend type-ir's existing metadata bag.** New `meta` keys
   (`meta.ownership`, `meta.layoutKind`, `meta.abiTarget`, ...) following the
   `nullable`/`readonly` convention-not-contract precedent
-  (parent survey §4 Q1-b, `index.ts:135-172`). *Cost:* zero new package/repo
-  surface, reuses the exact mechanism 118 existing projectors already read. *Cost
-  against:* parent survey §4 Q1-b already names the core risk — an incorrect
+  (parent survey §4 Q1-b, `index.ts:135-172`). _Cost:_ zero new package/repo
+  surface, reuses the exact mechanism 118 existing projectors already read. _Cost
+  against:_ parent survey §4 Q1-b already names the core risk — an incorrect
   ownership/layout value here is a memory-safety bug in generated C/Rust output,
   not a wrong-shape bug, and "conventions, not contracts" (no IR-level
   enforcement) was designed for exactly the class of annotation where the failure
   mode is "wrong shape," not "undefined behavior." None of cbindgen/WIT/uniffi
   resolve this via an open author-supplied annotation surface — cbindgen reads a
   Rust-level `#[repr(...)]` attribute (itself compiler-checked, not a free-text
-  convention), and WIT makes ownership a distinct *type constructor*
+  convention), and WIT makes ownership a distinct _type constructor_
   (`resource`/`borrow<T>`), not a metadata flag on an existing type. Both real
   precedents point away from "loose annotation," which is new evidence this
   option's cost section in the parent survey didn't have.
 - **A2. A separate `ffi-ir` package that references type-ir `TypeRef`s for the
   data-shape portion and adds its own boundary-semantics nodes.** Mirrors parent
-  survey §4 Q1-c, now informed by WIT: WIT itself effectively *is* this
+  survey §4 Q1-c, now informed by WIT: WIT itself effectively _is_ this
   option relative to a hypothetical "pure data shape IR" — its `record`/`variant`
   types are data-shape (type-ir already has near-equivalents: `object`, `union`),
   while `resource`, `borrow<T>`, `async` function qualifiers, and
   `stream`/`future` are boundary-semantics constructs layered on top, with clean
-  separation between the two groups in the spec itself. *Cost:* cleanest
+  separation between the two groups in the spec itself. _Cost:_ cleanest
   separation (type-ir's 118 existing projectors see zero risk of
   boundary-semantics leakage), and now has a real, shipped multi-language
-  precedent for the split being viable rather than just plausible. *Cost against:*
+  precedent for the split being viable rather than just plausible. _Cost against:_
   still a wholly new package to design/build/maintain; also raises a concrete
   sub-question A2 didn't have before this research — does the new package
   **re-derive** type-ir's `object`/`union`/`enum` kinds as its own `record`/
@@ -271,17 +271,17 @@ Each fork lists options with costs; none is picked.
   special case, whereas type-ir keeps `enum`/`union` as siblings, so a faithful
   reference-not-reinvent approach isn't a 1:1 structural match), or does it
   literally embed type-ir `TypeRef`s as boundary-node fields and add ownership
-  metadata on the *reference*, not the type? This is a genuine open sub-fork this
+  metadata on the _reference_, not the type? This is a genuine open sub-fork this
   document surfaces but does not resolve.
 - **A3. New `TypeKinds` entries inside type-ir itself** (e.g. a `resource` kind, a
   `callback` kind distinct from `function`), following the "hierarchy via
   subtyping" precedent (parent survey §2) used for all of type-ir's existing
-  kinds. *Cost:* if boundary semantics genuinely are just more type-shape
+  kinds. _Cost:_ if boundary semantics genuinely are just more type-shape
   variation (which WIT's own factoring — `resource` living in the same type
   grammar as `record`/`variant` — suggests is a defensible position, not a
   stretch), this keeps everything in one IR with one kind-extension mechanism,
   and every existing data-shape projector's `unknown`/degrade-fallback pattern
-  already knows how to safely ignore a kind it doesn't recognize. *Cost against:*
+  already knows how to safely ignore a kind it doesn't recognize. _Cost against:_
   couples type-ir's stability (currently: pure data shape, consumed by ~120
   projectors with no compiled-output correctness risk) to a concern where a
   wrong answer is a memory-safety bug, and every one of type-ir's 120 existing
@@ -299,27 +299,27 @@ Each fork lists options with costs; none is picked.
 
 - **B1. One shared "boundary IR," N target projectors** (JS, C, WIT-native, and
   in principle any future target), mirroring type-ir's own "one IR, ~120
-  projectors" architecture exactly. *Cost:* preserves the core value proposition
+  projectors" architecture exactly. _Cost:_ preserves the core value proposition
   the parent survey's Q2-a explicitly names as being forfeited by
   per-pair-baked-ABI approaches ("ABI-baked-into-projector means a new projector
-  per language *pair*, not per language... grows combinatorially"). *Cost
-  against:* per §3's table, the five real tools surveyed each solve the ownership
+  per language _pair_, not per language... grows combinatorially"). _Cost
+  against:_ per §3's table, the five real tools surveyed each solve the ownership
   question with genuinely different mechanisms (opaque pointer vs. `resource`
   type vs. `JsValue` table vs. generated destructor) — a shared IR node has to be
-  abstract enough to *specialize* into all of these per target, which is exactly
+  abstract enough to _specialize_ into all of these per target, which is exactly
   the design difficulty the parent survey's Q1/Q2 already flagged as unresolved,
   now with concrete confirmation (not just inference) that the mechanisms really
   do differ structurally, not just in naming.
 - **B2. WIT itself as the shared boundary IR** — i.e., don't invent a new IR
   vocabulary at all; adopt WIT's actual type grammar (`record`/`variant`/`enum`/
-  `resource`/`flags`/…) as fractal's boundary IR, and write projectors *from* WIT
-  (or from type-ir + a thin WIT-shaped boundary layer) *to* JS, C, and WIT text
+  `resource`/`flags`/…) as fractal's boundary IR, and write projectors _from_ WIT
+  (or from type-ir + a thin WIT-shaped boundary layer) _to_ JS, C, and WIT text
   itself (a WIT emission projector is nearly free once the IR already speaks WIT's
-  grammar). *Cost:* WIT is a real, versioned, externally-maintained spec with its
+  grammar). _Cost:_ WIT is a real, versioned, externally-maintained spec with its
   own tooling ecosystem (Canonical ABI, `wit-bindgen`, WASI) — adopting it avoids
   reinventing the resource/ownership primitive that this section's research
   suggests is genuinely hard to get right from scratch, and any WIT-native target
-  becomes near-zero-cost. *Cost against:* couples fractal's boundary-IR design to
+  becomes near-zero-cost. _Cost against:_ couples fractal's boundary-IR design to
   an external spec fractal doesn't control, whose evolution (WIT is explicitly
   still evolving — WASI 0.3 async/stream/future support was cited in this
   session's search results as a current-year development, not a settled feature)
@@ -327,18 +327,18 @@ Each fork lists options with costs; none is picked.
   targets at all — projecting WIT's `resource`/`borrow<T>` model onto a C ABI or a
   JS/wasm-bindgen boundary is itself unproven work this document has no
   prior-art confirmation for (WIT's own bindings generators target source
-  languages *compiling to* WASM components, not arbitrary non-WASM ABIs like
+  languages _compiling to_ WASM components, not arbitrary non-WASM ABIs like
   cbindgen's plain C).
 - **B3. Per-pair IRs, no shared boundary layer** — a JS-boundary IR, a
   C-boundary IR, and (if pursued) a WIT emission path, each independent,
   informed by shared research (this document plus the parent survey) but not by
-  shared code/schema. *Cost:* matches the observed pattern the parent survey's §3
+  shared code/schema. _Cost:_ matches the observed pattern the parent survey's §3
   closing observation already named ("every tool that does more than
   data-shape-only picks its own fixed strategy... rather than exposing a
   general-purpose IR surface") — lowest design risk, ships incrementally, and the
   existing `wasm-bindgen.ts` projector is already exactly this shape (a
   self-contained target-specific converter, per its own file header comment,
-  "each projector file in this package is self-contained"). *Cost against:*
+  "each projector file in this package is self-contained"). _Cost against:_
   explicitly forfeits the "one IR, many projectors" value proposition for the
   bindings case — three (or more) independent boundary-semantics vocabularies to
   design and maintain instead of one, with no cross-target consistency guarantee
@@ -385,10 +385,10 @@ flat namespace of type definitions).
 **2. Is WIT a target format or a toolchain's source-of-truth grammar? —
 the central question the user asked to resolve.** The spec is explicit about
 its own scope: **"WIT isn't a general-purpose programming language and doesn't
-define behaviour; it defines only *contracts* between components"**
+define behaviour; it defines only _contracts_ between components"**
 **[VERIFIED-EXTERNAL, wit.html, direct quote]**. This settles the question in a
 specific, narrow way: WIT is neither "a target you'd project into, full stop"
-(like OpenAPI) nor "a general shared IR that could sit *underneath* C and JS
+(like OpenAPI) nor "a general shared IR that could sit _underneath_ C and JS
 projectors the way type-ir sits underneath OpenAPI/protobuf/JSON-Schema
 projectors today." It is the **authoring/source format of one specific
 ecosystem** — the WASM Component Model — that its own bindings generator
@@ -399,7 +399,7 @@ cross-language FFI mechanism independent of WASM — "WebAssembly core modules
 are already portable across different architectures and operating systems;
 components retain these benefits and... add portability across different
 programming languages" **[VERIFIED-EXTERNAL, why-component-model.html, direct
-quote]** — the value proposition is stated as *built on top of* WASM's
+quote]** — the value proposition is stated as _built on top of_ WASM's
 sandboxing and portability, not as a standalone interface-description layer
 that happens to also support a WASM backend among others.
 
@@ -411,7 +411,7 @@ plausible, bounded addition alongside the other ~120. **"WIT's grammar as
 fractal's own internal shared boundary IR" (B2, replacing or sitting beneath
 what C and JS projectors both consume) is not well-supported by this
 research** — WIT's grammar is not a neutral data-shape+ownership vocabulary
-that happens to also serialize to WASM; it *is* the Component Model's contract
+that happens to also serialize to WASM; it _is_ the Component Model's contract
 language, inseparable in its own docs from WASM portability/sandboxing framing.
 Adopting it as fractal's internal IR would mean every C and JS projector reads
 an IR whose vocabulary was designed for, and is documented as being for,
@@ -438,10 +438,11 @@ scratch; it would gain nothing from `wit-bindgen`'s existing C support, because
 that support solves a different problem (WASM-guest C, not native-C-ABI C).
 
 **4. Philosophy alignment/divergence with fractal's own conventions.**
+
 - **Open metadata bag vs. fixed spec:** WIT has no analogue to type-ir's
   `meta: Record<string, unknown>` extension point. Its vocabulary is fixed by
   the spec itself (`record`/`variant`/`resource`/`flags`/...); extensibility
-  happens by the *spec evolving* (e.g. WASI 0.3 adding `stream`/`future`, per
+  happens by the _spec evolving_ (e.g. WASI 0.3 adding `stream`/`future`, per
   §2 above) not by a downstream consumer attaching arbitrary conventions to
   existing nodes. This is a direct divergence from "open metadata bag over
   fixed schema" — WIT is, structurally, the fixed-schema side of that design
@@ -455,8 +456,8 @@ that support solves a different problem (WASM-guest C, not native-C-ABI C).
   own language-target limitations), not a superset grammar where each backend
   is expected to reject a subset. This is a different shape of "partial
   support" than fractal's per-projector throw-on-unsupported-kind pattern: WIT
-  pushes incompleteness to *which backends exist*, not to *which constructs a
-  given backend accepts from an otherwise-shared document*.
+  pushes incompleteness to _which backends exist_, not to _which constructs a
+  given backend accepts from an otherwise-shared document_.
 - **Hierarchy via subtyping vs. fixed vocabulary:** type-ir's kind
   extensibility (new `TypeKinds` entries via declaration merging, ancestor
   fallback for projectors that don't recognize a kind) has no counterpart in
@@ -474,7 +475,7 @@ or the shared substrate beneath, fractal's own internal boundary IR.** The
 "one shared IR, N projectors" architecture (B1) and "WIT is just another
 target" are not in tension with each other — WIT-as-a-target is compatible
 with B1's own N-projector shape, it just means WIT is one of the N rather than
-the IR itself. B2 specifically (WIT's grammar *as* the shared IR) is the
+the IR itself. B2 specifically (WIT's grammar _as_ the shared IR) is the
 option this research weighs against most directly, on three independent
 grounds: WIT's own stated scope ("only contracts between components," an
 ecosystem-bound authoring format, not a neutral shared grammar), the concrete
@@ -494,16 +495,16 @@ not just repeats.
   metadata, a new kind, or a dedicated field, per Fork A's resolution) one of
   exactly two states — `inline` (portable value layout: crosses by copy, no
   ownership transfer semantics needed at the IR level) or `opaque`
-  (crosses by handle: ownership transfer/borrow *must* be specified). This is
+  (crosses by handle: ownership transfer/borrow _must_ be specified). This is
   directly motivated by §3's cross-tool observation that all five surveyed tools
-  independently converge on this exact two-way split. *Cost:* has real
+  independently converge on this exact two-way split. _Cost:_ has real
   convergent-evidence backing (not a guess) and is the smallest possible
-  ownership vocabulary that's still non-trivial. *Cost against:* WIT's actual
+  ownership vocabulary that's still non-trivial. _Cost against:_ WIT's actual
   `resource` design is richer than a binary flag — it distinguishes owned vs.
-  `borrow<T>` *per call site*, not per type (the same resource type can be
+  `borrow<T>` _per call site_, not per type (the same resource type can be
   passed owned in one signature and borrowed in another), so a type-level
   `layoutKind` flag alone under-models WIT's own precedent; would need the
-  borrowed/owned distinction to live on the *reference* (parameter/return
+  borrowed/owned distinction to live on the _reference_ (parameter/return
   position), not the type declaration, adding a second axis beyond the simple
   binary split.
 - **C2. Adopt WIT's `resource` + `borrow<T>` model directly** as the general
@@ -513,10 +514,10 @@ not just repeats.
   wrapping an opaque handle — the existing `wasm-bindgen.ts` projector doesn't yet
   have a `resource`-equivalent kind to lower from, so this is new work, not a
   refactor of existing handlers), and WIT itself lowers to a no-op (already
-  native). *Cost:* reuses a real, externally-vetted ownership primitive instead of
+  native). _Cost:_ reuses a real, externally-vetted ownership primitive instead of
   inventing one, and gives C and JS lowering rules a principled single source
   (the `resource`/`borrow` distinction) instead of two separately-invented
-  conventions. *Cost against:* per Fork B2's cost, WIT's `resource` was designed
+  conventions. _Cost against:_ per Fork B2's cost, WIT's `resource` was designed
   for the Component Model's own Canonical ABI and dynamic-linking model; whether
   its owned/borrowed semantics survive translation to a plain C ABI's
   compile-time-only linking model (no host runtime enforcing borrow duration the
@@ -526,9 +527,9 @@ not just repeats.
 - **C3. No general ownership model — ownership is entirely a per-target-projector
   concern**, informed by the same research but not unified in the IR (this is
   Fork A/B's "don't model it" option specialized to ownership specifically, same
-  as parent survey Q1-a). *Cost:* cheapest, avoids over-fitting a single ownership
+  as parent survey Q1-a). _Cost:_ cheapest, avoids over-fitting a single ownership
   vocabulary to three targets whose real mechanisms (per §3's table) genuinely
-  differ. *Cost against:* forfeits any cross-target ownership-correctness
+  differ. _Cost against:_ forfeits any cross-target ownership-correctness
   checking at the IR level — an author could describe a type as freely
   copyable when only one of the three targets can actually treat it that way, and
   the IR has no way to flag the mismatch before a target-specific codegen throws
@@ -555,7 +556,7 @@ then reframes C1-C3 as four named options explicitly cross-checked per target.
    contain no discussion of who allocates, who frees, or any allocation/free
    convention anywhere; they cover type layout, header config, type mappings, and
    function declarations only. This upgrades §1's earlier `[UNVERIFIED
-   interpretation]` mark on the same claim to directly confirmed: cbindgen is
+interpretation]` mark on the same claim to directly confirmed: cbindgen is
    silent on ownership by design, not by an oversight in this document's earlier
    reading.
 2. **uniffi's real mechanism is `Arc`-based reference counting, not opaque-handle +
@@ -576,13 +577,13 @@ then reframes C1-C3 as four named options explicitly cross-checked per target.
    interfaces" are documented as soft-deprecated in favor of it) also moved from
    `Box<dyn Trait>` to `Arc<dyn Trait>` specifically for this case, i.e. the same
    refcounting answer is reused for callbacks, not a separate mechanism. The docs
-   fetched did not spell out what happens if the *foreign* runtime garbage-collects
+   fetched did not spell out what happens if the _foreign_ runtime garbage-collects
    its side of a callback while Rust still holds the `Arc<dyn Trait>` handle — this
    specific hazard remains **[UNVERIFIED]**, not found in the fetched pages.
 3. **wasm-bindgen does have a zero-copy path, but it is a separate, unsafe escape
    hatch outside the safe struct/fn surface `wasm-bindgen.ts` targets** —
    correcting this document's earlier framing (§0, §3's table) that copying is the
-   *only* path. [VERIFIED-EXTERNAL: docs.rs/js-sys, `Uint8Array::view`/
+   _only_ path. [VERIFIED-EXTERNAL: docs.rs/js-sys, `Uint8Array::view`/
    `view_mut_raw`, fetched 2026-08-03]: `js_sys::Uint8Array::view()` returns a
    typed-array view directly into wasm linear memory with no copy, but its own
    documented safety warning is explicit: "Views into WebAssembly memory are only
@@ -609,7 +610,7 @@ then reframes C1-C3 as four named options explicitly cross-checked per target.
    maintains a conservative approximation of the number of live handles that were
    lent from this handle" — incremented when a borrow is lifted as a call
    parameter, decremented when that subtask resolves. Critically: "`canon
-   resource.drop`... is ensured to be zero when an `own` handle is dropped" — i.e.
+resource.drop`... is ensured to be zero when an `own` handle is dropped" — i.e.
    **dropping an owning handle while a live borrow still exists is a runtime trap
    (a caught, safe abort), not undefined behavior.** The actual destruction of the
    underlying resource is still explicit, guest-supplied code triggered by
@@ -623,46 +624,46 @@ then reframes C1-C3 as four named options explicitly cross-checked per target.
 **Comparison matrix — representative case: a struct/object with one heap-allocated
 field (e.g. a `Vec<u8>` byte buffer) crossing each system's boundary:**
 
-| System | Who allocates | Who frees | Copy / move / borrow | Failure mode if consumer gets it wrong |
-|---|---|---|---|---|
-| C (cbindgen) | Whichever side the author's hand-written convention says (cbindgen prescribes nothing — §1, confirmed above) | Same — author-defined free function, or raw `free()`/`libc::free` if the convention says so | Either a full value copy (struct passed/returned by value into caller-provided storage) or an opaque pointer decomposed via `slice::from_raw_parts` for the buffer; no compiler-checked distinction | **Undetected UB** — double-free, use-after-free, or leak are all possible and cbindgen has no mechanism to catch any of them; the generated header is silent on which failure a given misuse produces |
-| uniffi | Rust, via `Arc::new` | Rust's own `Arc` drop glue, triggered by the *last* dropped reference (foreign destructors only decrement) | Shared ownership by reference count — the buffer field is not re-copied per access, it lives inside the `Arc`'d object | **Leak only** (bounded, not UB) — a foreign side that never calls its generated destructor keeps the refcount above zero forever; memory-safety (no UAF/double-free) is preserved by construction |
-| wasm-bindgen (safe path, `wasm-bindgen.ts`'s actual behavior) | Rust allocates; JS receives a `Clone`d copy wrapped as a `JsValue`-tracked object | JS's own GC frees the JS-side copy; Rust's original is unaffected/independently dropped | **Full copy**, always, for the `Vec<u8>` field (`getter_with_clone` requires `Clone`) — no sharing | **None, memory-safety-wise** — the two copies are fully independent; cost is duplicated memory/CPU, not a safety bug |
-| wasm-bindgen (unsafe path, `Uint8Array::view()`, not used by `wasm-bindgen.ts`) | Rust allocates the buffer once | Rust frees it (or reallocates it) whenever it chooses | **Zero-copy borrow** — a live typed-array view directly into wasm linear memory | **Use-after-free / read of invalid memory**, undetected — any subsequent allocation on the Rust side can silently invalidate the JS-held view with no error at the point of misuse |
-| WIT (Canonical ABI `resource`) | Guest/host code, via its own constructor, registered under a handle in the per-instance handle table | Explicit guest/host-supplied destructor, invoked by `canon resource.drop` | **Handle** (`own` = ownership transfer, `borrow<T>` = scoped reference) — the underlying buffer is never copied by the ABI itself, only the handle crosses | **Runtime-detected trap** (safe abort) if an `own` handle is dropped while `num_lends > 0`; the underlying allocation is still whatever the guest's destructor implementation is (a bug there is out of the Canonical ABI's coverage) |
+| System                                                                          | Who allocates                                                                                                | Who frees                                                                                                  | Copy / move / borrow                                                                                                                                                                                | Failure mode if consumer gets it wrong                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C (cbindgen)                                                                    | Whichever side the author's hand-written convention says (cbindgen prescribes nothing — §1, confirmed above) | Same — author-defined free function, or raw `free()`/`libc::free` if the convention says so                | Either a full value copy (struct passed/returned by value into caller-provided storage) or an opaque pointer decomposed via `slice::from_raw_parts` for the buffer; no compiler-checked distinction | **Undetected UB** — double-free, use-after-free, or leak are all possible and cbindgen has no mechanism to catch any of them; the generated header is silent on which failure a given misuse produces                                 |
+| uniffi                                                                          | Rust, via `Arc::new`                                                                                         | Rust's own `Arc` drop glue, triggered by the _last_ dropped reference (foreign destructors only decrement) | Shared ownership by reference count — the buffer field is not re-copied per access, it lives inside the `Arc`'d object                                                                              | **Leak only** (bounded, not UB) — a foreign side that never calls its generated destructor keeps the refcount above zero forever; memory-safety (no UAF/double-free) is preserved by construction                                     |
+| wasm-bindgen (safe path, `wasm-bindgen.ts`'s actual behavior)                   | Rust allocates; JS receives a `Clone`d copy wrapped as a `JsValue`-tracked object                            | JS's own GC frees the JS-side copy; Rust's original is unaffected/independently dropped                    | **Full copy**, always, for the `Vec<u8>` field (`getter_with_clone` requires `Clone`) — no sharing                                                                                                  | **None, memory-safety-wise** — the two copies are fully independent; cost is duplicated memory/CPU, not a safety bug                                                                                                                  |
+| wasm-bindgen (unsafe path, `Uint8Array::view()`, not used by `wasm-bindgen.ts`) | Rust allocates the buffer once                                                                               | Rust frees it (or reallocates it) whenever it chooses                                                      | **Zero-copy borrow** — a live typed-array view directly into wasm linear memory                                                                                                                     | **Use-after-free / read of invalid memory**, undetected — any subsequent allocation on the Rust side can silently invalidate the JS-held view with no error at the point of misuse                                                    |
+| WIT (Canonical ABI `resource`)                                                  | Guest/host code, via its own constructor, registered under a handle in the per-instance handle table         | Explicit guest/host-supplied destructor, invoked by `canon resource.drop`                                  | **Handle** (`own` = ownership transfer, `borrow<T>` = scoped reference) — the underlying buffer is never copied by the ABI itself, only the handle crosses                                          | **Runtime-detected trap** (safe abort) if an `own` handle is dropped while `num_lends > 0`; the underlying allocation is still whatever the guest's destructor implementation is (a bug there is out of the Canonical ABI's coverage) |
 
 **Named options, reframed with this session's per-target evidence (extends,
 does not replace, C1-C3 above — none recommended):**
 
 - **Option 1 — Copy-only, always clone across the boundary** (matches C1's
   "inline" case narrowed to "never opaque"; matches `wasm-bindgen.ts`'s current,
-  shipped default). *Cross-checked:* **JS** — proven, this is exactly what
+  shipped default). _Cross-checked:_ **JS** — proven, this is exactly what
   `wasm-bindgen.ts` does today (`getter_with_clone` + `Clone`, confirmed by direct
   read). **WIT** — a legitimate native subset: non-`resource` types (`record`,
   `list`, etc.) already cross the Canonical ABI by value/copy, so "copy-only" is
   simply "never emit a `resource`," which works but forecloses using WIT's own
-  ownership primitive for anything that needs it. **C** — does *not* fully
+  ownership primitive for anything that needs it. **C** — does _not_ fully
   eliminate the ownership question the way it appears to: per the matrix above,
   even a pure copy needs an explicit answer for who allocates the copy's backing
   storage and who frees it (cbindgen supplies no such convention, confirmed
-  above), so "copy-only" only removes *aliasing/sharing* concerns for C, not the
+  above), so "copy-only" only removes _aliasing/sharing_ concerns for C, not the
   alloc/free question itself.
 - **Option 2 — Opaque handle + explicit free-function convention** (= C1's
   "opaque" case with a bare free-once discipline, no refcounting or lend-tracking
-  on top). *Cross-checked:* **C** — native fit; this is literally cbindgen's own
+  on top). _Cross-checked:_ **C** — native fit; this is literally cbindgen's own
   documented opaque-pointer pattern (§1). **JS** — does not map cleanly: JS has no
   language-enforced "call free once" idiom (GC-managed), so this would need a
   bolted-on `.free()`/dispose convention with the same "forgotten call" risk
   uniffi's `Arc` approach was specifically built to avoid (per point 2 above,
-  uniffi *could* have used bare free-once and chose refcounting instead). **WIT**
+  uniffi _could_ have used bare free-once and chose refcounting instead). **WIT**
   — a strict subset of `resource`'s actual mechanism: WIT already gives an opaque
-  handle + explicit free call, *plus* the lend-count/trap safety net this option
+  handle + explicit free call, _plus_ the lend-count/trap safety net this option
   omits (point 4 above) — adopting Option 2 for a WIT target means deliberately
   not using part of what WIT natively offers.
 - **Option 3 — Adopt a resource/borrow-shaped model generally** (own-handle +
-  `borrow<T>`-qualified reference, *including* WIT's actual enforcement mechanism —
+  `borrow<T>`-qualified reference, _including_ WIT's actual enforcement mechanism —
   a generated per-instance handle table with lend-count tracking that traps on
-  violation, not just the naming). *Cross-checked:* **WIT** — native, this is its
+  violation, not just the naming). _Cross-checked:_ **WIT** — native, this is its
   own shipped model (point 4). **C** — cbindgen's opaque pointer has no equivalent
   handle-table/lend-count runtime; a C target adopting this option would need
   fractal to generate that bookkeeping itself as new runtime code shipped
@@ -672,12 +673,12 @@ does not replace, C1-C3 above — none recommended):**
   native equivalent for the Rust-owns/JS-borrows direction; would need a
   generated handle-table wrapper (e.g. keyed via `Map`/`WeakMap` in the JS glue),
   distinct from wasm-bindgen's own `JsValue` index-table indirection (which
-  handles the *opposite* direction — JS-owned values Rust holds indices into) —
+  handles the _opposite_ direction — JS-owned values Rust holds indices into) —
   no tool surveyed this session already does this for the Rust-owns direction.
-  *Overall cost:* richest safety guarantee (a trap instead of UB or a silent
+  _Overall cost:_ richest safety guarantee (a trap instead of UB or a silent
   leak) but the most net-new implementation work for two of the three targets.
 - **Option 4 — Reference counting (`Arc`/`Rc`-shaped shared ownership) as the
-  general primitive**, per uniffi's actual (now-corrected) model. *Cross-checked:*
+  general primitive**, per uniffi's actual (now-corrected) model. _Cross-checked:_
   **uniffi's own domain** — proven at scale (Firefox mobile/desktop). **JS** — a
   genuinely natural fit: JS's `FinalizationRegistry` can decrement a Rust-side
   `Arc` when a JS wrapper object is collected, giving a real (if not yet
@@ -688,7 +689,7 @@ does not replace, C1-C3 above — none recommended):**
   mode stays "leak or worse if the author's hand-written refcount logic has a
   bug," not the structurally-safe "leak only" uniffi gets from a compiler-checked
   `Arc`. **WIT** — a confirmed structural mismatch: point 4 above establishes the
-  Canonical ABI's `resource` semantics are explicitly *not* reference counting
+  Canonical ABI's `resource` semantics are explicitly _not_ reference counting
   (they're a lend-count-and-trap discipline); mapping refcounting onto a WIT
   target means either ignoring `resource`'s native mechanism or building a
   translation layer between two different safety models — a specific, newly-
@@ -697,9 +698,9 @@ does not replace, C1-C3 above — none recommended):**
 
 #### Fork C, ownership representation: decided (2026-08-03)
 
-A sub-question surfaced after the deeper pass above: independent of *which*
+A sub-question surfaced after the deeper pass above: independent of _which_
 ownership discipline applies to a given value (Options 1-4, still open — see
-below), how should the chosen discipline be *represented* in the IR itself?
+below), how should the chosen discipline be _represented_ in the IR itself?
 Two shapes were on the table — metadata on a value (an entry in the existing
 per-TypeRef metadata bag, the same mechanism `optional`/`nullable` already
 use) or a first-class type constructor wrapping any type (mirroring WIT's own
@@ -709,7 +710,7 @@ lean:
 - **Decision: metadata, not a wrapping type constructor.** Ownership
   discipline is recorded as an entry in a TypeRef node's metadata bag (e.g.
   something shaped like `meta.ownership: "copy" | "opaque" | "refcount" |
-  "resource"` — the exact key/value shape is implementation detail left for
+"resource"` — the exact key/value shape is implementation detail left for
   later, not part of this decision).
 - **Reasoning.** type-ir already separates two independent failure surfaces:
   structural kind-resolution (which has ancestor fallback) and
@@ -734,7 +735,7 @@ lean:
   ownership as a first-class constructor, and this translation step is one
   every WIT emission will need.
 
-This decision resolves only the *representation shape* sub-question. It does
+This decision resolves only the _representation shape_ sub-question. It does
 not resolve Fork C's substance — which ownership discipline (Options 1-4,
 per the deeper-pass comparison matrix above) applies to which value, and
 which targets support which disciplines, remain open/unresolved.
@@ -801,21 +802,19 @@ itself contestable and downstream of Forks A-C:
   independent tools reaching the same fork is reasonably strong shared-primitive
   evidence, whichever of Fork C's options ultimately encodes it.
 - **Plausibly target-specific, resists forcing into one model:** C's requirement
-  that *every* crossed type have an explicit, source-declared layout
+  that _every_ crossed type have an explicit, source-declared layout
   (`#[repr(C)]-equivalent) with no fallback opaque-value primitive at the
-  language level (§1) — C literally cannot receive "any value" the way JS's
-  `JsValue` or WIT's Canonical ABI implicitly can, so an IR node meaning
-  "opaque/unknown, figure it out at the boundary" (type-ir's own `unknown` kind,
-  which `wasm-bindgen.ts` maps straight to `JsValue`, per `wasm-bindgen.ts:139`)
-  has no honest C equivalent — it would have to be an error, not a degrade, for a
-  C target specifically. Async calling convention is a second strong
-  candidate: WIT has a first-class `async` qualifier plus dedicated
-  `stream`/`future` types (§2); C has no language-level async calling convention
-  at all (callback-based or poll-based conventions are a library/generator
-  choice, not something C-the-ABI expresses); JS has `Promise` natively. Forcing
-  one shared "async" IR construct across a target that has no async primitive
-  (C) and two that do but via different mechanisms (native `Promise` vs. WIT's
-  `async`+`stream`/`future` pairing) is a real risk of the shared construct being
+language level (§1) — C literally cannot receive "any value" the way JS's
+`JsValue`or WIT's Canonical ABI implicitly can, so an IR node meaning
+"opaque/unknown, figure it out at the boundary" (type-ir's own`unknown`kind,
+which`wasm-bindgen.ts`maps straight to`JsValue`, per `wasm-bindgen.ts:139`)
+has no honest C equivalent — it would have to be an error, not a degrade, for a
+C target specifically. Async calling convention is a second strong
+candidate: WIT has a first-class `async`qualifier plus dedicated`stream`/`future`types (§2); C has no language-level async calling convention
+at all (callback-based or poll-based conventions are a library/generator
+choice, not something C-the-ABI expresses); JS has`Promise`natively. Forcing
+one shared "async" IR construct across a target that has no async primitive
+(C) and two that do but via different mechanisms (native`Promise`vs. WIT's`async`+`stream`/`future` pairing) is a real risk of the shared construct being
   either C-target-inapplicable or a lowest-common-denominator that loses WIT's
   stream/future distinction.
 - **Genuinely unresolved by this session's research (neither bucket, needs its
@@ -842,7 +841,7 @@ itself contestable and downstream of Forks A-C:
   requirement, no async, no built-in opaque-value fallback), and per this
   document's Fork D analysis, forces the hardest questions (ownership encoding,
   layout-vs-opaque split) to be answered early rather than deferred, because C
-  has no slack to punt on them into a fallback primitive. *Cost:* the payoff (a
+  has no slack to punt on them into a fallback primitive. _Cost:_ the payoff (a
   working C target) requires solving the IR's hardest sub-problem first, before
   any generalization has a second target to validate against — real risk of
   over-fitting the IR design to C's specific constraints if built as the sole
@@ -853,7 +852,7 @@ itself contestable and downstream of Forks A-C:
   across both documents) — building against it first means adopting/adapting a
   vetted vocabulary rather than inventing one from a blank page, and a WIT-text
   emission projector may be cheap once the IR already speaks WIT's grammar
-  (Fork B2). *Cost:* couples early architecture to an external, still-evolving
+  (Fork B2). _Cost:_ couples early architecture to an external, still-evolving
   spec (§2's WASI 0.3 async/stream/future note); and building WIT-shaped first
   risks under-testing against C's much harsher constraints (no generics, no
   async, no opaque-value fallback) until later, potentially requiring rework once
@@ -863,9 +862,9 @@ itself contestable and downstream of Forks A-C:
   projector already in the codebase (§0) and its documented failure boundary
   (union/tuple/map/intersection/method/interface all explicitly unsupported,
   `wasm-bindgen.ts:1-51,172-209`) as the concrete list of gaps a general IR would
-  need to close for even its *first* target, then widen. *Cost:* grounds the
+  need to close for even its _first_ target, then widen. _Cost:_ grounds the
   design in a real artifact rather than three tools' documentation, but JS/
-  wasm-bindgen is arguably the *least* representative of the three targets for
+  wasm-bindgen is arguably the _least_ representative of the three targets for
   forcing general questions — its `JsValue` escape hatch (§1's closing
   observation, §3's table) means JS alone under-motivates the ownership/layout
   questions C and WIT both force explicitly; generalizing from it risks carrying
@@ -884,8 +883,8 @@ itself contestable and downstream of Forks A-C:
 Prompted by the user expanding scope to "comprehensive ffi-gen" and naming seven
 additional candidate targets (items 1-7 below). Item 8 (Rust as consumer) was added
 in a later correction pass: the original C++ entry (item 6) had answered a
-different question than this section asks — "can C++ *expose* itself via a stable
-ABI" rather than "does generated C++ *consume* a plain C ABI" — and was rewritten
+different question than this section asks — "can C++ _expose_ itself via a stable
+ABI" rather than "does generated C++ _consume_ a plain C ABI" — and was rewritten
 in place; Rust-as-consumer was entirely missing from the original inventory (which
 only covered Rust-as-source, `wasm-bindgen.ts`) and is added here as a new entry.
 This section answers one narrow, factual question per
@@ -949,7 +948,7 @@ reference-type system. Local references are VM-managed and freed automatically w
 the native method returns; the VM must track every object handed to native code so
 the GC doesn't collect it prematurely. The underlying call itself does follow the
 platform's native calling convention (C convention on Unix, `__stdcall` on Win32),
-but the *signature shape* — `JNIEnv*`, opaque `jobject`/`jclass` handles, VM-managed
+but the _signature shape_ — `JNIEnv*`, opaque `jobject`/`jclass` handles, VM-managed
 reference lifetime — has no analogue in a plain `extern "C"` function signature.
 **Plain-C-ABI consumer: no.** Categorically different from items 1-3: it is not "a
 C-ABI library plus a loader," it is a distinct glue-generation target requiring
@@ -973,28 +972,28 @@ how to convert its own managed representations at the boundary, not to describe 
 non-C-ABI target shape.
 
 **6. C++ as a consumer of a plain C ABI (idiomatic wrapper-class codegen).**
-This entry was originally scoped backwards — it answered "can arbitrary C++ *expose
-itself* via a stable ABI," which is the wrong direction for this section's actual
-question (item 4's framing: does the target *consume* a plain C ABI library, the
+This entry was originally scoped backwards — it answered "can arbitrary C++ _expose
+itself_ via a stable ABI," which is the wrong direction for this section's actual
+question (item 4's framing: does the target _consume_ a plain C ABI library, the
 same direction as LuaJIT/Deno/Bun/cgo/P-Invoke above). The C++-ABI-instability fact
 from the original research is still correct background and is kept: [VERIFIED-
 EXTERNAL: oracle.com/technical-resources/articles/it-infrastructure/stable-
 cplusplus-abi.html and docs.rs/cxx, fetched 2026-08-03] "C is the only de facto
 ABI-stable lingua franca," and name mangling, non-POD struct/class layout, and
 vtable layout are all part of the C++ ABI with no single cross-compiler-stable
-answer — the documented, standard answer for *exposing* a C++ API is `extern "C"`,
+answer — the documented, standard answer for _exposing_ a C++ API is `extern "C"`,
 at which point it degenerates to the plain-C-ABI case (item's-1-3 shape). That fact
 answers a different question than the one this section asks, though: the actual
 target-inventory question for C++ is whether generated idiomatic C++ **consumer**
 code — a hand-shaped-looking RAII wrapper class whose constructor calls a C init
 function and whose destructor calls the matching C free function, wrapping an
-opaque pointer or POD struct — can be produced *from* a C-ABI-shaped type-ir
+opaque pointer or POD struct — can be produced _from_ a C-ABI-shaped type-ir
 projection, the same direction as bindgen-for-Rust (item 8 below) or this section's
 loader-stub pattern.
 [VERIFIED-EXTERNAL: github.com/mozilla/cbindgen/blob/main/docs.md, re-checked for
 C++-mode output specifically, fetched 2026-08-03] cbindgen's own C++ language mode
 is the closest existing tool-generated C++ output surveyed, and it answers this
-narrowly: it adds C++ *syntax* over the same C declarations (namespaces, `enum
+narrowly: it adds C++ _syntax_ over the same C declarations (namespaces, `enum
 class`, operator overloads, opt-in constructors via config) but does not, by
 default, generate an RAII wrapper class that owns and destroys an opaque C
 resource — its opaque-type handling (§1 above) still emits a bare forward
@@ -1015,7 +1014,7 @@ with `fclose` as the deleter). **Plain-C-ABI consumer: yes, but heavier than a
 loader stub** — unlike LuaJIT/Deno/Bun/cgo/P-Invoke (item 9's finding), which only
 need a thin re-declaration of an already-settled C signature in each runtime's own
 syntax, idiomatic C++ wrapper-class generation must additionally know the C API's
-*ownership shape* (which function pairs are init/free, which parameters are
+_ownership shape_ (which function pairs are init/free, which parameters are
 borrowed vs. owned) to decide what the constructor/destructor should call — the
 same ownership-discipline vocabulary this document's Fork C (§4) already treats as
 a genuinely hard, unsettled question. This makes C++ closer in weight to a real
@@ -1043,7 +1042,7 @@ overhead that a codegen target would need to account for (e.g. batching calls,
 avoiding cgo in hot loops) even though the ABI itself requires no special shape.
 
 **8. Rust as a consumer of a plain C ABI (idiomatic binding codegen).** Missing
-from the original inventory, which only covered Rust-as-*source*
+from the original inventory, which only covered Rust-as-_source_
 (`packages/type-ir/src/wasm-bindgen.ts`, type-ir → Rust exposing JS — the opposite
 direction). The well-established, real prior art here is `bindgen`
 (rust-lang/rust-bindgen): [VERIFIED-EXTERNAL: WebSearch results for
@@ -1055,7 +1054,7 @@ Rust 2024 edition's RFC 3484) those extern blocks are now required to be marked
 `unsafe extern` at the declaration level, not just at each call site. **Confirmed,
 not assumed: bindgen itself does not generate safe wrapper types with `Drop` impls
 for owned resources** — that layer is conventionally hand-written on top, in a
-*separate* crate, following the ecosystem's well-established `-sys` crate
+_separate_ crate, following the ecosystem's well-established `-sys` crate
 convention: a `foo-sys` crate holds bindgen's raw unsafe output and links the
 native library, while a plain `foo` crate (e.g. `libgit2-sys` → `git2-rs`, the
 canonical real-world example found this session) hand-writes the idiomatic safe
@@ -1068,7 +1067,7 @@ Rust, RAII-via-constructor/destructor in C++) is where the ownership-shape
 knowledge has to be supplied, hand-written in both ecosystems' actual practice
 rather than inferred by the declaration-generation tool itself. **Plain-C-ABI
 consumer: yes** for bindgen's own scope (it reads and re-declares an ordinary C
-header) — but, like C++, producing the *idiomatic, safe* consumer surface (not
+header) — but, like C++, producing the _idiomatic, safe_ consumer surface (not
 just the raw unsafe declarations) requires the same ownership-shape information a
 loader stub never needs, making "safe idiomatic Rust bindings" a heavier target
 than the pure loader-stub cases even though bindgen's own raw-declaration output
@@ -1076,23 +1075,23 @@ is a thin, direct, near-stub-weight re-description of the C header.
 
 ### Classification table
 
-| # | Target | Plain-C-ABI consumer? | Distinguishing factor (verified) |
-|---|---|---|---|
-| 1 | LuaJIT `ffi.C`/`ffi.load` | **Yes** | `cdef` is pure C-declaration parsing, not a compiler or custom format; symbols resolved by name against an ordinary shared library |
-| 2 | Deno `Deno.dlopen` | **Yes** | Struct-by-value and callbacks (`UnsafeCallback`) both supported; one performance-only caveat (struct args disable the V8 Fast-API "Turbocall" path), not a capability gap |
-| 3 | Bun `bun:ffi` | **Yes** (loading), **partial** (type coverage) | dlopen-based C ABI loader, but no struct type in the documented type table (manual pointer handling required); docs self-describe as experimental with known bugs |
-| 4 | JNI | **No** | Requires `JNIEnv*`/`jobject`/`jclass`-shaped generated glue and a VM-managed reference system; not expressible as an ordinary `extern "C"` signature |
-| 5 | .NET P/Invoke | **Yes, plus a declarative marshaling layer** | `[DllImport]`/`[LibraryImport]` call ordinary C ABI exports directly; `[MarshalAs]`/`CharSet` convert managed↔native representations on the .NET side only — the target library needs no .NET-specific shape |
-| 6 | C++ as consumer (idiomatic RAII wrapper-class codegen) | **Yes, but heavier than a stub** | Underlying ABI is still plain C (`extern "C"`, since C++ itself has no cross-compiler-stable ABI); no established general-purpose C-header-to-C++-RAII-wrapper generator tool found (cbindgen's C++ mode adds only syntax, not ownership-aware wrapper classes) — established practice is hand-rolled RAII (`unique_ptr<T, Deleter>` or a hand-written class), requiring ownership-shape knowledge a loader stub never needs |
-| 7 | Go (cgo) | **Yes** | Links against ordinary C ABI libraries directly; the real cost is per-call runtime overhead (goroutine stack switch onto `g0`, scheduler coordination) and GC-safety bookkeeping, not an ABI shape difference |
-| 8 | Rust as consumer (idiomatic `bindgen`-based binding codegen) | **Yes, but heavier than a stub for the safe layer** | `bindgen` generates raw `unsafe extern "C"` declarations directly from a C header (near-stub-weight); confirmed it does not itself generate safe wrapper types with `Drop` impls — that layer is conventionally hand-written on top in a separate crate (the ecosystem's `-sys`-crate convention, e.g. `libgit2-sys` → `git2-rs`), same ownership-shape burden as item 6 |
+| #   | Target                                                       | Plain-C-ABI consumer?                               | Distinguishing factor (verified)                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------ | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | LuaJIT `ffi.C`/`ffi.load`                                    | **Yes**                                             | `cdef` is pure C-declaration parsing, not a compiler or custom format; symbols resolved by name against an ordinary shared library                                                                                                                                                                                                                                                                                           |
+| 2   | Deno `Deno.dlopen`                                           | **Yes**                                             | Struct-by-value and callbacks (`UnsafeCallback`) both supported; one performance-only caveat (struct args disable the V8 Fast-API "Turbocall" path), not a capability gap                                                                                                                                                                                                                                                    |
+| 3   | Bun `bun:ffi`                                                | **Yes** (loading), **partial** (type coverage)      | dlopen-based C ABI loader, but no struct type in the documented type table (manual pointer handling required); docs self-describe as experimental with known bugs                                                                                                                                                                                                                                                            |
+| 4   | JNI                                                          | **No**                                              | Requires `JNIEnv*`/`jobject`/`jclass`-shaped generated glue and a VM-managed reference system; not expressible as an ordinary `extern "C"` signature                                                                                                                                                                                                                                                                         |
+| 5   | .NET P/Invoke                                                | **Yes, plus a declarative marshaling layer**        | `[DllImport]`/`[LibraryImport]` call ordinary C ABI exports directly; `[MarshalAs]`/`CharSet` convert managed↔native representations on the .NET side only — the target library needs no .NET-specific shape                                                                                                                                                                                                                 |
+| 6   | C++ as consumer (idiomatic RAII wrapper-class codegen)       | **Yes, but heavier than a stub**                    | Underlying ABI is still plain C (`extern "C"`, since C++ itself has no cross-compiler-stable ABI); no established general-purpose C-header-to-C++-RAII-wrapper generator tool found (cbindgen's C++ mode adds only syntax, not ownership-aware wrapper classes) — established practice is hand-rolled RAII (`unique_ptr<T, Deleter>` or a hand-written class), requiring ownership-shape knowledge a loader stub never needs |
+| 7   | Go (cgo)                                                     | **Yes**                                             | Links against ordinary C ABI libraries directly; the real cost is per-call runtime overhead (goroutine stack switch onto `g0`, scheduler coordination) and GC-safety bookkeeping, not an ABI shape difference                                                                                                                                                                                                                |
+| 8   | Rust as consumer (idiomatic `bindgen`-based binding codegen) | **Yes, but heavier than a stub for the safe layer** | `bindgen` generates raw `unsafe extern "C"` declarations directly from a C header (near-stub-weight); confirmed it does not itself generate safe wrapper types with `Drop` impls — that layer is conventionally hand-written on top in a separate crate (the ecosystem's `-sys`-crate convention, e.g. `libgit2-sys` → `git2-rs`), same ownership-shape burden as item 6                                                     |
 
 ### Finding: implied scope for a fractal FFI backend, not a decision
 
 Of the eight, four (LuaJIT, Deno, Bun, Go/cgo) and one qualified case (.NET
-P/Invoke) all consume the *same* plain C ABI shape that a `cbindgen`-style backend
+P/Invoke) all consume the _same_ plain C ABI shape that a `cbindgen`-style backend
 (§1 of this document) would already produce — the difference between them is only
-in each runtime's own idiomatic *loader/declaration* code (LuaJIT's `cdef` string,
+in each runtime's own idiomatic _loader/declaration_ code (LuaJIT's `cdef` string,
 Deno's `dlopen` type-signature object, Bun's `dlopen` type table, cgo's `import "C"`
 preamble, a C#/.NET `[DllImport]` signature block), not in the shape of the library
 itself. If that observation holds, those five would not need five independent

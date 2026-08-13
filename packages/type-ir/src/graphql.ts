@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { isA } from "./codegen-helpers.ts";
 
 // GraphQL SDL spec: https://spec.graphql.org/October2021/
 //
@@ -10,15 +10,15 @@ import { isA } from "./codegen-helpers.ts"
 // docs/archive/fc-op-kinds/projection-graphql.md for that, a different,
 // operation-level concern).
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 function isNullable(meta: Readonly<Record<string, unknown>>): boolean {
-  return meta.optional === true || meta.nullable === true
+  return meta.optional === true || meta.nullable === true;
 }
 
 // Best-effort conversion for a TypeRef used in *field/argument type position*
@@ -54,17 +54,17 @@ const handlers: Record<string, Converter> = {
   unknown: leaf("JSON"),
   never: leaf("JSON"),
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
+    const s = shape as TypeShape & { kind: "literal" };
     // GraphQL has no literal/const types (§ "Type System") — widen to the
     // nearest scalar.
-    if (s.value === null) return "JSON"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "Boolean"
-    return Number.isInteger(s.value) ? "Int" : "Float"
+    if (s.value === null) return "JSON";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "Boolean";
+    return Number.isInteger(s.value) ? "Int" : "Float";
   },
   enum: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`
+    const s = shape as TypeShape & { kind: "enum" };
+    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`;
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // A class instance carries only nominal identity (className/source), never
@@ -75,11 +75,11 @@ const handlers: Record<string, Converter> = {
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   object: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "JSON"),
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
+    const s = shape as TypeShape & { kind: "array" };
     // The element's own nullability (its `!`) is produced by the recursive
     // `toGraphQL` call — this only wraps the list brackets themselves; the
     // list's own nullability (outer `!`) is applied by the caller (`toGraphQL`).
-    return `[${toGraphQL(s.element)}]`
+    return `[${toGraphQL(s.element)}]`;
   },
   // GraphQL has no tuple construct (§ "Type System") — degrades to a list of
   // JSON, same honest-degrade convention protobuf.ts/capnp.ts use for
@@ -95,8 +95,8 @@ const handlers: Record<string, Converter> = {
   // element's) is what `toGraphQL` applies nullability from, same as every
   // other handler here returning a bare base type.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return baseType(s.element)
+    const s = shape as TypeShape & { kind: "stream" };
+    return baseType(s.element);
   },
   // GraphQL has no pagination vocabulary of its own (Relay's cursor
   // connections are a schema-authoring convention, not a language
@@ -104,8 +104,8 @@ const handlers: Record<string, Converter> = {
   // type, same as `array` above; the pagination signal itself is lost, same
   // honest-degrade tradeoff `union`'s unnamed-variant fallback makes.
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `[${toGraphQL(s.element)}]`
+    const s = shape as TypeShape & { kind: "page" };
+    return `[${toGraphQL(s.element)}]`;
   },
   // GraphQL unions are always named (§ "Unions") — an inline reference needs
   // `meta.unionName` (this projector's naming convention, parallel to
@@ -130,7 +130,7 @@ const handlers: Record<string, Converter> = {
   // construct of its own (an `interface` TypeRef is meant to become a
   // top-level `type` declaration via `toGraphQLType`, not be nested inline).
   interface: leaf("JSON"),
-}
+};
 
 /**
  * Inline type reference for a TypeRef — the SDL fragment usable in field,
@@ -141,13 +141,13 @@ const handlers: Record<string, Converter> = {
  * the `!` that otherwise marks a type as non-null.
  */
 function baseType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "JSON" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "JSON" : converter(ref.shape, ref.meta);
 }
 
 export function toGraphQL(ref: TypeRef): string {
-  const base = baseType(ref)
-  return isNullable(ref.meta) ? base : `${base}!`
+  const base = baseType(ref);
+  return isNullable(ref.meta) ? base : `${base}!`;
 }
 
 // GraphQL description strings (§ "Descriptions"): a `"""..."""` block
@@ -155,7 +155,7 @@ export function toGraphQL(ref: TypeRef): string {
 // single-line description, matching this codebase's other single-line doc
 // conventions (typescript.ts's single-line TSDoc, protobuf.ts's `//` line).
 function description(meta: Readonly<Record<string, unknown>>, indent: string): string {
-  return typeof meta.description === "string" ? `${indent}"""${meta.description}"""\n` : ""
+  return typeof meta.description === "string" ? `${indent}"""${meta.description}"""\n` : "";
 }
 
 // GraphQL's `@deprecated` directive (§ "Deprecation") is valid on object/
@@ -164,20 +164,20 @@ function description(meta: Readonly<Record<string, unknown>>, indent: string): s
 // emit an explicit reason when `meta.deprecatedReason` is given, same open-
 // metadata-bag convention as `meta.deprecated` itself).
 function deprecatedDirective(meta: Readonly<Record<string, unknown>>): string {
-  if (meta.deprecated !== true) return ""
-  const reason = typeof meta.deprecatedReason === "string" ? meta.deprecatedReason : undefined
-  return reason === undefined ? " @deprecated" : ` @deprecated(reason: ${JSON.stringify(reason)})`
+  if (meta.deprecated !== true) return "";
+  const reason = typeof meta.deprecatedReason === "string" ? meta.deprecatedReason : undefined;
+  return reason === undefined ? " @deprecated" : ` @deprecated(reason: ${JSON.stringify(reason)})`;
 }
 
 function renderMethodField(name: string, ref: TypeRef, indent: string): string {
   const m = ref.shape as TypeShape & {
-    kind: "method" | "function"
-    params: readonly { name: string; type: TypeRef }[]
-    returnType: TypeRef
-  }
-  const args = m.params.map((p) => `${p.name}: ${toGraphQL(p.type)}`).join(", ")
-  const argsPart = args.length > 0 ? `(${args})` : ""
-  return `${description(ref.meta, indent)}${indent}${name}${argsPart}: ${toGraphQL(m.returnType)}${deprecatedDirective(ref.meta)}`
+    kind: "method" | "function";
+    params: readonly { name: string; type: TypeRef }[];
+    returnType: TypeRef;
+  };
+  const args = m.params.map((p) => `${p.name}: ${toGraphQL(p.type)}`).join(", ");
+  const argsPart = args.length > 0 ? `(${args})` : "";
+  return `${description(ref.meta, indent)}${indent}${name}${argsPart}: ${toGraphQL(m.returnType)}${deprecatedDirective(ref.meta)}`;
 }
 
 // Renders the body lines (one per field) shared by `object` and
@@ -188,31 +188,31 @@ function renderMethodField(name: string, ref: TypeRef, indent: string): string {
 // where "skip" (per the projection's type-kind mapping) means "drop", not
 // "degrade to JSON".
 function renderFieldLines(fields: Readonly<Record<string, TypeRef>>): string[] {
-  const indent = "  "
-  const lines: string[] = []
+  const indent = "  ";
+  const lines: string[] = [];
   for (const [fieldName, fieldRef] of Object.entries(fields)) {
-    if (fieldRef.shape.kind === "null" || fieldRef.shape.kind === "void") continue
+    if (fieldRef.shape.kind === "null" || fieldRef.shape.kind === "void") continue;
     if (isA(fieldRef.shape.kind, "method")) {
-      lines.push(renderMethodField(fieldName, fieldRef, indent))
-      continue
+      lines.push(renderMethodField(fieldName, fieldRef, indent));
+      continue;
     }
     lines.push(
       `${description(fieldRef.meta, indent)}${indent}${fieldName}: ${toGraphQL(fieldRef)}${deprecatedDirective(fieldRef.meta)}`,
-    )
+    );
   }
-  return lines
+  return lines;
 }
 
 function renderObjectType(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const lines = renderFieldLines(s.fields)
-  return `${description(ref.meta, "")}type ${name} {\n${lines.join("\n")}\n}`
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const lines = renderFieldLines(s.fields);
+  return `${description(ref.meta, "")}type ${name} {\n${lines.join("\n")}\n}`;
 }
 
 function renderEnumType(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = s.members.map((member) => `  ${member}`)
-  return `${description(ref.meta, "")}enum ${name} {\n${lines.join("\n")}\n}`
+  const s = ref.shape as TypeShape & { kind: "enum" };
+  const lines = s.members.map((member) => `  ${member}`);
+  return `${description(ref.meta, "")}enum ${name} {\n${lines.join("\n")}\n}`;
 }
 
 // GraphQL unions (§ "Unions") may only contain Object types, and every member
@@ -222,25 +222,25 @@ function renderEnumType(name: string, ref: TypeRef): string {
 // `scalar` declaration (backed by JSON) rather than guessing a name or
 // silently dropping a variant.
 function variantName(variant: TypeRef): string | undefined {
-  if (variant.shape.kind === "ref") return (variant.shape as TypeShape & { kind: "ref" }).target
+  if (variant.shape.kind === "ref") return (variant.shape as TypeShape & { kind: "ref" }).target;
   if (isA(variant.shape.kind, "object")) {
-    return typeof variant.meta.typeName === "string" ? variant.meta.typeName : undefined
+    return typeof variant.meta.typeName === "string" ? variant.meta.typeName : undefined;
   }
-  return undefined
+  return undefined;
 }
 
 function renderUnionType(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "union" }
-  const names = s.variants.map(variantName)
-  const allNamed = names.every((n): n is string => n !== undefined)
+  const s = ref.shape as TypeShape & { kind: "union" };
+  const names = s.variants.map(variantName);
+  const allNamed = names.every((n): n is string => n !== undefined);
   if (!allNamed) {
-    return `${description(ref.meta, "")}scalar ${name}`
+    return `${description(ref.meta, "")}scalar ${name}`;
   }
-  return `${description(ref.meta, "")}union ${name} = ${names.join(" | ")}`
+  return `${description(ref.meta, "")}union ${name} = ${names.join(" | ")}`;
 }
 
 function objectFieldsOf(ref: TypeRef): Readonly<Record<string, TypeRef>> {
-  return isA(ref.shape.kind, "object") ? (ref.shape as TypeShape & { kind: "object" }).fields : {}
+  return isA(ref.shape.kind, "object") ? (ref.shape as TypeShape & { kind: "object" }).fields : {};
 }
 
 // GraphQL has no mixin/intersection construct (§ "Type System") — this
@@ -250,11 +250,11 @@ function objectFieldsOf(ref: TypeRef): Readonly<Record<string, TypeRef>> {
 // Members that aren't structurally `object`-shaped (e.g. a bare `ref`)
 // contribute no fields, since their shape isn't available to merge.
 function renderIntersectionType(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "intersection" }
-  const merged: Record<string, TypeRef> = {}
-  for (const member of s.members) Object.assign(merged, objectFieldsOf(member))
-  const lines = renderFieldLines(merged)
-  return `${description(ref.meta, "")}type ${name} {\n${lines.join("\n")}\n}`
+  const s = ref.shape as TypeShape & { kind: "intersection" };
+  const merged: Record<string, TypeRef> = {};
+  for (const member of s.members) Object.assign(merged, objectFieldsOf(member));
+  const lines = renderFieldLines(merged);
+  return `${description(ref.meta, "")}type ${name} {\n${lines.join("\n")}\n}`;
 }
 
 // An `interface` TypeRef (a service/contract's method surface — see
@@ -266,12 +266,12 @@ function renderIntersectionType(name: string, ref: TypeRef): string {
 // own `interface` keyword, which implies implementing types this IR has no
 // way to enumerate).
 function renderInterfaceAsType(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "interface" }
-  const indent = "  "
+  const s = ref.shape as TypeShape & { kind: "interface" };
+  const indent = "  ";
   const lines = Object.entries(s.methods).map(([methodName, methodRef]) =>
     renderMethodField(methodName, methodRef, indent),
-  )
-  return `${description(ref.meta, "")}type ${name} {\n${lines.join("\n")}\n}`
+  );
+  return `${description(ref.meta, "")}type ${name} {\n${lines.join("\n")}\n}`;
 }
 
 /**
@@ -284,17 +284,17 @@ function renderInterfaceAsType(name: string, ref: TypeRef): string {
  * shape.
  */
 export function toGraphQLType(name: string, ref: TypeRef): string {
-  const kind = ref.shape.kind
-  if (kind === "enum") return renderEnumType(name, ref)
-  if (isA(kind, "object")) return renderObjectType(name, ref)
-  if (kind === "union") return renderUnionType(name, ref)
-  if (kind === "intersection") return renderIntersectionType(name, ref)
-  if (kind === "interface") return renderInterfaceAsType(name, ref)
-  return `${description(ref.meta, "")}scalar ${name}`
+  const kind = ref.shape.kind;
+  if (kind === "enum") return renderEnumType(name, ref);
+  if (isA(kind, "object")) return renderObjectType(name, ref);
+  if (kind === "union") return renderUnionType(name, ref);
+  if (kind === "intersection") return renderIntersectionType(name, ref);
+  if (kind === "interface") return renderInterfaceAsType(name, ref);
+  return `${description(ref.meta, "")}scalar ${name}`;
 }
 
 export function toGraphQLTypes(registry: Record<string, TypeRef>): string {
   return Object.entries(registry)
     .map(([name, ref]) => toGraphQLType(name, ref))
-    .join("\n\n")
+    .join("\n\n");
 }

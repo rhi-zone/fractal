@@ -1,5 +1,5 @@
-import { type TypeRef, type TypeShape } from "@rhi-zone/fractal-type-ir"
-import type { FfiKinds, FfiParam, FfiRef, OwnershipDiscipline } from "./index.ts"
+import { type TypeRef, type TypeShape } from "@rhi-zone/fractal-type-ir";
+import type { FfiKinds, FfiParam, FfiRef, OwnershipDiscipline } from "./index.ts";
 
 // ffi-ir -> WIT (.wit source text) projector.
 //
@@ -67,11 +67,11 @@ function toKebabCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/[^a-zA-Z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 function isVoidType(ref: TypeRef): boolean {
-  return ref.shape.kind === "void" || ref.shape.kind === "null"
+  return ref.shape.kind === "void" || ref.shape.kind === "null";
 }
 
 const PRIMITIVES: Readonly<Record<string, string>> = {
@@ -89,7 +89,7 @@ const PRIMITIVES: Readonly<Record<string, string>> = {
   float32: "f32",
   float64: "f64",
   number: "f64",
-}
+};
 
 /** The structural (ownership-metadata-independent) WIT type expression for
  * `ref`. Hoists a fresh `record` declaration into `decls` (keyed by its
@@ -98,37 +98,40 @@ const PRIMITIVES: Readonly<Record<string, string>> = {
  * for the same reason (WIT, like Rust, has no anonymous inline record
  * syntax). Throws for any kind this minimal subset doesn't implement. */
 function baseType(ref: TypeRef, decls: Map<string, string>, nameHint: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
-  if (kind in PRIMITIVES) return PRIMITIVES[kind]!
+  if (kind in PRIMITIVES) return PRIMITIVES[kind]!;
 
   if (kind === "array") {
-    const shape = ref.shape as TypeShape & { kind: "array"; element: TypeRef }
-    return `list<${witType(shape.element, decls, nameHint)}>`
+    const shape = ref.shape as TypeShape & { kind: "array"; element: TypeRef };
+    return `list<${witType(shape.element, decls, nameHint)}>`;
   }
 
   if (kind === "ref") {
-    return toKebabCase((ref.shape as TypeShape & { kind: "ref"; target: string }).target)
+    return toKebabCase((ref.shape as TypeShape & { kind: "ref"; target: string }).target);
   }
 
   if (kind === "object") {
-    const shape = ref.shape as TypeShape & { kind: "object"; fields: Readonly<Record<string, TypeRef>> }
-    const recordName = toKebabCase(nameHint)
+    const shape = ref.shape as TypeShape & {
+      kind: "object";
+      fields: Readonly<Record<string, TypeRef>>;
+    };
+    const recordName = toKebabCase(nameHint);
     if (!decls.has(recordName)) {
-      decls.set(recordName, "") // reserve the slot before recursing, in case a field self-references
-      const lines = [`record ${recordName} {`]
+      decls.set(recordName, ""); // reserve the slot before recursing, in case a field self-references
+      const lines = [`record ${recordName} {`];
       for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-        lines.push(`    ${toKebabCase(fieldName)}: ${witType(fieldRef, decls, fieldName)},`)
+        lines.push(`    ${toKebabCase(fieldName)}: ${witType(fieldRef, decls, fieldName)},`);
       }
-      lines.push("}")
-      decls.set(recordName, lines.join("\n"))
+      lines.push("}");
+      decls.set(recordName, lines.join("\n"));
     }
-    return recordName
+    return recordName;
   }
 
   throw new Error(
     `toWit: kind "${kind}" has no WIT mapping in this minimal data-shape subset — only primitives, "object" (-> record), "array" (-> list<T>), and "ref" are implemented; a full type-ir -> WIT data-shape projector is separate, not-yet-done work`,
-  )
+  );
 }
 
 /** Full WIT type expression for `ref`, including ownership-discipline
@@ -145,28 +148,28 @@ function baseType(ref: TypeRef, decls: Map<string, string>, nameHint: string): s
  * file-level doc comment for why those two are explicitly out of scope for
  * this target. */
 function witType(ref: TypeRef, decls: Map<string, string>, nameHint: string): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  let base: string
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  let base: string;
   if (discipline !== undefined && discipline.kind !== "copy") {
     if (discipline.kind === "opaque-handle" || discipline.kind === "refcount") {
       throw new Error(
         `toWit: unsupported ownership discipline "${discipline.kind}" for the WIT target — WIT's decided scope (docs/design/ffi-ir-architecture-options.md, Fork C "discipline-per-target: decided") implements only "resource" (own/borrow) and "copy"; "${discipline.kind}" has no WIT-native realization and is explicitly excluded, not silently degraded`,
-      )
+      );
     }
     // discipline.kind === "resource"
     if (ref.shape.kind !== "ref") {
       throw new Error(
         `toWit: "resource" ownership metadata requires a { kind: "ref" } TypeRef naming the resource (the resourceRef() convention from ./index.ts), got shape kind "${ref.shape.kind}"`,
-      )
+      );
     }
-    const target = toKebabCase((ref.shape as TypeShape & { kind: "ref"; target: string }).target)
-    base = discipline.mode === "borrow" ? `borrow<${target}>` : target
+    const target = toKebabCase((ref.shape as TypeShape & { kind: "ref"; target: string }).target);
+    base = discipline.mode === "borrow" ? `borrow<${target}>` : target;
   } else {
-    base = baseType(ref, decls, nameHint)
+    base = baseType(ref, decls, nameHint);
   }
 
-  const optional = ref.meta.optional === true || ref.meta.nullable === true
-  return optional ? `option<${base}>` : base
+  const optional = ref.meta.optional === true || ref.meta.nullable === true;
+  return optional ? `option<${base}>` : base;
 }
 
 /** `name: func(param: type, ...) -> return-type;` — verified syntax
@@ -181,14 +184,18 @@ function funcLine(
   shape: { readonly params: readonly FfiParam[]; readonly returnType: TypeRef },
   decls: Map<string, string>,
 ): string {
-  const fnName = toKebabCase(name)
-  const params = shape.params.map((p) => `${toKebabCase(p.name)}: ${witType(p.type, decls, p.name)}`)
-  const returnClause = isVoidType(shape.returnType) ? "" : ` -> ${witType(shape.returnType, decls, `${name}-result`)}`
-  return `${fnName}: func(${params.join(", ")})${returnClause};`
+  const fnName = toKebabCase(name);
+  const params = shape.params.map(
+    (p) => `${toKebabCase(p.name)}: ${witType(p.type, decls, p.name)}`,
+  );
+  const returnClause = isVoidType(shape.returnType)
+    ? ""
+    : ` -> ${witType(shape.returnType, decls, `${name}-result`)}`;
+  return `${fnName}: func(${params.join(", ")})${returnClause};`;
 }
 
 function isFunctionLike(kind: string): kind is "function" | "method" {
-  return kind === "function" || kind === "method"
+  return kind === "function" || kind === "method";
 }
 
 /** `resource name { method: func(...) -> ...; ... }` — verified syntax
@@ -199,26 +206,29 @@ function isFunctionLike(kind: string): kind is "function" | "method" {
  * method line — a WIT `constructor(...)`/`static func` distinction is not
  * modeled by ffi-ir today and is not synthesized here. */
 function resourceBlock(shape: FfiKinds["resource"], decls: Map<string, string>): string {
-  const resourceName = toKebabCase(shape.name)
-  const lines = [`resource ${resourceName} {`]
+  const resourceName = toKebabCase(shape.name);
+  const lines = [`resource ${resourceName} {`];
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
     if (!isFunctionLike(methodRef.shape.kind)) {
       throw new Error(
         `toWit: resource "${shape.name}"'s method "${methodName}" has shape kind "${methodRef.shape.kind}", not "function"/"method" — a resource's methods map must contain callable shapes`,
-      )
+      );
     }
-    const callable = methodRef.shape as { readonly params: readonly FfiParam[]; readonly returnType: TypeRef }
-    lines.push(`    ${funcLine(methodName, callable, decls)}`)
+    const callable = methodRef.shape as {
+      readonly params: readonly FfiParam[];
+      readonly returnType: TypeRef;
+    };
+    lines.push(`    ${funcLine(methodName, callable, decls)}`);
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function indentBlock(text: string): string {
   return text
     .split("\n")
     .map((line) => (line.length === 0 ? line : `    ${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 /**
@@ -244,43 +254,55 @@ function indentBlock(text: string): string {
  * `baseType`), and a `function`/`method` shape called without a `name`.
  */
 export function toWit(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
-  const decls = new Map<string, string>()
+  const kind = ref.shape.kind;
+  const decls = new Map<string, string>();
 
   if (kind === "module") {
-    const shape = ref.shape as FfiKinds["module"]
-    const ifaceName = toKebabCase(shape.name)
-    const body: string[] = []
+    const shape = ref.shape as FfiKinds["module"];
+    const ifaceName = toKebabCase(shape.name);
+    const body: string[] = [];
     for (const [resName, resRef] of Object.entries(shape.resources)) {
       if (resRef.shape.kind !== "resource") {
-        throw new Error(`toWit: module "${shape.name}"'s resource "${resName}" has shape kind "${resRef.shape.kind}", not "resource"`)
+        throw new Error(
+          `toWit: module "${shape.name}"'s resource "${resName}" has shape kind "${resRef.shape.kind}", not "resource"`,
+        );
       }
-      body.push(resourceBlock(resRef.shape as FfiKinds["resource"], decls))
+      body.push(resourceBlock(resRef.shape as FfiKinds["resource"], decls));
     }
     for (const [fnName, fnRef] of Object.entries(shape.functions)) {
       if (!isFunctionLike(fnRef.shape.kind)) {
-        throw new Error(`toWit: module "${shape.name}"'s function "${fnName}" has shape kind "${fnRef.shape.kind}", not "function"/"method"`)
+        throw new Error(
+          `toWit: module "${shape.name}"'s function "${fnName}" has shape kind "${fnRef.shape.kind}", not "function"/"method"`,
+        );
       }
-      const callable = fnRef.shape as { readonly params: readonly FfiParam[]; readonly returnType: TypeRef }
-      body.push(funcLine(fnName, callable, decls))
+      const callable = fnRef.shape as {
+        readonly params: readonly FfiParam[];
+        readonly returnType: TypeRef;
+      };
+      body.push(funcLine(fnName, callable, decls));
     }
-    const inner = [...decls.values(), ...body].join("\n\n")
-    return `interface ${ifaceName} {\n${indentBlock(inner)}\n}`
+    const inner = [...decls.values(), ...body].join("\n\n");
+    return `interface ${ifaceName} {\n${indentBlock(inner)}\n}`;
   }
 
   if (kind === "resource") {
-    const block = resourceBlock(ref.shape as FfiKinds["resource"], decls)
-    return [...decls.values(), block].join("\n\n")
+    const block = resourceBlock(ref.shape as FfiKinds["resource"], decls);
+    return [...decls.values(), block].join("\n\n");
   }
 
   if (isFunctionLike(kind)) {
     if (name === undefined) {
-      throw new Error(`toWit: a standalone "${kind}" shape requires a name — its own schema carries no name (see index.ts's FfiKinds.function/method)`)
+      throw new Error(
+        `toWit: a standalone "${kind}" shape requires a name — its own schema carries no name (see index.ts's FfiKinds.function/method)`,
+      );
     }
-    const callable = ref.shape as { readonly params: readonly FfiParam[]; readonly returnType: TypeRef }
-    const line = funcLine(name, callable, decls)
-    return [...decls.values(), line].join("\n\n")
+    const callable = ref.shape as {
+      readonly params: readonly FfiParam[];
+      readonly returnType: TypeRef;
+    };
+    const line = funcLine(name, callable, decls);
+    return [...decls.values(), line].join("\n\n");
   }
 
-  throw new Error(`toWit: kind "${kind}" is not a boundary construct this projector emits`)
+  throw new Error(`toWit: kind "${kind}" is not a boundary construct this projector emits`);
 }

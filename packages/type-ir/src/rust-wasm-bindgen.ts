@@ -1,5 +1,10 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA, quote, toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import {
+  isA,
+  quote,
+  toPascalCaseStripSeparators,
+  toSnakeCaseStripSeparators,
+} from "./codegen-helpers.ts";
 
 // Rust codegen targeting wasm-bindgen (https://wasm-bindgen.github.io/wasm-bindgen/) —
 // `#[wasm_bindgen]`-annotated structs/enums/functions that JS can call into
@@ -51,32 +56,75 @@ import { isA, quote, toPascalCaseStripSeparators, toSnakeCaseStripSeparators } f
 // serde-wasm-bindgen, restructure the type, or hand-write the binding).
 
 const RUST_KEYWORDS = new Set([
-  "type", "struct", "enum", "fn", "let", "mut", "ref", "self", "super", "crate",
-  "mod", "pub", "use", "impl", "trait", "where", "loop", "while", "for", "if",
-  "else", "match", "return", "break", "continue", "as", "in", "move", "box",
-  "dyn", "abstract", "async", "await", "become", "const", "do", "extern",
-  "final", "macro", "override", "priv", "static", "try", "typeof", "unsafe",
-  "unsized", "virtual", "yield", "union",
-])
+  "type",
+  "struct",
+  "enum",
+  "fn",
+  "let",
+  "mut",
+  "ref",
+  "self",
+  "super",
+  "crate",
+  "mod",
+  "pub",
+  "use",
+  "impl",
+  "trait",
+  "where",
+  "loop",
+  "while",
+  "for",
+  "if",
+  "else",
+  "match",
+  "return",
+  "break",
+  "continue",
+  "as",
+  "in",
+  "move",
+  "box",
+  "dyn",
+  "abstract",
+  "async",
+  "await",
+  "become",
+  "const",
+  "do",
+  "extern",
+  "final",
+  "macro",
+  "override",
+  "priv",
+  "static",
+  "try",
+  "typeof",
+  "unsafe",
+  "unsized",
+  "virtual",
+  "yield",
+  "union",
+]);
 
 function escapeRustIdent(rustName: string): string {
-  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName
+  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 /** A kind with no direct wasm-bindgen ABI mapping. Throws instead of
  * degrading — see the file-level doc comment for why this projector's
  * convention differs from every other projector in this package. */
 function unsupported(kind: string, reason: string): Converter {
   return () => {
-    throw new Error(`toWasmBindgen: "${kind}" has no direct wasm-bindgen mapping — ${reason}`)
-  }
+    throw new Error(`toWasmBindgen: "${kind}" has no direct wasm-bindgen mapping — ${reason}`);
+  };
 }
 
 // Base inline-expression handlers — the wasm-bindgen analogue of
@@ -143,8 +191,8 @@ const handlers: Record<string, Converter> = {
   // (an honest "opaque object" representation, not a lossy struct-in-name-only).
   object: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "JsValue"),
   enum: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`
+    const s = shape as TypeShape & { kind: "enum" };
+    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`;
   },
   union: unsupported(
     "union",
@@ -154,11 +202,11 @@ const handlers: Record<string, Converter> = {
   // degrades, this one stays fully ABI-crossable (bool/String/i64/f64/())
   // rather than an opaque placeholder, so it's a legitimate simplification.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "()"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "bool"
-    return Number.isInteger(s.value) ? "i64" : "f64"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "()";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "bool";
+    return Number.isInteger(s.value) ? "i64" : "f64";
   },
   // Name reference — same caveat as `instance` above (trusts a declaration
   // exists elsewhere with this exact name).
@@ -183,7 +231,7 @@ const handlers: Record<string, Converter> = {
     "interface",
     "no service/trait-object construct crosses the wasm-bindgen ABI directly — an `interface`'s methods would each need their own #[wasm_bindgen] impl block on a concrete receiver type (see the `method` entry above), which isn't something a single TypeRef can express",
   ),
-}
+};
 
 /** Kinds allowed as a Vec<T>/Box<[T]> element per wasm-bindgen's documented
  * ABI-crossable categories (guide/src/reference/types/boxed-slices.md +
@@ -193,23 +241,23 @@ const handlers: Record<string, Converter> = {
  * array-of-bytes i.e. Vec<Vec<u8>>, array-of-map, ...) are excluded even
  * though their non-Vec inline type would otherwise resolve fine. */
 function vecElementType(element: TypeRef): string {
-  const kind = element.shape.kind
+  const kind = element.shape.kind;
   if (kind === "boolean") {
     throw new Error(
       'toWasmBindgen: Vec<bool> has no documented wasm-bindgen ABI mapping — wasm-bindgen\'s Vec<T>/Box<[T]> guide lists JsValue/imported JS types/exported Rust types/String, plus numeric widths via "boxed number slices", but not bool; wrap elements as JsValue (e.g. via serde-wasm-bindgen) or model as Vec<u8>/a bitset instead',
-    )
+    );
   }
   if (kind === "array" || kind === "stream" || kind === "page") {
     throw new Error(
       'toWasmBindgen: nested Vec<Vec<T>> (an "array"/"stream"/"page" element inside another) is not directly ABI-crossable — wasm-bindgen\'s own guide (arbitrary-data-with-serde.md) cites this exact shape as requiring the serde-wasm-bindgen crate',
-    )
+    );
   }
   if (kind === "bytes") {
     throw new Error(
       'toWasmBindgen: Vec<Vec<u8>> (an "array" of "bytes") is not directly ABI-crossable, for the same reason nested Vec<Vec<T>> generally isn\'t — requires serde-wasm-bindgen',
-    )
+    );
   }
-  return toWasmBindgenType(element)
+  return toWasmBindgenType(element);
 }
 
 /** Inline wasm-bindgen Rust type expression for `ref`, wrapping in
@@ -219,13 +267,15 @@ function vecElementType(element: TypeRef): string {
  * either). Throws for any kind with no direct ABI mapping — see the
  * `unsupported` handlers above and the file-level doc comment. */
 export function toWasmBindgenType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
+  const converter = resolve(ref.shape.kind, handlers);
   if (converter === undefined) {
-    throw new Error(`toWasmBindgen: unhandled kind "${ref.shape.kind}" (no handler and no known ancestor)`)
+    throw new Error(
+      `toWasmBindgen: unhandled kind "${ref.shape.kind}" (no handler and no known ancestor)`,
+    );
   }
-  const base = converter(ref.shape, ref.meta)
-  const optional = ref.meta.optional === true || ref.meta.nullable === true
-  return optional ? `Option<${base}>` : base
+  const base = converter(ref.shape, ref.meta);
+  const optional = ref.meta.optional === true || ref.meta.nullable === true;
+  return optional ? `Option<${base}>` : base;
 }
 
 /**
@@ -238,28 +288,28 @@ export function toWasmBindgenType(ref: TypeRef): string {
  * still throws even in this context — see the `union` handler above.
  */
 function bareType(nameHint: string, ref: TypeRef, decls: string[]): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   if (isA(kind, "object")) {
-    decls.push(buildStruct(nameHint, ref, decls))
-    return nameHint
+    decls.push(buildStruct(nameHint, ref, decls));
+    return nameHint;
   }
   if (kind === "enum") {
-    decls.push(buildEnum(nameHint, ref))
-    return nameHint
+    decls.push(buildEnum(nameHint, ref));
+    return nameHint;
   }
   if (kind === "array" || kind === "stream" || kind === "page") {
-    const s = ref.shape as TypeShape & { kind: "array" | "stream" | "page"; element: TypeRef }
-    const elementKind = s.element.shape.kind
+    const s = ref.shape as TypeShape & { kind: "array" | "stream" | "page"; element: TypeRef };
+    const elementKind = s.element.shape.kind;
     if (isA(elementKind, "object") || elementKind === "enum") {
-      return `Vec<${bareType(nameHint, s.element, decls)}>`
+      return `Vec<${bareType(nameHint, s.element, decls)}>`;
     }
-    return `Vec<${vecElementType(s.element)}>`
+    return `Vec<${vecElementType(s.element)}>`;
   }
-  const converter = resolve(kind, handlers)
+  const converter = resolve(kind, handlers);
   if (converter === undefined) {
-    throw new Error(`toWasmBindgen: unhandled kind "${kind}" (no handler and no known ancestor)`)
+    throw new Error(`toWasmBindgen: unhandled kind "${kind}" (no handler and no known ancestor)`);
   }
-  return converter(ref.shape, ref.meta)
+  return converter(ref.shape, ref.meta);
 }
 
 /** Field type + `js_name`/`readonly` attribute lines needed alongside it.
@@ -275,19 +325,19 @@ function fieldType(
   fieldRef: TypeRef,
   decls: string[],
 ): { type: string; rustName: string; ident: string; attrs: string[] } {
-  const bare = bareType(toPascalCaseStripSeparators(fieldName), fieldRef, decls)
-  const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-  const type = optional ? `Option<${bare}>` : bare
-  const rustName = toSnakeCaseStripSeparators(fieldName)
-  const ident = escapeRustIdent(rustName)
-  const attrs: string[] = []
-  if (rustName !== fieldName || ident !== rustName) attrs.push(`js_name = ${quote(fieldName)}`)
-  if (fieldRef.meta.readonly === true) attrs.push("readonly")
-  return { type, rustName, ident, attrs }
+  const bare = bareType(toPascalCaseStripSeparators(fieldName), fieldRef, decls);
+  const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+  const type = optional ? `Option<${bare}>` : bare;
+  const rustName = toSnakeCaseStripSeparators(fieldName);
+  const ident = escapeRustIdent(rustName);
+  const attrs: string[] = [];
+  if (rustName !== fieldName || ident !== rustName) attrs.push(`js_name = ${quote(fieldName)}`);
+  if (fieldRef.meta.readonly === true) attrs.push("readonly");
+  return { type, rustName, ident, attrs };
 }
 
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`${indent}/// ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`${indent}/// ${meta.description}`] : [];
 }
 
 // `#[derive(Clone)]` is required for `getter_with_clone` (wasm-bindgen's
@@ -297,21 +347,21 @@ function docComment(indent: string, meta: Readonly<Record<string, unknown>>): st
 // primitives, String, Vec<T>, other #[derive(Clone)] structs, JsValue) is
 // Clone.
 function buildStruct(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const lines: string[] = [...docComment("", ref.meta)]
-  if (ref.meta.deprecated === true) lines.push("#[deprecated]")
-  lines.push("#[derive(Clone)]", "#[wasm_bindgen(getter_with_clone)]", `pub struct ${name} {`)
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const lines: string[] = [...docComment("", ref.meta)];
+  if (ref.meta.deprecated === true) lines.push("#[deprecated]");
+  lines.push("#[derive(Clone)]", "#[wasm_bindgen(getter_with_clone)]", `pub struct ${name} {`);
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const { type, ident, attrs } = fieldType(fieldName, fieldRef, decls)
-    lines.push(...docComment("    ", fieldRef.meta))
-    if (attrs.length > 0) lines.push(`    #[wasm_bindgen(${attrs.join(", ")})]`)
-    if (fieldRef.meta.deprecated === true) lines.push("    #[deprecated]")
-    lines.push(`    pub ${ident}: ${type},`)
+    const { type, ident, attrs } = fieldType(fieldName, fieldRef, decls);
+    lines.push(...docComment("    ", fieldRef.meta));
+    if (attrs.length > 0) lines.push(`    #[wasm_bindgen(${attrs.join(", ")})]`);
+    if (fieldRef.meta.deprecated === true) lines.push("    #[deprecated]");
+    lines.push(`    pub ${ident}: ${type},`);
   }
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 // Fieldless / string-discriminant enum — matches wasm-bindgen's own
@@ -319,16 +369,16 @@ function buildStruct(name: string, ref: TypeRef, decls: string[]): string {
 // `Variant = "wireValue"`, preserving the IR member's exact wire string as
 // the JS-visible value without a separate rename attribute.
 function buildEnum(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const lines: string[] = [...docComment("", ref.meta), "#[wasm_bindgen]", `pub enum ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const lines: string[] = [...docComment("", ref.meta), "#[wasm_bindgen]", `pub enum ${name} {`];
 
   for (const member of shape.members) {
-    const variant = toPascalCaseStripSeparators(member)
-    lines.push(`    ${variant} = ${quote(member)},`)
+    const variant = toPascalCaseStripSeparators(member);
+    lines.push(`    ${variant} = ${quote(member)},`);
   }
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /**
@@ -342,33 +392,39 @@ function buildEnum(name: string, ref: TypeRef): string {
  */
 function buildFunction(name: string, ref: TypeRef, decls: string[]): string {
   const shape = ref.shape as TypeShape & {
-    kind: "function"
-    params: readonly { name: string; type: TypeRef }[]
-    returnType: TypeRef
-  }
-  const fnName = toSnakeCaseStripSeparators(name)
-  const attrs: string[] = []
-  if (fnName !== name) attrs.push(`js_name = ${quote(name)}`)
+    kind: "function";
+    params: readonly { name: string; type: TypeRef }[];
+    returnType: TypeRef;
+  };
+  const fnName = toSnakeCaseStripSeparators(name);
+  const attrs: string[] = [];
+  if (fnName !== name) attrs.push(`js_name = ${quote(name)}`);
 
   const params = shape.params.map((p) => {
-    const bare = bareType(toPascalCaseStripSeparators(p.name), p.type, decls)
-    const optional = p.type.meta.optional === true || p.type.meta.nullable === true
-    const type = optional ? `Option<${bare}>` : bare
-    const rustName = toSnakeCaseStripSeparators(p.name)
-    const ident = escapeRustIdent(rustName)
-    const rename = rustName !== p.name || ident !== rustName ? `#[wasm_bindgen(js_name = ${quote(p.name)})] ` : ""
-    return `${rename}${ident}: ${type}`
-  })
+    const bare = bareType(toPascalCaseStripSeparators(p.name), p.type, decls);
+    const optional = p.type.meta.optional === true || p.type.meta.nullable === true;
+    const type = optional ? `Option<${bare}>` : bare;
+    const rustName = toSnakeCaseStripSeparators(p.name);
+    const ident = escapeRustIdent(rustName);
+    const rename =
+      rustName !== p.name || ident !== rustName
+        ? `#[wasm_bindgen(js_name = ${quote(p.name)})] `
+        : "";
+    return `${rename}${ident}: ${type}`;
+  });
 
-  const isVoidReturn = shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null"
-  const returnType = isVoidReturn ? "" : ` -> ${bareType(`${toPascalCaseStripSeparators(name)}Return`, shape.returnType, decls)}`
+  const isVoidReturn =
+    shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null";
+  const returnType = isVoidReturn
+    ? ""
+    : ` -> ${bareType(`${toPascalCaseStripSeparators(name)}Return`, shape.returnType, decls)}`;
 
-  const lines: string[] = [...docComment("", ref.meta)]
-  lines.push(attrs.length > 0 ? `#[wasm_bindgen(${attrs.join(", ")})]` : "#[wasm_bindgen]")
-  lines.push(`pub fn ${fnName}(${params.join(", ")})${returnType} {`)
-  lines.push(`    todo!(${quote(`implement ${fnName}`)})`)
-  lines.push("}")
-  return lines.join("\n")
+  const lines: string[] = [...docComment("", ref.meta)];
+  lines.push(attrs.length > 0 ? `#[wasm_bindgen(${attrs.join(", ")})]` : "#[wasm_bindgen]");
+  lines.push(`pub fn ${fnName}(${params.join(", ")})${returnType} {`);
+  lines.push(`    todo!(${quote(`implement ${fnName}`)})`);
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /**
@@ -386,47 +442,47 @@ function buildFunction(name: string, ref: TypeRef, decls: string[]): string {
  * and why this projector throws instead of degrading.
  */
 export function toWasmBindgen(ref: TypeRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
-    const shape = ref.shape as TypeShape & { kind: "function"; thisType?: TypeRef }
+    const shape = ref.shape as TypeShape & { kind: "function"; thisType?: TypeRef };
     if (shape.thisType !== undefined) {
       throw new Error(
         'toWasmBindgen: "function" with a thisType (an implicit/explicit receiver) has no free-function wasm-bindgen mapping — see the "method" handler for why',
-      )
+      );
     }
     if (name === undefined) {
       throw new Error(
         'toWasmBindgen: "function" requires a name — wasm-bindgen exports are named JS bindings, not anonymous inline types',
-      )
+      );
     }
-    const decls: string[] = []
-    const fn = buildFunction(name, ref, decls)
-    return [...decls, fn].join("\n\n")
+    const decls: string[] = [];
+    const fn = buildFunction(name, ref, decls);
+    return [...decls, fn].join("\n\n");
   }
 
   if (kind === "method") {
     // Delegates to the shared explanatory message the inline-position
     // `method` handler throws.
-    handlers.method!(ref.shape, ref.meta)
+    handlers.method!(ref.shape, ref.meta);
   }
 
-  if (name === undefined) return toWasmBindgenType(ref)
+  if (name === undefined) return toWasmBindgenType(ref);
 
-  const decls: string[] = []
-  let mainDecl: string
+  const decls: string[] = [];
+  let mainDecl: string;
   if (isA(kind, "object")) {
-    mainDecl = buildStruct(name, ref, decls)
+    mainDecl = buildStruct(name, ref, decls);
   } else if (kind === "enum") {
-    mainDecl = buildEnum(name, ref)
+    mainDecl = buildEnum(name, ref);
   } else if (kind === "union") {
     // Delegates to the shared explanatory message the inline-position
     // `union` handler throws.
-    handlers.union!(ref.shape, ref.meta)
-    mainDecl = "" // unreachable — handlers.union always throws
+    handlers.union!(ref.shape, ref.meta);
+    mainDecl = ""; // unreachable — handlers.union always throws
   } else {
-    mainDecl = `pub type ${name} = ${toWasmBindgenType(ref)};`
+    mainDecl = `pub type ${name} = ${toWasmBindgenType(ref)};`;
   }
 
-  return [...decls, mainDecl].join("\n\n")
+  return [...decls, mainDecl].join("\n\n");
 }

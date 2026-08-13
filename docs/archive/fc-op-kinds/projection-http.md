@@ -1,6 +1,7 @@
 # HTTP Projection — Concept Inventory and server-less Analysis
 
 > Source files examined:
+>
 > - `server-less/crates/server-less-macros/src/http.rs`
 > - `server-less/crates/server-less-macros/src/openapi_gen.rs`
 > - `server-less/crates/server-less-core/src/lib.rs` (lines 291–306)
@@ -11,25 +12,26 @@
 
 ### [LIKELY-AGNOSTIC] HTTP Method (verb)
 
-The verb encodes the *intent class* of the operation: whether it reads or mutates, whether it is safe (no server side effects) and idempotent (repeated calls converge to the same server state).
+The verb encodes the _intent class_ of the operation: whether it reads or mutates, whether it is safe (no server side effects) and idempotent (repeated calls converge to the same server state).
 
-| Verb   | Safe | Idempotent | Intent class         |
-|--------|------|-----------|----------------------|
-| GET    | yes  | yes       | read / fetch         |
-| HEAD   | yes  | yes       | read metadata only   |
-| PUT    | no   | yes       | full replace / set   |
-| DELETE | no   | yes       | remove               |
-| POST   | no   | no        | create / command     |
-| PATCH  | no   | no        | partial update       |
+| Verb   | Safe | Idempotent | Intent class       |
+| ------ | ---- | ---------- | ------------------ |
+| GET    | yes  | yes        | read / fetch       |
+| HEAD   | yes  | yes        | read metadata only |
+| PUT    | no   | yes        | full replace / set |
+| DELETE | no   | yes        | remove             |
+| POST   | no   | no         | create / command   |
+| PATCH  | no   | no         | partial update     |
 
-The safety/idempotency distinctions are not HTTP-specific in spirit. gRPC has unary vs. server-streaming; message queues distinguish at-most-once vs. at-least-once delivery; CLI distinguishes read-only from mutating subcommands. The *underlying properties* (safe? idempotent? produces a side effect?) are protocol-agnostic. The *binding to a specific verb string* is HTTP-specific.
+The safety/idempotency distinctions are not HTTP-specific in spirit. gRPC has unary vs. server-streaming; message queues distinguish at-most-once vs. at-least-once delivery; CLI distinguishes read-only from mutating subcommands. The _underlying properties_ (safe? idempotent? produces a side effect?) are protocol-agnostic. The _binding to a specific verb string_ is HTTP-specific.
 
 **server-less:** `infer_http_method` (openapi_gen.rs:227–249) maps function-name prefixes to verbs:
-- `get_`, `fetch_`, `read_`, `list_`, `find_`, `search_` → GET  
-- `create_`, `add_`, `new_` → POST  
-- `update_`, `set_` → PUT  
-- `patch_`, `modify_` → PATCH  
-- `delete_`, `remove_` → DELETE  
+
+- `get_`, `fetch_`, `read_`, `list_`, `find_`, `search_` → GET
+- `create_`, `add_`, `new_` → POST
+- `update_`, `set_` → PUT
+- `patch_`, `modify_` → PATCH
+- `delete_`, `remove_` → DELETE
 - Unrecognized prefix → POST (silent fallback, noted at line 245)
 
 Explicit override: `#[route(method = "POST")]` parsed by `RouteOverride::parse_from_attrs` (openapi_gen.rs:57–61).
@@ -41,6 +43,7 @@ Explicit override: `#[route(method = "POST")]` parsed by `RouteOverride::parse_f
 A URL path like `/users/{id}` is the primary identifier of an HTTP resource. The template syntax `{param}` is specific to HTTP/REST convention (OpenAPI/RFC 6570 URI templates).
 
 **server-less:** `infer_path` (openapi_gen.rs:255–317) derives the path from the method name and parameter list:
+
 - Strips known verb prefix, converts remainder to kebab-case, pluralizes.
 - Appends `/{param_name}` for id-like parameters (line 313).
 - Override: `#[route(path = "/custom")]` (openapi_gen.rs:62–65).
@@ -84,14 +87,15 @@ Named string metadata accompanying the request. Conceptually headers overlap wit
 
 ### [LIKELY-AGNOSTIC] Response Status Code
 
-A numeric outcome classifier. The category (success, client error, server error, not found) maps to protocol-agnostic result types: Rust's `Result<T,E>`, gRPC status codes, CLI exit codes. The *specific numbers* (200, 404, 500) are HTTP-specific; the *category* is not.
+A numeric outcome classifier. The category (success, client error, server error, not found) maps to protocol-agnostic result types: Rust's `Result<T,E>`, gRPC status codes, CLI exit codes. The _specific numbers_ (200, 404, 500) are HTTP-specific; the _category_ is not.
 
 **server-less:** Status is inferred from return type (http.rs:1129–1134):
-- `()` → 204 No Content  
-- `Result<T,E>` → 200 on Ok, error status via `HttpStatusHelper` trait (http.rs:1142–1152)  
-- `Option<T>` → 200 on Some, 404 on None (http.rs:1158–1164)  
-- Iterator/Stream → 200 (SSE)  
-- Other T → 200  
+
+- `()` → 204 No Content
+- `Result<T,E>` → 200 on Ok, error status via `HttpStatusHelper` trait (http.rs:1142–1152)
+- `Option<T>` → 200 on Some, 404 on None (http.rs:1158–1164)
+- Iterator/Stream → 200 (SSE)
+- Other T → 200
 
 Override: `#[response(status = 201)]` (openapi_gen.rs:131–134). OpenAPI success code inferred from return type (openapi_gen.rs:456–461).
 
@@ -155,29 +159,30 @@ WWW-Authenticate / Authorization headers, HTTP status code semantics (401 = unau
 
 ## B. What HTTP Needs to Know About an Op
 
-| HTTP concept         | Can be inferred from op type/effects       | Agnostic metadata (explicit, protocol-neutral) | HTTP-specific authoring |
-|----------------------|--------------------------------------------|------------------------------------------------|-------------------------|
-| Method (verb)        | pure read → GET; mutating → POST/PUT       | `is_idempotent`, `is_readonly`, `has_side_effects` | `#[route(method = "PUT")]` |
-| Path template        | resource name from method name             | resource identity / canonical name             | path string syntax `{id}` |
-| Path parameters      | `is_id` flag, param name heuristics        | "this param identifies the resource"           | position in path template |
-| Query parameters     | non-id params on GET-like ops              | "this param is optional modifier metadata"     | wire name, `?` serialization |
-| Request body         | non-id params on mutating ops              | "this param is the primary input payload"      | `application/json` schema |
-| Request headers      | none                                       | none                                           | `#[param(location = "header")]`, wire name |
-| Response status code | return type (`()` → 204, `Option` → 404)  | `is_not_found`, `is_created`, outcome class    | numeric status code |
-| Response body        | return type T → serialize                  | "returns structured data"                      | none |
-| Response headers     | none                                       | none                                           | `#[response(header = ...)]` |
-| Content-Type         | none (always JSON)                         | none                                           | `#[response(content_type = ...)]` MIME string |
-| Caching              | none                                       | `is_cacheable`, cache TTL, ETag strategy       | Cache-Control directives |
-| Idempotency          | verb (implicitly)                          | `is_idempotent` flag                           | none |
-| Safety               | verb (implicitly)                          | `is_readonly` / `is_pure` flag                 | none |
-| Auth/Authz           | none                                       | `requires_auth`, `required_role`               | 401/403 codes, WWW-Authenticate header |
+| HTTP concept         | Can be inferred from op type/effects     | Agnostic metadata (explicit, protocol-neutral)     | HTTP-specific authoring                       |
+| -------------------- | ---------------------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| Method (verb)        | pure read → GET; mutating → POST/PUT     | `is_idempotent`, `is_readonly`, `has_side_effects` | `#[route(method = "PUT")]`                    |
+| Path template        | resource name from method name           | resource identity / canonical name                 | path string syntax `{id}`                     |
+| Path parameters      | `is_id` flag, param name heuristics      | "this param identifies the resource"               | position in path template                     |
+| Query parameters     | non-id params on GET-like ops            | "this param is optional modifier metadata"         | wire name, `?` serialization                  |
+| Request body         | non-id params on mutating ops            | "this param is the primary input payload"          | `application/json` schema                     |
+| Request headers      | none                                     | none                                               | `#[param(location = "header")]`, wire name    |
+| Response status code | return type (`()` → 204, `Option` → 404) | `is_not_found`, `is_created`, outcome class        | numeric status code                           |
+| Response body        | return type T → serialize                | "returns structured data"                          | none                                          |
+| Response headers     | none                                     | none                                               | `#[response(header = ...)]`                   |
+| Content-Type         | none (always JSON)                       | none                                               | `#[response(content_type = ...)]` MIME string |
+| Caching              | none                                     | `is_cacheable`, cache TTL, ETag strategy           | Cache-Control directives                      |
+| Idempotency          | verb (implicitly)                        | `is_idempotent` flag                               | none                                          |
+| Safety               | verb (implicitly)                        | `is_readonly` / `is_pure` flag                     | none                                          |
+| Auth/Authz           | none                                     | `requires_auth`, `required_role`                   | 401/403 codes, WWW-Authenticate header        |
 
 ---
 
 ## C. Classification Summary
 
 **[LIKELY-AGNOSTIC]** — other protocols plausibly share these distinctions:
-- HTTP method *intent* (safe/idempotent/mutating/creating/deleting) — maps to gRPC unary vs. server-stream, MQ delivery guarantees, CLI read vs. write subcommands
+
+- HTTP method _intent_ (safe/idempotent/mutating/creating/deleting) — maps to gRPC unary vs. server-stream, MQ delivery guarantees, CLI read vs. write subcommands
 - Path parameters — maps to gRPC primary key fields, CLI positional args
 - Query parameters — maps to gRPC optional filter fields, CLI flags
 - Request body — maps to gRPC request message, CLI stdin/args, MCP tool call `arguments`
@@ -187,6 +192,7 @@ WWW-Authenticate / Authorization headers, HTTP status code semantics (401 = unau
 - Safety / read-only (semantic) — relevant to cache reasoning, audit logging
 
 **[HTTP-SPECIFIC]** — no counterpart in other protocols:
+
 - HTTP verb strings (GET/POST/PUT/PATCH/DELETE as literal words)
 - Path template syntax (`/users/{id}`, RFC 6570 URI templates)
 - Request headers as a parameter location
@@ -194,37 +200,37 @@ WWW-Authenticate / Authorization headers, HTTP status code semantics (401 = unau
 - MIME Content-Type / Accept negotiation
 - Caching headers (Cache-Control, ETag, Last-Modified, Vary)
 - Authentication status codes (401 vs 403) and WWW-Authenticate header
-- Status code *numbers* (200, 201, 204, 400, 404, 500)
+- Status code _numbers_ (200, 201, 204, 400, 404, 500)
 
 ---
 
 ## D. What server-less Actually Does — Citation Table
 
-| Concept              | How server-less handles it | Key citations |
-|----------------------|----------------------------|---------------|
-| Verb inference       | Name prefix → verb enum    | openapi_gen.rs:227–249 |
-| Verb override        | `#[route(method = "...")]` | openapi_gen.rs:57–61 |
-| Path inference       | Kebab + pluralize + `{id}` | openapi_gen.rs:255–317 |
-| Path override        | `#[route(path = "...")]`   | openapi_gen.rs:62–65 |
-| Path validation      | Compile-time checks        | http.rs:1356–1501 |
-| Path param extraction| `Path<T>` or `Path<(...)>` | http.rs:854–882 |
-| Query param extraction| `Query<HashMap<String,String>>` | http.rs:963–1054 |
-| Header param extraction| `HeaderMap` + `headers.get(name)` | http.rs:1063–1117 |
-| Request body parsing | `Json<Value>` + field-by-field deserialize | http.rs:885–958 |
-| Response 204         | `()` return type           | http.rs:1129–1134 |
-| Response 404         | `Option<T>` return type    | http.rs:1156–1164 |
-| Response error status| `Result<T,E>` + `HttpStatusHelper` | http.rs:1136–1152 |
-| Response status override| `#[response(status = N)]` | openapi_gen.rs:131–134, http.rs:1226–1229 |
-| Response Content-Type| `#[response(content_type = "...")]` | openapi_gen.rs:135–138, http.rs:1248–1256 |
-| Response headers     | `#[response(header = ..., value = ...)]` | openapi_gen.rs:139–146, http.rs:1235–1244 |
-| SSE streaming        | `impl Stream<Item=T>` / `impl Iterator<Item=T>` → SSE | http.rs:1166–1198 |
-| Auth injection       | `Context` param hidden from OpenAPI | http.rs:47–54 |
-| Route skip           | `#[route(skip)]`           | openapi_gen.rs:42–44 |
-| Route hidden         | `#[route(hidden)]` (router yes, OpenAPI no) | openapi_gen.rs:45–46, http.rs:501–507 |
-| Tags                 | `#[route(tags = "...")]`   | openapi_gen.rs:67–76 |
-| Deprecated           | `#[route(deprecated)]`     | openapi_gen.rs:48–55 |
-| OpenAPI body content-type| Always `application/json` (hardcoded) | openapi_gen.rs:438–449 |
-| `HttpMount` trait    | Nested composition via `nest_service` | http.rs:354–378, core/lib.rs:296–306 |
+| Concept                   | How server-less handles it                            | Key citations                             |
+| ------------------------- | ----------------------------------------------------- | ----------------------------------------- |
+| Verb inference            | Name prefix → verb enum                               | openapi_gen.rs:227–249                    |
+| Verb override             | `#[route(method = "...")]`                            | openapi_gen.rs:57–61                      |
+| Path inference            | Kebab + pluralize + `{id}`                            | openapi_gen.rs:255–317                    |
+| Path override             | `#[route(path = "...")]`                              | openapi_gen.rs:62–65                      |
+| Path validation           | Compile-time checks                                   | http.rs:1356–1501                         |
+| Path param extraction     | `Path<T>` or `Path<(...)>`                            | http.rs:854–882                           |
+| Query param extraction    | `Query<HashMap<String,String>>`                       | http.rs:963–1054                          |
+| Header param extraction   | `HeaderMap` + `headers.get(name)`                     | http.rs:1063–1117                         |
+| Request body parsing      | `Json<Value>` + field-by-field deserialize            | http.rs:885–958                           |
+| Response 204              | `()` return type                                      | http.rs:1129–1134                         |
+| Response 404              | `Option<T>` return type                               | http.rs:1156–1164                         |
+| Response error status     | `Result<T,E>` + `HttpStatusHelper`                    | http.rs:1136–1152                         |
+| Response status override  | `#[response(status = N)]`                             | openapi_gen.rs:131–134, http.rs:1226–1229 |
+| Response Content-Type     | `#[response(content_type = "...")]`                   | openapi_gen.rs:135–138, http.rs:1248–1256 |
+| Response headers          | `#[response(header = ..., value = ...)]`              | openapi_gen.rs:139–146, http.rs:1235–1244 |
+| SSE streaming             | `impl Stream<Item=T>` / `impl Iterator<Item=T>` → SSE | http.rs:1166–1198                         |
+| Auth injection            | `Context` param hidden from OpenAPI                   | http.rs:47–54                             |
+| Route skip                | `#[route(skip)]`                                      | openapi_gen.rs:42–44                      |
+| Route hidden              | `#[route(hidden)]` (router yes, OpenAPI no)           | openapi_gen.rs:45–46, http.rs:501–507     |
+| Tags                      | `#[route(tags = "...")]`                              | openapi_gen.rs:67–76                      |
+| Deprecated                | `#[route(deprecated)]`                                | openapi_gen.rs:48–55                      |
+| OpenAPI body content-type | Always `application/json` (hardcoded)                 | openapi_gen.rs:438–449                    |
+| `HttpMount` trait         | Nested composition via `nest_service`                 | http.rs:354–378, core/lib.rs:296–306      |
 
 ---
 

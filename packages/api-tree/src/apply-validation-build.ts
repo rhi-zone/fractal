@@ -46,24 +46,24 @@
 //     same-file resolution is this phase's deliberate first cut, and giving
 //     up silently would emit a module missing that call site's whole key.
 
-import * as path from "node:path"
-import ts from "typescript"
-import { compileDefsBlock, type TypeRef } from "@rhi-zone/fractal-type-ir"
+import * as path from "node:path";
+import ts from "typescript";
+import { compileDefsBlock, type TypeRef } from "@rhi-zone/fractal-type-ir";
 import {
   createExtractorProgram,
   createSharingRegistry,
   finalizeSharedDefs,
   typeRefFromFunctionNode,
   type ShouldShare,
-} from "./extract.ts"
+} from "./extract.ts";
 import {
   readMetaEncodingMapFunctionFields,
   readMetaEncodingMapProfileNames,
   readMetaSourceMap,
   readMetaStringLiteral,
   walkNodeType,
-} from "./tree.ts"
-import { APPLY_VALIDATION_BRAND } from "./apply-validation.ts"
+} from "./tree.ts";
+import { APPLY_VALIDATION_BRAND } from "./apply-validation.ts";
 import {
   checkCache,
   computeDefNamesFingerprint,
@@ -72,8 +72,12 @@ import {
   writeCacheMetadata,
   type CacheLocationOptions,
   type CachedBuildOutcome,
-} from "./cache.ts"
-import { deriveFieldProfiles, type FieldProfileDerivation, type ProtocolName } from "./wire-derive.ts"
+} from "./cache.ts";
+import {
+  deriveFieldProfiles,
+  type FieldProfileDerivation,
+  type ProtocolName,
+} from "./wire-derive.ts";
 import {
   argvProfile,
   compileConstraintsFn,
@@ -89,21 +93,28 @@ import {
   type CompiledWireEntryFragment,
   type WireDefsRegistry,
   type WireProfile,
-} from "@rhi-zone/fractal-type-ir"
+} from "@rhi-zone/fractal-type-ir";
 
 /** The five wire protocol names an `applyValidation` call site's optional
  * third argument may name. */
-const PROTOCOL_NAMES: ReadonlySet<string> = new Set(["http", "cli", "mcp", "graphql", "jsonrpc", "identity"])
+const PROTOCOL_NAMES: ReadonlySet<string> = new Set([
+  "http",
+  "cli",
+  "mcp",
+  "graphql",
+  "jsonrpc",
+  "identity",
+]);
 
 function isProtocolName(value: string): value is ProtocolName {
-  return PROTOCOL_NAMES.has(value)
+  return PROTOCOL_NAMES.has(value);
 }
 
 /** The module specifier the generated module imports `createApplyValidation`
  * from. Overridable (`options.runtimeImport`) only so this package's own
  * tests can point a generated module at the local source file; a real
  * consumer always gets the published subpath. */
-export const DEFAULT_RUNTIME_IMPORT = "@rhi-zone/fractal-api-tree/apply-validation"
+export const DEFAULT_RUNTIME_IMPORT = "@rhi-zone/fractal-api-tree/apply-validation";
 
 /** Separator joining a call site's `key` and a leaf's tree-relative path into
  * the FLAT entry name handed to the type-ir compiler (which emits one flat
@@ -114,19 +125,20 @@ export const DEFAULT_RUNTIME_IMPORT = "@rhi-zone/fractal-api-tree/apply-validati
  * never asks a consumer to know about this: it re-groups the flat record into
  * the nested `Record<key, Record<path, entry>>` `createApplyValidation` wants
  * (see `composeApplyValidationTail`). */
-const FLAT_KEY_SEPARATOR = "\u0000"
+const FLAT_KEY_SEPARATOR = "\u0000";
 
-const flatName = (key: string, leafPath: string): string => `${key}${FLAT_KEY_SEPARATOR}${leafPath}`
+const flatName = (key: string, leafPath: string): string =>
+  `${key}${FLAT_KEY_SEPARATOR}${leafPath}`;
 
 /** One `applyValidation(key, treeExpr, protocol?)` call site, resolved. */
 export type ApplyValidationCallSite = {
   /** The literal first argument. */
-  readonly key: string
+  readonly key: string;
   /** The resolved TYPE of the `Node` tree the second argument traces back to. */
-  readonly nodeType: ts.Type
+  readonly nodeType: ts.Type;
   /** A node in the entry file to resolve types against (checker calls need a
    * location); the traced tree expression itself. */
-  readonly loc: ts.Node
+  readonly loc: ts.Node;
   /** The literal third argument, when present — see decision 1,
    * docs/design/wire-profiles-and-staged-validation.md's "Implementation
    * trace (phase B)" section. `undefined` for an ordinary 2-arg call site —
@@ -134,8 +146,8 @@ export type ApplyValidationCallSite = {
    * sugar for `"identity"` (phase D's decision A), so a 2-arg call site is
    * NOT skipped by extraction; this field still records the literal source
    * text (present vs. absent) for diagnostics/tests that care about it. */
-  readonly protocol?: ProtocolName
-}
+  readonly protocol?: ProtocolName;
+};
 
 /** True when the CALLEE of `call` is a `createApplyValidation` result.
  *
@@ -152,17 +164,21 @@ export type ApplyValidationCallSite = {
  * The alias chain is ALSO resolved (below) — not to decide the match, but so
  * a diagnostic can name the declaration a matched callee came from. */
 function isApplyValidationCallee(callee: ts.Expression, checker: ts.TypeChecker): boolean {
-  const calleeType = checker.getTypeAtLocation(callee)
-  return checker.getPropertyOfType(calleeType, APPLY_VALIDATION_BRAND) !== undefined
+  const calleeType = checker.getTypeAtLocation(callee);
+  return checker.getPropertyOfType(calleeType, APPLY_VALIDATION_BRAND) !== undefined;
 }
 
 /** The declaration a callee's (possibly aliased/imported) symbol resolves to
  * — for diagnostics only. */
-function calleeDeclaration(callee: ts.Expression, checker: ts.TypeChecker): ts.Declaration | undefined {
-  const symbol = checker.getSymbolAtLocation(callee)
-  if (!symbol) return undefined
-  const resolved = (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol
-  return resolved.declarations?.[0]
+function calleeDeclaration(
+  callee: ts.Expression,
+  checker: ts.TypeChecker,
+): ts.Declaration | undefined {
+  const symbol = checker.getSymbolAtLocation(callee);
+  if (!symbol) return undefined;
+  const resolved =
+    (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol;
+  return resolved.declarations?.[0];
 }
 
 /** A `Node` tree's type, structurally: carries `meta` (every `Node` does —
@@ -174,7 +190,7 @@ function isNodeType(type: ts.Type, checker: ts.TypeChecker): boolean {
   return (
     checker.getPropertyOfType(type, "meta") !== undefined &&
     checker.getPropertyOfType(type, "methods") === undefined
-  )
+  );
 }
 
 /** The declaration an identifier ultimately binds to, with any IMPORT alias
@@ -182,17 +198,21 @@ function isNodeType(type: ts.Type, checker: ts.TypeChecker): boolean {
  * `ImportSpecifier` in the importing file, which would make a cross-file
  * declaration look local. Resolving the alias is what lets the cross-file
  * case below report the file the value actually comes from. */
-function declarationOfIdentifier(id: ts.Identifier, checker: ts.TypeChecker): ts.Declaration | undefined {
-  const symbol = checker.getSymbolAtLocation(id)
-  if (!symbol) return undefined
-  const resolved = (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol
-  return resolved.declarations?.[0] ?? symbol.declarations?.[0]
+function declarationOfIdentifier(
+  id: ts.Identifier,
+  checker: ts.TypeChecker,
+): ts.Declaration | undefined {
+  const symbol = checker.getSymbolAtLocation(id);
+  if (!symbol) return undefined;
+  const resolved =
+    (symbol.flags & ts.SymbolFlags.Alias) !== 0 ? checker.getAliasedSymbol(symbol) : symbol;
+  return resolved.declarations?.[0] ?? symbol.declarations?.[0];
 }
 
 function describeLocation(node: ts.Node): string {
-  const source = node.getSourceFile()
-  const { line, character } = source.getLineAndCharacterOfPosition(node.getStart())
-  return `${source.fileName}:${line + 1}:${character + 1}`
+  const source = node.getSourceFile();
+  const { line, character } = source.getLineAndCharacterOfPosition(node.getStart());
+  return `${source.fileName}:${line + 1}:${character + 1}`;
 }
 
 /**
@@ -216,27 +236,27 @@ function describeLocation(node: ts.Node): string {
  * exact class of quiet miss this mechanism's loudness exists to kill.
  */
 function traceNodeType(expr: ts.Expression, checker: ts.TypeChecker, keyLabel: string): ts.Type {
-  const entryFile = expr.getSourceFile().fileName
-  const seen = new Set<ts.Node>()
+  const entryFile = expr.getSourceFile().fileName;
+  const seen = new Set<ts.Node>();
 
   const trace = (current: ts.Expression): ts.Type => {
     if (seen.has(current)) {
       throw new Error(
         `applyValidation codegen: cyclic tree expression for key ${keyLabel} at ${describeLocation(current)}`,
-      )
+      );
     }
-    seen.add(current)
+    seen.add(current);
 
-    const ownType = checker.getTypeAtLocation(current)
-    if (isNodeType(ownType, checker)) return ownType
+    const ownType = checker.getTypeAtLocation(current);
+    if (isNodeType(ownType, checker)) return ownType;
 
     if (ts.isIdentifier(current)) {
-      const decl = declarationOfIdentifier(current, checker)
+      const decl = declarationOfIdentifier(current, checker);
       if (!decl) {
         throw new Error(
           `applyValidation codegen: cannot resolve tree expression ${JSON.stringify(current.text)} ` +
             `for key ${keyLabel} at ${describeLocation(current)}`,
-        )
+        );
       }
       if (decl.getSourceFile().fileName !== entryFile) {
         throw new Error(
@@ -244,22 +264,23 @@ function traceNodeType(expr: ts.Expression, checker: ts.TypeChecker, keyLabel: s
             `is declared in another file (${decl.getSourceFile().fileName}). Cross-file tracing isn't ` +
             `supported yet — declare the tree (or its projection) in the entry file, or call ` +
             `applyValidation in the file that declares it.`,
-        )
+        );
       }
-      if (ts.isVariableDeclaration(decl) && decl.initializer) return trace(decl.initializer)
+      if (ts.isVariableDeclaration(decl) && decl.initializer) return trace(decl.initializer);
       throw new Error(
         `applyValidation codegen: the tree passed for key ${keyLabel} at ${describeLocation(current)} ` +
           `resolves to a declaration this codegen can't trace (${ts.SyntaxKind[decl.kind]}).`,
-      )
+      );
     }
 
     if (ts.isCallExpression(current)) {
       for (const arg of current.arguments) {
-        if (isNodeType(checker.getTypeAtLocation(arg), checker)) return checker.getTypeAtLocation(arg)
+        if (isNodeType(checker.getTypeAtLocation(arg), checker))
+          return checker.getTypeAtLocation(arg);
         if (ts.isIdentifier(arg)) {
           // An identifier argument may itself need one hop (a local `const`
           // holding the tree) before its Node-ness is visible.
-          const decl = declarationOfIdentifier(arg, checker)
+          const decl = declarationOfIdentifier(arg, checker);
           if (
             decl &&
             decl.getSourceFile().fileName === entryFile &&
@@ -267,25 +288,25 @@ function traceNodeType(expr: ts.Expression, checker: ts.TypeChecker, keyLabel: s
             decl.initializer &&
             isNodeType(checker.getTypeAtLocation(decl.initializer), checker)
           ) {
-            return checker.getTypeAtLocation(decl.initializer)
+            return checker.getTypeAtLocation(decl.initializer);
           }
         }
       }
       throw new Error(
         `applyValidation codegen: the call wrapping the tree for key ${keyLabel} at ` +
           `${describeLocation(current)} has no Node-typed argument to unwrap.`,
-      )
+      );
     }
 
-    if (ts.isParenthesizedExpression(current)) return trace(current.expression)
+    if (ts.isParenthesizedExpression(current)) return trace(current.expression);
 
     throw new Error(
       `applyValidation codegen: cannot trace the tree expression for key ${keyLabel} at ` +
         `${describeLocation(current)} back to an api() Node tree.`,
-    )
-  }
+    );
+  };
 
-  return trace(expr)
+  return trace(expr);
 }
 
 /**
@@ -302,66 +323,68 @@ export function findApplyValidationCallSites(
   source: ts.SourceFile,
   checker: ts.TypeChecker,
 ): ApplyValidationCallSite[] {
-  const sites: ApplyValidationCallSite[] = []
-  const keyLocations = new Map<string, string>()
+  const sites: ApplyValidationCallSite[] = [];
+  const keyLocations = new Map<string, string>();
 
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && isApplyValidationCallee(node.expression, checker)) {
-      const [keyArg, treeArg, protocolArg] = node.arguments
-      const where = describeLocation(node)
+      const [keyArg, treeArg, protocolArg] = node.arguments;
+      const where = describeLocation(node);
       if (keyArg === undefined || !ts.isStringLiteralLike(keyArg)) {
-        const decl = calleeDeclaration(node.expression, checker)
+        const decl = calleeDeclaration(node.expression, checker);
         throw new Error(
           `applyValidation codegen: the key argument at ${where} is not a string literal ` +
             `(callee declared at ${decl ? describeLocation(decl) : "unknown"}). Codegen can only ` +
             `generate validators for statically-known keys.`,
-        )
+        );
       }
-      const key = keyArg.text
-      const previous = keyLocations.get(key)
+      const key = keyArg.text;
+      const previous = keyLocations.get(key);
       if (previous !== undefined) {
         throw new Error(
           `applyValidation codegen: duplicate key ${JSON.stringify(key)} — used at ${previous} and ` +
             `again at ${where}. Each call site must claim its own key.`,
-        )
+        );
       }
       if (treeArg === undefined) {
-        throw new Error(`applyValidation codegen: missing tree argument for key ${JSON.stringify(key)} at ${where}`)
+        throw new Error(
+          `applyValidation codegen: missing tree argument for key ${JSON.stringify(key)} at ${where}`,
+        );
       }
-      let protocol: ProtocolName | undefined
+      let protocol: ProtocolName | undefined;
       if (protocolArg !== undefined) {
         if (!ts.isStringLiteralLike(protocolArg) || !isProtocolName(protocolArg.text)) {
           throw new Error(
             `applyValidation codegen: the protocol argument at ${where} is not a recognized string literal ` +
               `(expected one of ${[...PROTOCOL_NAMES].map((p) => JSON.stringify(p)).join(", ")}). Codegen can ` +
               `only generate per-protocol validators for statically-known protocol names.`,
-          )
+          );
         }
-        protocol = protocolArg.text
+        protocol = protocolArg.text;
       }
-      keyLocations.set(key, where)
+      keyLocations.set(key, where);
       sites.push({
         key,
         nodeType: traceNodeType(treeArg, checker, JSON.stringify(key)),
         loc: treeArg,
         ...(protocol !== undefined ? { protocol } : {}),
-      })
+      });
     }
-    ts.forEachChild(node, visit)
-  }
+    ts.forEachChild(node, visit);
+  };
 
-  visit(source)
-  return sites
+  visit(source);
+  return sites;
 }
 
 function loadSource(entryFile: string, program: ts.Program): ts.SourceFile {
-  const source = program.getSourceFile(entryFile)
-  if (!source) throw new Error(`applyValidation codegen: source not found: ${entryFile}`)
-  return source
+  const source = program.getSourceFile(entryFile);
+  if (!source) throw new Error(`applyValidation codegen: source not found: ${entryFile}`);
+  return source;
 }
 
 const runtimeImportLine = (runtimeImport: string): string =>
-  `import { createApplyValidation } from ${JSON.stringify(runtimeImport)}\n`
+  `import { createApplyValidation } from ${JSON.stringify(runtimeImport)}\n`;
 
 /**
  * The PRE-CODEGEN STUB module: a pass-through `applyValidation` over an empty
@@ -379,7 +402,7 @@ const runtimeImportLine = (runtimeImport: string): string =>
  * codegen and by `assertValidationCoverage` (apply-validation.ts), never here.
  */
 export function applyValidationStubSource(options?: { readonly runtimeImport?: string }): string {
-  const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
+  const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
   return [
     "// AUTO-GENERATED by @rhi-zone/fractal-api-tree. Do not edit by hand.",
     "//",
@@ -392,7 +415,7 @@ export function applyValidationStubSource(options?: { readonly runtimeImport?: s
     "",
     "export const applyValidation = createApplyValidation(validatorsByKey)",
     "",
-  ].join("\n")
+  ].join("\n");
 }
 
 /**
@@ -402,8 +425,8 @@ export function applyValidationStubSource(options?: { readonly runtimeImport?: s
  * `relativeImportSpecifier`.
  */
 function relativeImportSpecifier(outFile: string, declarationFile: string): string {
-  const rel = path.relative(path.dirname(outFile), declarationFile).split(path.sep).join("/")
-  return rel.startsWith(".") ? rel : `./${rel}`
+  const rel = path.relative(path.dirname(outFile), declarationFile).split(path.sep).join("/");
+  return rel.startsWith(".") ? rel : `./${rel}`;
 }
 
 // ============================================================================
@@ -468,7 +491,7 @@ const BASE_PROFILE_BY_NAME: Readonly<Record<string, WireProfile>> = {
   json: jsonProfile,
   query: queryProfile,
   argv: argvProfile,
-}
+};
 
 /** One 3-arg call site's leaf: its input `TypeRef`, the derived wire profile
  * assignment (`wire-derive.ts`), and — http/cli only, see this section's
@@ -479,10 +502,10 @@ const BASE_PROFILE_BY_NAME: Readonly<Record<string, WireProfile>> = {
  * the same scope cut the STRING form already makes (see
  * `readMetaEncodingMapProfileNames`'s doc comment). */
 export type WireApplyValidationLeaf = {
-  readonly ref: TypeRef
-  readonly derivation: FieldProfileDerivation
-  readonly hookFields: readonly string[]
-}
+  readonly ref: TypeRef;
+  readonly derivation: FieldProfileDerivation;
+  readonly hookFields: readonly string[];
+};
 
 /** Per-key wire-profile leaves — one `protocol` per key (a call site names
  * exactly one — an omitted third argument resolves to `"identity"`, see
@@ -490,13 +513,19 @@ export type WireApplyValidationLeaf = {
  * keyed by tree-relative path. */
 export type WireApplyValidationTypeRefs = {
   readonly byKey: Readonly<
-    Record<string, { readonly protocol: ProtocolName; readonly leaves: Readonly<Record<string, WireApplyValidationLeaf>> }>
-  >
+    Record<
+      string,
+      {
+        readonly protocol: ProtocolName;
+        readonly leaves: Readonly<Record<string, WireApplyValidationLeaf>>;
+      }
+    >
+  >;
   /** Shared/recursive `defs` a `shouldShare` extraction produced (empty
    * without it) — phase D's closing of this path's own "No `shouldShare`/defs
    * support" scope cut. */
-  readonly defs: Record<string, TypeRef>
-}
+  readonly defs: Record<string, TypeRef>;
+};
 
 /**
  * Extract every `applyValidation(key, treeExpr, protocol?)` call site's
@@ -537,15 +566,18 @@ export function extractWireApplyValidationTypeRefs(
   entryFile: string,
   options?: { readonly program?: ts.Program; readonly shouldShare?: ShouldShare },
 ): WireApplyValidationTypeRefs {
-  const program = options?.program ?? createExtractorProgram(entryFile)
-  const checker = program.getTypeChecker()
-  const source = loadSource(entryFile, program)
-  const registry = options?.shouldShare ? createSharingRegistry() : undefined
+  const program = options?.program ?? createExtractorProgram(entryFile);
+  const checker = program.getTypeChecker();
+  const source = loadSource(entryFile, program);
+  const registry = options?.shouldShare ? createSharingRegistry() : undefined;
 
-  const byKey: Record<string, { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }> = {}
+  const byKey: Record<
+    string,
+    { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }
+  > = {};
   for (const site of findApplyValidationCallSites(source, checker)) {
-    const protocol = site.protocol ?? "identity"
-    const leaves: Record<string, WireApplyValidationLeaf> = {}
+    const protocol = site.protocol ?? "identity";
+    const leaves: Record<string, WireApplyValidationLeaf> = {};
     walkNodeType(
       site.nodeType,
       "",
@@ -553,63 +585,79 @@ export function extractWireApplyValidationTypeRefs(
       site.loc,
       checker,
       (_name, leafPath, fn, _descriptionSource, leafChecker, nodeType) => {
-        const ref = typeRefFromFunctionNode(fn, leafChecker, registry)
-        const pathParamNames = leafPath.filter((seg) => seg.startsWith(":")).map((seg) => seg.slice(1))
-        let derivation: FieldProfileDerivation
-        let hookFields: readonly string[] = []
+        const ref = typeRefFromFunctionNode(fn, leafChecker, registry);
+        const pathParamNames = leafPath
+          .filter((seg) => seg.startsWith(":"))
+          .map((seg) => seg.slice(1));
+        let derivation: FieldProfileDerivation;
+        let hookFields: readonly string[] = [];
         if (protocol === "http" || protocol === "cli") {
-          const sourceMap = readMetaSourceMap(nodeType, protocol, site.loc, leafChecker)
+          const sourceMap = readMetaSourceMap(nodeType, protocol, site.loc, leafChecker);
           const method =
             protocol === "http"
-              ? readMetaStringLiteral(nodeType, "http", "method", site.loc, leafChecker) ??
-                readMetaStringLiteral(nodeType, "http", "verb", site.loc, leafChecker)
-              : undefined
-          derivation = deriveFieldProfiles(protocol, sourceMap, method, pathParamNames)
-          const encodingMap = readMetaEncodingMapProfileNames(nodeType, protocol, site.loc, leafChecker)
+              ? (readMetaStringLiteral(nodeType, "http", "method", site.loc, leafChecker) ??
+                readMetaStringLiteral(nodeType, "http", "verb", site.loc, leafChecker))
+              : undefined;
+          derivation = deriveFieldProfiles(protocol, sourceMap, method, pathParamNames);
+          const encodingMap = readMetaEncodingMapProfileNames(
+            nodeType,
+            protocol,
+            site.loc,
+            leafChecker,
+          );
           if (encodingMap !== undefined && "fieldProfiles" in derivation) {
-            const fieldProfiles = { ...derivation.fieldProfiles }
+            const fieldProfiles = { ...derivation.fieldProfiles };
             for (const [field, baseName] of Object.entries(encodingMap)) {
-              const base = BASE_PROFILE_BY_NAME[baseName]
-              if (base !== undefined) fieldProfiles[field] = base
+              const base = BASE_PROFILE_BY_NAME[baseName];
+              if (base !== undefined) fieldProfiles[field] = base;
             }
-            derivation = { fieldProfiles, defaultProfile: derivation.defaultProfile }
+            derivation = { fieldProfiles, defaultProfile: derivation.defaultProfile };
           }
-          const functionFields = readMetaEncodingMapFunctionFields(nodeType, protocol, site.loc, leafChecker)
-          if (functionFields !== undefined && functionFields.size > 0) hookFields = [...functionFields].sort()
+          const functionFields = readMetaEncodingMapFunctionFields(
+            nodeType,
+            protocol,
+            site.loc,
+            leafChecker,
+          );
+          if (functionFields !== undefined && functionFields.size > 0)
+            hookFields = [...functionFields].sort();
         } else {
-          derivation = deriveFieldProfiles(protocol, undefined, undefined, [])
+          derivation = deriveFieldProfiles(protocol, undefined, undefined, []);
         }
-        leaves[leafPath.join("/")] = { ref, derivation, hookFields }
+        leaves[leafPath.join("/")] = { ref, derivation, hookFields };
       },
-    )
-    byKey[site.key] = { protocol, leaves }
+    );
+    byKey[site.key] = { protocol, leaves };
   }
 
-  if (!options?.shouldShare || !registry) return { byKey, defs: {} }
+  if (!options?.shouldShare || !registry) return { byKey, defs: {} };
 
   // Flatten -> finalizeSharedDefs -> reassemble, over this path's single
   // `ref` per leaf (this path never carried a separate output ref or
   // description — see this function's own doc comment for why).
-  const flatRoots: Record<string, TypeRef> = {}
+  const flatRoots: Record<string, TypeRef> = {};
   for (const [key, { leaves }] of Object.entries(byKey)) {
     for (const [leafPath, leaf] of Object.entries(leaves)) {
-      flatRoots[flatName(key, leafPath)] = leaf.ref
+      flatRoots[flatName(key, leafPath)] = leaf.ref;
     }
   }
-  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, options.shouldShare)
-  const shared: Record<string, { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }> = {}
+  const { roots, defs } = finalizeSharedDefs(registry, flatRoots, options.shouldShare);
+  const shared: Record<
+    string,
+    { protocol: ProtocolName; leaves: Record<string, WireApplyValidationLeaf> }
+  > = {};
   for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
-    const rebuilt: Record<string, WireApplyValidationLeaf> = {}
+    const rebuilt: Record<string, WireApplyValidationLeaf> = {};
     for (const [leafPath, leaf] of Object.entries(leaves)) {
       rebuilt[leafPath] = {
         ref: roots[flatName(key, leafPath)]!,
         derivation: leaf.derivation,
         hookFields: leaf.hookFields,
-      }
+      };
     }
-    shared[key] = { protocol, leaves: rebuilt }
+    shared[key] = { protocol, leaves: rebuilt };
   }
-  return { byKey: shared, defs }
+  return { byKey: shared, defs };
 }
 
 /** Flat compiler entries (one per leaf across all call sites), keyed by
@@ -619,14 +667,20 @@ export function extractWireApplyValidationTypeRefs(
  * protocol). */
 function flatWireEntries(
   byKey: WireApplyValidationTypeRefs["byKey"],
-): { name: string; ref: TypeRef; protocol: ProtocolName; derivation: FieldProfileDerivation; hookFields: readonly string[] }[] {
+): {
+  name: string;
+  ref: TypeRef;
+  protocol: ProtocolName;
+  derivation: FieldProfileDerivation;
+  hookFields: readonly string[];
+}[] {
   const entries: {
-    name: string
-    ref: TypeRef
-    protocol: ProtocolName
-    derivation: FieldProfileDerivation
-    hookFields: readonly string[]
-  }[] = []
+    name: string;
+    ref: TypeRef;
+    protocol: ProtocolName;
+    derivation: FieldProfileDerivation;
+    hookFields: readonly string[];
+  }[] = [];
   for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
     for (const [leafPath, leaf] of Object.entries(leaves)) {
       entries.push({
@@ -635,10 +689,10 @@ function flatWireEntries(
         protocol,
         derivation: leaf.derivation,
         hookFields: leaf.hookFields,
-      })
+      });
     }
   }
-  return entries
+  return entries;
 }
 
 /** Compile one leaf's `CompiledWireEntryFragment` — the uniform-profile case
@@ -659,7 +713,13 @@ function compileWireLeafFragment(
   hookFields: readonly string[] = [],
 ): CompiledWireEntryFragment {
   if ("profile" in derivation) {
-    return compileWireEntryFragment(ref, derivation.profile, constraintsFnName, resolveImport, registry)
+    return compileWireEntryFragment(
+      ref,
+      derivation.profile,
+      constraintsFnName,
+      resolveImport,
+      registry,
+    );
   }
   return compileWireEntryFragmentComposite(
     ref,
@@ -669,12 +729,12 @@ function compileWireLeafFragment(
     resolveImport,
     registry,
     new Set(hookFields),
-  )
+  );
 }
 
 function indentGenerated(lines: readonly string[], spaces: number): string[] {
-  const pad = " ".repeat(spaces)
-  return lines.map((line) => (line.length === 0 ? line : pad + line))
+  const pad = " ".repeat(spaces);
+  return lines.map((line) => (line.length === 0 ? line : pad + line));
 }
 
 /**
@@ -698,54 +758,62 @@ function assembleWireApplyValidationModule(
   defsBlockLines: readonly string[] = [],
   wireDefsLines: readonly string[] = [],
 ): string {
-  const imports = new Map<string, Set<string>>()
-  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
+  const imports = new Map<string, Set<string>>();
+  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]));
 
-  const constraintsLines: string[] = []
+  const constraintsLines: string[] = [];
   entries.forEach(({ name }) => {
-    const fn = constraintsFns[name]
-    if (!fn) throw new Error(`buildWireApplyValidationModuleSource: missing constraints fn for entry ${JSON.stringify(name)}`)
-    constraintsLines.push(...fn.lines)
-  })
+    const fn = constraintsFns[name];
+    if (!fn)
+      throw new Error(
+        `buildWireApplyValidationModuleSource: missing constraints fn for entry ${JSON.stringify(name)}`,
+      );
+    constraintsLines.push(...fn.lines);
+  });
 
-  const entryLines: string[] = []
+  const entryLines: string[] = [];
   for (const { name, protocol } of entries) {
-    const key = wireValidatorKey(name, protocol)
-    const frag = wireFragments[key]
-    if (!frag) throw new Error(`buildWireApplyValidationModuleSource: missing wire fragment for ${JSON.stringify(key)}`)
+    const key = wireValidatorKey(name, protocol);
+    const frag = wireFragments[key];
+    if (!frag)
+      throw new Error(
+        `buildWireApplyValidationModuleSource: missing wire fragment for ${JSON.stringify(key)}`,
+      );
     if (frag.typeImport) {
-      const names = imports.get(frag.typeImport.from) ?? new Set<string>()
-      names.add(frag.typeImport.typeName)
-      imports.set(frag.typeImport.from, names)
+      const names = imports.get(frag.typeImport.from) ?? new Set<string>();
+      names.add(frag.typeImport.typeName);
+      imports.set(frag.typeImport.from, names);
     }
-    const codeLines = frag.code.split("\n")
+    const codeLines = frag.code.split("\n");
     entryLines.push(
       `  ${JSON.stringify(key)}: ${codeLines[0]}`,
       ...indentGenerated(codeLines.slice(1, -1), 2),
       `  ${codeLines[codeLines.length - 1]},`,
-    )
+    );
   }
 
-  const lines: string[] = []
-  lines.push("// AUTO-GENERATED by @rhi-zone/fractal-api-tree (wire-profile path). Do not edit by hand.")
-  lines.push("")
+  const lines: string[] = [];
+  lines.push(
+    "// AUTO-GENERATED by @rhi-zone/fractal-api-tree (wire-profile path). Do not edit by hand.",
+  );
+  lines.push("");
   for (const [from, names] of imports) {
-    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`)
+    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`);
   }
-  if (imports.size > 0) lines.push("")
-  lines.push(INFER_TYPE_REF_SOURCE)
-  lines.push("")
-  lines.push(...defsBlockLines)
-  if (defsBlockLines.length > 0) lines.push("")
-  lines.push(...wireDefsLines)
-  if (wireDefsLines.length > 0) lines.push("")
-  lines.push(...constraintsLines)
-  if (constraintsLines.length > 0) lines.push("")
-  lines.push("export const wireValidators = {")
-  lines.push(...entryLines)
-  lines.push("}")
-  lines.push("")
-  return lines.join("\n")
+  if (imports.size > 0) lines.push("");
+  lines.push(INFER_TYPE_REF_SOURCE);
+  lines.push("");
+  lines.push(...defsBlockLines);
+  if (defsBlockLines.length > 0) lines.push("");
+  lines.push(...wireDefsLines);
+  if (wireDefsLines.length > 0) lines.push("");
+  lines.push(...constraintsLines);
+  if (constraintsLines.length > 0) lines.push("");
+  lines.push("export const wireValidators = {");
+  lines.push(...entryLines);
+  lines.push("}");
+  lines.push("");
+  return lines.join("\n");
 }
 
 /**
@@ -765,32 +833,34 @@ function assembleWireApplyValidationModule(
  * (e.g. same-file-only tree tracing, `traceNodeType`'s doc comment).
  */
 function composeWireApplyValidationTail(byKey: WireApplyValidationTypeRefs["byKey"]): string {
-  const lines: string[] = []
-  lines.push("")
-  lines.push("/** Generated wire validators, grouped by (key, tree-relative path, protocol). */")
-  lines.push("export const wireValidatorsByKey = {")
+  const lines: string[] = [];
+  lines.push("");
+  lines.push("/** Generated wire validators, grouped by (key, tree-relative path, protocol). */");
+  lines.push("export const wireValidatorsByKey = {");
   for (const [key, { protocol, leaves }] of Object.entries(byKey)) {
-    lines.push(`  ${JSON.stringify(key)}: {`)
+    lines.push(`  ${JSON.stringify(key)}: {`);
     for (const leafPath of Object.keys(leaves)) {
-      const entryRef = wireValidatorKey(flatName(key, leafPath), protocol)
-      lines.push(`    ${JSON.stringify(leafPath)}: { ${JSON.stringify(protocol)}: wireValidators[${JSON.stringify(entryRef)}] },`)
+      const entryRef = wireValidatorKey(flatName(key, leafPath), protocol);
+      lines.push(
+        `    ${JSON.stringify(leafPath)}: { ${JSON.stringify(protocol)}: wireValidators[${JSON.stringify(entryRef)}] },`,
+      );
     }
-    lines.push("  },")
+    lines.push("  },");
   }
-  lines.push("}")
-  lines.push("")
-  lines.push("/** Pass this as `createApplyValidation`'s SECOND argument. */")
-  lines.push("export const applyValidation = createApplyValidation({}, wireValidatorsByKey)")
-  lines.push("")
-  return lines.join("\n")
+  lines.push("}");
+  lines.push("");
+  lines.push("/** Pass this as `createApplyValidation`'s SECOND argument. */");
+  lines.push("export const applyValidation = createApplyValidation({}, wireValidatorsByKey)");
+  lines.push("");
+  return lines.join("\n");
 }
 
 export type WireApplyValidationBuildOptions = {
-  readonly outFile?: string
-  readonly program?: ts.Program
-  readonly runtimeImport?: string
-  readonly shouldShare?: ShouldShare
-}
+  readonly outFile?: string;
+  readonly program?: ts.Program;
+  readonly runtimeImport?: string;
+  readonly shouldShare?: ShouldShare;
+};
 
 /**
  * Build the complete wire-profile `applyValidation` module source for
@@ -810,23 +880,26 @@ export function buildWireApplyValidationModuleSource(
   const { byKey, defs } = extractWireApplyValidationTypeRefs(entryFile, {
     ...(options?.program !== undefined ? { program: options.program } : {}),
     ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
-  })
-  const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
-  const entries = flatWireEntries(byKey)
+  });
+  const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
+  const entries = flatWireEntries(byKey);
   if (entries.length === 0) {
-    const stubOpt = options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}
-    return applyValidationStubSource(stubOpt)
+    const stubOpt =
+      options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {};
+    return applyValidationStubSource(stubOpt);
   }
-  const outFile = options?.outFile
+  const outFile = options?.outFile;
   const resolveImport =
-    outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
+    outFile === undefined
+      ? undefined
+      : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile);
 
-  const defsBlock = compileDefsBlock(defs)
-  const registry = createWireDefsRegistry(defs)
-  const constraintsFns: Record<string, CompiledConstraintsFn> = {}
-  const wireFragments: Record<string, CompiledWireEntryFragment> = {}
+  const defsBlock = compileDefsBlock(defs);
+  const registry = createWireDefsRegistry(defs);
+  const constraintsFns: Record<string, CompiledConstraintsFn> = {};
+  const wireFragments: Record<string, CompiledWireEntryFragment> = {};
   for (const { name, ref, protocol, derivation, hookFields } of entries) {
-    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
+    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames);
     wireFragments[wireValidatorKey(name, protocol)] = compileWireLeafFragment(
       ref,
       derivation,
@@ -834,13 +907,19 @@ export function buildWireApplyValidationModuleSource(
       resolveImport,
       registry,
       hookFields,
-    )
+    );
   }
   return (
     runtimeImportLine(runtimeImport) +
-    assembleWireApplyValidationModule(entries, constraintsFns, wireFragments, defsBlock.lines, registry.moduleLines()) +
+    assembleWireApplyValidationModule(
+      entries,
+      constraintsFns,
+      wireFragments,
+      defsBlock.lines,
+      registry.moduleLines(),
+    ) +
     composeWireApplyValidationTail(byKey)
-  )
+  );
 }
 
 /** JSON-serializable fingerprint input for one leaf's derivation — profile
@@ -856,22 +935,24 @@ export function buildWireApplyValidationModuleSource(
  * invalidate the leaf's cached artifact (a fused fragment and a hook
  * fragment for the SAME field/profile emit different code). */
 function fingerprintableDerivation(derivation: FieldProfileDerivation): unknown {
-  if ("profile" in derivation) return { profile: derivation.profile.name }
+  if ("profile" in derivation) return { profile: derivation.profile.name };
   return {
     defaultProfile: derivation.defaultProfile.name,
-    fieldProfiles: Object.fromEntries(Object.entries(derivation.fieldProfiles).map(([field, p]) => [field, p.name])),
-  }
+    fieldProfiles: Object.fromEntries(
+      Object.entries(derivation.fieldProfiles).map(([field, p]) => [field, p.name]),
+    ),
+  };
 }
 
 export type WireApplyValidationIncrementalResult = {
-  readonly source: string
-  readonly leafFingerprints: Record<string, string>
-  readonly leafArtifacts: Record<string, CompiledWireEntryFragment>
-  readonly defNamesFingerprint: string
+  readonly source: string;
+  readonly leafFingerprints: Record<string, string>;
+  readonly leafArtifacts: Record<string, CompiledWireEntryFragment>;
+  readonly defNamesFingerprint: string;
   /** Flat `(leafName, protocol)` keys (via `wireValidatorKey`) actually
    * RECOMPILED this run — everything else was carried forward. */
-  readonly changedLeaves: readonly string[]
-}
+  readonly changedLeaves: readonly string[];
+};
 
 /** Prior Tier-2 state for one wire-path entry — `defNamesFingerprint`
  * tracking (phase D closed this path's "no defs/ref-recursion support at all"
@@ -882,10 +963,10 @@ export type WireApplyValidationIncrementalResult = {
  * lookup) depends on which def names are callable, not just the leaf's own
  * IR fingerprint. */
 export type WireApplyValidationCarryForwardState = {
-  readonly leafFingerprints: Readonly<Record<string, string>>
-  readonly leafArtifacts: Readonly<Record<string, unknown>>
-  readonly defNamesFingerprint: string
-}
+  readonly leafFingerprints: Readonly<Record<string, string>>;
+  readonly leafArtifacts: Readonly<Record<string, unknown>>;
+  readonly defNamesFingerprint: string;
+};
 
 function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragment {
   return (
@@ -893,7 +974,7 @@ function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragm
     value !== null &&
     typeof (value as { code?: unknown }).code === "string" &&
     typeof (value as { wireType?: unknown }).wireType === "string"
-  )
+  );
 }
 
 /**
@@ -908,47 +989,52 @@ function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragm
  */
 export function buildWireApplyValidationModuleSourceIncremental(
   entryFile: string,
-  options: WireApplyValidationBuildOptions & { readonly prior?: WireApplyValidationCarryForwardState },
+  options: WireApplyValidationBuildOptions & {
+    readonly prior?: WireApplyValidationCarryForwardState;
+  },
 ): WireApplyValidationIncrementalResult {
   const { byKey, defs } = extractWireApplyValidationTypeRefs(entryFile, {
     ...(options.program !== undefined ? { program: options.program } : {}),
     ...(options.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
-  })
-  const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT
-  const outFile = options.outFile
+  });
+  const runtimeImport = options.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
+  const outFile = options.outFile;
   const resolveImport =
-    outFile === undefined ? undefined : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile)
+    outFile === undefined
+      ? undefined
+      : (declarationFile: string) => relativeImportSpecifier(outFile, declarationFile);
 
-  const defsBlock = compileDefsBlock(defs)
-  const registry = createWireDefsRegistry(defs)
-  const defNamesFingerprint = computeDefNamesFingerprint(defsBlock.defNames)
-  const prior = options.prior
-  const defNamesUnchanged = prior !== undefined && prior.defNamesFingerprint === defNamesFingerprint
+  const defsBlock = compileDefsBlock(defs);
+  const registry = createWireDefsRegistry(defs);
+  const defNamesFingerprint = computeDefNamesFingerprint(defsBlock.defNames);
+  const prior = options.prior;
+  const defNamesUnchanged =
+    prior !== undefined && prior.defNamesFingerprint === defNamesFingerprint;
 
-  const entries = flatWireEntries(byKey)
-  const leafFingerprints: Record<string, string> = {}
-  const leafArtifacts: Record<string, CompiledWireEntryFragment> = {}
-  const constraintsFns: Record<string, CompiledConstraintsFn> = {}
-  const changedLeaves: string[] = []
+  const entries = flatWireEntries(byKey);
+  const leafFingerprints: Record<string, string> = {};
+  const leafArtifacts: Record<string, CompiledWireEntryFragment> = {};
+  const constraintsFns: Record<string, CompiledConstraintsFn> = {};
+  const changedLeaves: string[] = [];
 
   for (const { name, ref, protocol, derivation, hookFields } of entries) {
-    const fingerprintKey = wireValidatorKey(name, protocol)
+    const fingerprintKey = wireValidatorKey(name, protocol);
     const fingerprint = computeLeafFingerprint(entryFile, {
       input: ref,
       protocol,
       derivation: fingerprintableDerivation(derivation),
       hookFields,
-    })
-    leafFingerprints[fingerprintKey] = fingerprint
-    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
-    const priorArtifact = prior?.leafArtifacts[fingerprintKey]
+    });
+    leafFingerprints[fingerprintKey] = fingerprint;
+    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames);
+    const priorArtifact = prior?.leafArtifacts[fingerprintKey];
     const reusable =
       defNamesUnchanged &&
       prior !== undefined &&
       prior.leafFingerprints[fingerprintKey] === fingerprint &&
-      isCompiledWireFragment(priorArtifact)
+      isCompiledWireFragment(priorArtifact);
     if (reusable && isCompiledWireFragment(priorArtifact)) {
-      leafArtifacts[fingerprintKey] = priorArtifact
+      leafArtifacts[fingerprintKey] = priorArtifact;
     } else {
       leafArtifacts[fingerprintKey] = compileWireLeafFragment(
         ref,
@@ -957,8 +1043,8 @@ export function buildWireApplyValidationModuleSourceIncremental(
         resolveImport,
         registry,
         hookFields,
-      )
-      changedLeaves.push(fingerprintKey)
+      );
+      changedLeaves.push(fingerprintKey);
     }
   }
 
@@ -966,10 +1052,16 @@ export function buildWireApplyValidationModuleSourceIncremental(
     entries.length === 0
       ? applyValidationStubSource({ runtimeImport })
       : runtimeImportLine(runtimeImport) +
-        assembleWireApplyValidationModule(entries, constraintsFns, leafArtifacts, defsBlock.lines, registry.moduleLines()) +
-        composeWireApplyValidationTail(byKey)
+        assembleWireApplyValidationModule(
+          entries,
+          constraintsFns,
+          leafArtifacts,
+          defsBlock.lines,
+          registry.moduleLines(),
+        ) +
+        composeWireApplyValidationTail(byKey);
 
-  return { source, leafFingerprints, leafArtifacts, defNamesFingerprint, changedLeaves }
+  return { source, leafFingerprints, leafArtifacts, defNamesFingerprint, changedLeaves };
 }
 
 /**
@@ -982,19 +1074,19 @@ export function buildWireApplyValidationModuleCached(
   entryFile: string,
   outFile: string,
   options?: {
-    readonly program?: ts.Program
-    readonly runtimeImport?: string
-    readonly force?: boolean
-    readonly reachable?: ReadonlySet<string>
-    readonly shouldShare?: ShouldShare
+    readonly program?: ts.Program;
+    readonly runtimeImport?: string;
+    readonly force?: boolean;
+    readonly reachable?: ReadonlySet<string>;
+    readonly shouldShare?: ShouldShare;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
   if (!options?.force) {
-    const check = checkCache(entryFile, outFile, options)
-    if (check.hit) return { status: "hit" }
+    const check = checkCache(entryFile, outFile, options);
+    if (check.hit) return { status: "hit" };
   }
-  const program = options?.program ?? createExtractorProgram(entryFile)
-  const priorRaw = readCarryForwardState(entryFile, outFile, options)
+  const program = options?.program ?? createExtractorProgram(entryFile);
+  const priorRaw = readCarryForwardState(entryFile, outFile, options);
   const prior: WireApplyValidationCarryForwardState | undefined =
     priorRaw === undefined
       ? undefined
@@ -1002,20 +1094,20 @@ export function buildWireApplyValidationModuleCached(
           leafFingerprints: priorRaw.leafFingerprints,
           leafArtifacts: priorRaw.leafArtifacts,
           defNamesFingerprint: priorRaw.defNamesFingerprint,
-        }
+        };
   const built = buildWireApplyValidationModuleSourceIncremental(entryFile, {
     outFile,
     program,
     ...(options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}),
     ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
     ...(prior !== undefined ? { prior } : {}),
-  })
+  });
   writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
     defNamesFingerprint: built.defNamesFingerprint,
-  })
-  return { status: "built", result: built.source, program }
+  });
+  return { status: "built", result: built.source, program };
 }
 
 /**
@@ -1026,14 +1118,14 @@ export async function writeWireApplyValidationModuleCached(
   entryFile: string,
   outFile: string,
   options?: {
-    readonly program?: ts.Program
-    readonly runtimeImport?: string
-    readonly force?: boolean
-    readonly reachable?: ReadonlySet<string>
-    readonly shouldShare?: ShouldShare
+    readonly program?: ts.Program;
+    readonly runtimeImport?: string;
+    readonly force?: boolean;
+    readonly reachable?: ReadonlySet<string>;
+    readonly shouldShare?: ShouldShare;
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
-  const outcome = buildWireApplyValidationModuleCached(entryFile, outFile, options)
-  if (outcome.status === "built") await Bun.write(outFile, outcome.result)
-  return outcome
+  const outcome = buildWireApplyValidationModuleCached(entryFile, outFile, options);
+  if (outcome.status === "built") await Bun.write(outFile, outcome.result);
+  return outcome;
 }

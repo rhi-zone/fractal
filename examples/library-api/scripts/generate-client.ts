@@ -9,16 +9,16 @@
 // so this script must run at build/codegen time (a Bun/Node process), not
 // bundled into the runtime client itself.
 
-import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
-import { generateClientFromNode } from "@rhi-zone/fractal-http-api-projector/codegen"
-import { api } from "../src/tree.ts"
+import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree";
+import { generateClientFromNode } from "@rhi-zone/fractal-http-api-projector/codegen";
+import { api } from "../src/tree.ts";
 
-const treePath = new URL("../src/tree.ts", import.meta.url).pathname
-const outPath = new URL("../src/client.generated.ts", import.meta.url).pathname
+const treePath = new URL("../src/tree.ts", import.meta.url).pathname;
+const outPath = new URL("../src/client.generated.ts", import.meta.url).pathname;
 
-const schemas = extractToolSchemas(treePath)
-const source = generateClientFromNode(api, schemas)
+const schemas = extractToolSchemas(treePath);
+const source = generateClientFromNode(api, schemas);
 
-await Bun.write(outPath, source)
+await Bun.write(outPath, source);
 
-console.log(`Wrote ${source.length} bytes to ${outPath}`)
+console.log(`Wrote ${source.length} bytes to ${outPath}`);

@@ -47,17 +47,15 @@
 // superseded for new servers, and would just duplicate the session-map
 // plumbing above for a legacy wire format.
 
-import type { Readable, Writable } from "node:stream"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import {
-  WebStandardStreamableHTTPServerTransport,
-} from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
-import type { WebStandardStreamableHTTPServerTransportOptions } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js"
-import type { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { createMcpServer } from "./server.ts"
-import type { CreateMcpServerOptions } from "./server.ts"
+import type { Readable, Writable } from "node:stream";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type { WebStandardStreamableHTTPServerTransportOptions } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
+import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { createMcpServer } from "./server.ts";
+import type { CreateMcpServerOptions } from "./server.ts";
 
 export type CreateStdioMcpServerOptions = CreateMcpServerOptions & {
   /**
@@ -66,8 +64,8 @@ export type CreateStdioMcpServerOptions = CreateMcpServerOptions & {
    * process streams. Forwarded as-is to `StdioServerTransport`'s
    * constructor, which defaults to the real process streams when omitted.
    */
-  readonly stdio?: { readonly stdin?: Readable; readonly stdout?: Writable }
-}
+  readonly stdio?: { readonly stdin?: Readable; readonly stdout?: Writable };
+};
 
 /**
  * Build an MCP `Server` from `tree` (via `createMcpServer`), connect it to a
@@ -85,10 +83,10 @@ export async function createStdioMcpServer(
   tree: Node,
   opts: CreateStdioMcpServerOptions,
 ): Promise<Server> {
-  const server = createMcpServer(tree, opts)
-  const transport = new StdioServerTransport(opts.stdio?.stdin, opts.stdio?.stdout)
-  await server.connect(transport)
-  return server
+  const server = createMcpServer(tree, opts);
+  const transport = new StdioServerTransport(opts.stdio?.stdin, opts.stdio?.stdout);
+  await server.connect(transport);
+  return server;
 }
 
 export type CreateHttpMcpServerOptions = CreateMcpServerOptions & {
@@ -100,14 +98,14 @@ export type CreateHttpMcpServerOptions = CreateMcpServerOptions & {
   readonly transport?: Omit<
     WebStandardStreamableHTTPServerTransportOptions,
     "sessionIdGenerator" | "onsessioninitialized" | "onsessionclosed"
-  >
-}
+  >;
+};
 
 const jsonRpcError = (status: number, code: number, message: string): Response =>
   new Response(JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }), {
     status,
     headers: { "Content-Type": "application/json" },
-  })
+  });
 
 /**
  * Build a fetch-compatible `(req: Request) => Promise<Response>` handler
@@ -130,17 +128,17 @@ export function createHttpMcpServer(
   const sessions = new Map<
     string,
     { readonly server: Server; readonly transport: WebStandardStreamableHTTPServerTransport }
-  >()
+  >();
 
   return async (req: Request): Promise<Response> => {
-    const sessionId = req.headers.get("mcp-session-id") ?? undefined
+    const sessionId = req.headers.get("mcp-session-id") ?? undefined;
 
     if (sessionId !== undefined) {
-      const entry = sessions.get(sessionId)
+      const entry = sessions.get(sessionId);
       if (entry === undefined) {
-        return jsonRpcError(404, -32001, `Unknown session: ${sessionId}`)
+        return jsonRpcError(404, -32001, `Unknown session: ${sessionId}`);
       }
-      return entry.transport.handleRequest(req)
+      return entry.transport.handleRequest(req);
     }
 
     // No session id: the only valid request without one is `initialize` —
@@ -150,25 +148,25 @@ export function createHttpMcpServer(
     const parsedBody: unknown = await req
       .clone()
       .json()
-      .catch(() => undefined)
+      .catch(() => undefined);
 
     if (!isInitializeRequest(parsedBody)) {
-      return jsonRpcError(400, -32000, "Bad Request: No valid session ID provided")
+      return jsonRpcError(400, -32000, "Bad Request: No valid session ID provided");
     }
 
-    const server = createMcpServer(tree, opts)
+    const server = createMcpServer(tree, opts);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => crypto.randomUUID(),
       onsessioninitialized: (id) => {
-        sessions.set(id, { server, transport })
+        sessions.set(id, { server, transport });
       },
       onsessionclosed: (id) => {
-        sessions.delete(id)
+        sessions.delete(id);
       },
       ...opts.transport,
-    })
+    });
 
-    await server.connect(transport)
-    return transport.handleRequest(req, { parsedBody })
-  }
+    await server.connect(transport);
+    return transport.handleRequest(req, { parsedBody });
+  };
 }

@@ -24,11 +24,11 @@ What it actually consumes / infers (cited, `graphql.rs`):
 
 - **Query vs Mutation** — inferred by method-name prefix (lines 658–669). Queries
   match `get_ / fetch_ / read_ / list_ / find_ / search_ / count_ / exists_ / is_ /
-  has_`; everything else is a Mutation. **No subscription support at all.**
+has_`; everything else is a Mutation. **No subscription support at all.**
 - **GraphQL return type** — inferred from the Rust return type (lines 816–883):
   `Option<T>` → nullable, `Result<T,E>` → non-null, `Vec<T>` → list, `()` →
   `Boolean`; scalar map for `String / Int / Float / Boolean / DateTime / UUID /
-  Url / JSON`; unknown → `JSON` fallback.
+Url / JSON`; unknown → `JSON` fallback.
 - **Arguments** — Rust method params become GraphQL field args. Context params
   (`server_less::Context`) are partitioned out and injected at the call site, NOT
   exposed as args. Child services (methods returning `&ChildService`) are treated
@@ -56,8 +56,8 @@ Adjacent: `http.rs` (`#[serve(graphql)]` integration), `openapi.rs` (consumes
 
 **Takeaway:** server-less GraphQL classification and typing derive from
 method-name prefix + Rust type signature, never from declarative metadata. So the
-"where could this come from" answer for server-less is always: *inferred from the
-Rust type/signature*, sometimes overridden by the `#[server(...)]` attribute.
+"where could this come from" answer for server-less is always: _inferred from the
+Rust type/signature_, sometimes overridden by the `#[server(...)]` attribute.
 
 ## Grounding source 2 — the GraphQL spec (real model)
 
@@ -115,7 +115,7 @@ does NOT implement subscriptions, so this is spec-grounded only.)
 Which object type a field hangs off, its position in the graph, and how nested
 selection traverses it, is GraphQL's own composition model. server-less derives
 it from Rust structure (impl type → root, child services → mount points), but the
-*concept of a navigable type graph with field-level resolvers* has no clean
+_concept of a navigable type graph with field-level resolvers_ has no clean
 recurrence in HTTP/CLI/MCP/gRPC (each of which is flat request→response). →
 `graphql:`-namespaced. Naming (camelCase field names, `{Struct}Query` root names)
 is likewise GraphQL-specific presentation.
@@ -123,11 +123,11 @@ is likewise GraphQL-specific presentation.
 ### 3. Nullability (`T` vs `T!`, list nesting) — **[GRAPHQL-SPECIFIC]**
 
 The nullable/non-null distinction with error-propagation semantics is a GraphQL
-type-system feature. The *underlying* optionality (`Option<T>` in Rust,
+type-system feature. The _underlying_ optionality (`Option<T>` in Rust,
 "required field" elsewhere) is agnostic and other schema projections
 (JSON-Schema `required`, OpenAPI `nullable`, protobuf optionality) also encode it
 — so raw optionality of a param/return MAY be an agnostic property. But
-GraphQL's *specific* nullability semantics (error bubbling, `!` on the graph
+GraphQL's _specific_ nullability semantics (error bubbling, `!` on the graph
 type) are GraphQL's projection of that. Classify the semantics as
 GRAPHQL-SPECIFIC; note the raw optionality underneath is a candidate agnostic
 signal shared with other schema projections.
@@ -140,7 +140,7 @@ listed protocols. No recurrence → `graphql:`-namespaced.
 ### 5. Return type as a named graph type — **[GRAPHQL-SPECIFIC]**
 
 Mapping a return value to a named schema type for nested traversal is GraphQL's
-model. The *raw return type* is an agnostic op property (every projection needs
+model. The _raw return type_ is an agnostic op property (every projection needs
 to know what an op returns), but its rendering as a graph-navigable type is
 GraphQL's. server-less infers this from the Rust return type (lines 816–883).
 
@@ -156,17 +156,17 @@ Context partitioned out uniformly.
 
 ## Summary table
 
-| Concept | Classification | Cross-protocol recurrence |
-|---|---|---|
-| query vs mutation | **LIKELY-AGNOSTIC** | = read/write **safety** axis: HTTP GET-vs-POST, MCP readOnlyHint, CLI read-vs-mutate |
-| subscription | **LIKELY-AGNOSTIC** | = **streaming**: gRPC server-streaming, SSE/ws, AsyncAPI channels |
-| arguments / inputs | **LIKELY-AGNOSTIC** (surface) | inputs recur everywhere; GraphQL arg framing is its own |
-| raw return type | LIKELY-AGNOSTIC (the value) | every projection needs op return |
-| raw optionality | candidate agnostic | shared with JSON-Schema/OpenAPI/protobuf `required` |
-| nullability semantics (`T!`, error bubbling) | **GRAPHQL-SPECIFIC** | — |
-| field/resolver graph placement | **GRAPHQL-SPECIFIC** | — |
-| field selection (subfield picking) | **GRAPHQL-SPECIFIC** | — |
-| return-as-named-graph-type | **GRAPHQL-SPECIFIC** | — |
+| Concept                                      | Classification                | Cross-protocol recurrence                                                            |
+| -------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------ |
+| query vs mutation                            | **LIKELY-AGNOSTIC**           | = read/write **safety** axis: HTTP GET-vs-POST, MCP readOnlyHint, CLI read-vs-mutate |
+| subscription                                 | **LIKELY-AGNOSTIC**           | = **streaming**: gRPC server-streaming, SSE/ws, AsyncAPI channels                    |
+| arguments / inputs                           | **LIKELY-AGNOSTIC** (surface) | inputs recur everywhere; GraphQL arg framing is its own                              |
+| raw return type                              | LIKELY-AGNOSTIC (the value)   | every projection needs op return                                                     |
+| raw optionality                              | candidate agnostic            | shared with JSON-Schema/OpenAPI/protobuf `required`                                  |
+| nullability semantics (`T!`, error bubbling) | **GRAPHQL-SPECIFIC**          | —                                                                                    |
+| field/resolver graph placement               | **GRAPHQL-SPECIFIC**          | —                                                                                    |
+| field selection (subfield picking)           | **GRAPHQL-SPECIFIC**          | —                                                                                    |
+| return-as-named-graph-type                   | **GRAPHQL-SPECIFIC**          | —                                                                                    |
 
 ## Sources
 

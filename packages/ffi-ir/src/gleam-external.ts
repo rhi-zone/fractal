@@ -1,6 +1,6 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toGleamType } from "@rhi-zone/fractal-type-ir/gleam"
-import type { FfiParam, FfiRef, FfiShape } from "./index.ts"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toGleamType } from "@rhi-zone/fractal-type-ir/gleam";
+import type { FfiParam, FfiRef, FfiShape } from "./index.ts";
 
 // `toSnakeCaseStripSeparators` duplicated here (not imported) — type-ir's
 // `codegen-helpers.ts` is an internal-only shared module across type-ir's own
@@ -13,7 +13,7 @@ function toSnakeCaseStripSeparators(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 // Gleam `@external` codegen for ffi-ir's boundary layer — module/function/
@@ -79,23 +79,23 @@ function toSnakeCaseStripSeparators(name: string): string {
 // subtyping, no inheritance) extended to the ownership-metadata question.
 
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`/// ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`/// ${meta.description}`] : [];
 }
 
 function jsModuleOf(meta: Readonly<Record<string, unknown>>, where: string): string {
-  const jsModule = meta.jsModule
+  const jsModule = meta.jsModule;
   if (typeof jsModule !== "string") {
     throw new Error(
       `toGleamFfi: "${where}" is missing required meta.jsModule (the JS module path/package @external's 2nd ` +
         'argument names — e.g. "./math.mjs" or an npm package name) — there is no derivable default, so this must ' +
         "be supplied explicitly on the FfiRef's meta bag",
-    )
+    );
   }
-  return jsModule
+  return jsModule;
 }
 
 function jsNameOf(meta: Readonly<Record<string, unknown>>, gleamName: string): string {
-  return typeof meta.jsName === "string" ? meta.jsName : gleamName
+  return typeof meta.jsName === "string" ? meta.jsName : gleamName;
 }
 
 /** One `@external(javascript, ...) \n pub fn name(...)` declaration for a
@@ -110,21 +110,27 @@ function buildFunctionDecl(
   where: string,
   extraParam?: { readonly name: string; readonly type: TypeRef },
 ): string {
-  const jsModule = jsModuleOf(meta, where)
-  const jsName = jsNameOf(meta, gleamName)
-  const allParams = extraParam === undefined ? params : [extraParam, ...params]
-  const paramList = allParams.map((p) => `${toSnakeCaseStripSeparators(p.name)}: ${toGleamType(p.type)}`).join(", ")
+  const jsModule = jsModuleOf(meta, where);
+  const jsName = jsNameOf(meta, gleamName);
+  const allParams = extraParam === undefined ? params : [extraParam, ...params];
+  const paramList = allParams
+    .map((p) => `${toSnakeCaseStripSeparators(p.name)}: ${toGleamType(p.type)}`)
+    .join(", ");
   const lines = [
     ...docComment(meta),
     `@external(javascript, ${JSON.stringify(jsModule)}, ${JSON.stringify(jsName)})`,
     `pub fn ${gleamName}(${paramList}) -> ${toGleamType(returnType)}`,
-  ]
-  return lines.join("\n")
+  ];
+  return lines.join("\n");
 }
 
-function buildFunction(name: string, shape: FfiShape & { kind: "function" }, meta: Readonly<Record<string, unknown>>): string {
-  const gleamName = toSnakeCaseStripSeparators(name)
-  return buildFunctionDecl(gleamName, shape.params, shape.returnType, meta, `function "${name}"`)
+function buildFunction(
+  name: string,
+  shape: FfiShape & { kind: "function" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const gleamName = toSnakeCaseStripSeparators(name);
+  return buildFunctionDecl(gleamName, shape.params, shape.returnType, meta, `function "${name}"`);
 }
 
 /**
@@ -145,14 +151,18 @@ function buildFunction(name: string, shape: FfiShape & { kind: "function" }, met
  * `buildResource`), referenced here by `types.ref`-style PascalCase name via
  * a synthetic ref TypeRef so it flows through `toGleamType` unchanged.
  */
-function buildMethod(name: string, shape: FfiShape & { kind: "method" }, meta: Readonly<Record<string, unknown>>): string {
-  const gleamName = toSnakeCaseStripSeparators(name)
-  const receiverParamName = toSnakeCaseStripSeparators(shape.receiver)
-  const receiverType: TypeRef = { shape: { kind: "ref", target: shape.receiver }, meta: {} }
+function buildMethod(
+  name: string,
+  shape: FfiShape & { kind: "method" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const gleamName = toSnakeCaseStripSeparators(name);
+  const receiverParamName = toSnakeCaseStripSeparators(shape.receiver);
+  const receiverType: TypeRef = { shape: { kind: "ref", target: shape.receiver }, meta: {} };
   return buildFunctionDecl(gleamName, shape.params, shape.returnType, meta, `method "${name}"`, {
     name: receiverParamName,
     type: receiverType,
-  })
+  });
 }
 
 /**
@@ -168,17 +178,25 @@ function buildMethod(name: string, shape: FfiShape & { kind: "method" }, meta: R
  * Gleam's external types carry no attached-function/impl-block syntax of
  * their own for this projector to hook into.
  */
-function buildResource(name: string, shape: FfiShape & { kind: "resource" }, meta: Readonly<Record<string, unknown>>): string {
-  const typeDecl = [...docComment(meta), `pub type ${name}`].join("\n")
+function buildResource(
+  name: string,
+  shape: FfiShape & { kind: "resource" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const typeDecl = [...docComment(meta), `pub type ${name}`].join("\n");
   const methods = Object.entries(shape.methods).map(([methodName, methodRef]) => {
-    const methodShape = methodRef.shape
+    const methodShape = methodRef.shape;
     if (methodShape.kind !== "method" && methodShape.kind !== "function") {
-      throw new Error(`toGleamFfi: resource method "${methodName}" has unexpected kind "${methodShape.kind}" (expected "method")`)
+      throw new Error(
+        `toGleamFfi: resource method "${methodName}" has unexpected kind "${methodShape.kind}" (expected "method")`,
+      );
     }
-    const asMethod = { ...methodShape, kind: "method", receiver: name } as FfiShape & { kind: "method" }
-    return buildMethod(methodName, asMethod, methodRef.meta)
-  })
-  return [typeDecl, ...methods].join("\n\n")
+    const asMethod = { ...methodShape, kind: "method", receiver: name } as FfiShape & {
+      kind: "method";
+    };
+    return buildMethod(methodName, asMethod, methodRef.meta);
+  });
+  return [typeDecl, ...methods].join("\n\n");
 }
 
 /**
@@ -196,10 +214,14 @@ function buildResource(name: string, shape: FfiShape & { kind: "resource" }, met
  * rather than synthesized as Gleam syntax that doesn't exist.
  */
 function buildModule(name: string, shape: FfiShape & { kind: "module" }): string {
-  const header = `// module: ${name} (place these declarations in ${toSnakeCaseStripSeparators(name)}.gleam)`
-  const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) => toGleamFfi(resRef, resName))
-  const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) => toGleamFfi(fnRef, fnName))
-  return [header, ...resourceDecls, ...functionDecls].join("\n\n")
+  const header = `// module: ${name} (place these declarations in ${toSnakeCaseStripSeparators(name)}.gleam)`;
+  const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) =>
+    toGleamFfi(resRef, resName),
+  );
+  const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) =>
+    toGleamFfi(fnRef, fnName),
+  );
+  return [header, ...resourceDecls, ...functionDecls].join("\n\n");
 }
 
 /**
@@ -210,25 +232,27 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }): string
  * requirement.
  */
 export function toGleamFfi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (name === undefined) {
     throw new Error(
       `toGleamFfi: "${kind}" requires a name — a Gleam \`@external\` binding is always a named top-level declaration, not an anonymous inline type`,
-    )
+    );
   }
 
   if (kind === "function") {
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta)
+    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta);
   }
   if (kind === "method") {
-    return buildMethod(name, ref.shape as FfiShape & { kind: "method" }, ref.meta)
+    return buildMethod(name, ref.shape as FfiShape & { kind: "method" }, ref.meta);
   }
   if (kind === "resource") {
-    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta)
+    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta);
   }
   if (kind === "module") {
-    return buildModule(name, ref.shape as FfiShape & { kind: "module" })
+    return buildModule(name, ref.shape as FfiShape & { kind: "module" });
   }
-  throw new Error(`toGleamFfi: unhandled ffi-ir kind "${kind}" — no Gleam @external mapping implemented for this backend`)
+  throw new Error(
+    `toGleamFfi: unhandled ffi-ir kind "${kind}" — no Gleam @external mapping implemented for this backend`,
+  );
 }

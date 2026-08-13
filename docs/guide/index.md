@@ -22,41 +22,41 @@ This constraint is load-bearing: composability alone does not yield a small ment
 
 ## Packages
 
-| Package | Role |
-|---------|------|
-| `@rhi-zone/fractal-api-tree` | `api`, `op`, `mergeMeta`, `Node`, `Meta`, `Handler` — the protocol-agnostic tree model |
+| Package                                | Role                                                                                                                                                                                                                                            |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@rhi-zone/fractal-api-tree`           | `api`, `op`, `mergeMeta`, `Node`, `Meta`, `Handler` — the protocol-agnostic tree model                                                                                                                                                          |
 | `@rhi-zone/fractal-http-api-projector` | HTTP kit: `http.get`/`post`/`put`/`patch`/`delete`, `httpProjection`, `createFetch`, `makeRouterFromRoute`, `crud`, `toOpenApi` (OpenAPI 3.1 projection, auto-served at `/openapi.json` by `createFetch`), `createClient` (runtime HTTP client) |
-| `@rhi-zone/fractal-mcp-api-projector` | MCP tool projection: `toTools` |
-| `@rhi-zone/fractal-cli-api-projector` | CLI projection over the same tree |
+| `@rhi-zone/fractal-mcp-api-projector`  | MCP tool projection: `toTools`                                                                                                                                                                                                                  |
+| `@rhi-zone/fractal-cli-api-projector`  | CLI projection over the same tree                                                                                                                                                                                                               |
 
 ## Quick Start
 
 ```ts
-import { api, op } from '@rhi-zone/fractal-api-tree/node'
-import { http } from '@rhi-zone/fractal-http-api-projector/verbs'
-import { createFetch } from '@rhi-zone/fractal-http-api-projector'
+import { api, op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector";
 
-const todos: Record<string, { id: string; title: string }> = {}
+const todos: Record<string, { id: string; title: string }> = {};
 
 const app = api({
   todos: api({
     list: op(() => Object.values(todos), http.get),
     add: op((input: { title: string }) => {
-      const id = `todo-${Object.keys(todos).length + 1}`
-      const todo = { id, ...input }
-      todos[id] = todo
-      return todo
+      const id = `todo-${Object.keys(todos).length + 1}`;
+      const todo = { id, ...input };
+      todos[id] = todo;
+      return todo;
     }, http.post),
   }),
-})
+});
 
 // Serve HTTP requests — GET /todos/list, POST /todos/add
-const fetch = createFetch(app)
-const response = await fetch(new Request('http://localhost/todos/list'))
+const fetch = createFetch(app);
+const response = await fetch(new Request("http://localhost/todos/list"));
 
 // Project to OpenAPI — same tree, no re-description
-import { toOpenApi } from '@rhi-zone/fractal-http-api-projector'
-const doc = await toOpenApi(app, { title: 'Todos API', version: '1.0.0' })
+import { toOpenApi } from "@rhi-zone/fractal-http-api-projector";
+const doc = await toOpenApi(app, { title: "Todos API", version: "1.0.0" });
 // ...or just GET /openapi.json — createFetch auto-serves it by default
 ```
 
@@ -79,8 +79,8 @@ A verb bundle like `http.get` is just a `Meta` value — `{ http: { directives: 
 Every `Node` carries a `meta: Meta` descriptor built during tree construction. After construction:
 
 ```ts
-import { toOpenApi } from '@rhi-zone/fractal-http-api-projector'
-const doc = await toOpenApi(app, { title: 'My API', version: '1.0.0' })
+import { toOpenApi } from "@rhi-zone/fractal-http-api-projector";
+const doc = await toOpenApi(app, { title: "My API", version: "1.0.0" });
 // doc.paths has every route, parameter, and requestBody schema
 // derived from the same node tree that runs requests
 ```

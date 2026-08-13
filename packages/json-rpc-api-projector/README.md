@@ -33,20 +33,23 @@ array over HTTP, which has no push channel.
 ## Usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
-import { createJsonRpcHttpHandler, createJsonRpcHttpClient } from "@rhi-zone/fractal-json-rpc-api-projector"
+import { api, op } from "@rhi-zone/fractal-api-tree";
+import {
+  createJsonRpcHttpHandler,
+  createJsonRpcHttpClient,
+} from "@rhi-zone/fractal-json-rpc-api-projector";
 
 const tree = api({
   books: api({
     list: op(() => []),
   }),
-})
+});
 
-const handler = createJsonRpcHttpHandler(tree)
+const handler = createJsonRpcHttpHandler(tree);
 // POST { jsonrpc: "2.0", method: "books.list", params: {}, id: 1 }
 
-const client = createJsonRpcHttpClient(tree, "http://localhost/rpc")
-const books = await client.books.list()
+const client = createJsonRpcHttpClient(tree, "http://localhost/rpc");
+const books = await client.books.list();
 ```
 
 ## Install

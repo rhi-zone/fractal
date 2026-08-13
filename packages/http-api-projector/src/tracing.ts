@@ -25,14 +25,14 @@
 //   packages/api-tree/src/otel.ts                          — shared types,
 //     `runServerSpan`, `wrapTracing`.
 
-import { parseTraceParent, runServerSpan } from "@rhi-zone/fractal-api-tree/otel"
-import type { TracingIntegration } from "@rhi-zone/fractal-api-tree/otel"
-import type { Fetch } from "./layers.ts"
+import { parseTraceParent, runServerSpan } from "@rhi-zone/fractal-api-tree/otel";
+import type { TracingIntegration } from "@rhi-zone/fractal-api-tree/otel";
+import type { Fetch } from "./layers.ts";
 
 export type HttpTracingOptions = {
   /** Value for the span's `projector.type` attribute. Default `"http"`. */
-  readonly projectorType?: string
-}
+  readonly projectorType?: string;
+};
 
 /**
  * Request-level tracing layer: wraps `inner` in a SERVER span named
@@ -50,12 +50,15 @@ export type HttpTracingOptions = {
  * }
  * createFetch(tree, { middleware: [tracingLayer(integration)] })
  */
-export function tracingLayer(integration: TracingIntegration, options: HttpTracingOptions = {}): (inner: Fetch) => Fetch {
-  const projectorType = options.projectorType ?? "http"
+export function tracingLayer(
+  integration: TracingIntegration,
+  options: HttpTracingOptions = {},
+): (inner: Fetch) => Fetch {
+  const projectorType = options.projectorType ?? "http";
   return (inner) => async (req) => {
-    const url = new URL(req.url)
-    const spanName = `${req.method} ${url.pathname}`
-    const incoming = parseTraceParent(req.headers.get("traceparent"))
+    const url = new URL(req.url);
+    const spanName = `${req.method} ${url.pathname}`;
+    const incoming = parseTraceParent(req.headers.get("traceparent"));
     return runServerSpan(
       integration,
       spanName,
@@ -67,10 +70,10 @@ export function tracingLayer(integration: TracingIntegration, options: HttpTraci
       },
       incoming,
       async (span) => {
-        const res = await inner(req)
-        span.setAttribute("http.status_code", res.status)
-        return res
+        const res = await inner(req);
+        span.setAttribute("http.status_code", res.status);
+        return res;
       },
-    )
-  }
+    );
+  };
 }

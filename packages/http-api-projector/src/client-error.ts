@@ -4,13 +4,13 @@
 
 /** Thrown by the fractal runtime client when the server responds with non-2xx. */
 export class ClientError extends Error {
-  readonly status: number
-  readonly body: unknown
+  readonly status: number;
+  readonly body: unknown;
 
   constructor(status: number, body: unknown) {
-    super(`HTTP ${status}`)
-    this.name = "ClientError"
-    this.status = status
-    this.body = body
+    super(`HTTP ${status}`);
+    this.name = "ClientError";
+    this.status = status;
+    this.body = body;
   }
 }

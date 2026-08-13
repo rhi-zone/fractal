@@ -68,17 +68,17 @@
 //   packages/mcp-api-projector/src/client.ts        — sibling runtime client (structural mirror)
 //   packages/http-api-projector/src/client.ts       — sibling runtime client (structural mirror)
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { TypeRef, TypeShape } from "@rhi-zone/fractal-type-ir"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import type { TypeRef, TypeShape } from "@rhi-zone/fractal-type-ir";
 import {
   argsFromInput,
   camelJoin,
   deriveOperationType,
   getGraphQLMeta,
   underscoreJoin,
-} from "./project.ts"
-import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts"
+} from "./project.ts";
+import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts";
 
 // ============================================================================
 // Public API types
@@ -86,15 +86,15 @@ import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./projec
 
 /** One GraphQL error entry, as `errors[]` conventionally carries it. */
 export type GraphQLClientErrorEntry = {
-  readonly message: string
-  readonly extensions?: unknown
-}
+  readonly message: string;
+  readonly extensions?: unknown;
+};
 
 /** The shape a transport's response must carry — the standard GraphQL execution-result contract. */
 export type GraphQLTransportResult = {
-  readonly data?: unknown
-  readonly errors?: readonly GraphQLClientErrorEntry[]
-}
+  readonly data?: unknown;
+  readonly errors?: readonly GraphQLClientErrorEntry[];
+};
 
 /**
  * Sends one query/mutation/subscription document + variables to a GraphQL
@@ -105,23 +105,23 @@ export type GraphQLTransportResult = {
 export type GraphQLTransport = (
   query: string,
   variables?: Record<string, unknown>,
-) => Promise<GraphQLTransportResult>
+) => Promise<GraphQLTransportResult>;
 
 export type GraphQLClientOptions = {
   /** Underscore-joined tree-path → derived input/output TypeRefs — the same `FieldTypeMap` `projectGraphQL`/`createGraphQLServer` accept. Drives argument types and the return-type selection set. */
-  readonly types?: FieldTypeMap
+  readonly types?: FieldTypeMap;
   /** Named type declarations a `ref`-kind output TypeRef may target — needed to expand a `ref` field into a real selection set instead of degrading to `__typename`. */
-  readonly namedTypes?: Readonly<Record<string, TypeRef>>
-}
+  readonly namedTypes?: Readonly<Record<string, TypeRef>>;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyGraphQLClient = Record<string, any>
+export type AnyGraphQLClient = Record<string, any>;
 
 /** Thrown when the transport's result carries a non-empty `errors` array. */
 export class GraphQLClientError extends Error {
   constructor(readonly errors: readonly GraphQLClientErrorEntry[]) {
-    super(errors[0]?.message ?? "GraphQL request failed")
-    this.name = "GraphQLClientError"
+    super(errors[0]?.message ?? "GraphQL request failed");
+    this.name = "GraphQLClientError";
   }
 }
 
@@ -130,15 +130,23 @@ export class GraphQLClientError extends Error {
 // ============================================================================
 
 /** Max recursion depth into nested composite fields — a safety net against self-referential object shapes with no `ref` indirection to key a visited-set off. */
-const MAX_SELECTION_DEPTH = 6
+const MAX_SELECTION_DEPTH = 6;
 
 function isCompositeKind(kind: string): boolean {
-  return kind === "object" || kind === "ref" || kind === "union" || kind === "intersection" || kind === "interface"
+  return (
+    kind === "object" ||
+    kind === "ref" ||
+    kind === "union" ||
+    kind === "intersection" ||
+    kind === "interface"
+  );
 }
 
 /** Unwrap `array` shapes to their element type — array-ness doesn't affect selection-set shape, only the field/arg SDL text (handled by `toGraphQL`, not this module). */
 function elementType(ref: TypeRef): TypeRef {
-  return ref.shape.kind === "array" ? elementType((ref.shape as TypeShape & { kind: "array" }).element) : ref
+  return ref.shape.kind === "array"
+    ? elementType((ref.shape as TypeShape & { kind: "array" }).element)
+    : ref;
 }
 
 /**
@@ -155,37 +163,37 @@ function buildSelectionSet(
   depth: number,
   visited: ReadonlySet<string>,
 ): string {
-  const target = elementType(ref)
-  const shape = target.shape
+  const target = elementType(ref);
+  const shape = target.shape;
 
   if (shape.kind === "ref") {
-    const refTarget = (shape as TypeShape & { kind: "ref" }).target
-    const named = namedTypes[refTarget]
+    const refTarget = (shape as TypeShape & { kind: "ref" }).target;
+    const named = namedTypes[refTarget];
     if (named === undefined || visited.has(refTarget) || depth >= MAX_SELECTION_DEPTH) {
-      return " { __typename }"
+      return " { __typename }";
     }
-    return buildSelectionSet(named, namedTypes, depth + 1, new Set([...visited, refTarget]))
+    return buildSelectionSet(named, namedTypes, depth + 1, new Set([...visited, refTarget]));
   }
 
   if (shape.kind !== "object") {
     // union/intersection/interface: no field-set to walk without a real
     // schema registry resolving variants — degrade honestly.
-    return " { __typename }"
+    return " { __typename }";
   }
 
-  const fields = Object.entries((shape as TypeShape & { kind: "object" }).fields)
-  if (fields.length === 0) return " { __typename }"
+  const fields = Object.entries((shape as TypeShape & { kind: "object" }).fields);
+  if (fields.length === 0) return " { __typename }";
 
   const lines = fields
     .filter(([, fieldRef]) => fieldRef.shape.kind !== "null" && fieldRef.shape.kind !== "void")
     .map(([name, fieldRef]) => {
-      const fieldElem = elementType(fieldRef)
-      if (!isCompositeKind(fieldElem.shape.kind)) return name
-      if (depth + 1 >= MAX_SELECTION_DEPTH) return `${name} { __typename }`
-      return `${name}${buildSelectionSet(fieldRef, namedTypes, depth + 1, visited)}`
-    })
+      const fieldElem = elementType(fieldRef);
+      if (!isCompositeKind(fieldElem.shape.kind)) return name;
+      if (depth + 1 >= MAX_SELECTION_DEPTH) return `${name} { __typename }`;
+      return `${name}${buildSelectionSet(fieldRef, namedTypes, depth + 1, visited)}`;
+    });
 
-  return ` { ${lines.join(" ")} }`
+  return ` { ${lines.join(" ")} }`;
 }
 
 /**
@@ -196,11 +204,14 @@ function buildSelectionSet(
  * client constructs) doesn't have to reimplement the recursive ref/object
  * walk.
  */
-export function selectionSetFor(output: TypeRef | undefined, namedTypes: Readonly<Record<string, TypeRef>>): string {
-  if (output === undefined) return ""
-  const elem = elementType(output)
-  if (!isCompositeKind(elem.shape.kind)) return ""
-  return buildSelectionSet(output, namedTypes, 0, new Set())
+export function selectionSetFor(
+  output: TypeRef | undefined,
+  namedTypes: Readonly<Record<string, TypeRef>>,
+): string {
+  if (output === undefined) return "";
+  const elem = elementType(output);
+  if (!isCompositeKind(elem.shape.kind)) return "";
+  return buildSelectionSet(output, namedTypes, 0, new Set());
 }
 
 // ============================================================================
@@ -209,10 +220,10 @@ export function selectionSetFor(output: TypeRef | undefined, namedTypes: Readonl
 
 /** Nest `inner` (the leaf field's own call + selection) inside one object-field wrapper per `path` segment — Query's namespace nesting; unused (empty `path`) for the flat Mutation/Subscription shape. */
 function nestBody(path: readonly string[], inner: string, indent: string): string {
-  if (path.length === 0) return `${indent}${inner}`
-  const [seg, ...rest] = path
-  const childIndent = `${indent}  `
-  return `${indent}${seg} {\n${nestBody(rest, inner, childIndent)}\n${indent}}`
+  if (path.length === 0) return `${indent}${inner}`;
+  const [seg, ...rest] = path;
+  const childIndent = `${indent}  `;
+  return `${indent}${seg} {\n${nestBody(rest, inner, childIndent)}\n${indent}}`;
 }
 
 /**
@@ -228,14 +239,14 @@ export function buildDocument(
   args: readonly Arg[],
   selection: string,
 ): string {
-  const varDecls = args.map((a) => `$${a.name}: ${a.typeSDL}`).join(", ")
-  const fieldArgs = args.map((a) => `${a.name}: $${a.name}`).join(", ")
-  const opSig = varDecls.length > 0 ? `(${varDecls})` : ""
-  const fieldCall = `${fieldName}${fieldArgs.length > 0 ? `(${fieldArgs})` : ""}${selection}`
+  const varDecls = args.map((a) => `$${a.name}: ${a.typeSDL}`).join(", ");
+  const fieldArgs = args.map((a) => `${a.name}: $${a.name}`).join(", ");
+  const opSig = varDecls.length > 0 ? `(${varDecls})` : "";
+  const fieldCall = `${fieldName}${fieldArgs.length > 0 ? `(${fieldArgs})` : ""}${selection}`;
 
-  const body = operationType === "query" ? nestBody(path, fieldCall, "  ") : `  ${fieldCall}`
+  const body = operationType === "query" ? nestBody(path, fieldCall, "  ") : `  ${fieldCall}`;
 
-  return `${operationType} FractalClientOp${opSig} {\n${body}\n}`
+  return `${operationType} FractalClientOp${opSig} {\n${body}\n}`;
 }
 
 /** Read the leaf field's own value back out of a transport's `data`, following `path` (Query only — Mutation/Subscription are flat). */
@@ -245,16 +256,16 @@ function unwrapData(
   fieldName: string,
   operationType: OperationType,
 ): unknown {
-  if (data === null || data === undefined) return undefined
-  let cur: unknown = data
+  if (data === null || data === undefined) return undefined;
+  let cur: unknown = data;
   if (operationType === "query") {
     for (const seg of path) {
-      if (cur === null || typeof cur !== "object") return undefined
-      cur = (cur as Record<string, unknown>)[seg]
+      if (cur === null || typeof cur !== "object") return undefined;
+      cur = (cur as Record<string, unknown>)[seg];
     }
   }
-  if (cur === null || typeof cur !== "object") return undefined
-  return (cur as Record<string, unknown>)[fieldName]
+  if (cur === null || typeof cur !== "object") return undefined;
+  return (cur as Record<string, unknown>)[fieldName];
 }
 
 // ============================================================================
@@ -276,16 +287,19 @@ function makeFieldCaller(
     // makeToolCaller merge (no server-side slug binding to lean on here
     // either: a GraphQL field's args ARE its whole input, no path to bind
     // against).
-    const merged: Record<string, unknown> = { ...slugValues, ...((input ?? {}) as Record<string, unknown>) }
-    const variables: Record<string, unknown> = {}
-    for (const arg of args) variables[arg.name] = merged[arg.name]
+    const merged: Record<string, unknown> = {
+      ...slugValues,
+      ...((input ?? {}) as Record<string, unknown>),
+    };
+    const variables: Record<string, unknown> = {};
+    for (const arg of args) variables[arg.name] = merged[arg.name];
 
-    const result = await transport(document, variables)
+    const result = await transport(document, variables);
     if (result.errors !== undefined && result.errors.length > 0) {
-      throw new GraphQLClientError(result.errors)
+      throw new GraphQLClientError(result.errors);
     }
-    return unwrapData(result.data, path, fieldName, operationType)
-  }
+    return unwrapData(result.data, path, fieldName, operationType);
+  };
 }
 
 // ============================================================================
@@ -293,9 +307,9 @@ function makeFieldCaller(
 // ============================================================================
 
 type ResolvedOptions = {
-  readonly types: FieldTypeMap
-  readonly namedTypes: Readonly<Record<string, TypeRef>>
-}
+  readonly types: FieldTypeMap;
+  readonly namedTypes: Readonly<Record<string, TypeRef>>;
+};
 
 function buildLeaf(
   child: Node,
@@ -306,28 +320,40 @@ function buildLeaf(
   transport: GraphQLTransport,
   opts: ResolvedOptions,
 ): (input?: unknown) => Promise<unknown> {
-  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
-  const lookupKey = [...path, key].reduce(underscoreJoin, "")
-  const typeInfo = opts.types[lookupKey]
-  const operationType = deriveOperationType(child.meta, typeInfo?.output)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta);
+  const lookupKey = [...path, key].reduce(underscoreJoin, "");
+  const typeInfo = opts.types[lookupKey];
+  const operationType = deriveOperationType(child.meta, typeInfo?.output);
 
-  const declaredArgs = argsFromInput(typeInfo?.input)
-  const declaredNames = new Set(declaredArgs.map((a) => a.name))
+  const declaredArgs = argsFromInput(typeInfo?.input);
+  const declaredNames = new Set(declaredArgs.map((a) => a.name));
   // Same merge order/precedence as project.ts's buildField/buildDispatch:
   // captured (fallback) args first, a declared arg with a colliding name wins.
-  const args = [...capturedArgs.filter((a) => !declaredNames.has(a.name)), ...declaredArgs]
+  const args = [...capturedArgs.filter((a) => !declaredNames.has(a.name)), ...declaredArgs];
 
   const fieldName =
-    typeof gql.name === "string" ? gql.name : operationType === "query" ? key : [...path, key].reduce(camelJoin, "")
+    typeof gql.name === "string"
+      ? gql.name
+      : operationType === "query"
+        ? key
+        : [...path, key].reduce(camelJoin, "");
   // Query nests through the full ancestor path (including fallback-name
   // segments — see module doc); Mutation/Subscription are flat top-level
   // fields, so no nesting path applies.
-  const fieldPath = operationType === "query" ? path : []
+  const fieldPath = operationType === "query" ? path : [];
 
-  const selection = selectionSetFor(typeInfo?.output, opts.namedTypes)
-  const document = buildDocument(operationType, fieldPath, fieldName, args, selection)
+  const selection = selectionSetFor(typeInfo?.output, opts.namedTypes);
+  const document = buildDocument(operationType, fieldPath, fieldName, args, selection);
 
-  return makeFieldCaller(document, args, fieldPath, fieldName, operationType, slugValues, transport)
+  return makeFieldCaller(
+    document,
+    args,
+    fieldPath,
+    fieldName,
+    operationType,
+    slugValues,
+    transport,
+  );
 }
 
 function buildClientNode(
@@ -338,16 +364,16 @@ function buildClientNode(
   transport: GraphQLTransport,
   opts: ResolvedOptions,
 ): AnyGraphQLClient {
-  const out: AnyGraphQLClient = {}
+  const out: AnyGraphQLClient = {};
 
   for (const [key, child] of Object.entries(node.children ?? {})) {
     out[key] = isLeaf(child)
       ? buildLeaf(child, path, key, capturedArgs, slugValues, transport, opts)
-      : buildClientNode(child, [...path, key], capturedArgs, slugValues, transport, opts)
+      : buildClientNode(child, [...path, key], capturedArgs, slugValues, transport, opts);
   }
 
   if (node.fallback !== undefined) {
-    const { name, subtree } = node.fallback
+    const { name, subtree } = node.fallback;
 
     // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
     // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
@@ -359,7 +385,7 @@ function buildClientNode(
     // caller directly (no extra property-access step beyond the fallback's
     // own name) instead of a one-off nested client object.
     out[name] = isLeaf(subtree)
-      ? (value: string): (input?: unknown) => Promise<unknown> =>
+      ? (value: string): ((input?: unknown) => Promise<unknown>) =>
           buildLeaf(
             subtree,
             path,
@@ -377,10 +403,10 @@ function buildClientNode(
             { ...slugValues, [name]: value },
             transport,
             opts,
-          )
+          );
   }
 
-  return out
+  return out;
 }
 
 // ============================================================================
@@ -419,6 +445,6 @@ export function createGraphQLClient(
   transport: GraphQLTransport,
   opts: GraphQLClientOptions = {},
 ): AnyGraphQLClient {
-  const resolved: ResolvedOptions = { types: opts.types ?? {}, namedTypes: opts.namedTypes ?? {} }
-  return buildClientNode(tree, [], [], {}, transport, resolved)
+  const resolved: ResolvedOptions = { types: opts.types ?? {}, namedTypes: opts.namedTypes ?? {} };
+  return buildClientNode(tree, [], [], {}, transport, resolved);
 }

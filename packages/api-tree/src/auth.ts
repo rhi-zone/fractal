@@ -79,7 +79,9 @@ export type AuthAdapter<TUser> = {
  * the SAME `adapter` object is passed to both (the documented pairing) — see
  * that function's doc for why this is safe to do unconditionally.
  */
-export function authLayer<TUser>(adapter: AuthAdapter<TUser>): (req: Request) => Promise<TUser | null> {
+export function authLayer<TUser>(
+  adapter: AuthAdapter<TUser>,
+): (req: Request) => Promise<TUser | null> {
   return (req) => resolveCached(adapter, req);
 }
 

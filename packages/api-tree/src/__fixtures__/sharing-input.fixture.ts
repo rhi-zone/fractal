@@ -7,26 +7,26 @@
 // apply-validation-sharing-input.fixture.ts) through the applyValidation
 // codegen pipeline's own shouldShare opt-in.
 
-import { api, op } from "../node.ts"
+import { api, op } from "../node.ts";
 
 interface Address {
-  street: string
-  city: string
-  zip: string
-  country: string
-  region: string
-  landmark: string
+  street: string;
+  city: string;
+  zip: string;
+  country: string;
+  region: string;
+  landmark: string;
 }
 
 function setBilling(_input: { userId: string; billing: Address }): { ok: boolean } {
-  return { ok: true }
+  return { ok: true };
 }
 
 function setShipping(_input: { userId: string; shipping: Address }): { ok: boolean } {
-  return { ok: true }
+  return { ok: true };
 }
 
 export const tree = api({
   setBilling: op(setBilling),
   setShipping: op(setShipping),
-})
+});

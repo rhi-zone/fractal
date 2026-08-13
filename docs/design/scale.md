@@ -13,12 +13,12 @@ in four variants. Each file is typechecked in isolation; `run.ts` records tsgo
 `--extendedDiagnostics` (best of 3 after a warm-up). Paths point at package
 **source** (`packages/*/src/index.ts`), so this measures the current code.
 
-| Variant | What it isolates |
-|---|---|
-| **A** | CURRENT coupled router: chained builder accumulates `Routes`, plus `client(app)` + 8 typed call-sites (forces `ClientOf`). |
-| **B** | Per-route typing ONLY: N handlers each typed locally (`ctx.params`/body/return), never fed through the chained builder — no accumulation tuple formed. |
-| **C1** | DECOUPLED, contract-object (tRPC-style): one `{ "/p": { get: h } } as const` literal, `ClientOfContract<typeof contract>` maps the object once. No chained accumulation. |
-| **C2** | DECOUPLED, opt-in accumulation: each route an independent `defineRoute(...)`, `buildClient([...])` forms the tuple at ONE call site. |
+| Variant | What it isolates                                                                                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A**   | CURRENT coupled router: chained builder accumulates `Routes`, plus `client(app)` + 8 typed call-sites (forces `ClientOf`).                                               |
+| **B**   | Per-route typing ONLY: N handlers each typed locally (`ctx.params`/body/return), never fed through the chained builder — no accumulation tuple formed.                   |
+| **C1**  | DECOUPLED, contract-object (tRPC-style): one `{ "/p": { get: h } } as const` literal, `ClientOfContract<typeof contract>` maps the object once. No chained accumulation. |
+| **C2**  | DECOUPLED, opt-in accumulation: each route an independent `defineRoute(...)`, `buildClient([...])` forms the tuple at ONE call site.                                     |
 
 **Tools.** Primary: **tsgo `7.0.0-dev.20260527.2`** (`@typescript/native-preview`,
 nix-provided) — gives full `--extendedDiagnostics`. Cross-validated against
@@ -29,28 +29,31 @@ nix-provided) — gives full `--extendedDiagnostics`. Cross-validated against
 ## Results (tsgo --extendedDiagnostics)
 
 ### Type instantiations
-| N | A | B | C1 | C2 |
-|---|---|---|---|---|
-| 10  | 26,683    | 9,902  | 12,728 | 13,764  |
-| 100 | 58,184    | 12,422 | 15,516 | 38,008  |
-| 300 | 215,120   | 18,018 | 20,694 | 91,940  |
-| 600 | 675,556   | 26,418 | 28,750 | 172,724 |
+
+| N   | A             | B      | C1         | C2      |
+| --- | ------------- | ------ | ---------- | ------- |
+| 10  | 26,683        | 9,902  | 12,728     | 13,764  |
+| 100 | 58,184        | 12,422 | 15,516     | 38,008  |
+| 300 | 215,120       | 18,018 | 20,694     | 91,940  |
+| 600 | 675,556       | 26,418 | 28,750     | 172,724 |
 | 900 | **1,406,020** | 34,818 | **36,794** | 253,540 |
 
 ### Check time (ms) / Memory (KB)
-| N | A check | A mem | C1 check | C1 mem | B check | C2 check |
-|---|---|---|---|---|---|---|
-| 100 | 16  | 36,804  | 7  | 31,209 | 6  | 17  |
-| 300 | 58  | 59,360  | 11 | 34,448 | 18 | 43  |
-| 600 | 164 | 119,209 | 19 | 39,043 | 45 | 103 |
-| 900 | 371 | 214,880 | 30 | 43,909 | 92 | 170 |
+
+| N   | A check | A mem   | C1 check | C1 mem | B check | C2 check |
+| --- | ------- | ------- | -------- | ------ | ------- | -------- |
+| 100 | 16      | 36,804  | 7        | 31,209 | 6       | 17       |
+| 300 | 58      | 59,360  | 11       | 34,448 | 18      | 43       |
+| 600 | 164     | 119,209 | 19       | 39,043 | 45      | 103      |
+| 900 | 371     | 214,880 | 30       | 43,909 | 92      | 170      |
 
 ### Cross-validation, stock tsc 6.0.3 (instantiations / outcome)
-| N | A | B | C1 | C2 |
-|---|---|---|---|---|
-| 300 | 201,019 (ok) | — | — | — |
-| 600 | **CRASH — RangeError: Maximum call stack size exceeded** | — | — | — |
-| 900 | **CRASH (binder stack overflow)** | 34,336 (ok) | 36,078 (ok) | 252,816 (ok) |
+
+| N   | A                                                        | B           | C1          | C2           |
+| --- | -------------------------------------------------------- | ----------- | ----------- | ------------ |
+| 300 | 201,019 (ok)                                             | —           | —           | —            |
+| 600 | **CRASH — RangeError: Maximum call stack size exceeded** | —           | —           | —            |
+| 900 | **CRASH (binder stack overflow)**                        | 34,336 (ok) | 36,078 (ok) | 252,816 (ok) |
 
 ## Verdict
 
@@ -60,19 +63,19 @@ grow **24x for a 9x route increase** (100→900); `inst / N²` is roughly consta
 growing `[...Routes, RouteOf<...>]` tuple, and `ClientOf` re-maps the whole tuple.
 At 900 it costs **1.4M instantiations, 371 ms check, 215 MB** under tsgo.
 
-Worse, the *runtime* of typechecking is not the only failure: the 900-deep chained
+Worse, the _runtime_ of typechecking is not the only failure: the 900-deep chained
 `.get().post()…` expression **crashes stock tsc 6.0.3 with a binder stack overflow
 somewhere between N=300 and N=600** (A-300 ok, A-600 crashes). tsgo's native binder
 survives, but consumers on stock tsc — the common case — get a hard compiler crash,
 not slow types. This is the exact Hono-`hc` / Eden failure mode, confirmed.
 
 **B (per-route typing only) is flat/cheap and is NOT the problem.** ~28
-instantiations per route, dead linear: 9.9K→34.8K across 10→900, 92 ms check at
-900. Per-route `ctx.params`/body/return inference scales fine regardless of N.
+instantiations per route, dead linear: 9.9K→34.8K across 10→900, 92 ms check at 900. Per-route `ctx.params`/body/return inference scales fine regardless of N.
 **At 900, A costs 40x B's instantiations** — the entire excess is accumulation +
 `ClientOf`, exactly as hypothesised.
 
 **C decoupled keeps the typed client AND scales.**
+
 - **C1 (contract object) is the winner.** Tracks B almost exactly — 36.8K
   instantiations and **30 ms** check at 900 (**38x fewer instantiations than A,
   12x faster check, 5x less memory**), survives stock tsc. The object literal's
@@ -104,6 +107,6 @@ effectively flat) that survives 900+ routes on every compiler. If the chained
 builder ergonomics must stay, C2 (opt-in `buildClient`) is the fallback: 5.5x
 cheaper and crash-free, but C1 is the recommendation.
 
-*Reproduce:* `cd spike/scale && bun gen/generate.ts && bun run.ts`
+_Reproduce:_ `cd spike/scale && bun gen/generate.ts && bun run.ts`
 (writes `logs/results.csv`, `logs/table.md`). Tool: tsgo native-preview; stock
 tsc cross-check via `bunx tsc -p <per-file tsconfig> --extendedDiagnostics`.

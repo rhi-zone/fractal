@@ -1,6 +1,6 @@
 // packages/api-tree/src/node.test.ts — new Node/Handler/Meta/fallback model
 
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "bun:test";
 import {
   op,
   api,
@@ -10,7 +10,7 @@ import {
   mergeMeta,
   type SharedMeta,
   type Node,
-} from "./node.ts"
+} from "./node.ts";
 import {
   resolveTags,
   TAG_READ_ONLY,
@@ -19,8 +19,8 @@ import {
   TAG_OPEN_WORLD,
   TAG_STREAMING,
   type Tags,
-} from "./tags.ts"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+} from "./tags.ts";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 
 // `SharedMeta`/`LeafMeta`/`BranchMeta` are extended via declaration merging
 // (a deployment's own augmentation file — see node.ts's doc comment and
@@ -30,7 +30,7 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 // statically known here. `OpenMeta` is the test-only escape hatch for that:
 // an index signature back on top of `SharedMeta`, used ONLY where a test's
 // whole point is an undeclared key.
-type OpenMeta = SharedMeta & Record<string, unknown>
+type OpenMeta = SharedMeta & Record<string, unknown>;
 
 // ============================================================================
 // 1. op() — leaf-node constructor
@@ -38,14 +38,14 @@ type OpenMeta = SharedMeta & Record<string, unknown>
 
 describe("op()", () => {
   it("op(fn) produces a leaf node with empty meta", () => {
-    const bare = (input: { n: number }) => input.n * 2
-    const n = api({ double: op(bare) })
-    const child = n.children?.["double"] as Node
-    expect(child.meta).toEqual({})
-    expect(child.handler!({ n: 3 })).toBe(6)
-    expect(isLeaf(child)).toBe(true)
-  })
-})
+    const bare = (input: { n: number }) => input.n * 2;
+    const n = api({ double: op(bare) });
+    const child = n.children?.["double"] as Node;
+    expect(child.meta).toEqual({});
+    expect(child.handler!({ n: 3 })).toBe(6);
+    expect(isLeaf(child)).toBe(true);
+  });
+});
 
 // ============================================================================
 // 2. fallback field — wildcard-capture subtree shape
@@ -53,19 +53,19 @@ describe("op()", () => {
 
 describe("fallback field on api()", () => {
   it("api({}, { fallback }) carries the fallback shape", () => {
-    const subtree = api({ checkout: op((_: { invoiceId: string }) => ({})) })
-    const invoicesNode = api({}, { fallback: { name: "invoiceId", subtree } })
-    expect(invoicesNode.fallback?.name).toBe("invoiceId")
-    expect(invoicesNode.fallback?.subtree).toBe(subtree)
-  })
+    const subtree = api({ checkout: op((_: { invoiceId: string }) => ({})) });
+    const invoicesNode = api({}, { fallback: { name: "invoiceId", subtree } });
+    expect(invoicesNode.fallback?.name).toBe("invoiceId");
+    expect(invoicesNode.fallback?.subtree).toBe(subtree);
+  });
 
   it("a node can carry both children and a fallback", () => {
-    const subtree = api({})
-    const n = api({ list: op(() => []) }, { fallback: { name: "id", subtree } })
-    expect(n.children?.["list"]).toBeDefined()
-    expect(n.fallback?.name).toBe("id")
-  })
-})
+    const subtree = api({});
+    const n = api({ list: op(() => []) }, { fallback: { name: "id", subtree } });
+    expect(n.children?.["list"]).toBeDefined();
+    expect(n.fallback?.name).toBe("id");
+  });
+});
 
 // ============================================================================
 // 2a. fallback() — DX constructor for the { name, subtree } shape
@@ -73,34 +73,34 @@ describe("fallback field on api()", () => {
 
 describe("fallback()", () => {
   it("fallback(name, children) wraps a bare children map in api() for you", () => {
-    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }))
-    const f = fallback("bookId", { get: getBook })
-    expect(f.name).toBe("bookId")
-    expect(isNode(f.subtree)).toBe(true)
-    expect(f.subtree.children?.["get"]).toBe(getBook)
-  })
+    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }));
+    const f = fallback("bookId", { get: getBook });
+    expect(f.name).toBe("bookId");
+    expect(isNode(f.subtree)).toBe(true);
+    expect(f.subtree.children?.["get"]).toBe(getBook);
+  });
 
   it("fallback(name, children) result composes directly into api()'s opts.fallback", () => {
-    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }))
-    const n = api({}, { fallback: fallback("bookId", { get: getBook }) })
-    expect(n.fallback?.name).toBe("bookId")
-    expect(n.fallback?.subtree.children?.["get"]).toBe(getBook)
-  })
+    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }));
+    const n = api({}, { fallback: fallback("bookId", { get: getBook }) });
+    expect(n.fallback?.name).toBe("bookId");
+    expect(n.fallback?.subtree.children?.["get"]).toBe(getBook);
+  });
 
   it("fallback(name, subtree) passes an already-built Node through unchanged", () => {
-    const prebuilt = api({ checkout: op((_: { invoiceId: string }) => ({})) })
-    const f = fallback("invoiceId", prebuilt)
-    expect(f.name).toBe("invoiceId")
-    expect(f.subtree).toBe(prebuilt)
-  })
+    const prebuilt = api({ checkout: op((_: { invoiceId: string }) => ({})) });
+    const f = fallback("invoiceId", prebuilt);
+    expect(f.name).toBe("invoiceId");
+    expect(f.subtree).toBe(prebuilt);
+  });
 
   it("equivalent to the hand-written { name, subtree: api(children) } shape", () => {
-    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }))
-    const sugared = fallback("bookId", { get: getBook })
-    const handWritten = { name: "bookId" as const, subtree: api({ get: getBook }) }
-    expect(sugared).toEqual(handWritten)
-  })
-})
+    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }));
+    const sugared = fallback("bookId", { get: getBook });
+    const handWritten = { name: "bookId" as const, subtree: api({ get: getBook }) };
+    expect(sugared).toEqual(handWritten);
+  });
+});
 
 // ============================================================================
 // 3. resolveTags — implication lattice
@@ -108,73 +108,82 @@ describe("fallback()", () => {
 
 describe("resolveTags", () => {
   it("readOnly ⇒ idempotent when idempotent is unknown", () => {
-    const result = resolveTags({ [TAG_READ_ONLY]: true })
-    expect(result.readOnly).toBe(true)
-    expect(result.idempotent).toBe(true)  // derived
-  })
+    const result = resolveTags({ [TAG_READ_ONLY]: true });
+    expect(result.readOnly).toBe(true);
+    expect(result.idempotent).toBe(true); // derived
+  });
 
   it("readOnly does not override an explicitly-set idempotent", () => {
     // idempotent: false is an explicit negative — readOnly ⇒ idempotent should
     // not stomp an explicit false (conflict is a domain issue, not our job here)
-    const result = resolveTags({ [TAG_READ_ONLY]: true, [TAG_IDEMPOTENT]: false })
-    expect(result.idempotent).toBe(false)  // explicit negative preserved
-  })
+    const result = resolveTags({ [TAG_READ_ONLY]: true, [TAG_IDEMPOTENT]: false });
+    expect(result.idempotent).toBe(false); // explicit negative preserved
+  });
 
   it("unknown stays unknown — absence does not default to false", () => {
-    const result = resolveTags({})
-    expect(result.readOnly).toBeUndefined()
-    expect(result.idempotent).toBeUndefined()
-    expect(result.destructive).toBeUndefined()
-    expect(result.openWorld).toBeUndefined()
-    expect(result.streaming).toBeUndefined()
-    expect(result.conflict).toBeUndefined()
-  })
+    const result = resolveTags({});
+    expect(result.readOnly).toBeUndefined();
+    expect(result.idempotent).toBeUndefined();
+    expect(result.destructive).toBeUndefined();
+    expect(result.openWorld).toBeUndefined();
+    expect(result.streaming).toBeUndefined();
+    expect(result.conflict).toBeUndefined();
+  });
 
   it("readOnly + destructive conflict is detected", () => {
     const result = resolveTags({
       [TAG_READ_ONLY]: true,
       [TAG_DESTRUCTIVE]: true,
-    })
-    expect(result.conflict).toBeDefined()
-    expect(typeof result.conflict).toBe("string")
-  })
+    });
+    expect(result.conflict).toBeDefined();
+    expect(typeof result.conflict).toBe("string");
+  });
 
   it("destructive + idempotent is valid (no conflict)", () => {
-    const result = resolveTags({ [TAG_DESTRUCTIVE]: true, [TAG_IDEMPOTENT]: true })
-    expect(result.destructive).toBe(true)
-    expect(result.idempotent).toBe(true)
-    expect(result.conflict).toBeUndefined()
-  })
+    const result = resolveTags({ [TAG_DESTRUCTIVE]: true, [TAG_IDEMPOTENT]: true });
+    expect(result.destructive).toBe(true);
+    expect(result.idempotent).toBe(true);
+    expect(result.conflict).toBeUndefined();
+  });
 
   it("streaming and openWorld are orthogonal — pass through untouched", () => {
     const result = resolveTags({
       [TAG_READ_ONLY]: true,
       [TAG_STREAMING]: true,
       [TAG_OPEN_WORLD]: true,
-    })
-    expect(result.streaming).toBe(true)
-    expect(result.openWorld).toBe(true)
-    expect(result.conflict).toBeUndefined()
-  })
+    });
+    expect(result.streaming).toBe(true);
+    expect(result.openWorld).toBe(true);
+    expect(result.conflict).toBeUndefined();
+  });
 
   it("a `stream` outputType derives streaming: true when the tag is unasserted", () => {
-    const streamRef: TypeRef = { shape: { kind: "stream", element: { shape: { kind: "string" }, meta: {} } }, meta: {} }
-    const result = resolveTags({}, streamRef)
-    expect(result.streaming).toBe(true)
-  })
+    const streamRef: TypeRef = {
+      shape: { kind: "stream", element: { shape: { kind: "string" }, meta: {} } },
+      meta: {},
+    };
+    const result = resolveTags({}, streamRef);
+    expect(result.streaming).toBe(true);
+  });
 
   it("a non-stream outputType does not derive streaming", () => {
-    const arrayRef: TypeRef = { shape: { kind: "array", element: { shape: { kind: "string" }, meta: {} } }, meta: {} }
-    const result = resolveTags({}, arrayRef)
-    expect(result.streaming).toBeUndefined()
-  })
+    const arrayRef: TypeRef = {
+      shape: { kind: "array", element: { shape: { kind: "string" }, meta: {} } },
+      meta: {},
+    };
+    const result = resolveTags({}, arrayRef);
+    expect(result.streaming).toBeUndefined();
+  });
 
   it("an explicit streaming tag (true or false) wins over a `stream` outputType", () => {
-    const streamRef: TypeRef = { shape: { kind: "stream", element: { shape: { kind: "string" }, meta: {} } }, meta: {} }
-    expect(resolveTags({ [TAG_STREAMING]: false }, streamRef).streaming).toBe(false)
-    expect(resolveTags({ [TAG_STREAMING]: true }, streamRef).streaming).toBe(true)
-  })
-})
+    const streamRef: TypeRef = {
+      shape: { kind: "stream", element: { shape: { kind: "string" }, meta: {} } },
+      meta: {},
+    };
+    expect(resolveTags({ [TAG_STREAMING]: false }, streamRef).streaming).toBe(false);
+    expect(resolveTags({ [TAG_STREAMING]: true }, streamRef).streaming).toBe(true);
+  });
+});
 
 // ============================================================================
 // 4. Open metadata — arbitrary/unknown keys pass through untouched
@@ -185,16 +194,22 @@ describe("open metadata", () => {
     const leaf = op(() => "ok", {
       myCustomProjection: { foo: "bar", nested: { deep: 42 } },
       "acme:cache": { ttl: 300, varyOn: ["id"] },
-    } as OpenMeta)
-    expect((leaf.meta as OpenMeta)["myCustomProjection"]).toEqual({ foo: "bar", nested: { deep: 42 } })
-    expect((leaf.meta as OpenMeta)["acme:cache"]).toEqual({ ttl: 300, varyOn: ["id"] })
-  })
+    } as OpenMeta);
+    expect((leaf.meta as OpenMeta)["myCustomProjection"]).toEqual({
+      foo: "bar",
+      nested: { deep: 42 },
+    });
+    expect((leaf.meta as OpenMeta)["acme:cache"]).toEqual({ ttl: 300, varyOn: ["id"] });
+  });
 
   it("arbitrary/unknown meta keys are preserved on node", () => {
-    const n = api({}, { meta: { internalFlag: true, analytics: { track: "pageview" } } as OpenMeta })
-    expect((n.meta as OpenMeta)["internalFlag"]).toBe(true)
-    expect((n.meta as OpenMeta)["analytics"]).toEqual({ track: "pageview" })
-  })
+    const n = api(
+      {},
+      { meta: { internalFlag: true, analytics: { track: "pageview" } } as OpenMeta },
+    );
+    expect((n.meta as OpenMeta)["internalFlag"]).toBe(true);
+    expect((n.meta as OpenMeta)["analytics"]).toEqual({ track: "pageview" });
+  });
 
   it("resolveTags leaves non-standard boolean keys in tags untouched (not consumed)", () => {
     // resolveTags reads only known tag keys; custom boolean keys pass through in
@@ -202,16 +217,16 @@ describe("open metadata", () => {
     const tags: Tags = {
       [TAG_READ_ONLY]: true,
       customTag: true,
-    }
-    const result = resolveTags(tags)
+    };
+    const result = resolveTags(tags);
     // Standard tags resolved correctly
-    expect(result.readOnly).toBe(true)
-    expect(result.idempotent).toBe(true)
+    expect(result.readOnly).toBe(true);
+    expect(result.idempotent).toBe(true);
     // The original tags bag is untouched
-    expect(tags[TAG_READ_ONLY]).toBe(true)
-    expect(tags["customTag"]).toBe(true)
-  })
-})
+    expect(tags[TAG_READ_ONLY]).toBe(true);
+    expect(tags["customTag"]).toBe(true);
+  });
+});
 
 // ============================================================================
 // 5. Standalone-function op
@@ -219,34 +234,34 @@ describe("open metadata", () => {
 
 describe("op surfaces", () => {
   it("standalone function op produces a leaf node", async () => {
-    const greet = (input: { name: string }) => `Hello, ${input.name}!`
-    const leaf = op(greet)
-    expect(isLeaf(leaf)).toBe(true)
-    expect(await leaf.handler!({ name: "world" })).toBe("Hello, world!")
-    expect(leaf.meta).toEqual({})
-  })
+    const greet = (input: { name: string }) => `Hello, ${input.name}!`;
+    const leaf = op(greet);
+    expect(isLeaf(leaf)).toBe(true);
+    expect(await leaf.handler!({ name: "world" })).toBe("Hello, world!");
+    expect(leaf.meta).toEqual({});
+  });
 
   it("standalone function op with meta preserves meta", async () => {
-    const leaf = op(
-      (input: { id: string }) => ({ found: true, id: input.id }),
-      { tags: { [TAG_READ_ONLY]: true }, http: { segment: "detail" } } as OpenMeta,
-    )
-    expect(await leaf.handler!({ id: "x" })).toEqual({ found: true, id: "x" })
-    expect(((leaf.meta as OpenMeta).tags as Tags | undefined)?.[TAG_READ_ONLY]).toBe(true)
-    expect((leaf.meta as OpenMeta)["http"]).toEqual({ segment: "detail" })
-  })
+    const leaf = op((input: { id: string }) => ({ found: true, id: input.id }), {
+      tags: { [TAG_READ_ONLY]: true },
+      http: { segment: "detail" },
+    } as OpenMeta);
+    expect(await leaf.handler!({ id: "x" })).toEqual({ found: true, id: "x" });
+    expect(((leaf.meta as OpenMeta).tags as Tags | undefined)?.[TAG_READ_ONLY]).toBe(true);
+    expect((leaf.meta as OpenMeta)["http"]).toEqual({ segment: "detail" });
+  });
 
   it("isNode / isLeaf discriminators are correct", () => {
-    const n = api({})
-    const leaf = op(() => "x")
-    expect(isNode(n)).toBe(true)
-    expect(isNode(leaf)).toBe(true)   // a leaf IS a node (has meta)
-    expect(isLeaf(n)).toBe(false)     // branch node with no handler
-    expect(isLeaf(leaf)).toBe(true)
-    expect(isNode(null)).toBe(false)
-    expect(isNode(42)).toBe(false)
-  })
-})
+    const n = api({});
+    const leaf = op(() => "x");
+    expect(isNode(n)).toBe(true);
+    expect(isNode(leaf)).toBe(true); // a leaf IS a node (has meta)
+    expect(isLeaf(n)).toBe(false); // branch node with no handler
+    expect(isLeaf(leaf)).toBe(true);
+    expect(isNode(null)).toBe(false);
+    expect(isNode(42)).toBe(false);
+  });
+});
 
 // ============================================================================
 // 6. mapNodes — pre-order tree transform (replaces removed tag inheritance)
@@ -254,41 +269,47 @@ describe("op surfaces", () => {
 
 describe("mapNodes", () => {
   it("visits every node pre-order via children and fallback.subtree", async () => {
-    const { mapNodes } = await import("./tags.ts")
-    const leaf = op(() => "x")
-    const subtree = api({ get: leaf })
-    const tree = api({ list: op(() => []) }, { fallback: { name: "id", subtree } })
+    const { mapNodes } = await import("./tags.ts");
+    const leaf = op(() => "x");
+    const subtree = api({ get: leaf });
+    const tree = api({ list: op(() => []) }, { fallback: { name: "id", subtree } });
 
-    const visited: unknown[] = []
+    const visited: unknown[] = [];
     mapNodes(tree, (n) => {
-      visited.push(n)
-      return n
-    })
+      visited.push(n);
+      return n;
+    });
 
     // root, "list" leaf, fallback subtree branch, and its "get" leaf
-    expect(visited).toHaveLength(4)
-    expect(visited[0]).toBe(tree)
-  })
+    expect(visited).toHaveLength(4);
+    expect(visited[0]).toBe(tree);
+  });
 
   it("a transform can tag every leaf node without mutating the original tree", async () => {
-    const { mapNodes } = await import("./tags.ts")
+    const { mapNodes } = await import("./tags.ts");
     const tree = api({
-        list: op(() => []),
-        detail: api({ read: op(() => ({})) }),
-      })
+      list: op(() => []),
+      detail: api({ read: op(() => ({})) }),
+    });
 
     const tagged = mapNodes(tree, (n) =>
       isLeaf(n) ? { ...n, meta: { ...n.meta, tags: { readOnly: true } } } : n,
-    )
+    );
 
-    expect(((tagged.children?.["list"] as Node).meta.tags as Tags | undefined)?.readOnly).toBe(true)
+    expect(((tagged.children?.["list"] as Node).meta.tags as Tags | undefined)?.readOnly).toBe(
+      true,
+    );
     expect(
-      (((tagged.children?.["detail"] as Node).children?.["read"] as Node).meta.tags as Tags | undefined)?.readOnly,
-    ).toBe(true)
+      (
+        ((tagged.children?.["detail"] as Node).children?.["read"] as Node).meta.tags as
+          | Tags
+          | undefined
+      )?.readOnly,
+    ).toBe(true);
     // Original tree is untouched
-    expect((tree.children?.["list"] as Node).meta.tags).toBeUndefined()
-  })
-})
+    expect((tree.children?.["list"] as Node).meta.tags).toBeUndefined();
+  });
+});
 
 // ============================================================================
 // 7. mergeMeta — deep-merge with precedence
@@ -296,76 +317,73 @@ describe("mapNodes", () => {
 
 describe("mergeMeta", () => {
   it("later bag wins over earlier for scalar keys", () => {
-    const m = mergeMeta({ foo: 1 } as OpenMeta, { foo: 2 } as OpenMeta)
-    expect((m as OpenMeta)["foo"]).toBe(2)
-  })
+    const m = mergeMeta({ foo: 1 } as OpenMeta, { foo: 2 } as OpenMeta);
+    expect((m as OpenMeta)["foo"]).toBe(2);
+  });
 
   it("undefined in later bag defers — does not override", () => {
-    const m = mergeMeta({ foo: 1 } as OpenMeta, { foo: undefined } as OpenMeta)
-    expect((m as OpenMeta)["foo"]).toBe(1)
-  })
+    const m = mergeMeta({ foo: 1 } as OpenMeta, { foo: undefined } as OpenMeta);
+    expect((m as OpenMeta)["foo"]).toBe(1);
+  });
 
   it("sub-bag objects are merged one level deep (later wins per key)", () => {
     const m = mergeMeta(
       { tags: { readOnly: true, openWorld: true } },
       { tags: { readOnly: false } },
-    )
-    expect((m.tags as Tags).readOnly).toBe(false)   // overridden
-    expect((m.tags as Tags).openWorld).toBe(true)   // inherited
-  })
+    );
+    expect((m.tags as Tags).readOnly).toBe(false); // overridden
+    expect((m.tags as Tags).openWorld).toBe(true); // inherited
+  });
 
   it("arrays are concatenated, not replaced", () => {
-    const m = mergeMeta({ roles: ["a"] } as OpenMeta, { roles: ["b", "c"] } as OpenMeta)
-    expect((m as OpenMeta)["roles"]).toEqual(["a", "b", "c"])
-  })
+    const m = mergeMeta({ roles: ["a"] } as OpenMeta, { roles: ["b", "c"] } as OpenMeta);
+    expect((m as OpenMeta)["roles"]).toEqual(["a", "b", "c"]);
+  });
 
   it("undefined metas are skipped", () => {
-    const m = mergeMeta(undefined, { x: 1 } as OpenMeta, undefined)
-    expect((m as OpenMeta)["x"]).toBe(1)
-  })
+    const m = mergeMeta(undefined, { x: 1 } as OpenMeta, undefined);
+    expect((m as OpenMeta)["x"]).toBe(1);
+  });
 
   it("key absent in later bag is inherited from earlier", () => {
-    const m = mergeMeta({ a: 1, b: 2 } as OpenMeta, { b: 3 } as OpenMeta)
-    expect((m as OpenMeta)["a"]).toBe(1)
-    expect((m as OpenMeta)["b"]).toBe(3)
-  })
+    const m = mergeMeta({ a: 1, b: 2 } as OpenMeta, { b: 3 } as OpenMeta);
+    expect((m as OpenMeta)["a"]).toBe(1);
+    expect((m as OpenMeta)["b"]).toBe(3);
+  });
 
   it("arrays at depth 2 (e.g. http.middleware) concatenate", () => {
-    const a = (inner: unknown) => inner
-    const b = (inner: unknown) => inner
+    const a = (inner: unknown) => inner;
+    const b = (inner: unknown) => inner;
     const m = mergeMeta(
       { http: { middleware: [a] } } as OpenMeta,
       { http: { middleware: [b] } } as OpenMeta,
-    )
-    expect(((m as OpenMeta).http as { middleware: unknown[] }).middleware).toEqual([a, b])
-  })
+    );
+    expect(((m as OpenMeta).http as { middleware: unknown[] }).middleware).toEqual([a, b]);
+  });
 
   it("scalar keys nested in sub-bags still overwrite (later wins)", () => {
-    const m = mergeMeta(
-      { tags: { readOnly: true } },
-      { tags: { readOnly: false } },
-    )
-    expect((m.tags as Tags).readOnly).toBe(false)
-  })
+    const m = mergeMeta({ tags: { readOnly: true } }, { tags: { readOnly: false } });
+    expect((m.tags as Tags).readOnly).toBe(false);
+  });
 
   it("composing a verb bundle with an extra http contribution preserves both flat scalar keys and the array key", () => {
     const verbGet = {
       tags: { readOnly: true },
       http: { verb: "GET", method: "GET" },
-    } as OpenMeta
-    const m = mergeMeta(verbGet, { http: { moveTo: ".." } } as OpenMeta)
-    expect((m as OpenMeta).http).toEqual({ verb: "GET", method: "GET", moveTo: ".." })
-    expect((m.tags as Tags).readOnly).toBe(true)
-  })
+    } as OpenMeta;
+    const m = mergeMeta(verbGet, { http: { moveTo: ".." } } as OpenMeta);
+    expect((m as OpenMeta).http).toEqual({ verb: "GET", method: "GET", moveTo: ".." });
+    expect((m.tags as Tags).readOnly).toBe(true);
+  });
 
   it("map-shaped value at depth 3 (e.g. http.sourceMap's per-param ParamSource) replaces WHOLESALE on key overlap, never field-merges (mergeRecords' depth cap, see its own doc comment)", () => {
     const m = mergeMeta(
       { http: { sourceMap: { year: { store: "query", key: "fiscal_year" } } } } as OpenMeta,
       { http: { sourceMap: { year: { store: "header" } } } } as OpenMeta,
-    )
-    expect((m as OpenMeta).http).toEqual({ sourceMap: { year: { store: "header" } } })
-  })
-})
+    );
+    expect((m as OpenMeta).http).toEqual({ sourceMap: { year: { store: "header" } } });
+  });
+});
 
 // ============================================================================
 // 8. api() — the branch-node constructor
@@ -373,12 +391,12 @@ describe("mergeMeta", () => {
 
 describe("api()", () => {
   it("api(children) produces a Node whose children are exactly what was passed", () => {
-    const children = { users: op(() => []) }
-    expect(api(children)).toEqual({ children, meta: {} })
-  })
+    const children = { users: op(() => []) };
+    expect(api(children)).toEqual({ children, meta: {} });
+  });
 
   it("api(children, opts) forwards meta and fallback exactly as given", () => {
-    const children = { users: op(() => []) }
+    const children = { users: op(() => []) };
     // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
     // split (docs/design/meta-role-split-spec.md §2) — `description` is the
     // real BranchMeta-valid field this branch-node test exercises instead;
@@ -387,18 +405,16 @@ describe("api()", () => {
     // assignable to `api()`'s own `Widen<...>`-indexed return type (see
     // node.ts's `Widen` doc comment), where a plain inferred object literal
     // type is.
-    const meta = { description: "users branch" }
-    const fallback = { name: "id", subtree: op(() => ({})) }
-    expect(api(children, { meta, fallback })).toEqual(
-      { children, meta, fallback },
-    )
-  })
+    const meta = { description: "users branch" };
+    const fallback = { name: "id", subtree: op(() => ({})) };
+    expect(api(children, { meta, fallback })).toEqual({ children, meta, fallback });
+  });
 
   it("composes with nested api() calls", () => {
     const tree = api({
       users: api({ list: op(() => []) }),
-    })
-    expect(isNode(tree)).toBe(true)
-    expect(isLeaf((tree.children?.["users"] as Node).children?.["list"] as Node)).toBe(true)
-  })
-})
+    });
+    expect(isNode(tree)).toBe(true);
+    expect(isLeaf((tree.children?.["users"] as Node).children?.["list"] as Node)).toBe(true);
+  });
+});

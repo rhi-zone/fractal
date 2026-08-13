@@ -13,7 +13,7 @@ reference page: [HTTP](../reference/framework/http.md), [MCP](../reference/frame
 There is one `Node` tree, authored with two constructors:
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
+import { api, op } from "@rhi-zone/fractal-api-tree";
 
 const tree = api({
   books: api({
@@ -21,7 +21,7 @@ const tree = api({
     add: op((input: { title: string }) => ({ id: "2", ...input })),
     remove: op((input: { id: string }) => ({ ok: true }), { tags: { destructive: true } }),
   }),
-})
+});
 ```
 
 `meta.tags` (three-valued: `true` / `false` / `undefined`, no inheritance — see
@@ -32,9 +32,9 @@ prompts, GraphQL Query-vs-Mutation placement.
 Projections split into two dispatch modes (see
 [Concepts §7](./concepts.md#7-projections--dispatching-vs-enumerating)):
 
-| Mode | Protocols | What happens |
-|---|---|---|
-| **Dispatching** | HTTP, CLI | A request/argv arrives → walk the tree (or HTTP's derived route tree) to one leaf → call its handler |
+| Mode            | Protocols              | What happens                                                                                                           |
+| --------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Dispatching** | HTTP, CLI              | A request/argv arrives → walk the tree (or HTTP's derived route tree) to one leaf → call its handler                   |
 | **Enumerating** | MCP, GraphQL, JSON-RPC | Flatten every leaf up front into a flat list (tools / fields / methods), then dispatch by name against that flat table |
 
 The same tree, unmodified, feeds all five constructors below — nothing about `tree` above
@@ -49,13 +49,13 @@ client, all derived from the same `HttpRoute` (itself built from `Node` via
 `httpProjection` — see [Concepts §3](./concepts.md#3-building-the-http-route-tree--a-separate-transform-not-attribute-dispatch)).
 **Dispatching**: `createFetch` walks the compiled `HttpRoute` directly, O(depth) via keyed
 child lookup, no flat route table. Standout feature: because `toOpenApi` and `createClient`
-walk the *same* `HttpRoute` the server dispatches on, server/docs/client cannot drift apart
+walk the _same_ `HttpRoute` the server dispatches on, server/docs/client cannot drift apart
 — there's no separate schema-authoring step to fall out of sync.
 
 ```ts
-import { createFetch } from "@rhi-zone/fractal-http-api-projector"
-const fetch = createFetch(tree)
-await fetch(new Request("http://localhost/books/list")) // GET, derived from readOnly: true
+import { createFetch } from "@rhi-zone/fractal-http-api-projector";
+const fetch = createFetch(tree);
+await fetch(new Request("http://localhost/books/list")); // GET, derived from readOnly: true
 ```
 
 ### MCP — `@rhi-zone/fractal-mcp-api-projector`
@@ -113,7 +113,7 @@ edge of the request):
 // packages/mcp-api-projector/src/server.ts
 export type McpMiddleware = (
   next: (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>
+) => (input: Record<string, unknown>, stores: Stores) => unknown | Promise<unknown>;
 ```
 
 `CliMiddleware` (`packages/cli-api-projector/src/cli.ts`), `HttpHandlerMiddleware`
@@ -122,7 +122,7 @@ export type McpMiddleware = (
 `(input, stores) => result` in, same shape out. Each is wired through its own options object
 (`CreateMcpServerOptions.middleware`, `CliOpts.middleware`,
 `PresetOptions.handlerMiddleware`, `ResolverOptions.middleware`) and composed by the same
-`composeMiddleware`-shaped reducer, first-listed outermost. It sits *inside* the
+`composeMiddleware`-shaped reducer, first-listed outermost. It sits _inside_ the
 handler-invocation boundary — closer to the handler than protocol-level wrapping like
 HTTP's `layers.ts` (`autoMethodLayer`, CORS) — and is the place to hang cross-cutting
 concerns that need the assembled `input` and the shared `stores` (caller context, tracing,
@@ -136,7 +136,7 @@ cross-cutting concern has to be baked into the tree's own handlers.
 ## 4. Extensions
 
 "Extension" is HTTP-client-specific vocabulary — it names client-side wrappers around the
-*fetch step*, not the server middleware from §3. A `ClientExtension`
+_fetch step_, not the server middleware from §3. A `ClientExtension`
 (`packages/http-api-projector/src/extension.ts`) is one value with two independent
 interpreters:
 
@@ -148,27 +148,27 @@ interpreters:
   `generateClient`'s standalone codegen output.
 
 Composition order matches middleware: `extensions[0]` is outermost. The deliberate design
-choice (per the module doc) is *not* a fixed `beforeRequest`/`afterResponse` hook enum —
+choice (per the module doc) is _not_ a fixed `beforeRequest`/`afterResponse` hook enum —
 that shape can't express `retry`, which needs to re-run the entire inner fetch arbitrarily
 many times, not just observe around one call. Built-in extensions in
 `packages/http-api-projector/src/extensions/` (each an ordinary `ClientExtension`, no
 privileged internal API):
 
-| Extension | File |
-|---|---|
-| `retry(options?)` | `retry.ts` |
-| `timeout(options)` | `timeout.ts` |
-| `interceptors(options?)` | `interceptors.ts` |
-| `logging(options?)` | `logging.ts` |
-| `pagination(options?)` | `pagination.ts` |
+| Extension                                                     | File                                                           |
+| ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `retry(options?)`                                             | `retry.ts`                                                     |
+| `timeout(options)`                                            | `timeout.ts`                                                   |
+| `interceptors(options?)`                                      | `interceptors.ts`                                              |
+| `logging(options?)`                                           | `logging.ts`                                                   |
+| `pagination(options?)`                                        | `pagination.ts`                                                |
 | `errors`, `idempotency`, `streaming`, `tracing`, `validation` | (same directory — not yet in the reference table's short list) |
 
 ```ts
-import { createClient } from "@rhi-zone/fractal-http-api-projector"
-import { retry } from "@rhi-zone/fractal-http-api-projector/extensions/retry"
-import { logging } from "@rhi-zone/fractal-http-api-projector/extensions/logging"
+import { createClient } from "@rhi-zone/fractal-http-api-projector";
+import { retry } from "@rhi-zone/fractal-http-api-projector/extensions/retry";
+import { logging } from "@rhi-zone/fractal-http-api-projector/extensions/logging";
 
-const client = createClient(tree, { extensions: [retry({ maxRetries: 3 }), logging()] })
+const client = createClient(tree, { extensions: [retry({ maxRetries: 3 }), logging()] });
 // retry is outermost: it sees logging's effects on every attempt, including retried ones
 ```
 
@@ -184,18 +184,15 @@ per-protocol re-authoring — a single tag asserted once changes behavior consis
 everywhere that tag is meaningful:
 
 ```ts
-const remove = op(
-  (input: { id: string }) => ({ ok: true }),
-  { tags: { destructive: true } },
-)
+const remove = op((input: { id: string }) => ({ ok: true }), { tags: { destructive: true } });
 ```
 
-| Projection | Effect of `destructive: true` |
-|---|---|
-| HTTP | `verbFromTags` derives `DELETE` (idempotent+destructive combination) |
-| MCP | `destructiveHint: true` on the tool's annotations |
-| CLI | `runCli` prompts for interactive confirmation before invoking |
-| GraphQL | Not read-like, so the field lands under `Mutation` rather than `Query` |
+| Projection | Effect of `destructive: true`                                          |
+| ---------- | ---------------------------------------------------------------------- |
+| HTTP       | `verbFromTags` derives `DELETE` (idempotent+destructive combination)   |
+| MCP        | `destructiveHint: true` on the tool's annotations                      |
+| CLI        | `runCli` prompts for interactive confirmation before invoking          |
+| GraphQL    | Not read-like, so the field lands under `Mutation` rather than `Query` |
 
 Similarly, `readOnly: true` (which the lattice also implies `idempotent: true` for) drives
 HTTP's `GET`, MCP's `readOnlyHint`/`idempotentHint`, CLI skipping the confirm prompt, and

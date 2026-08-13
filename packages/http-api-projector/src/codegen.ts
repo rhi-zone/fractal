@@ -52,14 +52,19 @@
 //   packages/api-tree/src/tree.ts               — SchemaMap, ToolSchema, extractToolSchemas
 //   packages/api-tree/src/extract.ts            — JsonSchema
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import { httpProjection } from "./dx.ts"
-import type { HttpRoute } from "./route.ts"
-import { collectResultHelpers, composeCodegenFetch, composeCodegenResult, findStreamingCall } from "./extension.ts"
-import type { ClientExtension, CodegenOperationInfo, StreamingCallArgs } from "./extension.ts"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import { httpProjection } from "./dx.ts";
+import type { HttpRoute } from "./route.ts";
+import {
+  collectResultHelpers,
+  composeCodegenFetch,
+  composeCodegenResult,
+  findStreamingCall,
+} from "./extension.ts";
+import type { ClientExtension, CodegenOperationInfo, StreamingCallArgs } from "./extension.ts";
 
 // ============================================================================
 // Public API
@@ -67,7 +72,7 @@ import type { ClientExtension, CodegenOperationInfo, StreamingCallArgs } from ".
 
 export type CodegenOptions = {
   /** Name of the emitted `Client` type and factory return type. Defaults to "Client". */
-  readonly clientName?: string
+  readonly clientName?: string;
   /**
    * Extensions composed into the generated client's fetch call, baked in at
    * GENERATION time (unlike the runtime client's `ClientOptions.extensions`,
@@ -79,8 +84,8 @@ export type CodegenOptions = {
    * `extensions` (or passing `[]`) produces output byte-for-byte identical
    * to the pre-extension standalone client.
    */
-  readonly extensions?: readonly ClientExtension[]
-}
+  readonly extensions?: readonly ClientExtension[];
+};
 
 /**
  * Generate standalone TypeScript client source directly from an already-
@@ -106,8 +111,11 @@ export function generateClient(
   schemas?: SchemaMap,
   options: CodegenOptions = {},
 ): string {
-  const streamingEnabled = findStreamingCall(options.extensions) !== undefined
-  return render(buildTree(route, "", new Set(), schemas, undefined, undefined, streamingEnabled), options)
+  const streamingEnabled = findStreamingCall(options.extensions) !== undefined;
+  return render(
+    buildTree(route, "", new Set(), schemas, undefined, undefined, streamingEnabled),
+    options,
+  );
 }
 
 /**
@@ -127,11 +135,14 @@ export function generateClientFromNode(
   schemas?: SchemaMap,
   options: CodegenOptions = {},
 ): string {
-  const route = httpProjection(node)
-  const codegenNames = buildCodegenNameMap(node)
-  const memberNames = buildMemberNameMap(node)
-  const streamingEnabled = findStreamingCall(options.extensions) !== undefined
-  return render(buildTree(route, "", new Set(), schemas, codegenNames, memberNames, streamingEnabled), options)
+  const route = httpProjection(node);
+  const codegenNames = buildCodegenNameMap(node);
+  const memberNames = buildMemberNameMap(node);
+  const streamingEnabled = findStreamingCall(options.extensions) !== undefined;
+  return render(
+    buildTree(route, "", new Set(), schemas, codegenNames, memberNames, streamingEnabled),
+    options,
+  );
 }
 
 // ============================================================================
@@ -147,19 +158,19 @@ export function generateClientFromNode(
 
 /** Full underscore-joined path name (e.g. "books_bookId_read") — for SchemaMap lookups. */
 function buildCodegenNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
+  const out = new Map<Handler, string>();
   const visit = (node: Node, prefix: string): void => {
     for (const [key, child] of Object.entries(node.children ?? {})) {
-      const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+      const seg = prefix.length > 0 ? `${prefix}_${key}` : key;
       if (isLeaf(child)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(child.handler!, seg)
+        out.set(child.handler!, seg);
       } else {
-        visit(child, seg)
+        visit(child, seg);
       }
     }
     if (node.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name
+      const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name;
 
       // Same bare-leaf `fallback.subtree` case as client.ts's
       // `collectHandlerNames`/`collectCodegenNames`/openapi.ts's
@@ -168,26 +179,26 @@ function buildCodegenNameMap(n: Node): Map<Handler, string> {
       // nonexistent `children`.
       if (isLeaf(node.fallback.subtree)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(node.fallback.subtree.handler!, seg)
+        out.set(node.fallback.subtree.handler!, seg);
       } else {
-        visit(node.fallback.subtree, seg)
+        visit(node.fallback.subtree, seg);
       }
     }
-  }
-  visit(n, "")
-  return out
+  };
+  visit(n, "");
+  return out;
 }
 
 /** Own authored child key (e.g. "read") — for client member names. */
 function buildMemberNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
+  const out = new Map<Handler, string>();
   const visit = (node: Node): void => {
     for (const [key, child] of Object.entries(node.children ?? {})) {
       if (isLeaf(child)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(child.handler!, key)
+        out.set(child.handler!, key);
       } else {
-        visit(child)
+        visit(child);
       }
     }
     if (node.fallback !== undefined) {
@@ -195,26 +206,27 @@ function buildMemberNameMap(n: Node): Map<Handler, string> {
       // fallback's own name directly instead of recursing into a leaf.
       if (isLeaf(node.fallback.subtree)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(node.fallback.subtree.handler!, node.fallback.name)
+        out.set(node.fallback.subtree.handler!, node.fallback.name);
       } else {
-        visit(node.fallback.subtree)
+        visit(node.fallback.subtree);
       }
     }
-  }
-  visit(n)
-  return out
+  };
+  visit(n);
+  return out;
 }
 
 /** Fallback name derived purely from path + verb, for handlers absent from a name map. */
 function nameFromPath(path: string, verb: string): string {
-  const base = path === "/"
-    ? "root"
-    : path
-        .split("/")
-        .filter((s) => s.length > 0)
-        .map((s) => (s.startsWith("{") && s.endsWith("}") ? s.slice(1, -1) : s))
-        .join("_")
-  return `${base}_${verb.toLowerCase()}`
+  const base =
+    path === "/"
+      ? "root"
+      : path
+          .split("/")
+          .filter((s) => s.length > 0)
+          .map((s) => (s.startsWith("{") && s.endsWith("}") ? s.slice(1, -1) : s))
+          .join("_");
+  return `${base}_${verb.toLowerCase()}`;
 }
 
 // ============================================================================
@@ -222,12 +234,12 @@ function nameFromPath(path: string, verb: string): string {
 // ============================================================================
 
 type OperationEntry = {
-  readonly memberName: string
-  readonly codegenName: string
-  readonly path: string // e.g. "/books/{bookId}"
-  readonly verb: string // uppercase HTTP method
-  readonly requestSchema?: JsonSchema
-  readonly responseSchema?: JsonSchema
+  readonly memberName: string;
+  readonly codegenName: string;
+  readonly path: string; // e.g. "/books/{bookId}"
+  readonly verb: string; // uppercase HTTP method
+  readonly requestSchema?: JsonSchema;
+  readonly responseSchema?: JsonSchema;
   /**
    * True when this operation's output is tagged `x-stream` (see
    * `@rhi-zone/fractal-type-ir`'s `toJsonSchema`, `stream` kind) AND a
@@ -237,18 +249,18 @@ type OperationEntry = {
    * extension's `streamingCall` instead of the default `Promise<T>`/
    * `__request(...)`.
    */
-  readonly streaming: boolean
-}
+  readonly streaming: boolean;
+};
 
 type ClientTreeNode = {
-  readonly children: Map<string, ClientTreeNode>
-  param?: { readonly name: string; readonly subtree: ClientTreeNode }
-  readonly operations: Map<string, OperationEntry>
-}
+  readonly children: Map<string, ClientTreeNode>;
+  param?: { readonly name: string; readonly subtree: ClientTreeNode };
+  readonly operations: Map<string, OperationEntry>;
+};
 
 /** True when `schema` has at least one property left after path-param stripping. */
 function hasContent(schema: JsonSchema | undefined): schema is JsonSchema {
-  return schema?.properties !== undefined && Object.keys(schema.properties).length > 0
+  return schema?.properties !== undefined && Object.keys(schema.properties).length > 0;
 }
 
 /**
@@ -261,14 +273,15 @@ function hasContent(schema: JsonSchema | undefined): schema is JsonSchema {
  * vendor extension, same convention as `x-class-name`/`x-function`), hence
  * the local cast.
  */
-function unwrapStreamSchema(
-  schema: JsonSchema | undefined,
-): { readonly schema: JsonSchema | undefined; readonly isStream: boolean } {
-  const tagged = schema as (JsonSchema & { readonly ["x-stream"]?: boolean }) | undefined
+function unwrapStreamSchema(schema: JsonSchema | undefined): {
+  readonly schema: JsonSchema | undefined;
+  readonly isStream: boolean;
+} {
+  const tagged = schema as (JsonSchema & { readonly ["x-stream"]?: boolean }) | undefined;
   if (tagged?.["x-stream"] === true) {
-    return { schema: tagged.items === false ? undefined : tagged.items, isStream: true }
+    return { schema: tagged.items === false ? undefined : tagged.items, isStream: true };
   }
-  return { schema, isStream: false }
+  return { schema, isStream: false };
 }
 
 /**
@@ -278,17 +291,20 @@ function unwrapStreamSchema(
  * an operation's own `input` argument. Schemas without `properties` (no
  * fields at all, or an "unsupported" punt schema) pass through unchanged.
  */
-function stripPathParams(schema: JsonSchema | undefined, exclude: ReadonlySet<string>): JsonSchema | undefined {
-  if (schema?.properties === undefined || exclude.size === 0) return schema
-  const kept = Object.entries(schema.properties).filter(([k]) => !exclude.has(k))
-  if (kept.length === Object.keys(schema.properties).length) return schema
+function stripPathParams(
+  schema: JsonSchema | undefined,
+  exclude: ReadonlySet<string>,
+): JsonSchema | undefined {
+  if (schema?.properties === undefined || exclude.size === 0) return schema;
+  const kept = Object.entries(schema.properties).filter(([k]) => !exclude.has(k));
+  if (kept.length === Object.keys(schema.properties).length) return schema;
   return {
     ...schema,
     properties: Object.fromEntries(kept),
     ...(schema.required !== undefined
       ? { required: schema.required.filter((r) => !exclude.has(r)) }
       : {}),
-  }
+  };
 }
 
 /**
@@ -302,7 +318,7 @@ function isSingleLeafMethod(route: HttpRoute): boolean {
     Object.keys(route.methods ?? {}).length === 1 &&
     Object.keys(route.children ?? {}).length === 0 &&
     route.fallback === undefined
-  )
+  );
 }
 
 /**
@@ -321,9 +337,9 @@ function attachOperation(
   codegenNames: ReadonlyMap<Handler, string> | undefined,
   streamingEnabled: boolean,
 ): void {
-  const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(path, verb)
-  const toolSchema = schemas?.[codegenName]
-  const requestSchema = stripPathParams(toolSchema?.inputSchema, pathParamNames)
+  const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(path, verb);
+  const toolSchema = schemas?.[codegenName];
+  const requestSchema = stripPathParams(toolSchema?.inputSchema, pathParamNames);
   // Only unwrap the `x-stream` array-of-element schema down to the bare
   // element schema when a streaming-aware extension is actually in play
   // (`streamingEnabled`) — otherwise the operation stays `Promise<Array<T>>`-
@@ -335,7 +351,7 @@ function attachOperation(
   // actually produce.
   const { schema: outputSchema, isStream } = streamingEnabled
     ? unwrapStreamSchema(toolSchema?.outputSchema)
-    : { schema: toolSchema?.outputSchema, isStream: false }
+    : { schema: toolSchema?.outputSchema, isStream: false };
 
   node.operations.set(memberName, {
     memberName,
@@ -345,7 +361,7 @@ function attachOperation(
     ...(hasContent(requestSchema) ? { requestSchema } : {}),
     ...(outputSchema !== undefined ? { responseSchema: outputSchema } : {}),
     streaming: streamingEnabled && isStream,
-  })
+  });
 }
 
 /**
@@ -374,32 +390,60 @@ function buildTree(
   memberNames: ReadonlyMap<Handler, string> | undefined,
   streamingEnabled: boolean,
 ): ClientTreeNode {
-  const node: ClientTreeNode = { children: new Map(), operations: new Map() }
-  const displayPath = path === "" ? "/" : path
+  const node: ClientTreeNode = { children: new Map(), operations: new Map() };
+  const displayPath = path === "" ? "/" : path;
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
-    const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase()
-    attachOperation(node, memberName, verb, entry, displayPath, pathParamNames, schemas, codegenNames, streamingEnabled)
+    const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase();
+    attachOperation(
+      node,
+      memberName,
+      verb,
+      entry,
+      displayPath,
+      pathParamNames,
+      schemas,
+      codegenNames,
+      streamingEnabled,
+    );
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
-    const childPath = `${path}/${seg}`
+    const childPath = `${path}/${seg}`;
     if (isSingleLeafMethod(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const [verb] = Object.keys(child.methods!)
+      const [verb] = Object.keys(child.methods!);
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const entry = child.methods![verb!]!
-      attachOperation(node, seg, verb!, entry, childPath, pathParamNames, schemas, codegenNames, streamingEnabled)
+      const entry = child.methods![verb!]!;
+      attachOperation(
+        node,
+        seg,
+        verb!,
+        entry,
+        childPath,
+        pathParamNames,
+        schemas,
+        codegenNames,
+        streamingEnabled,
+      );
     } else {
       node.children.set(
         seg,
-        buildTree(child, childPath, pathParamNames, schemas, codegenNames, memberNames, streamingEnabled),
-      )
+        buildTree(
+          child,
+          childPath,
+          pathParamNames,
+          schemas,
+          codegenNames,
+          memberNames,
+          streamingEnabled,
+        ),
+      );
     }
   }
 
   if (route.fallback !== undefined) {
-    const { name, subtree } = route.fallback
+    const { name, subtree } = route.fallback;
     node.param = {
       name,
       subtree: buildTree(
@@ -411,10 +455,10 @@ function buildTree(
         memberNames,
         streamingEnabled,
       ),
-    }
+    };
   }
 
-  return node
+  return node;
 }
 
 // ============================================================================
@@ -423,7 +467,7 @@ function buildTree(
 
 /** A valid bare JS identifier, or a quoted string literal key otherwise. */
 function safeKey(key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 
 function pascalCase(part: string): string {
@@ -431,17 +475,17 @@ function pascalCase(part: string): string {
     .split(/[^A-Za-z0-9]+/)
     .filter((s) => s.length > 0)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("")
+    .join("");
 }
 
 /** `"books_bookId_read"` -> `"BooksBookIdRead"` — base name for that op's `<Base>Input`/`<Base>Output`. */
 function typeBaseName(codegenName: string): string {
-  return codegenName.split("_").map(pascalCase).join("")
+  return codegenName.split("_").map(pascalCase).join("");
 }
 
 /** `/books/{bookId}` -> the content of a JS template literal: `/books/${encodeURIComponent(bookId)}`. */
 function pathTemplateLiteral(path: string): string {
-  return path.replace(/\{([^}]+)\}/g, (_match, name: string) => `\${encodeURIComponent(${name})}`)
+  return path.replace(/\{([^}]+)\}/g, (_match, name: string) => `\${encodeURIComponent(${name})}`);
 }
 
 // ============================================================================
@@ -455,58 +499,58 @@ function pathTemplateLiteral(path: string): string {
 // ============================================================================
 
 function schemaToType(schema: JsonSchema | undefined, indent: string): string {
-  if (schema === undefined) return "unknown"
+  if (schema === undefined) return "unknown";
 
-  if ("const" in schema) return JSON.stringify(schema.const)
+  if ("const" in schema) return JSON.stringify(schema.const);
 
-  const enumValues = schema.enum
+  const enumValues = schema.enum;
   if (Array.isArray(enumValues)) {
-    if (enumValues.length === 0) return "never"
-    return enumValues.map((v) => JSON.stringify(v)).join(" | ")
+    if (enumValues.length === 0) return "never";
+    return enumValues.map((v) => JSON.stringify(v)).join(" | ");
   }
 
-  const anyOf = schema.anyOf ?? schema.oneOf
+  const anyOf = schema.anyOf ?? schema.oneOf;
   if (Array.isArray(anyOf)) {
-    if (anyOf.length === 0) return "unknown"
-    return anyOf.map((s) => schemaToType(s, indent)).join(" | ")
+    if (anyOf.length === 0) return "unknown";
+    return anyOf.map((s) => schemaToType(s, indent)).join(" | ");
   }
 
-  const allOf = (schema as { allOf?: JsonSchema[] }).allOf
+  const allOf = (schema as { allOf?: JsonSchema[] }).allOf;
   if (Array.isArray(allOf)) {
-    if (allOf.length === 0) return "unknown"
-    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ")
+    if (allOf.length === 0) return "unknown";
+    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ");
   }
 
-  const type = schema.type
+  const type = schema.type;
 
-  const properties = schema.properties
+  const properties = schema.properties;
   if (type === "object" || properties !== undefined) {
     if (properties === undefined || Object.keys(properties).length === 0) {
-      return "Record<string, unknown>"
+      return "Record<string, unknown>";
     }
-    const required = new Set(schema.required ?? [])
-    const nextIndent = indent + "  "
+    const required = new Set(schema.required ?? []);
+    const nextIndent = indent + "  ";
     const lines = Object.entries(properties).map(([key, propSchema]) => {
-      const optional = required.has(key) ? "" : "?"
-      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`
-    })
-    return `{\n${lines.join("\n")}\n${indent}}`
+      const optional = required.has(key) ? "" : "?";
+      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`;
+    });
+    return `{\n${lines.join("\n")}\n${indent}}`;
   }
 
-  const items = schema.items
+  const items = schema.items;
   if (type === "array" || items !== undefined) {
-    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`
+    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`;
   }
 
   switch (type) {
     case "string":
-      return "string"
+      return "string";
     case "number":
-      return "number"
+      return "number";
     case "boolean":
-      return "boolean"
+      return "boolean";
     default:
-      return "unknown"
+      return "unknown";
   }
 }
 
@@ -515,30 +559,32 @@ function schemaToType(schema: JsonSchema | undefined, indent: string): string {
 // ============================================================================
 
 function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
-  const nextIndent = indent + "  "
-  const lines: string[] = []
+  const nextIndent = indent + "  ";
+  const lines: string[] = [];
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`)
+    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`);
   }
 
   if (node.param !== undefined) {
-    const { name, subtree } = node.param
-    lines.push(`${nextIndent}readonly ${safeKey(name)}: (${name}: string) => ${nodeTypeLiteral(subtree, nextIndent)}`)
+    const { name, subtree } = node.param;
+    lines.push(
+      `${nextIndent}readonly ${safeKey(name)}: (${name}: string) => ${nodeTypeLiteral(subtree, nextIndent)}`,
+    );
   }
 
   for (const [memberName, entry] of node.operations) {
-    const base = typeBaseName(entry.codegenName)
-    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown"
+    const base = typeBaseName(entry.codegenName);
+    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown";
     const sig =
       entry.requestSchema !== undefined
         ? `(input: ${base}Input, callOpts?: CallOptions)`
-        : `(callOpts?: CallOptions)`
-    const returnType = entry.streaming ? `AsyncIterable<${outputType}>` : `Promise<${outputType}>`
-    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => ${returnType}`)
+        : `(callOpts?: CallOptions)`;
+    const returnType = entry.streaming ? `AsyncIterable<${outputType}>` : `Promise<${outputType}>`;
+    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => ${returnType}`);
   }
 
-  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
+  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
 }
 
 // ============================================================================
@@ -557,27 +603,31 @@ function nodeRuntimeLiteral(
   streamingCall: ((args: StreamingCallArgs) => string) | undefined,
   extensions: readonly ClientExtension[] | undefined,
 ): string {
-  const nextIndent = indent + "  "
-  const lines: string[] = []
+  const nextIndent = indent + "  ";
+  const lines: string[] = [];
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent, streamingCall, extensions)},`)
+    lines.push(
+      `${nextIndent}${safeKey(key)}: ${nodeRuntimeLiteral(child, nextIndent, streamingCall, extensions)},`,
+    );
   }
 
   if (node.param !== undefined) {
-    const { name, subtree } = node.param
+    const { name, subtree } = node.param;
     lines.push(
       `${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent, streamingCall, extensions)}),`,
-    )
+    );
   }
 
   for (const [memberName, entry] of node.operations) {
-    const base = typeBaseName(entry.codegenName)
-    const hasInput = entry.requestSchema !== undefined
-    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown"
-    const params = hasInput ? `input: ${base}Input, callOpts?: CallOptions` : `callOpts?: CallOptions`
-    const inputArg = hasInput ? "input" : "undefined"
-    const pathLit = pathTemplateLiteral(entry.path)
+    const base = typeBaseName(entry.codegenName);
+    const hasInput = entry.requestSchema !== undefined;
+    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown";
+    const params = hasInput
+      ? `input: ${base}Input, callOpts?: CallOptions`
+      : `callOpts?: CallOptions`;
+    const inputArg = hasInput ? "input" : "undefined";
+    const pathLit = pathTemplateLiteral(entry.path);
 
     if (entry.streaming && streamingCall !== undefined) {
       const callExpr = streamingCall({
@@ -590,24 +640,24 @@ function nodeRuntimeLiteral(
         baseTimeoutExpr: "baseTimeout",
         baseSignalExpr: "baseSignal",
         callOptsExpr: "callOpts",
-      })
+      });
       lines.push(
         `${nextIndent}${safeKey(memberName)}: (${params}): AsyncIterable<${outputType}> => ` +
           `${callExpr} as unknown as AsyncIterable<${outputType}>,`,
-      )
+      );
     } else {
       const requestExpr =
         `__request(baseUrl, fetchImpl, headers, "${entry.verb}", \`${pathLit}\`, ${inputArg}, ` +
-        `baseTimeout, baseSignal, callOpts)`
-      const resultExpr = composeCodegenResult(requestExpr, entry.codegenName, extensions)
+        `baseTimeout, baseSignal, callOpts)`;
+      const resultExpr = composeCodegenResult(requestExpr, entry.codegenName, extensions);
       lines.push(
         `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
           `(${resultExpr}) as Promise<${outputType}>,`,
-      )
+      );
     }
   }
 
-  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
+  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
 }
 
 // ============================================================================
@@ -615,10 +665,10 @@ function nodeRuntimeLiteral(
 // ============================================================================
 
 function collectOperations(node: ClientTreeNode, out: OperationEntry[] = []): OperationEntry[] {
-  for (const entry of node.operations.values()) out.push(entry)
-  for (const child of node.children.values()) collectOperations(child, out)
-  if (node.param !== undefined) collectOperations(node.param.subtree, out)
-  return out
+  for (const entry of node.operations.values()) out.push(entry);
+  for (const child of node.children.values()) collectOperations(child, out);
+  if (node.param !== undefined) collectOperations(node.param.subtree, out);
+  return out;
 }
 
 // ============================================================================
@@ -626,29 +676,29 @@ function collectOperations(node: ClientTreeNode, out: OperationEntry[] = []): Op
 // ============================================================================
 
 function render(root: ClientTreeNode, options: CodegenOptions): string {
-  const clientName = options.clientName ?? "Client"
-  const entries = collectOperations(root)
+  const clientName = options.clientName ?? "Client";
+  const entries = collectOperations(root);
 
-  const typeDecls: string[] = []
-  const seenBases = new Set<string>()
+  const typeDecls: string[] = [];
+  const seenBases = new Set<string>();
   for (const entry of entries) {
-    const base = typeBaseName(entry.codegenName)
+    const base = typeBaseName(entry.codegenName);
     // Two different route positions could in principle share a codegen name
     // (only possible in the no-Node degraded-naming case, where two distinct
     // co-located verbs at two distinct paths both fall back to the same
     // `nameFromPath`-derived name); guard against emitting duplicate aliases.
-    if (seenBases.has(base)) continue
-    seenBases.add(base)
+    if (seenBases.has(base)) continue;
+    seenBases.add(base);
     if (entry.requestSchema !== undefined) {
-      typeDecls.push(`export type ${base}Input = ${schemaToType(entry.requestSchema, "")}`)
+      typeDecls.push(`export type ${base}Input = ${schemaToType(entry.requestSchema, "")}`);
     }
     if (entry.responseSchema !== undefined) {
-      typeDecls.push(`export type ${base}Output = ${schemaToType(entry.responseSchema, "")}`)
+      typeDecls.push(`export type ${base}Output = ${schemaToType(entry.responseSchema, "")}`);
     }
   }
 
-  const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`
-  const streamingCall = findStreamingCall(options.extensions)
+  const clientTypeDecl = `export type ${clientName} = ${nodeTypeLiteral(root, "")}`;
+  const streamingCall = findStreamingCall(options.extensions);
 
   // Per-operation result helpers (e.g. `extensions/validation.ts`'s one
   // schema constant per operation) need the FULL operation list up front, and
@@ -659,10 +709,10 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
   const operationInfos: CodegenOperationInfo[] = entries.map((entry) => ({
     codegenName: entry.codegenName,
     ...(entry.responseSchema !== undefined ? { responseSchema: entry.responseSchema } : {}),
-  }))
-  const resultHelpers = collectResultHelpers(operationInfos, options.extensions)
+  }));
+  const resultHelpers = collectResultHelpers(operationInfos, options.extensions);
 
-  const factoryBody = nodeRuntimeLiteral(root, "  ", streamingCall, options.extensions)
+  const factoryBody = nodeRuntimeLiteral(root, "  ", streamingCall, options.extensions);
 
   // Extensions are baked in at generation time: each contributes an
   // expression wrapping the base fetch impl (`expr`), plus any helper
@@ -672,25 +722,27 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
   const { expr: fetchExpr, helpers: extensionHelpers } = composeCodegenFetch(
     "options.fetch ?? fetch",
     options.extensions,
-  )
+  );
 
-  return [
-    HEADER,
-    typeDecls.join("\n\n"),
-    clientTypeDecl,
-    RUNTIME_HELPERS,
-    ...extensionHelpers,
-    ...resultHelpers,
+  return (
     [
-      `export function createClient(baseUrl: string, options: CreateClientOptions = {}): ${clientName} {`,
-      `  const fetchImpl = ${fetchExpr}`,
-      `  const headers = options.headers`,
-      `  const baseTimeout = options.timeout`,
-      `  const baseSignal = options.signal`,
-      `  return ${factoryBody}`,
-      `}`,
-    ].join("\n"),
-  ].join("\n\n") + "\n"
+      HEADER,
+      typeDecls.join("\n\n"),
+      clientTypeDecl,
+      RUNTIME_HELPERS,
+      ...extensionHelpers,
+      ...resultHelpers,
+      [
+        `export function createClient(baseUrl: string, options: CreateClientOptions = {}): ${clientName} {`,
+        `  const fetchImpl = ${fetchExpr}`,
+        `  const headers = options.headers`,
+        `  const baseTimeout = options.timeout`,
+        `  const baseSignal = options.signal`,
+        `  return ${factoryBody}`,
+        `}`,
+      ].join("\n"),
+    ].join("\n\n") + "\n"
+  );
 }
 
 // ============================================================================
@@ -699,7 +751,7 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
 
 const HEADER =
   "// @generated by @rhi-zone/fractal-http-api-projector's client codegen — do not edit\n" +
-  "// Standalone: no imports, depends only on the global `fetch`/`Request`/`URL` surface."
+  "// Standalone: no imports, depends only on the global `fetch`/`Request`/`URL` surface.";
 
 const RUNTIME_HELPERS = `
 export type CreateClientOptions = {
@@ -816,4 +868,4 @@ async function __request(
   }
 
   return body
-}`.trim()
+}`.trim();

@@ -18,7 +18,7 @@
 // convention: GET/HEAD/DELETE → "query", POST/PUT/PATCH → "body", with
 // route-slug params always from "path".
 
-import type { WireOf, WireProfileName } from "@rhi-zone/fractal-type-ir"
+import type { WireOf, WireProfileName } from "@rhi-zone/fractal-type-ir";
 
 // ============================================================================
 // Store interface
@@ -32,7 +32,7 @@ import type { WireOf, WireProfileName } from "@rhi-zone/fractal-type-ir"
  * semantics by the projector that builds them (see `httpStores` in
  * http-api-projector/src/decode.ts) rather than by this shared type.
  */
-export type Store = Record<string, unknown>
+export type Store = Record<string, unknown>;
 
 /**
  * The `caller` store's shape — auth/identity context, populated by every
@@ -43,7 +43,7 @@ export type Store = Record<string, unknown>
  * wanting a richer `caller` composes it in its own augmentation, the same way
  * it composes any other store member (docs/design/typed-store-spec.md §2).
  */
-export type CallerStoreShape = Store
+export type CallerStoreShape = Store;
 
 /**
  * The store members CORE itself declares, split out from `StoreRegistry` (which
@@ -61,7 +61,7 @@ export type CallerStoreShape = Store
  * (`httpStores`, `buildInput`, `assembleArgumentInput`).
  */
 export interface CoreStores {
-  caller: CallerStoreShape
+  caller: CallerStoreShape;
 }
 
 /**
@@ -105,7 +105,7 @@ export interface StoreRegistry extends CoreStores {}
  * `stores.someUndeclaredName` remains a compile-time error, unchanged — that
  * property is what this type has always existed to enforce.
  */
-export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>
+export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>;
 
 /**
  * The keys of `StoreRegistry` whose members are REQUIRED (no `?`) — the
@@ -114,15 +114,15 @@ export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>
  * one that resolves to `never`.
  */
 export type RequiredStoreKeys = {
-  [K in keyof StoreRegistry]-?: {} extends Pick<StoreRegistry, K> ? never : K
-}[keyof StoreRegistry]
+  [K in keyof StoreRegistry]-?: {} extends Pick<StoreRegistry, K> ? never : K;
+}[keyof StoreRegistry];
 
 /**
  * The required members a DEPLOYMENT must supply — `RequiredStoreKeys` minus the
  * ones core declares itself (`caller`, which every projector builds per-request
  * rather than the deployment registering once).
  */
-export type RequiredServiceStoreKeys = Exclude<RequiredStoreKeys, keyof CoreStores>
+export type RequiredServiceStoreKeys = Exclude<RequiredStoreKeys, keyof CoreStores>;
 
 /**
  * The single registration object a deployment supplies for its service stores
@@ -147,7 +147,7 @@ export type RequiredServiceStoreKeys = Exclude<RequiredStoreKeys, keyof CoreStor
  * stores at all — a deployment with none simply never needs the registration
  * site.
  */
-export type ServiceStores = Readonly<Pick<StoreRegistry, RequiredServiceStoreKeys>>
+export type ServiceStores = Readonly<Pick<StoreRegistry, RequiredServiceStoreKeys>>;
 
 /**
  * The portion of the merged registry a PROJECTOR builds on its own, per
@@ -171,7 +171,7 @@ export type ServiceStores = Readonly<Pick<StoreRegistry, RequiredServiceStoreKey
  * of overstating what a builder produces. When the threading does land, each
  * `XStoreBag` widens back to `Stores & XStores` and this type goes away.
  */
-export type ProjectorStores = Omit<Stores, RequiredServiceStoreKeys>
+export type ProjectorStores = Omit<Stores, RequiredServiceStoreKeys>;
 
 // ============================================================================
 // Per-param source override
@@ -183,15 +183,15 @@ export type ProjectorStores = Omit<Stores, RequiredServiceStoreKeys>
  * from a query param on a POST request.
  */
 export interface ParamSource {
-  readonly store: string
-  readonly key?: string // defaults to param name when omitted
+  readonly store: string;
+  readonly key?: string; // defaults to param name when omitted
 }
 
 /**
  * Map of param names to their source overrides. Only params listed here
  * diverge from the convention; all others follow the primary-store rule.
  */
-export type SourceMap = Readonly<Record<string, ParamSource>>
+export type SourceMap = Readonly<Record<string, ParamSource>>;
 
 /**
  * One `meta.<NS>.encodingMap` entry's two authorable shapes (phase B/E,
@@ -219,7 +219,7 @@ export type SourceMap = Readonly<Record<string, ParamSource>>
  * check already lives downstream) and would risk exactly the kind of
  * widening-through-a-typed-intermediate hazard that comment warns about.
  */
-export type EncodingMap = Readonly<Record<string, WireProfileName | ((w: never) => unknown)>>
+export type EncodingMap = Readonly<Record<string, WireProfileName | ((w: never) => unknown)>>;
 
 // ============================================================================
 // source() authoring helper — shared machinery for every protocol's
@@ -258,7 +258,7 @@ export type EncodingMap = Readonly<Record<string, WireProfileName | ((w: never) 
  */
 export type SourceMapInput<Store extends string = string> = Readonly<
   Record<string, Store | { readonly store: Store; readonly key?: string }>
->
+>;
 
 /**
  * The `SourceMap` a `SourceMapInput` expands to, with each key's own literal
@@ -283,8 +283,8 @@ export type SourceMapInput<Store extends string = string> = Readonly<
 export type ResolvedSourceMap<M extends SourceMapInput> = {
   readonly [K in keyof M]: M[K] extends string
     ? { readonly store: M[K] & string; readonly key: K & string }
-    : M[K] & ParamSource
-}
+    : M[K] & ParamSource;
+};
 
 /**
  * Expands a `SourceMapInput`'s string shorthand to full `ParamSource` entries
@@ -294,11 +294,11 @@ export type ResolvedSourceMap<M extends SourceMapInput> = {
  * place, not once per protocol.
  */
 export function resolveSourceMap<const M extends SourceMapInput>(map: M): ResolvedSourceMap<M> {
-  const sourceMap: Record<string, ParamSource> = {}
+  const sourceMap: Record<string, ParamSource> = {};
   for (const [key, value] of Object.entries(map)) {
-    sourceMap[key] = typeof value === "string" ? { store: value, key } : value
+    sourceMap[key] = typeof value === "string" ? { store: value, key } : value;
   }
-  return sourceMap as ResolvedSourceMap<M>
+  return sourceMap as ResolvedSourceMap<M>;
 }
 
 // ============================================================================
@@ -346,7 +346,7 @@ export function resolveSourceMap<const M extends SourceMapInput>(map: M): Resolv
  * (and `string` for one typed against an open `Record<string, unknown>`), both
  * of which make the coverage check below vacuous rather than wrong.
  */
-export type InputKeys<H> = H extends (input: infer I) => any ? keyof I : never
+export type InputKeys<H> = H extends (input: infer I) => any ? keyof I : never;
 
 /**
  * `T`'s own EXPLICIT keys only — drops an index signature's own contribution
@@ -363,7 +363,7 @@ export type InputKeys<H> = H extends (input: infer I) => any ? keyof I : never
  * (scratch `tsc`) to silently break `SourceMapsOf` below for the exact shape
  * `typeof someNode.meta` produces, not just some contrived edge case.
  */
-type OwnKeys<T> = { [K in keyof T as string extends K ? never : K]: T[K] }
+type OwnKeys<T> = { [K in keyof T as string extends K ? never : K]: T[K] };
 
 /**
  * The `sourceMap` value(s) carried by any namespace of a folded meta object —
@@ -376,8 +376,10 @@ type OwnKeys<T> = { [K in keyof T as string extends K ? never : K]: T[K] }
  * `typeof node.meta` a caller might reasonably pass instead.
  */
 type SourceMapsOf<Meta> = OwnKeys<Meta>[keyof OwnKeys<Meta>] extends infer NS
-  ? NS extends { readonly sourceMap: infer M } ? M : never
-  : never
+  ? NS extends { readonly sourceMap: infer M }
+    ? M
+    : never
+  : never;
 
 /**
  * Resolve which store param `P` reads from, given a folded `Meta` object —
@@ -400,15 +402,18 @@ type SourceMapsOf<Meta> = OwnKeys<Meta>[keyof OwnKeys<Meta>] extends infer NS
  * carries no per-key information to check against, so contributing nothing is
  * also the honest answer.
  */
-export type FindStoreForParam<Meta, P extends string> = SourceMapsOf<Meta> extends infer NS
-  ? NS extends unknown
-    ? string extends keyof NS
-      ? never
-      : P extends keyof NS
-        ? NS[P] extends { readonly store: infer S } ? S : never
-        : never
-    : never
-  : never
+export type FindStoreForParam<Meta, P extends string> =
+  SourceMapsOf<Meta> extends infer NS
+    ? NS extends unknown
+      ? string extends keyof NS
+        ? never
+        : P extends keyof NS
+          ? NS[P] extends { readonly store: infer S }
+            ? S
+            : never
+          : never
+      : never
+    : never;
 
 /**
  * Every param name any namespace's `sourceMap` in `Meta` declares an override
@@ -429,11 +434,14 @@ export type FindStoreForParam<Meta, P extends string> = SourceMapsOf<Meta> exten
  * declared params — not, as a non-distributed `keyof (M1 | M2)` would, their
  * intersection.
  */
-export type DeclaredSourceParams<Meta> = SourceMapsOf<Meta> extends infer NS
-  ? NS extends unknown
-    ? string extends keyof NS ? never : keyof NS & string
-    : never
-  : never
+export type DeclaredSourceParams<Meta> =
+  SourceMapsOf<Meta> extends infer NS
+    ? NS extends unknown
+      ? string extends keyof NS
+        ? never
+        : keyof NS & string
+      : never
+    : never;
 
 /**
  * The `source()`-declared param names a handler does NOT declare as an input —
@@ -456,7 +464,7 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
   ? never
   : string extends InputKeys<H>
     ? never
-    : Exclude<DeclaredSourceParams<Meta>, InputKeys<H>>
+    : Exclude<DeclaredSourceParams<Meta>, InputKeys<H>>;
 
 // ============================================================================
 // Function-form `encodingMap` decoder typing — decision 3, docs/design/
@@ -548,23 +556,25 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
  * namespace contributed nothing. Hardcoded to these two literal keys (see
  * this section's header comment for why that's not a protocol-blindness
  * violation). */
-type HttpNamespaceOf<Meta> = Meta extends { readonly http?: infer NS } ? NS : undefined
-type CliNamespaceOf<Meta> = Meta extends { readonly cli?: infer NS } ? NS : undefined
+type HttpNamespaceOf<Meta> = Meta extends { readonly http?: infer NS } ? NS : undefined;
+type CliNamespaceOf<Meta> = Meta extends { readonly cli?: infer NS } ? NS : undefined;
 
 /** The HTTP method `op()`'s own contributions declared — `meta.http.method`
  * wins, else `meta.http.verb` (mirroring `extractWireApplyValidationTypeRefs`'s
  * own `readMetaStringLiteral(..., "method", ...) ?? readMetaStringLiteral(...,
  * "verb", ...)` read order), else `"GET"` — `wire-derive.ts`'s own
  * `primaryStoreForMethod(method ?? "GET")` default for an unauthored method. */
-type HttpMethodOf<Meta> = HttpNamespaceOf<Meta> extends { readonly method: infer M extends string }
-  ? M
-  : HttpNamespaceOf<Meta> extends { readonly verb: infer V extends string }
-    ? V
-    : "GET"
+type HttpMethodOf<Meta> =
+  HttpNamespaceOf<Meta> extends { readonly method: infer M extends string }
+    ? M
+    : HttpNamespaceOf<Meta> extends { readonly verb: infer V extends string }
+      ? V
+      : "GET";
 
 /** `wire-derive.ts`'s `primaryStoreForMethod`, at the type level: GET/HEAD/
  * DELETE -> `"query"`, everything else -> `"body"`. */
-type HttpDefaultStore<Meta> = HttpMethodOf<Meta> extends "GET" | "HEAD" | "DELETE" ? "query" : "body"
+type HttpDefaultStore<Meta> =
+  HttpMethodOf<Meta> extends "GET" | "HEAD" | "DELETE" ? "query" : "body";
 
 /** `wire-derive.ts`'s `httpStoreEncoding`/`cliStoreEncoding`, at the type
  * level — a store name to a `WireProfileName`. */
@@ -572,7 +582,7 @@ type StoreProfile<NS extends "http" | "cli", Store extends string> = NS extends 
   ? Store extends "body"
     ? "json"
     : "query"
-  : "argv"
+  : "argv";
 
 /** One namespace's `sourceMap` value, structurally (not via `SourceMapsOf`,
  * which unions EVERY namespace — this needs exactly one, scoped to `NS`). */
@@ -582,7 +592,7 @@ type NamespaceSourceMapOf<Meta, NS extends "http" | "cli"> = NS extends "http"
     : never
   : CliNamespaceOf<Meta> extends { readonly sourceMap?: infer M }
     ? M
-    : never
+    : never;
 
 /** The single, EXACT store an explicit `sourceMap` entry names for field `P`
  * under namespace `NS` — `never` when there is no explicit entry (the caller
@@ -599,7 +609,7 @@ type ExplicitStoreForField<Meta, NS extends "http" | "cli", P extends string> =
             ? S
             : never
           : never
-    : never
+    : never;
 
 /** The store(s) a field with NO explicit `sourceMap` entry might resolve to
  * — `"path"` (an authored local path-slug name match, unknowable from `op()`
@@ -607,7 +617,7 @@ type ExplicitStoreForField<Meta, NS extends "http" | "cli", P extends string> =
  * header comment for when this union is real vs. vacuous. */
 type FallbackStoresForField<Meta, NS extends "http" | "cli"> = NS extends "http"
   ? "path" | HttpDefaultStore<Meta>
-  : "path" | "flag"
+  : "path" | "flag";
 
 /** Every store field `P` (under namespace `NS`) might resolve to, given
  * `Meta` — the explicit override when one exists, else the fallback union. */
@@ -615,7 +625,7 @@ type ResolvedStoresForField<Meta, NS extends "http" | "cli", P extends string> =
   ExplicitStoreForField<Meta, NS, P>,
 ] extends [never]
   ? FallbackStoresForField<Meta, NS>
-  : ExplicitStoreForField<Meta, NS, P>
+  : ExplicitStoreForField<Meta, NS, P>;
 
 /**
  * The type a function-form `meta.<NS>.encodingMap[P]` decoder's PARAMETER
@@ -630,7 +640,7 @@ export type EncodingMapWireOf<Meta, NS extends "http" | "cli", P extends string,
     ? S extends string
       ? WireOf<T, StoreProfile<NS, S>>
       : never
-    : never
+    : never;
 
 /** `Meta["http"].encodingMap` / `Meta["cli"].encodingMap`, structurally. */
 type NamespaceEncodingMapOf<Meta, NS extends "http" | "cli"> = NS extends "http"
@@ -639,11 +649,11 @@ type NamespaceEncodingMapOf<Meta, NS extends "http" | "cli"> = NS extends "http"
     : never
   : CliNamespaceOf<Meta> extends { readonly encodingMap?: infer M }
     ? M
-    : never
+    : never;
 
 /** `H`'s single declared input parameter's type — `never` for a handler with
  * no parameter. */
-type HandlerInput<H> = H extends (input: infer I) => any ? I : never
+type HandlerInput<H> = H extends (input: infer I) => any ? I : never;
 
 /**
  * Every field name, under namespace `NS`, whose `encodingMap` entry is a
@@ -668,13 +678,15 @@ export type MismatchedEncodingMapDecoders<H, Meta, NS extends "http" | "cli"> =
         : {
             [P in Extract<keyof M, string>]: P extends keyof HandlerInput<H>
               ? M[P] extends (w: infer W) => infer R
-                ? [(w: W) => R] extends [(w: EncodingMapWireOf<Meta, NS, P, HandlerInput<H>[P]>) => HandlerInput<H>[P]]
+                ? [(w: W) => R] extends [
+                    (w: EncodingMapWireOf<Meta, NS, P, HandlerInput<H>[P]>) => HandlerInput<H>[P],
+                  ]
                   ? never
                   : P
                 : never
-              : never
+              : never;
           }[Extract<keyof M, string>]
-    : never
+    : never;
 
 // ============================================================================
 // Assembler
@@ -705,28 +717,28 @@ export function assemble(
 ): Record<string, unknown> {
   const resolve = (name: string): ParamSource | undefined => {
     if (pathParamNames.includes(name)) {
-      return { store: "path", key: name }
+      return { store: "path", key: name };
     }
     if (name in sourceMap) {
-      return sourceMap[name]!
+      return sourceMap[name]!;
     }
     if (primaryStore) {
-      return { store: primaryStore, key: name }
+      return { store: primaryStore, key: name };
     }
-    return undefined
-  }
+    return undefined;
+  };
 
   // Store names are resolved dynamically here (from sourceMap/pathParamNames,
   // both plain strings) — `Stores` is intentionally narrowed to the
   // declaration-merged StoreRegistry for call sites that access it by
   // literal key, so this internal lookup needs the wider index signature.
-  const byName = stores as Readonly<Record<string, Store | undefined>>
+  const byName = stores as Readonly<Record<string, Store | undefined>>;
 
-  const values: Record<string, unknown> = {}
+  const values: Record<string, unknown> = {};
   for (const name of paramNames) {
-    const src = resolve(name)
-    values[name] = src ? byName[src.store]?.[src.key ?? name] : undefined
+    const src = resolve(name);
+    values[name] = src ? byName[src.store]?.[src.key ?? name] : undefined;
   }
 
-  return values
+  return values;
 }

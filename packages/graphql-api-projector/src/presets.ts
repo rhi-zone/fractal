@@ -35,51 +35,67 @@
 // `.subscribe()`, with a Bun WebSocket adapter (`handleBunWebSocket`)
 // mirroring this module's own HTTP preset.
 
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import { createGraphQLServer } from "./server.ts"
-import type { CreateGraphQLServerOptions } from "./server.ts"
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { createGraphQLServer } from "./server.ts";
+import type { CreateGraphQLServerOptions } from "./server.ts";
 
 /** The standard GraphQL-over-HTTP request body shape. */
 type GraphQLHttpRequestBody = {
-  readonly query?: unknown
-  readonly variables?: Record<string, unknown> | undefined
-  readonly operationName?: string | undefined
-}
+  readonly query?: unknown;
+  readonly variables?: Record<string, unknown> | undefined;
+  readonly operationName?: string | undefined;
+};
 
 /** CORS configuration — `true` for permissive defaults (`origin: "*"`), or an object to configure origin/credentials. Mirrors http-api-projector's `CorsOptions` shape (kept local rather than an import — see module doc on avoiding a new cross-package dependency for a handful of lines). */
 export type HttpGraphQLCorsOptions = {
-  readonly origin?: string | readonly string[]
-  readonly credentials?: boolean
-}
+  readonly origin?: string | readonly string[];
+  readonly credentials?: boolean;
+};
 
 export type CreateHttpGraphQLServerOptions<T = unknown> = CreateGraphQLServerOptions<T> & {
   /** URL path the handler responds to. Every other path gets a 404. Defaults to `/graphql`. */
-  readonly path?: string
+  readonly path?: string;
   /** Enable CORS. `true` for permissive defaults (`origin: "*"`), an options object to configure origin/credentials, or omitted/`false` to disable (default). */
-  readonly cors?: boolean | HttpGraphQLCorsOptions
+  readonly cors?: boolean | HttpGraphQLCorsOptions;
   /** Serve the raw SDL text on a bare `GET <path>` (no `query` param) — a minimal playground/introspection landing page. Default `true`; pass `false` to 400 instead. */
-  readonly playground?: boolean
-}
+  readonly playground?: boolean;
+};
 
-function jsonResponse(body: unknown, status: number, extraHeaders: Record<string, string> = {}): Response {
+function jsonResponse(
+  body: unknown,
+  status: number,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", ...extraHeaders },
-  })
+  });
 }
 
 /** CORS response headers for `req`, or `{}` when CORS is disabled or the request's Origin isn't allowed. */
-function corsHeaders(req: Request, cors: boolean | HttpGraphQLCorsOptions | undefined): Record<string, string> {
-  if (cors === undefined || cors === false) return {}
-  const opts = cors === true ? {} : cors
-  const origins: readonly string[] = opts.origin === undefined ? ["*"] : typeof opts.origin === "string" ? [opts.origin] : opts.origin
-  const reqOrigin = req.headers.get("Origin")
-  const allowed = origins.includes("*") ? "*" : reqOrigin !== null && origins.includes(reqOrigin) ? reqOrigin : undefined
-  if (allowed === undefined) return {}
+function corsHeaders(
+  req: Request,
+  cors: boolean | HttpGraphQLCorsOptions | undefined,
+): Record<string, string> {
+  if (cors === undefined || cors === false) return {};
+  const opts = cors === true ? {} : cors;
+  const origins: readonly string[] =
+    opts.origin === undefined
+      ? ["*"]
+      : typeof opts.origin === "string"
+        ? [opts.origin]
+        : opts.origin;
+  const reqOrigin = req.headers.get("Origin");
+  const allowed = origins.includes("*")
+    ? "*"
+    : reqOrigin !== null && origins.includes(reqOrigin)
+      ? reqOrigin
+      : undefined;
+  if (allowed === undefined) return {};
   return {
     "Access-Control-Allow-Origin": allowed,
     ...(opts.credentials === true ? { "Access-Control-Allow-Credentials": "true" } : {}),
-  }
+  };
 }
 
 /** `OPTIONS` preflight response — 204 + the standard CORS preflight headers. */
@@ -89,9 +105,10 @@ function corsPreflightResponse(req: Request, cors: boolean | HttpGraphQLCorsOpti
     headers: {
       ...corsHeaders(req, cors),
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": req.headers.get("Access-Control-Request-Headers") ?? "Content-Type",
+      "Access-Control-Allow-Headers":
+        req.headers.get("Access-Control-Request-Headers") ?? "Content-Type",
     },
-  })
+  });
 }
 
 /**
@@ -114,55 +131,71 @@ export function createHttpGraphQLServer<T = unknown>(
   tree: Node,
   opts: CreateHttpGraphQLServerOptions<T> = {},
 ): (req: Request) => Promise<Response> {
-  const server = createGraphQLServer(tree, opts)
-  const path = opts.path ?? "/graphql"
-  const playground = opts.playground ?? true
+  const server = createGraphQLServer(tree, opts);
+  const path = opts.path ?? "/graphql";
+  const playground = opts.playground ?? true;
 
   return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url)
-    if (url.pathname !== path) return new Response("Not Found", { status: 404 })
+    const url = new URL(req.url);
+    if (url.pathname !== path) return new Response("Not Found", { status: 404 });
 
     if (req.method === "OPTIONS") {
       if (opts.cors === undefined || opts.cors === false) {
-        return new Response(null, { status: 204, headers: { Allow: "GET, POST, OPTIONS" } })
+        return new Response(null, { status: 204, headers: { Allow: "GET, POST, OPTIONS" } });
       }
-      return corsPreflightResponse(req, opts.cors)
+      return corsPreflightResponse(req, opts.cors);
     }
 
-    const cors = corsHeaders(req, opts.cors)
+    const cors = corsHeaders(req, opts.cors);
 
-    let body: GraphQLHttpRequestBody
+    let body: GraphQLHttpRequestBody;
     if (req.method === "GET") {
-      const query = url.searchParams.get("query")
+      const query = url.searchParams.get("query");
       if (query === null) {
-        if (!playground) return jsonResponse({ errors: [{ message: "Must provide query string" }] }, 400, cors)
-        return new Response(server.sdl, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8", ...cors } })
+        if (!playground)
+          return jsonResponse({ errors: [{ message: "Must provide query string" }] }, 400, cors);
+        return new Response(server.sdl, {
+          status: 200,
+          headers: { "Content-Type": "text/plain; charset=utf-8", ...cors },
+        });
       }
-      const variablesParam = url.searchParams.get("variables")
-      let variables: Record<string, unknown> | undefined
+      const variablesParam = url.searchParams.get("variables");
+      let variables: Record<string, unknown> | undefined;
       if (variablesParam !== null) {
         try {
-          variables = JSON.parse(variablesParam) as Record<string, unknown>
+          variables = JSON.parse(variablesParam) as Record<string, unknown>;
         } catch {
-          return jsonResponse({ errors: [{ message: "Variables are invalid JSON" }] }, 400, cors)
+          return jsonResponse({ errors: [{ message: "Variables are invalid JSON" }] }, 400, cors);
         }
       }
-      body = { query, variables, operationName: url.searchParams.get("operationName") ?? undefined }
+      body = {
+        query,
+        variables,
+        operationName: url.searchParams.get("operationName") ?? undefined,
+      };
     } else if (req.method === "POST") {
       try {
-        body = (await req.json()) as GraphQLHttpRequestBody
+        body = (await req.json()) as GraphQLHttpRequestBody;
       } catch {
-        return jsonResponse({ errors: [{ message: "Request body is invalid JSON" }] }, 400, cors)
+        return jsonResponse({ errors: [{ message: "Request body is invalid JSON" }] }, 400, cors);
       }
     } else {
-      return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, POST, OPTIONS", ...cors } })
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { Allow: "GET, POST, OPTIONS", ...cors },
+      });
     }
 
     if (typeof body.query !== "string") {
-      return jsonResponse({ errors: [{ message: "Must provide query string" }] }, 400, cors)
+      return jsonResponse({ errors: [{ message: "Must provide query string" }] }, 400, cors);
     }
 
-    const result = await server.execute(body.query, body.variables, { request: req }, body.operationName)
-    return jsonResponse(result, 200, cors)
-  }
+    const result = await server.execute(
+      body.query,
+      body.variables,
+      { request: req },
+      body.operationName,
+    );
+    return jsonResponse(result, 200, cors);
+  };
 }

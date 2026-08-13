@@ -42,8 +42,9 @@ environment) but is HTTP/fetch-surface-specific by design.
 ## `Handler<R>` — the one framework type
 
 ```ts
-type Handler<R = {}> = (req: Request & { ctx: R }) =>
-  Response | undefined | Promise<Response | undefined>
+type Handler<R = {}> = (
+  req: Request & { ctx: R },
+) => Response | undefined | Promise<Response | undefined>;
 ```
 
 A handler is a plain function from a typed request to an optional Response.
@@ -54,6 +55,7 @@ A handler is a plain function from a typed request to an optional Response.
 `R` is the set of keys the handler requires present on ONE context bag `req.ctx`,
 which carries BOTH captured path params AND middleware-injected vars. Two discharge
 mechanisms fill it, same shape:
+
 - `param("id", inner)` discharges a PATH-PARAM key (API-surface — it appears in the
   OpenAPI path + the generated client's call args), binding the segment into
   `req.ctx.id`;
@@ -76,15 +78,15 @@ All combinators live in `@rhi-zone/fractal-api-tree` and return a `Reflected<M, 
 `Handler<R>` with an inert `.meta` sidecar). The runtime behavior is pure
 `(req) => Response | undefined`; `.meta` is never read on the dispatch path.
 
-| Combinator | Runtime behavior | Meta tag |
-|---|---|---|
-| `methods(table)` | Dispatch by verb when path is fully consumed; pass on verb miss | `"methods"` |
-| `path(record)` | Dispatch on next literal path segment; pass if absent | `"path"` |
-| `mount(prefix, inner)` | Alias for single-key `path` | `"path"` (desugars) |
-| `param(name, inner)` | Read next segment, bind into `req.ctx[name]`, advance URL (PATH-PARAM) | `"param"` |
-| `provide(key, produce, inner)` | Run producer; Response short-circuits, value injects into `req.ctx[key]` (VAR) | `"provide"` |
-| `withAuth(authenticate, inner)` | `provide` specialized to `user` (auth principal or 401) | `"provide"` |
-| `choice(...alts)` | Try each alt in order; first non-undefined wins | `"choice"` |
+| Combinator                      | Runtime behavior                                                               | Meta tag            |
+| ------------------------------- | ------------------------------------------------------------------------------ | ------------------- |
+| `methods(table)`                | Dispatch by verb when path is fully consumed; pass on verb miss                | `"methods"`         |
+| `path(record)`                  | Dispatch on next literal path segment; pass if absent                          | `"path"`            |
+| `mount(prefix, inner)`          | Alias for single-key `path`                                                    | `"path"` (desugars) |
+| `param(name, inner)`            | Read next segment, bind into `req.ctx[name]`, advance URL (PATH-PARAM)         | `"param"`           |
+| `provide(key, produce, inner)`  | Run producer; Response short-circuits, value injects into `req.ctx[key]` (VAR) | `"provide"`         |
+| `withAuth(authenticate, inner)` | `provide` specialized to `user` (auth principal or 401)                        | `"provide"`         |
+| `choice(...alts)`               | Try each alt in order; first non-undefined wins                                | `"choice"`          |
 
 The `"provide"` meta is walked THROUGH by every projection (OpenAPI params, the
 generated client's call args, the drift `RouteUnion`) without surfacing its key —
@@ -148,6 +150,7 @@ app (Reflected<M>)
 ```
 
 `toOpenApi` walks `.meta` to project an OpenAPI 3.x document. `generate` emits:
+
 - `client.ts` — typed API client factory + `GenUnion` + `AssertExact` drift guard.
 - `server.ts` — per-route `Handler<P>` type aliases (e.g. `GetTodosId = Handler<{id: string}>`).
 

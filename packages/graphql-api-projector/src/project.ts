@@ -47,13 +47,13 @@
 // field's `args` object is structurally the same "flat named-value bag" a
 // tool call's `arguments` is.
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SourceMap } from "@rhi-zone/fractal-api-tree"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toGraphQL } from "@rhi-zone/fractal-type-ir/graphql"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { SourceMap } from "@rhi-zone/fractal-api-tree";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toGraphQL } from "@rhi-zone/fractal-type-ir/graphql";
 
 // ============================================================================
 // meta.graphql — open bag, per-projection overrides
@@ -70,15 +70,15 @@ import { toGraphQL } from "@rhi-zone/fractal-type-ir/graphql"
  */
 export type GraphQLLeafMetaProperties = {
   /** Overrides tag-derived operation-type inference outright. */
-  readonly operation?: "query" | "mutation" | "subscription"
+  readonly operation?: "query" | "mutation" | "subscription";
   /** Full field-name override (prefix/camelCase-join ignored when set). */
-  readonly name?: string
+  readonly name?: string;
   /** Description text override — emitted as an SDL `"""..."""` block. */
-  readonly description?: string
+  readonly description?: string;
   /** Deprecation flag override — else derived from `meta.tags.deprecated`. */
-  readonly deprecated?: boolean
+  readonly deprecated?: boolean;
   /** `@deprecated(reason: ...)` — only meaningful when `deprecated` resolves true. */
-  readonly deprecatedReason?: string
+  readonly deprecatedReason?: string;
   /**
    * Per-arg source overrides for this leaf's input assembly (see
    * `packages/api-tree/src/input.ts`) — mirrors `McpLeafMetaProperties.sourceMap`.
@@ -86,14 +86,14 @@ export type GraphQLLeafMetaProperties = {
    * `args` bag (which already carries the flattened per-field argument
    * names 1:1 with the handler's input bag — see resolve.ts).
    */
-  readonly sourceMap?: SourceMap
-  readonly [key: string]: unknown
-}
+  readonly sourceMap?: SourceMap;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `GraphQLLeafMetaProperties` under the `graphql` key — extend `LeafMeta` with this in a deployment's augmentation file. */
 export type GraphQLLeafMeta = {
-  readonly graphql?: GraphQLLeafMetaProperties
-}
+  readonly graphql?: GraphQLLeafMetaProperties;
+};
 
 /**
  * `meta.graphql` fields valid at BRANCH position only.
@@ -107,20 +107,20 @@ export type GraphQLLeafMeta = {
  * awaiting implementation, not dead code.
  */
 export type GraphQLBranchMetaProperties = {
-  readonly namespace?: string
-  readonly [key: string]: unknown
-}
+  readonly namespace?: string;
+  readonly [key: string]: unknown;
+};
 
 /** Wraps `GraphQLBranchMetaProperties` under the `graphql` key — extend `BranchMeta` with this in a deployment's augmentation file. */
 export type GraphQLBranchMeta = {
-  readonly graphql?: GraphQLBranchMetaProperties
-}
+  readonly graphql?: GraphQLBranchMetaProperties;
+};
 
 /** Safely extract the open `meta.graphql` bag — leaf position (every currently-wired read site is a per-field/leaf walk). */
 export function getGraphQLMeta(meta: GraphQLLeafMeta): GraphQLLeafMetaProperties {
-  const g = meta.graphql
-  if (typeof g !== "object" || g === null) return {}
-  return g
+  const g = meta.graphql;
+  if (typeof g !== "object" || g === null) return {};
+  return g;
 }
 
 // ============================================================================
@@ -130,10 +130,10 @@ export function getGraphQLMeta(meta: GraphQLLeafMeta): GraphQLLeafMetaProperties
 
 /** Per-field derived facts: real input/output TypeRefs + JSDoc description. */
 export type FieldTypeInfo = {
-  readonly input?: TypeRef
-  readonly output?: TypeRef
-  readonly description?: string
-}
+  readonly input?: TypeRef;
+  readonly output?: TypeRef;
+  readonly description?: string;
+};
 
 /**
  * Map of field lookup-key (see `fieldKey` below — the underscore-joined tree
@@ -141,12 +141,12 @@ export type FieldTypeInfo = {
  * extractor pass, e.g. `@rhi-zone/fractal-api-tree/tree`'s
  * `extractToolTypeRefs`, feeds both MCP and GraphQL) → derived TypeRefs.
  */
-export type FieldTypeMap = Readonly<Record<string, FieldTypeInfo>>
+export type FieldTypeMap = Readonly<Record<string, FieldTypeInfo>>;
 
 /** Options for `projectGraphQL`. */
 export type ProjectGraphQLOptions = {
   /** Underscore-joined tree-path → derived input/output TypeRefs (from codegen). */
-  readonly types?: FieldTypeMap
+  readonly types?: FieldTypeMap;
   /**
    * Named type declarations (object/enum/union/…) referenced by any supplied
    * `FieldTypeInfo`'s input/output TypeRefs — e.g. a `ref`-kind field type
@@ -156,8 +156,8 @@ export type ProjectGraphQLOptions = {
    * produces) — this projector doesn't itself resolve `ref` targets, since
    * doing so needs a caller-supplied registry it has no other way to obtain.
    */
-  readonly namedTypes?: Readonly<Record<string, TypeRef>>
-}
+  readonly namedTypes?: Readonly<Record<string, TypeRef>>;
+};
 
 // ============================================================================
 // Field descriptor + dispatch
@@ -165,42 +165,42 @@ export type ProjectGraphQLOptions = {
 
 /** One GraphQL field declaration line's worth of derived facts. */
 export type GraphQLField = {
-  readonly name: string
+  readonly name: string;
   /** Already-formatted arg list, e.g. `"(id: ID!, name: String)"`, or `""` when the field takes no args. */
-  readonly argsSDL: string
+  readonly argsSDL: string;
   /** Already-formatted return type, e.g. `"User!"`, `"[Book!]!"`. */
-  readonly typeSDL: string
-  readonly description?: string
-  readonly deprecated?: boolean
-  readonly deprecatedReason?: string
-}
+  readonly typeSDL: string;
+  readonly description?: string;
+  readonly deprecated?: boolean;
+  readonly deprecatedReason?: string;
+};
 
 /**
  * One resolved GraphQL argument — name + SDL type fragment. Exported so
  * client.ts (a second consumer of the same captured-fallback/declared-arg
  * derivation) can share this shape instead of redeclaring it.
  */
-export type Arg = { readonly name: string; readonly typeSDL: string }
+export type Arg = { readonly name: string; readonly typeSDL: string };
 
-export type OperationType = "query" | "mutation" | "subscription"
+export type OperationType = "query" | "mutation" | "subscription";
 
 /** A dispatch entry: the leaf's handler plus what `resolve.ts` needs to assemble its input. */
 export type Dispatch = {
-  readonly handler: Handler
+  readonly handler: Handler;
   /** Every argument name this field declares (captured-fallback + type-derived) — the paramNames `assemble()` reads. */
-  readonly inputNames: readonly string[]
-  readonly sourceMap: SourceMap
-  readonly operationType: OperationType
+  readonly inputNames: readonly string[];
+  readonly sourceMap: SourceMap;
+  readonly operationType: OperationType;
   /** The leaf's own `LeafMeta` — carried through for consumers needing dispatch-time access without a second walk. */
-  readonly meta: LeafMeta
-}
+  readonly meta: LeafMeta;
+};
 
 /** `projectGraphQL`'s full result. */
 export type ProjectGraphQLResult = {
   /** Root `Query` type fields — top-level branches/leaves only; nested namespace fields live in `types`. */
-  readonly queryFields: readonly GraphQLField[]
-  readonly mutationFields: readonly GraphQLField[]
-  readonly subscriptionFields: readonly GraphQLField[]
+  readonly queryFields: readonly GraphQLField[];
+  readonly mutationFields: readonly GraphQLField[];
+  readonly subscriptionFields: readonly GraphQLField[];
   /**
    * Dispatch entries, keyed differently per operation type (see `buildDispatch`'s
    * call sites in `projectGraphQL`):
@@ -212,17 +212,17 @@ export type ProjectGraphQLResult = {
    *     namespaces (`users.list` and `orders.list` both render a field named
    *     "list"), so only the qualified path is collision-free.
    */
-  readonly handlers: ReadonlyMap<string, Dispatch>
+  readonly handlers: ReadonlyMap<string, Dispatch>;
   /** Synthesized namespace object types (Query nesting) + any named types a supplied TypeRef referenced — keyed by SDL type name, ready for `toGraphQLTypes`. */
-  readonly types: Readonly<Record<string, TypeRef>>
-}
+  readonly types: Readonly<Record<string, TypeRef>>;
+};
 
 // ============================================================================
 // Naming helpers
 // ============================================================================
 
 function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1)
+  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
 }
 
 /**
@@ -233,7 +233,7 @@ function capitalize(s: string): string {
  * name-derivation pairing).
  */
 export function camelJoin(prefix: string, seg: string): string {
-  return prefix.length === 0 ? seg : `${prefix}${capitalize(seg)}`
+  return prefix.length === 0 ? seg : `${prefix}${capitalize(seg)}`;
 }
 
 /**
@@ -242,12 +242,12 @@ export function camelJoin(prefix: string, seg: string): string {
  * reason as `camelJoin` above.
  */
 export function underscoreJoin(prefix: string, seg: string): string {
-  return prefix.length === 0 ? seg : `${prefix}_${seg}`
+  return prefix.length === 0 ? seg : `${prefix}_${seg}`;
 }
 
 /** PascalCase join of a namespace path, e.g. `["users","admin"]` → `"UsersAdmin"`. */
 function pascalJoin(path: readonly string[]): string {
-  return path.map(capitalize).join("")
+  return path.map(capitalize).join("");
 }
 
 // ============================================================================
@@ -262,20 +262,20 @@ function pascalJoin(path: readonly string[]): string {
  * declared args — only captured-fallback args (if any) apply.
  */
 export function argsFromInput(input: TypeRef | undefined): Arg[] {
-  if (input === undefined) return []
-  const shape = input.shape
-  if (shape.kind !== "object") return []
-  return Object.entries(shape.fields).map(([name, ref]) => ({ name, typeSDL: toGraphQL(ref) }))
+  if (input === undefined) return [];
+  const shape = input.shape;
+  if (shape.kind !== "object") return [];
+  return Object.entries(shape.fields).map(([name, ref]) => ({ name, typeSDL: toGraphQL(ref) }));
 }
 
 /** SDL return type for a leaf — the derived output TypeRef, or an honest `JSON` (nullable — unknown, not asserted non-null) degrade when none was supplied. */
 function returnSDL(output: TypeRef | undefined): string {
-  return output === undefined ? "JSON" : toGraphQL(output)
+  return output === undefined ? "JSON" : toGraphQL(output);
 }
 
 function formatArgs(args: readonly Arg[]): string {
-  if (args.length === 0) return ""
-  return `(${args.map((a) => `${a.name}: ${a.typeSDL}`).join(", ")})`
+  if (args.length === 0) return "";
+  return `(${args.map((a) => `${a.name}: ${a.typeSDL}`).join(", ")})`;
 }
 
 // ============================================================================
@@ -301,14 +301,17 @@ function formatArgs(args: readonly Arg[]): string {
  * different source of truth (same reasoning as `camelJoin`/`underscoreJoin`
  * above).
  */
-export function deriveOperationType(meta: LeafMeta & GraphQLLeafMeta, output?: TypeRef): OperationType {
-  const gql = getGraphQLMeta(meta)
-  if (gql.operation !== undefined) return gql.operation
+export function deriveOperationType(
+  meta: LeafMeta & GraphQLLeafMeta,
+  output?: TypeRef,
+): OperationType {
+  const gql = getGraphQLMeta(meta);
+  if (gql.operation !== undefined) return gql.operation;
 
-  const resolved = resolveTags((meta.tags ?? {}) as Tags, output)
-  if (resolved.streaming === true) return "subscription"
-  if (resolved.readOnly === true) return "query"
-  return "mutation"
+  const resolved = resolveTags((meta.tags ?? {}) as Tags, output);
+  if (resolved.streaming === true) return "subscription";
+  if (resolved.readOnly === true) return "query";
+  return "mutation";
 }
 
 // ============================================================================
@@ -322,25 +325,26 @@ function buildField(
   capturedArgs: readonly Arg[],
   typeInfo: FieldTypeInfo | undefined,
 ): GraphQLField {
-  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta);
 
   const description =
     typeof gql.description === "string"
       ? gql.description
       : typeof child.meta.description === "string"
         ? child.meta.description
-        : typeInfo?.description
+        : typeInfo?.description;
 
-  const resolvedTags = resolveTags((child.meta.tags ?? {}) as Tags)
-  const deprecated = typeof gql.deprecated === "boolean" ? gql.deprecated : resolvedTags.deprecated === true
+  const resolvedTags = resolveTags((child.meta.tags ?? {}) as Tags);
+  const deprecated =
+    typeof gql.deprecated === "boolean" ? gql.deprecated : resolvedTags.deprecated === true;
 
-  const declaredArgs = argsFromInput(typeInfo?.input)
+  const declaredArgs = argsFromInput(typeInfo?.input);
   // Captured (fallback) args come first — mirrors path-then-body/query
   // convention elsewhere (path params bind before the primary store). A
   // declared arg with a colliding name wins (it's the more specific,
   // authored fact); the captured one is dropped to avoid a duplicate SDL arg.
-  const declaredNames = new Set(declaredArgs.map((a) => a.name))
-  const args = [...capturedArgs.filter((a) => !declaredNames.has(a.name)), ...declaredArgs]
+  const declaredNames = new Set(declaredArgs.map((a) => a.name));
+  const args = [...capturedArgs.filter((a) => !declaredNames.has(a.name)), ...declaredArgs];
 
   return {
     name: fieldName,
@@ -348,8 +352,10 @@ function buildField(
     typeSDL: returnSDL(typeInfo?.output),
     ...(description !== undefined ? { description } : {}),
     ...(deprecated ? { deprecated: true } : {}),
-    ...(deprecated && typeof gql.deprecatedReason === "string" ? { deprecatedReason: gql.deprecatedReason } : {}),
-  }
+    ...(deprecated && typeof gql.deprecatedReason === "string"
+      ? { deprecatedReason: gql.deprecatedReason }
+      : {}),
+  };
 }
 
 function buildDispatch(
@@ -358,20 +364,20 @@ function buildDispatch(
   typeInfo: FieldTypeInfo | undefined,
   operationType: OperationType,
 ): Dispatch {
-  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta)
-  const declaredArgs = argsFromInput(typeInfo?.input)
-  const declaredNames = new Set(declaredArgs.map((a) => a.name))
+  const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta);
+  const declaredArgs = argsFromInput(typeInfo?.input);
+  const declaredNames = new Set(declaredArgs.map((a) => a.name));
   const inputNames = [
     ...capturedArgs.filter((a) => !declaredNames.has(a.name)).map((a) => a.name),
     ...declaredArgs.map((a) => a.name),
-  ]
+  ];
   return {
     handler: child.handler as Handler,
     inputNames,
     sourceMap: gql.sourceMap ?? {},
     operationType,
     meta: child.meta,
-  }
+  };
 }
 
 // ============================================================================
@@ -379,26 +385,26 @@ function buildDispatch(
 // ============================================================================
 
 type QueryNamespace = {
-  readonly fields: Map<string, GraphQLField>
-  readonly children: Map<string, { readonly seg: string; readonly ns: QueryNamespace }>
-}
+  readonly fields: Map<string, GraphQLField>;
+  readonly children: Map<string, { readonly seg: string; readonly ns: QueryNamespace }>;
+};
 
 function emptyNamespace(): QueryNamespace {
-  return { fields: new Map(), children: new Map() }
+  return { fields: new Map(), children: new Map() };
 }
 
 /** Walk down (creating as needed) the namespace chain at `path`, from `root`. */
 function namespaceAt(root: QueryNamespace, path: readonly string[]): QueryNamespace {
-  let ns = root
+  let ns = root;
   for (const seg of path) {
-    let entry = ns.children.get(seg)
+    let entry = ns.children.get(seg);
     if (entry === undefined) {
-      entry = { seg, ns: emptyNamespace() }
-      ns.children.set(seg, entry)
+      entry = { seg, ns: emptyNamespace() };
+      ns.children.set(seg, entry);
     }
-    ns = entry.ns
+    ns = entry.ns;
   }
-  return ns
+  return ns;
 }
 
 /**
@@ -417,17 +423,17 @@ function renderNamespace(
   path: readonly string[],
   typesOut: Record<string, TypeRef>,
 ): GraphQLField[] {
-  const ownFields = [...ns.fields.values()]
+  const ownFields = [...ns.fields.values()];
 
   const childFields = [...ns.children.entries()].map(([seg, { ns: childNs }]) => {
-    const childPath = [...path, seg]
-    const nested = renderNamespace(childNs, childPath, typesOut)
-    const typeName = `${pascalJoin(childPath)}Query`
-    typesOut[typeName] = objectTypeRefFromFields(nested)
-    return { name: seg, argsSDL: "", typeSDL: `${typeName}!` } satisfies GraphQLField
-  })
+    const childPath = [...path, seg];
+    const nested = renderNamespace(childNs, childPath, typesOut);
+    const typeName = `${pascalJoin(childPath)}Query`;
+    typesOut[typeName] = objectTypeRefFromFields(nested);
+    return { name: seg, argsSDL: "", typeSDL: `${typeName}!` } satisfies GraphQLField;
+  });
 
-  return [...ownFields, ...childFields]
+  return [...ownFields, ...childFields];
 }
 
 /**
@@ -443,7 +449,7 @@ function renderNamespace(
  * array through `ProjectGraphQLResult.types`.
  */
 function objectTypeRefFromFields(fields: readonly GraphQLField[]): TypeRef {
-  return { shape: { kind: "object", fields: {} }, meta: { graphqlFields: fields } }
+  return { shape: { kind: "object", fields: {} }, meta: { graphqlFields: fields } };
 }
 
 // ============================================================================
@@ -451,23 +457,28 @@ function objectTypeRefFromFields(fields: readonly GraphQLField[]): TypeRef {
 // ============================================================================
 
 type WalkLeaf = {
-  readonly path: readonly string[]
-  readonly key: string
-  readonly node: Node
-  readonly capturedArgs: readonly Arg[]
-}
+  readonly path: readonly string[];
+  readonly key: string;
+  readonly node: Node;
+  readonly capturedArgs: readonly Arg[];
+};
 
-function walkLeaves(n: Node, path: readonly string[], capturedArgs: readonly Arg[], out: WalkLeaf[]): void {
+function walkLeaves(
+  n: Node,
+  path: readonly string[],
+  capturedArgs: readonly Arg[],
+  out: WalkLeaf[],
+): void {
   for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isLeaf(child)) {
-      out.push({ path, key, node: child, capturedArgs })
+      out.push({ path, key, node: child, capturedArgs });
     } else {
-      walkLeaves(child, [...path, key], capturedArgs, out)
+      walkLeaves(child, [...path, key], capturedArgs, out);
     }
   }
 
   if (n.fallback !== undefined) {
-    const captured = [...capturedArgs, { name: n.fallback.name, typeSDL: "ID!" }]
+    const captured = [...capturedArgs, { name: n.fallback.name, typeSDL: "ID!" }];
 
     // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
     // not just a branch (`api({...})`) — recursing into it as a branch here
@@ -478,9 +489,9 @@ function walkLeaves(n: Node, path: readonly string[], capturedArgs: readonly Arg
     // fallback's own name (same convention api-tree/tree.ts's `walkNodeType`
     // fix, aa28952, and the other projectors' identical fix use).
     if (isLeaf(n.fallback.subtree)) {
-      out.push({ path, key: n.fallback.name, node: n.fallback.subtree, capturedArgs: captured })
+      out.push({ path, key: n.fallback.name, node: n.fallback.subtree, capturedArgs: captured });
     } else {
-      walkLeaves(n.fallback.subtree, [...path, n.fallback.name], captured, out)
+      walkLeaves(n.fallback.subtree, [...path, n.fallback.name], captured, out);
     }
   }
 }
@@ -493,22 +504,22 @@ function walkLeaves(n: Node, path: readonly string[], capturedArgs: readonly Arg
  * implements.
  */
 export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): ProjectGraphQLResult {
-  const typeMap = opts.types ?? {}
-  const handlers = new Map<string, Dispatch>()
-  const types: Record<string, TypeRef> = { ...opts.namedTypes }
+  const typeMap = opts.types ?? {};
+  const handlers = new Map<string, Dispatch>();
+  const types: Record<string, TypeRef> = { ...opts.namedTypes };
 
-  const leaves: WalkLeaf[] = []
-  walkLeaves(n, [], [], leaves)
+  const leaves: WalkLeaf[] = [];
+  walkLeaves(n, [], [], leaves);
 
-  const mutationFields: GraphQLField[] = []
-  const subscriptionFields: GraphQLField[] = []
-  const queryRoot = emptyNamespace()
+  const mutationFields: GraphQLField[] = [];
+  const subscriptionFields: GraphQLField[] = [];
+  const queryRoot = emptyNamespace();
 
   for (const leaf of leaves) {
-    const gql = getGraphQLMeta(leaf.node.meta as GraphQLLeafMeta)
-    const lookupKey = [...leaf.path, leaf.key].reduce(underscoreJoin, "")
-    const typeInfo = typeMap[lookupKey]
-    const operationType = deriveOperationType(leaf.node.meta, typeInfo?.output)
+    const gql = getGraphQLMeta(leaf.node.meta as GraphQLLeafMeta);
+    const lookupKey = [...leaf.path, leaf.key].reduce(underscoreJoin, "");
+    const typeInfo = typeMap[lookupKey];
+    const operationType = deriveOperationType(leaf.node.meta, typeInfo?.output);
 
     if (operationType === "query") {
       // Namespace path: meta.graphql.namespace overrides a branch segment
@@ -516,10 +527,10 @@ export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): Proje
       // override lives on the BRANCH node, which this leaf-centric walk
       // doesn't visit directly, so only the plain tree-key path is used here
       // (branch-level `meta.graphql.namespace` is a later-phase refinement).
-      const ns = namespaceAt(queryRoot, leaf.path)
-      const fieldName = typeof gql.name === "string" ? gql.name : leaf.key
-      const field = buildField(fieldName, leaf.node, leaf.capturedArgs, typeInfo)
-      ns.fields.set(fieldName, field)
+      const ns = namespaceAt(queryRoot, leaf.path);
+      const fieldName = typeof gql.name === "string" ? gql.name : leaf.key;
+      const field = buildField(fieldName, leaf.node, leaf.capturedArgs, typeInfo);
+      ns.fields.set(fieldName, field);
       // Dispatch key: the QUALIFIED tree-path key (same convention as
       // `FieldTypeMap`'s lookup key), NOT the bare `fieldName` — a nested
       // Query field name is only unique WITHIN its own synthesized namespace
@@ -529,19 +540,19 @@ export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): Proje
       // per-namespace-type resolver maps graphql-js needs must reconstruct
       // this same key from tree position (path + leaf key), not read it off
       // the rendered field name.
-      handlers.set(lookupKey, buildDispatch(leaf.node, leaf.capturedArgs, typeInfo, operationType))
-      continue
+      handlers.set(lookupKey, buildDispatch(leaf.node, leaf.capturedArgs, typeInfo, operationType));
+      continue;
     }
 
     const flatName =
-      typeof gql.name === "string" ? gql.name : [...leaf.path, leaf.key].reduce(camelJoin, "")
-    const field = buildField(flatName, leaf.node, leaf.capturedArgs, typeInfo)
-    handlers.set(flatName, buildDispatch(leaf.node, leaf.capturedArgs, typeInfo, operationType))
-    if (operationType === "mutation") mutationFields.push(field)
-    else subscriptionFields.push(field)
+      typeof gql.name === "string" ? gql.name : [...leaf.path, leaf.key].reduce(camelJoin, "");
+    const field = buildField(flatName, leaf.node, leaf.capturedArgs, typeInfo);
+    handlers.set(flatName, buildDispatch(leaf.node, leaf.capturedArgs, typeInfo, operationType));
+    if (operationType === "mutation") mutationFields.push(field);
+    else subscriptionFields.push(field);
   }
 
-  const queryFields = renderNamespace(queryRoot, [], types)
+  const queryFields = renderNamespace(queryRoot, [], types);
 
-  return { queryFields, mutationFields, subscriptionFields, handlers, types }
+  return { queryFields, mutationFields, subscriptionFields, handlers, types };
 }

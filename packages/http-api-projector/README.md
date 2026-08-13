@@ -29,19 +29,19 @@ AWS Lambda.
 ## Usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
-import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+import { api, op } from "@rhi-zone/fractal-api-tree";
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
 
 const tree = api({
   books: api({
     list: op(() => [], http.get),
   }),
-})
+});
 
-const fetch = createFetch(tree)
-const res = await fetch(new Request("http://localhost/books/list"))
+const fetch = createFetch(tree);
+const res = await fetch(new Request("http://localhost/books/list"));
 ```
 
 ## Install

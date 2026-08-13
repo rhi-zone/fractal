@@ -7,212 +7,336 @@
 // wrong issuer/audience, missing/malformed header) with `null` — never a
 // thrown error, per `AuthAdapter`'s contract.
 
-import { describe, expect, it } from "bun:test"
-import { authLayer, authMiddleware } from "@rhi-zone/fractal-api-tree/auth"
-import { jsonToBase64Url } from "./jwt.ts"
-import { oidcServer } from "./server.ts"
-import { makeSignedJwt } from "./test-helpers.ts"
-import type { FetchLike, Jwks } from "./jwks.ts"
+import { describe, expect, it } from "bun:test";
+import { authLayer, authMiddleware } from "@rhi-zone/fractal-api-tree/auth";
+import { jsonToBase64Url } from "./jwt.ts";
+import { oidcServer } from "./server.ts";
+import { makeSignedJwt } from "./test-helpers.ts";
+import type { FetchLike, Jwks } from "./jwks.ts";
 
 function jwksFetchImpl(jwks: Jwks): FetchLike {
-  return async () => new Response(JSON.stringify(jwks), { status: 200 })
+  return async () => new Response(JSON.stringify(jwks), { status: 200 });
 }
 
-const ISSUER = "https://auth.example.com"
-const AUDIENCE = "my-api"
+const ISSUER = "https://auth.example.com";
+const AUDIENCE = "my-api";
 
-async function makeValidToken(overrides: Record<string, unknown> = {}): Promise<{ token: string; jwks: Jwks }> {
+async function makeValidToken(
+  overrides: Record<string, unknown> = {},
+): Promise<{ token: string; jwks: Jwks }> {
   const { token, publicJwk } = await makeSignedJwt({
     sub: "user-1",
     iss: ISSUER,
     aud: AUDIENCE,
     exp: Date.now() / 1000 + 3600,
     ...overrides,
-  })
-  return { token, jwks: { keys: [publicJwk] } }
+  });
+  return { token, jwks: { keys: [publicJwk] } };
 }
 
 describe("oidcServer", () => {
   it("resolves claims for a valid Bearer token", async () => {
-    const { token, jwks } = await makeValidToken()
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://auth.example.com/jwks.json", fetchImpl: jwksFetchImpl(jwks) })
+    const { token, jwks } = await makeValidToken();
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://auth.example.com/jwks.json",
+      fetchImpl: jwksFetchImpl(jwks),
+    });
 
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user?.sub).toBe("user-1")
-  })
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user?.sub).toBe("user-1");
+  });
 
   it("resolves null when there's no Authorization header", async () => {
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    const user = await auth.resolve(new Request("http://localhost/"))
-    expect(user).toBeNull()
-  })
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    const user = await auth.resolve(new Request("http://localhost/"));
+    expect(user).toBeNull();
+  });
 
   it("resolves null for a non-Bearer scheme", async () => {
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: "Basic abc123" } }))
-    expect(user).toBeNull()
-  })
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: "Basic abc123" } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null for a malformed token", async () => {
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: "Bearer not-a-jwt" } }))
-    expect(user).toBeNull()
-  })
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: "Bearer not-a-jwt" } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null when the token is expired", async () => {
-    const { token, jwks } = await makeValidToken({ exp: Date.now() / 1000 - 60 })
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl(jwks) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user).toBeNull()
-  })
+    const { token, jwks } = await makeValidToken({ exp: Date.now() / 1000 - 60 });
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl(jwks),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null on issuer mismatch", async () => {
-    const { token, jwks } = await makeValidToken({ iss: "https://evil.example.com" })
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl(jwks) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user).toBeNull()
-  })
+    const { token, jwks } = await makeValidToken({ iss: "https://evil.example.com" });
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl(jwks),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null on audience mismatch", async () => {
-    const { token, jwks } = await makeValidToken({ aud: "other-api" })
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl(jwks) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user).toBeNull()
-  })
+    const { token, jwks } = await makeValidToken({ aud: "other-api" });
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl(jwks),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null when the signature doesn't match the served JWKS key (wrong key)", async () => {
-    const { token } = await makeValidToken()
-    const { publicJwk: unrelatedKey } = await makeSignedJwt({ sub: "user-2", exp: Date.now() / 1000 + 3600 })
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [unrelatedKey] }) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user).toBeNull()
-  })
+    const { token } = await makeValidToken();
+    const { publicJwk: unrelatedKey } = await makeSignedJwt({
+      sub: "user-2",
+      exp: Date.now() / 1000 + 3600,
+    });
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [unrelatedKey] }),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
-  it("resolves null for an unsupported/forged alg (e.g. \"none\") without ever hitting the JWKS endpoint", async () => {
+  it('resolves null for an unsupported/forged alg (e.g. "none") without ever hitting the JWKS endpoint', async () => {
     // The classic "alg: none" JWT bypass — a token that claims an
     // unsupported algorithm must be rejected on the header check alone,
     // before any JWKS lookup or signature verification is attempted.
-    const header = jsonToBase64Url({ alg: "none" })
-    const claims = jsonToBase64Url({ sub: "attacker", iss: ISSUER, aud: AUDIENCE, exp: Date.now() / 1000 + 3600 })
-    const forgedToken = `${header}.${claims}.`
+    const header = jsonToBase64Url({ alg: "none" });
+    const claims = jsonToBase64Url({
+      sub: "attacker",
+      iss: ISSUER,
+      aud: AUDIENCE,
+      exp: Date.now() / 1000 + 3600,
+    });
+    const forgedToken = `${header}.${claims}.`;
     const fetchImpl: FetchLike = async () => {
-      throw new Error("JWKS endpoint should not be contacted for an unsupported alg")
-    }
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${forgedToken}` } }))
-    expect(user).toBeNull()
-  })
+      throw new Error("JWKS endpoint should not be contacted for an unsupported alg");
+    };
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl,
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${forgedToken}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null for HS256 (symmetric alg, deliberately unsupported per jwt.ts's module doc)", async () => {
-    const header = jsonToBase64Url({ alg: "HS256" })
-    const claims = jsonToBase64Url({ sub: "attacker", exp: Date.now() / 1000 + 3600 })
-    const forgedToken = `${header}.${claims}.forged-sig`
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${forgedToken}` } }))
-    expect(user).toBeNull()
-  })
+    const header = jsonToBase64Url({ alg: "HS256" });
+    const claims = jsonToBase64Url({ sub: "attacker", exp: Date.now() / 1000 + 3600 });
+    const forgedToken = `${header}.${claims}.forged-sig`;
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${forgedToken}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null for a Bearer scheme with no token following it", async () => {
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    const noToken = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: "Bearer" } }))
-    expect(noToken).toBeNull()
-    const emptyToken = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: "Bearer " } }))
-    expect(emptyToken).toBeNull()
-  })
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    const noToken = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: "Bearer" } }),
+    );
+    expect(noToken).toBeNull();
+    const emptyToken = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: "Bearer " } }),
+    );
+    expect(emptyToken).toBeNull();
+  });
 
   it("resolves null when the token's kid doesn't match any key in the served JWKS", async () => {
     const { token, publicJwk } = await makeSignedJwt(
       { sub: "user-1", iss: ISSUER, aud: AUDIENCE, exp: Date.now() / 1000 + 3600 },
       { kid: "key-signed-with" },
-    )
+    );
     // JWKS is served but only has an unrelated kid — getKey force-refreshes
     // once and still can't find "key-signed-with", so it throws internally;
     // resolve() must catch that and return null, not propagate.
-    const servedJwks: Jwks = { keys: [{ ...publicJwk, kid: "some-other-kid" }] }
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl(servedJwks) })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user).toBeNull()
-  })
+    const servedJwks: Jwks = { keys: [{ ...publicJwk, kid: "some-other-kid" }] };
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl(servedJwks),
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("resolves null when the JWKS endpoint is unreachable", async () => {
-    const { token } = await makeValidToken()
-    const failingFetch: FetchLike = async () => new Response("boom", { status: 500 })
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: failingFetch })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user).toBeNull()
-  })
+    const { token } = await makeValidToken();
+    const failingFetch: FetchLike = async () => new Response("boom", { status: 500 });
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: failingFetch,
+    });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user).toBeNull();
+  });
 
   it("discovers the JWKS URI from issuer's well-known document when jwksUri is omitted", async () => {
-    const { token, jwks } = await makeValidToken()
-    const seenUrls: string[] = []
+    const { token, jwks } = await makeValidToken();
+    const seenUrls: string[] = [];
     const fetchImpl: FetchLike = async (input) => {
-      const url = String(input)
-      seenUrls.push(url)
+      const url = String(input);
+      seenUrls.push(url);
       if (url.endsWith("/.well-known/openid-configuration")) {
-        return new Response(JSON.stringify({ jwks_uri: `${ISSUER}/jwks.json` }), { status: 200 })
+        return new Response(JSON.stringify({ jwks_uri: `${ISSUER}/jwks.json` }), { status: 200 });
       }
-      return new Response(JSON.stringify(jwks), { status: 200 })
-    }
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, fetchImpl })
-    const user = await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(user?.sub).toBe("user-1")
-    expect(seenUrls).toContain(`${ISSUER}/.well-known/openid-configuration`)
-  })
+      return new Response(JSON.stringify(jwks), { status: 200 });
+    };
+    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, fetchImpl });
+    const user = await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(user?.sub).toBe("user-1");
+    expect(seenUrls).toContain(`${ISSUER}/.well-known/openid-configuration`);
+  });
 
   it("caches the JWKS across multiple resolve calls (single fetch)", async () => {
-    const { token, jwks } = await makeValidToken()
-    let calls = 0
+    const { token, jwks } = await makeValidToken();
+    let calls = 0;
     const fetchImpl: FetchLike = async () => {
-      calls += 1
-      return new Response(JSON.stringify(jwks), { status: 200 })
-    }
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl })
-    await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    await auth.resolve(new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(calls).toBe(1)
-  })
+      calls += 1;
+      return new Response(JSON.stringify(jwks), { status: 200 });
+    };
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl,
+    });
+    await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    await auth.resolve(
+      new Request("http://localhost/", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(calls).toBe(1);
+  });
 
   it("has a default guard rejecting unauthenticated requests with 401", async () => {
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    expect(auth.guard).toBeDefined()
-    const rejected = auth.guard?.(new Request("http://localhost/"), null)
-    expect(rejected).toBeInstanceOf(Response)
-    expect((rejected as Response).status).toBe(401)
-  })
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    expect(auth.guard).toBeDefined();
+    const rejected = auth.guard?.(new Request("http://localhost/"), null);
+    expect(rejected).toBeInstanceOf(Response);
+    expect((rejected as Response).status).toBe(401);
+  });
 
   it("guard lets an authenticated user through", async () => {
-    const auth = oidcServer({ issuer: ISSUER, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl({ keys: [] }) })
-    const result = auth.guard?.(new Request("http://localhost/"), { sub: "user-1" })
-    expect(result).toBeUndefined()
-  })
-})
+    const auth = oidcServer({
+      issuer: ISSUER,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl({ keys: [] }),
+    });
+    const result = auth.guard?.(new Request("http://localhost/"), { sub: "user-1" });
+    expect(result).toBeUndefined();
+  });
+});
 
 describe("oidcServer wired through authLayer/authMiddleware", () => {
   it("rejects unauthenticated requests at the http-api-projector layer", async () => {
-    const { createFetch } = await import("@rhi-zone/fractal-http-api-projector/preset")
-    const { api, op } = await import("@rhi-zone/fractal-api-tree/node")
-    const { AsyncLocalStorage } = await import("node:async_hooks")
+    const { createFetch } = await import("@rhi-zone/fractal-http-api-projector/preset");
+    const { api, op } = await import("@rhi-zone/fractal-api-tree/node");
+    const { AsyncLocalStorage } = await import("node:async_hooks");
 
-    const { token, jwks } = await makeValidToken()
-    const auth = oidcServer({ issuer: ISSUER, audience: AUDIENCE, jwksUri: "https://x/jwks.json", fetchImpl: jwksFetchImpl(jwks) })
-    const storage = new AsyncLocalStorage<Awaited<ReturnType<typeof auth.resolve>>>()
+    const { token, jwks } = await makeValidToken();
+    const auth = oidcServer({
+      issuer: ISSUER,
+      audience: AUDIENCE,
+      jwksUri: "https://x/jwks.json",
+      fetchImpl: jwksFetchImpl(jwks),
+    });
+    const storage = new AsyncLocalStorage<Awaited<ReturnType<typeof auth.resolve>>>();
 
     const tree = api({
       whoami: op((_: unknown) => ({ sub: storage.getStore()?.sub ?? null }), {
         http: { method: "GET" },
       }),
-    })
+    });
     const fetchHandler = createFetch(tree, {
       als: { storage, init: authLayer(auth) },
       middleware: [authMiddleware(auth)],
-    })
+    });
 
-    const anon = await fetchHandler(new Request("http://localhost/whoami"))
-    expect(anon.status).toBe(401)
+    const anon = await fetchHandler(new Request("http://localhost/whoami"));
+    expect(anon.status).toBe(401);
 
-    const authed = await fetchHandler(new Request("http://localhost/whoami", { headers: { Authorization: `Bearer ${token}` } }))
-    expect(authed.status).toBe(200)
-    expect(await authed.json()).toEqual({ sub: "user-1" })
-  })
-})
+    const authed = await fetchHandler(
+      new Request("http://localhost/whoami", { headers: { Authorization: `Bearer ${token}` } }),
+    );
+    expect(authed.status).toBe(200);
+    expect(await authed.json()).toEqual({ sub: "user-1" });
+  });
+});

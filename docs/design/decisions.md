@@ -167,6 +167,7 @@ didn't indicate they're all the same kind of thing: projectors of the API tree
 into protocol surfaces.
 
 **Decision:** Rename packages to reflect what they are:
+
 - `core` → `api-tree` — the tree model (`Node`, `Op`, `Meta`, `mergeMeta`,
   `Result`, combinators)
 - Protocol projectors get a `-api-projector` suffix: `http-api-projector`,

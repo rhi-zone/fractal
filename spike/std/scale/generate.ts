@@ -81,13 +81,9 @@ function emitApp(routes: Res[]): string {
     if (r.kind === "get") {
       lines.push(`void api["/${r.name}"].get().then((v) => v);`);
     } else if (r.kind === "getpost") {
-      lines.push(
-        `void api["/${r.name}"].post({ body: { name: "x", qty: 1 } }).then((v) => v);`,
-      );
+      lines.push(`void api["/${r.name}"].post({ body: { name: "x", qty: 1 } }).then((v) => v);`);
     } else {
-      lines.push(
-        `void api["/${r.name}/{id}"].get({ params: { id: "1" } }).then((v) => v);`,
-      );
+      lines.push(`void api["/${r.name}/{id}"].get({ params: { id: "1" } }).then((v) => v);`);
     }
   }
   return lines.join("\n") + "\n";

@@ -11,6 +11,7 @@ field type changed) on BOTH tsgo and stock tsc. See `derive.ts` (`RouteUnion` +
 `AssertExact`) for the winning code.
 
 ## Layout
+
 - `derive.ts` — `AssertExact` (sound function-identity equality), `FlatRoutes`
   (f2/f3/f4 object derivation), and **`RouteUnion`** (f5 — the linear winner).
 - `naive.ts` — `ClientShapeFromMeta` (f1's heavy nested re-derive).
@@ -22,6 +23,7 @@ field type changed) on BOTH tsgo and stock tsc. See `derive.ts` (`RouteUnion` +
   `--extendedDiagnostics` + stock tsc; writes `logs/{results.csv,table.md}`.
 
 ## Reproduce
+
 ```
 cd spike/drift-guard
 bun gen/generate.ts 99 300 600 900     # writes out/*.ts
@@ -29,6 +31,7 @@ bun run.ts                              # writes logs/table.md
 ```
 
 Drift proof (after generate):
+
 ```
 # build f5 drift guards at N=99 (33 resources), then typecheck each — must error:
 for d in add remove renameParam changeBody; do
@@ -44,14 +47,16 @@ done
 ```
 
 ## Results — see `logs/table.md`. Headline at 900 routes (instantiations):
-| no-guard | f1 naive | f2 flatmap | f3 per-route | f4 hybrid | **f5 union** |
-|---|---|---|---|---|---|
-| 0 | 5.67M (tsc TS2589) | 4.76M | 2.67M | 2.67M | **0.24M** |
+
+| no-guard | f1 naive           | f2 flatmap | f3 per-route | f4 hybrid | **f5 union** |
+| -------- | ------------------ | ---------- | ------------ | --------- | ------------ |
+| 0        | 5.67M (tsc TS2589) | 4.76M      | 2.67M        | 2.67M     | **0.24M**    |
 
 f1/f2/f3/f4 are all O(N²) (the `UnionToObj` merge / per-route re-walk).
 f5 never materializes a keyed object — it compares two UNIONS — so it stays linear.
 
 ## Core API finding
+
 `methods<P>({ GET: h })` (the param-route pattern used in
 `packages/type-ir/test/scale/gen.ts` and examples) **erases the literal verb set**
 in `.meta` (`verbs: readonly Method[]` instead of `readonly ["GET"]`), because the

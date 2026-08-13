@@ -6,17 +6,17 @@
 //   3. derived schema flows into a real MCP tool's inputSchema (via toTools)
 //   4. exotic type (union) punts to `unknown` with a TODO $comment
 
-import { describe, expect, it } from "bun:test"
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
-import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import { describe, expect, it } from "bun:test";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
+import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 import {
   extractRouteSchemas,
   extractRouteTypeRefs,
   extractToolSchemas,
   extractToolTypeRefs,
   hasTreeExport,
-} from "./tree.ts"
+} from "./tree.ts";
 import {
   createExtractorProgram,
   createSharingRegistry,
@@ -29,19 +29,19 @@ import {
   typeRefFromFunctionNode,
   typeRefFromReturnType,
   typeRefFromType,
-} from "./extract.ts"
-import { nodeCount } from "@rhi-zone/fractal-type-ir"
-import { tree } from "./__fixtures__/tree.fixture.ts"
-import ts from "typescript"
+} from "./extract.ts";
+import { nodeCount } from "@rhi-zone/fractal-type-ir";
+import { tree } from "./__fixtures__/tree.fixture.ts";
+import ts from "typescript";
 
-const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`
-const schemas = extractToolSchemas(FIXTURE)
+const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`;
+const schemas = extractToolSchemas(FIXTURE);
 
-const TYPEREF_FIXTURE = `${import.meta.dir}/__fixtures__/typeref.fixture.ts`
+const TYPEREF_FIXTURE = `${import.meta.dir}/__fixtures__/typeref.fixture.ts`;
 
 /** Locate an exported const's function-typed initializer node by name. */
 function findExportedFn(source: ts.SourceFile, name: string): ts.Node {
-  let found: ts.Node | undefined
+  let found: ts.Node | undefined;
   const visit = (n: ts.Node): void => {
     if (
       !found &&
@@ -50,15 +50,15 @@ function findExportedFn(source: ts.SourceFile, name: string): ts.Node {
     ) {
       for (const decl of n.declarationList.declarations) {
         if (ts.isIdentifier(decl.name) && decl.name.text === name && decl.initializer) {
-          found = opFunctionNode(decl.initializer)
+          found = opFunctionNode(decl.initializer);
         }
       }
     }
-    if (!found) ts.forEachChild(n, visit)
-  }
-  visit(source)
-  if (!found) throw new Error(`findExportedFn: ${name} not found`)
-  return found
+    if (!found) ts.forEachChild(n, visit);
+  };
+  visit(source);
+  if (!found) throw new Error(`findExportedFn: ${name} not found`);
+  return found;
 }
 
 // ============================================================================
@@ -84,25 +84,25 @@ describe("schema derivation from op input type", () => {
         },
       },
       required: ["name", "roles", "address"],
-    })
-  })
+    });
+  });
 
   it("follows a named-constant op referenced by identifier (not just inline op() calls)", () => {
     expect(schemas["widgets_list"]?.inputSchema).toEqual({
       type: "object",
       properties: { limit: { type: "number" } },
-    })
-    expect(schemas["widgets_list"]?.description).toBe("List all widgets in the catalog.")
-  })
+    });
+    expect(schemas["widgets_list"]?.description).toBe("List all widgets in the catalog.");
+  });
 
   it("threads a param-node op's input type into its namespaced tool name", () => {
     expect(schemas["users_userId_get"]?.inputSchema).toEqual({
       type: "object",
       properties: { userId: { type: "string" } },
       required: ["userId"],
-    })
-  })
-})
+    });
+  });
+});
 
 // ============================================================================
 // A `fallback.subtree` that is a bare `op()` leaf (not wrapped in `api(...)`)
@@ -122,15 +122,15 @@ describe("fallback.subtree as a bare op() leaf", () => {
       type: "object",
       properties: { widgetId: { type: "string" } },
       required: ["widgetId"],
-    })
-  })
+    });
+  });
 
-  it("extractRouteTypeRefs keys it exactly as build.ts's wrapValidators/collectUnvalidatedLeaves would at runtime — \"tree/widgetById/:widgetId\" (treeId-prefixed), not an extra trailing segment", () => {
-    const routes = extractRouteTypeRefs(FIXTURE)
-    expect(routes["tree/widgetById/:widgetId"]).toBeDefined()
-    expect(routes["tree/widgetById/widgetId"]).toBeUndefined()
-  })
-})
+  it('extractRouteTypeRefs keys it exactly as build.ts\'s wrapValidators/collectUnvalidatedLeaves would at runtime — "tree/widgetById/:widgetId" (treeId-prefixed), not an extra trailing segment', () => {
+    const routes = extractRouteTypeRefs(FIXTURE);
+    expect(routes["tree/widgetById/:widgetId"]).toBeDefined();
+    expect(routes["tree/widgetById/widgetId"]).toBeUndefined();
+  });
+});
 
 // ============================================================================
 // 1b. Per-field JSDoc → property `description` (+ `@default` → `default`)
@@ -138,30 +138,30 @@ describe("fallback.subtree as a bare op() leaf", () => {
 
 describe("per-field description extraction (property JSDoc)", () => {
   it("populates description on a top-level property with a leading JSDoc comment", () => {
-    const name = schemas["users_create"]?.inputSchema.properties?.name
-    expect(name?.description).toBe("The user's display name.")
-  })
+    const name = schemas["users_create"]?.inputSchema.properties?.name;
+    expect(name?.description).toBe("The user's display name.");
+  });
 
   it("populates description + default from a JSDoc comment with an @default tag", () => {
-    const age = schemas["users_create"]?.inputSchema.properties?.age
-    expect(age?.description).toBe("Age in years.")
-    expect(age?.default).toBe(18)
-  })
+    const age = schemas["users_create"]?.inputSchema.properties?.age;
+    expect(age?.description).toBe("Age in years.");
+    expect(age?.default).toBe(18);
+  });
 
   it("omits description for a property without JSDoc", () => {
-    const roles = schemas["users_create"]?.inputSchema.properties?.roles
-    expect(roles?.description).toBeUndefined()
-    const userId = schemas["users_userId_get"]?.inputSchema.properties?.userId
-    expect(userId?.description).toBeUndefined()
-  })
+    const roles = schemas["users_create"]?.inputSchema.properties?.roles;
+    expect(roles?.description).toBeUndefined();
+    const userId = schemas["users_userId_get"]?.inputSchema.properties?.userId;
+    expect(userId?.description).toBeUndefined();
+  });
 
   it("propagates description on nested object properties", () => {
-    const address = schemas["users_create"]?.inputSchema.properties?.address
-    expect(address?.properties?.street?.description).toBe("Street address line.")
+    const address = schemas["users_create"]?.inputSchema.properties?.address;
+    expect(address?.properties?.street?.description).toBe("Street address line.");
     // sibling nested field with no JSDoc stays undefined
-    expect(address?.properties?.zip?.description).toBeUndefined()
-  })
-})
+    expect(address?.properties?.zip?.description).toBeUndefined();
+  });
+});
 
 // ============================================================================
 // 2. JSDoc → description
@@ -169,41 +169,41 @@ describe("per-field description extraction (property JSDoc)", () => {
 
 describe("JSDoc extraction", () => {
   it("extracts the leading doc comment as the description", () => {
-    expect(schemas["users_create"]?.description).toBe("Create a new user account.")
-  })
+    expect(schemas["users_create"]?.description).toBe("Create a new user account.");
+  });
 
   it("omits description when the op has no JSDoc", () => {
-    expect(schemas["users_userId_get"]?.description).toBeUndefined()
-  })
-})
+    expect(schemas["users_userId_get"]?.description).toBeUndefined();
+  });
+});
 
 // ============================================================================
 // 3. Derived schema flows into the MCP tool (end-to-end)
 // ============================================================================
 
 describe("MCP tool carries the derived inputSchema + description", () => {
-  const tools = toTools(tree, { schemas })
-  const byName = Object.fromEntries(tools.map((t) => [t.name, t]))
+  const tools = toTools(tree, { schemas });
+  const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
 
   it("replaces the { type: 'object' } placeholder with the real schema", () => {
-    const t = byName["users_create"]!
-    expect(t.inputSchema).toEqual(schemas["users_create"]!.inputSchema)
-    expect(t.inputSchema).not.toEqual({ type: "object" })
+    const t = byName["users_create"]!;
+    expect(t.inputSchema).toEqual(schemas["users_create"]!.inputSchema);
+    expect(t.inputSchema).not.toEqual({ type: "object" });
     expect((t.inputSchema.properties as Record<string, unknown>).name).toEqual({
       type: "string",
       description: "The user's display name.",
-    })
-  })
+    });
+  });
 
   it("uses the JSDoc-derived description as the fallback", () => {
-    expect(byName["users_create"]!.description).toBe("Create a new user account.")
-  })
+    expect(byName["users_create"]!.description).toBe("Create a new user account.");
+  });
 
   it("without a schema map, inputSchema stays the spec-minimum placeholder", () => {
-    const t = toTools(tree).find((x) => x.name === "users_create")!
-    expect(t.inputSchema).toEqual({ type: "object" })
-  })
-})
+    const t = toTools(tree).find((x) => x.name === "users_create")!;
+    expect(t.inputSchema).toEqual({ type: "object" });
+  });
+});
 
 // ============================================================================
 // 3a-factory. Trees built inside a top-level `export function` factory
@@ -215,38 +215,38 @@ describe("MCP tool carries the derived inputSchema + description", () => {
 // ============================================================================
 
 describe("walkTree recognizes trees returned from an exported factory function", () => {
-  const FACTORY_FIXTURE = `${import.meta.dir}/__fixtures__/tree-factory.fixture.ts`
-  const factorySchemas = extractToolSchemas(FACTORY_FIXTURE)
+  const FACTORY_FIXTURE = `${import.meta.dir}/__fixtures__/tree-factory.fixture.ts`;
+  const factorySchemas = extractToolSchemas(FACTORY_FIXTURE);
 
   it("extracts the leaf behind the two-statement `const tree = api(...); return tree` form", () => {
-    expect(factorySchemas["greet"]).toBeDefined()
+    expect(factorySchemas["greet"]).toBeDefined();
     expect(factorySchemas["greet"]!.inputSchema).toEqual({
       type: "object",
       properties: { name: { type: "string" } },
       required: ["name"],
-    })
+    });
     expect(factorySchemas["greet"]!.description).toBe(
       "Say hello, closing over the composition-time greeting.",
-    )
-  })
+    );
+  });
 
   it("extracts the leaf behind the single `return api(...)` form", () => {
-    expect(factorySchemas["ping"]).toBeDefined()
+    expect(factorySchemas["ping"]).toBeDefined();
     expect(factorySchemas["ping"]!.inputSchema).toEqual({
       type: "object",
       properties: { count: { type: "number" } },
       required: ["count"],
-    })
-  })
+    });
+  });
 
   it("skips a non-exported factory", () => {
-    expect(factorySchemas["hidden"]).toBeUndefined()
-  })
+    expect(factorySchemas["hidden"]).toBeUndefined();
+  });
 
   it("skips an exported factory that doesn't return a tree", () => {
-    expect(Object.keys(factorySchemas)).not.toContain("plain")
-  })
-})
+    expect(Object.keys(factorySchemas)).not.toContain("plain");
+  });
+});
 
 // ============================================================================
 // 3a-default-export. A bare `export default api(...)` — the tree expression
@@ -259,42 +259,42 @@ describe("walkTree recognizes trees returned from an exported factory function",
 // ============================================================================
 
 describe("walkTree recognizes a bare `export default api(...)` (no function wrapper, no binding)", () => {
-  const DEFAULT_EXPORT_FIXTURE = `${import.meta.dir}/__fixtures__/default-export.fixture.ts`
+  const DEFAULT_EXPORT_FIXTURE = `${import.meta.dir}/__fixtures__/default-export.fixture.ts`;
 
   it("hasTreeExport returns true for a file using this pattern", () => {
-    expect(hasTreeExport(DEFAULT_EXPORT_FIXTURE)).toBe(true)
-  })
+    expect(hasTreeExport(DEFAULT_EXPORT_FIXTURE)).toBe(true);
+  });
 
   it("extractToolSchemas discovers the leaf under the underscore-joined default name", () => {
-    const toolSchemas = extractToolSchemas(DEFAULT_EXPORT_FIXTURE)
-    expect(toolSchemas["ping"]).toBeDefined()
+    const toolSchemas = extractToolSchemas(DEFAULT_EXPORT_FIXTURE);
+    expect(toolSchemas["ping"]).toBeDefined();
     expect(toolSchemas["ping"]!.inputSchema).toEqual({
       type: "object",
       properties: { count: { type: "number" } },
       required: ["count"],
-    })
-    expect(toolSchemas["ping"]!.description).toBe("Ping the default-exported tree.")
-  })
+    });
+    expect(toolSchemas["ping"]!.description).toBe("Ping the default-exported tree.");
+  });
 
-  it("extractRouteSchemas keys the leaf under the \"default\" treeId prefix", () => {
-    const routeSchemas = extractRouteSchemas(DEFAULT_EXPORT_FIXTURE)
-    expect(Object.keys(routeSchemas)).toEqual(["default/ping"])
+  it('extractRouteSchemas keys the leaf under the "default" treeId prefix', () => {
+    const routeSchemas = extractRouteSchemas(DEFAULT_EXPORT_FIXTURE);
+    expect(Object.keys(routeSchemas)).toEqual(["default/ping"]);
     expect(routeSchemas["default/ping"]!.inputSchema).toEqual({
       type: "object",
       properties: { count: { type: "number" } },
       required: ["count"],
-    })
-  })
+    });
+  });
 
-  it("extractRouteTypeRefs keys the leaf under the \"default\" treeId prefix too", () => {
-    const routeTypeRefs = extractRouteTypeRefs(DEFAULT_EXPORT_FIXTURE)
-    expect(Object.keys(routeTypeRefs)).toEqual(["default/ping"])
-    const input = routeTypeRefs["default/ping"]!.input
-    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(fields)).toEqual(["count"])
-    expect(fields.count!.shape.kind).toBe("number")
-  })
-})
+  it('extractRouteTypeRefs keys the leaf under the "default" treeId prefix too', () => {
+    const routeTypeRefs = extractRouteTypeRefs(DEFAULT_EXPORT_FIXTURE);
+    expect(Object.keys(routeTypeRefs)).toEqual(["default/ping"]);
+    const input = routeTypeRefs["default/ping"]!.input;
+    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(Object.keys(fields)).toEqual(["count"]);
+    expect(fields.count!.shape.kind).toBe("number");
+  });
+});
 
 // ============================================================================
 // 3a-collision. Two trees in ONE file sharing a relative leaf path
@@ -308,45 +308,45 @@ describe("walkTree recognizes a bare `export default api(...)` (no function wrap
 // ============================================================================
 
 describe("two trees in one file with a colliding leaf path — treeId disambiguates them", () => {
-  const COLLISION_FIXTURE = `${import.meta.dir}/__fixtures__/collision.fixture.ts`
-  const routes = extractRouteTypeRefs(COLLISION_FIXTURE)
-  const routeSchemas = extractRouteSchemas(COLLISION_FIXTURE)
+  const COLLISION_FIXTURE = `${import.meta.dir}/__fixtures__/collision.fixture.ts`;
+  const routes = extractRouteTypeRefs(COLLISION_FIXTURE);
+  const routeSchemas = extractRouteSchemas(COLLISION_FIXTURE);
 
-  it("keys each tree's \"list\" leaf under its own treeId prefix, not one bare \"list\" key that the second tree would overwrite", () => {
-    expect(Object.keys(routes).sort()).toEqual(["catalogTree/list", "inventoryTree/list"])
-    expect(routes["list"]).toBeUndefined()
-  })
+  it('keys each tree\'s "list" leaf under its own treeId prefix, not one bare "list" key that the second tree would overwrite', () => {
+    expect(Object.keys(routes).sort()).toEqual(["catalogTree/list", "inventoryTree/list"]);
+    expect(routes["list"]).toBeUndefined();
+  });
 
   it("extractRouteTypeRefs: catalogTree's leaf keeps its OWN input type (limit: number), not inventoryTree's", () => {
-    const input = routes["catalogTree/list"]!.input
-    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(fields)).toEqual(["limit"])
-    expect(fields.limit!.shape.kind).toBe("number")
-  })
+    const input = routes["catalogTree/list"]!.input;
+    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(Object.keys(fields)).toEqual(["limit"]);
+    expect(fields.limit!.shape.kind).toBe("number");
+  });
 
   it("extractRouteTypeRefs: inventoryTree's leaf keeps its OWN input type (warehouseId: string), not catalogTree's", () => {
-    const input = routes["inventoryTree/list"]!.input
-    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(fields)).toEqual(["warehouseId"])
-    expect(fields.warehouseId!.shape.kind).toBe("string")
-  })
+    const input = routes["inventoryTree/list"]!.input;
+    const fields = (input.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(Object.keys(fields)).toEqual(["warehouseId"]);
+    expect(fields.warehouseId!.shape.kind).toBe("string");
+  });
 
   it("extractRouteSchemas: same disambiguation, JSON-Schema-keyed — each tree's own inputSchema and description survive independently", () => {
-    expect(Object.keys(routeSchemas).sort()).toEqual(["catalogTree/list", "inventoryTree/list"])
+    expect(Object.keys(routeSchemas).sort()).toEqual(["catalogTree/list", "inventoryTree/list"]);
     expect(routeSchemas["catalogTree/list"]!.inputSchema).toEqual({
       type: "object",
       properties: { limit: { type: "number" } },
       required: ["limit"],
-    })
-    expect(routeSchemas["catalogTree/list"]!.description).toBe("List items in the catalog.")
+    });
+    expect(routeSchemas["catalogTree/list"]!.description).toBe("List items in the catalog.");
     expect(routeSchemas["inventoryTree/list"]!.inputSchema).toEqual({
       type: "object",
       properties: { warehouseId: { type: "string" } },
       required: ["warehouseId"],
-    })
-    expect(routeSchemas["inventoryTree/list"]!.description).toBe("List warehouse inventory rows.")
-  })
-})
+    });
+    expect(routeSchemas["inventoryTree/list"]!.description).toBe("List warehouse inventory rows.");
+  });
+});
 
 // ============================================================================
 // 3b. meta.mcp.name / meta.mcp.segment overrides reflected in the
@@ -355,22 +355,22 @@ describe("two trees in one file with a colliding leaf path — treeId disambigua
 // ============================================================================
 
 describe("meta.mcp overrides reflected in the reconstructed name", () => {
-  const tools = toTools(tree, { schemas })
-  const byName = Object.fromEntries(tools.map((t) => [t.name, t]))
+  const tools = toTools(tree, { schemas });
+  const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
 
   it("a leaf's meta.mcp.name fully overrides the tool name — schemas keys under the override, not the default join", () => {
     // The default underscore-joined name would have been "mcpOverrides_renamed";
     // meta.mcp.name replaces it outright, prefix and all.
-    expect(schemas["mcpOverrides_renamed"]).toBeUndefined()
+    expect(schemas["mcpOverrides_renamed"]).toBeUndefined();
     expect(schemas["custom_search"]?.inputSchema).toEqual({
       type: "object",
       properties: { q: { type: "string" } },
       required: ["q"],
-    })
+    });
     // And the real runtime projection resolves the SAME derived schema under
     // the SAME name — this is the divergence the two code paths must not have.
-    expect(byName["custom_search"]?.inputSchema).toEqual(schemas["custom_search"]!.inputSchema)
-  })
+    expect(byName["custom_search"]?.inputSchema).toEqual(schemas["custom_search"]!.inputSchema);
+  });
 
   // `api()`'s `opts.meta` parameter is now a `const` type parameter (`M`,
   // node.ts), matching how `children` (`C`) and `fallback` (`const F`)
@@ -385,19 +385,19 @@ describe("meta.mcp overrides reflected in the reconstructed name", () => {
   // honored `meta.mcp.segment` at runtime — the two code paths no longer
   // diverge.
   it("a branch's meta.mcp.segment overrides this child's contribution to the reconstructed name — schemas keys under the override, not the default join", () => {
-    expect(schemas["mcpOverrides_catalog_list"]).toBeUndefined()
+    expect(schemas["mcpOverrides_catalog_list"]).toBeUndefined();
     expect(schemas["mcpOverrides_products_list"]?.inputSchema).toEqual({
       type: "object",
       properties: { limit: { type: "number" } },
-    })
+    });
     // And the real runtime projection resolves the SAME derived schema under
     // the SAME name — this is the divergence the two code paths must not have.
     expect(byName["mcpOverrides_products_list"]?.inputSchema).toEqual(
       schemas["mcpOverrides_products_list"]!.inputSchema,
-    )
-    expect(byName["mcpOverrides_catalog_list"]).toBeUndefined()
-  })
-})
+    );
+    expect(byName["mcpOverrides_catalog_list"]).toBeUndefined();
+  });
+});
 
 // ============================================================================
 // 4. Fallback fires for an unhandled (union) type — TODO-tagged
@@ -405,13 +405,15 @@ describe("meta.mcp overrides reflected in the reconstructed name", () => {
 
 describe("fallback for exotic types", () => {
   it("punts a union field to { type: 'object' } with a TODO $comment", () => {
-    const q = (schemas["search_run"]?.inputSchema.properties as
-      | Record<string, { type?: string; $comment?: string }>
-      | undefined)?.q
-    expect(q?.$comment).toMatch(/TODO\(type-ir\)/)
-    expect(q?.$comment).toMatch(/union/)
-  })
-})
+    const q = (
+      schemas["search_run"]?.inputSchema.properties as
+        | Record<string, { type?: string; $comment?: string }>
+        | undefined
+    )?.q;
+    expect(q?.$comment).toMatch(/TODO\(type-ir\)/);
+    expect(q?.$comment).toMatch(/union/);
+  });
+});
 
 // ============================================================================
 // 5. outputSchema extraction from op return types — Result<T,E> unwrapping
@@ -423,16 +425,16 @@ describe("outputSchema derivation", () => {
       type: "object",
       properties: { id: { type: "string" } },
       required: ["id"],
-    })
-  })
+    });
+  });
 
   it("unwraps Promise<T> return type to T's schema", () => {
     expect(schemas["async_fetch"]?.outputSchema).toEqual({
       type: "object",
       properties: { value: { type: "number" } },
       required: ["value"],
-    })
-  })
+    });
+  });
 
   // ── Result unwrapping — 5 cases ────────────────────────────────────────────
 
@@ -442,8 +444,8 @@ describe("outputSchema derivation", () => {
       type: "object",
       properties: { answer: { type: "number" } },
       required: ["answer"],
-    })
-  })
+    });
+  });
 
   // (b) Barrel re-export: `import type { Result as ResultFromBarrel } from "./barrel"`
   //     The syntax path checks the TypeReference identifier name ("Result" after
@@ -453,8 +455,8 @@ describe("outputSchema derivation", () => {
       type: "object",
       properties: { count: { type: "number" } },
       required: ["count"],
-    })
-  })
+    });
+  });
 
   // (c) Further-generic alias: `type ApiResult<T> = Result<T, string>`.
   //     The syntax path walks the local TypeAliasDeclaration — its body is
@@ -464,8 +466,8 @@ describe("outputSchema derivation", () => {
       type: "object",
       properties: { items: { type: "array", items: { type: "string" } } },
       required: ["items"],
-    })
-  })
+    });
+  });
 
   // Promise<Result<T,E>>: syntax path strips Promise first, then unwraps Result
   it("Promise<Result<T,E>> unwraps both layers to T's schema", () => {
@@ -473,8 +475,8 @@ describe("outputSchema derivation", () => {
       type: "object",
       properties: { name: { type: "string" } },
       required: ["name"],
-    })
-  })
+    });
+  });
 
   // Genuine 2-member union that is NOT a Result — must NOT be false-positived.
   // No "Result" identifier in the annotation → syntax path skips it.
@@ -482,7 +484,7 @@ describe("outputSchema derivation", () => {
   // It IS, however, a discriminated union on `kind` — it now extracts fully
   // rather than punting (discriminated-union detection, see extract.ts).
   it("a different 2-member union with a different discriminant does not unwrap as Result — extracts as its own discriminated union instead", () => {
-    const output = schemas["differentUnion_ping"]?.outputSchema
+    const output = schemas["differentUnion_ping"]?.outputSchema;
     expect(output).toEqual({
       oneOf: [
         {
@@ -497,55 +499,64 @@ describe("outputSchema derivation", () => {
         },
       ],
       discriminator: { propertyName: "kind" },
-    })
-  })
-})
+    });
+  });
+});
 
 // ============================================================================
 // 6. TypeRef extraction — TS type → TypeRef → JSON Schema
 // ============================================================================
 
 describe("TypeRef extraction", () => {
-  const typeRefs = extractToolTypeRefs(FIXTURE)
+  const typeRefs = extractToolTypeRefs(FIXTURE);
 
   it("typeRefFromType produces correct shapes for primitives / optional / array / nested fields", () => {
-    const input = typeRefs["users_create"]!.input
-    expect(input.shape.kind).toBe("object")
-    const fields = (input.shape as { kind: "object"; fields: Record<string, import("@rhi-zone/fractal-type-ir").TypeRef> }).fields
-    expect(fields.name?.shape.kind).toBe("string")
-    expect(fields.age?.shape.kind).toBe("number")
-    expect(fields.age?.meta.optional).toBe(true)
-    expect(fields.roles?.shape.kind).toBe("array")
-    expect((fields.roles?.shape as { element: { shape: { kind: string } } }).element.shape.kind).toBe("string")
-    expect(fields.address?.shape.kind).toBe("object")
-  })
+    const input = typeRefs["users_create"]!.input;
+    expect(input.shape.kind).toBe("object");
+    const fields = (
+      input.shape as {
+        kind: "object";
+        fields: Record<string, import("@rhi-zone/fractal-type-ir").TypeRef>;
+      }
+    ).fields;
+    expect(fields.name?.shape.kind).toBe("string");
+    expect(fields.age?.shape.kind).toBe("number");
+    expect(fields.age?.meta.optional).toBe(true);
+    expect(fields.roles?.shape.kind).toBe("array");
+    expect(
+      (fields.roles?.shape as { element: { shape: { kind: string } } }).element.shape.kind,
+    ).toBe("string");
+    expect(fields.address?.shape.kind).toBe("object");
+  });
 
   it("typeRefFromFunctionNode produces the correct TypeRef for a function input", () => {
-    const input = typeRefs["users_userId_get"]!.input
-    expect(toJsonSchema(input)).toEqual(schemas["users_userId_get"]!.inputSchema)
-  })
+    const input = typeRefs["users_userId_get"]!.input;
+    expect(toJsonSchema(input)).toEqual(schemas["users_userId_get"]!.inputSchema);
+  });
 
   it("typeRefFromReturnType unwraps Result<T,E> to T's TypeRef", () => {
-    const output = typeRefs["fallible_compute"]!.output!
-    expect(output.shape.kind).toBe("object")
-    expect(toJsonSchema(output)).toEqual(schemas["fallible_compute"]!.outputSchema!)
-  })
+    const output = typeRefs["fallible_compute"]!.output!;
+    expect(output.shape.kind).toBe("object");
+    expect(toJsonSchema(output)).toEqual(schemas["fallible_compute"]!.outputSchema!);
+  });
 
   it("extractToolTypeRefs carries the JSDoc description alongside the TypeRefs", () => {
-    expect(typeRefs["users_create"]!.description).toBe("Create a new user account.")
-    expect(typeRefs["users_userId_get"]!.description).toBeUndefined()
-  })
+    expect(typeRefs["users_create"]!.description).toBe("Create a new user account.");
+    expect(typeRefs["users_userId_get"]!.description).toBeUndefined();
+  });
 
   it("punted types produce t(types.unknown, { $comment }) — no `type` discriminant carried over", () => {
-    const fields = (typeRefs["search_run"]!.input.shape as {
-      kind: "object"
-      fields: Record<string, import("@rhi-zone/fractal-type-ir").TypeRef>
-    }).fields
-    const q = fields.q!
-    expect(q.shape.kind).toBe("unknown")
-    expect(q.meta.$comment).toMatch(/TODO\(type-ir\)/)
-    expect(q.meta.$comment).toMatch(/union/)
-  })
+    const fields = (
+      typeRefs["search_run"]!.input.shape as {
+        kind: "object";
+        fields: Record<string, import("@rhi-zone/fractal-type-ir").TypeRef>;
+      }
+    ).fields;
+    const q = fields.q!;
+    expect(q.shape.kind).toBe("unknown");
+    expect(q.meta.$comment).toMatch(/TODO\(type-ir\)/);
+    expect(q.meta.$comment).toMatch(/union/);
+  });
 
   it("round-trips: toJsonSchema(typeRefFromType(...)) matches schemaFromType(...) for non-punted tools", () => {
     const names = [
@@ -556,54 +567,54 @@ describe("TypeRef extraction", () => {
       "barrel_query",
       "generic_search",
       "promiseResult_load",
-    ]
+    ];
     for (const name of names) {
-      expect(toJsonSchema(typeRefs[name]!.input)).toEqual(schemas[name]!.inputSchema)
+      expect(toJsonSchema(typeRefs[name]!.input)).toEqual(schemas[name]!.inputSchema);
       if (typeRefs[name]!.output !== undefined) {
-        expect(toJsonSchema(typeRefs[name]!.output!)).toEqual(schemas[name]!.outputSchema!)
+        expect(toJsonSchema(typeRefs[name]!.output!)).toEqual(schemas[name]!.outputSchema!);
       }
     }
-  })
-})
+  });
+});
 
 // ============================================================================
 // 7. TypeRef extraction functions called directly (not via the tree walker)
 // ============================================================================
 
 describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, called directly", () => {
-  const program = createExtractorProgram(TYPEREF_FIXTURE)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(TYPEREF_FIXTURE)!
-  const fn = findExportedFn(source, "sample")
+  const program = createExtractorProgram(TYPEREF_FIXTURE);
+  const checker = program.getTypeChecker();
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!;
+  const fn = findExportedFn(source, "sample");
 
   it("typeRefFromFunctionNode lowers the input parameter to a TypeRef matching schemaFromFunctionNode", () => {
-    const inputRef = typeRefFromFunctionNode(fn, checker)
-    expect(inputRef.shape.kind).toBe("object")
-    expect(toJsonSchema(inputRef)).toEqual(schemaFromFunctionNode(fn, checker))
-  })
+    const inputRef = typeRefFromFunctionNode(fn, checker);
+    expect(inputRef.shape.kind).toBe("object");
+    expect(toJsonSchema(inputRef)).toEqual(schemaFromFunctionNode(fn, checker));
+  });
 
   it("typeRefFromFunctionNode carries no typeName/declarationFile for an anonymous inline parameter type", () => {
-    const inputRef = typeRefFromFunctionNode(fn, checker)
-    expect(inputRef.meta.typeName).toBeUndefined()
-    expect(inputRef.meta.declarationFile).toBeUndefined()
-  })
+    const inputRef = typeRefFromFunctionNode(fn, checker);
+    expect(inputRef.meta.typeName).toBeUndefined();
+    expect(inputRef.meta.declarationFile).toBeUndefined();
+  });
 
   it("typeRefFromFunctionNode carries meta.typeName/meta.declarationFile for a NAMED (type alias) parameter type", () => {
-    const namedFn = findExportedFn(source, "namedParamFn")
-    const inputRef = typeRefFromFunctionNode(namedFn, checker)
-    expect(inputRef.meta.typeName).toBe("BookQuery")
-    expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE)
+    const namedFn = findExportedFn(source, "namedParamFn");
+    const inputRef = typeRefFromFunctionNode(namedFn, checker);
+    expect(inputRef.meta.typeName).toBe("BookQuery");
+    expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE);
     // Structural lowering still happens underneath the provenance metadata —
     // the shape itself is unaffected, only meta gains the two extra keys.
-    expect(inputRef.shape.kind).toBe("object")
-  })
+    expect(inputRef.shape.kind).toBe("object");
+  });
 
   it("typeRefFromFunctionNode carries meta.typeName/meta.declarationFile for a NAMED (interface) parameter type", () => {
-    const namedFn = findExportedFn(source, "namedInterfaceParamFn")
-    const inputRef = typeRefFromFunctionNode(namedFn, checker)
-    expect(inputRef.meta.typeName).toBe("BookIdParam")
-    expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE)
-  })
+    const namedFn = findExportedFn(source, "namedInterfaceParamFn");
+    const inputRef = typeRefFromFunctionNode(namedFn, checker);
+    expect(inputRef.meta.typeName).toBe("BookIdParam");
+    expect(inputRef.meta.declarationFile).toBe(TYPEREF_FIXTURE);
+  });
 
   // Regression: a TS builtin/global utility type (`Record<K,V>`) used
   // directly as a handler's whole parameter type IS nameable
@@ -614,14 +625,14 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
   // `typeProvenanceOf` must exclude it and fall through to structural
   // inlining, same as a genuinely anonymous inline parameter type.
   it("typeRefFromFunctionNode carries NO typeName/declarationFile for a builtin/global TS utility type (Record) parameter type", () => {
-    const builtinFn = findExportedFn(source, "builtinNamedParamFn")
-    const inputRef = typeRefFromFunctionNode(builtinFn, checker)
-    expect(inputRef.meta.typeName).toBeUndefined()
-    expect(inputRef.meta.declarationFile).toBeUndefined()
+    const builtinFn = findExportedFn(source, "builtinNamedParamFn");
+    const inputRef = typeRefFromFunctionNode(builtinFn, checker);
+    expect(inputRef.meta.typeName).toBeUndefined();
+    expect(inputRef.meta.declarationFile).toBeUndefined();
     // Structural lowering still happens underneath — a Record<string,
     // number> still lowers to a `map` shape, just without import provenance.
-    expect(inputRef.shape.kind).toBe("map")
-  })
+    expect(inputRef.shape.kind).toBe("map");
+  });
 
   // Regression: a conditional/mapped-type utility alias (mirroring valibot's
   // `InferOutput<TSchema>`) used directly as a handler's parameter type
@@ -636,132 +647,134 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
   // `typeProvenanceOf` must exclude ANY symbol named `"__type"`, regardless
   // of the declaring AST node kind.
   it("typeRefFromFunctionNode carries NO typeName/declarationFile for a mapped-type-utility (InferOutput-shaped) parameter type", () => {
-    const mappedFn = findExportedFn(source, "mappedUtilityNamedParamFn")
-    const inputRef = typeRefFromFunctionNode(mappedFn, checker)
-    expect(inputRef.meta.typeName).toBeUndefined()
-    expect(inputRef.meta.declarationFile).toBeUndefined()
+    const mappedFn = findExportedFn(source, "mappedUtilityNamedParamFn");
+    const inputRef = typeRefFromFunctionNode(mappedFn, checker);
+    expect(inputRef.meta.typeName).toBeUndefined();
+    expect(inputRef.meta.declarationFile).toBeUndefined();
     // Structural lowering still happens underneath — the mapped type still
     // lowers to an `object` shape with both fields, just without import
     // provenance.
-    expect(inputRef.shape.kind).toBe("object")
-  })
+    expect(inputRef.shape.kind).toBe("object");
+  });
 
   it("typeRefFromType matches schemaFromType for the same resolved parameter type", () => {
-    const fnType = checker.getTypeAtLocation(fn)
-    const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
-    const [param] = sig!.getParameters()
-    const paramType = checker.getTypeOfSymbolAtLocation(param!, fn)
-    const ref = typeRefFromType(paramType, checker, fn)
-    expect(toJsonSchema(ref)).toEqual(schemaFromType(paramType, checker, fn))
-  })
+    const fnType = checker.getTypeAtLocation(fn);
+    const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call);
+    const [param] = sig!.getParameters();
+    const paramType = checker.getTypeOfSymbolAtLocation(param!, fn);
+    const ref = typeRefFromType(paramType, checker, fn);
+    expect(toJsonSchema(ref)).toEqual(schemaFromType(paramType, checker, fn));
+  });
 
   it("typeRefFromReturnType unwraps Result<T,E> to T's TypeRef matching schemaFromReturnType", () => {
-    const outputRef = typeRefFromReturnType(fn, checker)
-    expect(outputRef.shape.kind).toBe("object")
-    expect(toJsonSchema(outputRef)).toEqual(schemaFromReturnType(fn, checker))
+    const outputRef = typeRefFromReturnType(fn, checker);
+    expect(outputRef.shape.kind).toBe("object");
+    expect(toJsonSchema(outputRef)).toEqual(schemaFromReturnType(fn, checker));
     expect(toJsonSchema(outputRef)).toEqual({
       type: "object",
       properties: { total: { type: "number" } },
       required: ["total"],
-    })
-  })
-})
+    });
+  });
+});
 
 // ============================================================================
 // AsyncIterable/AsyncGenerator return-type detection — types.stream
 // ============================================================================
 
 describe("typeRefFromReturnType detects AsyncIterable/AsyncGenerator return types", () => {
-  const program = createExtractorProgram(TYPEREF_FIXTURE)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+  const program = createExtractorProgram(TYPEREF_FIXTURE);
+  const checker = program.getTypeChecker();
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!;
 
   it("a function returning AsyncIterable<T> lowers to types.stream, T extracted fully", () => {
-    const fn = findExportedFn(source, "streamFn")
-    const ref = typeRefFromReturnType(fn, checker)
-    expect(ref.shape.kind).toBe("stream")
-    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element
-    expect(element.shape.kind).toBe("object")
-    const fields = (element.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.id?.shape.kind).toBe("string")
+    const fn = findExportedFn(source, "streamFn");
+    const ref = typeRefFromReturnType(fn, checker);
+    expect(ref.shape.kind).toBe("stream");
+    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element;
+    expect(element.shape.kind).toBe("object");
+    const fields = (element.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.id?.shape.kind).toBe("string");
     expect(toJsonSchema(ref)).toEqual({
       type: "array",
       items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
       "x-stream": true,
-    })
-  })
+    });
+  });
 
   it("an async function* (AsyncGenerator<T, void, unknown> inferred return) lowers to types.stream", () => {
     const fnDecl = source.statements.find(
-      (s): s is ts.FunctionDeclaration => ts.isFunctionDeclaration(s) && s.name?.text === "asyncGenFn",
-    )
-    if (!fnDecl) throw new Error("asyncGenFn not found")
-    const ref = typeRefFromReturnType(fnDecl, checker)
-    expect(ref.shape.kind).toBe("stream")
-    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element
-    expect(element.shape.kind).toBe("number")
-  })
+      (s): s is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(s) && s.name?.text === "asyncGenFn",
+    );
+    if (!fnDecl) throw new Error("asyncGenFn not found");
+    const ref = typeRefFromReturnType(fnDecl, checker);
+    expect(ref.shape.kind).toBe("stream");
+    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element;
+    expect(element.shape.kind).toBe("number");
+  });
 
   it("Promise<AsyncIterable<T>> unwraps the Promise first, then detects the stream underneath", () => {
-    const fn = findExportedFn(source, "promiseStreamFn")
-    const ref = typeRefFromReturnType(fn, checker)
-    expect(ref.shape.kind).toBe("stream")
-    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element
-    expect(element.shape.kind).toBe("string")
-  })
-})
+    const fn = findExportedFn(source, "promiseStreamFn");
+    const ref = typeRefFromReturnType(fn, checker);
+    expect(ref.shape.kind).toBe("stream");
+    const element = (ref.shape as { kind: "stream"; element: TypeRef }).element;
+    expect(element.shape.kind).toBe("string");
+  });
+});
 
 // ============================================================================
 // CursorPage<T>/OffsetPage<T>/Page<T> return-type detection — types.page
 // ============================================================================
 
 describe("typeRefFromReturnType detects CursorPage/OffsetPage/Page return types", () => {
-  const program = createExtractorProgram(TYPEREF_FIXTURE)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+  const program = createExtractorProgram(TYPEREF_FIXTURE);
+  const checker = program.getTypeChecker();
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!;
 
   it("a function returning CursorPage<T> lowers to types.page with style 'cursor'", () => {
-    const fn = findExportedFn(source, "cursorPageFn")
-    const ref = typeRefFromReturnType(fn, checker)
-    expect(ref.shape.kind).toBe("page")
-    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
-    expect(shape.style).toBe("cursor")
-    const fields = (shape.element.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.id?.shape.kind).toBe("string")
+    const fn = findExportedFn(source, "cursorPageFn");
+    const ref = typeRefFromReturnType(fn, checker);
+    expect(ref.shape.kind).toBe("page");
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" };
+    expect(shape.style).toBe("cursor");
+    const fields = (shape.element.shape as { kind: "object"; fields: Record<string, TypeRef> })
+      .fields;
+    expect(fields.id?.shape.kind).toBe("string");
     expect(toJsonSchema(ref)).toEqual({
       type: "array",
       items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
       "x-page-style": "cursor",
-    })
-  })
+    });
+  });
 
   it("a function returning OffsetPage<T> lowers to types.page with style 'offset'", () => {
-    const fn = findExportedFn(source, "offsetPageFn")
-    const ref = typeRefFromReturnType(fn, checker)
-    expect(ref.shape.kind).toBe("page")
-    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
-    expect(shape.style).toBe("offset")
-    expect(shape.element.shape.kind).toBe("number")
-  })
+    const fn = findExportedFn(source, "offsetPageFn");
+    const ref = typeRefFromReturnType(fn, checker);
+    expect(ref.shape.kind).toBe("page");
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" };
+    expect(shape.style).toBe("offset");
+    expect(shape.element.shape.kind).toBe("number");
+  });
 
   it("a function returning the reader-facing Page<T> union defaults to style 'cursor'", () => {
-    const fn = findExportedFn(source, "pageUnionFn")
-    const ref = typeRefFromReturnType(fn, checker)
-    expect(ref.shape.kind).toBe("page")
-    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
-    expect(shape.style).toBe("cursor")
-    expect(shape.element.shape.kind).toBe("string")
-  })
+    const fn = findExportedFn(source, "pageUnionFn");
+    const ref = typeRefFromReturnType(fn, checker);
+    expect(ref.shape.kind).toBe("page");
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" };
+    expect(shape.style).toBe("cursor");
+    expect(shape.element.shape.kind).toBe("string");
+  });
 
   it("Promise<CursorPage<T>> unwraps the Promise first, then detects the page underneath", () => {
-    const fn = findExportedFn(source, "promiseCursorPageFn")
-    const ref = typeRefFromReturnType(fn, checker)
-    expect(ref.shape.kind).toBe("page")
-    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" }
-    expect(shape.style).toBe("cursor")
-    expect(shape.element.shape.kind).toBe("string")
-  })
-})
+    const fn = findExportedFn(source, "promiseCursorPageFn");
+    const ref = typeRefFromReturnType(fn, checker);
+    expect(ref.shape.kind).toBe("page");
+    const shape = ref.shape as { kind: "page"; element: TypeRef; style: "cursor" | "offset" };
+    expect(shape.style).toBe("cursor");
+    expect(shape.element.shape.kind).toBe("string");
+  });
+});
 
 // ============================================================================
 // 8. Gap fixes — tuples, index signatures, class filtering, nested Promise,
@@ -769,190 +782,195 @@ describe("typeRefFromReturnType detects CursorPage/OffsetPage/Page return types"
 // ============================================================================
 
 describe("typeRefFromType gap fixes", () => {
-  const program = createExtractorProgram(TYPEREF_FIXTURE)
-  const checker = program.getTypeChecker()
-  const source = program.getSourceFile(TYPEREF_FIXTURE)!
+  const program = createExtractorProgram(TYPEREF_FIXTURE);
+  const checker = program.getTypeChecker();
+  const source = program.getSourceFile(TYPEREF_FIXTURE)!;
 
   /** Resolve a top-level `type X = …` alias or `class X …` to its ts.Type. */
   function typeOf(name: string): ts.Type {
-    let found: ts.Node | undefined
+    let found: ts.Node | undefined;
     const visit = (n: ts.Node): void => {
-      if (!found && ts.isTypeAliasDeclaration(n) && n.name.text === name) found = n.name
-      if (!found && ts.isClassDeclaration(n) && n.name?.text === name) found = n.name
-      if (!found) ts.forEachChild(n, visit)
-    }
-    visit(source)
-    if (!found) throw new Error(`typeOf: ${name} not found`)
-    return checker.getTypeAtLocation(found)
+      if (!found && ts.isTypeAliasDeclaration(n) && n.name.text === name) found = n.name;
+      if (!found && ts.isClassDeclaration(n) && n.name?.text === name) found = n.name;
+      if (!found) ts.forEachChild(n, visit);
+    };
+    visit(source);
+    if (!found) throw new Error(`typeOf: ${name} not found`);
+    return checker.getTypeAtLocation(found);
   }
 
   it("lowers a tuple to types.tuple, not an indexed object", () => {
-    const ref = typeRefFromType(typeOf("TupleType"), checker, source)
-    expect(ref.shape.kind).toBe("tuple")
-    const elements = (ref.shape as { kind: "tuple"; elements: TypeRef[] }).elements
-    expect(elements.map((e) => e.shape.kind)).toEqual(["string", "number", "boolean"])
+    const ref = typeRefFromType(typeOf("TupleType"), checker, source);
+    expect(ref.shape.kind).toBe("tuple");
+    const elements = (ref.shape as { kind: "tuple"; elements: TypeRef[] }).elements;
+    expect(elements.map((e) => e.shape.kind)).toEqual(["string", "number", "boolean"]);
     expect(toJsonSchema(ref)).toEqual({
       type: "array",
       prefixItems: [{ type: "string" }, { type: "number" }, { type: "boolean" }],
       items: false,
-    })
-  })
+    });
+  });
 
   it("lowers Record<string, number> to types.map", () => {
-    const ref = typeRefFromType(typeOf("RecordType"), checker, source)
-    expect(ref.shape.kind).toBe("map")
-    const map = ref.shape as { kind: "map"; key: TypeRef; value: TypeRef }
-    expect(map.key.shape.kind).toBe("string")
-    expect(map.value.shape.kind).toBe("number")
+    const ref = typeRefFromType(typeOf("RecordType"), checker, source);
+    expect(ref.shape.kind).toBe("map");
+    const map = ref.shape as { kind: "map"; key: TypeRef; value: TypeRef };
+    expect(map.key.shape.kind).toBe("string");
+    expect(map.value.shape.kind).toBe("number");
     expect(toJsonSchema(ref)).toEqual({
       type: "object",
       additionalProperties: { type: "number" },
-    })
-  })
+    });
+  });
 
   it("lowers an explicit string index signature to types.map", () => {
-    const ref = typeRefFromType(typeOf("IndexSigType"), checker, source)
-    expect(ref.shape.kind).toBe("map")
-    const map = ref.shape as { kind: "map"; key: TypeRef; value: TypeRef }
-    expect(map.key.shape.kind).toBe("string")
-    expect(map.value.shape.kind).toBe("boolean")
-  })
+    const ref = typeRefFromType(typeOf("IndexSigType"), checker, source);
+    expect(ref.shape.kind).toBe("map");
+    const map = ref.shape as { kind: "map"; key: TypeRef; value: TypeRef };
+    expect(map.key.shape.kind).toBe("string");
+    expect(map.value.shape.kind).toBe("boolean");
+  });
 
   it("keeps a single string literal as types.literal, not widened to string", () => {
-    const ref = typeRefFromType(typeOf("SingleLiteral"), checker, source)
-    expect(ref.shape.kind).toBe("literal")
-    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe("active")
-  })
+    const ref = typeRefFromType(typeOf("SingleLiteral"), checker, source);
+    expect(ref.shape.kind).toBe("literal");
+    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe("active");
+  });
 
   it("keeps a single numeric literal as types.literal", () => {
-    const ref = typeRefFromType(typeOf("NumericLiteral"), checker, source)
-    expect(ref.shape.kind).toBe("literal")
-    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(42)
-  })
+    const ref = typeRefFromType(typeOf("NumericLiteral"), checker, source);
+    expect(ref.shape.kind).toBe("literal");
+    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(42);
+  });
 
   it("keeps a single boolean literal as types.literal", () => {
-    const ref = typeRefFromType(typeOf("BooleanLiteral"), checker, source)
-    expect(ref.shape.kind).toBe("literal")
-    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(true)
-  })
+    const ref = typeRefFromType(typeOf("BooleanLiteral"), checker, source);
+    expect(ref.shape.kind).toBe("literal");
+    expect((ref.shape as { kind: "literal"; value: unknown }).value).toBe(true);
+  });
 
   it("lowers a union of string literals (LiteralType) to types.enum", () => {
-    const ref = typeRefFromType(typeOf("LiteralType"), checker, source)
-    expect(ref.shape.kind).toBe("enum")
+    const ref = typeRefFromType(typeOf("LiteralType"), checker, source);
+    expect(ref.shape.kind).toBe("enum");
     expect((ref.shape as { kind: "enum"; members: readonly string[] }).members).toEqual([
       "active",
       "inactive",
-    ])
-  })
+    ]);
+  });
 
   it("lowers a class-typed field to a purely nominal types.instance (no fields)", () => {
-    const ref = typeRefFromType(typeOf("ClassInstanceField"), checker, source)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const owner = fields.owner!
-    expect(owner.shape.kind).toBe("instance")
-    const ownerShape = owner.shape as { kind: "instance"; className: string; declarationFile: string }
-    expect(ownerShape.className).toBe("SampleClass")
-    expect(ownerShape.declarationFile).toContain("typeref.fixture.ts")
-    expect(Object.keys(ownerShape)).toEqual(["kind", "className", "declarationFile"])
-  })
+    const ref = typeRefFromType(typeOf("ClassInstanceField"), checker, source);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const owner = fields.owner!;
+    expect(owner.shape.kind).toBe("instance");
+    const ownerShape = owner.shape as {
+      kind: "instance";
+      className: string;
+      declarationFile: string;
+    };
+    expect(ownerShape.className).toBe("SampleClass");
+    expect(ownerShape.declarationFile).toContain("typeref.fixture.ts");
+    expect(Object.keys(ownerShape)).toEqual(["kind", "className", "declarationFile"]);
+  });
 
   it("carries the class's method surface as an interface TypeRef in meta.interface, alongside the nominal instance", () => {
-    const ref = typeRefFromType(typeOf("ClassInstanceField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const owner = fields.owner!
-    expect(owner.shape.kind).toBe("instance")
+    const ref = typeRefFromType(typeOf("ClassInstanceField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const owner = fields.owner!;
+    expect(owner.shape.kind).toBe("instance");
 
-    const iface = owner.meta.interface as TypeRef
-    expect(iface).toBeDefined()
-    expect(iface.shape.kind).toBe("interface")
-    const methods = (iface.shape as { kind: "interface"; methods: Record<string, TypeRef> }).methods
-    expect(Object.keys(methods)).toEqual(["greet"])
+    const iface = owner.meta.interface as TypeRef;
+    expect(iface).toBeDefined();
+    expect(iface.shape.kind).toBe("interface");
+    const methods = (iface.shape as { kind: "interface"; methods: Record<string, TypeRef> })
+      .methods;
+    expect(Object.keys(methods)).toEqual(["greet"]);
 
-    const greet = methods.greet!
-    expect(greet.shape.kind).toBe("method")
+    const greet = methods.greet!;
+    expect(greet.shape.kind).toBe("method");
     const greetShape = greet.shape as {
-      kind: "method"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-      thisType?: TypeRef
-    }
-    expect(greetShape.params).toEqual([])
-    expect(greetShape.returnType.shape.kind).toBe("string")
-    expect(greetShape.thisType?.shape.kind).toBe("instance")
-    expect((greetShape.thisType?.shape as { className: string }).className).toBe("SampleClass")
-  })
+      kind: "method";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+      thisType?: TypeRef;
+    };
+    expect(greetShape.params).toEqual([]);
+    expect(greetShape.returnType.shape.kind).toBe("string");
+    expect(greetShape.thisType?.shape.kind).toBe("instance");
+    expect((greetShape.thisType?.shape as { className: string }).className).toBe("SampleClass");
+  });
 
   it("omits meta.interface entirely for a class with no methods", () => {
-    const ref = typeRefFromType(typeOf("NoMethodClass"), checker, source)
-    expect(ref.shape.kind).toBe("instance")
-    expect(ref.meta.interface).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("NoMethodClass"), checker, source);
+    expect(ref.shape.kind).toBe("instance");
+    expect(ref.meta.interface).toBeUndefined();
+  });
 
   it("unwraps a nested Promise<T> field to T's TypeRef", () => {
-    const ref = typeRefFromType(typeOf("PromiseField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.data?.shape.kind).toBe("string")
-  })
+    const ref = typeRefFromType(typeOf("PromiseField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.data?.shape.kind).toBe("string");
+  });
 
   it("lowers an AsyncIterable<T> field to types.stream with T's element TypeRef", () => {
-    const ref = typeRefFromType(typeOf("AsyncIterableField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.events?.shape.kind).toBe("stream")
-    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element
-    expect(element.shape.kind).toBe("string")
-  })
+    const ref = typeRefFromType(typeOf("AsyncIterableField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.events?.shape.kind).toBe("stream");
+    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element;
+    expect(element.shape.kind).toBe("string");
+  });
 
   it("lowers an AsyncGenerator<T, TReturn, TNext> field to types.stream, dropping TReturn/TNext", () => {
-    const ref = typeRefFromType(typeOf("AsyncGeneratorField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.events?.shape.kind).toBe("stream")
-    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element
-    expect(element.shape.kind).toBe("number")
-  })
+    const ref = typeRefFromType(typeOf("AsyncGeneratorField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.events?.shape.kind).toBe("stream");
+    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element;
+    expect(element.shape.kind).toBe("number");
+  });
 
   it("lowers an AsyncIterableIterator<T> field to types.stream (an async function*'s explicit return type)", () => {
-    const ref = typeRefFromType(typeOf("AsyncIterableIteratorField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.events?.shape.kind).toBe("stream")
-    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element
-    expect(element.shape.kind).toBe("boolean")
-  })
+    const ref = typeRefFromType(typeOf("AsyncIterableIteratorField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.events?.shape.kind).toBe("stream");
+    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element;
+    expect(element.shape.kind).toBe("boolean");
+  });
 
   it("sets meta.readonly on a `readonly`-modified field, and leaves a plain field alone", () => {
-    const ref = typeRefFromType(typeOf("ReadonlyField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.id?.meta.readonly).toBe(true)
-    expect(fields.name?.meta.readonly).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("ReadonlyField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.id?.meta.readonly).toBe(true);
+    expect(fields.name?.meta.readonly).toBeUndefined();
+  });
 
   it("sets both meta.optional and meta.readonly on a `readonly` optional field", () => {
-    const ref = typeRefFromType(typeOf("ReadonlyOptionalField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.id?.meta.optional).toBe(true)
-    expect(fields.id?.meta.readonly).toBe(true)
-  })
+    const ref = typeRefFromType(typeOf("ReadonlyOptionalField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.id?.meta.optional).toBe(true);
+    expect(fields.id?.meta.readonly).toBe(true);
+  });
 
   it("does not stack-overflow on an array-mediated recursive type, and refs itself", () => {
-    const ref = typeRefFromType(typeOf("RecursiveType"), checker, source)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.name?.shape.kind).toBe("string")
-    const children = fields.children!
-    expect(children.shape.kind).toBe("array")
-    const elemRef = (children.shape as { kind: "array"; element: TypeRef }).element
-    expect(elemRef.shape.kind).toBe("ref")
-    expect((elemRef.shape as { kind: "ref"; target: string }).target).toBe("RecursiveType")
-  })
+    const ref = typeRefFromType(typeOf("RecursiveType"), checker, source);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.name?.shape.kind).toBe("string");
+    const children = fields.children!;
+    expect(children.shape.kind).toBe("array");
+    const elemRef = (children.shape as { kind: "array"; element: TypeRef }).element;
+    expect(elemRef.shape.kind).toBe("ref");
+    expect((elemRef.shape as { kind: "ref"; target: string }).target).toBe("RecursiveType");
+  });
 
   it("does not stack-overflow on a directly self-referential type, and refs itself", () => {
-    const ref = typeRefFromType(typeOf("DirectRecursive"), checker, source)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const self = fields.self!
-    expect(self.shape.kind).toBe("ref")
-    expect((self.shape as { kind: "ref"; target: string }).target).toBe("DirectRecursive")
-  })
+    const ref = typeRefFromType(typeOf("DirectRecursive"), checker, source);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const self = fields.self!;
+    expect(self.shape.kind).toBe("ref");
+    expect((self.shape as { kind: "ref"; target: string }).target).toBe("DirectRecursive");
+  });
 
   // Regression: Set<T>/Map<K,T>'s OWN interface methods (`forEach(callback:
   // (value: T, value2: T, set: Set<T>) => void)`, `set(key, value): Map<K,
@@ -964,354 +982,355 @@ describe("typeRefFromType gap fixes", () => {
   // at the CONTAINER, not the real named type the recursion is actually
   // through.
   it("does not emit a dangling ref('Set') on a Set-mediated recursive type — refs the named type instead", () => {
-    const ref = typeRefFromType(typeOf("SetRecursiveType"), checker, source)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.name?.shape.kind).toBe("string")
-    const children = fields.children!
-    expect(children.shape.kind).toBe("array")
-    const elemRef = (children.shape as { kind: "array"; element: TypeRef }).element
-    expect(elemRef.shape.kind).toBe("ref")
-    expect((elemRef.shape as { kind: "ref"; target: string }).target).toBe("SetRecursiveType")
-  })
+    const ref = typeRefFromType(typeOf("SetRecursiveType"), checker, source);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.name?.shape.kind).toBe("string");
+    const children = fields.children!;
+    expect(children.shape.kind).toBe("array");
+    const elemRef = (children.shape as { kind: "array"; element: TypeRef }).element;
+    expect(elemRef.shape.kind).toBe("ref");
+    expect((elemRef.shape as { kind: "ref"; target: string }).target).toBe("SetRecursiveType");
+  });
 
   it("does not emit a dangling ref('Map') on a Map-mediated recursive type — refs the named type instead", () => {
-    const ref = typeRefFromType(typeOf("MapRecursiveType"), checker, source)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.name?.shape.kind).toBe("string")
-    const children = fields.children!
-    expect(children.shape.kind).toBe("map")
-    const keyRef = (children.shape as { kind: "map"; key: TypeRef; value: TypeRef }).key
-    const valueRef = (children.shape as { kind: "map"; key: TypeRef; value: TypeRef }).value
-    expect(keyRef.shape.kind).toBe("string")
-    expect(valueRef.shape.kind).toBe("ref")
-    expect((valueRef.shape as { kind: "ref"; target: string }).target).toBe("MapRecursiveType")
-  })
+    const ref = typeRefFromType(typeOf("MapRecursiveType"), checker, source);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.name?.shape.kind).toBe("string");
+    const children = fields.children!;
+    expect(children.shape.kind).toBe("map");
+    const keyRef = (children.shape as { kind: "map"; key: TypeRef; value: TypeRef }).key;
+    const valueRef = (children.shape as { kind: "map"; key: TypeRef; value: TypeRef }).value;
+    expect(keyRef.shape.kind).toBe("string");
+    expect(valueRef.shape.kind).toBe("ref");
+    expect((valueRef.shape as { kind: "ref"; target: string }).target).toBe("MapRecursiveType");
+  });
 
   // ── Branded/opaque types ──────────────────────────────────────────────────
 
   it("lowers a branded string to its base shape with meta.brand set", () => {
-    const ref = typeRefFromType(typeOf("LocationId"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.brand).toBe("LocationId")
-  })
+    const ref = typeRefFromType(typeOf("LocationId"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.brand).toBe("LocationId");
+  });
 
   it("lowers a second branded string with its own distinct brand value", () => {
-    const ref = typeRefFromType(typeOf("UserId"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.brand).toBe("UserId")
-  })
+    const ref = typeRefFromType(typeOf("UserId"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.brand).toBe("UserId");
+  });
 
   it("lowers a branded number (using the __tag spelling) with meta.brand set", () => {
-    const ref = typeRefFromType(typeOf("PositiveInt"), checker, source)
-    expect(ref.shape).toEqual({ kind: "number" })
-    expect(ref.meta.brand).toBe("PositiveInt")
-  })
+    const ref = typeRefFromType(typeOf("PositiveInt"), checker, source);
+    expect(ref.shape).toEqual({ kind: "number" });
+    expect(ref.meta.brand).toBe("PositiveInt");
+  });
 
   it("carries brand metadata through a branded field on an object", () => {
-    const ref = typeRefFromType(typeOf("BrandedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.locationId?.shape).toEqual({ kind: "string" })
-    expect(fields.locationId?.meta.brand).toBe("LocationId")
-    expect(fields.name?.shape).toEqual({ kind: "string" })
-    expect(fields.name?.meta.brand).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("BrandedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.locationId?.shape).toEqual({ kind: "string" });
+    expect(fields.locationId?.meta.brand).toBe("LocationId");
+    expect(fields.name?.shape).toEqual({ kind: "string" });
+    expect(fields.name?.meta.brand).toBeUndefined();
+  });
 
   // ── Brand→kind promotion (known brand names → the matching IR kind) ──────
 
   it("promotes a brand matching a known kind name to that kind, not a plain string", () => {
-    const ref = typeRefFromType(typeOf("UserIdUuid"), checker, source)
-    expect(ref.shape).toEqual({ kind: "uuid" })
-  })
+    const ref = typeRefFromType(typeOf("UserIdUuid"), checker, source);
+    expect(ref.shape).toEqual({ kind: "uuid" });
+  });
 
   it("matches a known brand name case-insensitively (all-uppercase)", () => {
-    const ref = typeRefFromType(typeOf("UppercaseUuidBrand"), checker, source)
-    expect(ref.shape).toEqual({ kind: "uuid" })
-  })
+    const ref = typeRefFromType(typeOf("UppercaseUuidBrand"), checker, source);
+    expect(ref.shape).toEqual({ kind: "uuid" });
+  });
 
   it("matches a known brand name case-insensitively (mixed case)", () => {
-    const ref = typeRefFromType(typeOf("MixedCaseUuidBrand"), checker, source)
-    expect(ref.shape).toEqual({ kind: "uuid" })
-  })
+    const ref = typeRefFromType(typeOf("MixedCaseUuidBrand"), checker, source);
+    expect(ref.shape).toEqual({ kind: "uuid" });
+  });
 
   it("promotes a uri-branded string to the uri kind", () => {
-    const ref = typeRefFromType(typeOf("UriBrand"), checker, source)
-    expect(ref.shape).toEqual({ kind: "uri" })
-  })
+    const ref = typeRefFromType(typeOf("UriBrand"), checker, source);
+    expect(ref.shape).toEqual({ kind: "uri" });
+  });
 
   it("promotes an email-branded string to the email kind", () => {
-    const ref = typeRefFromType(typeOf("EmailBrand"), checker, source)
-    expect(ref.shape).toEqual({ kind: "email" })
-  })
+    const ref = typeRefFromType(typeOf("EmailBrand"), checker, source);
+    expect(ref.shape).toEqual({ kind: "email" });
+  });
 
   it("promotes known-kind brands nested as object fields", () => {
-    const ref = typeRefFromType(typeOf("PromotedBrandField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.id?.shape).toEqual({ kind: "uuid" })
-    expect(fields.contact?.shape).toEqual({ kind: "email" })
-  })
+    const ref = typeRefFromType(typeOf("PromotedBrandField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.id?.shape).toEqual({ kind: "uuid" });
+    expect(fields.contact?.shape).toEqual({ kind: "email" });
+  });
 
   it("does not promote a known brand name over a non-string base — falls through to meta.brand", () => {
-    const ref = typeRefFromType(typeOf("NumberBrandedUuid"), checker, source)
-    expect(ref.shape).toEqual({ kind: "number" })
-    expect(ref.meta.brand).toBe("uuid")
-  })
+    const ref = typeRefFromType(typeOf("NumberBrandedUuid"), checker, source);
+    expect(ref.shape).toEqual({ kind: "number" });
+    expect(ref.meta.brand).toBe("uuid");
+  });
 
   // ── Symbol-branded types (`unique symbol` tag, not a string-literal tag) ──
 
   it("lowers a unique-symbol-branded string to its base shape, with brand name from the symbol declaration", () => {
-    const ref = typeRefFromType(typeOf("SymbolBrandedId"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.brand).toBe("LocationId")
-  })
+    const ref = typeRefFromType(typeOf("SymbolBrandedId"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.brand).toBe("LocationId");
+  });
 
   it("lowers a unique-symbol-branded number the same way", () => {
-    const ref = typeRefFromType(typeOf("SymbolBrandedUserId"), checker, source)
-    expect(ref.shape).toEqual({ kind: "number" })
-    expect(ref.meta.brand).toBe("UserId")
-  })
+    const ref = typeRefFromType(typeOf("SymbolBrandedUserId"), checker, source);
+    expect(ref.shape).toEqual({ kind: "number" });
+    expect(ref.meta.brand).toBe("UserId");
+  });
 
   it("carries unique-symbol brand metadata through a field on an object", () => {
-    const ref = typeRefFromType(typeOf("SymbolBrandedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.id?.shape).toEqual({ kind: "string" })
-    expect(fields.id?.meta.brand).toBe("LocationId")
-    expect(fields.name?.shape).toEqual({ kind: "string" })
-    expect(fields.name?.meta.brand).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("SymbolBrandedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.id?.shape).toEqual({ kind: "string" });
+    expect(fields.id?.meta.brand).toBe("LocationId");
+    expect(fields.name?.shape).toEqual({ kind: "string" });
+    expect(fields.name?.meta.brand).toBeUndefined();
+  });
 
   // ── Shared-symbol branded types (one `unique symbol` key, literal values) ─
 
   it("reads the brand name from the literal value when a shared symbol key is tagged with a string literal", () => {
-    const ref = typeRefFromType(typeOf("SharedSymbolLocationId"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.brand).toBe("LocationId")
-  })
+    const ref = typeRefFromType(typeOf("SharedSymbolLocationId"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.brand).toBe("LocationId");
+  });
 
   it("distinguishes a second type sharing the same symbol key by its own literal value", () => {
-    const ref = typeRefFromType(typeOf("SharedSymbolUserId"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.brand).toBe("UserId")
-  })
+    const ref = typeRefFromType(typeOf("SharedSymbolUserId"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.brand).toBe("UserId");
+  });
 
   it("does not treat a plain (non-branded) intersection as a brand — lowers to types.intersection", () => {
-    const ref = typeRefFromType(typeOf("PlainIntersection"), checker, source)
-    expect(ref.shape.kind).toBe("intersection")
-    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members
-    expect(members).toHaveLength(2)
-    expect(members[0]?.shape.kind).toBe("object")
-    expect(members[1]?.shape.kind).toBe("object")
-  })
+    const ref = typeRefFromType(typeOf("PlainIntersection"), checker, source);
+    expect(ref.shape.kind).toBe("intersection");
+    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members;
+    expect(members).toHaveLength(2);
+    expect(members[0]?.shape.kind).toBe("object");
+    expect(members[1]?.shape.kind).toBe("object");
+  });
 
   // ── Mixin intersections (structural, non-branded) ─────────────────────────
 
   it("extracts a two-way mixin intersection with each constituent lowered recursively", () => {
-    const ref = typeRefFromType(typeOf("MixinType"), checker, source)
-    expect(ref.shape.kind).toBe("intersection")
-    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members
-    expect(members).toHaveLength(2)
-    const [hasId, hasTimestamps] = members
-    expect(hasId?.shape.kind).toBe("object")
-    const idFields = (hasId?.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(idFields)).toEqual(["id"])
-    expect(hasTimestamps?.shape.kind).toBe("object")
-    const tsFields = (hasTimestamps?.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(tsFields)).toEqual(["createdAt", "updatedAt"])
-  })
+    const ref = typeRefFromType(typeOf("MixinType"), checker, source);
+    expect(ref.shape.kind).toBe("intersection");
+    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members;
+    expect(members).toHaveLength(2);
+    const [hasId, hasTimestamps] = members;
+    expect(hasId?.shape.kind).toBe("object");
+    const idFields = (hasId?.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(Object.keys(idFields)).toEqual(["id"]);
+    expect(hasTimestamps?.shape.kind).toBe("object");
+    const tsFields = (hasTimestamps?.shape as { kind: "object"; fields: Record<string, TypeRef> })
+      .fields;
+    expect(Object.keys(tsFields)).toEqual(["createdAt", "updatedAt"]);
+  });
 
   it("extracts a three-way intersection (two named mixins + an inline object) fully", () => {
-    const ref = typeRefFromType(typeOf("TripleIntersection"), checker, source)
-    expect(ref.shape.kind).toBe("intersection")
-    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members
-    expect(members).toHaveLength(3)
-    expect(members.every((m) => m.shape.kind === "object")).toBe(true)
-  })
+    const ref = typeRefFromType(typeOf("TripleIntersection"), checker, source);
+    expect(ref.shape.kind).toBe("intersection");
+    const members = (ref.shape as { kind: "intersection"; members: TypeRef[] }).members;
+    expect(members).toHaveLength(3);
+    expect(members.every((m) => m.shape.kind === "object")).toBe(true);
+  });
 
   // ── Property JSDoc refinement tags (@minLength/@maxLength/@pattern/@format/
   //    @minimum/@maximum/@exclusiveMinimum/@exclusiveMaximum/@multipleOf) ────
 
   it("reads @minLength/@maxLength off a property's JSDoc into meta", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.name?.meta.minLength).toBe(2)
-    expect(fields.name?.meta.maxLength).toBe(100)
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.name?.meta.minLength).toBe(2);
+    expect(fields.name?.meta.maxLength).toBe(100);
+  });
 
   it("reads @pattern off a property's JSDoc, stripping surrounding quotes", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.slug?.meta.pattern).toBe("^[a-z][a-z0-9-]*$")
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.slug?.meta.pattern).toBe("^[a-z][a-z0-9-]*$");
+  });
 
   it("reads @format off a property's JSDoc as a raw (unquoted) string", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.contact?.meta.format).toBe("email")
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.contact?.meta.format).toBe("email");
+  });
 
   it("reads @minimum/@maximum off a property's JSDoc as numbers", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.percent?.meta.minimum).toBe(0)
-    expect(fields.percent?.meta.maximum).toBe(100)
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.percent?.meta.minimum).toBe(0);
+    expect(fields.percent?.meta.maximum).toBe(100);
+  });
 
   it("reads @exclusiveMinimum/@exclusiveMaximum off a property's JSDoc as numbers", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.strictRange?.meta.exclusiveMinimum).toBe(0)
-    expect(fields.strictRange?.meta.exclusiveMaximum).toBe(1000)
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.strictRange?.meta.exclusiveMinimum).toBe(0);
+    expect(fields.strictRange?.meta.exclusiveMaximum).toBe(1000);
+  });
 
   it("reads @multipleOf off a property's JSDoc as a number", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.step?.meta.multipleOf).toBe(5)
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.step?.meta.multipleOf).toBe(5);
+  });
 
   it("carries no refinement meta for a property with no refinement JSDoc tags", () => {
-    const ref = typeRefFromType(typeOf("RefinedField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.plain?.meta.minLength).toBeUndefined()
-    expect(fields.plain?.meta.pattern).toBeUndefined()
-    expect(fields.plain?.meta.minimum).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("RefinedField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.plain?.meta.minLength).toBeUndefined();
+    expect(fields.plain?.meta.pattern).toBeUndefined();
+    expect(fields.plain?.meta.minimum).toBeUndefined();
+  });
 
   // ── Branded intersection refinement tags (MinLength<N>/MaxLength<N>/… from
   //    @rhi-zone/fractal-type-ir/kinds/refinements, shared `RefinementTag`
   //    symbol key) ────────────────────────────────────────────────────────
 
   it("extracts a single refinement tag intersected with a base type", () => {
-    const ref = typeRefFromType(typeOf("ShortCode"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.minLength).toBe(2)
-  })
+    const ref = typeRefFromType(typeOf("ShortCode"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.minLength).toBe(2);
+  });
 
   it("merges two refinement tags intersected onto the same base type", () => {
-    const ref = typeRefFromType(typeOf("ValidName"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.minLength).toBe(2)
-    expect(ref.meta.maxLength).toBe(100)
-  })
+    const ref = typeRefFromType(typeOf("ValidName"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.minLength).toBe(2);
+    expect(ref.meta.maxLength).toBe(100);
+  });
 
   it("extracts numeric Minimum/Maximum refinement tags over a number base", () => {
-    const ref = typeRefFromType(typeOf("Percent"), checker, source)
-    expect(ref.shape).toEqual({ kind: "number" })
-    expect(ref.meta.minimum).toBe(0)
-    expect(ref.meta.maximum).toBe(100)
-  })
+    const ref = typeRefFromType(typeOf("Percent"), checker, source);
+    expect(ref.shape).toEqual({ kind: "number" });
+    expect(ref.meta.minimum).toBe(0);
+    expect(ref.meta.maximum).toBe(100);
+  });
 
   it("extracts a Pattern refinement tag's string-literal value", () => {
-    const ref = typeRefFromType(typeOf("SlugPattern"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.pattern).toBe("^[a-z0-9-]+$")
-  })
+    const ref = typeRefFromType(typeOf("SlugPattern"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.pattern).toBe("^[a-z0-9-]+$");
+  });
 
   it("carries refinement-tag meta through fields on an object", () => {
-    const ref = typeRefFromType(typeOf("RefinedIntersectionField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.code?.shape).toEqual({ kind: "string" })
-    expect(fields.code?.meta.minLength).toBe(2)
-    expect(fields.name?.shape).toEqual({ kind: "string" })
-    expect(fields.name?.meta.minLength).toBe(2)
-    expect(fields.name?.meta.maxLength).toBe(100)
-  })
+    const ref = typeRefFromType(typeOf("RefinedIntersectionField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.code?.shape).toEqual({ kind: "string" });
+    expect(fields.code?.meta.minLength).toBe(2);
+    expect(fields.name?.shape).toEqual({ kind: "string" });
+    expect(fields.name?.meta.minLength).toBe(2);
+    expect(fields.name?.meta.maxLength).toBe(100);
+  });
 
   // ── Combined brand + refinement intersections (any combination of base,
   //    brand tag, refinement tag(s) in one intersection — not just either
   //    pattern alone) ───────────────────────────────────────────────────────
 
   it("promotes a brand alone with no refinements (baseline, still works)", () => {
-    const ref = typeRefFromType(typeOf("EmailBrand"), checker, source)
-    expect(ref.shape).toEqual({ kind: "email" })
-    expect(ref.meta.minLength).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("EmailBrand"), checker, source);
+    expect(ref.shape).toEqual({ kind: "email" });
+    expect(ref.meta.minLength).toBeUndefined();
+  });
 
   it("merges refinement tags alone with no brand (baseline, still works)", () => {
-    const ref = typeRefFromType(typeOf("ValidName"), checker, source)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.minLength).toBe(2)
-    expect(ref.meta.maxLength).toBe(100)
-    expect(ref.meta.brand).toBeUndefined()
-  })
+    const ref = typeRefFromType(typeOf("ValidName"), checker, source);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.minLength).toBe(2);
+    expect(ref.meta.maxLength).toBe(100);
+    expect(ref.meta.brand).toBeUndefined();
+  });
 
   it("combines a brand tag with a single refinement tag: Email & MinLength<5>", () => {
-    const ref = typeRefFromType(typeOf("EmailMinLength"), checker, source)
-    expect(ref.shape).toEqual({ kind: "email" })
-    expect(ref.meta.minLength).toBe(5)
-  })
+    const ref = typeRefFromType(typeOf("EmailMinLength"), checker, source);
+    expect(ref.shape).toEqual({ kind: "email" });
+    expect(ref.meta.minLength).toBe(5);
+  });
 
   it("combines a brand tag with a Pattern refinement tag: Uuid & Pattern<...>", () => {
-    const ref = typeRefFromType(typeOf("UuidPattern"), checker, source)
-    expect(ref.shape).toEqual({ kind: "uuid" })
-    expect(ref.meta.pattern).toBe("^[0-9a-f-]{36}$")
-  })
+    const ref = typeRefFromType(typeOf("UuidPattern"), checker, source);
+    expect(ref.shape).toEqual({ kind: "uuid" });
+    expect(ref.meta.pattern).toBe("^[0-9a-f-]{36}$");
+  });
 
   it("combines a brand tag with multiple refinement tags: Email & MinLength<3> & MaxLength<254>", () => {
-    const ref = typeRefFromType(typeOf("EmailMinMaxLength"), checker, source)
-    expect(ref.shape).toEqual({ kind: "email" })
-    expect(ref.meta.minLength).toBe(3)
-    expect(ref.meta.maxLength).toBe(254)
-  })
+    const ref = typeRefFromType(typeOf("EmailMinMaxLength"), checker, source);
+    expect(ref.shape).toEqual({ kind: "email" });
+    expect(ref.meta.minLength).toBe(3);
+    expect(ref.meta.maxLength).toBe(254);
+  });
 
   // ── Enums / literal unions ────────────────────────────────────────────────
 
   /** Resolve an exported function's single parameter type by name. */
   function paramTypeOf(name: string): ts.Type {
-    const fn = findExportedFn(source, name)
-    const fnType = checker.getTypeAtLocation(fn)
-    const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call)
-    const [param] = sig!.getParameters()
-    return checker.getTypeOfSymbolAtLocation(param!, fn)
+    const fn = findExportedFn(source, name);
+    const fnType = checker.getTypeAtLocation(fn);
+    const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call);
+    const [param] = sig!.getParameters();
+    return checker.getTypeOfSymbolAtLocation(param!, fn);
   }
 
   it("lowers a string enum to types.enum with its member values", () => {
-    const ref = typeRefFromType(paramTypeOf("statusFn"), checker, source)
-    expect(ref.shape.kind).toBe("enum")
+    const ref = typeRefFromType(paramTypeOf("statusFn"), checker, source);
+    expect(ref.shape.kind).toBe("enum");
     expect((ref.shape as { kind: "enum"; members: readonly string[] }).members).toEqual([
       "active",
       "inactive",
-    ])
-  })
+    ]);
+  });
 
   it("lowers a string literal union type to types.enum", () => {
-    const ref = typeRefFromType(paramTypeOf("stringUnionFn"), checker, source)
-    expect(ref.shape.kind).toBe("enum")
+    const ref = typeRefFromType(paramTypeOf("stringUnionFn"), checker, source);
+    expect(ref.shape.kind).toBe("enum");
     expect((ref.shape as { kind: "enum"; members: readonly string[] }).members).toEqual([
       "a",
       "b",
       "c",
-    ])
-  })
+    ]);
+  });
 
   it("lowers a numeric enum to a union of literals", () => {
-    const ref = typeRefFromType(paramTypeOf("priorityFn"), checker, source)
-    expect(ref.shape.kind).toBe("union")
-    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
+    const ref = typeRefFromType(paramTypeOf("priorityFn"), checker, source);
+    expect(ref.shape.kind).toBe("union");
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants;
     expect(variants.map((v) => v.shape)).toEqual([
       { kind: "literal", value: 0 },
       { kind: "literal", value: 1 },
       { kind: "literal", value: 2 },
-    ])
-  })
+    ]);
+  });
 
   it("lowers a boolean parameter to types.boolean, not an enum", () => {
-    const ref = typeRefFromType(paramTypeOf("booleanParamFn"), checker, source)
-    expect(ref.shape).toEqual({ kind: "boolean" })
-  })
+    const ref = typeRefFromType(paramTypeOf("booleanParamFn"), checker, source);
+    expect(ref.shape).toEqual({ kind: "boolean" });
+  });
 
   it("still punts a mixed non-literal union (string | number)", () => {
-    const ref = typeRefFromType(paramTypeOf("mixedUnionFn"), checker, source)
-    expect(ref.shape.kind).toBe("unknown")
-    expect(ref.meta.$comment).toMatch(/TODO\(type-ir\)/)
-    expect(ref.meta.$comment).toMatch(/union/)
-  })
+    const ref = typeRefFromType(paramTypeOf("mixedUnionFn"), checker, source);
+    expect(ref.shape.kind).toBe("unknown");
+    expect(ref.meta.$comment).toMatch(/TODO\(type-ir\)/);
+    expect(ref.meta.$comment).toMatch(/union/);
+  });
 
   it("lowers a mixed-literal union to a union of literals", () => {
-    const ref = typeRefFromType(paramTypeOf("literalMixedUnionFn"), checker, source)
-    expect(ref.shape.kind).toBe("union")
-    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
+    const ref = typeRefFromType(paramTypeOf("literalMixedUnionFn"), checker, source);
+    expect(ref.shape.kind).toBe("union");
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants;
     // TS reorders union constituents internally, so compare as a set rather
     // than assuming declaration order is preserved.
     expect(variants.map((v) => v.shape)).toEqual(
@@ -1320,120 +1339,120 @@ describe("typeRefFromType gap fixes", () => {
         { kind: "literal", value: 1 },
         { kind: "literal", value: true },
       ]),
-    )
-    expect(variants).toHaveLength(3)
-  })
+    );
+    expect(variants).toHaveLength(3);
+  });
 
   // ── Discriminated unions ──────────────────────────────────────────────────
 
   it("extracts a discriminated union (ShapeUnion) as types.union with meta.discriminator = 'type', variants as full objects", () => {
-    const ref = typeRefFromType(paramTypeOf("shapeUnionFn"), checker, source)
-    expect(ref.shape.kind).toBe("union")
-    expect(ref.meta.discriminator).toBe("type")
-    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
-    expect(variants).toHaveLength(2)
-    expect(variants.every((v) => v.shape.kind === "object")).toBe(true)
+    const ref = typeRefFromType(paramTypeOf("shapeUnionFn"), checker, source);
+    expect(ref.shape.kind).toBe("union");
+    expect(ref.meta.discriminator).toBe("type");
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants;
+    expect(variants).toHaveLength(2);
+    expect(variants.every((v) => v.shape.kind === "object")).toBe(true);
     const byDiscriminant = Object.fromEntries(
       variants.map((v) => {
-        const fields = (v.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-        const typeField = fields.type!.shape as { kind: "literal"; value: unknown }
-        return [typeField.value as string, fields]
+        const fields = (v.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+        const typeField = fields.type!.shape as { kind: "literal"; value: unknown };
+        return [typeField.value as string, fields];
       }),
-    )
-    expect(Object.keys(byDiscriminant).sort()).toEqual(["circle", "square"])
-    expect(byDiscriminant.circle?.radius?.shape.kind).toBe("number")
-    expect(byDiscriminant.square?.side?.shape.kind).toBe("number")
-  })
+    );
+    expect(Object.keys(byDiscriminant).sort()).toEqual(["circle", "square"]);
+    expect(byDiscriminant.circle?.radius?.shape.kind).toBe("number");
+    expect(byDiscriminant.square?.side?.shape.kind).toBe("number");
+  });
 
   it("extracts a non-discriminated object union (NonDiscriminated) as types.union WITHOUT meta.discriminator", () => {
-    const ref = typeRefFromType(paramTypeOf("nonDiscriminatedFn"), checker, source)
-    expect(ref.shape.kind).toBe("union")
-    expect(ref.meta.discriminator).toBeUndefined()
-    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants
-    expect(variants).toHaveLength(2)
-    expect(variants.every((v) => v.shape.kind === "object")).toBe(true)
-  })
+    const ref = typeRefFromType(paramTypeOf("nonDiscriminatedFn"), checker, source);
+    expect(ref.shape.kind).toBe("union");
+    expect(ref.meta.discriminator).toBeUndefined();
+    const variants = (ref.shape as { kind: "union"; variants: TypeRef[] }).variants;
+    expect(variants).toHaveLength(2);
+    expect(variants.every((v) => v.shape.kind === "object")).toBe(true);
+  });
 
   // ── Callable/function types ────────────────────────────────────────────────
 
   it("lowers a callback field to types.function instead of punting or dropping it", () => {
-    const ref = typeRefFromType(typeOf("CallbackField"), checker, source)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(Object.keys(fields)).toEqual(["onChange"])
-    const onChange = fields.onChange!
-    expect(onChange.shape.kind).toBe("function")
+    const ref = typeRefFromType(typeOf("CallbackField"), checker, source);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(Object.keys(fields)).toEqual(["onChange"]);
+    const onChange = fields.onChange!;
+    expect(onChange.shape.kind).toBe("function");
     const fn = onChange.shape as {
-      kind: "function"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-      thisType?: TypeRef
-    }
-    expect(fn.params).toHaveLength(1)
-    expect(fn.params[0]?.name).toBe("value")
-    expect(fn.params[0]?.type.shape.kind).toBe("number")
-    expect(fn.returnType.shape.kind).toBe("void")
-    expect(fn.thisType).toBeUndefined()
-  })
+      kind: "function";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+      thisType?: TypeRef;
+    };
+    expect(fn.params).toHaveLength(1);
+    expect(fn.params[0]?.name).toBe("value");
+    expect(fn.params[0]?.type.shape.kind).toBe("number");
+    expect(fn.returnType.shape.kind).toBe("void");
+    expect(fn.thisType).toBeUndefined();
+  });
 
   it("lowers a bare arrow-function type alias to types.function with all params in order", () => {
-    const ref = typeRefFromType(typeOf("ArrowFnType"), checker, source)
-    expect(ref.shape.kind).toBe("function")
+    const ref = typeRefFromType(typeOf("ArrowFnType"), checker, source);
+    expect(ref.shape.kind).toBe("function");
     const fn = ref.shape as {
-      kind: "function"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-    }
-    expect(fn.params.map((p) => p.name)).toEqual(["x", "label"])
-    expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["number", "string"])
-    expect(fn.returnType.shape.kind).toBe("boolean")
-  })
+      kind: "function";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+    };
+    expect(fn.params.map((p) => p.name)).toEqual(["x", "label"]);
+    expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["number", "string"]);
+    expect(fn.returnType.shape.kind).toBe("boolean");
+  });
 
   it("carries an explicit `this` parameter as thisType, resolved to the class's own instance", () => {
-    const ref = typeRefFromType(typeOf("BoundMethodType"), checker, source)
-    expect(ref.shape.kind).toBe("function")
+    const ref = typeRefFromType(typeOf("BoundMethodType"), checker, source);
+    expect(ref.shape.kind).toBe("function");
     const fn = ref.shape as {
-      kind: "function"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-      thisType?: TypeRef
-    }
-    expect(fn.params.map((p) => p.name)).toEqual(["amount"])
-    expect(fn.thisType?.shape.kind).toBe("instance")
-    const thisShape = fn.thisType?.shape as { kind: "instance"; className: string }
-    expect(thisShape.className).toBe("MethodOwner")
-  })
+      kind: "function";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+      thisType?: TypeRef;
+    };
+    expect(fn.params.map((p) => p.name)).toEqual(["amount"]);
+    expect(fn.thisType?.shape.kind).toBe("instance");
+    const thisShape = fn.thisType?.shape as { kind: "instance"; className: string };
+    expect(thisShape.className).toBe("MethodOwner");
+  });
 
   // ── Overloaded functions/methods — intersection of call signatures ────────
 
   type FnShape = {
-    kind: "function"
-    params: readonly { name: string; type: TypeRef }[]
-    returnType: TypeRef
-  }
+    kind: "function";
+    params: readonly { name: string; type: TypeRef }[];
+    returnType: TypeRef;
+  };
   type MethodShape = {
-    kind: "method"
-    params: readonly { name: string; type: TypeRef }[]
-    returnType: TypeRef
-    thisType?: TypeRef
-  }
-  type IntersectionShape = { kind: "intersection"; members: TypeRef[] }
+    kind: "method";
+    params: readonly { name: string; type: TypeRef }[];
+    returnType: TypeRef;
+    thisType?: TypeRef;
+  };
+  type IntersectionShape = { kind: "intersection"; members: TypeRef[] };
 
   it("lowers an overloaded function to types.intersection of one types.function per overload", () => {
-    const ref = typeRefFromType(typeOf("OverloadedFnField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const handler = fields.handler!
-    expect(handler.shape.kind).toBe("intersection")
-    const members = (handler.shape as IntersectionShape).members
-    expect(members).toHaveLength(2)
-    expect(members.every((m) => m.shape.kind === "function")).toBe(true)
+    const ref = typeRefFromType(typeOf("OverloadedFnField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const handler = fields.handler!;
+    expect(handler.shape.kind).toBe("intersection");
+    const members = (handler.shape as IntersectionShape).members;
+    expect(members).toHaveLength(2);
+    expect(members.every((m) => m.shape.kind === "function")).toBe(true);
 
-    const [first, second] = members.map((m) => m.shape as FnShape)
-    expect(first!.params.map((p) => p.type.shape.kind)).toEqual(["string"])
-    expect(first!.returnType.shape.kind).toBe("number")
-    expect(second!.params.map((p) => p.type.shape.kind)).toEqual(["number"])
-    expect(second!.returnType.shape.kind).toBe("string")
-  })
+    const [first, second] = members.map((m) => m.shape as FnShape);
+    expect(first!.params.map((p) => p.type.shape.kind)).toEqual(["string"]);
+    expect(first!.returnType.shape.kind).toBe("number");
+    expect(second!.params.map((p) => p.type.shape.kind)).toEqual(["number"]);
+    expect(second!.returnType.shape.kind).toBe("string");
+  });
 
   it("does not include the implementation signature in the extracted overload intersection", () => {
     // OverloadedFnField's declared type is `typeof overloadedFn`, whose two
@@ -1441,136 +1460,137 @@ describe("typeRefFromType gap fixes", () => {
     // string` — the wider implementation signature `(a: string | number) =>
     // number | string` backs the body but is never callable from outside and
     // must not appear as a third intersection member.
-    const ref = typeRefFromType(typeOf("OverloadedFnField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const members = (fields.handler!.shape as IntersectionShape).members
-    expect(members).toHaveLength(2)
-    const paramKinds = members.map((m) => (m.shape as FnShape).params[0]!.type.shape.kind).sort()
-    expect(paramKinds).toEqual(["number", "string"])
+    const ref = typeRefFromType(typeOf("OverloadedFnField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const members = (fields.handler!.shape as IntersectionShape).members;
+    expect(members).toHaveLength(2);
+    const paramKinds = members.map((m) => (m.shape as FnShape).params[0]!.type.shape.kind).sort();
+    expect(paramKinds).toEqual(["number", "string"]);
     // The implementation signature's union param (`string | number`) would
     // show up as a third member with a `union`- or `unknown`-kind param —
     // confirm no such member exists.
     expect(members.some((m) => (m.shape as FnShape).params[0]!.type.shape.kind === "union")).toBe(
       false,
-    )
-  })
+    );
+  });
 
   it("lowers an overloaded class method to types.intersection of one types.method per overload, each carrying thisType", () => {
-    const ref = typeRefFromType(typeOf("OverloadedMethodClass"), checker, source)
-    expect(ref.shape.kind).toBe("instance")
-    const iface = ref.meta.interface as TypeRef
-    expect(iface).toBeDefined()
-    const methods = (iface.shape as { kind: "interface"; methods: Record<string, TypeRef> }).methods
-    const process = methods.process!
-    expect(process.shape.kind).toBe("intersection")
-    const members = (process.shape as IntersectionShape).members
-    expect(members).toHaveLength(2)
-    expect(members.every((m) => m.shape.kind === "method")).toBe(true)
+    const ref = typeRefFromType(typeOf("OverloadedMethodClass"), checker, source);
+    expect(ref.shape.kind).toBe("instance");
+    const iface = ref.meta.interface as TypeRef;
+    expect(iface).toBeDefined();
+    const methods = (iface.shape as { kind: "interface"; methods: Record<string, TypeRef> })
+      .methods;
+    const process = methods.process!;
+    expect(process.shape.kind).toBe("intersection");
+    const members = (process.shape as IntersectionShape).members;
+    expect(members).toHaveLength(2);
+    expect(members.every((m) => m.shape.kind === "method")).toBe(true);
 
-    const [first, second] = members.map((m) => m.shape as MethodShape)
-    expect(first!.params.map((p) => p.type.shape.kind)).toEqual(["string"])
-    expect(first!.returnType.shape.kind).toBe("number")
-    expect(second!.params.map((p) => p.type.shape.kind)).toEqual(["number"])
-    expect(second!.returnType.shape.kind).toBe("string")
+    const [first, second] = members.map((m) => m.shape as MethodShape);
+    expect(first!.params.map((p) => p.type.shape.kind)).toEqual(["string"]);
+    expect(first!.returnType.shape.kind).toBe("number");
+    expect(second!.params.map((p) => p.type.shape.kind)).toEqual(["number"]);
+    expect(second!.returnType.shape.kind).toBe("string");
 
     for (const m of members) {
-      const thisType = (m.shape as MethodShape).thisType
-      expect(thisType?.shape.kind).toBe("instance")
-      expect((thisType?.shape as { className: string }).className).toBe("OverloadedMethodClass")
+      const thisType = (m.shape as MethodShape).thisType;
+      expect(thisType?.shape.kind).toBe("instance");
+      expect((thisType?.shape as { className: string }).className).toBe("OverloadedMethodClass");
     }
-  })
+  });
 
   it("lowers each overload's independently-Result-shaped return type on its own — no cross-overload collapsing", () => {
-    const ref = typeRefFromType(typeOf("OverloadedResultFnField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const members = (fields.handler!.shape as IntersectionShape).members
-    expect(members).toHaveLength(2)
+    const ref = typeRefFromType(typeOf("OverloadedResultFnField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const members = (fields.handler!.shape as IntersectionShape).members;
+    expect(members).toHaveLength(2);
 
     const byParamKind = Object.fromEntries(
       members.map((m) => {
-        const fn = m.shape as FnShape
-        return [fn.params[0]!.type.shape.kind, fn.returnType]
+        const fn = m.shape as FnShape;
+        return [fn.params[0]!.type.shape.kind, fn.returnType];
       }),
-    )
+    );
 
     // Each overload's return type is the (unwrapped-at-the-op-level-only)
     // Result<T,E> alias, extracted structurally as its own discriminated
     // union — `T` differs per overload (`{ text: string }` vs `{ num:
     // number }`), proving each signature's return type was lowered
     // independently rather than sharing one memoized result.
-    const stringOverloadReturn = byParamKind.string!
-    const numberOverloadReturn = byParamKind.number!
-    expect(stringOverloadReturn.shape.kind).toBe("union")
-    expect(numberOverloadReturn.shape.kind).toBe("union")
-    expect(stringOverloadReturn.meta.discriminator).toBe("kind")
-    expect(numberOverloadReturn.meta.discriminator).toBe("kind")
+    const stringOverloadReturn = byParamKind.string!;
+    const numberOverloadReturn = byParamKind.number!;
+    expect(stringOverloadReturn.shape.kind).toBe("union");
+    expect(numberOverloadReturn.shape.kind).toBe("union");
+    expect(stringOverloadReturn.meta.discriminator).toBe("kind");
+    expect(numberOverloadReturn.meta.discriminator).toBe("kind");
 
     const okFieldsOf = (returnRef: TypeRef): string[] => {
-      const variants = (returnRef.shape as { kind: "union"; variants: TypeRef[] }).variants
+      const variants = (returnRef.shape as { kind: "union"; variants: TypeRef[] }).variants;
       const okVariant = variants.find((v) => {
-        const f = (v.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-        return (f.kind?.shape as { kind: "literal"; value: unknown })?.value === "ok"
-      })!
+        const f = (v.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+        return (f.kind?.shape as { kind: "literal"; value: unknown })?.value === "ok";
+      })!;
       const valueFields = (okVariant.shape as { kind: "object"; fields: Record<string, TypeRef> })
-        .fields.value!.shape as { kind: "object"; fields: Record<string, TypeRef> }
-      return Object.keys(valueFields.fields)
-    }
-    expect(okFieldsOf(stringOverloadReturn)).toEqual(["text"])
-    expect(okFieldsOf(numberOverloadReturn)).toEqual(["num"])
-  })
+        .fields.value!.shape as { kind: "object"; fields: Record<string, TypeRef> };
+      return Object.keys(valueFields.fields);
+    };
+    expect(okFieldsOf(stringOverloadReturn)).toEqual(["text"]);
+    expect(okFieldsOf(numberOverloadReturn)).toEqual(["num"]);
+  });
 
   // ── Generic type parameters — extract constraint bounds ───────────────────
 
   it("extracts an inline-object constraint (`T extends { name: string }`) as the object shape, tagged meta.generic", () => {
-    const fn = findExportedFn(source, "inlineConstraintFn")
-    const ref = typeRefFromFunctionNode(fn, checker)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.name?.shape.kind).toBe("string")
-    expect(ref.meta.generic).toBe(true)
-  })
+    const fn = findExportedFn(source, "inlineConstraintFn");
+    const ref = typeRefFromFunctionNode(fn, checker);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.name?.shape.kind).toBe("string");
+    expect(ref.meta.generic).toBe(true);
+  });
 
   it("extracts a primitive constraint (`T extends string`) as types.string, tagged meta.generic", () => {
-    const fn = findExportedFn(source, "primitiveConstraintFn")
-    const ref = typeRefFromFunctionNode(fn, checker)
-    expect(ref.shape).toEqual({ kind: "string" })
-    expect(ref.meta.generic).toBe(true)
-  })
+    const fn = findExportedFn(source, "primitiveConstraintFn");
+    const ref = typeRefFromFunctionNode(fn, checker);
+    expect(ref.shape).toEqual({ kind: "string" });
+    expect(ref.meta.generic).toBe(true);
+  });
 
   it("extracts a named-interface constraint (`T extends Searchable`) as the interface's shape, tagged meta.generic", () => {
-    const fn = findExportedFn(source, "interfaceConstraintFn")
-    const ref = typeRefFromFunctionNode(fn, checker)
-    expect(ref.shape.kind).toBe("object")
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.query?.shape.kind).toBe("string")
-    expect(ref.meta.generic).toBe(true)
-  })
+    const fn = findExportedFn(source, "interfaceConstraintFn");
+    const ref = typeRefFromFunctionNode(fn, checker);
+    expect(ref.shape.kind).toBe("object");
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.query?.shape.kind).toBe("string");
+    expect(ref.meta.generic).toBe(true);
+  });
 
   it("lowers an unconstrained type parameter to types.unknown with a descriptive comment, no meta.generic", () => {
-    const fn = findExportedFn(source, "unconstrainedFn")
-    const ref = typeRefFromFunctionNode(fn, checker)
-    expect(ref.shape.kind).toBe("unknown")
-    expect(ref.meta.generic).toBeUndefined()
-    expect(ref.meta.$comment).toMatch(/unconstrained generic type parameter/)
-  })
+    const fn = findExportedFn(source, "unconstrainedFn");
+    const ref = typeRefFromFunctionNode(fn, checker);
+    expect(ref.shape.kind).toBe("unknown");
+    expect(ref.meta.generic).toBeUndefined();
+    expect(ref.meta.$comment).toMatch(/unconstrained generic type parameter/);
+  });
 
   it("regression: non-generic functions are unaffected by type-parameter handling", () => {
-    const fn = findExportedFn(source, "sample")
-    const ref = typeRefFromFunctionNode(fn, checker)
-    expect(ref.shape.kind).toBe("object")
-    expect(ref.meta.generic).toBeUndefined()
-  })
+    const fn = findExportedFn(source, "sample");
+    const ref = typeRefFromFunctionNode(fn, checker);
+    expect(ref.shape.kind).toBe("object");
+    expect(ref.meta.generic).toBeUndefined();
+  });
 
   it("regression: a single-signature function still lowers to a bare types.function, no intersection wrapper", () => {
-    const ref = typeRefFromType(typeOf("SingleSignatureFnField"), checker, source)
-    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    const handler = fields.handler!
-    expect(handler.shape.kind).toBe("function")
-    const fn = handler.shape as FnShape
-    expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["string"])
-    expect(fn.returnType.shape.kind).toBe("number")
-  })
-})
+    const ref = typeRefFromType(typeOf("SingleSignatureFnField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const handler = fields.handler!;
+    expect(handler.shape.kind).toBe("function");
+    const fn = handler.shape as FnShape;
+    expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["string"]);
+    expect(fn.returnType.shape.kind).toBe("number");
+  });
+});
 
 // ============================================================================
 // 9. End-to-end: extracted per-field descriptions actually reach CLI --help
@@ -1581,19 +1601,23 @@ describe("typeRefFromType gap fixes", () => {
 
 describe("end-to-end: CLI --help renders JSDoc-derived field descriptions", () => {
   it("users create --help lists each field's description (top-level + nested)", async () => {
-    const { runCli } = await import("@rhi-zone/fractal-cli-api-projector")
-    const out: string[] = []
+    const { runCli } = await import("@rhi-zone/fractal-cli-api-projector");
+    const out: string[] = [];
     const io = {
-      stdout: { write: (s: string) => { out.push(s) } },
+      stdout: {
+        write: (s: string) => {
+          out.push(s);
+        },
+      },
       stderr: { write: (_s: string) => {} },
       confirm: async () => true,
-    }
-    await runCli(tree, ["users", "create", "--help"], io, { schemas })
-    const help = out.join("")
-    expect(help).toContain("The user's display name.")
-    expect(help).toContain("Age in years.")
-  })
-})
+    };
+    await runCli(tree, ["users", "create", "--help"], io, { schemas });
+    const help = out.join("");
+    expect(help).toContain("The user's display name.");
+    expect(help).toContain("Age in years.");
+  });
+});
 
 // ============================================================================
 // 10. Structural sharing — SharingRegistry / shouldShare / finalizeSharedDefs,
@@ -1601,89 +1625,107 @@ describe("end-to-end: CLI --help renders JSDoc-derived field descriptions", () =
 // ============================================================================
 
 describe("structural sharing", () => {
-  const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`
+  const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`;
 
   it("without shouldShare, extractToolTypeRefs returns the exact prior TypeRefMap shape — no defs, Address inlined at every use", () => {
-    const plain = extractToolTypeRefs(SHARING_FIXTURE)
-    expect(Object.keys(plain)).toEqual(["getUser", "getOrder", "getProduct"])
+    const plain = extractToolTypeRefs(SHARING_FIXTURE);
+    expect(Object.keys(plain)).toEqual(["getUser", "getOrder", "getProduct"]);
     // Every output is a plain TypeRef, not { types, defs } — the type system
     // already enforces this via the overload, but confirm at runtime too.
-    expect((plain as unknown as { defs?: unknown }).defs).toBeUndefined()
-    const userOut = plain.getUser!.output!
-    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.billing!.shape.kind).toBe("object")
-  })
+    expect((plain as unknown as { defs?: unknown }).defs).toBeUndefined();
+    const userOut = plain.getUser!.output!;
+    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.billing!.shape.kind).toBe("object");
+  });
 
   it("with shouldShare, Address (reused 3x, big enough) is extracted to defs and referenced via ref", () => {
-    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: defaultShouldShare })
-    expect(Object.keys(defs)).toContain("Address")
-    const userOut = shared.getUser!.output!
-    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.billing!.shape).toEqual({ kind: "ref", target: "Address" })
-    expect(fields.shipping!.shape).toEqual({ kind: "ref", target: "Address" })
-    const orderFields = (shared.getOrder!.output!.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(orderFields.address!.shape).toEqual({ kind: "ref", target: "Address" })
-  })
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, {
+      shouldShare: defaultShouldShare,
+    });
+    expect(Object.keys(defs)).toContain("Address");
+    const userOut = shared.getUser!.output!;
+    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.billing!.shape).toEqual({ kind: "ref", target: "Address" });
+    expect(fields.shipping!.shape).toEqual({ kind: "ref", target: "Address" });
+    const orderFields = (
+      shared.getOrder!.output!.shape as { kind: "object"; fields: Record<string, TypeRef> }
+    ).fields;
+    expect(orderFields.address!.shape).toEqual({ kind: "ref", target: "Address" });
+  });
 
   it("a self-recursive type (Category.parent: Category) is ALWAYS shared, regardless of shouldShare", () => {
     // A predicate that never shares anything — recursive types bypass it entirely.
-    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => false })
-    expect(Object.keys(defs)).toContain("Category")
-    const category = defs.Category!
-    const fields = (category.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
-    expect(fields.parent!.shape).toEqual({ kind: "ref", target: "Category" })
-  })
+    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => false });
+    expect(Object.keys(defs)).toContain("Category");
+    const category = defs.Category!;
+    const fields = (category.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    expect(fields.parent!.shape).toEqual({ kind: "ref", target: "Category" });
+  });
 
   it("a predicate that always returns false still keeps recursive defs but drops non-recursive ones (Address inlined back)", () => {
-    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => false })
-    expect(Object.keys(defs)).toEqual(["Category"])
-    const userOut = shared.getUser!.output!
-    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, {
+      shouldShare: () => false,
+    });
+    expect(Object.keys(defs)).toEqual(["Category"]);
+    const userOut = shared.getUser!.output!;
+    const fields = (userOut.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
     // Inlined back — no ref, real object structure restored.
-    expect(fields.billing!.shape.kind).toBe("object")
-  })
+    expect(fields.billing!.shape.kind).toBe("object");
+  });
 
   it("a predicate that always returns true shares every named type encountered", () => {
-    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => true })
-    expect(Object.keys(defs).sort()).toEqual(["Address", "Category"])
-  })
+    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => true });
+    expect(Object.keys(defs).sort()).toEqual(["Address", "Category"]);
+  });
 
   it("extractRouteTypeRefs supports the same shouldShare opt-in, keyed by treeId-prefixed route path", () => {
-    const { types: shared, defs } = extractRouteTypeRefs(SHARING_FIXTURE, { shouldShare: defaultShouldShare })
-    expect(Object.keys(shared)).toEqual(["tree/getUser", "tree/getOrder", "tree/getProduct"])
-    expect(Object.keys(defs)).toContain("Address")
-  })
+    const { types: shared, defs } = extractRouteTypeRefs(SHARING_FIXTURE, {
+      shouldShare: defaultShouldShare,
+    });
+    expect(Object.keys(shared)).toEqual(["tree/getUser", "tree/getOrder", "tree/getProduct"]);
+    expect(Object.keys(defs)).toContain("Address");
+  });
 
   it("finalizeSharedDefs: recursive names are always kept even when shouldShare rejects everything", () => {
-    const registry = createSharingRegistry()
+    const registry = createSharingRegistry();
     // Simulate what typeRefFromType would have recorded for a self-recursive def.
-    const selfRef = { shape: { kind: "ref", target: "Self" }, meta: {} } as TypeRef
-    const body = { shape: { kind: "object", fields: { next: selfRef } }, meta: {} } as TypeRef
-    registry.defs.set("Self", body)
-    registry.useCounts.set("Self", 5)
-    registry.recursive.add("Self")
+    const selfRef = { shape: { kind: "ref", target: "Self" }, meta: {} } as TypeRef;
+    const body = { shape: { kind: "object", fields: { next: selfRef } }, meta: {} } as TypeRef;
+    registry.defs.set("Self", body);
+    registry.useCounts.set("Self", 5);
+    registry.recursive.add("Self");
 
-    const { defs } = finalizeSharedDefs(registry, {}, () => false)
-    expect(Object.keys(defs)).toEqual(["Self"])
-    expect(defs.Self).toEqual(body)
-  })
+    const { defs } = finalizeSharedDefs(registry, {}, () => false);
+    expect(Object.keys(defs)).toEqual(["Self"]);
+    expect(defs.Self).toEqual(body);
+  });
 
   it("finalizeSharedDefs: a non-recursive def below the useCount/nodeCount bar is inlined back into every root", () => {
-    const registry = createSharingRegistry()
-    const smallBody = { shape: { kind: "object", fields: { id: { shape: { kind: "string" }, meta: {} } } }, meta: {} } as TypeRef
-    registry.defs.set("Small", smallBody)
-    registry.useCounts.set("Small", 3)
+    const registry = createSharingRegistry();
+    const smallBody = {
+      shape: { kind: "object", fields: { id: { shape: { kind: "string" }, meta: {} } } },
+      meta: {},
+    } as TypeRef;
+    registry.defs.set("Small", smallBody);
+    registry.useCounts.set("Small", 3);
 
-    const root = { shape: { kind: "ref", target: "Small" }, meta: {} } as TypeRef
-    const { roots, defs } = finalizeSharedDefs(registry, { root }, defaultShouldShare)
-    expect(defs).toEqual({})
-    expect(roots.root).toEqual(smallBody)
-  })
+    const root = { shape: { kind: "ref", target: "Small" }, meta: {} } as TypeRef;
+    const { roots, defs } = finalizeSharedDefs(registry, { root }, defaultShouldShare);
+    expect(defs).toEqual({});
+    expect(roots.root).toEqual(smallBody);
+  });
 
   it("defaultShouldShare requires BOTH useCount > 1 AND nodeCount > 5", () => {
-    const small = { shape: { kind: "object", fields: { a: { shape: { kind: "string" }, meta: {} } } }, meta: {} } as TypeRef
-    expect(nodeCount(small)).toBeLessThanOrEqual(5)
-    expect(defaultShouldShare({ node: small, tree: small, useCount: 10, typeName: "Small" })).toBe(false)
-    expect(defaultShouldShare({ node: small, tree: small, useCount: 1, typeName: "Small" })).toBe(false)
-  })
-})
+    const small = {
+      shape: { kind: "object", fields: { a: { shape: { kind: "string" }, meta: {} } } },
+      meta: {},
+    } as TypeRef;
+    expect(nodeCount(small)).toBeLessThanOrEqual(5);
+    expect(defaultShouldShare({ node: small, tree: small, useCount: 10, typeName: "Small" })).toBe(
+      false,
+    );
+    expect(defaultShouldShare({ node: small, tree: small, useCount: 1, typeName: "Small" })).toBe(
+      false,
+    );
+  });
+});

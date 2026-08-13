@@ -7,6 +7,6 @@
 // extraction branches never depends on disk I/O).
 
 export type Sample = {
-  id: string
-  count: number
-}
+  id: string;
+  count: number;
+};

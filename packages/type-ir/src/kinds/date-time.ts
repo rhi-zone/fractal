@@ -17,18 +17,18 @@
 // (no `Time` class the way `datetime`/`date` have `Date`), so representing
 // it as anything other than a formatted string would invent a domain type
 // this runtime doesn't have.
-import { registerParent, t, type TypeRef } from "../index.ts"
+import { registerParent, t, type TypeRef } from "../index.ts";
 
 declare module "../index.ts" {
   interface TypeKinds {
-    datetime: { readonly kind: "datetime" }
-    date: { readonly kind: "date" }
-    time: { readonly kind: "time" }
+    datetime: { readonly kind: "datetime" };
+    date: { readonly kind: "date" };
+    time: { readonly kind: "time" };
   }
 }
 
-registerParent("time", "string")
+registerParent("time", "string");
 
-export const datetime = (meta?: Record<string, unknown>): TypeRef => t({ kind: "datetime" }, meta)
-export const date = (meta?: Record<string, unknown>): TypeRef => t({ kind: "date" }, meta)
-export const time = (meta?: Record<string, unknown>): TypeRef => t({ kind: "time" }, meta)
+export const datetime = (meta?: Record<string, unknown>): TypeRef => t({ kind: "datetime" }, meta);
+export const date = (meta?: Record<string, unknown>): TypeRef => t({ kind: "date" }, meta);
+export const time = (meta?: Record<string, unknown>): TypeRef => t({ kind: "time" }, meta);

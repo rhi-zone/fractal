@@ -94,6 +94,7 @@ files.
 Key tension: **this lands directly on the combinator-identity gap** (see
 TODO.md — "Built code doesn't match the combinator identity"). The spec's
 requirements need, in order:
+
 1. The combinator identity resolved first — an operation declaration is
    presumably a combinator-composed value, and until the combinator
    primitives are settled there's no substrate to define "operation" in

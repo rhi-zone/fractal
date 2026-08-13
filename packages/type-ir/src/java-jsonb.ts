@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-helpers.ts";
 
 // ============================================================================
 // Java/Jakarta JSON-B projector — TypeRef -> idiomatic Java 16+ source using
@@ -42,7 +42,7 @@ export interface JavaOptions {
    * toString; the default) or "pojo" (a classic class with private final
    * fields, a `@JsonbCreator` constructor, and `getX()` accessors — for
    * codebases not yet on a Java baseline with records). */
-  style?: "record" | "pojo"
+  style?: "record" | "pojo";
   /** How an optional/nullable field's type is rendered: "nullable" (default)
    * keeps the plain boxed type and adds a `@Nullable` annotation — the
    * convention JSON-B and most Java JSON libraries expect, since
@@ -50,12 +50,12 @@ export interface JavaOptions {
    * return values, not field/parameter/record-component types. "optional"
    * wraps the type in `java.util.Optional<T>` for codebases that have chosen
    * to use it that way regardless. */
-  optionalStyle?: "nullable" | "optional"
+  optionalStyle?: "nullable" | "optional";
   /** Emit JSON-B (`@JsonbProperty`/`@JsonbCreator`/`@JsonbTypeInfo`/
    * `@JsonbSubtype`) annotations for JSON (de)serialization. Default `true`. */
-  jsonb?: boolean
+  jsonb?: boolean;
   /** `package` declaration line to emit above the type. Omitted if unset. */
-  packageName?: string
+  packageName?: string;
 }
 
 const defaultOptions: Required<JavaOptions> = {
@@ -63,14 +63,14 @@ const defaultOptions: Required<JavaOptions> = {
   optionalStyle: "nullable",
   jsonb: true,
   packageName: "",
-}
+};
 
 // JSpecify (https://jspecify.dev/) is the JSR-305 successor endorsed by
 // Google/JetBrains/Spring as the common `@Nullable` all tooling is
 // converging on — used here rather than `javax.annotation.Nullable` (JSR-305,
 // unmaintained) or a framework-specific one (`org.springframework.lang.
 // Nullable`), since this projector has no framework to anchor a choice to.
-const NULLABLE_ANNOTATION = "org.jspecify.annotations.Nullable"
+const NULLABLE_ANNOTATION = "org.jspecify.annotations.Nullable";
 
 // A leaf scalar's Java rendering: `primitive` (when one exists — Java's 8
 // primitive types have no null value, so a leaf with a primitive form only
@@ -81,16 +81,20 @@ const NULLABLE_ANNOTATION = "org.jspecify.annotations.Nullable"
 // `java.*`/`javax.*` types the boxed/primitive spelling itself requires
 // (empty for unqualified names like `String`/`int` that live in
 // `java.lang`, which needs no import).
-type Rendering = { readonly primitive?: string; readonly boxed: string; readonly imports: readonly string[] }
+type Rendering = {
+  readonly primitive?: string;
+  readonly boxed: string;
+  readonly imports: readonly string[];
+};
 
-type Ctx = { readonly options: Required<JavaOptions>; readonly imports: Set<string> }
+type Ctx = { readonly options: Required<JavaOptions>; readonly imports: Set<string> };
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>, ctx: Ctx) => Rendering
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>, ctx: Ctx) => Rendering;
 
 const leaf =
   (boxed: string, primitive?: string, imports: readonly string[] = []): Converter =>
   () =>
-    primitive === undefined ? { boxed, imports } : { boxed, primitive, imports }
+    primitive === undefined ? { boxed, imports } : { boxed, primitive, imports };
 
 // Turns an arbitrary field/property name into a valid, idiomatic Java
 // identifier (camelCase, alphanumeric) — used both for record
@@ -98,11 +102,11 @@ const leaf =
 // still compiles) and enum constants (see `javaEnumConstant` below, which
 // additionally upper-snake-cases the result).
 function toJavaIdentifier(name: string): string {
-  const parts = name.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0)
-  if (parts.length === 0) return "value"
-  const [first, ...rest] = parts
-  const camel = [first!.toLowerCase(), ...rest.map(capitalize)].join("")
-  return /^[A-Za-z_$]/.test(camel) ? camel : `_${camel}`
+  const parts = name.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0);
+  if (parts.length === 0) return "value";
+  const [first, ...rest] = parts;
+  const camel = [first!.toLowerCase(), ...rest.map(capitalize)].join("");
+  return /^[A-Za-z_$]/.test(camel) ? camel : `_${camel}`;
 }
 
 function javaEnumConstant(member: string): string {
@@ -110,8 +114,8 @@ function javaEnumConstant(member: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^A-Za-z0-9]+/g, "_")
     .toUpperCase()
-    .replace(/^_+|_+$/g, "")
-  return snake.length === 0 || !/^[A-Za-z_]/.test(snake) ? `VALUE_${snake}` : snake
+    .replace(/^_+|_+$/g, "");
+  return snake.length === 0 || !/^[A-Za-z_]/.test(snake) ? `VALUE_${snake}` : snake;
 }
 
 const handlers: Record<string, Converter> = {
@@ -138,28 +142,31 @@ const handlers: Record<string, Converter> = {
   unknown: leaf("Object"),
   never: leaf("Void"),
   object: (shape, meta, _ctx) => {
-    const s = shape as TypeShape & { kind: "object" }
-    const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous"
+    const s = shape as TypeShape & { kind: "object" };
+    const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous";
     // An inline (unnamed) object has no Java equivalent expressible as a type
     // reference — Java has no anonymous record/struct type. Honest degrade:
     // callers that need a real declaration for an inline object should route
     // through `toJsonbDeclaration` with an explicit name instead of nesting it.
-    void s
-    return { boxed: name, imports: [] }
+    void s;
+    return { boxed: name, imports: [] };
   },
   // A class instance carries only nominal identity (className/source), never
   // fields (see type-ir's TypeKinds.instance doc comment) — rendered as a
   // bare reference to that class name; the caller assembling the emitted
   // source is responsible for importing `className` from `source`.
-  instance: (shape) => ({ boxed: (shape as TypeShape & { kind: "instance" }).className, imports: [] }),
+  instance: (shape) => ({
+    boxed: (shape as TypeShape & { kind: "instance" }).className,
+    imports: [],
+  }),
   array: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "array" }
-    const element = javaType(s.element, ctx)
-    return { boxed: `List<${element}>`, imports: ["java.util.List"] }
+    const s = shape as TypeShape & { kind: "array" };
+    const element = javaType(s.element, ctx);
+    return { boxed: `List<${element}>`, imports: ["java.util.List"] };
   },
   tuple: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    const elements = s.elements.map((e) => javaType(e, ctx))
+    const s = shape as TypeShape & { kind: "tuple" };
+    const elements = s.elements.map((e) => javaType(e, ctx));
     // Java has no structural tuple type. Rendered as a reference to a
     // conventional `TupleN<T1, ..., TN>` record — this projector does not
     // define that support type itself (out of scope for a single TypeRef ->
@@ -167,29 +174,29 @@ const handlers: Record<string, Converter> = {
     // responsible for providing (or importing) `Tuple2`/`Tuple3`/... records
     // with components named `first`/`second`/... — the same "caller wires
     // the import" convention `instance`/`ref` rely on above.
-    return { boxed: `Tuple${elements.length}<${elements.join(", ")}>`, imports: [] }
+    return { boxed: `Tuple${elements.length}<${elements.join(", ")}>`, imports: [] };
   },
   // No native async-sequence type in Java's standard type system — degrades
   // to `List<T>` of the element type, the same honest-degrade convention
   // every other data-only projector (Zod, protobuf, ...) applies to `stream`.
   stream: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    const element = javaType(s.element, ctx)
-    return { boxed: `List<${element}>`, imports: ["java.util.List"] }
+    const s = shape as TypeShape & { kind: "stream" };
+    const element = javaType(s.element, ctx);
+    return { boxed: `List<${element}>`, imports: ["java.util.List"] };
   },
   // Same degrade as `stream` — a page is one window over a larger collection
   // (see TypeKinds.page's doc comment), and Java has no pagination-window
   // type of its own to target.
   page: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "page" }
-    const element = javaType(s.element, ctx)
-    return { boxed: `List<${element}>`, imports: ["java.util.List"] }
+    const s = shape as TypeShape & { kind: "page" };
+    const element = javaType(s.element, ctx);
+    return { boxed: `List<${element}>`, imports: ["java.util.List"] };
   },
   map: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "map" }
-    const key = javaType(s.key, ctx)
-    const value = javaType(s.value, ctx)
-    return { boxed: `Map<${key}, ${value}>`, imports: ["java.util.Map"] }
+    const s = shape as TypeShape & { kind: "map" };
+    const key = javaType(s.key, ctx);
+    const value = javaType(s.value, ctx);
+    return { boxed: `Map<${key}, ${value}>`, imports: ["java.util.Map"] };
   },
   union: (_shape, meta) => {
     // A union's idiomatic Java rendering is a top-level sealed interface
@@ -200,34 +207,37 @@ const handlers: Record<string, Converter> = {
     // unlike `object`, which at least has "Anonymous" as a last resort, an
     // inline anonymous sealed interface can't be expressed as a type
     // reference at all).
-    if (typeof meta.typeName === "string") return { boxed: meta.typeName, imports: [] }
-    return { boxed: "Object", imports: [] }
+    if (typeof meta.typeName === "string") return { boxed: meta.typeName, imports: [] };
+    return { boxed: "Object", imports: [] };
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
+    const s = shape as TypeShape & { kind: "literal" };
     // Java has no literal type — degrades to the literal value's own runtime
     // type (String/Boolean/Integer/Double), the closest available type
     // still capable of holding that one value.
-    if (s.value === null) return { boxed: "Void", imports: [] }
-    if (typeof s.value === "string") return { boxed: "String", imports: [] }
-    if (typeof s.value === "boolean") return { boxed: "Boolean", primitive: "boolean", imports: [] }
+    if (s.value === null) return { boxed: "Void", imports: [] };
+    if (typeof s.value === "string") return { boxed: "String", imports: [] };
+    if (typeof s.value === "boolean")
+      return { boxed: "Boolean", primitive: "boolean", imports: [] };
     return Number.isInteger(s.value)
       ? { boxed: "Integer", primitive: "int", imports: [] }
-      : { boxed: "Double", primitive: "double", imports: [] }
+      : { boxed: "Double", primitive: "double", imports: [] };
   },
   enum: (shape, meta) => {
-    const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous"
-    void shape
-    return { boxed: name, imports: [] }
+    const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous";
+    void shape;
+    return { boxed: name, imports: [] };
   },
   ref: (shape) => ({ boxed: (shape as TypeShape & { kind: "ref" }).target, imports: [] }),
   // Java has no intersection/mixin type — lossy: falls back to the first
   // member's type, dropping the rest (same fallback protobuf.ts uses for the
   // same reason).
   intersection: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? { boxed: "Object", imports: [] } : { boxed: javaType(first, ctx), imports: [] }
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined
+      ? { boxed: "Object", imports: [] }
+      : { boxed: javaType(first, ctx), imports: [] };
   },
   // `java.util.function` has fixed-arity functional interfaces for 0-2
   // params (Supplier/Function/BiFunction); arities above that have no
@@ -235,32 +245,35 @@ const handlers: Record<string, Converter> = {
   // define TriFunction+) and degrade to Object, the same honest-degrade
   // protobuf.ts applies to its own uncoverable cases.
   function: (shape, _meta, ctx) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const returnType = javaType(s.returnType, ctx)
-    const isVoid = s.returnType.shape.kind === "void"
-    const params = s.params.map((p) => javaType(p.type, ctx))
+    const s = shape as TypeShape & { kind: "function" };
+    const returnType = javaType(s.returnType, ctx);
+    const isVoid = s.returnType.shape.kind === "void";
+    const params = s.params.map((p) => javaType(p.type, ctx));
     if (params.length === 0) {
       return isVoid
         ? { boxed: "Runnable", imports: [] }
-        : { boxed: `java.util.function.Supplier<${returnType}>`, imports: [] }
+        : { boxed: `java.util.function.Supplier<${returnType}>`, imports: [] };
     }
     if (params.length === 1) {
       return isVoid
         ? { boxed: `java.util.function.Consumer<${params[0]}>`, imports: [] }
-        : { boxed: `java.util.function.Function<${params[0]}, ${returnType}>`, imports: [] }
+        : { boxed: `java.util.function.Function<${params[0]}, ${returnType}>`, imports: [] };
     }
     if (params.length === 2) {
       return isVoid
         ? { boxed: `java.util.function.BiConsumer<${params[0]}, ${params[1]}>`, imports: [] }
-        : { boxed: `java.util.function.BiFunction<${params[0]}, ${params[1]}, ${returnType}>`, imports: [] }
+        : {
+            boxed: `java.util.function.BiFunction<${params[0]}, ${params[1]}, ${returnType}>`,
+            imports: [],
+          };
     }
-    return { boxed: "Object", imports: [] }
+    return { boxed: "Object", imports: [] };
   },
   // An interface's method surface has no Java FIELD-position equivalent
   // (unlike TypeScript, which can spell an inline callable-object type) —
   // degrades to Object, same as protobuf.ts's handling of the same kind.
   interface: () => ({ boxed: "Object", imports: [] }),
-}
+};
 
 /** Bare type expression for `ref` — the reference (boxed) spelling, suitable
  * as a generic type argument, a `List<...>`/`Map<...>` element, or any
@@ -268,16 +281,19 @@ const handlers: Record<string, Converter> = {
  * additionally applies primitive-unboxing and nullable rendering). Collects
  * required imports into `ctx.imports` as a side effect. */
 export function javaType(ref: TypeRef, ctx: Ctx): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const rendering = converter === undefined ? { boxed: "Object", imports: [] } : converter(ref.shape, ref.meta, ctx)
-  for (const imp of rendering.imports) ctx.imports.add(imp)
-  return rendering.boxed
+  const converter = resolve(ref.shape.kind, handlers);
+  const rendering =
+    converter === undefined
+      ? { boxed: "Object", imports: [] }
+      : converter(ref.shape, ref.meta, ctx);
+  for (const imp of rendering.imports) ctx.imports.add(imp);
+  return rendering.boxed;
 }
 
 type FieldRendering = {
-  readonly type: string
-  readonly annotations: readonly string[]
-}
+  readonly type: string;
+  readonly annotations: readonly string[];
+};
 
 /** A field/record-component/parameter's rendering: primitive type when the
  * field is required (Java primitives can't express null, so a required
@@ -286,19 +302,22 @@ type FieldRendering = {
  * `@Nullable`, per `options.optionalStyle` — when the field is optional/
  * nullable. */
 function jsonbFieldType(ref: TypeRef, ctx: Ctx): FieldRendering {
-  const converter = resolve(ref.shape.kind, handlers)
-  const rendering = converter === undefined ? { boxed: "Object", imports: [] } : converter(ref.shape, ref.meta, ctx)
-  for (const imp of rendering.imports) ctx.imports.add(imp)
-  const optional = ref.meta.optional === true || ref.meta.nullable === true
+  const converter = resolve(ref.shape.kind, handlers);
+  const rendering =
+    converter === undefined
+      ? { boxed: "Object", imports: [] }
+      : converter(ref.shape, ref.meta, ctx);
+  for (const imp of rendering.imports) ctx.imports.add(imp);
+  const optional = ref.meta.optional === true || ref.meta.nullable === true;
   if (!optional) {
-    return { type: rendering.primitive ?? rendering.boxed, annotations: [] }
+    return { type: rendering.primitive ?? rendering.boxed, annotations: [] };
   }
   if (ctx.options.optionalStyle === "optional") {
-    ctx.imports.add("java.util.Optional")
-    return { type: `Optional<${rendering.boxed}>`, annotations: [] }
+    ctx.imports.add("java.util.Optional");
+    return { type: `Optional<${rendering.boxed}>`, annotations: [] };
   }
-  ctx.imports.add(NULLABLE_ANNOTATION)
-  return { type: rendering.boxed, annotations: ["@Nullable"] }
+  ctx.imports.add(NULLABLE_ANNOTATION);
+  return { type: rendering.boxed, annotations: ["@Nullable"] };
 }
 
 /** Detects a discriminated union's shared discriminant field name, following
@@ -307,37 +326,43 @@ function jsonbFieldType(ref: TypeRef, ctx: Ctx): FieldRendering {
  * re-deriving it structurally — the extractor that built the TypeRef is the
  * one place that actually knows which field was matched as a discriminant. */
 function discriminatorOf(meta: Readonly<Record<string, unknown>>): string | undefined {
-  return typeof meta.discriminator === "string" ? meta.discriminator : undefined
+  return typeof meta.discriminator === "string" ? meta.discriminator : undefined;
 }
 
 function variantName(variant: TypeRef, unionName: string, index: number): string {
-  if (typeof variant.meta.typeName === "string") return variant.meta.typeName
-  return `${unionName}Variant${index + 1}`
+  if (typeof variant.meta.typeName === "string") return variant.meta.typeName;
+  return `${unionName}Variant${index + 1}`;
 }
 
 /** Renders one `object`-shaped variant of a discriminated/plain union as a
  * Java record implementing the union's sealed interface. */
 function renderVariantRecord(name: string, interfaceName: string, ref: TypeRef, ctx: Ctx): string {
-  const body = renderRecordOrClass(name, ref, ctx, [interfaceName])
-  return body
+  const body = renderRecordOrClass(name, ref, ctx, [interfaceName]);
+  return body;
 }
 
-function renderRecordOrClass(name: string, ref: TypeRef, ctx: Ctx, implementsList: readonly string[] = []): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const fields = Object.entries(shape.fields)
-  const implementsClause = implementsList.length === 0 ? "" : ` implements ${implementsList.join(", ")}`
-  const doc = javaDocComment(ref.meta, "")
+function renderRecordOrClass(
+  name: string,
+  ref: TypeRef,
+  ctx: Ctx,
+  implementsList: readonly string[] = [],
+): string {
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const fields = Object.entries(shape.fields);
+  const implementsClause =
+    implementsList.length === 0 ? "" : ` implements ${implementsList.join(", ")}`;
+  const doc = javaDocComment(ref.meta, "");
 
   if (ctx.options.style === "record") {
     const components = fields.map(([fieldName, fieldRef]) => {
-      const { type, annotations } = jsonbFieldType(fieldRef, ctx)
-      const javaName = toJavaIdentifier(fieldName)
+      const { type, annotations } = jsonbFieldType(fieldRef, ctx);
+      const javaName = toJavaIdentifier(fieldName);
       const jsonAnnotation =
-        ctx.options.jsonb && javaName !== fieldName ? [`@JsonbProperty(${quote(fieldName)}) `] : []
-      const annotationPrefix = [...annotations.map((a) => `${a} `), ...jsonAnnotation].join("")
-      return `${annotationPrefix}${type} ${javaName}`
-    })
-    return `${doc}public record ${name}(${components.join(", ")})${implementsClause} {}`
+        ctx.options.jsonb && javaName !== fieldName ? [`@JsonbProperty(${quote(fieldName)}) `] : [];
+      const annotationPrefix = [...annotations.map((a) => `${a} `), ...jsonAnnotation].join("");
+      return `${annotationPrefix}${type} ${javaName}`;
+    });
+    return `${doc}public record ${name}(${components.join(", ")})${implementsClause} {}`;
   }
 
   // Classic POJO: private final fields + a `@JsonbCreator`-annotated
@@ -345,37 +370,37 @@ function renderRecordOrClass(name: string, ref: TypeRef, ctx: Ctx, implementsLis
   // immutable objects: https://jakarta.ee/specifications/jsonb/3.0/apidocs/
   // jakarta.json.bind/jakarta/json/bind/annotation/JsonbCreator.html) +
   // `getX()` accessors.
-  const lines: string[] = []
-  lines.push(`${doc}public final class ${name}${implementsClause} {`)
+  const lines: string[] = [];
+  lines.push(`${doc}public final class ${name}${implementsClause} {`);
   const rendered = fields.map(([fieldName, fieldRef]) => {
-    const { type, annotations } = jsonbFieldType(fieldRef, ctx)
-    const javaName = toJavaIdentifier(fieldName)
-    return { fieldName, javaName, type, annotations }
-  })
+    const { type, annotations } = jsonbFieldType(fieldRef, ctx);
+    const javaName = toJavaIdentifier(fieldName);
+    return { fieldName, javaName, type, annotations };
+  });
   for (const f of rendered) {
-    for (const a of f.annotations) lines.push(`  ${a}`)
-    lines.push(`  private final ${f.type} ${f.javaName};`)
+    for (const a of f.annotations) lines.push(`  ${a}`);
+    lines.push(`  private final ${f.type} ${f.javaName};`);
   }
-  lines.push("")
+  lines.push("");
   const ctorParams = rendered
     .map((f) => {
-      const jsonAnnotation = ctx.options.jsonb ? `@JsonbProperty(${quote(f.fieldName)}) ` : ""
-      const nullableAnnotation = f.annotations.includes("@Nullable") ? "@Nullable " : ""
-      return `${jsonAnnotation}${nullableAnnotation}${f.type} ${f.javaName}`
+      const jsonAnnotation = ctx.options.jsonb ? `@JsonbProperty(${quote(f.fieldName)}) ` : "";
+      const nullableAnnotation = f.annotations.includes("@Nullable") ? "@Nullable " : "";
+      return `${jsonAnnotation}${nullableAnnotation}${f.type} ${f.javaName}`;
     })
-    .join(", ")
-  if (ctx.options.jsonb) lines.push("  @JsonbCreator")
-  lines.push(`  public ${name}(${ctorParams}) {`)
-  for (const f of rendered) lines.push(`    this.${f.javaName} = ${f.javaName};`)
-  lines.push("  }")
+    .join(", ");
+  if (ctx.options.jsonb) lines.push("  @JsonbCreator");
+  lines.push(`  public ${name}(${ctorParams}) {`);
+  for (const f of rendered) lines.push(`    this.${f.javaName} = ${f.javaName};`);
+  lines.push("  }");
   for (const f of rendered) {
-    lines.push("")
-    lines.push(`  public ${f.type} get${capitalize(f.javaName)}() {`)
-    lines.push(`    return this.${f.javaName};`)
-    lines.push("  }")
+    lines.push("");
+    lines.push(`  public ${f.type} get${capitalize(f.javaName)}() {`);
+    lines.push(`    return this.${f.javaName};`);
+    lines.push("  }");
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /** Renders a union as a Java 17+ sealed interface (https://openjdk.org/jeps/409)
@@ -394,44 +419,47 @@ function renderRecordOrClass(name: string, ref: TypeRef, ctx: Ctx, implementsLis
  * used elsewhere in this projector for constructs JSON-B can't express.
  */
 function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = discriminatorOf(ref.meta)
-  const names = shape.variants.map((v, i) => variantName(v, name, i))
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator = discriminatorOf(ref.meta);
+  const names = shape.variants.map((v, i) => variantName(v, name, i));
 
-  const lines: string[] = []
-  const doc = javaDocComment(ref.meta, "")
-  if (doc) lines.push(doc.trimEnd())
+  const lines: string[] = [];
+  const doc = javaDocComment(ref.meta, "");
+  if (doc) lines.push(doc.trimEnd());
   if (ctx.options.jsonb && discriminator !== undefined) {
-    ctx.imports.add("jakarta.json.bind.annotation.JsonbTypeInfo")
-    ctx.imports.add("jakarta.json.bind.annotation.JsonbSubtype")
-    lines.push(`@JsonbTypeInfo(key = ${quote(discriminator)}, value = {`)
-    lines.push(names.map((n) => `    @JsonbSubtype(alias = ${quote(n)}, type = ${n}.class)`).join(",\n"))
-    lines.push("})")
+    ctx.imports.add("jakarta.json.bind.annotation.JsonbTypeInfo");
+    ctx.imports.add("jakarta.json.bind.annotation.JsonbSubtype");
+    lines.push(`@JsonbTypeInfo(key = ${quote(discriminator)}, value = {`);
+    lines.push(
+      names.map((n) => `    @JsonbSubtype(alias = ${quote(n)}, type = ${n}.class)`).join(",\n"),
+    );
+    lines.push("})");
   }
-  lines.push(`public sealed interface ${name} permits ${names.join(", ")} {}`)
+  lines.push(`public sealed interface ${name} permits ${names.join(", ")} {}`);
 
   const variantDecls = shape.variants.map((variant, i) => {
-    const variantRef = variant
+    const variantRef = variant;
     if (variantRef.shape.kind !== "object") {
       // A non-object union variant (e.g. a bare string/number literal) has
       // no fields to carry as record components — wrapped in a single-field
       // "value" record, the same honest degrade a discriminated union with
       // a scalar variant needs to stay a valid `implements` target.
-      const inner = jsonbFieldType(variantRef, ctx)
-      const annotationPrefix = inner.annotations.length > 0 ? `${inner.annotations.join(" ")} ` : ""
-      return `${javaDocComment(variantRef.meta, "")}public record ${names[i]}(${annotationPrefix}${inner.type} value) implements ${name} {}`
+      const inner = jsonbFieldType(variantRef, ctx);
+      const annotationPrefix =
+        inner.annotations.length > 0 ? `${inner.annotations.join(" ")} ` : "";
+      return `${javaDocComment(variantRef.meta, "")}public record ${names[i]}(${annotationPrefix}${inner.type} value) implements ${name} {}`;
     }
-    return renderVariantRecord(names[i]!, name, variantRef, ctx)
-  })
+    return renderVariantRecord(names[i]!, name, variantRef, ctx);
+  });
 
-  return [lines.join("\n"), ...variantDecls].join("\n\n")
+  return [lines.join("\n"), ...variantDecls].join("\n\n");
 }
 
 function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const doc = javaDocComment(ref.meta, "")
-  const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }))
-  const needsAdapter = constants.some(({ member, constant }) => member !== constant)
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const doc = javaDocComment(ref.meta, "");
+  const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }));
+  const needsAdapter = constants.some(({ member, constant }) => member !== constant);
   // JSON-B serializes/deserializes an enum by its constant NAME by default,
   // with no per-constant wire-value annotation of its own (see module doc
   // comment) — when the sanitized constant names don't already round-trip to
@@ -439,34 +467,38 @@ function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   // registered via `@JsonbTypeAdapter`, plus a comment spelling out the exact
   // mapping the adapter implementation needs to honor.
   if (ctx.options.jsonb && needsAdapter) {
-    ctx.imports.add("jakarta.json.bind.annotation.JsonbTypeAdapter")
-    const adapterName = `${name}Adapter`
-    const lines: string[] = []
-    if (doc) lines.push(doc.trimEnd())
-    lines.push("// JSON-B has no per-constant wire-value annotation (unlike Gson's")
-    lines.push("// @SerializedName or Jackson's @JsonValue/@JsonCreator) -- register a")
-    lines.push(`// JsonbAdapter<${name}, String> named ${adapterName} mapping:`)
-    for (const { member, constant } of constants) lines.push(`//   ${constant} <-> ${quote(member)}`)
-    lines.push(`@JsonbTypeAdapter(${adapterName}.class)`)
-    lines.push(`public enum ${name} {`)
-    lines.push(`  ${constants.map((c) => c.constant).join(", ")}`)
-    lines.push("}")
-    return lines.join("\n")
+    ctx.imports.add("jakarta.json.bind.annotation.JsonbTypeAdapter");
+    const adapterName = `${name}Adapter`;
+    const lines: string[] = [];
+    if (doc) lines.push(doc.trimEnd());
+    lines.push("// JSON-B has no per-constant wire-value annotation (unlike Gson's");
+    lines.push("// @SerializedName or Jackson's @JsonValue/@JsonCreator) -- register a");
+    lines.push(`// JsonbAdapter<${name}, String> named ${adapterName} mapping:`);
+    for (const { member, constant } of constants)
+      lines.push(`//   ${constant} <-> ${quote(member)}`);
+    lines.push(`@JsonbTypeAdapter(${adapterName}.class)`);
+    lines.push(`public enum ${name} {`);
+    lines.push(`  ${constants.map((c) => c.constant).join(", ")}`);
+    lines.push("}");
+    return lines.join("\n");
   }
-  return `${doc}public enum ${name} {\n  ${constants.map((c) => c.constant).join(", ")}\n}`
+  return `${doc}public enum ${name} {\n  ${constants.map((c) => c.constant).join(", ")}\n}`;
 }
 
-const JSONB_IMPORTS = ["jakarta.json.bind.annotation.JsonbProperty", "jakarta.json.bind.annotation.JsonbCreator"]
+const JSONB_IMPORTS = [
+  "jakarta.json.bind.annotation.JsonbProperty",
+  "jakarta.json.bind.annotation.JsonbCreator",
+];
 
 function assembleSource(body: string, ctx: Ctx, options: Required<JavaOptions>): string {
-  const lines: string[] = []
-  if (options.packageName !== "") lines.push(`package ${options.packageName};`, "")
-  const imports = [...ctx.imports].sort()
+  const lines: string[] = [];
+  if (options.packageName !== "") lines.push(`package ${options.packageName};`, "");
+  const imports = [...ctx.imports].sort();
   if (imports.length > 0) {
-    lines.push(...imports.map((i) => `import ${i};`), "")
+    lines.push(...imports.map((i) => `import ${i};`), "");
   }
-  lines.push(body)
-  return `${lines.join("\n").trimEnd()}\n`
+  lines.push(body);
+  return `${lines.join("\n").trimEnd()}\n`;
 }
 
 /**
@@ -477,30 +509,30 @@ function assembleSource(body: string, ctx: Ctx, options: Required<JavaOptions>):
  * construct the way TypeScript's `type X = ...` does.
  */
 export function toJsonbDeclaration(name: string, ref: TypeRef, options?: JavaOptions): string {
-  const resolved = resolveOptions(defaultOptions, options)
-  const ctx: Ctx = { options: resolved, imports: new Set(resolved.jsonb ? JSONB_IMPORTS : []) }
+  const resolved = resolveOptions(defaultOptions, options);
+  const ctx: Ctx = { options: resolved, imports: new Set(resolved.jsonb ? JSONB_IMPORTS : []) };
 
-  let body: string
+  let body: string;
   if (ref.shape.kind === "object") {
-    body = renderRecordOrClass(name, ref, ctx)
+    body = renderRecordOrClass(name, ref, ctx);
   } else if (ref.shape.kind === "enum") {
-    body = renderEnum(name, ref, ctx)
+    body = renderEnum(name, ref, ctx);
   } else if (ref.shape.kind === "union") {
-    body = renderSealedInterface(name, ref, ctx)
+    body = renderSealedInterface(name, ref, ctx);
   } else if (ref.shape.kind === "tuple") {
-    const shape = ref.shape as TypeShape & { kind: "tuple" }
-    const ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"]
+    const shape = ref.shape as TypeShape & { kind: "tuple" };
+    const ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
     const components = shape.elements.map((element, i) => {
-      const { type } = jsonbFieldType(element, ctx)
-      return `${type} ${ordinals[i] ?? `field${i + 1}`}`
-    })
-    body = `${javaDocComment(ref.meta, "")}public record ${name}(${components.join(", ")}) {}`
+      const { type } = jsonbFieldType(element, ctx);
+      return `${type} ${ordinals[i] ?? `field${i + 1}`}`;
+    });
+    body = `${javaDocComment(ref.meta, "")}public record ${name}(${components.join(", ")}) {}`;
   } else {
     // A wrapper class is the closest Java equivalent to a bare type alias
     // over a scalar/collection type (Java has no `type X = ...` construct).
-    const { type, annotations } = jsonbFieldType(ref, ctx)
-    const annotationLine = annotations.length > 0 ? `${annotations.join(" ")} ` : ""
-    const doc = javaDocComment(ref.meta, "")
+    const { type, annotations } = jsonbFieldType(ref, ctx);
+    const annotationLine = annotations.length > 0 ? `${annotations.join(" ")} ` : "";
+    const doc = javaDocComment(ref.meta, "");
     body =
       resolved.style === "record"
         ? `${doc}public record ${name}(${annotationLine}${type} value) {}`
@@ -516,10 +548,10 @@ export function toJsonbDeclaration(name: string, ref: TypeRef, options?: JavaOpt
             "    return this.value;",
             "  }",
             "}",
-          ].join("\n")
+          ].join("\n");
   }
 
-  return assembleSource(body, ctx, resolved)
+  return assembleSource(body, ctx, resolved);
 }
 
 /**
@@ -531,9 +563,9 @@ export function toJsonbDeclaration(name: string, ref: TypeRef, options?: JavaOpt
  * java-jackson.ts.
  */
 export function toJsonb(ref: TypeRef, name?: string, options?: JavaOptions): string {
-  if (name !== undefined) return toJsonbDeclaration(name, ref, options)
-  const resolved = resolveOptions(defaultOptions, options)
-  const ctx: Ctx = { options: resolved, imports: new Set() }
-  const { type } = jsonbFieldType(ref, ctx)
-  return type
+  if (name !== undefined) return toJsonbDeclaration(name, ref, options);
+  const resolved = resolveOptions(defaultOptions, options);
+  const ctx: Ctx = { options: resolved, imports: new Set() };
+  const { type } = jsonbFieldType(ref, ctx);
+  return type;
 }

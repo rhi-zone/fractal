@@ -1,4 +1,4 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 
 // JSON Schema draft-04: https://json-schema.org/specification-links.html#draft-4
 // (draft-zyp-json-schema-04). Divergences from draft-07 / latest (json-schema.ts,
@@ -28,53 +28,56 @@ import { resolve, type TypeRef, type TypeShape } from "./index.ts"
 // - No `readOnly`/`writeOnly` (introduced draft-07) — `meta.readonly` on a
 //   field is silently dropped rather than emitting a keyword draft-04 doesn't
 //   define
-export type JsonSchema04 = Record<string, unknown>
+export type JsonSchema04 = Record<string, unknown>;
 
 // `$comment` is a draft-07+ keyword (json-schema.org draft-07 §10.1) — not part
 // of draft-04's vocabulary, so it is excluded here (unlike json-schema-07.ts/
 // json-schema.ts, and unlike openapi30.ts which also passes it through).
-const passthroughKeys = ["minLength", "maxLength", "pattern", "multipleOf"] as const
+const passthroughKeys = ["minLength", "maxLength", "pattern", "multipleOf"] as const;
 
-function applyNumericBounds(schema: JsonSchema04, meta: Readonly<Record<string, unknown>>): JsonSchema04 {
-  let result = schema
+function applyNumericBounds(
+  schema: JsonSchema04,
+  meta: Readonly<Record<string, unknown>>,
+): JsonSchema04 {
+  let result = schema;
 
   // draft-04 §5.1.1: exclusiveMinimum is a boolean modifier on `minimum`.
   if (meta.exclusiveMinimum !== undefined) {
-    result = { ...result, minimum: meta.exclusiveMinimum, exclusiveMinimum: true }
+    result = { ...result, minimum: meta.exclusiveMinimum, exclusiveMinimum: true };
   } else if (meta.minimum !== undefined) {
-    result = { ...result, minimum: meta.minimum }
+    result = { ...result, minimum: meta.minimum };
   }
 
   // draft-04 §5.1.2: exclusiveMaximum is a boolean modifier on `maximum`.
   if (meta.exclusiveMaximum !== undefined) {
-    result = { ...result, maximum: meta.exclusiveMaximum, exclusiveMaximum: true }
+    result = { ...result, maximum: meta.exclusiveMaximum, exclusiveMaximum: true };
   } else if (meta.maximum !== undefined) {
-    result = { ...result, maximum: meta.maximum }
+    result = { ...result, maximum: meta.maximum };
   }
 
-  return result
+  return result;
 }
 
 function withMeta(schema: JsonSchema04, meta: Readonly<Record<string, unknown>>): JsonSchema04 {
-  let result = schema
+  let result = schema;
 
   // draft-04 has no `type` array nor `anyOf`-free nullable idiom distinct from
   // later drafts' `["T", "null"]` shorthand — always wrap in anyOf.
   if (meta.nullable === true) {
-    result = { anyOf: [result, { type: "null" }] }
+    result = { anyOf: [result, { type: "null" }] };
   }
 
-  if (typeof meta.description === "string") result = { ...result, description: meta.description }
-  if (meta.deprecated === true) result = { ...result, deprecated: true }
-  if (meta.default !== undefined) result = { ...result, default: meta.default }
+  if (typeof meta.description === "string") result = { ...result, description: meta.description };
+  if (meta.deprecated === true) result = { ...result, deprecated: true };
+  if (meta.default !== undefined) result = { ...result, default: meta.default };
 
-  result = applyNumericBounds(result, meta)
+  result = applyNumericBounds(result, meta);
 
   for (const key of passthroughKeys) {
-    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] }
+    if (meta[key] !== undefined) result = { ...result, [key]: meta[key] };
   }
 
-  return result
+  return result;
 }
 
 // Infers the JSON Schema `type` for an enum's members from their actual
@@ -86,24 +89,24 @@ function withMeta(schema: JsonSchema04, meta: Readonly<Record<string, unknown>>)
 // (`type` is optional; `enum` alone still constrains to the listed values).
 function enumSchema(members: readonly unknown[]): JsonSchema04 {
   if (members.length > 0 && members.every((m) => typeof m === "boolean")) {
-    return { type: "boolean", enum: [...members] }
+    return { type: "boolean", enum: [...members] };
   }
   if (members.length > 0 && members.every((m) => typeof m === "number")) {
-    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number"
-    return { type, enum: [...members] }
+    const type = members.every((m) => Number.isInteger(m)) ? "integer" : "number";
+    return { type, enum: [...members] };
   }
   if (members.length > 0 && members.every((m) => typeof m === "string")) {
-    return { type: "string", enum: [...members] }
+    return { type: "string", enum: [...members] };
   }
-  return { enum: [...members] }
+  return { enum: [...members] };
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema04
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => JsonSchema04;
 
 const leaf =
   (schema: JsonSchema04): Converter =>
   () =>
-    schema
+    schema;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf({ type: "boolean" }),
@@ -129,69 +132,69 @@ const handlers: Record<string, Converter> = {
   // encoded as the literal `false` the way json-schema-07.ts does — use `not: {}`.
   never: leaf({ not: {} }),
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
-    const properties: Record<string, JsonSchema04> = {}
-    const required: string[] = []
+    const s = shape as TypeShape & { kind: "object" };
+    const properties: Record<string, JsonSchema04> = {};
+    const required: string[] = [];
     for (const [name, field] of Object.entries(s.fields)) {
-      properties[name] = toJsonSchema04(field)
-      if (field.meta.optional !== true) required.push(name)
+      properties[name] = toJsonSchema04(field);
+      if (field.meta.optional !== true) required.push(name);
     }
-    const schema: JsonSchema04 = { type: "object", properties }
-    if (required.length > 0) schema.required = required
-    return schema
+    const schema: JsonSchema04 = { type: "object", properties };
+    if (required.length > 0) schema.required = required;
+    return schema;
   },
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return { type: "array", items: toJsonSchema04(s.element) }
+    const s = shape as TypeShape & { kind: "array" };
+    return { type: "array", items: toJsonSchema04(s.element) };
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
+    const s = shape as TypeShape & { kind: "tuple" };
     // draft-04 §5.3.1: `items` as an array of schemas positionally validates a
     // tuple; `additionalItems: false` forbids extra elements.
-    return { type: "array", items: s.elements.map(toJsonSchema04), additionalItems: false }
+    return { type: "array", items: s.elements.map(toJsonSchema04), additionalItems: false };
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return { type: "object", additionalProperties: toJsonSchema04(s.value) }
+    const s = shape as TypeShape & { kind: "map" };
+    return { type: "object", additionalProperties: toJsonSchema04(s.value) };
   },
   // draft-04 has no streaming/async-sequence vocabulary either — same
   // `array`-of-element degrade as json-schema.ts (latest draft), carrying
   // `x-stream: true`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return { type: "array", items: toJsonSchema04(s.element), "x-stream": true }
+    const s = shape as TypeShape & { kind: "stream" };
+    return { type: "array", items: toJsonSchema04(s.element), "x-stream": true };
   },
   // draft-04 §5.5.4 defines `oneOf` (exactly one variant matches) but no
   // `discriminator` keyword; the OpenAPI-originated `discriminator: { propertyName }`
   // shape is a widely-recognized extension (carried by `meta.discriminator`, an open
   // metadata bag convention — see CLAUDE.md), same as json-schema.ts's latest projector.
   union: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const variants = s.variants.map(toJsonSchema04)
+    const s = shape as TypeShape & { kind: "union" };
+    const variants = s.variants.map(toJsonSchema04);
     if (typeof meta.discriminator === "string") {
-      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } }
+      return { oneOf: variants, discriminator: { propertyName: meta.discriminator } };
     }
-    return { anyOf: variants }
+    return { anyOf: variants };
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
+    const s = shape as TypeShape & { kind: "literal" };
     // draft-04 has no `const` (introduced draft-06) — use a single-member enum.
-    return { enum: [s.value] }
+    return { enum: [s.value] };
   },
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return enumSchema(s.members)
+    const s = shape as TypeShape & { kind: "enum" };
+    return enumSchema(s.members);
   },
   ref: (shape) => {
-    const s = shape as TypeShape & { kind: "ref" }
-    return { $ref: `#/definitions/${s.target}` }
+    const s = shape as TypeShape & { kind: "ref" };
+    return { $ref: `#/definitions/${s.target}` };
   },
   // draft-04 §5.5.3 `allOf`: every listed schema must validate — the faithful
   // encoding of a structural intersection (mixin composition), unchanged from
   // later drafts.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    return { allOf: s.members.map(toJsonSchema04) }
+    const s = shape as TypeShape & { kind: "intersection" };
+    return { allOf: s.members.map(toJsonSchema04) };
   },
   // draft-04 has no callable-type vocabulary either — same honest degradation
   // json-schema.ts (latest draft) uses: an untyped schema carrying
@@ -203,12 +206,12 @@ const handlers: Record<string, Converter> = {
   // draft-04 has no service/interface-with-methods vocabulary either —
   // degrade to an untyped object schema carrying `x-interface: true`.
   interface: leaf({ type: "object", "x-interface": true }),
-}
+};
 
 export function toJsonSchema04(ref: TypeRef): JsonSchema04 {
-  const converter = resolve(ref.shape.kind, handlers)
-  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta)
-  return withMeta(schema, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  const schema = converter === undefined ? {} : converter(ref.shape, ref.meta);
+  return withMeta(schema, ref.meta);
 }
 
 // Declaration helpers ---------------------------------------------------------
@@ -218,8 +221,8 @@ export function toJsonSchema04(ref: TypeRef): JsonSchema04 {
 // produces.
 
 export interface JsonSchema04Declaration {
-  readonly id?: string
-  readonly definitions?: Readonly<Record<string, TypeRef>>
+  readonly id?: string;
+  readonly definitions?: Readonly<Record<string, TypeRef>>;
 }
 
 export function toJsonSchema04Document(
@@ -229,17 +232,17 @@ export function toJsonSchema04Document(
   const schema: JsonSchema04 = {
     $schema: "http://json-schema.org/draft-04/schema#",
     ...toJsonSchema04(ref),
-  }
+  };
 
-  if (declaration.id !== undefined) schema.id = declaration.id
+  if (declaration.id !== undefined) schema.id = declaration.id;
 
   if (declaration.definitions !== undefined) {
-    const definitions: Record<string, JsonSchema04> = {}
+    const definitions: Record<string, JsonSchema04> = {};
     for (const [name, defRef] of Object.entries(declaration.definitions)) {
-      definitions[name] = toJsonSchema04(defRef)
+      definitions[name] = toJsonSchema04(defRef);
     }
-    schema.definitions = definitions
+    schema.definitions = definitions;
   }
 
-  return schema
+  return schema;
 }

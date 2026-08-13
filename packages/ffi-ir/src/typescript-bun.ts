@@ -1,5 +1,5 @@
-import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir"
-import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir";
+import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Bun (`bun:ffi`) consumer projector — the JS-side counterpart to
 // `rust-c-abi.ts`: where `rust-c-abi.ts` emits the Rust *producer* of a plain C ABI
@@ -86,23 +86,55 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 const JS_RESERVED = new Set([
-  "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-  "delete", "do", "else", "export", "extends", "finally", "for", "function",
-  "if", "import", "in", "instanceof", "new", "return", "super", "switch",
-  "this", "throw", "try", "typeof", "var", "void", "while", "with", "yield",
-  "let", "static", "await", "async",
-])
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "export",
+  "extends",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "await",
+  "async",
+]);
 
 function escapeJsIdent(name: string): string {
-  return JS_RESERVED.has(name) ? `${name}_` : name
+  return JS_RESERVED.has(name) ? `${name}_` : name;
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 /**
@@ -112,27 +144,27 @@ function quote(value: string): string {
  * file-level doc comment for the full reasoning on each discipline.
  */
 export function toBunFfiType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline?.kind === "opaque-handle" || discipline?.kind === "refcount") return "ptr"
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline?.kind === "opaque-handle" || discipline?.kind === "refcount") return "ptr";
   if (discipline?.kind === "resource") {
     throw new Error(
       `toBunFfiType: unsupported ownership discipline "resource" (own/borrow) for the bun:ffi target — ` +
         "that is WIT's Canonical ABI handle-table mechanism (an i32 index with lend-count tracking), not a raw " +
         "C-ABI pointer; a plain dlopen'd shared library (what bun:ffi loads) never speaks that ABI, matching " +
         "rust-c-abi.ts's identical scope decision for the same discipline on the same wire boundary",
-    )
+    );
   }
   // discipline is undefined or "copy" beyond this point — plain by-value.
-  return resolve(ref.shape.kind, primitiveHandlers) ?? unsupportedKind(ref.shape.kind)
+  return resolve(ref.shape.kind, primitiveHandlers) ?? unsupportedKind(ref.shape.kind);
 }
 
 function unsupportedKind(kind: string): never {
   throw new Error(
     `toBunFfiType: unhandled kind "${kind}" — bun:ffi's FFIType vocabulary has no token for this shape ` +
-      '(no struct-by-value, tuple, map, union, or nested-container type exists in its documented/introspected ' +
+      "(no struct-by-value, tuple, map, union, or nested-container type exists in its documented/introspected " +
       "type table; a value needing one of those crosses only as a manual pointer + hand-written marshalling code, " +
       "which this minimal generator does not attempt rather than guess a lossy encoding)",
-  )
+  );
 }
 
 // Minimal primitive-kind -> FFIType mapping. Deliberately NOT a full
@@ -165,16 +197,16 @@ const primitiveHandlers: Record<string, string> = {
   bytes: "buffer",
   null: "void",
   void: "void",
-}
+};
 
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`${indent}// ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`${indent}// ${meta.description}`] : [];
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+  readonly returnType: TypeRef;
+};
 
 /** One symbol-table entry (`name: { args: [...], returns: ... }`, the value
  * half of `dlopen`'s second argument) for a `function`/`method` shape.
@@ -182,10 +214,10 @@ type FfiFunctionLike = {
  * parameter — mirrors `rust-c-abi.ts`'s `buildFunction`'s identical `selfParam`
  * handling for a resource method's implicit handle. */
 function buildSymbolEntry(symbolName: string, shape: FfiFunctionLike, selfParam: boolean): string {
-  const args: string[] = []
-  if (selfParam) args.push(quote("ptr"))
-  for (const p of shape.params) args.push(quote(toBunFfiType(p.type)))
-  const returns = quote(toBunFfiType(shape.returnType))
+  const args: string[] = [];
+  if (selfParam) args.push(quote("ptr"));
+  for (const p of shape.params) args.push(quote(toBunFfiType(p.type)));
+  const returns = quote(toBunFfiType(shape.returnType));
   // The key MUST be the literal native symbol name `dlopen` looks up via
   // `dlsym` (verified against bun.com/docs/runtime/ffi, 2026-08-03: "the
   // KEY in the symbols object ... must exactly match the native exported
@@ -198,28 +230,37 @@ function buildSymbolEntry(symbolName: string, shape: FfiFunctionLike, selfParam:
   // A quoted string key sidesteps both that risk and the separate
   // "starts with a digit"/non-identifier-shaped-name case, at no cost —
   // JS object literals accept any string as a quoted key.
-  return `  ${quote(symbolName)}: { args: [${args.join(", ")}], returns: ${returns} },`
+  return `  ${quote(symbolName)}: { args: [${args.join(", ")}], returns: ${returns} },`;
 }
 
 /** The thin exported wrapper function calling through `symbols.<symbolName>`
  * — `wrapperName` is the ffi-ir map key (already an idiomatic JS
  * identifier), `symbolName` is the raw C-ABI export name `rust-c-abi.ts` actually
  * produced (may differ, e.g. snake_case vs camelCase). */
-function buildWrapper(wrapperName: string, symbolName: string, ref: FfiRef, shape: FfiFunctionLike, selfParam?: string): string {
-  const params: string[] = []
-  if (selfParam !== undefined) params.push(`handle: number /* ${selfParam} */`)
-  for (const p of shape.params) params.push(`${escapeJsIdent(p.name)}: unknown`)
+function buildWrapper(
+  wrapperName: string,
+  symbolName: string,
+  ref: FfiRef,
+  shape: FfiFunctionLike,
+  selfParam?: string,
+): string {
+  const params: string[] = [];
+  if (selfParam !== undefined) params.push(`handle: number /* ${selfParam} */`);
+  for (const p of shape.params) params.push(`${escapeJsIdent(p.name)}: unknown`);
 
-  const args = [...(selfParam !== undefined ? ["handle"] : []), ...shape.params.map((p) => escapeJsIdent(p.name))]
+  const args = [
+    ...(selfParam !== undefined ? ["handle"] : []),
+    ...shape.params.map((p) => escapeJsIdent(p.name)),
+  ];
 
-  const lines: string[] = [...docComment("", ref.meta)]
-  lines.push(`export function ${escapeJsIdent(wrapperName)}(${params.join(", ")}) {`)
+  const lines: string[] = [...docComment("", ref.meta)];
+  lines.push(`export function ${escapeJsIdent(wrapperName)}(${params.join(", ")}) {`);
   // Bracket + quoted access, same reason the symbol-entry key above is
   // quoted rather than emitted as a bare/escaped identifier — `symbolName`
   // must reach `dlsym` unmodified.
-  lines.push(`  return symbols[${quote(symbolName)}](${args.join(", ")})`)
-  lines.push("}")
-  return lines.join("\n")
+  lines.push(`  return symbols[${quote(symbolName)}](${args.join(", ")})`);
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /** Collected `{ entries, wrappers }` for one `function`/`method`/`resource`
@@ -229,48 +270,56 @@ function buildWrapper(wrapperName: string, symbolName: string, ref: FfiRef, shap
  * resource also reuses (so both paths share one code path rather than
  * diverging). */
 function collect(ref: FfiRef, name: string): { entries: string[]; wrappers: string[] } {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    const symbolName = toSnakeCase(name)
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    const symbolName = toSnakeCase(name);
     return {
       entries: [buildSymbolEntry(symbolName, shape, false)],
       wrappers: [buildWrapper(name, symbolName, ref, shape)],
-    }
+    };
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiShape & { kind: "resource"; name: string; methods: Readonly<Record<string, FfiRef>> }
-    const resourceSnake = toSnakeCase(shape.name)
-    const entries: string[] = []
-    const wrappers: string[] = []
+    const shape = ref.shape as FfiShape & {
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    const resourceSnake = toSnakeCase(shape.name);
+    const entries: string[] = [];
+    const wrappers: string[] = [];
 
     for (const [methodName, methodRef] of Object.entries(shape.methods)) {
-      const methodShape = methodRef.shape as FfiShape & { kind: "method" }
-      const symbolName = `${resourceSnake}_${toSnakeCase(methodName)}`
-      entries.push(buildSymbolEntry(symbolName, methodShape, true))
-      wrappers.push(buildWrapper(`${shape.name}_${methodName}`, symbolName, methodRef, methodShape, shape.name))
+      const methodShape = methodRef.shape as FfiShape & { kind: "method" };
+      const symbolName = `${resourceSnake}_${toSnakeCase(methodName)}`;
+      entries.push(buildSymbolEntry(symbolName, methodShape, true));
+      wrappers.push(
+        buildWrapper(`${shape.name}_${methodName}`, symbolName, methodRef, methodShape, shape.name),
+      );
     }
 
     // The paired free function `rust-c-abi.ts`'s `buildResource` always emits
     // (`buildFreeFunction`, `<resource>_free`) — a real exported symbol in
     // the compiled library this file's whole job is to bind against, so
     // omitting it would leave callers with no way to ever release a handle.
-    const freeSymbol = `${resourceSnake}_free`
-    entries.push(`  ${quote(freeSymbol)}: { args: [${quote("ptr")}], returns: ${quote("void")} },`)
+    const freeSymbol = `${resourceSnake}_free`;
+    entries.push(`  ${quote(freeSymbol)}: { args: [${quote("ptr")}], returns: ${quote("void")} },`);
     wrappers.push(
       [
         `export function ${escapeJsIdent(shape.name)}_free(handle: number) {`,
         `  return symbols[${quote(freeSymbol)}](handle)`,
         "}",
       ].join("\n"),
-    )
+    );
 
-    return { entries, wrappers }
+    return { entries, wrappers };
   }
 
-  throw new Error(`toBun: unhandled ffi-ir kind "${kind}" for collect() — only "function" and "resource" contribute dlopen symbols`)
+  throw new Error(
+    `toBun: unhandled ffi-ir kind "${kind}" for collect() — only "function" and "resource" contribute dlopen symbols`,
+  );
 }
 
 /**
@@ -298,53 +347,57 @@ function collect(ref: FfiRef, name: string): { entries: string[]; wrappers: stri
  *     not an arbitrary choice.
  */
 export function toBun(ref: FfiRef, libPath: string, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "method") {
     throw new Error(
       'toBun: a bare "method" cannot be projected on its own — project its enclosing "resource" instead, ' +
         "so its receiver's other methods and paired free function land in the same dlopen call",
-    )
+    );
   }
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toBun: "function" requires a name — a dlopen symbol is a named export, not an anonymous inline type')
+      throw new Error(
+        'toBun: "function" requires a name — a dlopen symbol is a named export, not an anonymous inline type',
+      );
     }
-    const { entries, wrappers } = collect(ref, name)
-    return renderModule(libPath, entries, wrappers)
+    const { entries, wrappers } = collect(ref, name);
+    return renderModule(libPath, entries, wrappers);
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiShape & { kind: "resource"; name: string }
-    const { entries, wrappers } = collect(ref, shape.name)
-    return renderModule(libPath, entries, wrappers)
+    const shape = ref.shape as FfiShape & { kind: "resource"; name: string };
+    const { entries, wrappers } = collect(ref, shape.name);
+    return renderModule(libPath, entries, wrappers);
   }
 
   if (kind === "module") {
     const shape = ref.shape as FfiShape & {
-      kind: "module"
-      name: string
-      functions: Readonly<Record<string, FfiRef>>
-      resources: Readonly<Record<string, FfiRef>>
-    }
-    const entries: string[] = []
-    const wrappers: string[] = []
+      kind: "module";
+      name: string;
+      functions: Readonly<Record<string, FfiRef>>;
+      resources: Readonly<Record<string, FfiRef>>;
+    };
+    const entries: string[] = [];
+    const wrappers: string[] = [];
     for (const [fnName, fnRef] of Object.entries(shape.functions)) {
-      const r = collect(fnRef, fnName)
-      entries.push(...r.entries)
-      wrappers.push(...r.wrappers)
+      const r = collect(fnRef, fnName);
+      entries.push(...r.entries);
+      wrappers.push(...r.wrappers);
     }
     for (const [, resRef] of Object.entries(shape.resources)) {
-      const resShape = resRef.shape as FfiShape & { kind: "resource"; name: string }
-      const r = collect(resRef, resShape.name)
-      entries.push(...r.entries)
-      wrappers.push(...r.wrappers)
+      const resShape = resRef.shape as FfiShape & { kind: "resource"; name: string };
+      const r = collect(resRef, resShape.name);
+      entries.push(...r.entries);
+      wrappers.push(...r.wrappers);
     }
-    return renderModule(libPath, entries, wrappers)
+    return renderModule(libPath, entries, wrappers);
   }
 
-  throw new Error(`toBun: unhandled ffi-ir kind "${kind}" — no bun:ffi mapping implemented for this backend`)
+  throw new Error(
+    `toBun: unhandled ffi-ir kind "${kind}" — no bun:ffi mapping implemented for this backend`,
+  );
 }
 
 function renderModule(libPath: string, entries: string[], wrappers: string[]): string {
@@ -356,6 +409,6 @@ function renderModule(libPath: string, entries: string[], wrappers: string[]): s
     "})",
     "",
     ...wrappers.flatMap((w, i) => (i === 0 ? [w] : ["", w])),
-  ]
-  return lines.join("\n")
+  ];
+  return lines.join("\n");
 }

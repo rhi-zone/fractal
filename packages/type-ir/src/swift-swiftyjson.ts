@@ -1,5 +1,10 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, quote, swiftDocComment, toCamelCaseStripSeparators } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import {
+  capitalize,
+  quote,
+  swiftDocComment,
+  toCamelCaseStripSeparators,
+} from "./codegen-helpers.ts";
 
 // packages/type-ir/src/swift-swiftyjson.ts — @rhi-zone/fractal-type-ir/swift-swiftyjson
 //
@@ -24,10 +29,10 @@ import { capitalize, quote, swiftDocComment, toCamelCaseStripSeparators } from "
 // union construct.
 
 function swiftIdentifier(name: string): string {
-  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "")
-  if (ident.length === 0) ident = "_"
-  if (/^[0-9]/.test(ident)) ident = `_${ident}`
-  return ident
+  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "");
+  if (ident.length === 0) ident = "_";
+  if (/^[0-9]/.test(ident)) ident = `_${ident}`;
+  return ident;
 }
 
 // Swift type + SwiftyJSON accessor pair for every leaf/primitive kind this
@@ -40,13 +45,13 @@ function swiftIdentifier(name: string): string {
 // name (returns nil instead) — see SwiftyJSON's SwiftyJSON.swift for the
 // full int8/16/32/64 + uInt8/16/32/64 family this table draws from.
 interface Accessor {
-  readonly type: string
-  readonly required: string
-  readonly optional: string
+  readonly type: string;
+  readonly required: string;
+  readonly optional: string;
 }
 
 function accessor(type: string, base: string): Accessor {
-  return { type, required: `${base}Value`, optional: base }
+  return { type, required: `${base}Value`, optional: base };
 }
 
 const primitiveHandlers: Record<string, Accessor> = {
@@ -84,7 +89,7 @@ const primitiveHandlers: Record<string, Accessor> = {
   void: accessor("Any", "object"),
   unknown: accessor("Any", "object"),
   never: accessor("Any", "object"),
-}
+};
 
 /** Declarations hoisted out of a field/element position, to be emitted as
  * sibling top-level declarations (SwiftyJSON's hand-written init(json:)
@@ -93,8 +98,8 @@ const primitiveHandlers: Record<string, Accessor> = {
  * nests inside the parent struct's body — every hoisted declaration here is
  * emitted at the top level and simply referenced by name from its use site). */
 interface Ctx {
-  decls: string[]
-  declared: Set<string>
+  decls: string[];
+  declared: Set<string>;
 }
 
 // The declared Swift type name for `ref` when it's a kind that needs its own
@@ -102,61 +107,61 @@ interface Ctx {
 // (which hoists the declaration) and `accessorExpr` (which only needs to
 // reference the name a sibling call already hoisted under).
 function hoistedName(ref: TypeRef, hint: string): string {
-  return typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint)
+  return typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint);
 }
 
 /** The Swift type expression for `ref` in a field/element/key/value
  * position, hoisting any object/enum/union it contains as a top-level
  * declaration keyed by `hint` (capitalized) or `meta.typeName`. */
 function swiftType(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const kind = ref.shape.kind
-  let base: string
+  const kind = ref.shape.kind;
+  let base: string;
 
   if (kind === "object") {
-    const name = hoistedName(ref, hint)
+    const name = hoistedName(ref, hint);
     if (!ctx.declared.has(name)) {
-      ctx.declared.add(name)
-      ctx.decls.push(structDecl(name, ref, ctx))
+      ctx.declared.add(name);
+      ctx.decls.push(structDecl(name, ref, ctx));
     }
-    base = name
+    base = name;
   } else if (kind === "enum") {
-    const name = hoistedName(ref, hint)
+    const name = hoistedName(ref, hint);
     if (!ctx.declared.has(name)) {
-      ctx.declared.add(name)
-      ctx.decls.push(enumDecl(name, ref))
+      ctx.declared.add(name);
+      ctx.decls.push(enumDecl(name, ref));
     }
-    base = name
+    base = name;
   } else if (kind === "union") {
-    const name = hoistedName(ref, hint)
+    const name = hoistedName(ref, hint);
     if (!ctx.declared.has(name)) {
-      ctx.declared.add(name)
-      ctx.decls.push(unionDecl(name, ref, ctx))
+      ctx.declared.add(name);
+      ctx.decls.push(unionDecl(name, ref, ctx));
     }
-    base = name
+    base = name;
   } else if (kind === "array" || kind === "stream" || kind === "page") {
     // No native SwiftyJSON streaming/pagination-window construct — degrades
     // honestly to an array of the element type, same convention
     // swift-codable.ts uses for `stream`/`page`.
-    const s = ref.shape as TypeShape & { element: TypeRef }
-    base = `[${swiftType(s.element, `${hint}Element`, ctx)}]`
+    const s = ref.shape as TypeShape & { element: TypeRef };
+    base = `[${swiftType(s.element, `${hint}Element`, ctx)}]`;
   } else if (kind === "map") {
-    const s = ref.shape as TypeShape & { kind: "map" }
+    const s = ref.shape as TypeShape & { kind: "map" };
     // JSON object keys are always strings — SwiftyJSON's `.dictionaryValue`
     // is `[String: JSON]`, so the key type itself is fixed regardless of
     // `s.key`'s declared kind (same assumption swift-codable.ts's own `map`
     // branch makes implicitly by rendering whatever `s.key` says, which in
     // practice is always `string` for a JSON-sourced map).
-    base = `[String: ${swiftType(s.value, `${hint}Value`, ctx)}]`
+    base = `[String: ${swiftType(s.value, `${hint}Value`, ctx)}]`;
   } else if (kind === "tuple") {
-    const s = ref.shape as TypeShape & { kind: "tuple" }
-    base = `(${s.elements.map((element, i) => swiftType(element, `${hint}${i}`, ctx)).join(", ")})`
+    const s = ref.shape as TypeShape & { kind: "tuple" };
+    base = `(${s.elements.map((element, i) => swiftType(element, `${hint}${i}`, ctx)).join(", ")})`;
   } else if (kind === "ref") {
-    base = capitalize((ref.shape as TypeShape & { kind: "ref" }).target)
+    base = capitalize((ref.shape as TypeShape & { kind: "ref" }).target);
   } else if (kind === "instance") {
-    base = (ref.shape as TypeShape & { kind: "instance" }).className
+    base = (ref.shape as TypeShape & { kind: "instance" }).className;
   } else if (kind === "literal") {
-    const s = ref.shape as TypeShape & { kind: "literal" }
-    const value = s.value
+    const s = ref.shape as TypeShape & { kind: "literal" };
+    const value = s.value;
     base =
       value === null
         ? "Any"
@@ -166,19 +171,19 @@ function swiftType(ref: TypeRef, hint: string, ctx: Ctx): string {
             ? "Bool"
             : Number.isInteger(value)
               ? "Int"
-              : "Double"
+              : "Double";
   } else if (kind === "intersection") {
-    const s = ref.shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    base = first === undefined ? "Any" : swiftType(first, hint, ctx)
+    const s = ref.shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    base = first === undefined ? "Any" : swiftType(first, hint, ctx);
   } else {
-    base = resolve(kind, primitiveHandlers)?.type ?? "Any"
+    base = resolve(kind, primitiveHandlers)?.type ?? "Any";
   }
 
   if ((ref.meta.optional === true || ref.meta.nullable === true) && !base.endsWith("?")) {
-    base = `${base}?`
+    base = `${base}?`;
   }
-  return base
+  return base;
 }
 
 /** The Swift expression that extracts `ref`'s value out of `jsonExpr` (an
@@ -187,70 +192,70 @@ function swiftType(ref: TypeRef, hint: string, ctx: Ctx): string {
  * object/enum/union declaration this expression references has already
  * been hoisted into `ctx.decls`. */
 function accessorExpr(ref: TypeRef, jsonExpr: string, hint: string): string {
-  const optional = ref.meta.optional === true || ref.meta.nullable === true
-  const kind = ref.shape.kind
+  const optional = ref.meta.optional === true || ref.meta.nullable === true;
+  const kind = ref.shape.kind;
 
   if (kind === "object" || kind === "union") {
-    const name = hoistedName(ref, hint)
+    const name = hoistedName(ref, hint);
     return optional
       ? `${jsonExpr}.exists() ? ${name}(json: ${jsonExpr}) : nil`
-      : `${name}(json: ${jsonExpr})`
+      : `${name}(json: ${jsonExpr})`;
   }
   if (kind === "enum") {
-    const name = hoistedName(ref, hint)
-    return optional ? `${name}.from(json: ${jsonExpr})` : `${name}.from(json: ${jsonExpr})!`
+    const name = hoistedName(ref, hint);
+    return optional ? `${name}.from(json: ${jsonExpr})` : `${name}.from(json: ${jsonExpr})!`;
   }
   if (kind === "array" || kind === "stream" || kind === "page") {
-    const s = ref.shape as TypeShape & { element: TypeRef }
-    const elementExpr = accessorExpr(s.element, "$0", `${hint}Element`)
-    const mapExpr = `${jsonExpr}.arrayValue.map { ${elementExpr} }`
-    return optional ? `${jsonExpr}.exists() ? ${mapExpr} : nil` : mapExpr
+    const s = ref.shape as TypeShape & { element: TypeRef };
+    const elementExpr = accessorExpr(s.element, "$0", `${hint}Element`);
+    const mapExpr = `${jsonExpr}.arrayValue.map { ${elementExpr} }`;
+    return optional ? `${jsonExpr}.exists() ? ${mapExpr} : nil` : mapExpr;
   }
   if (kind === "map") {
-    const s = ref.shape as TypeShape & { kind: "map" }
-    const valueExpr = accessorExpr(s.value, "$0.value", `${hint}Value`)
-    const dictExpr = `Dictionary(uniqueKeysWithValues: ${jsonExpr}.dictionaryValue.map { ($0.key, ${valueExpr}) })`
-    return optional ? `${jsonExpr}.exists() ? ${dictExpr} : nil` : dictExpr
+    const s = ref.shape as TypeShape & { kind: "map" };
+    const valueExpr = accessorExpr(s.value, "$0.value", `${hint}Value`);
+    const dictExpr = `Dictionary(uniqueKeysWithValues: ${jsonExpr}.dictionaryValue.map { ($0.key, ${valueExpr}) })`;
+    return optional ? `${jsonExpr}.exists() ? ${dictExpr} : nil` : dictExpr;
   }
   if (kind === "tuple") {
-    const s = ref.shape as TypeShape & { kind: "tuple" }
+    const s = ref.shape as TypeShape & { kind: "tuple" };
     const elements = s.elements.map((element, i) =>
       accessorExpr(element, `${jsonExpr}.arrayValue[${i}]`, `${hint}${i}`),
-    )
-    return `(${elements.join(", ")})`
+    );
+    return `(${elements.join(", ")})`;
   }
   if (kind === "ref") {
     // A `ref` target's own declaration isn't visible from here — assumed to
     // follow this file's `init(json:)` convention, same trust-the-caller
     // assumption swift-codable.ts's `ref` handler documents for a bare type
     // name reference.
-    const name = capitalize((ref.shape as TypeShape & { kind: "ref" }).target)
+    const name = capitalize((ref.shape as TypeShape & { kind: "ref" }).target);
     return optional
       ? `${jsonExpr}.exists() ? ${name}(json: ${jsonExpr}) : nil`
-      : `${name}(json: ${jsonExpr})`
+      : `${name}(json: ${jsonExpr})`;
   }
   if (kind === "instance") {
-    const name = (ref.shape as TypeShape & { kind: "instance" }).className
+    const name = (ref.shape as TypeShape & { kind: "instance" }).className;
     return optional
       ? `${jsonExpr}.exists() ? ${name}(json: ${jsonExpr}) : nil`
-      : `${name}(json: ${jsonExpr})`
+      : `${name}(json: ${jsonExpr})`;
   }
   if (kind === "literal") {
-    const s = ref.shape as TypeShape & { kind: "literal" }
-    const value = s.value
-    if (value === null) return "nil"
-    if (typeof value === "string") return quote(value)
-    if (typeof value === "boolean") return String(value)
-    return String(value)
+    const s = ref.shape as TypeShape & { kind: "literal" };
+    const value = s.value;
+    if (value === null) return "nil";
+    if (typeof value === "string") return quote(value);
+    if (typeof value === "boolean") return String(value);
+    return String(value);
   }
   if (kind === "intersection") {
-    const s = ref.shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? `${jsonExpr}.object` : accessorExpr(first, jsonExpr, hint)
+    const s = ref.shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? `${jsonExpr}.object` : accessorExpr(first, jsonExpr, hint);
   }
 
-  const a = resolve(kind, primitiveHandlers) ?? accessor("Any", "object")
-  return optional ? `${jsonExpr}.${a.optional}` : `${jsonExpr}.${a.required}`
+  const a = resolve(kind, primitiveHandlers) ?? accessor("Any", "object");
+  return optional ? `${jsonExpr}.${a.optional}` : `${jsonExpr}.${a.required}`;
 }
 
 // `struct Name { let/var field: Type; init(json: JSON) { self.field = ... } }`
@@ -258,17 +263,21 @@ function accessorExpr(ref: TypeRef, jsonExpr: string, hint: string): string {
 // CodingKeys (SwiftyJSON has no keyed-container concept; the JSON field name
 // is simply the subscript literal used directly in the initializer body).
 function structDecl(name: string, ref: TypeRef, ctx: Ctx): string {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const propLines: string[] = []
-  const initLines: string[] = []
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const propLines: string[] = [];
+  const initLines: string[] = [];
 
   for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
-    const swiftName = swiftIdentifier(fieldName)
-    const readonly = fieldRef.meta.readonly === true
-    const typeName = swiftType(fieldRef, `${name}${capitalize(fieldName)}`, ctx)
-    propLines.push(`    ${readonly ? "let" : "var"} ${swiftName}: ${typeName}`)
-    const expr = accessorExpr(fieldRef, `json[${quote(fieldName)}]`, `${name}${capitalize(fieldName)}`)
-    initLines.push(`        self.${swiftName} = ${expr}`)
+    const swiftName = swiftIdentifier(fieldName);
+    const readonly = fieldRef.meta.readonly === true;
+    const typeName = swiftType(fieldRef, `${name}${capitalize(fieldName)}`, ctx);
+    propLines.push(`    ${readonly ? "let" : "var"} ${swiftName}: ${typeName}`);
+    const expr = accessorExpr(
+      fieldRef,
+      `json[${quote(fieldName)}]`,
+      `${name}${capitalize(fieldName)}`,
+    );
+    initLines.push(`        self.${swiftName} = ${expr}`);
   }
 
   const lines = [
@@ -280,8 +289,8 @@ function structDecl(name: string, ref: TypeRef, ctx: Ctx): string {
     ...initLines,
     "    }",
     "}",
-  ]
-  return lines.join("\n")
+  ];
+  return lines.join("\n");
 }
 
 // `enum Name: String { case a; case b; static func from(json: JSON) -> Name? { Name(rawValue: json.stringValue) } }`
@@ -289,11 +298,11 @@ function structDecl(name: string, ref: TypeRef, ctx: Ctx): string {
 // factory returning `nil` on an unrecognized/missing value) stands in for
 // swift-codable.ts's automatic `RawRepresentable` conformance.
 function enumDecl(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [...swiftDocComment(ref), `enum ${name}: String, CaseIterable {`]
+  const s = ref.shape as TypeShape & { kind: "enum" };
+  const lines = [...swiftDocComment(ref), `enum ${name}: String, CaseIterable {`];
   for (const member of s.members) {
-    const ident = swiftIdentifier(member)
-    lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`)
+    const ident = swiftIdentifier(member);
+    lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`);
   }
   lines.push(
     "",
@@ -301,16 +310,16 @@ function enumDecl(name: string, ref: TypeRef): string {
     `        ${name}(rawValue: json.stringValue)`,
     "    }",
     "}",
-  )
-  return lines.join("\n")
+  );
+  return lines.join("\n");
 }
 
 function variantCaseName(ref: TypeRef, index: number): string {
-  if (typeof ref.meta.typeName === "string") return swiftIdentifier(ref.meta.typeName)
-  const kind = ref.shape.kind
-  if (kind === "ref") return swiftIdentifier((ref.shape as TypeShape & { kind: "ref" }).target)
-  if (kind in primitiveHandlers) return swiftIdentifier(kind)
-  return `variant${index + 1}`
+  if (typeof ref.meta.typeName === "string") return swiftIdentifier(ref.meta.typeName);
+  const kind = ref.shape.kind;
+  if (kind === "ref") return swiftIdentifier((ref.shape as TypeShape & { kind: "ref" }).target);
+  if (kind in primitiveHandlers) return swiftIdentifier(kind);
+  return `variant${index + 1}`;
 }
 
 // SwiftyJSON's `JSON.Type` enum (`.string`, `.number`, `.bool`, `.array`,
@@ -321,48 +330,63 @@ function variantCaseName(ref: TypeRef, index: number): string {
 // probing" idea, just against SwiftyJSON's own type tag instead of a thrown
 // decode error.
 function jsonTypeCase(kind: string): string {
-  if (kind === "string" || kind === "uuid" || kind === "uri" || kind === "email" || kind === "datetime" || kind === "date" || kind === "time" || kind === "duration" || kind === "bytes") {
-    return ".string"
+  if (
+    kind === "string" ||
+    kind === "uuid" ||
+    kind === "uri" ||
+    kind === "email" ||
+    kind === "datetime" ||
+    kind === "date" ||
+    kind === "time" ||
+    kind === "duration" ||
+    kind === "bytes"
+  ) {
+    return ".string";
   }
-  if (kind === "boolean") return ".bool"
-  if (kind === "array" || kind === "tuple" || kind === "stream" || kind === "page") return ".array"
-  if (kind === "object" || kind === "map") return ".dictionary"
-  if (kind === "enum") return ".string"
-  return ".number"
+  if (kind === "boolean") return ".bool";
+  if (kind === "array" || kind === "tuple" || kind === "stream" || kind === "page") return ".array";
+  if (kind === "object" || kind === "map") return ".dictionary";
+  if (kind === "enum") return ".string";
+  return ".number";
 }
 
-function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[], ctx: Ctx): string {
+function plainUnionDecl(
+  name: string,
+  ref: TypeRef,
+  variants: readonly TypeRef[],
+  ctx: Ctx,
+): string {
   const cases = variants.map((variant, i) => ({
     caseName: variantCaseName(variant, i),
     typeName: swiftType(variant, capitalize(variantCaseName(variant, i)), ctx),
     typeCase: jsonTypeCase(variant.shape.kind),
     expr: accessorExpr(variant, "json", capitalize(variantCaseName(variant, i))),
-  }))
+  }));
 
-  const lines = [...swiftDocComment(ref), `enum ${name} {`]
-  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
-  lines.push("", "    init(json: JSON) {", "        switch json.type {")
+  const lines = [...swiftDocComment(ref), `enum ${name} {`];
+  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`);
+  lines.push("", "    init(json: JSON) {", "        switch json.type {");
   for (const c of cases) {
-    lines.push(`        case ${c.typeCase}: self = .${c.caseName}(${c.expr})`)
+    lines.push(`        case ${c.typeCase}: self = .${c.caseName}(${c.expr})`);
   }
   lines.push(
     `        default: self = .${cases[0]!.caseName}(${cases[0]!.expr})`,
     "        }",
     "    }",
     "}",
-  )
-  return lines.join("\n")
+  );
+  return lines.join("\n");
 }
 
 function discriminatorTag(ref: TypeRef, discriminator: string, index: number): string {
   if (ref.shape.kind === "object") {
-    const field = (ref.shape as TypeShape & { kind: "object" }).fields[discriminator]
+    const field = (ref.shape as TypeShape & { kind: "object" }).fields[discriminator];
     if (field !== undefined && field.shape.kind === "literal") {
-      const value = (field.shape as TypeShape & { kind: "literal" }).value
-      if (typeof value === "string") return value
+      const value = (field.shape as TypeShape & { kind: "literal" }).value;
+      if (typeof value === "string") return value;
     }
   }
-  return `variant${index + 1}`
+  return `variant${index + 1}`;
 }
 
 function discriminatedUnionDecl(
@@ -373,39 +397,40 @@ function discriminatedUnionDecl(
   ctx: Ctx,
 ): string {
   const cases = variants.map((variant, i) => {
-    const tag = discriminatorTag(variant, discriminator, i)
-    const typeName = typeof variant.meta.typeName === "string" ? variant.meta.typeName : capitalize(tag)
+    const tag = discriminatorTag(variant, discriminator, i);
+    const typeName =
+      typeof variant.meta.typeName === "string" ? variant.meta.typeName : capitalize(tag);
     if (variant.shape.kind === "object" && !ctx.declared.has(typeName)) {
-      ctx.declared.add(typeName)
-      ctx.decls.push(structDecl(typeName, variant, ctx))
+      ctx.declared.add(typeName);
+      ctx.decls.push(structDecl(typeName, variant, ctx));
     }
-    return { tag, caseName: swiftIdentifier(tag), typeName }
-  })
+    return { tag, caseName: swiftIdentifier(tag), typeName };
+  });
 
-  const lines = [...swiftDocComment(ref), `enum ${name} {`]
-  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
+  const lines = [...swiftDocComment(ref), `enum ${name} {`];
+  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`);
   lines.push(
     "",
     "    init(json: JSON) {",
     `        switch json[${quote(discriminator)}].stringValue {`,
-  )
+  );
   for (const c of cases) {
-    lines.push(`        case ${quote(c.tag)}: self = .${c.caseName}(${c.typeName}(json: json))`)
+    lines.push(`        case ${quote(c.tag)}: self = .${c.caseName}(${c.typeName}(json: json))`);
   }
   lines.push(
     `        default: self = .${cases[0]!.caseName}(${cases[0]!.typeName}(json: json))`,
     "        }",
     "    }",
     "}",
-  )
-  return lines.join("\n")
+  );
+  return lines.join("\n");
 }
 
 function unionDecl(name: string, ref: TypeRef, ctx: Ctx): string {
-  const s = ref.shape as TypeShape & { kind: "union" }
+  const s = ref.shape as TypeShape & { kind: "union" };
   return typeof ref.meta.discriminator === "string"
     ? discriminatedUnionDecl(name, ref, s.variants, ref.meta.discriminator, ctx)
-    : plainUnionDecl(name, ref, s.variants, ctx)
+    : plainUnionDecl(name, ref, s.variants, ctx);
 }
 
 /**
@@ -420,26 +445,26 @@ function unionDecl(name: string, ref: TypeRef, ctx: Ctx): string {
  * "inside the parent's body" placement.
  */
 export function toSwiftyJSON(ref: TypeRef, name = "Root"): string {
-  const ctx: Ctx = { decls: [], declared: new Set() }
-  const kind = ref.shape.kind
+  const ctx: Ctx = { decls: [], declared: new Set() };
+  const kind = ref.shape.kind;
 
   if (kind === "object") {
-    ctx.declared.add(name)
-    ctx.decls.push(structDecl(name, ref, ctx))
-    return ctx.decls.join("\n\n")
+    ctx.declared.add(name);
+    ctx.decls.push(structDecl(name, ref, ctx));
+    return ctx.decls.join("\n\n");
   }
   if (kind === "enum") {
-    ctx.declared.add(name)
-    ctx.decls.push(enumDecl(name, ref))
-    return ctx.decls.join("\n\n")
+    ctx.declared.add(name);
+    ctx.decls.push(enumDecl(name, ref));
+    return ctx.decls.join("\n\n");
   }
   if (kind === "union") {
-    ctx.declared.add(name)
-    ctx.decls.push(unionDecl(name, ref, ctx))
-    return ctx.decls.join("\n\n")
+    ctx.declared.add(name);
+    ctx.decls.push(unionDecl(name, ref, ctx));
+    return ctx.decls.join("\n\n");
   }
 
-  const typeName = swiftType(ref, name, ctx)
-  const alias = `typealias ${name} = ${typeName}`
-  return ctx.decls.length > 0 ? [...ctx.decls, alias].join("\n\n") : alias
+  const typeName = swiftType(ref, name, ctx);
+  const alias = `typealias ${name} = ${typeName}`;
+  return ctx.decls.length > 0 ? [...ctx.decls, alias].join("\n\n") : alias;
 }

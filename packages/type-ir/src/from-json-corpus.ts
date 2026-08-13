@@ -24,12 +24,9 @@
 //   fromJsonCorpus(values, config) is a convenience wrapper that runs both
 //   phases back to back, so existing callers see identical behavior.
 
-import { t, types, ancestors, type TypeRef } from "./index.ts"
-import { inferValueShape as fromJson, type InferConfig, type LeafHeuristic } from "./from-json.ts"
-import {
-  int8, int16, int32, int64,
-  uint8, uint16, uint32, uint64,
-} from "./kinds/common.ts"
+import { t, types, ancestors, type TypeRef } from "./index.ts";
+import { inferValueShape as fromJson, type InferConfig, type LeafHeuristic } from "./from-json.ts";
+import { int8, int16, int32, int64, uint8, uint16, uint32, uint64 } from "./kinds/common.ts";
 
 // ---------------------------------------------------------------------------
 // Phase 1 types — the evidence tree
@@ -43,17 +40,17 @@ import {
  */
 export interface EvidenceNode {
   /** Total number of raw values (of any JS type) observed at this position. */
-  readonly n: number
+  readonly n: number;
   /** How many of those values were `null`. */
-  readonly nullCount: number
+  readonly nullCount: number;
   /** How many were non-container leaf values (null/boolean/number/string) — the population `distinctValues`/`sortedNumeric` are drawn from. */
-  readonly leafCount: number
+  readonly leafCount: number;
   /** Per-JS-type occurrence counts: "null" | "boolean" | "number" | "string" | "object" | "array". */
-  readonly typeCounts: Readonly<Record<string, number>>
+  readonly typeCounts: Readonly<Record<string, number>>;
   /** Raw values observed at this position, in corpus order — used by dirty-data resolution, which needs to re-run `fromJson` per value. */
-  readonly values: readonly unknown[]
+  readonly values: readonly unknown[];
   /** JSON-serialized distinct leaf values — the enum evidence's K. */
-  readonly distinctValues: ReadonlySet<string>
+  readonly distinctValues: ReadonlySet<string>;
   /**
    * How many distinct leaf values were observed exactly once (Good-Turing's
    * n1). `singletons / leafCount` estimates the probability that the next
@@ -62,40 +59,40 @@ export interface EvidenceNode {
    * inference-theory.md` §6.10 for why this is the estimable quantity and
    * §6.8 for the assumption it rests on (an i.i.d. corpus).
    */
-  readonly singletons: number
+  readonly singletons: number;
   /** Distinct integer leaf values, sorted ascending — clustering evidence for integer enum detection. */
-  readonly sortedNumeric: readonly number[]
+  readonly sortedNumeric: readonly number[];
   /** Present when at least one raw value at this position was a plain object. */
   readonly object?: {
     /** Sub-evidence per field name, merged across every sample that had that field. */
-    readonly fields: Readonly<Record<string, EvidenceNode>>
+    readonly fields: Readonly<Record<string, EvidenceNode>>;
     /** How many object-typed samples had each field present. */
-    readonly fieldPresenceCount: Readonly<Record<string, number>>
+    readonly fieldPresenceCount: Readonly<Record<string, number>>;
     /** Number of object-typed samples observed at this position. */
-    readonly sampleCount: number
+    readonly sampleCount: number;
     /** One key-set per object-typed sample, in corpus order — dict-vs-record growth evidence. */
-    readonly keySets: readonly ReadonlySet<string>[]
-  }
+    readonly keySets: readonly ReadonlySet<string>[];
+  };
   /** Present when at least one raw value at this position was an array. */
   readonly array?: {
     /** Sub-evidence merged across every element of every array at this position (index-agnostic — the "homogeneous array" bucket). */
-    readonly element: EvidenceNode
+    readonly element: EvidenceNode;
     /** Sub-evidence per index, across arrays at this position (index-sensitive — the "fixed-arity tuple" bucket). */
-    readonly perIndex: readonly EvidenceNode[]
+    readonly perIndex: readonly EvidenceNode[];
     /** Length of each array-typed sample, in corpus order. */
-    readonly lengths: readonly number[]
+    readonly lengths: readonly number[];
     /** Raw object elements across every array at this position — discriminated-union candidate data. */
-    readonly elementObjects: readonly Record<string, unknown>[]
-  }
+    readonly elementObjects: readonly Record<string, unknown>[];
+  };
 }
 
 export interface EvidenceTree {
   /** The raw corpus, unmodified. */
-  readonly values: readonly unknown[]
+  readonly values: readonly unknown[];
   /** Evidence for the corpus as a whole (the root structural position). */
-  readonly root: EvidenceNode
+  readonly root: EvidenceNode;
   /** The config passed to `collectEvidence`, kept as `resolveEvidence`'s defaults when no `ResolveStrategy` override is given. */
-  readonly config?: CorpusInferConfig
+  readonly config?: CorpusInferConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,17 +100,17 @@ export interface EvidenceTree {
 // ---------------------------------------------------------------------------
 
 /** A resolution hook tried at every node: return a replacement TypeRef to override the built-in decision, or `undefined` to leave it as-is. */
-export type EvidenceResolver = (node: EvidenceNode, ref: TypeRef) => TypeRef | undefined
+export type EvidenceResolver = (node: EvidenceNode, ref: TypeRef) => TypeRef | undefined;
 
 export interface ResolveStrategy extends InferConfig {
   /** Enum detection: use the three-signal approach (saturation, uniqueness, clustering). Default: true. */
-  detectEnums?: boolean
+  detectEnums?: boolean;
   /** Discriminated union detection. Default: true. */
-  detectDiscriminatedUnions?: boolean
+  detectDiscriminatedUnions?: boolean;
   /** Dict detection via key accumulation. Default: true. */
-  detectDicts?: boolean
+  detectDicts?: boolean;
   /** Dirty-data detection (flag anomalous minority types). Default: false. */
-  detectDirtyData?: boolean
+  detectDirtyData?: boolean;
   /**
    * Full override of the resolution pipeline. When omitted, `defaultStages`
    * builds the built-in ordered list from the knobs on this interface.
@@ -123,9 +120,9 @@ export interface ResolveStrategy extends InferConfig {
    * from `defaultStages(resolved)` and filter or splice if you want to keep
    * most of the defaults. Stage order is significant (see `Stage`).
    */
-  stages?: readonly Stage[]
+  stages?: readonly Stage[];
   /** Minimum samples before enum detection fires. Default: 3. */
-  enumMinSamples?: number
+  enumMinSamples?: number;
   /**
    * Minimum samples before K=1 evidence (every sample shares one value)
    * collapses to `literal`/a one-member `enum`. Deliberately higher than
@@ -135,7 +132,7 @@ export interface ResolveStrategy extends InferConfig {
    * `enumMinSamples` hasn't yet had much chance to show a second value.
    * Default: 5.
    */
-  literalMinSamples?: number
+  literalMinSamples?: number;
   /**
    * Upper bound on distinct-value count (K) above which a position is never
    * called an enum, regardless of how many samples support it. Default: 50.
@@ -149,7 +146,7 @@ export interface ResolveStrategy extends InferConfig {
    * rely on the ratio alone. See `docs/design/inference-theory.md` §6.6-6.7
    * for why a cut on K alone cannot separate memorization from restriction.
    */
-  enumMaxMembers?: number
+  enumMaxMembers?: number;
   /**
    * Guard term for enum detection: reject when `K/N` reaches this. Default: 0.5.
    * Chosen empirically — across 61 real npm string fields the best fixed cutoff
@@ -157,7 +154,7 @@ export interface ResolveStrategy extends InferConfig {
    * real job is robustness: it is the term that degrades gracefully rather than
    * inverting when the corpus contains duplicated records.
    */
-  enumMaxRatio?: number
+  enumMaxRatio?: number;
   /**
    * Required coverage before committing to a closed member set: emit an enum
    * only when the Good-Turing estimate `1 - n1/N` reaches this. Default: 0.9.
@@ -168,7 +165,7 @@ export interface ResolveStrategy extends InferConfig {
    * choice visible. 0.9 is a conservative default for codegen, where a wrong
    * enum is a runtime failure rather than a lost optimisation.
    */
-  enumCoverageBar?: number
+  enumCoverageBar?: number;
   /**
    * Decide what type each position emits. Receives a `PositionContext` (K, N,
    * singletons, the candidate members, the path from the root, the merged
@@ -181,17 +178,17 @@ export interface ResolveStrategy extends InferConfig {
    * are consumed via `defaultEnumPredicate`. A replacement need use none of
    * them, and may construct types the built-ins never would.
    */
-  generalize?: Generalize
+  generalize?: Generalize;
   /** Replace the discriminated-union grouping decision. Default `defaultDetectDU`. */
-  duGrouping?: Group
+  duGrouping?: Group;
   /** Replace the dict-vs-record grouping decision. Default `defaultDetectDict`. */
-  dictGrouping?: Group
+  dictGrouping?: Group;
   /** Replace the CFD discriminant-search grouping decision. Default `defaultDetectCfd`. */
-  cfdGrouping?: Group
+  cfdGrouping?: Group;
   /** Replace the discriminant-free structural-split grouping decision. Default `defaultSplitObjects`. */
-  splitGrouping?: Group
+  splitGrouping?: Group;
   /** Minimum samples before dict detection fires. Default: 3. */
-  dictMinSamples?: number
+  dictMinSamples?: number;
   /**
    * Structural union splitting on plain object merges: when a position in
    * the corpus mixes objects whose field sets are dissimilar enough (see
@@ -202,7 +199,7 @@ export interface ResolveStrategy extends InferConfig {
    * object fields, array elements), not just inside array-of-object DU
    * detection. Default: true.
    */
-  splitDissimilarObjects?: boolean
+  splitDissimilarObjects?: boolean;
   /**
    * Jaccard symmetric-difference threshold (fraction of the union of field
    * names) above which two clustered samples are considered structurally
@@ -217,14 +214,14 @@ export interface ResolveStrategy extends InferConfig {
    * out of as few as 2 total fields (worst case: 1/2 = 0.5 symmetric
    * difference) never triggers a split on its own. Default: 0.5.
    */
-  objectSplitThreshold?: number
+  objectSplitThreshold?: number;
   /**
    * Minimum object samples at a position before structural splitting is
    * considered. Higher than `dictMinSamples`/`enumMinSamples` because,
    * unlike those, splitting has no discriminant field corroborating that
    * the dissimilarity is real signal rather than sampling noise. Default: 5.
    */
-  objectSplitMinSamples?: number
+  objectSplitMinSamples?: number;
   /**
    * How `trySplitDissimilarObjects` groups the raw per-sample field sets
    * before deciding whether a position's objects are one population or
@@ -256,7 +253,7 @@ export interface ResolveStrategy extends InferConfig {
    *
    * Default: `"single-linkage"`.
    */
-  clusteringMethod?: ClusteringMethod
+  clusteringMethod?: ClusteringMethod;
   /**
    * CFD-style discriminant search (see the "CFD discriminant search"
    * section of `from-json-corpus.ts` and
@@ -270,7 +267,7 @@ export interface ResolveStrategy extends InferConfig {
    * after it and skips anything already resolved to a union). Default:
    * true.
    */
-  detectCfdDiscriminants?: boolean
+  detectCfdDiscriminants?: boolean;
   /**
    * Minimum object samples at a position before CFD discriminant search
    * runs. Higher than `tryDetectDU`'s implicit `elements.length < 3` gate:
@@ -279,7 +276,7 @@ export interface ResolveStrategy extends InferConfig {
    * samples are needed before a cardinality/cohesion/separation score can
    * be trusted over sampling noise. Default: 8.
    */
-  cfdMinSamples?: number
+  cfdMinSamples?: number;
   /**
    * Maximum K/N ratio (distinct discriminant values over sample count) a
    * candidate field may have. This is the direct analogue of
@@ -292,7 +289,7 @@ export interface ResolveStrategy extends InferConfig {
    * always rejected regardless of this threshold — that's a unique-ID
    * field, not a discriminant. Default: 0.5.
    */
-  cfdMaxCardinalityRatio?: number
+  cfdMaxCardinalityRatio?: number;
   /**
    * Minimum samples required in every value-group of a candidate
    * discriminant field. Mirrors `trySplitDissimilarObjects`'s "a cluster of
@@ -300,7 +297,7 @@ export interface ResolveStrategy extends InferConfig {
    * value seen only once has no corroborating evidence that its shape is a
    * real, repeatable population rather than sampling noise. Default: 2.
    */
-  cfdMinGroupSize?: number
+  cfdMinGroupSize?: number;
   /**
    * Minimum `cohesion * separation` score (see `scoreCfdCandidate`) a
    * candidate discriminant must clear to be accepted. Both signals range
@@ -308,91 +305,91 @@ export interface ResolveStrategy extends InferConfig {
    * both internally consistent AND structurally distinct from each other.
    * Default: 0.5.
    */
-  cfdMinScore?: number
+  cfdMinScore?: number;
   /** Custom resolvers for specific evidence patterns, tried at every node after the built-in passes. First non-`undefined` result wins. */
-  customResolvers?: EvidenceResolver[]
+  customResolvers?: EvidenceResolver[];
 }
 
 /** See `ResolveStrategy.clusteringMethod`. */
-export type ClusteringMethod = "single-linkage" | "complete-linkage" | "key-signature"
+export type ClusteringMethod = "single-linkage" | "complete-linkage" | "key-signature";
 
 /** Back-compat alias — the config accepted by `fromJsonCorpus`/`collectEvidence` is exactly a `ResolveStrategy`. */
-export type CorpusInferConfig = ResolveStrategy
+export type CorpusInferConfig = ResolveStrategy;
 
 // ---------------------------------------------------------------------------
 // Phase 1 — collectEvidence: mechanical, no decisions
 // ---------------------------------------------------------------------------
 
 function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
-  const typeCounts: Record<string, number> = {}
-  let nullCount = 0
-  const distinctValues = new Set<string>()
-  const leafCounts = new Map<string, number>()
-  const numericSet = new Set<number>()
-  const objectSamples: Record<string, unknown>[] = []
-  const arraySamples: unknown[][] = []
-  const keySets: Set<string>[] = []
+  const typeCounts: Record<string, number> = {};
+  let nullCount = 0;
+  const distinctValues = new Set<string>();
+  const leafCounts = new Map<string, number>();
+  const numericSet = new Set<number>();
+  const objectSamples: Record<string, unknown>[] = [];
+  const arraySamples: unknown[][] = [];
+  const keySets: Set<string>[] = [];
 
   for (const v of values) {
     if (v === null) {
-      nullCount++
-      typeCounts.null = (typeCounts.null ?? 0) + 1
-      distinctValues.add("null")
-      leafCounts.set("null", (leafCounts.get("null") ?? 0) + 1)
-      continue
+      nullCount++;
+      typeCounts.null = (typeCounts.null ?? 0) + 1;
+      distinctValues.add("null");
+      leafCounts.set("null", (leafCounts.get("null") ?? 0) + 1);
+      continue;
     }
     if (Array.isArray(v)) {
-      typeCounts.array = (typeCounts.array ?? 0) + 1
-      arraySamples.push(v)
-      continue
+      typeCounts.array = (typeCounts.array ?? 0) + 1;
+      arraySamples.push(v);
+      continue;
     }
     if (typeof v === "object") {
-      typeCounts.object = (typeCounts.object ?? 0) + 1
-      const obj = v as Record<string, unknown>
-      objectSamples.push(obj)
-      keySets.push(new Set(Object.keys(obj)))
-      continue
+      typeCounts.object = (typeCounts.object ?? 0) + 1;
+      const obj = v as Record<string, unknown>;
+      objectSamples.push(obj);
+      keySets.push(new Set(Object.keys(obj)));
+      continue;
     }
-    typeCounts[typeof v] = (typeCounts[typeof v] ?? 0) + 1
-    const key = JSON.stringify(v)
-    distinctValues.add(key)
-    leafCounts.set(key, (leafCounts.get(key) ?? 0) + 1)
-    if (typeof v === "number" && Number.isInteger(v)) numericSet.add(v)
+    typeCounts[typeof v] = (typeCounts[typeof v] ?? 0) + 1;
+    const key = JSON.stringify(v);
+    distinctValues.add(key);
+    leafCounts.set(key, (leafCounts.get(key) ?? 0) + 1);
+    if (typeof v === "number" && Number.isInteger(v)) numericSet.add(v);
   }
 
-  const leafCount = values.length - objectSamples.length - arraySamples.length
+  const leafCount = values.length - objectSamples.length - arraySamples.length;
 
-  let objectEvidence: EvidenceNode["object"] | undefined
+  let objectEvidence: EvidenceNode["object"] | undefined;
   if (objectSamples.length > 0) {
-    const fieldNames = new Set<string>()
-    for (const o of objectSamples) for (const k of Object.keys(o)) fieldNames.add(k)
-    const fields: Record<string, EvidenceNode> = {}
-    const fieldPresenceCount: Record<string, number> = {}
+    const fieldNames = new Set<string>();
+    for (const o of objectSamples) for (const k of Object.keys(o)) fieldNames.add(k);
+    const fields: Record<string, EvidenceNode> = {};
+    const fieldPresenceCount: Record<string, number> = {};
     for (const name of fieldNames) {
-      const fieldValues = objectSamples.filter((o) => Object.hasOwn(o, name)).map((o) => o[name])
-      fieldPresenceCount[name] = fieldValues.length
-      fields[name] = buildEvidenceNode(fieldValues)
+      const fieldValues = objectSamples.filter((o) => Object.hasOwn(o, name)).map((o) => o[name]);
+      fieldPresenceCount[name] = fieldValues.length;
+      fields[name] = buildEvidenceNode(fieldValues);
     }
-    objectEvidence = { fields, fieldPresenceCount, sampleCount: objectSamples.length, keySets }
+    objectEvidence = { fields, fieldPresenceCount, sampleCount: objectSamples.length, keySets };
   }
 
-  let arrayEvidence: EvidenceNode["array"] | undefined
+  let arrayEvidence: EvidenceNode["array"] | undefined;
   if (arraySamples.length > 0) {
-    const allElements = arraySamples.flat()
+    const allElements = arraySamples.flat();
     const elementObjects = allElements.filter(
       (e) => e !== null && typeof e === "object" && !Array.isArray(e),
-    ) as Record<string, unknown>[]
-    const maxLength = Math.max(...arraySamples.map((a) => a.length))
-    const perIndex: EvidenceNode[] = []
+    ) as Record<string, unknown>[];
+    const maxLength = Math.max(...arraySamples.map((a) => a.length));
+    const perIndex: EvidenceNode[] = [];
     for (let i = 0; i < maxLength; i++) {
-      perIndex.push(buildEvidenceNode(arraySamples.filter((a) => i < a.length).map((a) => a[i])))
+      perIndex.push(buildEvidenceNode(arraySamples.filter((a) => i < a.length).map((a) => a[i])));
     }
     arrayEvidence = {
       element: buildEvidenceNode(allElements),
       perIndex,
       lengths: arraySamples.map((a) => a.length),
       elementObjects,
-    }
+    };
   }
 
   return {
@@ -406,7 +403,7 @@ function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
     sortedNumeric: [...numericSet].sort((a, b) => a - b),
     ...(objectEvidence !== undefined ? { object: objectEvidence } : {}),
     ...(arrayEvidence !== undefined ? { array: arrayEvidence } : {}),
-  }
+  };
 }
 
 /**
@@ -416,7 +413,7 @@ function buildEvidenceNode(values: readonly unknown[]): EvidenceNode {
  * heuristics run here.
  */
 export function collectEvidence(values: unknown[], config?: CorpusInferConfig): EvidenceTree {
-  return { values, root: buildEvidenceNode(values), ...(config !== undefined ? { config } : {}) }
+  return { values, root: buildEvidenceNode(values), ...(config !== undefined ? { config } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -425,42 +422,42 @@ export function collectEvidence(values: unknown[], config?: CorpusInferConfig): 
 
 // Ranges indexed by kind name, for computing the tightest covering width.
 const intWidthTable: Record<string, { min: number; max: number }> = {
-  uint8:   { min: 0, max: 255 },
-  int8:    { min: -128, max: 127 },
-  uint16:  { min: 0, max: 65535 },
-  int16:   { min: -32768, max: 32767 },
-  uint32:  { min: 0, max: 4294967295 },
-  int32:   { min: -2147483648, max: 2147483647 },
-  uint64:  { min: 0, max: Number.MAX_SAFE_INTEGER },
-  int64:   { min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER },
+  uint8: { min: 0, max: 255 },
+  int8: { min: -128, max: 127 },
+  uint16: { min: 0, max: 65535 },
+  int16: { min: -32768, max: 32767 },
+  uint32: { min: 0, max: 4294967295 },
+  int32: { min: -2147483648, max: 2147483647 },
+  uint64: { min: 0, max: Number.MAX_SAFE_INTEGER },
+  int64: { min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER },
   integer: { min: -Infinity, max: Infinity },
-}
+};
 
 // Ordered tightest-to-widest (same order as fromJson's narrowing table).
 const intWidthOrder: readonly { kind: string; min: number; max: number; ctor: () => TypeRef }[] = [
-  { kind: "uint8",  min: 0, max: 255, ctor: uint8 },
-  { kind: "int8",   min: -128, max: 127, ctor: int8 },
+  { kind: "uint8", min: 0, max: 255, ctor: uint8 },
+  { kind: "int8", min: -128, max: 127, ctor: int8 },
   { kind: "uint16", min: 0, max: 65535, ctor: uint16 },
-  { kind: "int16",  min: -32768, max: 32767, ctor: int16 },
+  { kind: "int16", min: -32768, max: 32767, ctor: int16 },
   { kind: "uint32", min: 0, max: 4294967295, ctor: uint32 },
-  { kind: "int32",  min: -2147483648, max: 2147483647, ctor: int32 },
+  { kind: "int32", min: -2147483648, max: 2147483647, ctor: int32 },
   { kind: "uint64", min: 0, max: Number.MAX_SAFE_INTEGER, ctor: uint64 },
-  { kind: "int64",  min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER, ctor: int64 },
-]
+  { kind: "int64", min: Number.MIN_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER, ctor: int64 },
+];
 
-const integerKindSet = new Set(Object.keys(intWidthTable))
+const integerKindSet = new Set(Object.keys(intWidthTable));
 
 /** Find the tightest integer width that covers the union of two widths' ranges. */
 function widenIntegerKinds(a: string, b: string): TypeRef {
-  const ra = intWidthTable[a]
-  const rb = intWidthTable[b]
-  if (ra === undefined || rb === undefined) return t(types.integer)
-  const needMin = Math.min(ra.min, rb.min)
-  const needMax = Math.max(ra.max, rb.max)
+  const ra = intWidthTable[a];
+  const rb = intWidthTable[b];
+  if (ra === undefined || rb === undefined) return t(types.integer);
+  const needMin = Math.min(ra.min, rb.min);
+  const needMax = Math.max(ra.max, rb.max);
   for (const { min, max, ctor } of intWidthOrder) {
-    if (needMin >= min && needMax <= max) return ctor()
+    if (needMin >= min && needMax <= max) return ctor();
   }
-  return t(types.integer)
+  return t(types.integer);
 }
 
 // ---------------------------------------------------------------------------
@@ -468,8 +465,8 @@ function widenIntegerKinds(a: string, b: string): TypeRef {
 // ---------------------------------------------------------------------------
 
 function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
-  if (Object.keys(extra).length === 0) return ref
-  return { shape: ref.shape, meta: { ...ref.meta, ...extra } }
+  if (Object.keys(extra).length === 0) return ref;
+  return { shape: ref.shape, meta: { ...ref.meta, ...extra } };
 }
 
 // Structural equality is on the serialized form, and the serialized form of a
@@ -478,35 +475,41 @@ function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
 // growing accumulator re-serializes the whole accumulated subtree on every
 // step, which is quadratic in the number of merged types and was ~90% of the
 // runtime on structurally-diverse corpora (JSON Schema documents).
-const shapeKeyCache = new WeakMap<TypeRef, string>()
+const shapeKeyCache = new WeakMap<TypeRef, string>();
 function shapeKey(r: TypeRef): string {
-  let k = shapeKeyCache.get(r)
-  if (k === undefined) { k = JSON.stringify(r.shape); shapeKeyCache.set(r, k) }
-  return k
+  let k = shapeKeyCache.get(r);
+  if (k === undefined) {
+    k = JSON.stringify(r.shape);
+    shapeKeyCache.set(r, k);
+  }
+  return k;
 }
-const refKeyCache = new WeakMap<TypeRef, string>()
+const refKeyCache = new WeakMap<TypeRef, string>();
 function refKey(r: TypeRef): string {
-  let k = refKeyCache.get(r)
-  if (k === undefined) { k = JSON.stringify(r); refKeyCache.set(r, k) }
-  return k
+  let k = refKeyCache.get(r);
+  if (k === undefined) {
+    k = JSON.stringify(r);
+    refKeyCache.set(r, k);
+  }
+  return k;
 }
 
 function shapeEqual(a: TypeRef, b: TypeRef): boolean {
-  if (a === b) return true
-  if (a.shape.kind !== b.shape.kind) return false
-  return shapeKey(a) === shapeKey(b)
+  if (a === b) return true;
+  if (a.shape.kind !== b.shape.kind) return false;
+  return shapeKey(a) === shapeKey(b);
 }
 
 function typeRefEqual(a: TypeRef, b: TypeRef): boolean {
   // Cheap discriminators before paying for serialization at all.
-  if (a === b) return true
-  if (a.shape.kind !== b.shape.kind) return false
-  return refKey(a) === refKey(b)
+  if (a === b) return true;
+  if (a.shape.kind !== b.shape.kind) return false;
+  return refKey(a) === refKey(b);
 }
 
 function isSubkind(child: string, parent: string): boolean {
-  if (child === parent) return true
-  return ancestors(child).includes(parent)
+  if (child === parent) return true;
+  return ancestors(child).includes(parent);
 }
 
 // `date`/`datetime` are type-ir's `Date` domain type, not a string subtype
@@ -520,21 +523,24 @@ function isSubkind(child: string, parent: string): boolean {
 // widened to plain `string`. This set names the format-detected kinds that
 // need that string-widening path even though they're no longer literal
 // string subtypes in the type system.
-const stringDetectedFormatKinds = new Set(["date", "datetime"])
+const stringDetectedFormatKinds = new Set(["date", "datetime"]);
 
 function isStringLikeForUnification(kind: string): boolean {
-  return isSubkind(kind, "string") || stringDetectedFormatKinds.has(kind)
+  return isSubkind(kind, "string") || stringDetectedFormatKinds.has(kind);
 }
 
 /**
  * Merge meta bags from two TypeRefs. Picks up `nullable`, `optional`,
  * and any other conventions that should survive unification.
  */
-function mergeMeta(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {
-  const merged: Record<string, unknown> = {}
-  if (a.nullable === true || b.nullable === true) merged.nullable = true
-  if (a.optional === true || b.optional === true) merged.optional = true
-  return merged
+function mergeMeta(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  if (a.nullable === true || b.nullable === true) merged.nullable = true;
+  if (a.optional === true || b.optional === true) merged.optional = true;
+  return merged;
 }
 
 /**
@@ -544,68 +550,70 @@ function mergeMeta(a: Record<string, unknown>, b: Record<string, unknown>): Reco
  * - Incompatible → union
  */
 function unifyTypes(a: TypeRef, b: TypeRef): TypeRef {
-  if (typeRefEqual(a, b)) return a
+  if (typeRefEqual(a, b)) return a;
 
-  const ak = a.shape.kind
-  const bk = b.shape.kind
-  const meta = mergeMeta(a.meta, b.meta)
+  const ak = a.shape.kind;
+  const bk = b.shape.kind;
+  const meta = mergeMeta(a.meta, b.meta);
 
   // Integer width unification — find tightest covering width
   if (integerKindSet.has(ak) && integerKindSet.has(bk)) {
-    return withMeta(widenIntegerKinds(ak, bk), meta)
+    return withMeta(widenIntegerKinds(ak, bk), meta);
   }
 
   // String subtype/format unification — if both are string subtypes (or a
   // string-detected format like date/datetime — see isStringLikeForUnification),
   // widen to string (e.g. uuid + date → string; we can't narrow further)
   if (isStringLikeForUnification(ak) && isStringLikeForUnification(bk)) {
-    if (ak === bk) return withMeta(a, meta) // same format
+    if (ak === bk) return withMeta(a, meta); // same format
     // Different string subtypes/formats → plain string
-    return withMeta(t(types.string), meta)
+    return withMeta(t(types.string), meta);
   }
 
   // number + any integer kind → number (integers are a subset of numbers)
-  if (ak === "number" && (integerKindSet.has(bk) || bk === "number")) return withMeta(t(types.number), meta)
-  if (bk === "number" && (integerKindSet.has(ak) || ak === "number")) return withMeta(t(types.number), meta)
+  if (ak === "number" && (integerKindSet.has(bk) || bk === "number"))
+    return withMeta(t(types.number), meta);
+  if (bk === "number" && (integerKindSet.has(ak) || ak === "number"))
+    return withMeta(t(types.number), meta);
 
   // Same compound kind → structural merge
   if (ak === "object" && bk === "object") {
-    return withMeta(mergeObjectTypes(a, b), meta)
+    return withMeta(mergeObjectTypes(a, b), meta);
   }
 
   if (ak === "array" && bk === "array") {
-    const aEl = (a.shape as { element: TypeRef }).element
-    const bEl = (b.shape as { element: TypeRef }).element
-    return withMeta(t(types.array(unifyTypes(aEl, bEl))), meta)
+    const aEl = (a.shape as { element: TypeRef }).element;
+    const bEl = (b.shape as { element: TypeRef }).element;
+    return withMeta(t(types.array(unifyTypes(aEl, bEl))), meta);
   }
 
   if (ak === "tuple" && bk === "tuple") {
-    const aEls = (a.shape as { elements: readonly TypeRef[] }).elements
-    const bEls = (b.shape as { elements: readonly TypeRef[] }).elements
+    const aEls = (a.shape as { elements: readonly TypeRef[] }).elements;
+    const bEls = (b.shape as { elements: readonly TypeRef[] }).elements;
     if (aEls.length === bEls.length) {
-      return withMeta(t(types.tuple(aEls.map((el, i) => unifyTypes(el, bEls[i]!)))), meta)
+      return withMeta(t(types.tuple(aEls.map((el, i) => unifyTypes(el, bEls[i]!)))), meta);
     }
     // Different-length tuples → can't unify as tuple
-    return withMeta(makeUnion(a, b), meta)
+    return withMeta(makeUnion(a, b), meta);
   }
 
   // array + tuple → array (tuple is a special case of array)
   if ((ak === "array" && bk === "tuple") || (ak === "tuple" && bk === "array")) {
-    const arrRef = ak === "array" ? a : b
-    const tupRef = ak === "tuple" ? a : b
-    const arrEl = (arrRef.shape as { element: TypeRef }).element
-    const tupEls = (tupRef.shape as { elements: readonly TypeRef[] }).elements
-    let unified = arrEl
-    for (const el of tupEls) unified = unifyTypes(unified, el)
-    return withMeta(t(types.array(unified)), meta)
+    const arrRef = ak === "array" ? a : b;
+    const tupRef = ak === "tuple" ? a : b;
+    const arrEl = (arrRef.shape as { element: TypeRef }).element;
+    const tupEls = (tupRef.shape as { elements: readonly TypeRef[] }).elements;
+    let unified = arrEl;
+    for (const el of tupEls) unified = unifyTypes(unified, el);
+    return withMeta(t(types.array(unified)), meta);
   }
 
   // map + object → keep as union (semantically different)
   // map + map → unify value types
   if (ak === "map" && bk === "map") {
-    const aVal = (a.shape as { value: TypeRef }).value
-    const bVal = (b.shape as { value: TypeRef }).value
-    return withMeta(t(types.map(t(types.string), unifyTypes(aVal, bVal))), meta)
+    const aVal = (a.shape as { value: TypeRef }).value;
+    const bVal = (b.shape as { value: TypeRef }).value;
+    return withMeta(t(types.map(t(types.string), unifyTypes(aVal, bVal))), meta);
   }
 
   // `unknown` means "no information" (e.g. an empty array's element type),
@@ -613,62 +621,63 @@ function unifyTypes(a: TypeRef, b: TypeRef): TypeRef {
   // A concrete type merged with `unknown` should just be that concrete
   // type; only unknown-with-unknown stays unknown. (If every sample really
   // is `unknown`, both branches below still return `unknown`.)
-  if (ak === "unknown") return withMeta(b, meta)
-  if (bk === "unknown") return withMeta(a, meta)
+  if (ak === "unknown") return withMeta(b, meta);
+  if (bk === "unknown") return withMeta(a, meta);
 
   // null + T → T with nullable meta (common pattern)
-  if (ak === "null" && bk !== "null") return withMeta(b, { ...meta, nullable: true })
-  if (bk === "null" && ak !== "null") return withMeta(a, { ...meta, nullable: true })
+  if (ak === "null" && bk !== "null") return withMeta(b, { ...meta, nullable: true });
+  if (bk === "null" && ak !== "null") return withMeta(a, { ...meta, nullable: true });
 
   // Flatten unions: if either side is already a union, merge into it
-  return withMeta(makeUnion(a, b), meta)
+  return withMeta(makeUnion(a, b), meta);
 }
 
 function makeUnion(a: TypeRef, b: TypeRef): TypeRef {
-  const aVariants = a.shape.kind === "union"
-    ? (a.shape as { variants: readonly TypeRef[] }).variants
-    : [a]
-  const bVariants = b.shape.kind === "union"
-    ? (b.shape as { variants: readonly TypeRef[] }).variants
-    : [b]
+  const aVariants =
+    a.shape.kind === "union" ? (a.shape as { variants: readonly TypeRef[] }).variants : [a];
+  const bVariants =
+    b.shape.kind === "union" ? (b.shape as { variants: readonly TypeRef[] }).variants : [b];
   // Deduplicate. A linear scan of `typeRefEqual` here is quadratic in the
   // variant count and re-serializes every existing variant per candidate;
   // a key set makes it linear.
-  const all = [...aVariants]
-  const seen = new Set<string>()
-  for (const existing of all) seen.add(refKey(existing))
+  const all = [...aVariants];
+  const seen = new Set<string>();
+  for (const existing of all) seen.add(refKey(existing));
   for (const v of bVariants) {
-    const k = refKey(v)
-    if (!seen.has(k)) { seen.add(k); all.push(v) }
+    const k = refKey(v);
+    if (!seen.has(k)) {
+      seen.add(k);
+      all.push(v);
+    }
   }
-  return all.length === 1 ? all[0]! : t(types.union(all))
+  return all.length === 1 ? all[0]! : t(types.union(all));
 }
 
 function mergeObjectTypes(a: TypeRef, b: TypeRef): TypeRef {
-  const aFields = (a.shape as { fields: Record<string, TypeRef> }).fields
-  const bFields = (b.shape as { fields: Record<string, TypeRef> }).fields
-  const allKeys = new Set([...Object.keys(aFields), ...Object.keys(bFields)])
-  const fields: Record<string, TypeRef> = {}
+  const aFields = (a.shape as { fields: Record<string, TypeRef> }).fields;
+  const bFields = (b.shape as { fields: Record<string, TypeRef> }).fields;
+  const allKeys = new Set([...Object.keys(aFields), ...Object.keys(bFields)]);
+  const fields: Record<string, TypeRef> = {};
   for (const key of allKeys) {
-    const inA = Object.hasOwn(aFields, key)
-    const inB = Object.hasOwn(bFields, key)
+    const inA = Object.hasOwn(aFields, key);
+    const inB = Object.hasOwn(bFields, key);
     if (inA && inB) {
       // Present in both — unify types, keep required only if required in both
-      const unified = unifyTypes(aFields[key]!, bFields[key]!)
-      const aOpt = aFields[key]!.meta.optional === true
-      const bOpt = bFields[key]!.meta.optional === true
+      const unified = unifyTypes(aFields[key]!, bFields[key]!);
+      const aOpt = aFields[key]!.meta.optional === true;
+      const bOpt = bFields[key]!.meta.optional === true;
       if (aOpt || bOpt) {
-        fields[key] = withMeta(unified, { optional: true })
+        fields[key] = withMeta(unified, { optional: true });
       } else {
-        fields[key] = unified
+        fields[key] = unified;
       }
     } else {
       // Present in only one → optional
-      const ref = inA ? aFields[key]! : bFields[key]!
-      fields[key] = withMeta(ref, { optional: true })
+      const ref = inA ? aFields[key]! : bFields[key]!;
+      fields[key] = withMeta(ref, { optional: true });
     }
   }
-  return t(types.object(fields))
+  return t(types.object(fields));
 }
 
 // ---------------------------------------------------------------------------
@@ -676,12 +685,12 @@ function mergeObjectTypes(a: TypeRef, b: TypeRef): TypeRef {
 // ---------------------------------------------------------------------------
 
 function mergeAll(refs: readonly TypeRef[]): TypeRef {
-  if (refs.length === 0) return t(types.unknown)
-  let merged = refs[0]!
+  if (refs.length === 0) return t(types.unknown);
+  let merged = refs[0]!;
   for (let i = 1; i < refs.length; i++) {
-    merged = unifyTypes(merged, refs[i]!)
+    merged = unifyTypes(merged, refs[i]!);
   }
-  return merged
+  return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -715,25 +724,25 @@ function mergeAll(refs: readonly TypeRef[]): TypeRef {
  */
 export interface PositionContext {
   /** Distinct leaf values observed here (K). */
-  readonly distinct: number
+  readonly distinct: number;
   /** Leaf occurrences observed here (N). */
-  readonly occurrences: number
+  readonly occurrences: number;
   /** Distinct leaf values seen exactly once (Good-Turing's n1). */
-  readonly singletons: number
+  readonly singletons: number;
   /** JSON-serialized distinct leaf values. */
-  readonly distinctValues: ReadonlySet<string>
+  readonly distinctValues: ReadonlySet<string>;
   /** The distinct leaf values, parsed — the candidate member set. */
-  readonly members: readonly unknown[]
+  readonly members: readonly unknown[];
   /** Distinct integer leaf values, ascending, when this position is integer-typed. */
-  readonly sortedNumeric: readonly number[]
+  readonly sortedNumeric: readonly number[];
   /** Field names / array markers from the root. `["user","role"]`, `["tags","[]"]`. */
-  readonly path: readonly (string | number)[]
+  readonly path: readonly (string | number)[];
   /** The mechanically-merged type here, before any generalization ran. */
-  readonly ref: TypeRef
+  readonly ref: TypeRef;
   /** Full evidence for this position. */
-  readonly node: EvidenceNode
+  readonly node: EvidenceNode;
   /** The fully-defaulted strategy, so a custom rule can reuse the built-in knobs. */
-  readonly strategy: ResolvedStrategy
+  readonly strategy: ResolvedStrategy;
 }
 
 /**
@@ -756,7 +765,7 @@ export interface PositionContext {
  *   c.node.nullCount > 0 ? t(types.union([defaultGeneralize(c) ?? c.ref, t(types.null())])) : undefined
  * ```
  */
-export type Generalize = (ctx: PositionContext) => TypeRef | undefined
+export type Generalize = (ctx: PositionContext) => TypeRef | undefined;
 
 /**
  * The built-in enum decision, kept separate so a custom `Generalize` can reuse
@@ -766,25 +775,25 @@ export type Generalize = (ctx: PositionContext) => TypeRef | undefined
  * estimate nor the ratio is sound alone.
  */
 export function defaultEnumPredicate(ctx: PositionContext): boolean {
-  const { distinct: K, occurrences: N, singletons, strategy } = ctx
-  if (N < strategy.enumMinSamples) return false
-  if (K === 1) return N >= strategy.literalMinSamples
-  if (K >= N) return false // every value unique — never a bounded vocabulary
+  const { distinct: K, occurrences: N, singletons, strategy } = ctx;
+  if (N < strategy.enumMinSamples) return false;
+  if (K === 1) return N >= strategy.literalMinSamples;
+  if (K >= N) return false; // every value unique — never a bounded vocabulary
 
   // Output-size guard, NOT an evidence test. A cut on K alone cannot separate
   // memorization from genuine restriction (inference-theory.md §6.6-6.7).
-  if (K > strategy.enumMaxMembers) return false
+  if (K > strategy.enumMaxMembers) return false;
 
   // Guard term: K/N. Under a duplication factor r it falls as (K/N)/r rather
   // than inverting, which is what makes the coverage term below safe to use
   // despite the unresolved entity-identity question (§6.8, §6.11).
-  if (K / N >= strategy.enumMaxRatio) return false
+  if (K / N >= strategy.enumMaxRatio) return false;
 
   // Evidence term: Good-Turing. `1 - singletons/N` estimates coverage; median
   // absolute error 0.011 against held-out data over 41 real fields, rho 0.991
   // (§6.10). Never used alone: on a duplicated corpus every count is >= 2, so
   // singletons is 0 and coverage reads a spurious 1.0.
-  return 1 - singletons / N >= strategy.enumCoverageBar
+  return 1 - singletons / N >= strategy.enumCoverageBar;
 }
 
 /**
@@ -794,25 +803,25 @@ export function defaultEnumPredicate(ctx: PositionContext): boolean {
  * container positions, so traversal continues.
  */
 export function defaultGeneralize(ctx: PositionContext): TypeRef | undefined {
-  const { ref, members } = ctx
-  const { shape } = ref
+  const { ref, members } = ctx;
+  const { shape } = ref;
 
   if (shape.kind === "string" || isSubkind(shape.kind, "string")) {
-    if (!defaultEnumPredicate(ctx)) return undefined
-    if (!members.every((m) => typeof m === "string")) return undefined
-    if (members.length === 1) return t(types.literal(members[0] as string), ref.meta)
-    return t(types.enum(members as string[]), ref.meta)
+    if (!defaultEnumPredicate(ctx)) return undefined;
+    if (!members.every((m) => typeof m === "string")) return undefined;
+    if (members.length === 1) return t(types.literal(members[0] as string), ref.meta);
+    return t(types.enum(members as string[]), ref.meta);
   }
 
   if (integerKindSet.has(shape.kind)) {
-    if (!members.every((v) => typeof v === "number" && Number.isInteger(v))) return undefined
-    if (!defaultEnumPredicate(ctx)) return undefined
-    const nums = members as number[]
-    if (nums.length === 1) return t(types.literal(nums[0]!), ref.meta)
-    return t(types.union(nums.map((v) => t(types.literal(v)))), ref.meta)
+    if (!members.every((v) => typeof v === "number" && Number.isInteger(v))) return undefined;
+    if (!defaultEnumPredicate(ctx)) return undefined;
+    const nums = members as number[];
+    if (nums.length === 1) return t(types.literal(nums[0]!), ref.meta);
+    return t(types.union(nums.map((v) => t(types.literal(v)))), ref.meta);
   }
 
-  return undefined
+  return undefined;
 }
 
 function walkAndGeneralize(
@@ -828,42 +837,56 @@ function walkAndGeneralize(
     distinctValues: node.distinctValues,
     members: [...node.distinctValues].map((v) => JSON.parse(v) as unknown),
     sortedNumeric: node.sortedNumeric,
-    path, ref, node, strategy: resolved,
-  })
-  if (decided !== undefined) return decided
+    path,
+    ref,
+    node,
+    strategy: resolved,
+  });
+  if (decided !== undefined) return decided;
 
-  const { shape } = ref
+  const { shape } = ref;
   if (shape.kind === "object") {
-    const fields = (shape as { fields: Record<string, TypeRef> }).fields
-    const newFields: Record<string, TypeRef> = {}
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+    const newFields: Record<string, TypeRef> = {};
     for (const [name, fieldRef] of Object.entries(fields)) {
-      const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined
-        ? walkAndGeneralize(fieldRef, childNode, resolved, [...path, name])
-        : fieldRef
+      const childNode = node.object?.fields[name];
+      newFields[name] =
+        childNode !== undefined
+          ? walkAndGeneralize(fieldRef, childNode, resolved, [...path, name])
+          : fieldRef;
     }
-    return t(types.object(newFields), ref.meta)
+    return t(types.object(newFields), ref.meta);
   }
   if (shape.kind === "array") {
-    const el = (shape as { element: TypeRef }).element
-    const childNode = node.array?.element
+    const el = (shape as { element: TypeRef }).element;
+    const childNode = node.array?.element;
     return childNode !== undefined
       ? t(types.array(walkAndGeneralize(el, childNode, resolved, [...path, "[]"])), ref.meta)
-      : ref
+      : ref;
   }
   if (shape.kind === "tuple") {
-    const els = (shape as { elements: readonly TypeRef[] }).elements
-    const perIndex = node.array?.perIndex
-    return t(types.tuple(els.map((el, i) => {
-      const childNode = perIndex?.[i]
-      return childNode !== undefined ? walkAndGeneralize(el, childNode, resolved, [...path, i]) : el
-    })), ref.meta)
+    const els = (shape as { elements: readonly TypeRef[] }).elements;
+    const perIndex = node.array?.perIndex;
+    return t(
+      types.tuple(
+        els.map((el, i) => {
+          const childNode = perIndex?.[i];
+          return childNode !== undefined
+            ? walkAndGeneralize(el, childNode, resolved, [...path, i])
+            : el;
+        }),
+      ),
+      ref.meta,
+    );
   }
   if (shape.kind === "union") {
-    const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => walkAndGeneralize(v, node, resolved, path))), ref.meta)
+    const variants = (shape as { variants: readonly TypeRef[] }).variants;
+    return t(
+      types.union(variants.map((v) => walkAndGeneralize(v, node, resolved, path))),
+      ref.meta,
+    );
   }
-  return ref
+  return ref;
 }
 
 // ---------------------------------------------------------------------------
@@ -881,36 +904,54 @@ function walkAndGeneralize(
  * notion of structural distance.
  */
 function fieldSetJaccardDistance(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
-  let diffCount = 0
-  const union = new Set<string>()
+  let diffCount = 0;
+  const union = new Set<string>();
   for (const x of a) {
-    union.add(x)
-    if (!b.has(x)) diffCount++
+    union.add(x);
+    if (!b.has(x)) diffCount++;
   }
   for (const x of b) {
-    union.add(x)
-    if (!a.has(x)) diffCount++
+    union.add(x);
+    if (!a.has(x)) diffCount++;
   }
-  if (union.size === 0) return 0
-  return diffCount / union.size
+  if (union.size === 0) return 0;
+  return diffCount / union.size;
 }
 
 // ---------------------------------------------------------------------------
 // Discriminated union detection
 // ---------------------------------------------------------------------------
 
-function walkAndDetectDU(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
-  const { shape } = ref
+function walkAndDetectDU(
+  ref: TypeRef,
+  node: EvidenceNode,
+  resolved: ResolvedStrategy,
+  corpusSize: number,
+  path: readonly (string | number)[] = [],
+): TypeRef {
+  const { shape } = ref;
 
   if (shape.kind === "array") {
-    const el = (shape as { element: TypeRef }).element
+    const el = (shape as { element: TypeRef }).element;
     if (el.shape.kind === "object" && node.array !== undefined) {
-      const du = resolved.duGrouping(groupingContext(el, node.array.element, node.array.elementObjects, [...path, "[]"], resolved, corpusSize))
-      if (du !== undefined) return t(types.array(du), ref.meta)
+      const du = resolved.duGrouping(
+        groupingContext(
+          el,
+          node.array.element,
+          node.array.elementObjects,
+          [...path, "[]"],
+          resolved,
+          corpusSize,
+        ),
+      );
+      if (du !== undefined) return t(types.array(du), ref.meta);
     }
-    const childNode = node.array?.element
-    const newEl = childNode !== undefined ? walkAndDetectDU(el, childNode, resolved, corpusSize, [...path, "[]"]) : el
-    return t(types.array(newEl), ref.meta)
+    const childNode = node.array?.element;
+    const newEl =
+      childNode !== undefined
+        ? walkAndDetectDU(el, childNode, resolved, corpusSize, [...path, "[]"])
+        : el;
+    return t(types.array(newEl), ref.meta);
   }
 
   if (shape.kind === "object") {
@@ -926,20 +967,25 @@ function walkAndDetectDU(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStr
     // sit directly at a position instead of nested inside an array field.
     const objectSamples = node.values.filter(
       (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
-    )
-    const du = resolved.duGrouping(groupingContext(ref, node, objectSamples, path, resolved, corpusSize))
-    if (du !== undefined) return withMeta(du, ref.meta)
+    );
+    const du = resolved.duGrouping(
+      groupingContext(ref, node, objectSamples, path, resolved, corpusSize),
+    );
+    if (du !== undefined) return withMeta(du, ref.meta);
 
-    const fields = (shape as { fields: Record<string, TypeRef> }).fields
-    const newFields: Record<string, TypeRef> = {}
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+    const newFields: Record<string, TypeRef> = {};
     for (const [name, fieldRef] of Object.entries(fields)) {
-      const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined ? walkAndDetectDU(fieldRef, childNode, resolved, corpusSize, [...path, name]) : fieldRef
+      const childNode = node.object?.fields[name];
+      newFields[name] =
+        childNode !== undefined
+          ? walkAndDetectDU(fieldRef, childNode, resolved, corpusSize, [...path, name])
+          : fieldRef;
     }
-    return t(types.object(newFields), ref.meta)
+    return t(types.object(newFields), ref.meta);
   }
 
-  return ref
+  return ref;
 }
 
 /**
@@ -951,52 +997,55 @@ function tryDetectDU(
   objectRef: TypeRef,
   elements: readonly Record<string, unknown>[],
 ): TypeRef | null {
-  if (elements.length < 3) return null
-  const fields = (objectRef.shape as { fields: Record<string, TypeRef> }).fields
+  if (elements.length < 3) return null;
+  const fields = (objectRef.shape as { fields: Record<string, TypeRef> }).fields;
 
   // Candidate discriminant fields: enum-typed fields
-  const candidates: string[] = []
+  const candidates: string[] = [];
   for (const [name, fieldRef] of Object.entries(fields)) {
-    if (fieldRef.shape.kind === "enum") candidates.push(name)
+    if (fieldRef.shape.kind === "enum") candidates.push(name);
     if (fieldRef.shape.kind === "union") {
-      const variants = (fieldRef.shape as { variants: readonly TypeRef[] }).variants
-      if (variants.every((v) => v.shape.kind === "literal")) candidates.push(name)
+      const variants = (fieldRef.shape as { variants: readonly TypeRef[] }).variants;
+      if (variants.every((v) => v.shape.kind === "literal")) candidates.push(name);
     }
   }
 
   for (const discField of candidates) {
     // Group elements by the discriminant field's value
-    const groups = new Map<string, Record<string, unknown>[]>()
-    let valid = true
+    const groups = new Map<string, Record<string, unknown>[]>();
+    let valid = true;
     for (const el of elements) {
-      const val = el[discField]
-      if (val === undefined) { valid = false; break }
-      const key = JSON.stringify(val)
-      let group = groups.get(key)
-      if (group === undefined) {
-        group = []
-        groups.set(key, group)
+      const val = el[discField];
+      if (val === undefined) {
+        valid = false;
+        break;
       }
-      group.push(el)
+      const key = JSON.stringify(val);
+      let group = groups.get(key);
+      if (group === undefined) {
+        group = [];
+        groups.set(key, group);
+      }
+      group.push(el);
     }
-    if (!valid || groups.size < 2) continue
+    if (!valid || groups.size < 2) continue;
 
     // Check if the groups have distinct shapes — use Jaccard distance
     // on field sets (excluding the discriminant field itself)
-    const groupFieldSets = new Map<string, Set<string>>()
+    const groupFieldSets = new Map<string, Set<string>>();
     for (const [key, group] of groups) {
-      const fieldSet = new Set<string>()
+      const fieldSet = new Set<string>();
       for (const el of group) {
         for (const k of Object.keys(el)) {
-          if (k !== discField) fieldSet.add(k)
+          if (k !== discField) fieldSet.add(k);
         }
       }
-      groupFieldSets.set(key, fieldSet)
+      groupFieldSets.set(key, fieldSet);
     }
 
     // Check if groups have meaningfully different field sets
-    const fieldSets = [...groupFieldSets.values()]
-    let hasDifference = false
+    const fieldSets = [...groupFieldSets.values()];
+    let hasDifference = false;
     for (let i = 0; i < fieldSets.length && !hasDifference; i++) {
       for (let j = i + 1; j < fieldSets.length && !hasDifference; j++) {
         // If symmetric difference is > 10% of the union, shapes are distinct
@@ -1006,17 +1055,17 @@ function tryDetectDU(
         // separate populations, so far less field-set disagreement is
         // needed to corroborate that they're structurally distinct too.
         if (fieldSetJaccardDistance(fieldSets[i]!, fieldSets[j]!) > 0.1) {
-          hasDifference = true
+          hasDifference = true;
         }
       }
     }
 
-    if (!hasDifference) continue
+    if (!hasDifference) continue;
 
-    return buildDiscriminatedUnion(discField, groups)
+    return buildDiscriminatedUnion(discField, groups);
   }
 
-  return null
+  return null;
 }
 
 /**
@@ -1034,27 +1083,27 @@ function buildDiscriminatedUnion(
   discField: string,
   groups: ReadonlyMap<string, readonly Record<string, unknown>[]>,
 ): TypeRef {
-  const variants: TypeRef[] = []
+  const variants: TypeRef[] = [];
   for (const [key, group] of groups) {
     // Merge objects within this group
     const groupRefs = group.map((el) => {
-      const fields: Record<string, TypeRef> = {}
+      const fields: Record<string, TypeRef> = {};
       for (const [k, v] of Object.entries(el)) {
-        fields[k] = fromJson(v)
+        fields[k] = fromJson(v);
       }
-      return t(types.object(fields))
-    })
-    let merged = groupRefs[0]!
+      return t(types.object(fields));
+    });
+    let merged = groupRefs[0]!;
     for (let i = 1; i < groupRefs.length; i++) {
-      merged = mergeObjectTypes(merged, groupRefs[i]!)
+      merged = mergeObjectTypes(merged, groupRefs[i]!);
     }
     // Set the discriminant field to a literal
-    const mergedFields = { ...(merged.shape as { fields: Record<string, TypeRef> }).fields }
-    mergedFields[discField] = t(types.literal(JSON.parse(key)))
-    variants.push(t(types.object(mergedFields)))
+    const mergedFields = { ...(merged.shape as { fields: Record<string, TypeRef> }).fields };
+    mergedFields[discField] = t(types.literal(JSON.parse(key)));
+    variants.push(t(types.object(mergedFields)));
   }
 
-  return t(types.union(variants), { discriminator: discField })
+  return t(types.union(variants), { discriminator: discField });
 }
 
 // ---------------------------------------------------------------------------
@@ -1083,9 +1132,9 @@ function buildDiscriminatedUnion(
 
 /** A scalar sibling field candidate, grouped by its raw JSON-serialized value, with its combined cohesion*separation score. */
 interface CfdCandidate {
-  readonly field: string
-  readonly groups: ReadonlyMap<string, readonly Record<string, unknown>[]>
-  readonly score: number
+  readonly field: string;
+  readonly groups: ReadonlyMap<string, readonly Record<string, unknown>[]>;
+  readonly score: number;
 }
 
 /**
@@ -1096,15 +1145,15 @@ interface CfdCandidate {
  * in any sample is disqualified outright, everywhere else is a candidate.
  */
 function collectScalarFieldNames(elements: readonly Record<string, unknown>[]): string[] {
-  const allKeys = new Set<string>()
-  const disqualified = new Set<string>()
+  const allKeys = new Set<string>();
+  const disqualified = new Set<string>();
   for (const el of elements) {
     for (const [k, v] of Object.entries(el)) {
-      allKeys.add(k)
-      if (v !== null && typeof v === "object") disqualified.add(k)
+      allKeys.add(k);
+      if (v !== null && typeof v === "object") disqualified.add(k);
     }
   }
-  return [...allKeys].filter((k) => !disqualified.has(k))
+  return [...allKeys].filter((k) => !disqualified.has(k));
 }
 
 /**
@@ -1140,65 +1189,65 @@ function scoreCfdCandidate(
   maxCardinalityRatio: number,
   minGroupSize: number,
 ): CfdCandidate | null {
-  const N = elements.length
-  const groups = new Map<string, Record<string, unknown>[]>()
+  const N = elements.length;
+  const groups = new Map<string, Record<string, unknown>[]>();
   for (const el of elements) {
-    const val = el[field]
-    if (val === undefined || (val !== null && typeof val === "object")) return null
-    const key = JSON.stringify(val)
-    let group = groups.get(key)
+    const val = el[field];
+    if (val === undefined || (val !== null && typeof val === "object")) return null;
+    const key = JSON.stringify(val);
+    let group = groups.get(key);
     if (group === undefined) {
-      group = []
-      groups.set(key, group)
+      group = [];
+      groups.set(key, group);
     }
-    group.push(el)
+    group.push(el);
   }
 
-  const K = groups.size
-  if (K < 2 || K >= N) return null
-  if (K / N > maxCardinalityRatio) return null
+  const K = groups.size;
+  if (K < 2 || K >= N) return null;
+  if (K / N > maxCardinalityRatio) return null;
   for (const group of groups.values()) {
-    if (group.length < minGroupSize) return null
+    if (group.length < minGroupSize) return null;
   }
 
-  const groupFieldSetLists = new Map<string, Set<string>[]>()
-  const groupUnionFieldSets = new Map<string, Set<string>>()
+  const groupFieldSetLists = new Map<string, Set<string>[]>();
+  const groupUnionFieldSets = new Map<string, Set<string>>();
   for (const [key, group] of groups) {
-    const perElementSets: Set<string>[] = []
-    const unionSet = new Set<string>()
+    const perElementSets: Set<string>[] = [];
+    const unionSet = new Set<string>();
     for (const el of group) {
-      const fs = new Set(Object.keys(el).filter((k) => k !== field))
-      perElementSets.push(fs)
-      for (const k of fs) unionSet.add(k)
+      const fs = new Set(Object.keys(el).filter((k) => k !== field));
+      perElementSets.push(fs);
+      for (const k of fs) unionSet.add(k);
     }
-    groupFieldSetLists.set(key, perElementSets)
-    groupUnionFieldSets.set(key, unionSet)
+    groupFieldSetLists.set(key, perElementSets);
+    groupUnionFieldSets.set(key, unionSet);
   }
 
-  let cohesionDistSum = 0
-  let cohesionPairCount = 0
+  let cohesionDistSum = 0;
+  let cohesionPairCount = 0;
   for (const sets of groupFieldSetLists.values()) {
     for (let i = 0; i < sets.length; i++) {
       for (let j = i + 1; j < sets.length; j++) {
-        cohesionDistSum += fieldSetJaccardDistance(sets[i]!, sets[j]!)
-        cohesionPairCount++
+        cohesionDistSum += fieldSetJaccardDistance(sets[i]!, sets[j]!);
+        cohesionPairCount++;
       }
     }
   }
-  const cohesion = cohesionPairCount > 0 ? 1 - cohesionDistSum / cohesionPairCount : 1
+  const cohesion = cohesionPairCount > 0 ? 1 - cohesionDistSum / cohesionPairCount : 1;
 
-  const unionSets = [...groupUnionFieldSets.values()]
-  let sepDistSum = 0
-  let sepPairCount = 0
+  const unionSets = [...groupUnionFieldSets.values()];
+  let sepDistSum = 0;
+  let sepPairCount = 0;
   for (let i = 0; i < unionSets.length; i++) {
     for (let j = i + 1; j < unionSets.length; j++) {
-      sepDistSum += fieldSetJaccardDistance(unionSets[i]!, unionSets[j]!)
-      sepPairCount++
+      sepDistSum += fieldSetJaccardDistance(unionSets[i]!, unionSets[j]!);
+      sepPairCount++;
     }
   }
-  const separation = sepPairCount > 0 ? sepDistSum / sepPairCount : 0
+  const separation = sepPairCount > 0 ? sepDistSum / sepPairCount : 0;
 
-  return { field, groups, score: cohesion * separation }
+  return { field, groups, score: cohesion * separation };
 }
 
 /**
@@ -1216,35 +1265,51 @@ function tryDetectCfdDiscriminant(
   minGroupSize: number,
   minScore: number,
 ): TypeRef | null {
-  if (elements.length < minSamples) return null
+  if (elements.length < minSamples) return null;
 
-  const candidateFields = collectScalarFieldNames(elements)
-  let best: CfdCandidate | null = null
+  const candidateFields = collectScalarFieldNames(elements);
+  let best: CfdCandidate | null = null;
   for (const field of candidateFields) {
-    const candidate = scoreCfdCandidate(field, elements, maxCardinalityRatio, minGroupSize)
-    if (candidate === null) continue
-    if (candidate.score < minScore) continue
-    if (best === null || candidate.score > best.score) best = candidate
+    const candidate = scoreCfdCandidate(field, elements, maxCardinalityRatio, minGroupSize);
+    if (candidate === null) continue;
+    if (candidate.score < minScore) continue;
+    if (best === null || candidate.score > best.score) best = candidate;
   }
-  if (best === null) return null
+  if (best === null) return null;
 
-  return buildDiscriminatedUnion(best.field, best.groups)
+  return buildDiscriminatedUnion(best.field, best.groups);
 }
 
-function walkAndDetectCfdDiscriminant(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
-  const { shape } = ref
+function walkAndDetectCfdDiscriminant(
+  ref: TypeRef,
+  node: EvidenceNode,
+  resolved: ResolvedStrategy,
+  corpusSize: number,
+  path: readonly (string | number)[] = [],
+): TypeRef {
+  const { shape } = ref;
 
   if (shape.kind === "array") {
-    const el = (shape as { element: TypeRef }).element
+    const el = (shape as { element: TypeRef }).element;
     if (el.shape.kind === "object" && node.array !== undefined) {
-      const cfd = resolved.cfdGrouping(groupingContext(el, node.array.element, node.array.elementObjects, [...path, "[]"], resolved, corpusSize))
-      if (cfd !== undefined) return t(types.array(cfd), ref.meta)
+      const cfd = resolved.cfdGrouping(
+        groupingContext(
+          el,
+          node.array.element,
+          node.array.elementObjects,
+          [...path, "[]"],
+          resolved,
+          corpusSize,
+        ),
+      );
+      if (cfd !== undefined) return t(types.array(cfd), ref.meta);
     }
-    const childNode = node.array?.element
-    const newEl = childNode !== undefined
-      ? walkAndDetectCfdDiscriminant(el, childNode, resolved, corpusSize, path)
-      : el
-    return t(types.array(newEl), ref.meta)
+    const childNode = node.array?.element;
+    const newEl =
+      childNode !== undefined
+        ? walkAndDetectCfdDiscriminant(el, childNode, resolved, corpusSize, path)
+        : el;
+    return t(types.array(newEl), ref.meta);
   }
 
   if (shape.kind === "object") {
@@ -1252,22 +1317,25 @@ function walkAndDetectCfdDiscriminant(ref: TypeRef, node: EvidenceNode, resolved
     // its comment for why `node.values` (not `node.object`) is the source.
     const objectSamples = node.values.filter(
       (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
-    )
-    const cfd = resolved.cfdGrouping(groupingContext(ref, node, objectSamples, path, resolved, corpusSize))
-    if (cfd !== undefined) return withMeta(cfd, ref.meta)
+    );
+    const cfd = resolved.cfdGrouping(
+      groupingContext(ref, node, objectSamples, path, resolved, corpusSize),
+    );
+    if (cfd !== undefined) return withMeta(cfd, ref.meta);
 
-    const fields = (shape as { fields: Record<string, TypeRef> }).fields
-    const newFields: Record<string, TypeRef> = {}
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+    const newFields: Record<string, TypeRef> = {};
     for (const [name, fieldRef] of Object.entries(fields)) {
-      const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined
-        ? walkAndDetectCfdDiscriminant(fieldRef, childNode, resolved, corpusSize, path)
-        : fieldRef
+      const childNode = node.object?.fields[name];
+      newFields[name] =
+        childNode !== undefined
+          ? walkAndDetectCfdDiscriminant(fieldRef, childNode, resolved, corpusSize, path)
+          : fieldRef;
     }
-    return t(types.object(newFields), ref.meta)
+    return t(types.object(newFields), ref.meta);
   }
 
-  return ref
+  return ref;
 }
 
 // ---------------------------------------------------------------------------
@@ -1301,14 +1369,14 @@ function walkAndDetectCfdDiscriminant(ref: TypeRef, node: EvidenceNode, resolved
  * optional" into two spurious single-field-vs-empty variants.
  */
 function objectSplitDistance(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
-  if (a.size === 0 || b.size === 0) return 0
-  return fieldSetJaccardDistance(a, b)
+  if (a.size === 0 || b.size === 0) return 0;
+  return fieldSetJaccardDistance(a, b);
 }
 
 /** One resolved cluster: the union of its members' field names, and the raw member samples. */
 interface ObjectCluster {
-  readonly fieldSet: Set<string>
-  readonly members: Record<string, unknown>[]
+  readonly fieldSet: Set<string>;
+  readonly members: Record<string, unknown>[];
 }
 
 /**
@@ -1322,22 +1390,22 @@ function clusterSingleLinkage(
   keySets: readonly ReadonlySet<string>[],
   threshold: number,
 ): ObjectCluster[] {
-  const clusters: ObjectCluster[] = []
+  const clusters: ObjectCluster[] = [];
   for (let i = 0; i < samples.length; i++) {
-    const fs = keySets[i]!
-    let best: { cluster: ObjectCluster; dist: number } | undefined
+    const fs = keySets[i]!;
+    let best: { cluster: ObjectCluster; dist: number } | undefined;
     for (const cluster of clusters) {
-      const dist = objectSplitDistance(fs, cluster.fieldSet)
-      if (best === undefined || dist < best.dist) best = { cluster, dist }
+      const dist = objectSplitDistance(fs, cluster.fieldSet);
+      if (best === undefined || dist < best.dist) best = { cluster, dist };
     }
     if (best !== undefined && best.dist <= threshold) {
-      best.cluster.members.push(samples[i]!)
-      for (const k of fs) best.cluster.fieldSet.add(k)
+      best.cluster.members.push(samples[i]!);
+      for (const k of fs) best.cluster.fieldSet.add(k);
     } else {
-      clusters.push({ fieldSet: new Set(fs), members: [samples[i]!] })
+      clusters.push({ fieldSet: new Set(fs), members: [samples[i]!] });
     }
   }
-  return clusters
+  return clusters;
 }
 
 /**
@@ -1365,15 +1433,15 @@ function clusterCompleteLinkage(
   keySets: readonly ReadonlySet<string>[],
   threshold: number,
 ): ObjectCluster[] {
-  const n = samples.length
+  const n = samples.length;
 
   // Base pairwise distance matrix over original sample indices.
-  const base: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0))
+  const base: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const d = objectSplitDistance(keySets[i]!, keySets[j]!)
-      base[i]![j] = d
-      base[j]![i] = d
+      const d = objectSplitDistance(keySets[i]!, keySets[j]!);
+      base[i]![j] = d;
+      base[j]![i] = d;
     }
   }
 
@@ -1381,52 +1449,56 @@ function clusterCompleteLinkage(
   // sample indices plus its current distance to every other active slot
   // (maintained incrementally via the complete-linkage merge-update rule,
   // rather than recomputed from scratch after every merge).
-  const members: number[][] = Array.from({ length: n }, (_, i) => [i])
-  const active = new Array<boolean>(n).fill(true)
+  const members: number[][] = Array.from({ length: n }, (_, i) => [i]);
+  const active = new Array<boolean>(n).fill(true);
   const dist: number[][] = Array.from({ length: n }, (_, i) => {
-    const row = new Array<number>(n).fill(Infinity)
-    for (let j = 0; j < n; j++) if (j !== i) row[j] = base[i]![j]!
-    return row
-  })
+    const row = new Array<number>(n).fill(Infinity);
+    for (let j = 0; j < n; j++) if (j !== i) row[j] = base[i]![j]!;
+    return row;
+  });
 
-  let remaining = n
+  let remaining = n;
   while (remaining > 1) {
-    let bi = -1
-    let bj = -1
-    let bestDist = Infinity
+    let bi = -1;
+    let bj = -1;
+    let bestDist = Infinity;
     for (let i = 0; i < n; i++) {
-      if (!active[i]) continue
-      const row = dist[i]!
+      if (!active[i]) continue;
+      const row = dist[i]!;
       for (let j = i + 1; j < n; j++) {
-        if (!active[j]) continue
-        const d = row[j]!
-        if (d < bestDist) { bestDist = d; bi = i; bj = j }
+        if (!active[j]) continue;
+        const d = row[j]!;
+        if (d < bestDist) {
+          bestDist = d;
+          bi = i;
+          bj = j;
+        }
       }
     }
-    if (bi === -1 || bestDist > threshold) break
+    if (bi === -1 || bestDist > threshold) break;
 
     // Merge cluster bj into bi; complete-linkage update: the merged
     // cluster's distance to any other active cluster k is the max of the
     // two pre-merge distances.
     for (let k = 0; k < n; k++) {
-      if (!active[k] || k === bi || k === bj) continue
-      const merged = Math.max(dist[bi]![k]!, dist[bj]![k]!)
-      dist[bi]![k] = merged
-      dist[k]![bi] = merged
+      if (!active[k] || k === bi || k === bj) continue;
+      const merged = Math.max(dist[bi]![k]!, dist[bj]![k]!);
+      dist[bi]![k] = merged;
+      dist[k]![bi] = merged;
     }
-    members[bi]!.push(...members[bj]!)
-    active[bj] = false
-    remaining--
+    members[bi]!.push(...members[bj]!);
+    active[bj] = false;
+    remaining--;
   }
 
-  const clusters: ObjectCluster[] = []
+  const clusters: ObjectCluster[] = [];
   for (let i = 0; i < n; i++) {
-    if (!active[i]) continue
-    const fieldSet = new Set<string>()
-    for (const idx of members[i]!) for (const k of keySets[idx]!) fieldSet.add(k)
-    clusters.push({ fieldSet, members: members[i]!.map((idx) => samples[idx]!) })
+    if (!active[i]) continue;
+    const fieldSet = new Set<string>();
+    for (const idx of members[i]!) for (const k of keySets[idx]!) fieldSet.add(k);
+    clusters.push({ fieldSet, members: members[i]!.map((idx) => samples[idx]!) });
   }
-  return clusters
+  return clusters;
 }
 
 /**
@@ -1439,18 +1511,18 @@ function clusterByKeySignature(
   samples: readonly Record<string, unknown>[],
   keySets: readonly ReadonlySet<string>[],
 ): ObjectCluster[] {
-  const bySignature = new Map<string, ObjectCluster>()
+  const bySignature = new Map<string, ObjectCluster>();
   for (let i = 0; i < samples.length; i++) {
-    const fs = keySets[i]!
-    const signature = [...fs].sort().join(" ")
-    let cluster = bySignature.get(signature)
+    const fs = keySets[i]!;
+    const signature = [...fs].sort().join(" ");
+    let cluster = bySignature.get(signature);
     if (cluster === undefined) {
-      cluster = { fieldSet: new Set(fs), members: [] }
-      bySignature.set(signature, cluster)
+      cluster = { fieldSet: new Set(fs), members: [] };
+      bySignature.set(signature, cluster);
     }
-    cluster.members.push(samples[i]!)
+    cluster.members.push(samples[i]!);
   }
-  return [...bySignature.values()]
+  return [...bySignature.values()];
 }
 
 function clusterObjectSamples(
@@ -1460,9 +1532,12 @@ function clusterObjectSamples(
   method: ClusteringMethod,
 ): ObjectCluster[] {
   switch (method) {
-    case "complete-linkage": return clusterCompleteLinkage(samples, keySets, threshold)
-    case "key-signature": return clusterByKeySignature(samples, keySets)
-    case "single-linkage": return clusterSingleLinkage(samples, keySets, threshold)
+    case "complete-linkage":
+      return clusterCompleteLinkage(samples, keySets, threshold);
+    case "key-signature":
+      return clusterByKeySignature(samples, keySets);
+    case "single-linkage":
+      return clusterSingleLinkage(samples, keySets, threshold);
   }
 }
 
@@ -1480,67 +1555,82 @@ function trySplitDissimilarObjects(
   minSamples: number,
   clusteringMethod: ClusteringMethod,
 ): TypeRef | null {
-  const objEv = node.object
-  if (objEv === undefined) return null
-  if (objEv.sampleCount < minSamples) return null
+  const objEv = node.object;
+  if (objEv === undefined) return null;
+  if (objEv.sampleCount < minSamples) return null;
 
   const objectSamples = node.values.filter(
     (v): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v),
-  )
+  );
   // buildEvidenceNode pushes onto `keySets` in the same order it pushes
   // onto `objectSamples` (both driven by the same filter pass), and
   // `node.values` preserves corpus order — so index i here lines up with
   // `objEv.keySets[i]`.
-  if (objectSamples.length !== objEv.keySets.length) return null
+  if (objectSamples.length !== objEv.keySets.length) return null;
 
-  const clusters = clusterObjectSamples(objectSamples, objEv.keySets, threshold, clusteringMethod)
+  const clusters = clusterObjectSamples(objectSamples, objEv.keySets, threshold, clusteringMethod);
 
-  if (clusters.length < 2) return null
+  if (clusters.length < 2) return null;
   // Every resulting variant needs corroborating evidence from at least two
   // samples — a cluster of one is indistinguishable from a single outlier,
   // and splitting on that alone would fork off a spurious variant.
-  if (clusters.some((c) => c.members.length < 2)) return null
+  if (clusters.some((c) => c.members.length < 2)) return null;
 
-  const variants = clusters.map((cluster) => mergeAll(cluster.members.map((el) => fromJson(el))))
-  return t(types.union(variants))
+  const variants = clusters.map((cluster) => mergeAll(cluster.members.map((el) => fromJson(el))));
+  return t(types.union(variants));
 }
 
-function walkAndSplitDissimilarObjects(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
-  const { shape } = ref
+function walkAndSplitDissimilarObjects(
+  ref: TypeRef,
+  node: EvidenceNode,
+  resolved: ResolvedStrategy,
+  corpusSize: number,
+  path: readonly (string | number)[] = [],
+): TypeRef {
+  const { shape } = ref;
 
   if (shape.kind === "object") {
-    const split = resolved.splitGrouping(groupingContext(ref, node, [], path, resolved, corpusSize))
-    if (split !== undefined) return withMeta(split, ref.meta)
+    const split = resolved.splitGrouping(
+      groupingContext(ref, node, [], path, resolved, corpusSize),
+    );
+    if (split !== undefined) return withMeta(split, ref.meta);
 
-    const fields = (shape as { fields: Record<string, TypeRef> }).fields
-    const newFields: Record<string, TypeRef> = {}
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+    const newFields: Record<string, TypeRef> = {};
     for (const [name, fieldRef] of Object.entries(fields)) {
-      const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined
-        ? walkAndSplitDissimilarObjects(fieldRef, childNode, resolved, corpusSize, path)
-        : fieldRef
+      const childNode = node.object?.fields[name];
+      newFields[name] =
+        childNode !== undefined
+          ? walkAndSplitDissimilarObjects(fieldRef, childNode, resolved, corpusSize, path)
+          : fieldRef;
     }
-    return t(types.object(newFields), ref.meta)
+    return t(types.object(newFields), ref.meta);
   }
 
   if (shape.kind === "array") {
-    const el = (shape as { element: TypeRef }).element
-    const childNode = node.array?.element
-    const newEl = childNode !== undefined
-      ? walkAndSplitDissimilarObjects(el, childNode, resolved, corpusSize, path)
-      : el
-    return t(types.array(newEl), ref.meta)
+    const el = (shape as { element: TypeRef }).element;
+    const childNode = node.array?.element;
+    const newEl =
+      childNode !== undefined
+        ? walkAndSplitDissimilarObjects(el, childNode, resolved, corpusSize, path)
+        : el;
+    return t(types.array(newEl), ref.meta);
   }
 
   if (shape.kind === "tuple") {
-    const els = (shape as { elements: readonly TypeRef[] }).elements
-    const perIndex = node.array?.perIndex
-    return t(types.tuple(els.map((el, i) => {
-      const childNode = perIndex?.[i]
-      return childNode !== undefined
-        ? walkAndSplitDissimilarObjects(el, childNode, resolved, corpusSize, path)
-        : el
-    })), ref.meta)
+    const els = (shape as { elements: readonly TypeRef[] }).elements;
+    const perIndex = node.array?.perIndex;
+    return t(
+      types.tuple(
+        els.map((el, i) => {
+          const childNode = perIndex?.[i];
+          return childNode !== undefined
+            ? walkAndSplitDissimilarObjects(el, childNode, resolved, corpusSize, path)
+            : el;
+        }),
+      ),
+      ref.meta,
+    );
   }
 
   // Deliberately no `union` case: a union at this position was already
@@ -1551,36 +1641,51 @@ function walkAndSplitDissimilarObjects(ref: TypeRef, node: EvidenceNode, resolve
   // (or corrupt) an already-correct discriminated union. General splitting
   // only ever acts on positions still in plain `object` form.
 
-  return ref
+  return ref;
 }
 
 // ---------------------------------------------------------------------------
 // Dict detection (record vs. map)
 // ---------------------------------------------------------------------------
 
-function walkAndDetectDicts(ref: TypeRef, node: EvidenceNode, resolved: ResolvedStrategy, corpusSize: number, path: readonly (string|number)[] = []): TypeRef {
-  const { shape } = ref
+function walkAndDetectDicts(
+  ref: TypeRef,
+  node: EvidenceNode,
+  resolved: ResolvedStrategy,
+  corpusSize: number,
+  path: readonly (string | number)[] = [],
+): TypeRef {
+  const { shape } = ref;
   if (shape.kind !== "object") {
     if (shape.kind === "array") {
-      const el = (shape as { element: TypeRef }).element
-      const childNode = node.array?.element
-      const newEl = childNode !== undefined ? walkAndDetectDicts(el, childNode, resolved, corpusSize, path) : el
-      return t(types.array(newEl), ref.meta)
+      const el = (shape as { element: TypeRef }).element;
+      const childNode = node.array?.element;
+      const newEl =
+        childNode !== undefined
+          ? walkAndDetectDicts(el, childNode, resolved, corpusSize, path)
+          : el;
+      return t(types.array(newEl), ref.meta);
     }
-    return ref
+    return ref;
   }
 
-  const fields = (shape as { fields: Record<string, TypeRef> }).fields
+  const fields = (shape as { fields: Record<string, TypeRef> }).fields;
 
   // First, recurse into child fields
-  const newFields: Record<string, TypeRef> = {}
+  const newFields: Record<string, TypeRef> = {};
   for (const [name, fieldRef] of Object.entries(fields)) {
-    const childNode = node.object?.fields[name]
-    newFields[name] = childNode !== undefined ? walkAndDetectDicts(fieldRef, childNode, resolved, corpusSize, path) : fieldRef
+    const childNode = node.object?.fields[name];
+    newFields[name] =
+      childNode !== undefined
+        ? walkAndDetectDicts(fieldRef, childNode, resolved, corpusSize, path)
+        : fieldRef;
   }
 
-  const recursed = t(types.object(newFields), ref.meta)
-  return resolved.dictGrouping(groupingContext(recursed, node, [], path, resolved, corpusSize)) ?? recursed
+  const recursed = t(types.object(newFields), ref.meta);
+  return (
+    resolved.dictGrouping(groupingContext(recursed, node, [], path, resolved, corpusSize)) ??
+    recursed
+  );
 }
 
 /**
@@ -1593,36 +1698,36 @@ function tryDetectDict(
   totalValues: number,
   minSamples: number,
 ): TypeRef | null {
-  const newFields = (ref.shape as { fields: Record<string, TypeRef> }).fields
+  const newFields = (ref.shape as { fields: Record<string, TypeRef> }).fields;
 
-  if (totalValues < minSamples) return null
+  if (totalValues < minSamples) return null;
 
   // Key sets observed at this path across the corpus
-  const allKeySets = node.object?.keySets ?? []
+  const allKeySets = node.object?.keySets ?? [];
 
-  if (allKeySets.length < minSamples) return null
+  if (allKeySets.length < minSamples) return null;
 
   // Measure key-set growth: how many distinct keys appear as we add samples?
-  const allDistinctKeys = new Set<string>()
-  const growthPoints: number[] = []
+  const allDistinctKeys = new Set<string>();
+  const growthPoints: number[] = [];
   for (const ks of allKeySets) {
-    for (const k of ks) allDistinctKeys.add(k)
-    growthPoints.push(allDistinctKeys.size)
+    for (const k of ks) allDistinctKeys.add(k);
+    growthPoints.push(allDistinctKeys.size);
   }
 
   // If key set is stable (same keys in every sample), it's a record.
   // If distinct key count keeps growing linearly, it's a dict.
-  const firstCount = growthPoints[0]!
-  const lastCount = growthPoints[growthPoints.length - 1]!
+  const firstCount = growthPoints[0]!;
+  const lastCount = growthPoints[growthPoints.length - 1]!;
 
   // Keys common to ALL samples → record fields
-  let commonKeys: Set<string> | undefined
+  let commonKeys: Set<string> | undefined;
   for (const ks of allKeySets) {
     if (commonKeys === undefined) {
-      commonKeys = new Set(ks)
+      commonKeys = new Set(ks);
     } else {
       for (const k of commonKeys) {
-        if (!ks.has(k)) commonKeys.delete(k)
+        if (!ks.has(k)) commonKeys.delete(k);
       }
     }
   }
@@ -1630,26 +1735,26 @@ function tryDetectDict(
   // Growth ratio: how much did the distinct key count grow relative to
   // how many samples we saw? If it grew by > 50% of the sample count,
   // that's dict-like linear growth.
-  const keyGrowth = lastCount - firstCount
-  const sampleCount = allKeySets.length
-  const growthRatio = keyGrowth / sampleCount
+  const keyGrowth = lastCount - firstCount;
+  const sampleCount = allKeySets.length;
+  const growthRatio = keyGrowth / sampleCount;
 
   if (growthRatio > 0.5 && lastCount > (commonKeys?.size ?? 0) + 2) {
     // Dict detected. Separate common keys (record fields) from varying keys (dict entries).
-    const common = commonKeys ?? new Set<string>()
+    const common = commonKeys ?? new Set<string>();
 
     if (common.size > 0) {
       // Mixed: fixed record fields + dynamic dict entries
       // Collect all non-common-key value types for the dict part
-      const dictValueRefs: TypeRef[] = []
+      const dictValueRefs: TypeRef[] = [];
       for (const [name, fieldRef] of Object.entries(newFields)) {
-        if (!common.has(name)) dictValueRefs.push(fieldRef)
+        if (!common.has(name)) dictValueRefs.push(fieldRef);
       }
-      const dictValueType = dictValueRefs.length > 0 ? mergeAll(dictValueRefs) : t(types.unknown)
+      const dictValueType = dictValueRefs.length > 0 ? mergeAll(dictValueRefs) : t(types.unknown);
 
-      const recordFields: Record<string, TypeRef> = {}
+      const recordFields: Record<string, TypeRef> = {};
       for (const k of common) {
-        if (k in newFields) recordFields[k] = newFields[k]!
+        if (k in newFields) recordFields[k] = newFields[k]!;
       }
 
       // `meta.additionalPropertyType` — the dict-entry value type, distinct
@@ -1660,16 +1765,16 @@ function tryDetectDict(
       return withMeta(t(types.object(recordFields)), {
         ...ref.meta,
         additionalPropertyType: dictValueType,
-      })
+      });
     }
 
     // Pure dict: no stable keys
-    const allValueRefs = Object.values(newFields)
-    const valueType = allValueRefs.length > 0 ? mergeAll(allValueRefs) : t(types.unknown)
-    return t(types.map(t(types.string), valueType))
+    const allValueRefs = Object.values(newFields);
+    const valueType = allValueRefs.length > 0 ? mergeAll(allValueRefs) : t(types.unknown);
+    return t(types.map(t(types.string), valueType));
   }
 
-  return null
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1677,104 +1782,118 @@ function tryDetectDict(
 // ---------------------------------------------------------------------------
 
 function walkAndDetectDirty(ref: TypeRef, node: EvidenceNode): TypeRef {
-  const { shape } = ref
+  const { shape } = ref;
 
   if (shape.kind === "union") {
-    const variants = (shape as { variants: readonly TypeRef[] }).variants
-    if (variants.length !== 2) return ref
+    const variants = (shape as { variants: readonly TypeRef[] }).variants;
+    if (variants.length !== 2) return ref;
 
-    const pathValues = node.values
+    const pathValues = node.values;
 
-    if (pathValues.length < 5) return ref
+    if (pathValues.length < 5) return ref;
 
     // Count how many values match each variant
     const counts = variants.map((variant) => {
-      let count = 0
+      let count = 0;
       for (const val of pathValues) {
-        const inferred = fromJson(val)
-        if (shapeEqual(inferred, variant)) count++
+        const inferred = fromJson(val);
+        if (shapeEqual(inferred, variant)) count++;
       }
-      return count
-    })
+      return count;
+    });
 
-    const total = counts.reduce((a, b) => a + b, 0)
-    const max = Math.max(...counts)
-    const maxIdx = counts.indexOf(max)
+    const total = counts.reduce((a, b) => a + b, 0);
+    const max = Math.max(...counts);
+    const maxIdx = counts.indexOf(max);
 
     // If one variant has > 90% of the values, the other is likely dirty
     if (max / total > 0.9) {
-      const cleanType = variants[maxIdx]!
-      const dirtyCount = total - max
+      const cleanType = variants[maxIdx]!;
+      const dirtyCount = total - max;
       return withMeta(cleanType, {
         dirtyDataWarning: `${dirtyCount}/${total} values (${((dirtyCount / total) * 100).toFixed(1)}%) appear to be dirty data`,
-      })
+      });
     }
   }
 
   if (shape.kind === "object") {
-    const fields = (shape as { fields: Record<string, TypeRef> }).fields
-    const newFields: Record<string, TypeRef> = {}
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+    const newFields: Record<string, TypeRef> = {};
     for (const [name, fieldRef] of Object.entries(fields)) {
-      const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined ? walkAndDetectDirty(fieldRef, childNode) : fieldRef
+      const childNode = node.object?.fields[name];
+      newFields[name] =
+        childNode !== undefined ? walkAndDetectDirty(fieldRef, childNode) : fieldRef;
     }
-    return t(types.object(newFields), ref.meta)
+    return t(types.object(newFields), ref.meta);
   }
 
   if (shape.kind === "array") {
-    const el = (shape as { element: TypeRef }).element
-    const childNode = node.array?.element
-    const newEl = childNode !== undefined ? walkAndDetectDirty(el, childNode) : el
-    return t(types.array(newEl), ref.meta)
+    const el = (shape as { element: TypeRef }).element;
+    const childNode = node.array?.element;
+    const newEl = childNode !== undefined ? walkAndDetectDirty(el, childNode) : el;
+    return t(types.array(newEl), ref.meta);
   }
 
-  return ref
+  return ref;
 }
 
 // ---------------------------------------------------------------------------
 // Custom resolvers
 // ---------------------------------------------------------------------------
 
-function applyCustomResolvers(ref: TypeRef, node: EvidenceNode, resolvers: readonly EvidenceResolver[]): TypeRef {
-  let current = ref
+function applyCustomResolvers(
+  ref: TypeRef,
+  node: EvidenceNode,
+  resolvers: readonly EvidenceResolver[],
+): TypeRef {
+  let current = ref;
   for (const resolver of resolvers) {
-    const result = resolver(node, current)
-    if (result !== undefined) current = result
+    const result = resolver(node, current);
+    if (result !== undefined) current = result;
   }
 
-  const { shape } = current
+  const { shape } = current;
   if (shape.kind === "object") {
-    const fields = (shape as { fields: Record<string, TypeRef> }).fields
-    const newFields: Record<string, TypeRef> = {}
+    const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+    const newFields: Record<string, TypeRef> = {};
     for (const [name, fieldRef] of Object.entries(fields)) {
-      const childNode = node.object?.fields[name]
-      newFields[name] = childNode !== undefined ? applyCustomResolvers(fieldRef, childNode, resolvers) : fieldRef
+      const childNode = node.object?.fields[name];
+      newFields[name] =
+        childNode !== undefined ? applyCustomResolvers(fieldRef, childNode, resolvers) : fieldRef;
     }
-    return t(types.object(newFields), current.meta)
+    return t(types.object(newFields), current.meta);
   }
 
   if (shape.kind === "array") {
-    const el = (shape as { element: TypeRef }).element
-    const childNode = node.array?.element
-    const newEl = childNode !== undefined ? applyCustomResolvers(el, childNode, resolvers) : el
-    return t(types.array(newEl), current.meta)
+    const el = (shape as { element: TypeRef }).element;
+    const childNode = node.array?.element;
+    const newEl = childNode !== undefined ? applyCustomResolvers(el, childNode, resolvers) : el;
+    return t(types.array(newEl), current.meta);
   }
 
   if (shape.kind === "tuple") {
-    const els = (shape as { elements: readonly TypeRef[] }).elements
-    const perIndex = node.array?.perIndex
-    return t(types.tuple(els.map((el, i) => {
-      const childNode = perIndex?.[i]
-      return childNode !== undefined ? applyCustomResolvers(el, childNode, resolvers) : el
-    })), current.meta)
+    const els = (shape as { elements: readonly TypeRef[] }).elements;
+    const perIndex = node.array?.perIndex;
+    return t(
+      types.tuple(
+        els.map((el, i) => {
+          const childNode = perIndex?.[i];
+          return childNode !== undefined ? applyCustomResolvers(el, childNode, resolvers) : el;
+        }),
+      ),
+      current.meta,
+    );
   }
 
   if (shape.kind === "union") {
-    const variants = (shape as { variants: readonly TypeRef[] }).variants
-    return t(types.union(variants.map((v) => applyCustomResolvers(v, node, resolvers))), current.meta)
+    const variants = (shape as { variants: readonly TypeRef[] }).variants;
+    return t(
+      types.union(variants.map((v) => applyCustomResolvers(v, node, resolvers))),
+      current.meta,
+    );
   }
 
-  return current
+  return current;
 }
 
 // ---------------------------------------------------------------------------
@@ -1782,33 +1901,33 @@ function applyCustomResolvers(ref: TypeRef, node: EvidenceNode, resolvers: reado
 // ---------------------------------------------------------------------------
 
 interface ResolvedStrategy {
-  readonly innerConfig: InferConfig
-  readonly detectEnums: boolean
-  readonly detectDiscriminatedUnions: boolean
-  readonly detectDicts: boolean
-  readonly detectDirtyData: boolean
-  readonly enumMinSamples: number
-  readonly literalMinSamples: number
-  readonly enumMaxMembers: number
-  readonly enumMaxRatio: number
-  readonly enumCoverageBar: number
-  readonly generalize: Generalize
-  readonly duGrouping: Group
-  readonly dictGrouping: Group
-  readonly cfdGrouping: Group
-  readonly splitGrouping: Group
-  readonly dictMinSamples: number
-  readonly splitDissimilarObjects: boolean
-  readonly objectSplitThreshold: number
-  readonly objectSplitMinSamples: number
-  readonly clusteringMethod: ClusteringMethod
-  readonly detectCfdDiscriminants: boolean
-  readonly cfdMinSamples: number
-  readonly cfdMaxCardinalityRatio: number
-  readonly cfdMinGroupSize: number
-  readonly cfdMinScore: number
-  readonly customResolvers: readonly EvidenceResolver[]
-  readonly stages: readonly Stage[]
+  readonly innerConfig: InferConfig;
+  readonly detectEnums: boolean;
+  readonly detectDiscriminatedUnions: boolean;
+  readonly detectDicts: boolean;
+  readonly detectDirtyData: boolean;
+  readonly enumMinSamples: number;
+  readonly literalMinSamples: number;
+  readonly enumMaxMembers: number;
+  readonly enumMaxRatio: number;
+  readonly enumCoverageBar: number;
+  readonly generalize: Generalize;
+  readonly duGrouping: Group;
+  readonly dictGrouping: Group;
+  readonly cfdGrouping: Group;
+  readonly splitGrouping: Group;
+  readonly dictMinSamples: number;
+  readonly splitDissimilarObjects: boolean;
+  readonly objectSplitThreshold: number;
+  readonly objectSplitMinSamples: number;
+  readonly clusteringMethod: ClusteringMethod;
+  readonly detectCfdDiscriminants: boolean;
+  readonly cfdMinSamples: number;
+  readonly cfdMaxCardinalityRatio: number;
+  readonly cfdMinGroupSize: number;
+  readonly cfdMinScore: number;
+  readonly customResolvers: readonly EvidenceResolver[];
+  readonly stages: readonly Stage[];
 }
 
 /**
@@ -1817,24 +1936,27 @@ interface ResolvedStrategy {
  * (`resolvedStrategy(opts).stages`) and filter or splice it rather than
  * reconstructing it.
  */
-export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferConfig): ResolvedStrategy {
-
-  const innerConfig: InferConfig = {}
-  const arrayThreshold = strategy?.arrayThreshold ?? cfg?.arrayThreshold
-  if (arrayThreshold !== undefined) innerConfig.arrayThreshold = arrayThreshold
-  const narrowIntegerWidth = strategy?.narrowIntegerWidth ?? cfg?.narrowIntegerWidth
-  if (narrowIntegerWidth !== undefined) innerConfig.narrowIntegerWidth = narrowIntegerWidth
-  const detectStringFormats = strategy?.detectStringFormats ?? cfg?.detectStringFormats
-  if (detectStringFormats !== undefined) innerConfig.detectStringFormats = detectStringFormats
-  const detectClassInstances = strategy?.detectClassInstances ?? cfg?.detectClassInstances
-  if (detectClassInstances !== undefined) innerConfig.detectClassInstances = detectClassInstances
-  const leafHeuristics = strategy?.leafHeuristics ?? cfg?.leafHeuristics
-  if (leafHeuristics !== undefined) innerConfig.leafHeuristics = leafHeuristics as LeafHeuristic[]
+export function resolvedStrategy(
+  strategy?: ResolveStrategy,
+  cfg?: CorpusInferConfig,
+): ResolvedStrategy {
+  const innerConfig: InferConfig = {};
+  const arrayThreshold = strategy?.arrayThreshold ?? cfg?.arrayThreshold;
+  if (arrayThreshold !== undefined) innerConfig.arrayThreshold = arrayThreshold;
+  const narrowIntegerWidth = strategy?.narrowIntegerWidth ?? cfg?.narrowIntegerWidth;
+  if (narrowIntegerWidth !== undefined) innerConfig.narrowIntegerWidth = narrowIntegerWidth;
+  const detectStringFormats = strategy?.detectStringFormats ?? cfg?.detectStringFormats;
+  if (detectStringFormats !== undefined) innerConfig.detectStringFormats = detectStringFormats;
+  const detectClassInstances = strategy?.detectClassInstances ?? cfg?.detectClassInstances;
+  if (detectClassInstances !== undefined) innerConfig.detectClassInstances = detectClassInstances;
+  const leafHeuristics = strategy?.leafHeuristics ?? cfg?.leafHeuristics;
+  if (leafHeuristics !== undefined) innerConfig.leafHeuristics = leafHeuristics as LeafHeuristic[];
 
   const base: ResolvedStrategy = {
     innerConfig,
     detectEnums: strategy?.detectEnums ?? cfg?.detectEnums ?? true,
-    detectDiscriminatedUnions: strategy?.detectDiscriminatedUnions ?? cfg?.detectDiscriminatedUnions ?? true,
+    detectDiscriminatedUnions:
+      strategy?.detectDiscriminatedUnions ?? cfg?.detectDiscriminatedUnions ?? true,
     detectDicts: strategy?.detectDicts ?? cfg?.detectDicts ?? true,
     detectDirtyData: strategy?.detectDirtyData ?? cfg?.detectDirtyData ?? false,
     enumMinSamples: strategy?.enumMinSamples ?? cfg?.enumMinSamples ?? 3,
@@ -1859,11 +1981,11 @@ export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferCo
     cfdMinScore: strategy?.cfdMinScore ?? cfg?.cfdMinScore ?? 0.5,
     customResolvers: strategy?.customResolvers ?? cfg?.customResolvers ?? [],
     stages: [],
-  }
+  };
   // `defaultStages` reads the fully-defaulted strategy, so it is built after
   // the rest and folded back in.
-  const stages = strategy?.stages ?? cfg?.stages ?? defaultStages(base)
-  return { ...base, stages }
+  const stages = strategy?.stages ?? cfg?.stages ?? defaultStages(base);
+  return { ...base, stages };
 }
 
 // ---------------------------------------------------------------------------
@@ -1901,33 +2023,36 @@ export function resolvedStrategy(strategy?: ResolveStrategy, cfg?: CorpusInferCo
 /** Context handed to every stage. */
 export interface StageContext {
   /** Number of top-level corpus values. */
-  readonly corpusSize: number
+  readonly corpusSize: number;
   /** The fully-defaulted strategy, so custom stages can read the same knobs the defaults do. */
-  readonly strategy: ResolvedStrategy
+  readonly strategy: ResolvedStrategy;
 }
 
 /** A stage that decides which occurrences constitute one position. */
 export interface Grouping {
-  readonly name: string
-  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
+  readonly name: string;
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef;
 }
 
 /** A stage that decides what type an already-grouped position emits. */
 export interface Generalization {
-  readonly name: string
-  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
+  readonly name: string;
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef;
 }
 
 /** One entry in the resolution pipeline, tagged with which kind of judgment it makes. */
 export type Stage =
   | { readonly kind: "grouping"; readonly step: Grouping }
-  | { readonly kind: "generalization"; readonly step: Generalization }
+  | { readonly kind: "generalization"; readonly step: Generalization };
 
-const grouping = (name: string, apply: Grouping["apply"]): Stage =>
-  ({ kind: "grouping", step: { name, apply } })
-const generalization = (name: string, apply: Generalization["apply"]): Stage =>
-  ({ kind: "generalization", step: { name, apply } })
-
+const grouping = (name: string, apply: Grouping["apply"]): Stage => ({
+  kind: "grouping",
+  step: { name, apply },
+});
+const generalization = (name: string, apply: Generalization["apply"]): Stage => ({
+  kind: "generalization",
+  step: { name, apply },
+});
 
 /**
  * Lift a PER-POSITION decision into a whole-tree stage.
@@ -1944,46 +2069,58 @@ const generalization = (name: string, apply: Generalization["apply"]): Stage =>
  * the input unchanged lets traversal continue into them.
  */
 export function perPosition(
-  fn: (ref: TypeRef, node: EvidenceNode, ctx: StageContext & { path: readonly (string | number)[] }) => TypeRef,
+  fn: (
+    ref: TypeRef,
+    node: EvidenceNode,
+    ctx: StageContext & { path: readonly (string | number)[] },
+  ) => TypeRef,
 ): (ref: TypeRef, node: EvidenceNode, ctx: StageContext) => TypeRef {
   const walk = (
-    ref: TypeRef, node: EvidenceNode, ctx: StageContext, path: readonly (string | number)[],
+    ref: TypeRef,
+    node: EvidenceNode,
+    ctx: StageContext,
+    path: readonly (string | number)[],
   ): TypeRef => {
-    const decided = fn(ref, node, { ...ctx, path })
-    if (decided !== ref) return decided
+    const decided = fn(ref, node, { ...ctx, path });
+    if (decided !== ref) return decided;
 
-    const { shape } = ref
+    const { shape } = ref;
     if (shape.kind === "object") {
-      const fields = (shape as { fields: Record<string, TypeRef> }).fields
-      const next: Record<string, TypeRef> = {}
+      const fields = (shape as { fields: Record<string, TypeRef> }).fields;
+      const next: Record<string, TypeRef> = {};
       for (const [name, fieldRef] of Object.entries(fields)) {
-        const child = node.object?.fields[name]
-        next[name] = child !== undefined ? walk(fieldRef, child, ctx, [...path, name]) : fieldRef
+        const child = node.object?.fields[name];
+        next[name] = child !== undefined ? walk(fieldRef, child, ctx, [...path, name]) : fieldRef;
       }
-      return t(types.object(next), ref.meta)
+      return t(types.object(next), ref.meta);
     }
     if (shape.kind === "array") {
-      const el = (shape as { element: TypeRef }).element
-      const child = node.array?.element
+      const el = (shape as { element: TypeRef }).element;
+      const child = node.array?.element;
       return child !== undefined
         ? t(types.array(walk(el, child, ctx, [...path, "[]"])), ref.meta)
-        : ref
+        : ref;
     }
     if (shape.kind === "tuple") {
-      const els = (shape as { elements: readonly TypeRef[] }).elements
-      const perIndex = node.array?.perIndex
-      return t(types.tuple(els.map((el, i) => {
-        const child = perIndex?.[i]
-        return child !== undefined ? walk(el, child, ctx, [...path, i]) : el
-      })), ref.meta)
+      const els = (shape as { elements: readonly TypeRef[] }).elements;
+      const perIndex = node.array?.perIndex;
+      return t(
+        types.tuple(
+          els.map((el, i) => {
+            const child = perIndex?.[i];
+            return child !== undefined ? walk(el, child, ctx, [...path, i]) : el;
+          }),
+        ),
+        ref.meta,
+      );
     }
     if (shape.kind === "union") {
-      const variants = (shape as { variants: readonly TypeRef[] }).variants
-      return t(types.union(variants.map((v) => walk(v, node, ctx, path))), ref.meta)
+      const variants = (shape as { variants: readonly TypeRef[] }).variants;
+      return t(types.union(variants.map((v) => walk(v, node, ctx, path))), ref.meta);
     }
-    return ref
-  }
-  return (ref, node, ctx) => walk(ref, node, ctx, [])
+    return ref;
+  };
+  return (ref, node, ctx) => walk(ref, node, ctx, []);
 }
 
 /**
@@ -1992,9 +2129,9 @@ export function perPosition(
  */
 export interface GroupingContext extends PositionContext {
   /** Raw object samples observed at this position. */
-  readonly samples: readonly Record<string, unknown>[]
+  readonly samples: readonly Record<string, unknown>[];
   /** Total corpus size, which some grouping decisions gate on. */
-  readonly corpusSize: number
+  readonly corpusSize: number;
 }
 
 /**
@@ -2013,11 +2150,15 @@ export interface GroupingContext extends PositionContext {
  * structural splitting only sees what neither resolved. Collapsing them into
  * one hook would erase that precedence.
  */
-export type Group = (ctx: GroupingContext) => TypeRef | undefined
+export type Group = (ctx: GroupingContext) => TypeRef | undefined;
 
 function groupingContext(
-  ref: TypeRef, node: EvidenceNode, samples: readonly Record<string, unknown>[],
-  path: readonly (string | number)[], strategy: ResolvedStrategy, corpusSize: number,
+  ref: TypeRef,
+  node: EvidenceNode,
+  samples: readonly Record<string, unknown>[],
+  path: readonly (string | number)[],
+  strategy: ResolvedStrategy,
+  corpusSize: number,
 ): GroupingContext {
   return {
     distinct: node.distinctValues.size,
@@ -2026,26 +2167,40 @@ function groupingContext(
     distinctValues: node.distinctValues,
     members: [...node.distinctValues].map((v) => JSON.parse(v) as unknown),
     sortedNumeric: node.sortedNumeric,
-    path, ref, node, strategy, samples, corpusSize,
-  }
+    path,
+    ref,
+    node,
+    strategy,
+    samples,
+    corpusSize,
+  };
 }
 
 /** Built-in discriminated-union detection: an enum/literal-typed field that partitions the shapes. */
-export const defaultDetectDU: Group = (c) => tryDetectDU(c.ref, c.samples) ?? undefined
+export const defaultDetectDU: Group = (c) => tryDetectDU(c.ref, c.samples) ?? undefined;
 
 /** Built-in CFD-style discriminant search over all scalar fields, not just enum-typed ones. */
 export const defaultDetectCfd: Group = (c) =>
-  tryDetectCfdDiscriminant(c.samples, c.strategy.cfdMinSamples, c.strategy.cfdMaxCardinalityRatio,
-    c.strategy.cfdMinGroupSize, c.strategy.cfdMinScore) ?? undefined
+  tryDetectCfdDiscriminant(
+    c.samples,
+    c.strategy.cfdMinSamples,
+    c.strategy.cfdMaxCardinalityRatio,
+    c.strategy.cfdMinGroupSize,
+    c.strategy.cfdMinScore,
+  ) ?? undefined;
 
 /** Built-in discriminant-free structural splitting by field-set similarity. */
 export const defaultSplitObjects: Group = (c) =>
-  trySplitDissimilarObjects(c.node, c.strategy.objectSplitThreshold,
-    c.strategy.objectSplitMinSamples, c.strategy.clusteringMethod) ?? undefined
+  trySplitDissimilarObjects(
+    c.node,
+    c.strategy.objectSplitThreshold,
+    c.strategy.objectSplitMinSamples,
+    c.strategy.clusteringMethod,
+  ) ?? undefined;
 
 /** Built-in dict-vs-record decision, by key-set growth. */
 export const defaultDetectDict: Group = (c) =>
-  tryDetectDict(c.ref, c.node, c.corpusSize, c.strategy.dictMinSamples) ?? undefined
+  tryDetectDict(c.ref, c.node, c.corpusSize, c.strategy.dictMinSamples) ?? undefined;
 
 /**
  * The built-in pipeline. Same steps, same order, same behaviour as before the
@@ -2056,29 +2211,44 @@ export const defaultDetectDict: Group = (c) =>
  * `kind` or `name`, or splice their own stage in at a chosen position.
  */
 export function defaultStages(resolved: ResolvedStrategy): Stage[] {
-  const out: Stage[] = []
+  const out: Stage[] = [];
 
   // GENERALIZATION first: DU grouping below consumes its output (see above).
   if (resolved.detectEnums) {
-    out.push(generalization("generalize", (ref, node) => walkAndGeneralize(ref, node, resolved)))
+    out.push(generalization("generalize", (ref, node) => walkAndGeneralize(ref, node, resolved)));
   }
   if (resolved.detectDiscriminatedUnions) {
-    out.push(grouping("discriminated-union", (ref, node, ctx) => walkAndDetectDU(ref, node, resolved, ctx.corpusSize)))
+    out.push(
+      grouping("discriminated-union", (ref, node, ctx) =>
+        walkAndDetectDU(ref, node, resolved, ctx.corpusSize),
+      ),
+    );
   }
   if (resolved.detectDicts) {
-    out.push(grouping("dict-vs-record", (ref, node, ctx) => walkAndDetectDicts(ref, node, resolved, ctx.corpusSize)))
+    out.push(
+      grouping("dict-vs-record", (ref, node, ctx) =>
+        walkAndDetectDicts(ref, node, resolved, ctx.corpusSize),
+      ),
+    );
   }
   if (resolved.detectCfdDiscriminants) {
-    out.push(grouping("cfd-discriminant", (ref, node, ctx) =>
-      walkAndDetectCfdDiscriminant(ref, node, resolved, ctx.corpusSize)))
+    out.push(
+      grouping("cfd-discriminant", (ref, node, ctx) =>
+        walkAndDetectCfdDiscriminant(ref, node, resolved, ctx.corpusSize),
+      ),
+    );
   }
   if (resolved.splitDissimilarObjects) {
-    out.push(grouping("structural-split", (ref, node, ctx) => walkAndSplitDissimilarObjects(ref, node, resolved, ctx.corpusSize)))
+    out.push(
+      grouping("structural-split", (ref, node, ctx) =>
+        walkAndSplitDissimilarObjects(ref, node, resolved, ctx.corpusSize),
+      ),
+    );
   }
   if (resolved.detectDirtyData) {
-    out.push(generalization("dirty-data", (ref, node) => walkAndDetectDirty(ref, node)))
+    out.push(generalization("dirty-data", (ref, node) => walkAndDetectDirty(ref, node)));
   }
-  return out
+  return out;
 }
 
 /**
@@ -2088,27 +2258,27 @@ export function defaultStages(resolved: ResolvedStrategy): Stage[] {
  * dirty-data detection — happen here, gated by `strategy`.
  */
 export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy): TypeRef {
-  if (tree.values.length === 0) return t(types.unknown)
+  if (tree.values.length === 0) return t(types.unknown);
 
-  const resolved = resolvedStrategy(strategy, tree.config)
-  const ctx: StageContext = { corpusSize: tree.values.length, strategy: resolved }
+  const resolved = resolvedStrategy(strategy, tree.config);
+  const ctx: StageContext = { corpusSize: tree.values.length, strategy: resolved };
 
   // Mechanics, not policy: type each raw value, then structurally merge
   // (integer width widening, union flattening). Nothing here is a judgment
   // call, so it is not a stage and is not pluggable.
-  let merged = mergeAll(tree.values.map((v) => fromJson(v, resolved.innerConfig)))
+  let merged = mergeAll(tree.values.map((v) => fromJson(v, resolved.innerConfig)));
 
   // Policy: an ordered pipeline of grouping and generalization stages.
   for (const stage of resolved.stages) {
-    merged = stage.step.apply(merged, tree.root, ctx)
+    merged = stage.step.apply(merged, tree.root, ctx);
   }
 
   // Escape hatch, applied after every stage: arbitrary per-node overrides.
   if (resolved.customResolvers.length > 0) {
-    merged = applyCustomResolvers(merged, tree.root, resolved.customResolvers)
+    merged = applyCustomResolvers(merged, tree.root, resolved.customResolvers);
   }
 
-  return merged
+  return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -2124,6 +2294,6 @@ export function resolveEvidence(tree: EvidenceTree, strategy?: ResolveStrategy):
  * Convenience wrapper over `collectEvidence` + `resolveEvidence`.
  */
 export function fromJsonCorpus(values: unknown[], config?: CorpusInferConfig): TypeRef {
-  const evidence = collectEvidence(values, config)
-  return resolveEvidence(evidence, config)
+  const evidence = collectEvidence(values, config);
+  return resolveEvidence(evidence, config);
 }

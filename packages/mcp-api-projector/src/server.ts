@@ -41,8 +41,11 @@
 //   packages/mcp-api-projector/src/project.ts   — toTools/projectTools/projectResources (descriptors + dispatch tables)
 //   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import type { RequestHandlerExtra, RequestOptions } from "@modelcontextprotocol/sdk/shared/protocol.js"
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import type {
+  RequestHandlerExtra,
+  RequestOptions,
+} from "@modelcontextprotocol/sdk/shared/protocol.js";
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -53,7 +56,7 @@ import {
   ListToolsRequestSchema,
   McpError,
   ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js"
+} from "@modelcontextprotocol/sdk/types.js";
 import type {
   CallToolResult,
   ContentBlock,
@@ -69,10 +72,24 @@ import type {
   ServerCapabilities,
   ServerNotification,
   ServerRequest,
-} from "@modelcontextprotocol/sdk/types.js"
-import type { LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress, matchKind } from "@rhi-zone/fractal-api-tree"
-import type { CallerStoreShape, DetectionOptions, ErrorEncoder, ProjectorStores, SourceMap, Store } from "@rhi-zone/fractal-api-tree"
+} from "@modelcontextprotocol/sdk/types.js";
+import type { LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import {
+  assemble,
+  composeErrorEncoders,
+  isResultShape,
+  isStreamChunk,
+  isStreamProgress,
+  matchKind,
+} from "@rhi-zone/fractal-api-tree";
+import type {
+  CallerStoreShape,
+  DetectionOptions,
+  ErrorEncoder,
+  ProjectorStores,
+  SourceMap,
+  Store,
+} from "@rhi-zone/fractal-api-tree";
 
 /**
  * MCP's own store-name fragment: an INERT, plain interface naming the stores
@@ -93,9 +110,9 @@ import type { CallerStoreShape, DetectionOptions, ErrorEncoder, ProjectorStores,
  */
 export interface McpStores {
   /** A tool call's or prompt's named arguments. */
-  argument?: Store
+  argument?: Store;
   /** A resource template's URI variables, captured from the requested URI. */
-  "uri-variable"?: Store
+  "uri-variable"?: Store;
 }
 
 /**
@@ -106,11 +123,11 @@ export interface McpStores {
  * `uri-variable` without its own ambient augmentation — see `HttpStoreBag`'s
  * doc.
  */
-export type McpStoreBag = ProjectorStores & McpStores
+export type McpStoreBag = ProjectorStores & McpStores;
 
-import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
-import { projectPrompts, projectResources, projectTools } from "./project.ts"
-import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts"
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context";
+import { projectPrompts, projectResources, projectTools } from "./project.ts";
+import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "./project.ts";
 
 // ============================================================================
 // Rich content pass-through (tool call results, resource read results)
@@ -124,7 +141,7 @@ import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "
 // or embedded resource instead of having everything flattened to JSON text.
 
 /** MCP content-block `type` discriminator values recognized for pass-through. */
-const MCP_CONTENT_TYPES = new Set(["text", "image", "audio", "resource"])
+const MCP_CONTENT_TYPES = new Set(["text", "image", "audio", "resource"]);
 
 /**
  * True when `value` is a plain object whose `type` field is one of the
@@ -135,21 +152,25 @@ const MCP_CONTENT_TYPES = new Set(["text", "image", "audio", "resource"])
  * or a plain value (wrap as text).
  */
 function isMcpContentBlock(value: unknown): value is ContentBlock {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false
-  const type = (value as { type?: unknown }).type
-  if (typeof type !== "string" || !MCP_CONTENT_TYPES.has(type)) return false
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const type = (value as { type?: unknown }).type;
+  if (typeof type !== "string" || !MCP_CONTENT_TYPES.has(type)) return false;
 
-  const v = value as Record<string, unknown>
+  const v = value as Record<string, unknown>;
   switch (type) {
     case "text":
-      return typeof v.text === "string"
+      return typeof v.text === "string";
     case "image":
     case "audio":
-      return typeof v.data === "string" && typeof v.mimeType === "string"
+      return typeof v.data === "string" && typeof v.mimeType === "string";
     case "resource":
-      return typeof v.resource === "object" && v.resource !== null && typeof (v.resource as { uri?: unknown }).uri === "string"
+      return (
+        typeof v.resource === "object" &&
+        v.resource !== null &&
+        typeof (v.resource as { uri?: unknown }).uri === "string"
+      );
     default:
-      return false
+      return false;
   }
 }
 
@@ -162,18 +183,18 @@ function isMcpContentBlock(value: unknown): value is ContentBlock {
  */
 export function toCallToolContent(result: unknown): ContentBlock[] {
   if (Array.isArray(result) && result.length > 0 && result.every(isMcpContentBlock)) {
-    return result
+    return result;
   }
   if (isMcpContentBlock(result)) {
-    return [result]
+    return [result];
   }
-  return [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }]
+  return [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }];
 }
 
 /** Resource content shape produced for a `resources/read` result. */
 type ResourceContentEntry =
   | { uri: string; mimeType: string; text: string }
-  | { uri: string; mimeType: string; blob: string }
+  | { uri: string; mimeType: string; blob: string };
 
 /**
  * Decide the single `contents` entry for a `resources/read` result: if the
@@ -181,17 +202,29 @@ type ResourceContentEntry =
  * `mimeType`), use those fields directly; otherwise fall back to
  * `JSON.stringify`-as-text, matching the previous always-JSON behavior.
  */
-export function toResourceContent(result: unknown, uri: string, defaultMimeType: string): ResourceContentEntry {
+export function toResourceContent(
+  result: unknown,
+  uri: string,
+  defaultMimeType: string,
+): ResourceContentEntry {
   if (typeof result === "object" && result !== null && !Array.isArray(result)) {
-    const v = result as Record<string, unknown>
+    const v = result as Record<string, unknown>;
     if (typeof v.text === "string") {
-      return { uri, mimeType: typeof v.mimeType === "string" ? v.mimeType : defaultMimeType, text: v.text }
+      return {
+        uri,
+        mimeType: typeof v.mimeType === "string" ? v.mimeType : defaultMimeType,
+        text: v.text,
+      };
     }
     if (typeof v.blob === "string") {
-      return { uri, mimeType: typeof v.mimeType === "string" ? v.mimeType : defaultMimeType, blob: v.blob }
+      return {
+        uri,
+        mimeType: typeof v.mimeType === "string" ? v.mimeType : defaultMimeType,
+        blob: v.blob,
+      };
     }
   }
-  return { uri, mimeType: defaultMimeType, text: JSON.stringify(result) }
+  return { uri, mimeType: defaultMimeType, text: JSON.stringify(result) };
 }
 
 // ============================================================================
@@ -219,7 +252,7 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
     typeof v === "object" &&
     v !== null &&
     typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
-  )
+  );
 }
 
 /**
@@ -235,16 +268,16 @@ async function collectStreamedToolContent(
   iterable: AsyncIterable<unknown>,
   extra: McpRequestExtra,
 ): Promise<ContentBlock[]> {
-  const progressToken = extra._meta?.progressToken
-  const content: ContentBlock[] = []
-  const iterator = iterable[Symbol.asyncIterator]()
+  const progressToken = extra._meta?.progressToken;
+  const content: ContentBlock[] = [];
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
+    const step = await iterator.next();
     if (step.done) {
-      if (step.value !== undefined) content.push(...toCallToolContent(step.value))
-      break
+      if (step.value !== undefined) content.push(...toCallToolContent(step.value));
+      break;
     }
-    const value: unknown = step.value
+    const value: unknown = step.value;
     if (isStreamProgress(value)) {
       if (progressToken !== undefined) {
         await extra.sendNotification({
@@ -255,15 +288,15 @@ async function collectStreamedToolContent(
             total: value.total ?? 1,
             ...(value.message !== undefined ? { message: value.message } : {}),
           },
-        })
+        });
       }
     } else if (isStreamChunk(value)) {
-      content.push(...toCallToolContent(value.data))
+      content.push(...toCallToolContent(value.data));
     } else {
-      content.push(...toCallToolContent(value))
+      content.push(...toCallToolContent(value));
     }
   }
-  return content
+  return content;
 }
 
 /**
@@ -279,16 +312,17 @@ async function collectStreamedResourceContents(
   uri: string,
   defaultMimeType: string,
 ): Promise<ResourceContentEntry[]> {
-  const progressToken = extra._meta?.progressToken
-  const contents: ResourceContentEntry[] = []
-  const iterator = iterable[Symbol.asyncIterator]()
+  const progressToken = extra._meta?.progressToken;
+  const contents: ResourceContentEntry[] = [];
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
+    const step = await iterator.next();
     if (step.done) {
-      if (step.value !== undefined) contents.push(toResourceContent(step.value, uri, defaultMimeType))
-      break
+      if (step.value !== undefined)
+        contents.push(toResourceContent(step.value, uri, defaultMimeType));
+      break;
     }
-    const value: unknown = step.value
+    const value: unknown = step.value;
     if (isStreamProgress(value)) {
       if (progressToken !== undefined) {
         await extra.sendNotification({
@@ -299,15 +333,15 @@ async function collectStreamedResourceContents(
             total: value.total ?? 1,
             ...(value.message !== undefined ? { message: value.message } : {}),
           },
-        })
+        });
       }
     } else if (isStreamChunk(value)) {
-      contents.push(toResourceContent(value.data, uri, defaultMimeType))
+      contents.push(toResourceContent(value.data, uri, defaultMimeType));
     } else {
-      contents.push(toResourceContent(value, uri, defaultMimeType))
+      contents.push(toResourceContent(value, uri, defaultMimeType));
     }
   }
-  return contents
+  return contents;
 }
 
 /**
@@ -322,18 +356,21 @@ async function collectStreamedMessages(
   iterable: AsyncIterable<unknown>,
   extra: McpRequestExtra,
 ): Promise<Array<{ role: "assistant"; content: { type: "text"; text: string } }>> {
-  const progressToken = extra._meta?.progressToken
-  const messages: Array<{ role: "assistant"; content: { type: "text"; text: string } }> = []
-  const iterator = iterable[Symbol.asyncIterator]()
+  const progressToken = extra._meta?.progressToken;
+  const messages: Array<{ role: "assistant"; content: { type: "text"; text: string } }> = [];
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
+    const step = await iterator.next();
     if (step.done) {
       if (step.value !== undefined) {
-        messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(step.value) } })
+        messages.push({
+          role: "assistant",
+          content: { type: "text", text: JSON.stringify(step.value) },
+        });
       }
-      break
+      break;
     }
-    const value: unknown = step.value
+    const value: unknown = step.value;
     if (isStreamProgress(value)) {
       if (progressToken !== undefined) {
         await extra.sendNotification({
@@ -344,15 +381,18 @@ async function collectStreamedMessages(
             total: value.total ?? 1,
             ...(value.message !== undefined ? { message: value.message } : {}),
           },
-        })
+        });
       }
     } else if (isStreamChunk(value)) {
-      messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(value.data) } })
+      messages.push({
+        role: "assistant",
+        content: { type: "text", text: JSON.stringify(value.data) },
+      });
     } else {
-      messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(value) } })
+      messages.push({ role: "assistant", content: { type: "text", text: JSON.stringify(value) } });
     }
   }
-  return messages
+  return messages;
 }
 
 // ============================================================================
@@ -370,12 +410,12 @@ async function collectStreamedMessages(
 
 /** An error encoder's MCP-specific target shape — error code + message. */
 export type McpErrorResponse = {
-  readonly code: number
-  readonly message: string
-}
+  readonly code: number;
+  readonly message: string;
+};
 
 /** `ErrorEncoder<E, McpErrorResponse>` — maps a handler's error value to an MCP error code/message. */
-export type McpErrorEncoder<E = unknown> = ErrorEncoder<E, McpErrorResponse>
+export type McpErrorEncoder<E = unknown> = ErrorEncoder<E, McpErrorResponse>;
 
 /**
  * Pre-built `McpErrorEncoder`: maps error `kind` values to MCP error codes,
@@ -385,23 +425,23 @@ export type McpErrorEncoder<E = unknown> = ErrorEncoder<E, McpErrorResponse>
  * `matchKind` per mapping entry — first match wins (object key order).
  */
 export function mcpErrors<E = unknown>(mapping: Record<string, number>): McpErrorEncoder<E> {
-  const encoders = Object.entries(mapping).map(([kind, code]) =>
-    matchKind<number>(kind, code),
-  )
-  const composed = composeErrorEncoders(...encoders)
+  const encoders = Object.entries(mapping).map(([kind, code]) => matchKind<number>(kind, code));
+  const composed = composeErrorEncoders(...encoders);
   return (error) => {
-    const code = composed(error)
-    if (code === undefined) return undefined
-    return { code, message: JSON.stringify(error) }
-  }
+    const code = composed(error);
+    if (code === undefined) return undefined;
+    return { code, message: JSON.stringify(error) };
+  };
 }
 
 /** Render an `McpErrorResponse` as a `CallToolResult`'s error content, for a named tool. */
 function encodeToolError(name: string, response: McpErrorResponse): CallToolResult {
   return {
     isError: true,
-    content: [{ type: "text", text: `Error ${response.code} for tool "${name}": ${response.message}` }],
-  }
+    content: [
+      { type: "text", text: `Error ${response.code} for tool "${name}": ${response.message}` },
+    ],
+  };
 }
 
 // ============================================================================
@@ -431,7 +471,7 @@ function encodeToolError(name: string, response: McpErrorResponse): CallToolResu
  * without a breaking change to the option's shape. Pass `true` instead for
  * the common "just turn it on" case.
  */
-export type SamplingConfig = Record<string, never>
+export type SamplingConfig = Record<string, never>;
 
 /**
  * The overloaded signature of `stores.caller.createMessage`, exposed to
@@ -445,9 +485,15 @@ export type SamplingConfig = Record<string, never>
  * changes on the server side).
  */
 export interface CreateMessageFn {
-  (params: CreateMessageRequestParamsBase, options?: RequestOptions): Promise<CreateMessageResult>
-  (params: CreateMessageRequestParamsWithTools, options?: RequestOptions): Promise<CreateMessageResultWithTools>
-  (params: CreateMessageRequestParams, options?: RequestOptions): Promise<CreateMessageResult | CreateMessageResultWithTools>
+  (params: CreateMessageRequestParamsBase, options?: RequestOptions): Promise<CreateMessageResult>;
+  (
+    params: CreateMessageRequestParamsWithTools,
+    options?: RequestOptions,
+  ): Promise<CreateMessageResultWithTools>;
+  (
+    params: CreateMessageRequestParams,
+    options?: RequestOptions,
+  ): Promise<CreateMessageResult | CreateMessageResultWithTools>;
 }
 
 // ============================================================================
@@ -479,14 +525,14 @@ export interface CreateMessageFn {
  * without a breaking change to the option's shape. Pass `true` instead for
  * the common "just turn it on" case. Mirrors `SamplingConfig`.
  */
-export type LoggingConfig = Record<string, never>
+export type LoggingConfig = Record<string, never>;
 
 /** A single `notifications/message` payload — see `SendLogFn`. */
 export type SendLogParams = {
-  readonly level: LoggingLevel
-  readonly data: unknown
-  readonly logger?: string
-}
+  readonly level: LoggingLevel;
+  readonly data: unknown;
+  readonly logger?: string;
+};
 
 /**
  * `stores.caller.sendLog`, exposed to tool/resource/prompt handlers when
@@ -501,7 +547,7 @@ export type SendLogParams = {
  * section above.
  */
 export interface SendLogFn {
-  (params: SendLogParams): Promise<void>
+  (params: SendLogParams): Promise<void>;
 }
 
 // ============================================================================
@@ -542,12 +588,14 @@ function callerStore(
     ...(sendLoggingMessage !== undefined
       ? { sendLog: (params: SendLogParams) => sendLoggingMessage(params, extra.sessionId) }
       : {}),
-  }
+  };
 }
 
 /** `paramNames` for one assembly: the union of the raw values' own keys and any name declared in `sourceMap` — so a param sourced purely from an override (not present in the raw values at all) still gets assembled. */
-const paramNamesFor = (values: Record<string, unknown>, sourceMap: SourceMap): readonly string[] =>
-  [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])]
+const paramNamesFor = (
+  values: Record<string, unknown>,
+  sourceMap: SourceMap,
+): readonly string[] => [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])];
 
 // ----------------------------------------------------------------------------
 // Two assembly paths, one per store name — NOT one function taking the store
@@ -586,8 +634,11 @@ function assembleArgumentInput(
   const stores: McpStoreBag = {
     argument: values,
     caller: callerStore(extra, createMessage, sendLoggingMessage),
-  }
-  return { input: assemble(stores, paramNamesFor(values, sourceMap), sourceMap, "argument"), stores }
+  };
+  return {
+    input: assemble(stores, paramNamesFor(values, sourceMap), sourceMap, "argument"),
+    stores,
+  };
 }
 
 /** Assemble a resource read's input bag — raw values land in the `uri-variable` store. */
@@ -601,8 +652,11 @@ function assembleUriVariableInput(
   const stores: McpStoreBag = {
     "uri-variable": values,
     caller: callerStore(extra, createMessage, sendLoggingMessage),
-  }
-  return { input: assemble(stores, paramNamesFor(values, sourceMap), sourceMap, "uri-variable"), stores }
+  };
+  return {
+    input: assemble(stores, paramNamesFor(values, sourceMap), sourceMap, "uri-variable"),
+    stores,
+  };
 }
 
 // ============================================================================
@@ -628,7 +682,7 @@ function assembleUriVariableInput(
  * to middleware directly (see `assembleInput`'s doc and
  * docs/design/middleware-and-caller-context.md).
  */
-type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>
+type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
 /**
  * An MCP middleware wraps the handler-invoking function `next` (itself
@@ -639,7 +693,7 @@ type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>
  */
 export type McpMiddleware = (
   next: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>
+) => (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>;
 
 /**
  * Compose `middleware` around `base`, first entry outermost. An empty array
@@ -649,11 +703,11 @@ function composeMiddleware(
   middleware: readonly McpMiddleware[],
   base: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
 ): (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base
+  let wrapped = base;
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped)
+    wrapped = middleware[i]!(wrapped);
   }
-  return wrapped
+  return wrapped;
 }
 
 // ============================================================================
@@ -665,25 +719,25 @@ function composeMiddleware(
 
 /** Dispatch context `CreateMcpServerOptions.als`'s `init` receives. */
 export type McpAlsContext = {
-  readonly meta: LeafMeta
-  readonly name: string
-  readonly requestType: "tool" | "resource" | "prompt"
-}
+  readonly meta: LeafMeta;
+  readonly name: string;
+  readonly requestType: "tool" | "resource" | "prompt";
+};
 
 export type CreateMcpServerOptions<T = unknown> = {
   /** Server name, surfaced to MCP clients during the initialize handshake. */
-  readonly name: string
+  readonly name: string;
   /** Server version, surfaced alongside `name`. */
-  readonly version: string
+  readonly version: string;
   /** Optional human-readable server description/title (SDK `Implementation` fields). */
-  readonly title?: string
-  readonly description?: string
+  readonly title?: string;
+  readonly description?: string;
   /** Tool-name → derived input schema + JSDoc description (from codegen). Forwarded to `projectTools`. */
-  readonly schemas?: SchemaMap
+  readonly schemas?: SchemaMap;
   /** URI scheme for derived resource URIs (see `projectResources`). Forwarded as-is. */
-  readonly resources?: ProjectResourcesOptions
+  readonly resources?: ProjectResourcesOptions;
   /** Prompt projection options (see `projectPrompts`). Forwarded as-is. */
-  readonly prompts?: ProjectPromptsOptions
+  readonly prompts?: ProjectPromptsOptions;
   /**
    * Additional `Node => Node` passes, applied in array order, to `tree`
    * BEFORE `projectTools`/`projectResources`/`projectPrompts` build their
@@ -723,7 +777,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * args reach the handler directly (the design's stated zero-setup
    * tradeoff for a pre-codegen checkout).
    */
-  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
+  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>;
   /**
    * Additional capabilities to advertise beyond `{ tools: {} }` (always
    * included — this preset always registers tool handlers), `{ resources: {} }`
@@ -731,7 +785,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * `{ prompts: {} }` (added automatically when the tree contains any prompt
    * leaves).
    */
-  readonly capabilities?: ServerCapabilities
+  readonly capabilities?: ServerCapabilities;
   /**
    * Wrap each tool/resource/prompt handler call so it runs inside its own
    * `AsyncLocalStorage` context. `init` computes the per-invocation context
@@ -748,7 +802,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * receives), or read the ALS store from code it invokes synchronously
    * inside `next`. Absent by default (no ALS wrapping).
    */
-  readonly als?: AlsConfig<McpAlsContext, T>
+  readonly als?: AlsConfig<McpAlsContext, T>;
   /**
    * Around-hooks wrapping each tool/resource/prompt handler call — `F => F`
    * where `F = (input, stores) => result` (see
@@ -762,7 +816,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    *
    * When omitted (or empty), each handler is called directly — zero overhead.
    */
-  readonly middleware?: readonly McpMiddleware[]
+  readonly middleware?: readonly McpMiddleware[];
   /**
    * Opt-in configuration for the structural sniffing this preset applies to
    * a tool/resource/prompt handler's return value — `result` gates
@@ -781,7 +835,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * (`packages/http-api-projector/src/preset.ts`) and CLI's
    * `CliOpts.detection`.
    */
-  readonly detection?: DetectionOptions
+  readonly detection?: DetectionOptions;
   /**
    * Maps a tool handler's `Result.err(E)` error value to an
    * `McpErrorResponse` (error code + message) — see
@@ -796,7 +850,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * `PresetOptions.errorEncoder` (`packages/http-api-projector/src/preset.ts`)
    * and CLI's `CliOpts.errorEncoder` (`packages/cli-api-projector/src/cli.ts`).
    */
-  readonly errorEncoder?: McpErrorEncoder
+  readonly errorEncoder?: McpErrorEncoder;
   /**
    * Opt-in: expose `createMessage` on `stores.caller` so tool/resource/
    * prompt handlers can request LLM sampling from the connected client
@@ -814,7 +868,7 @@ export type CreateMcpServerOptions<T = unknown> = {
    * `initialize` — see this module's "Sampling" doc section above
    * `CreateMessageFn` for the full explanation.
    */
-  readonly sampling?: boolean | SamplingConfig
+  readonly sampling?: boolean | SamplingConfig;
   /**
    * Opt-in: MCP Tier 2 logging — advertises the `logging` server capability
    * (`{ logging: {} }`, merged with any `opts.capabilities.logging` passed
@@ -833,8 +887,8 @@ export type CreateMcpServerOptions<T = unknown> = {
    * Absent by default — `stores.caller` has no `sendLog` field, and no
    * `logging` capability is advertised, unless this is set.
    */
-  readonly logging?: boolean | LoggingConfig
-}
+  readonly logging?: boolean | LoggingConfig;
+};
 
 /**
  * Build an OOTB MCP `Server` from a Node tree: projects `tree` via
@@ -862,26 +916,29 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   // walk — see `CreateMcpServerOptions.rewriters`. This is where generated
   // validation wires in (`applyValidation`), same integration point HTTP's
   // `PresetOptions.rewriters` provides.
-  const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree)
+  const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree);
 
-  const { tools, handlers } = projectTools(workingTree, opts.schemas !== undefined ? { schemas: opts.schemas } : {})
+  const { tools, handlers } = projectTools(
+    workingTree,
+    opts.schemas !== undefined ? { schemas: opts.schemas } : {},
+  );
   const {
     resources,
     resourceTemplates,
     handlers: resourceHandlers,
     templateHandlers,
-  } = projectResources(workingTree, opts.resources ?? {})
-  const hasResources = resources.length > 0 || resourceTemplates.length > 0
+  } = projectResources(workingTree, opts.resources ?? {});
+  const hasResources = resources.length > 0 || resourceTemplates.length > 0;
 
-  const { prompts, handlers: promptHandlers } = projectPrompts(workingTree, opts.prompts ?? {})
-  const hasPrompts = prompts.length > 0
+  const { prompts, handlers: promptHandlers } = projectPrompts(workingTree, opts.prompts ?? {});
+  const hasPrompts = prompts.length > 0;
 
   // Around-hooks wrapping each handler call — see CreateMcpServerOptions.middleware.
-  const middleware = opts.middleware ?? []
+  const middleware = opts.middleware ?? [];
 
   // Opt-in return-value detection — see CreateMcpServerOptions.detection.
-  const detectResult = opts.detection?.result ?? true
-  const detectStreaming = opts.detection?.streaming ?? true
+  const detectResult = opts.detection?.result ?? true;
+  const detectStreaming = opts.detection?.streaming ?? true;
 
   // ALS wrapping (see CreateMcpServerOptions.als) — innermost, closer to the
   // handler than `middleware`. Absent `opts.als` degrades to identity (no
@@ -890,30 +947,32 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   const withAls = (
     handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
     context: McpAlsContext,
-  ): (input: Record<string, unknown>) => unknown | Promise<unknown> =>
+  ): ((input: Record<string, unknown>) => unknown | Promise<unknown>) =>
     opts.als === undefined
       ? handler
       : (input) => {
-          const store = opts.als!.init(context)
+          const store = opts.als!.init(context);
           return store instanceof Promise
             ? store.then((resolved) => opts.als!.storage.run(resolved, () => handler(input)))
-            : opts.als!.storage.run(store, () => handler(input))
-        }
+            : opts.als!.storage.run(store, () => handler(input));
+        };
 
   // Bridge a plain handler `(input) => result` into `F => F`'s base case
   // `(input, stores) => handler(input)` — the handler never sees `stores`,
   // structurally (see McpMiddleware's module doc above).
-  const toBase = (
-    handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
-  ): ((input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>) =>
-    (input, _stores) => handler(input)
+  const toBase =
+    (
+      handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
+    ): ((input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>) =>
+    (input, _stores) =>
+      handler(input);
 
   const implementation: Implementation = {
     name: opts.name,
     version: opts.version,
     ...(opts.title !== undefined ? { title: opts.title } : {}),
     ...(opts.description !== undefined ? { description: opts.description } : {}),
-  }
+  };
 
   const server = new Server(implementation, {
     capabilities: {
@@ -936,198 +995,250 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         ? { logging: { ...opts.capabilities?.logging } }
         : {}),
     },
-  })
+  });
 
   // Opt-in sampling (see CreateMcpServerOptions.sampling and this module's
   // "Sampling" doc section) — gates whether `stores.caller.createMessage`
   // exists at all; `true` and `{}` (a `SamplingConfig`, no fields yet) both
   // enable it. Bound to `server.createMessage` so a handler never needs a
   // reference to the `Server` instance itself.
-  const samplingEnabled = opts.sampling === true || (typeof opts.sampling === "object" && opts.sampling !== null)
+  const samplingEnabled =
+    opts.sampling === true || (typeof opts.sampling === "object" && opts.sampling !== null);
   const createMessage: CreateMessageFn | undefined = samplingEnabled
-    ? ((params: CreateMessageRequestParams, options?: RequestOptions) => server.createMessage(params, options)) as CreateMessageFn
-    : undefined
+    ? (((params: CreateMessageRequestParams, options?: RequestOptions) =>
+        server.createMessage(params, options)) as CreateMessageFn)
+    : undefined;
 
   // Opt-in logging (see CreateMcpServerOptions.logging and this module's
   // "Logging" doc section) — gates whether `stores.caller.sendLog` exists at
   // all. Bound to `server.sendLoggingMessage` so a handler never needs a
   // reference to the `Server` instance itself; per-request session binding
   // happens in `assembleInput`, not here.
-  const loggingEnabled = opts.logging === true || (typeof opts.logging === "object" && opts.logging !== null)
-  const sendLoggingMessage: ((params: SendLogParams, sessionId?: string) => Promise<void>) | undefined = loggingEnabled
+  const loggingEnabled =
+    opts.logging === true || (typeof opts.logging === "object" && opts.logging !== null);
+  const sendLoggingMessage:
+    | ((params: SendLogParams, sessionId?: string) => Promise<void>)
+    | undefined = loggingEnabled
     ? (params, sessionId) => server.sendLoggingMessage(params, sessionId)
-    : undefined
+    : undefined;
 
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }))
+  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra): Promise<CallToolResult> => {
-    const { name, arguments: args } = request.params
-    const dispatch = handlers.get(name)
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    async (request, extra): Promise<CallToolResult> => {
+      const { name, arguments: args } = request.params;
+      const dispatch = handlers.get(name);
 
-    if (dispatch === undefined) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: `Unknown tool: ${name}` }],
-      }
-    }
-
-    try {
-      const { input, stores } = assembleArgumentInput(args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
-      const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" }
-      const base = toBase(withAls(dispatch.handler, toolContext))
-      const callHandler = middleware.length === 0
-        ? base
-        : composeMiddleware(middleware, base)
-      let result = await callHandler(input, stores)
-
-      // Streaming: an async-iterable result (e.g. an async generator
-      // handler) is drained into progress notifications + collected content
-      // instead of going through Result-unwrapping/toCallToolContent below —
-      // checked first since neither a Result nor plain content is an async
-      // iterable, so there's no ambiguity (matches HTTP's `runRoute`,
-      // packages/http-api-projector/src/route.ts).
-      if (detectStreaming && isAsyncIterable(result)) {
-        return { content: await collectStreamedToolContent(result, extra) }
+      if (dispatch === undefined) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `Unknown tool: ${name}` }],
+        };
       }
 
-      // Result unwrapping: applied whenever `detectResult` is on (matching
-      // HTTP's `runRoute`, packages/http-api-projector/src/route.ts) — any
-      // handler returning `{kind:"err", error}` gets a proper MCP tool
-      // error result, whether the `err` came from the handler itself or from
-      // a generated validator's rejection (`applyValidation` wraps the
-      // handler with `parse()`, which returns the same `Result` shape on
-      // failure). A `kind:"ok"` Result is unwrapped to its `.value` before
-      // becoming content, so an ordinary handler that happens to return this
-      // package's own `Result<T,E>` shape (see
-      // @rhi-zone/fractal-api-tree's `ok`/`err`) is treated the same way
-      // regardless of validator wiring.
-      if (detectResult && isResultShape(result)) {
-        if (result.kind === "err") {
-          const encoded = opts.errorEncoder?.(result.error)
-          if (encoded !== undefined) return encodeToolError(name, encoded)
-          return {
-            isError: true,
-            content: [
-              { type: "text", text: `Invalid input for tool "${name}": ${JSON.stringify(result.error)}` },
-            ],
-          }
+      try {
+        const { input, stores } = assembleArgumentInput(
+          args ?? {},
+          dispatch.sourceMap,
+          extra,
+          createMessage,
+          sendLoggingMessage,
+        );
+        const toolContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "tool" };
+        const base = toBase(withAls(dispatch.handler, toolContext));
+        const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
+        let result = await callHandler(input, stores);
+
+        // Streaming: an async-iterable result (e.g. an async generator
+        // handler) is drained into progress notifications + collected content
+        // instead of going through Result-unwrapping/toCallToolContent below —
+        // checked first since neither a Result nor plain content is an async
+        // iterable, so there's no ambiguity (matches HTTP's `runRoute`,
+        // packages/http-api-projector/src/route.ts).
+        if (detectStreaming && isAsyncIterable(result)) {
+          return { content: await collectStreamedToolContent(result, extra) };
         }
-        result = result.value
-      }
 
-      return {
-        content: toCallToolContent(result),
+        // Result unwrapping: applied whenever `detectResult` is on (matching
+        // HTTP's `runRoute`, packages/http-api-projector/src/route.ts) — any
+        // handler returning `{kind:"err", error}` gets a proper MCP tool
+        // error result, whether the `err` came from the handler itself or from
+        // a generated validator's rejection (`applyValidation` wraps the
+        // handler with `parse()`, which returns the same `Result` shape on
+        // failure). A `kind:"ok"` Result is unwrapped to its `.value` before
+        // becoming content, so an ordinary handler that happens to return this
+        // package's own `Result<T,E>` shape (see
+        // @rhi-zone/fractal-api-tree's `ok`/`err`) is treated the same way
+        // regardless of validator wiring.
+        if (detectResult && isResultShape(result)) {
+          if (result.kind === "err") {
+            const encoded = opts.errorEncoder?.(result.error);
+            if (encoded !== undefined) return encodeToolError(name, encoded);
+            return {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: `Invalid input for tool "${name}": ${JSON.stringify(result.error)}`,
+                },
+              ],
+            };
+          }
+          result = result.value;
+        }
+
+        return {
+          content: toCallToolContent(result),
+        };
+      } catch {
+        // A thrown error is never surfaced verbatim to the caller — matching
+        // HTTP's `runRoute` (route.ts), which already collapses a thrown
+        // error to a generic "internal server error" 500 rather than leaking
+        // `err.message`. A handler's thrown message can carry internals
+        // (stack frames, file paths, driver-specific text, ...) that weren't
+        // meant for an MCP client; a handler that WANTS to communicate a
+        // specific, client-facing failure should return an `err(...)` Result
+        // instead (see the Result-unwrapping check above), which IS surfaced
+        // verbatim — that is the intentional, opt-in error-reporting channel.
+        return {
+          isError: true,
+          content: [{ type: "text", text: "internal error" }],
+        };
       }
-    } catch {
-      // A thrown error is never surfaced verbatim to the caller — matching
-      // HTTP's `runRoute` (route.ts), which already collapses a thrown
-      // error to a generic "internal server error" 500 rather than leaking
-      // `err.message`. A handler's thrown message can carry internals
-      // (stack frames, file paths, driver-specific text, ...) that weren't
-      // meant for an MCP client; a handler that WANTS to communicate a
-      // specific, client-facing failure should return an `err(...)` Result
-      // instead (see the Result-unwrapping check above), which IS surfaced
-      // verbatim — that is the intentional, opt-in error-reporting channel.
-      return {
-        isError: true,
-        content: [{ type: "text", text: "internal error" }],
-      }
-    }
-  })
+    },
+  );
 
   if (hasResources) {
-    server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources }))
-    server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates }))
+    server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources }));
+    server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({ resourceTemplates }));
 
-    const resourcesByUri = new Map(resources.map((r) => [r.uri, r] as const))
+    const resourcesByUri = new Map(resources.map((r) => [r.uri, r] as const));
 
-    server.setRequestHandler(ReadResourceRequestSchema, async (request, extra): Promise<ReadResourceResult> => {
-      const { uri } = request.params
+    server.setRequestHandler(
+      ReadResourceRequestSchema,
+      async (request, extra): Promise<ReadResourceResult> => {
+        const { uri } = request.params;
 
-      // Fixed resources first (exact URI match), then templates (pattern match).
-      const fixed = resourceHandlers.get(uri)
-      if (fixed !== undefined) {
-        const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json"
-        const fixedContext: McpAlsContext = { meta: fixed.meta, name: uri, requestType: "resource" }
-        const base = toBase(withAls(fixed.handler, fixedContext))
-        const callHandler = middleware.length === 0
-          ? base
-          : composeMiddleware(middleware, base)
-        // No URI-variables for a fixed resource — assembleInput still builds
-        // the `caller` store from `extra` so middleware sees it here too.
-        const { input, stores } = assembleUriVariableInput({}, {}, extra, createMessage, sendLoggingMessage)
-        const result = await callHandler(input, stores)
-        if (detectStreaming && isAsyncIterable(result)) {
-          return { contents: await collectStreamedResourceContents(result, extra, uri, mimeType) }
+        // Fixed resources first (exact URI match), then templates (pattern match).
+        const fixed = resourceHandlers.get(uri);
+        if (fixed !== undefined) {
+          const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json";
+          const fixedContext: McpAlsContext = {
+            meta: fixed.meta,
+            name: uri,
+            requestType: "resource",
+          };
+          const base = toBase(withAls(fixed.handler, fixedContext));
+          const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
+          // No URI-variables for a fixed resource — assembleInput still builds
+          // the `caller` store from `extra` so middleware sees it here too.
+          const { input, stores } = assembleUriVariableInput(
+            {},
+            {},
+            extra,
+            createMessage,
+            sendLoggingMessage,
+          );
+          const result = await callHandler(input, stores);
+          if (detectStreaming && isAsyncIterable(result)) {
+            return {
+              contents: await collectStreamedResourceContents(result, extra, uri, mimeType),
+            };
+          }
+          return { contents: [toResourceContent(result, uri, mimeType)] };
         }
-        return { contents: [toResourceContent(result, uri, mimeType)] }
-      }
 
-      for (const template of templateHandlers) {
-        const match = template.pattern.exec(uri)
-        if (match === null) continue
-        const captured: Record<string, string> = {}
-        template.paramNames.forEach((name, i) => {
-          captured[name] = match[i + 1] as string
-        })
-        const { input, stores } = assembleUriVariableInput(captured, template.sourceMap, extra, createMessage, sendLoggingMessage)
-        const templateContext: McpAlsContext = { meta: template.meta, name: uri, requestType: "resource" }
-        const base = toBase(withAls(template.handler, templateContext))
-        const callHandler = middleware.length === 0
-          ? base
-          : composeMiddleware(middleware, base)
-        const result = await callHandler(input, stores)
-        if (detectStreaming && isAsyncIterable(result)) {
-          return { contents: await collectStreamedResourceContents(result, extra, uri, template.mimeType) }
+        for (const template of templateHandlers) {
+          const match = template.pattern.exec(uri);
+          if (match === null) continue;
+          const captured: Record<string, string> = {};
+          template.paramNames.forEach((name, i) => {
+            captured[name] = match[i + 1] as string;
+          });
+          const { input, stores } = assembleUriVariableInput(
+            captured,
+            template.sourceMap,
+            extra,
+            createMessage,
+            sendLoggingMessage,
+          );
+          const templateContext: McpAlsContext = {
+            meta: template.meta,
+            name: uri,
+            requestType: "resource",
+          };
+          const base = toBase(withAls(template.handler, templateContext));
+          const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
+          const result = await callHandler(input, stores);
+          if (detectStreaming && isAsyncIterable(result)) {
+            return {
+              contents: await collectStreamedResourceContents(
+                result,
+                extra,
+                uri,
+                template.mimeType,
+              ),
+            };
+          }
+          return { contents: [toResourceContent(result, uri, template.mimeType)] };
         }
-        return { contents: [toResourceContent(result, uri, template.mimeType)] }
-      }
 
-      throw new McpError(ErrorCode.InvalidParams, `Resource not found: ${uri}`)
-    })
+        throw new McpError(ErrorCode.InvalidParams, `Resource not found: ${uri}`);
+      },
+    );
   }
 
   if (hasPrompts) {
-    server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }))
+    server.setRequestHandler(ListPromptsRequestSchema, () => ({ prompts }));
 
-    server.setRequestHandler(GetPromptRequestSchema, async (request, extra): Promise<GetPromptResult> => {
-      const { name, arguments: args } = request.params
-      const dispatch = promptHandlers.get(name)
+    server.setRequestHandler(
+      GetPromptRequestSchema,
+      async (request, extra): Promise<GetPromptResult> => {
+        const { name, arguments: args } = request.params;
+        const dispatch = promptHandlers.get(name);
 
-      if (dispatch === undefined) {
-        throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`)
-      }
+        if (dispatch === undefined) {
+          throw new McpError(ErrorCode.InvalidParams, `Unknown prompt: ${name}`);
+        }
 
-      const { input, stores } = assembleArgumentInput(args ?? {}, dispatch.sourceMap, extra, createMessage, sendLoggingMessage)
-      const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" }
-      const base = toBase(withAls(dispatch.handler, promptContext))
-      const callHandler = middleware.length === 0
-        ? base
-        : composeMiddleware(middleware, base)
-      const result = await callHandler(input, stores)
+        const { input, stores } = assembleArgumentInput(
+          args ?? {},
+          dispatch.sourceMap,
+          extra,
+          createMessage,
+          sendLoggingMessage,
+        );
+        const promptContext: McpAlsContext = { meta: dispatch.meta, name, requestType: "prompt" };
+        const base = toBase(withAls(dispatch.handler, promptContext));
+        const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
+        const result = await callHandler(input, stores);
 
-      // Streaming: collect all yields + the final return value into the
-      // messages array — see `collectStreamedMessages`'s doc.
-      if (detectStreaming && isAsyncIterable(result)) {
-        return { messages: await collectStreamedMessages(result, extra) }
-      }
+        // Streaming: collect all yields + the final return value into the
+        // messages array — see `collectStreamedMessages`'s doc.
+        if (detectStreaming && isAsyncIterable(result)) {
+          return { messages: await collectStreamedMessages(result, extra) };
+        }
 
-      // A handler may already return a well-formed GetPromptResult (has a
-      // `messages` array) — pass it through as-is. Otherwise wrap the plain
-      // return value as a single assistant text message.
-      if (
-        typeof result === "object" &&
-        result !== null &&
-        Array.isArray((result as { messages?: unknown }).messages)
-      ) {
-        return result as GetPromptResult
-      }
+        // A handler may already return a well-formed GetPromptResult (has a
+        // `messages` array) — pass it through as-is. Otherwise wrap the plain
+        // return value as a single assistant text message.
+        if (
+          typeof result === "object" &&
+          result !== null &&
+          Array.isArray((result as { messages?: unknown }).messages)
+        ) {
+          return result as GetPromptResult;
+        }
 
-      return {
-        messages: [{ role: "assistant", content: { type: "text", text: JSON.stringify(result) } }],
-      }
-    })
+        return {
+          messages: [
+            { role: "assistant", content: { type: "text", text: JSON.stringify(result) } },
+          ],
+        };
+      },
+    );
   }
 
-  return server
+  return server;
 }

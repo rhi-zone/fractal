@@ -5,22 +5,24 @@ plain JSON-serializable object, not source code text. All examples below
 render the same shape:
 
 ```ts
-import { t, types } from "@rhi-zone/fractal-type-ir"
+import { t, types } from "@rhi-zone/fractal-type-ir";
 
-const user = t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  age: { shape: types.integer, meta: { optional: true, minimum: 0 } },
-}))
+const user = t(
+  types.object({
+    id: t(types.integer),
+    name: t(types.string),
+    email: t(types.string),
+    age: { shape: types.integer, meta: { optional: true, minimum: 0 } },
+  }),
+);
 ```
 
 ## JSON Schema (2020-12)
 
 ```ts
-import { toJsonSchema, toJsonSchemaDocument } from "@rhi-zone/fractal-type-ir/json-schema"
+import { toJsonSchema, toJsonSchemaDocument } from "@rhi-zone/fractal-type-ir/json-schema";
 
-toJsonSchema(user)
+toJsonSchema(user);
 ```
 
 ```json
@@ -44,9 +46,9 @@ resolve against; empty/absent `defs` omits `$defs` entirely.
 ## JSON Schema (draft-07)
 
 ```ts
-import { toJsonSchema07 } from "@rhi-zone/fractal-type-ir/json-schema-07"
+import { toJsonSchema07 } from "@rhi-zone/fractal-type-ir/json-schema-07";
 
-toJsonSchema07(user)
+toJsonSchema07(user);
 ```
 
 ```json
@@ -70,9 +72,9 @@ schema `false` (draft-07 permits boolean schemas).
 ## JSON Schema (draft-04)
 
 ```ts
-import { toJsonSchema04Document } from "@rhi-zone/fractal-type-ir/json-schema-04"
+import { toJsonSchema04Document } from "@rhi-zone/fractal-type-ir/json-schema-04";
 
-toJsonSchema04Document(user)
+toJsonSchema04Document(user);
 ```
 
 ```json
@@ -100,9 +102,9 @@ numbers (that arrives in draft-06); no `readOnly`/`writeOnly`/`examples`/
 ## OpenAPI 3.0
 
 ```ts
-import { toOpenApi30, toOpenApi30Document } from "@rhi-zone/fractal-type-ir/openapi30"
+import { toOpenApi30, toOpenApi30Document } from "@rhi-zone/fractal-type-ir/openapi30";
 
-toOpenApi30(user)
+toOpenApi30(user);
 ```
 
 ```json
@@ -129,9 +131,9 @@ into a full OAS document's own top-level `components`.
 ## OpenAPI 2.0 (Swagger)
 
 ```ts
-import { toOpenApi20, toOpenApi20Definitions } from "@rhi-zone/fractal-type-ir/openapi20"
+import { toOpenApi20, toOpenApi20Definitions } from "@rhi-zone/fractal-type-ir/openapi20";
 
-toOpenApi20(user)
+toOpenApi20(user);
 ```
 
 ```json
@@ -157,9 +159,9 @@ refs.
 ## JSON Type Definition (JTD)
 
 ```ts
-import { toJtd } from "@rhi-zone/fractal-type-ir/jtd"
+import { toJtd } from "@rhi-zone/fractal-type-ir/jtd";
 
-toJtd(user)
+toJtd(user);
 ```
 
 ```json
@@ -186,12 +188,12 @@ JTD has no generic "number"/"integer" — `number` degrades to `float64`,
 ## Standard Schema
 
 ```ts
-import { toStandardSchema } from "@rhi-zone/fractal-type-ir/standard-schema"
+import { toStandardSchema } from "@rhi-zone/fractal-type-ir/standard-schema";
 
-const schema = toStandardSchema(user)
-schema["~standard"].vendor    // "fractal-type-ir"
-schema["~standard"].validate(value)
-schema["~standard"].jsonSchema.input({ target: "draft-2020-12" })
+const schema = toStandardSchema(user);
+schema["~standard"].vendor; // "fractal-type-ir"
+schema["~standard"].validate(value);
+schema["~standard"].jsonSchema.input({ target: "draft-2020-12" });
 ```
 
 Implements both interfaces the [Standard Schema](https://standardschema.dev/)

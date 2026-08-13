@@ -62,18 +62,21 @@
 //   packages/http-api-projector/src/verbs.ts      — httpVerbBundle, http.*, moveTo
 //   packages/http-api-projector/src/route.ts      — naiveTransform, applyMethods, applyMoveTo, resolveMoveTo
 
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
 
 /**
  * Union-to-intersection — identical technique to `TreeManifest`'s own helper
  * (tree-manifest.ts): flattens a union of per-entry manifest fragments into
  * one object carrying every fragment's keys as siblings.
  */
-type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) extends
-  (u: infer I) => void ? I : never
+type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) extends (
+  u: infer I,
+) => void
+  ? I
+  : never;
 
 /** Force eager evaluation of a mapped/intersection type into a plain object type. */
-type Simplify<T> = { readonly [K in keyof T]: T[K] } & {}
+type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
 
 /**
  * Resolve a leaf's HTTP method from its own `meta` — `M["http"]["method"]`
@@ -93,7 +96,7 @@ type ResolveMethod<M> = M extends { readonly http: infer H }
   ? H extends { readonly method: infer V extends string }
     ? V
     : "POST"
-  : "POST"
+  : "POST";
 
 /**
  * Resolve a leaf's `meta.http.moveTo` (as a literal, when present — see
@@ -121,7 +124,7 @@ type ResolveMoveTo<M> = M extends { readonly http: infer H }
   ? H extends { readonly moveTo: infer P extends string }
     ? P
     : undefined
-  : undefined
+  : undefined;
 
 // ============================================================================
 // Path-string algebra — template-literal counterpart to route.ts's
@@ -141,12 +144,20 @@ type ResolveMoveTo<M> = M extends { readonly http: infer H }
  * the first split, which is skipped rather than kept as a `""` segment.
  */
 type SplitSegments<S extends string> = S extends `${infer Head}/${infer Rest}`
-  ? Head extends "" ? SplitSegments<Rest> : [Head, ...SplitSegments<Rest>]
-  : S extends "" ? [] : [S]
+  ? Head extends ""
+    ? SplitSegments<Rest>
+    : [Head, ...SplitSegments<Rest>]
+  : S extends ""
+    ? []
+    : [S];
 
 /** Drop the last element of a tuple — the type-level `Array.prototype.pop`. */
-type PopLast<Segs extends readonly string[]> =
-  Segs extends readonly [...infer Init extends readonly string[], string] ? Init : []
+type PopLast<Segs extends readonly string[]> = Segs extends readonly [
+  ...infer Init extends readonly string[],
+  string,
+]
+  ? Init
+  : [];
 
 /**
  * Apply `moveTo`'s relative-path tokens to a segment tuple, one token at a
@@ -163,16 +174,18 @@ type PopLast<Segs extends readonly string[]> =
  * reconciles that afterward, walking the FULL tree to substitute the real
  * name when one exists — see this file's module doc.
  */
-type ApplyTokens<Segs extends readonly string[], Tokens extends readonly string[]> =
-  Tokens extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
-    ? Head extends "."
-      ? ApplyTokens<Segs, Rest>
-      : Head extends ".."
-        ? ApplyTokens<PopLast<Segs>, Rest>
-        : Head extends "*"
-          ? ApplyTokens<[...Segs, ":param"], Rest>
-          : ApplyTokens<[...Segs, Head], Rest>
-    : Segs
+type ApplyTokens<
+  Segs extends readonly string[],
+  Tokens extends readonly string[],
+> = Tokens extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
+  ? Head extends "."
+    ? ApplyTokens<Segs, Rest>
+    : Head extends ".."
+      ? ApplyTokens<PopLast<Segs>, Rest>
+      : Head extends "*"
+        ? ApplyTokens<[...Segs, ":param"], Rest>
+        : ApplyTokens<[...Segs, Head], Rest>
+  : Segs;
 
 /**
  * Re-walk a `moveTo`-resolved segment tuple against the FULL, original
@@ -192,28 +205,41 @@ type ApplyTokens<Segs extends readonly string[], Tokens extends readonly string[
  * the tuple is returned untouched: with no known position left to check,
  * any later `:param` marker keeps `insertAt`'s own synthesized default.
  */
-type ResolveWildcardSegments<Root extends Node, Segs extends readonly string[]> =
-  Segs extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
-    ? Head extends `:${string}`
-      ? Root extends { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
-        ? Head extends ":param"
-          ? [`:${Name}`, ...ResolveWildcardSegments<S, Rest>]
-          : [Head, ...ResolveWildcardSegments<S, Rest>]
+type ResolveWildcardSegments<
+  Root extends Node,
+  Segs extends readonly string[],
+> = Segs extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
+  ? Head extends `:${string}`
+    ? Root extends {
+        readonly fallback: {
+          readonly name: infer Name extends string;
+          readonly subtree: infer S extends Node;
+        };
+      }
+      ? Head extends ":param"
+        ? [`:${Name}`, ...ResolveWildcardSegments<S, Rest>]
+        : [Head, ...ResolveWildcardSegments<S, Rest>]
+      : [Head, ...Rest]
+    : Root extends { readonly children: infer C extends Readonly<Record<string, Node>> }
+      ? Head extends keyof C
+        ? [Head, ...ResolveWildcardSegments<C[Head], Rest>]
         : [Head, ...Rest]
-      : Root extends { readonly children: infer C extends Readonly<Record<string, Node>> }
-        ? Head extends keyof C
-          ? [Head, ...ResolveWildcardSegments<C[Head], Rest>]
-          : [Head, ...Rest]
-        : [Head, ...Rest]
-    : []
+      : [Head, ...Rest]
+  : [];
 
 /** Join segments back into `route.ts`'s own path-string convention: `""` for zero segments, `/a/b` otherwise. */
-type JoinSegments<Segs extends readonly string[]> =
-  Segs extends readonly [infer Head extends string, ...infer Rest extends readonly string[]]
-    ? Rest extends readonly [] ? Head : `${Head}/${JoinSegments<Rest>}`
-    : ""
+type JoinSegments<Segs extends readonly string[]> = Segs extends readonly [
+  infer Head extends string,
+  ...infer Rest extends readonly string[],
+]
+  ? Rest extends readonly []
+    ? Head
+    : `${Head}/${JoinSegments<Rest>}`
+  : "";
 
-type JoinPath<Segs extends readonly string[]> = Segs extends readonly [] ? "" : `/${JoinSegments<Segs>}`
+type JoinPath<Segs extends readonly string[]> = Segs extends readonly []
+  ? ""
+  : `/${JoinSegments<Segs>}`;
 
 /**
  * Resolve a leaf's final path: unchanged when it carries no `moveTo`
@@ -222,10 +248,15 @@ type JoinPath<Segs extends readonly string[]> = Segs extends readonly [] ? "" : 
  * synthesized `:param` wildcard reconciled against `Root`'s own tree via
  * `ResolveWildcardSegments`.
  */
-type ResolvedPath<Prefix extends string, MoveToPath extends string | undefined, Root extends Node> =
-  MoveToPath extends string
-    ? JoinPath<ResolveWildcardSegments<Root, ApplyTokens<SplitSegments<Prefix>, SplitSegments<MoveToPath>>>>
-    : Prefix
+type ResolvedPath<
+  Prefix extends string,
+  MoveToPath extends string | undefined,
+  Root extends Node,
+> = MoveToPath extends string
+  ? JoinPath<
+      ResolveWildcardSegments<Root, ApplyTokens<SplitSegments<Prefix>, SplitSegments<MoveToPath>>>
+    >
+  : Prefix;
 
 // ============================================================================
 // Collect phase — walk `N`, producing a UNION of per-leaf manifest entries
@@ -237,11 +268,11 @@ type ResolvedPath<Prefix extends string, MoveToPath extends string | undefined, 
 // ============================================================================
 
 type ManifestEntry = {
-  readonly path: string
-  readonly method: string
-  readonly input: unknown
-  readonly output: unknown
-}
+  readonly path: string;
+  readonly method: string;
+  readonly input: unknown;
+  readonly output: unknown;
+};
 
 type CollectEntries<N extends Node, Prefix extends string, Root extends Node> =
   // Leaf part — this node's own entry, at its moveTo-resolved path.
@@ -268,10 +299,10 @@ type CollectEntries<N extends Node, Prefix extends string, Root extends Node> =
   | (N extends { readonly handler: infer H extends Handler; readonly meta: infer M }
       ? H extends (input: infer I) => infer R
         ? {
-            readonly path: ResolvedPath<Prefix, ResolveMoveTo<M>, Root>
-            readonly method: ResolveMethod<M>
-            readonly input: I
-            readonly output: Awaited<R>
+            readonly path: ResolvedPath<Prefix, ResolveMoveTo<M>, Root>;
+            readonly method: ResolveMethod<M>;
+            readonly input: I;
+            readonly output: Awaited<R>;
           }
         : never
       : never)
@@ -284,10 +315,14 @@ type CollectEntries<N extends Node, Prefix extends string, Root extends Node> =
       : never)
   // Fallback part — same recursion, keyed by `:name`, matching the
   // wildcard-segment convention `naiveTransform`/`applyMoveTo` both use.
-  | (N extends
-      { readonly fallback: { readonly name: infer Name extends string; readonly subtree: infer S extends Node } }
+  | (N extends {
+      readonly fallback: {
+        readonly name: infer Name extends string;
+        readonly subtree: infer S extends Node;
+      };
+    }
       ? CollectEntries<S, `${Prefix}/:${Name}`, Root>
-      : never)
+      : never);
 
 // ============================================================================
 // Build phase — fold the entries union into `{ [path]: { [method]: {input,
@@ -318,16 +353,19 @@ type MethodsForPath<E extends ManifestEntry, P extends string> = Simplify<
     Extract<E, { readonly path: P }> extends infer Entry extends ManifestEntry
       ? Entry extends unknown
         ? {
-            readonly [M in Entry["method"]]: { readonly input: Entry["input"]; readonly output: Entry["output"] }
+            readonly [M in Entry["method"]]: {
+              readonly input: Entry["input"];
+              readonly output: Entry["output"];
+            };
           }
         : never
       : never
   >
->
+>;
 
-type BuildManifest<E extends ManifestEntry> = Simplify<
-  { readonly [P in E["path"]]: MethodsForPath<E, P> }
->
+type BuildManifest<E extends ManifestEntry> = Simplify<{
+  readonly [P in E["path"]]: MethodsForPath<E, P>;
+}>;
 
 /**
  * Public entry point: `HttpManifest<N>` flattens `N` into `/`-path ->
@@ -344,4 +382,4 @@ type BuildManifest<E extends ManifestEntry> = Simplify<
  */
 export type HttpManifest<N extends Node, Prefix extends string = ""> = BuildManifest<
   CollectEntries<N, Prefix, N>
->
+>;

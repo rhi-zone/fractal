@@ -3,7 +3,7 @@
 `@rhi-zone/fractal-type-ir` ships one projector per Python class-definition convention:
 stdlib `@dataclass`, Pydantic v2 `BaseModel`, `attrs.define`, `msgspec.Struct`, and cattrs
 (an `attrs.define` class paired with a `cattrs.Converter`). Unlike the single-expression
-TypeScript projectors, these render a whole *module*: every nested `object`/`enum` field gets
+TypeScript projectors, these render a whole _module_: every nested `object`/`enum` field gets
 promoted to its own top-level declaration (named from the field), and `toX(ref, name)` returns
 the full source text — imports, declarations, and (for cattrs) converter preamble — as one
 string.
@@ -11,11 +11,11 @@ string.
 ## Python (dataclass)
 
 ```ts
-import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toPython } from "@rhi-zone/fractal-type-ir/python-dataclass"
+import { t, types } from "@rhi-zone/fractal-type-ir";
+import { toPython } from "@rhi-zone/fractal-type-ir/python-dataclass";
 
-const user = t(types.object({ id: t(types.string), age: t(types.integer) }))
-toPython(user, "User")
+const user = t(types.object({ id: t(types.string), age: t(types.integer) }));
+toPython(user, "User");
 ```
 
 ```python
@@ -36,10 +36,12 @@ its own `@dataclass`/`class ...(Enum)` declaration above the parent, named from 
 ### Pydantic
 
 ```ts
-import { toPydantic } from "@rhi-zone/fractal-type-ir/python-pydantic"
+import { toPydantic } from "@rhi-zone/fractal-type-ir/python-pydantic";
 
-const person = t(types.object({ name: t(types.string), nickname: t(types.string, { optional: true }) }))
-toPydantic(person, "Person")
+const person = t(
+  types.object({ name: t(types.string), nickname: t(types.string, { optional: true }) }),
+);
+toPydantic(person, "Person");
 ```
 
 ```python
@@ -59,9 +61,9 @@ becomes `Annotated[Union[...], Discriminator(...)]`.
 ### attrs
 
 ```ts
-import { toAttrs } from "@rhi-zone/fractal-type-ir/python-attrs"
+import { toAttrs } from "@rhi-zone/fractal-type-ir/python-attrs";
 
-toAttrs(person, "Person")
+toAttrs(person, "Person");
 ```
 
 ```python
@@ -80,9 +82,9 @@ Same `T | None = None` optional convention as Pydantic. Constraints become
 ### msgspec
 
 ```ts
-import { toMsgspec } from "@rhi-zone/fractal-type-ir/python-msgspec"
+import { toMsgspec } from "@rhi-zone/fractal-type-ir/python-msgspec";
 
-toMsgspec(person, "Person")
+toMsgspec(person, "Person");
 ```
 
 ```python
@@ -101,9 +103,9 @@ than a `@msgspec.define(...)` call. Constraints become `Annotated[T, msgspec.Met
 ### cattrs
 
 ```ts
-import { toCattrs } from "@rhi-zone/fractal-type-ir/python-cattrs"
+import { toCattrs } from "@rhi-zone/fractal-type-ir/python-cattrs";
 
-toCattrs(person, "Person")
+toCattrs(person, "Person");
 ```
 
 ```python

@@ -14,20 +14,20 @@ A `Store` is a uniform key-value interface over one input source:
 
 ```ts
 interface Store {
-  get(key: string): unknown
+  get(key: string): unknown;
 }
 ```
 
 `httpStores(req, slugs, parsedBody)` builds the five standard stores for a
 request:
 
-| store    | source                                    |
+| store    | source                                     |
 | -------- | ------------------------------------------ |
 | `path`   | route slugs (dynamic path segments)        |
-| `query`  | URL query string                            |
-| `header` | request headers                             |
-| `body`   | the pre-parsed request body                 |
-| `caller` | raw request headers, unparsed pass-through  |
+| `query`  | URL query string                           |
+| `header` | request headers                            |
+| `body`   | the pre-parsed request body                |
+| `caller` | raw request headers, unparsed pass-through |
 
 The body is parsed once, upstream, via `parseRequestBody` — which WHATWG API
 handles it depends on `Content-Type` (`application/json` → `req.json()`;
@@ -45,8 +45,8 @@ this store's; see `docs/design/middleware-and-caller-context.md`.
 An **assembler** (`assemble`) then builds the handler's input bag by reading
 named params out of these stores, one param at a time, following a
 resolution order (below). This replaces reading everything positionally off
-the raw `Request` — handlers declare *what* they need by name, and the
-assembler figures out *where* each name comes from.
+the raw `Request` — handlers declare _what_ they need by name, and the
+assembler figures out _where_ each name comes from.
 
 ---
 
@@ -91,7 +91,7 @@ const sources: Sources = {
   sourceMap: {
     apiKey: { store: "header", key: "x-api-key" },
   },
-}
+};
 ```
 
 `ParamSource.key` defaults to the param name when omitted, so
@@ -115,7 +115,7 @@ const sources: Sources = {
   sourceMap: {
     apiKey: { store: "header", key: "x-api-key" },
   },
-}
+};
 ```
 
 Resolution order per param, in `assemble`:
@@ -162,7 +162,7 @@ const sources: Sources = {
     ...bag,
     tags: typeof bag.tags === "string" ? bag.tags.split(",") : bag.tags,
   }),
-}
+};
 ```
 
 `paramNames`, `sourceMap`, and `transform` all live together on the same

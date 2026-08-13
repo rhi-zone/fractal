@@ -11,10 +11,10 @@
 // precedent it mirrors), so without this registration those pages would fail
 // to compile with an "ApiExplorer is not defined" MDX error.
 
-import MDXComponents from "@theme-original/MDXComponents"
-import { ApiExplorer } from "@rhi-zone/fractal-api-explorer"
+import MDXComponents from "@theme-original/MDXComponents";
+import { ApiExplorer } from "@rhi-zone/fractal-api-explorer";
 
 export default {
   ...MDXComponents,
   ApiExplorer,
-}
+};

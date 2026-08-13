@@ -13,10 +13,21 @@
 // flat named-value bag `assemble()` expects, so the "argument" store is
 // simply `args` itself, no request-shape adaptation needed.
 
-import { GraphQLError } from "graphql"
-import { assemble, composeErrorEncoders, isResultShape, isStreamChunk, isStreamProgress } from "@rhi-zone/fractal-api-tree"
-import type { DetectionOptions, ErrorEncoder, ProjectorStores, Store } from "@rhi-zone/fractal-api-tree"
-import type { Dispatch } from "./project.ts"
+import { GraphQLError } from "graphql";
+import {
+  assemble,
+  composeErrorEncoders,
+  isResultShape,
+  isStreamChunk,
+  isStreamProgress,
+} from "@rhi-zone/fractal-api-tree";
+import type {
+  DetectionOptions,
+  ErrorEncoder,
+  ProjectorStores,
+  Store,
+} from "@rhi-zone/fractal-api-tree";
+import type { Dispatch } from "./project.ts";
 
 /**
  * GraphQL's own store-name fragment: an INERT, plain interface naming the one
@@ -36,7 +47,7 @@ import type { Dispatch } from "./project.ts"
  */
 export interface GraphQLStores {
   /** A field's resolver `args` — already the flat named-value bag `assemble()` expects. */
-  argument?: Store
+  argument?: Store;
 }
 
 /**
@@ -46,7 +57,7 @@ export interface GraphQLStores {
  * own fragment — see `HttpStoreBag`'s doc for why the intersection is what
  * lets this package build and read `argument` without an ambient augmentation.
  */
-export type GraphQLStoreBag = ProjectorStores & GraphQLStores
+export type GraphQLStoreBag = ProjectorStores & GraphQLStores;
 
 // ============================================================================
 // Structured error types — composable error-to-transport mapping (mirrors
@@ -55,12 +66,12 @@ export type GraphQLStoreBag = ProjectorStores & GraphQLStores
 
 /** An error encoder's GraphQL-specific target shape — message + optional `extensions` (the spec's error-metadata bag, conventionally carrying `extensions.code`). */
 export type GraphQLErrorResponse = {
-  readonly message: string
-  readonly extensions?: Record<string, unknown>
-}
+  readonly message: string;
+  readonly extensions?: Record<string, unknown>;
+};
 
 /** `ErrorEncoder<E, GraphQLErrorResponse>` — maps a handler's error value to a GraphQL error message + extensions. */
-export type GraphQLErrorEncoder<E = unknown> = ErrorEncoder<E, GraphQLErrorResponse>
+export type GraphQLErrorEncoder<E = unknown> = ErrorEncoder<E, GraphQLErrorResponse>;
 
 /**
  * Pre-built `GraphQLErrorEncoder`: maps error `kind` values to
@@ -72,24 +83,26 @@ export type GraphQLErrorEncoder<E = unknown> = ErrorEncoder<E, GraphQLErrorRespo
  * (matching how most `Result.err(E)` shapes in this codebase carry one — see
  * api-tree's `Result`/tag-set conventions), else its `JSON.stringify`.
  */
-export function graphqlErrors<E = unknown>(mapping: Record<string, string>): GraphQLErrorEncoder<E> {
+export function graphqlErrors<E = unknown>(
+  mapping: Record<string, string>,
+): GraphQLErrorEncoder<E> {
   const encoders = Object.entries(mapping).map(
     ([kind, code]): ErrorEncoder<unknown, GraphQLErrorResponse> =>
       (error) => {
-        if (typeof error !== "object" || error === null || !("kind" in error)) return undefined
-        if ((error as { kind: unknown }).kind !== kind) return undefined
-        const rawMessage = (error as { message?: unknown }).message
-        const message = typeof rawMessage === "string" ? rawMessage : JSON.stringify(error)
-        return { message, extensions: { code } }
+        if (typeof error !== "object" || error === null || !("kind" in error)) return undefined;
+        if ((error as { kind: unknown }).kind !== kind) return undefined;
+        const rawMessage = (error as { message?: unknown }).message;
+        const message = typeof rawMessage === "string" ? rawMessage : JSON.stringify(error);
+        return { message, extensions: { code } };
       },
-  )
-  return composeErrorEncoders(...encoders) as GraphQLErrorEncoder<E>
+  );
+  return composeErrorEncoders(...encoders) as GraphQLErrorEncoder<E>;
 }
 
 function toGraphQLError(response: GraphQLErrorResponse): GraphQLError {
   return new GraphQLError(response.message, {
     extensions: response.extensions,
-  })
+  });
 }
 
 // ============================================================================
@@ -102,7 +115,7 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
     typeof v === "object" &&
     v !== null &&
     typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
-  )
+  );
 }
 
 // ============================================================================
@@ -120,9 +133,9 @@ function assembleGraphQLInput(
   entry: Dispatch,
   args: Record<string, unknown>,
 ): { readonly input: Record<string, unknown>; readonly stores: GraphQLStoreBag } {
-  const stores: GraphQLStoreBag = { argument: args, caller: {} }
-  const input = assemble(stores, entry.inputNames, entry.sourceMap, "argument")
-  return { input, stores }
+  const stores: GraphQLStoreBag = { argument: args, caller: {} };
+  const input = assemble(stores, entry.inputNames, entry.sourceMap, "argument");
+  return { input, stores };
 }
 
 // ============================================================================
@@ -136,24 +149,24 @@ function assembleGraphQLInput(
 /** A GraphQL resolver-scoped middleware — wraps the handler-invoking function `next`. */
 export type GraphQLHandlerMiddleware = (
   next: (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>,
-) => (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>
+) => (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>;
 
 /** Compose `middleware` around `base`, first entry outermost. An empty array returns `base` unchanged. */
 function composeMiddleware(
   middleware: readonly GraphQLHandlerMiddleware[],
   base: (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>,
 ): (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base
+  let wrapped = base;
   for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped)
+    wrapped = middleware[i]!(wrapped);
   }
-  return wrapped
+  return wrapped;
 }
 
 /** Options for `createResolver`. */
 export type ResolverOptions = {
   /** Maps a handler's `Result.err(E)` error value to a `GraphQLErrorResponse`. `undefined` (including when omitted) falls back to a generic `GraphQLError` wrapping the raw error value. */
-  readonly errorEncoder?: GraphQLErrorEncoder
+  readonly errorEncoder?: GraphQLErrorEncoder;
   /**
    * Around-hooks wrapping the handler call — `F => F` where
    * `F = (input, stores) => result`. `stores` is the raw pre-assembly stores
@@ -161,7 +174,7 @@ export type ResolverOptions = {
    * `argument` store, the resolver's own `args`); the handler itself never
    * sees `stores`. Empty/absent by default (no-op, zero overhead).
    */
-  readonly middleware?: readonly GraphQLHandlerMiddleware[]
+  readonly middleware?: readonly GraphQLHandlerMiddleware[];
   /**
    * Opt-in configuration for this resolver's structural sniffing of a
    * handler's return value — `result` gates `Result`-shape
@@ -173,17 +186,27 @@ export type ResolverOptions = {
    * no effect here. Mirrors HTTP's `PresetOptions.detection` and MCP's
    * `CreateMcpServerOptions.detection`.
    */
-  readonly detection?: DetectionOptions
-}
+  readonly detection?: DetectionOptions;
+};
 
 /** A plain graphql-js field resolver: `(parent, args, context, info) => result`. */
-export type FieldResolver = (parent: unknown, args: Record<string, unknown>, context: unknown, info: unknown) => Promise<unknown>
+export type FieldResolver = (
+  parent: unknown,
+  args: Record<string, unknown>,
+  context: unknown,
+  info: unknown,
+) => Promise<unknown>;
 
 /** A graphql-js subscription field config: `subscribe` yields root values, `resolve` maps each to the field's own return shape. */
 export type SubscriptionFieldConfig = {
-  readonly subscribe: (parent: unknown, args: Record<string, unknown>, context: unknown, info: unknown) => Promise<AsyncIterable<unknown>>
-  readonly resolve: (payload: unknown) => unknown
-}
+  readonly subscribe: (
+    parent: unknown,
+    args: Record<string, unknown>,
+    context: unknown,
+    info: unknown,
+  ) => Promise<AsyncIterable<unknown>>;
+  readonly resolve: (payload: unknown) => unknown;
+};
 
 /**
  * Run one field's assembled input through its handler, Result-unwrapping the
@@ -200,17 +223,19 @@ async function runHandler(
   errorEncoder: GraphQLErrorEncoder | undefined,
   detectResult: boolean,
 ): Promise<unknown> {
-  let result: unknown = await entry.handler(input)
+  let result: unknown = await entry.handler(input);
 
   if (detectResult && isResultShape(result)) {
     if (result.kind === "err") {
-      const encoded = errorEncoder?.(result.error)
-      throw encoded !== undefined ? toGraphQLError(encoded) : new GraphQLError(JSON.stringify(result.error))
+      const encoded = errorEncoder?.(result.error);
+      throw encoded !== undefined
+        ? toGraphQLError(encoded)
+        : new GraphQLError(JSON.stringify(result.error));
     }
-    result = result.value
+    result = result.value;
   }
 
-  return result
+  return result;
 }
 
 /**
@@ -224,16 +249,18 @@ async function runHandler(
  * same distinction on their own transports).
  */
 function createFieldResolver(entry: Dispatch, options: ResolverOptions): FieldResolver {
-  const middleware = options.middleware ?? []
-  const detectResult = options.detection?.result ?? true
-  const base = (input: Record<string, unknown>, _stores: GraphQLStoreBag): unknown | Promise<unknown> =>
-    runHandler(entry, input, options.errorEncoder, detectResult)
-  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base)
+  const middleware = options.middleware ?? [];
+  const detectResult = options.detection?.result ?? true;
+  const base = (
+    input: Record<string, unknown>,
+    _stores: GraphQLStoreBag,
+  ): unknown | Promise<unknown> => runHandler(entry, input, options.errorEncoder, detectResult);
+  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
 
   return async (_parent, args) => {
-    const { input, stores } = assembleGraphQLInput(entry, args)
-    return callHandler(input, stores)
-  }
+    const { input, stores } = assembleGraphQLInput(entry, args);
+    return callHandler(input, stores);
+  };
 }
 
 /**
@@ -248,17 +275,17 @@ function createFieldResolver(entry: Dispatch, options: ResolverOptions): FieldRe
  * value as one more emission, not a silently discarded one.
  */
 async function* drainSubscription(iterable: AsyncIterable<unknown>): AsyncGenerator<unknown> {
-  const iterator = iterable[Symbol.asyncIterator]()
+  const iterator = iterable[Symbol.asyncIterator]();
   for (;;) {
-    const step = await iterator.next()
+    const step = await iterator.next();
     if (step.done) {
-      if (step.value !== undefined) yield step.value
-      return
+      if (step.value !== undefined) yield step.value;
+      return;
     }
-    const value: unknown = step.value
-    if (isStreamProgress(value)) continue
-    if (isStreamChunk(value)) yield value.data
-    else yield value
+    const value: unknown = step.value;
+    if (isStreamProgress(value)) continue;
+    if (isStreamChunk(value)) yield value.data;
+    else yield value;
   }
 }
 
@@ -271,24 +298,30 @@ async function* drainSubscription(iterable: AsyncIterable<unknown>): AsyncGenera
  * final resolved value (no further Result-unwrapping per-event — see
  * `drainSubscription`'s doc).
  */
-function createSubscriptionResolver(entry: Dispatch, options: ResolverOptions): SubscriptionFieldConfig {
-  const middleware = options.middleware ?? []
-  const base = (input: Record<string, unknown>, _stores: GraphQLStoreBag): unknown | Promise<unknown> => entry.handler(input)
-  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base)
+function createSubscriptionResolver(
+  entry: Dispatch,
+  options: ResolverOptions,
+): SubscriptionFieldConfig {
+  const middleware = options.middleware ?? [];
+  const base = (
+    input: Record<string, unknown>,
+    _stores: GraphQLStoreBag,
+  ): unknown | Promise<unknown> => entry.handler(input);
+  const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
 
   return {
     subscribe: async (_parent, args) => {
-      const { input, stores } = assembleGraphQLInput(entry, args)
-      const result: unknown = await callHandler(input, stores)
+      const { input, stores } = assembleGraphQLInput(entry, args);
+      const result: unknown = await callHandler(input, stores);
       if (!isAsyncIterable(result)) {
         throw new GraphQLError(
           `Subscription handler did not return an AsyncIterable (tags.streaming implies one) — got ${typeof result}`,
-        )
+        );
       }
-      return drainSubscription(result)
+      return drainSubscription(result);
     },
     resolve: (payload) => payload,
-  }
+  };
 }
 
 /**
@@ -304,5 +337,5 @@ export function createResolver(
 ): FieldResolver | SubscriptionFieldConfig {
   return entry.operationType === "subscription"
     ? createSubscriptionResolver(entry, options)
-    : createFieldResolver(entry, options)
+    : createFieldResolver(entry, options);
 }

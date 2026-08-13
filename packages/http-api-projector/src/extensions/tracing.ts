@@ -26,11 +26,11 @@
 //     (`tracingLayer`), which extracts the `traceparent` THIS extension
 //     injects, on the receiving end.
 
-import { formatTraceParent, runClientSpan } from "@rhi-zone/fractal-api-tree/otel"
-import type { TracingIntegration } from "@rhi-zone/fractal-api-tree/otel"
-import type { ClientExtension, FetchImpl } from "../extension.ts"
+import { formatTraceParent, runClientSpan } from "@rhi-zone/fractal-api-tree/otel";
+import type { TracingIntegration } from "@rhi-zone/fractal-api-tree/otel";
+import type { ClientExtension, FetchImpl } from "../extension.ts";
 
-export type TracingOptions = TracingIntegration
+export type TracingOptions = TracingIntegration;
 
 /**
  * OpenTelemetry-compatible tracing extension: wraps every outgoing request
@@ -46,25 +46,27 @@ export type TracingOptions = TracingIntegration
  * createClient(node, { baseUrl, extensions: [tracing({ tracer: trace.getTracer("my-client") })] })
  */
 export function tracing(options: TracingOptions): ClientExtension {
-  const integration: TracingIntegration = options
+  const integration: TracingIntegration = options;
 
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    const url = new URL(req.url)
-    const spanName = `${req.method} ${url.pathname}`
-    return runClientSpan(
-      integration,
-      spanName,
-      { "http.method": req.method, "http.url": req.url, "operation.name": url.pathname },
-      async (span) => {
-        const headers = new Headers(req.headers)
-        headers.set("traceparent", formatTraceParent(span.spanContext()))
-        const tracedReq = new Request(req, { headers })
-        const res = await inner(tracedReq)
-        span.setAttribute("http.status_code", res.status)
-        return res
-      },
-    )
-  }
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      const url = new URL(req.url);
+      const spanName = `${req.method} ${url.pathname}`;
+      return runClientSpan(
+        integration,
+        spanName,
+        { "http.method": req.method, "http.url": req.url, "operation.name": url.pathname },
+        async (span) => {
+          const headers = new Headers(req.headers);
+          headers.set("traceparent", formatTraceParent(span.spanContext()));
+          const tracedReq = new Request(req, { headers });
+          const res = await inner(tracedReq);
+          span.setAttribute("http.status_code", res.status);
+          return res;
+        },
+      );
+    };
 
-  return { name: "tracing", wrapFetch }
+  return { name: "tracing", wrapFetch };
 }

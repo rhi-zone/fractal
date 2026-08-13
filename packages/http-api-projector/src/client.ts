@@ -64,16 +64,16 @@
 //   packages/http-api-projector/src/dx.ts       — httpProjection preset
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback, isLeaf
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { TypedClient } from "@rhi-zone/fractal-api-tree"
-import { httpProjection } from "./dx.ts"
-import type { HttpRoute, RouteLeafMeta } from "./route.ts"
-import { ClientError } from "./client-error.ts"
-import { composeDecodeResponse, composeFetch } from "./extension.ts"
-import type { ClientExtension } from "./extension.ts"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { TypedClient } from "@rhi-zone/fractal-api-tree";
+import { httpProjection } from "./dx.ts";
+import type { HttpRoute, RouteLeafMeta } from "./route.ts";
+import { ClientError } from "./client-error.ts";
+import { composeDecodeResponse, composeFetch } from "./extension.ts";
+import type { ClientExtension } from "./extension.ts";
 
-export { ClientError } from "./client-error.ts"
+export { ClientError } from "./client-error.ts";
 
 // ============================================================================
 // Public API types
@@ -81,26 +81,26 @@ export { ClientError } from "./client-error.ts"
 
 export type ClientOptions = {
   /** Base URL prepended to every request path. Defaults to "" (relative). */
-  readonly baseUrl?: string
+  readonly baseUrl?: string;
   /**
    * Fetch implementation to use. Defaults to global `fetch`.
    * Inject `createFetch(tree)` from @rhi-zone/fractal-http-api-projector/preset for in-process
    * round-trip tests without a network.
    */
-  readonly fetch?: (req: Request) => Promise<Response>
+  readonly fetch?: (req: Request) => Promise<Response>;
   /**
    * Per-request timeout in milliseconds, applied via `AbortSignal.timeout`.
    * Overridable per-call via `CallOptions.timeout`. Unset by default (no
    * timeout — existing behavior).
    */
-  readonly timeout?: number
+  readonly timeout?: number;
   /**
    * An `AbortSignal` that cancels every request made by this client (e.g. a
    * component-lifetime or navigation signal). Combined with `timeout` (if
    * both set) via `AbortSignal.any`. Overridable per-call via
    * `CallOptions.signal`.
    */
-  readonly signal?: AbortSignal
+  readonly signal?: AbortSignal;
   /**
    * Extensions composing around the fetch implementation — retry, request/
    * response interceptors, a fixed timeout, or a user-authored
@@ -109,16 +109,16 @@ export type ClientOptions = {
    * client makes. See `packages/http-api-projector/src/extensions/` for the
    * built-ins and `./extension.ts` for the API a custom extension implements.
    */
-  readonly extensions?: readonly ClientExtension[]
-}
+  readonly extensions?: readonly ClientExtension[];
+};
 
 /** Per-call overrides for `timeout`/`signal`, layered on top of the client-level `ClientOptions`. */
 export type CallOptions = {
   /** Overrides the client-level `timeout` for this call only. */
-  readonly timeout?: number
+  readonly timeout?: number;
   /** Overrides the client-level `signal` for this call only. */
-  readonly signal?: AbortSignal
-}
+  readonly signal?: AbortSignal;
+};
 
 // ============================================================================
 // AnyClient / RouteClient — the erased-input client shape, computed WITHOUT
@@ -166,7 +166,7 @@ export type CallOptions = {
 // ============================================================================
 
 /** A leaf callable — what a route position with a resolved method becomes. */
-type ClientLeafFn<CallOpts> = (input?: unknown, callOpts?: CallOpts) => Promise<unknown>
+type ClientLeafFn<CallOpts> = (input?: unknown, callOpts?: CallOpts) => Promise<unknown>;
 
 /**
  * The erased-but-sound client shape: every property is itself an
@@ -202,15 +202,15 @@ type ClientLeafFn<CallOpts> = (input?: unknown, callOpts?: CallOpts) => Promise<
  * ever silently accepted) versus `any`'s "everything goes."
  */
 export interface AnyClient<CallOpts = CallOptions> {
-  readonly [key: string]: AnyClient<CallOpts>
-  (slugValue: string): AnyClient<CallOpts>
-  (input?: unknown, opts?: CallOpts): Promise<unknown>
+  readonly [key: string]: AnyClient<CallOpts>;
+  (slugValue: string): AnyClient<CallOpts>;
+  (input?: unknown, opts?: CallOpts): Promise<unknown>;
 }
 
 /** A method entry's callable type — precise when the handler's own type is known, erased-but-sound otherwise. */
 type RouteMethodFn<E, CallOpts> = E extends { readonly handler: (input: infer I) => infer Res }
   ? (input: I, opts?: CallOpts) => Promise<Awaited<Res>>
-  : ClientLeafFn<CallOpts>
+  : ClientLeafFn<CallOpts>;
 
 /**
  * True iff `T`'s keys are a single literal (not a union, not `string`) —
@@ -224,12 +224,22 @@ type RouteMethodFn<E, CallOpts> = E extends { readonly handler: (input: infer I)
  */
 type IsSingleKey<T> = [keyof T] extends [never]
   ? false
-  : (keyof T extends infer K ? (K extends keyof T ? ([Exclude<keyof T, K>] extends [never] ? true : false) : never) : never) extends true
+  : (
+        keyof T extends infer K
+          ? K extends keyof T
+            ? [Exclude<keyof T, K>] extends [never]
+              ? true
+              : false
+            : never
+          : never
+      ) extends true
     ? true
-    : false
+    : false;
 
 /** Precise per-key methods object — one named callable per method entry, name = lowercased HTTP verb (see `createClientFromRoute`'s own doc: a bare `HttpRoute` has no memory of a co-located handler's authored Node key, only its resolved verb). Only ever invoked once a caller has already confirmed `keyof M` is a literal (not `string`) — see `RouteClient`. */
-type RouteMethodsObject<M, CallOpts> = { readonly [K in keyof M as K extends string ? Lowercase<K> : never]: RouteMethodFn<M[K], CallOpts> }
+type RouteMethodsObject<M, CallOpts> = {
+  readonly [K in keyof M as K extends string ? Lowercase<K> : never]: RouteMethodFn<M[K], CallOpts>;
+};
 
 /**
  * The precise client shape `buildClientNode` computes for a route tree of
@@ -259,7 +269,9 @@ type RouteMethodsObject<M, CallOpts> = { readonly [K in keyof M as K extends str
  * with in the first place.
  */
 export type RouteClient<R extends HttpRoute, CallOpts = CallOptions> = R extends {
-  readonly methods?: infer M extends Readonly<Record<string, { readonly handler: Handler }>> | undefined
+  readonly methods?: infer M extends
+    | Readonly<Record<string, { readonly handler: Handler }>>
+    | undefined;
 }
   ? [M] extends [undefined]
     ? RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts> // no methods at this position — pure branch
@@ -269,43 +281,55 @@ export type RouteClient<R extends HttpRoute, CallOpts = CallOptions> = R extends
         ? IsSingleKey<NonNullable<M>> extends true
           ? RouteMethodFn<NonNullable<M>[keyof NonNullable<M>], CallOpts> // bare leaf callable — isSingleLeafMethod's true branch
           : RouteMethodsObject<NonNullable<M>, CallOpts>
-        : RouteMethodsObject<NonNullable<M>, CallOpts> & RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts>
-  : RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts>
+        : RouteMethodsObject<NonNullable<M>, CallOpts> &
+            RouteChildrenPartOf<R, CallOpts> &
+            RouteFallbackPart<R, CallOpts>
+  : RouteChildrenPartOf<R, CallOpts> & RouteFallbackPart<R, CallOpts>;
 
 /** True iff `R` has no children AND no fallback — the other two thirds of `isSingleLeafMethod`'s condition (the `methods` count is checked separately, via `IsSingleKey`, by `RouteClient` itself). */
 type IsBareLeaf<R extends HttpRoute> = R extends {
-  readonly children?: infer C extends Readonly<Record<string, HttpRoute>> | undefined
+  readonly children?: infer C extends Readonly<Record<string, HttpRoute>> | undefined;
 }
   ? [C] extends [undefined]
-    ? R extends { readonly fallback?: infer F extends { readonly name: string; readonly subtree: HttpRoute } | undefined }
+    ? R extends {
+        readonly fallback?: infer F extends
+          | { readonly name: string; readonly subtree: HttpRoute }
+          | undefined;
+      }
       ? [F] extends [undefined]
         ? true
         : false
       : true
     : false
-  : true
+  : true;
 
 /** Children part, re-derived from `R` directly (rather than taking an already-extracted `C`) so every call site shares one structural `infer` — matching `RouteClient`'s doc comment on avoiding indexed access. Degrades to `unknown` (a no-op in an intersection) when `R` has no children at all. */
 type RouteChildrenPartOf<R extends HttpRoute, CallOpts> = R extends {
-  readonly children?: infer C extends Readonly<Record<string, HttpRoute>> | undefined
+  readonly children?: infer C extends Readonly<Record<string, HttpRoute>> | undefined;
 }
   ? [C] extends [undefined]
     ? unknown
     : string extends keyof NonNullable<C>
       ? { readonly [key: string]: RouteClient<HttpRoute, CallOpts> }
-      : { readonly [K in keyof NonNullable<C>]: NonNullable<C>[K] extends HttpRoute ? RouteClient<NonNullable<C>[K], CallOpts> : never }
-  : unknown
+      : {
+          readonly [K in keyof NonNullable<C>]: NonNullable<C>[K] extends HttpRoute
+            ? RouteClient<NonNullable<C>[K], CallOpts>
+            : never;
+        }
+  : unknown;
 
 /** Fallback part — `{ [fallback.name]: (slug) => RouteClient<subtree, CallOpts> }`, or an index signature when the fallback's own name is erased to plain `string`. Degrades to `unknown` (a no-op in an intersection) when `R` has no fallback at all. */
 type RouteFallbackPart<R extends HttpRoute, CallOpts> = R extends {
-  readonly fallback?: { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute } | undefined
+  readonly fallback?:
+    | { readonly name: infer Nm extends string; readonly subtree: infer S extends HttpRoute }
+    | undefined;
 }
   ? string extends Nm
     ? { readonly [key: string]: (slugValue: string) => RouteClient<HttpRoute, CallOpts> }
     : { readonly [K in Nm]: (slugValue: string) => RouteClient<S, CallOpts> }
-  : unknown
+  : unknown;
 
-type FetchImpl = (req: Request) => Promise<Response>
+type FetchImpl = (req: Request) => Promise<Response>;
 
 // ============================================================================
 // Internal: timeout/signal resolution
@@ -324,22 +348,28 @@ function resolveSignal(
   baseSignal: AbortSignal | undefined,
   callOpts: CallOptions | undefined,
 ): AbortSignal | undefined {
-  const timeout = callOpts?.timeout ?? baseTimeout
-  const signal = callOpts?.signal ?? baseSignal
-  const timeoutSignal = timeout !== undefined ? AbortSignal.timeout(timeout) : undefined
-  if (timeoutSignal !== undefined && signal !== undefined) return AbortSignal.any([signal, timeoutSignal])
-  return timeoutSignal ?? signal
+  const timeout = callOpts?.timeout ?? baseTimeout;
+  const signal = callOpts?.signal ?? baseSignal;
+  const timeoutSignal = timeout !== undefined ? AbortSignal.timeout(timeout) : undefined;
+  if (timeoutSignal !== undefined && signal !== undefined)
+    return AbortSignal.any([signal, timeoutSignal]);
+  return timeoutSignal ?? signal;
 }
 
 /** Rethrow abort-driven fetch failures with a message that distinguishes timeout from user cancellation. */
-function describeAbort(err: unknown, verb: string, path: string, timeout: number | undefined): Error {
+function describeAbort(
+  err: unknown,
+  verb: string,
+  path: string,
+  timeout: number | undefined,
+): Error {
   if (err instanceof Error && err.name === "TimeoutError") {
-    return new Error(`Request timed out after ${timeout}ms: ${verb} ${path}`)
+    return new Error(`Request timed out after ${timeout}ms: ${verb} ${path}`);
   }
   if (err instanceof Error && err.name === "AbortError") {
-    return new Error(`Request aborted: ${verb} ${path}`)
+    return new Error(`Request aborted: ${verb} ${path}`);
   }
-  return err instanceof Error ? err : new Error(String(err))
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 // ============================================================================
@@ -360,9 +390,9 @@ function collectHandlerNames(n: Node, out: Map<Handler, string>): void {
   for (const [key, child] of Object.entries(n.children ?? {})) {
     if (isLeaf(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(child.handler!, key)
+      out.set(child.handler!, key);
     } else {
-      collectHandlerNames(child, out)
+      collectHandlerNames(child, out);
     }
   }
   if (n.fallback !== undefined) {
@@ -376,18 +406,18 @@ function collectHandlerNames(n: Node, out: Map<Handler, string>): void {
     // use).
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(n.fallback.subtree.handler!, n.fallback.name)
+      out.set(n.fallback.subtree.handler!, n.fallback.name);
     } else {
-      collectHandlerNames(n.fallback.subtree, out)
+      collectHandlerNames(n.fallback.subtree, out);
     }
   }
 }
 
 /** Build the handler → own-child-key name map for a Node tree — see doc above. */
 function buildHandlerNames(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
-  collectHandlerNames(n, out)
-  return out
+  const out = new Map<Handler, string>();
+  collectHandlerNames(n, out);
+  return out;
 }
 
 // ============================================================================
@@ -408,34 +438,34 @@ function buildHandlerNames(n: Node): Map<Handler, string> {
 
 function collectCodegenNames(n: Node, prefix: string, out: Map<Handler, string>): void {
   for (const [key, child] of Object.entries(n.children ?? {})) {
-    const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+    const seg = prefix.length > 0 ? `${prefix}_${key}` : key;
     if (isLeaf(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(child.handler!, seg)
+      out.set(child.handler!, seg);
     } else {
-      collectCodegenNames(child, seg, out)
+      collectCodegenNames(child, seg, out);
     }
   }
   if (n.fallback !== undefined) {
-    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
 
     // Same bare-leaf `fallback.subtree` case as `collectHandlerNames` above
     // — key it directly at `seg` (no extra segment beyond the fallback's
     // own name) instead of recursing into a leaf's nonexistent `children`.
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(n.fallback.subtree.handler!, seg)
+      out.set(n.fallback.subtree.handler!, seg);
     } else {
-      collectCodegenNames(n.fallback.subtree, seg, out)
+      collectCodegenNames(n.fallback.subtree, seg, out);
     }
   }
 }
 
 /** Build the handler → full codegen-name map for a Node tree — see doc above. */
 function buildCodegenNames(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
-  collectCodegenNames(n, "", out)
-  return out
+  const out = new Map<Handler, string>();
+  collectCodegenNames(n, "", out);
+  return out;
 }
 
 // ============================================================================
@@ -455,63 +485,67 @@ function makeCaller(
   codegenName: string | undefined,
 ): (input?: unknown, callOpts?: CallOptions) => Promise<unknown> {
   return async (input?: unknown, callOpts?: CallOptions): Promise<unknown> => {
-    const timeout = callOpts?.timeout ?? baseTimeout
-    const signal = resolveSignal(baseTimeout, baseSignal, callOpts) ?? null
+    const timeout = callOpts?.timeout ?? baseTimeout;
+    const signal = resolveSignal(baseTimeout, baseSignal, callOpts) ?? null;
 
-    let req: Request
+    let req: Request;
     if (verb === "GET" || verb === "HEAD" || verb === "DELETE") {
       // Input goes into query params for read-only/deletion ops; body is not
       // conventional for GET/HEAD/DELETE.
       const finalUrl = baseUrl.startsWith("http")
         ? new URL(path, baseUrl)
-        : new URL(path, "http://localhost")
+        : new URL(path, "http://localhost");
       if (input !== null && input !== undefined && typeof input === "object") {
         for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-          if (slugValues.has(k)) continue // already embedded in the path
+          if (slugValues.has(k)) continue; // already embedded in the path
           if (v !== undefined && v !== null) {
-            finalUrl.searchParams.set(k, String(v))
+            finalUrl.searchParams.set(k, String(v));
           }
         }
       }
       const url = baseUrl.startsWith("http")
         ? finalUrl.toString()
-        : finalUrl.pathname + (finalUrl.search !== "" ? finalUrl.search : "")
-      req = new Request(url, { method: verb, signal })
+        : finalUrl.pathname + (finalUrl.search !== "" ? finalUrl.search : "");
+      req = new Request(url, { method: verb, signal });
     } else {
       // POST/PUT/PATCH: input as JSON body
-      const url = `${baseUrl}${path}`
+      const url = `${baseUrl}${path}`;
       req = new Request(url, {
         method: verb,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input ?? {}),
         signal,
-      })
+      });
     }
 
-    let res: Response
+    let res: Response;
     try {
-      res = await fetchImpl(req)
+      res = await fetchImpl(req);
     } catch (err) {
-      throw describeAbort(err, verb, path, timeout)
+      throw describeAbort(err, verb, path, timeout);
     }
 
-    const decoded = composeDecodeResponse(res, { request: req, refetch: fetchImpl, meta, codegenName }, extensions)
-    if (decoded !== undefined) return decoded.value
+    const decoded = composeDecodeResponse(
+      res,
+      { request: req, refetch: fetchImpl, meta, codegenName },
+      extensions,
+    );
+    if (decoded !== undefined) return decoded.value;
 
-    let body: unknown
-    const ct = res.headers.get("Content-Type") ?? ""
+    let body: unknown;
+    const ct = res.headers.get("Content-Type") ?? "";
     if (ct.includes("application/json")) {
-      body = await res.json()
+      body = await res.json();
     } else {
-      body = await res.text()
+      body = await res.text();
     }
 
     if (!res.ok) {
-      throw new ClientError(res.status, body)
+      throw new ClientError(res.status, body);
     }
 
-    return body
-  }
+    return body;
+  };
 }
 
 // ============================================================================
@@ -531,7 +565,7 @@ function isSingleLeafMethod(route: HttpRoute): boolean {
     Object.keys(route.methods ?? {}).length === 1 &&
     Object.keys(route.children ?? {}).length === 0 &&
     route.fallback === undefined
-  )
+  );
 }
 
 /**
@@ -543,7 +577,7 @@ function isSingleLeafMethod(route: HttpRoute): boolean {
  * the precise static type at the boundary — this function's own return type
  * is never itself exposed.
  */
-type ClientNodeBuildResult = Record<string, unknown> | ClientLeafFn<CallOptions>
+type ClientNodeBuildResult = Record<string, unknown> | ClientLeafFn<CallOptions>;
 
 function buildClientNode(
   route: HttpRoute,
@@ -559,9 +593,9 @@ function buildClientNode(
 ): ClientNodeBuildResult {
   if (isSingleLeafMethod(route)) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const [verb] = Object.keys(route.methods!)
+    const [verb] = Object.keys(route.methods!);
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const entry = route.methods![verb!]!
+    const entry = route.methods![verb!]!;
     return makeCaller(
       verb!,
       path,
@@ -573,13 +607,13 @@ function buildClientNode(
       extensions,
       entry.meta,
       codegenNames?.get(entry.handler),
-    )
+    );
   }
 
-  const client: Record<string, unknown> = {}
+  const client: Record<string, unknown> = {};
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
-    const name = handlerNames?.get(entry.handler) ?? verb.toLowerCase()
+    const name = handlerNames?.get(entry.handler) ?? verb.toLowerCase();
     client[name] = makeCaller(
       verb,
       path,
@@ -591,7 +625,7 @@ function buildClientNode(
       extensions,
       entry.meta,
       codegenNames?.get(entry.handler),
-    )
+    );
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
@@ -606,11 +640,11 @@ function buildClientNode(
       baseSignal,
       extensions,
       codegenNames,
-    )
+    );
   }
 
   if (route.fallback !== undefined) {
-    const { name, subtree } = route.fallback
+    const { name, subtree } = route.fallback;
     client[name] = (slugValue: string): ClientNodeBuildResult =>
       buildClientNode(
         subtree,
@@ -623,10 +657,10 @@ function buildClientNode(
         baseSignal,
         extensions,
         codegenNames,
-      )
+      );
   }
 
-  return client
+  return client;
 }
 
 // ============================================================================
@@ -662,9 +696,12 @@ function buildClientNode(
  * @param route - The (already rewritten) HttpRoute tree to project.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).
  */
-export function createClientFromRoute<R extends HttpRoute>(route: R, opts: ClientOptions = {}): RouteClient<R, CallOptions> {
-  const baseUrl = opts.baseUrl ?? ""
-  const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
+export function createClientFromRoute<R extends HttpRoute>(
+  route: R,
+  opts: ClientOptions = {},
+): RouteClient<R, CallOptions> {
+  const baseUrl = opts.baseUrl ?? "";
+  const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions);
   return buildClientNode(
     route,
     "",
@@ -676,7 +713,7 @@ export function createClientFromRoute<R extends HttpRoute>(route: R, opts: Clien
     opts.signal,
     opts.extensions,
     undefined,
-  ) as RouteClient<R, CallOptions>
+  ) as RouteClient<R, CallOptions>;
 }
 
 // ============================================================================
@@ -710,12 +747,15 @@ export function createClientFromRoute<R extends HttpRoute>(route: R, opts: Clien
  * @param n - The root node to project.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).
  */
-export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): TypedClient<N, CallOptions> {
-  const route = httpProjection(n)
-  const handlerNames = buildHandlerNames(n)
-  const codegenNames = buildCodegenNames(n)
-  const baseUrl = opts.baseUrl ?? ""
-  const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions)
+export function createClient<N extends Node>(
+  n: N,
+  opts: ClientOptions = {},
+): TypedClient<N, CallOptions> {
+  const route = httpProjection(n);
+  const handlerNames = buildHandlerNames(n);
+  const codegenNames = buildCodegenNames(n);
+  const baseUrl = opts.baseUrl ?? "";
+  const fetchImpl = composeFetch(opts.fetch ?? globalThis.fetch.bind(globalThis), opts.extensions);
   return buildClientNode(
     route,
     "",
@@ -727,5 +767,5 @@ export function createClient<N extends Node>(n: N, opts: ClientOptions = {}): Ty
     opts.signal,
     opts.extensions,
     codegenNames,
-  ) as TypedClient<N, CallOptions>
+  ) as TypedClient<N, CallOptions>;
 }

@@ -13,7 +13,7 @@
 // force-unified — see each group's doc comment below for which projectors
 // share which variant.
 
-import { ancestors } from "./index.ts"
+import { ancestors } from "./index.ts";
 
 // ============================================================================
 // Identifier casing
@@ -24,7 +24,7 @@ import { ancestors } from "./index.ts"
  * needs a PascalCase getter/setter/method name from a camelCase field name
  * (`name` -> `Name` for `getName`/`setName`) had its own copy. */
 export function capitalize(name: string): string {
-  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1)
+  return name.length === 0 ? name : name[0]!.toUpperCase() + name.slice(1);
 }
 
 /** Splits `name` on runs of non-alphanumeric characters, capitalizes each
@@ -34,10 +34,10 @@ export function capitalize(name: string): string {
  * (an invalid Go identifier start). Shared by the `go-*` projector family
  * (go-jsoniter, go-sonic, go-easyjson, go-encoding-json). */
 export function goFieldIdent(raw: string): string {
-  const parts = raw.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0)
-  const joined = parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join("")
-  if (joined.length === 0) return "Field"
-  return /^[0-9]/.test(joined) ? `_${joined}` : joined
+  const parts = raw.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0);
+  const joined = parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join("");
+  if (joined.length === 0) return "Field";
+  return /^[0-9]/.test(joined) ? `_${joined}` : joined;
 }
 
 /** Splits `name` into words on camelCase boundaries and `_`/`-`/whitespace
@@ -49,7 +49,7 @@ export function splitWords(name: string): string[] {
     .replace(/[_\-\s]+/g, " ")
     .trim()
     .split(" ")
-    .filter(Boolean)
+    .filter(Boolean);
 }
 
 /** PascalCase via `splitWords` — capitalize each word, lowercase the rest,
@@ -57,14 +57,14 @@ export function splitWords(name: string): string[] {
 export function toPascalCaseFromWords(name: string): string {
   return splitWords(name)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join("")
+    .join("");
 }
 
 /** camelCase via `toPascalCaseFromWords`, lowercasing the leading character.
  * Shared by elm-json.ts. */
 export function toCamelCaseFromWords(name: string): string {
-  const pascal = toPascalCaseFromWords(name)
-  return pascal.length === 0 ? pascal : pascal.charAt(0).toLowerCase() + pascal.slice(1)
+  const pascal = toPascalCaseFromWords(name);
+  return pascal.length === 0 ? pascal : pascal.charAt(0).toLowerCase() + pascal.slice(1);
 }
 
 /** PascalCase by stripping non-alphanumeric runs and uppercasing the
@@ -74,8 +74,10 @@ export function toCamelCaseFromWords(name: string): string {
  * of each word; this one leaves internal casing alone, matching Rust/Gleam
  * convention for already-mixed-case identifiers). */
 export function toPascalCaseStripSeparators(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return cleaned.length === 0 ? cleaned : cleaned[0]!.toUpperCase() + cleaned.slice(1)
+  const cleaned = name.replace(/[^a-zA-Z0-9]+(.)?/g, (_m, c: string | undefined) =>
+    c ? c.toUpperCase() : "",
+  );
+  return cleaned.length === 0 ? cleaned : cleaned[0]!.toUpperCase() + cleaned.slice(1);
 }
 
 /** camelCase by stripping `-`/`_`/whitespace runs and uppercasing the
@@ -83,8 +85,10 @@ export function toPascalCaseStripSeparators(name: string): string {
  * Shared by the `swift-*` projector family (swift-codable, swift-objectmapper,
  * swift-swiftyjson). */
 export function toCamelCaseStripSeparators(name: string): string {
-  const camel = name.replace(/[-_\s]+(.)?/g, (_, c: string | undefined) => (c ? c.toUpperCase() : ""))
-  return camel.length === 0 ? camel : camel[0]!.toLowerCase() + camel.slice(1)
+  const camel = name.replace(/[-_\s]+(.)?/g, (_, c: string | undefined) =>
+    c ? c.toUpperCase() : "",
+  );
+  return camel.length === 0 ? camel : camel[0]!.toLowerCase() + camel.slice(1);
 }
 
 /** snake_case by inserting `_` at camelCase boundaries, replacing any other
@@ -95,7 +99,7 @@ export function toSnakeCaseStripSeparators(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 /** snake_case by inserting `_` at camelCase boundaries and between a
@@ -108,7 +112,7 @@ export function toSnakeCaseAcronymAware(name: string): string {
   return name
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 // ============================================================================
@@ -120,7 +124,7 @@ export function toSnakeCaseAcronymAware(name: string): string {
  * `target` is expected" check every projector with kind-specific branches
  * (e.g. "is this an int32/int64 refinement of `integer`?") needs. */
 export function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
+  return kind === target || ancestors(kind).includes(target);
 }
 
 // ============================================================================
@@ -133,7 +137,7 @@ export function isA(kind: string, target: string): boolean {
  * Typed to accept `unknown` so it also covers call sites (e.g.
  * mkdocs-reference.ts) that quote non-string values. */
 export function quote(value: unknown): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 /** JSON-quotes `name` only when it isn't already a valid bare TS/JS
@@ -142,7 +146,7 @@ export function quote(value: unknown): string {
  * typescript-io-ts, typescript-yup, typescript-typebox, typescript-runtypes,
  * typescript-superstruct, typescript-effect-schema, typescript-arktype). */
 export function quoteKey(name: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
 }
 
 /** Single-quotes `value` for Dart string-literal syntax, backslash-escaping
@@ -151,8 +155,8 @@ export function quoteKey(name: string): string {
  * Shared by dart-built-value.ts, dart-freezed.ts, and
  * dart-json-serializable.ts. */
 export function quoteDart(value: string): string {
-  const escaped = value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$")
-  return `'${escaped}'`
+  const escaped = value.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$");
+  return `'${escaped}'`;
 }
 
 // ============================================================================
@@ -164,7 +168,7 @@ export function quoteDart(value: string): string {
  * KotlinGsonOptions, …) reimplemented this as a one-line spread; generic here
  * since the merge itself doesn't depend on what `T` is. */
 export function resolveOptions<T extends object>(defaults: Required<T>, options?: T): Required<T> {
-  return { ...defaults, ...options }
+  return { ...defaults, ...options };
 }
 
 // ============================================================================
@@ -178,7 +182,7 @@ export function indent4(text: string): string {
   return text
     .split("\n")
     .map((line) => (line.length === 0 ? line : `    ${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 /** Splits `text` into lines and prepends `spaces` spaces to each non-empty
@@ -186,15 +190,15 @@ export function indent4(text: string): string {
  * other already-split lines). Shared by swift-codable.ts and
  * swift-objectmapper.ts. */
 export function indentLines(text: string, spaces: number): string[] {
-  const pad = " ".repeat(spaces)
-  return text.split("\n").map((line) => (line.length === 0 ? line : `${pad}${line}`))
+  const pad = " ".repeat(spaces);
+  return text.split("\n").map((line) => (line.length === 0 ? line : `${pad}${line}`));
 }
 
 // ============================================================================
 // Doc comments
 // ============================================================================
 
-type Meta = Readonly<Record<string, unknown>>
+type Meta = Readonly<Record<string, unknown>>;
 
 /** Java-style `/** … *&#47;` doc comment: always multiline (opening `/**`
  * and closing ` *&#47;` on their own lines) even for a lone description or a
@@ -204,14 +208,14 @@ type Meta = Readonly<Record<string, unknown>>
  * description nor a deprecation flag. Shared by java-gson.ts,
  * java-jackson.ts, java-moshi.ts, and java-jsonb.ts. */
 export function javaDocComment(meta: Meta, indent: string): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
-  const lines = ["/**"]
-  if (description !== undefined) lines.push(`${indent} * ${description}`)
-  if (deprecated) lines.push(`${indent} * @deprecated`)
-  lines.push(`${indent} */`)
-  return `${lines.join("\n")}\n${indent}`
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  const deprecated = meta.deprecated === true;
+  if (description === undefined && !deprecated) return "";
+  const lines = ["/**"];
+  if (description !== undefined) lines.push(`${indent} * ${description}`);
+  if (deprecated) lines.push(`${indent} * @deprecated`);
+  lines.push(`${indent} */`);
+  return `${lines.join("\n")}\n${indent}`;
 }
 
 /** Kotlin-style `/** … *&#47;` doc comment: collapses to a single line
@@ -220,14 +224,20 @@ export function javaDocComment(meta: Meta, indent: string): string {
  * line. Returns `""` when there's neither a description nor a deprecation
  * flag. Shared by kotlin-gson.ts, kotlin-jackson.ts, and kotlin-kotlinx.ts. */
 export function kotlinDocComment(meta: Meta, indent: string): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  const deprecated = meta.deprecated === true;
+  if (description === undefined && !deprecated) return "";
   if (description !== undefined && deprecated) {
-    return [`${indent}/**`, `${indent} * ${description}`, `${indent} * @deprecated`, `${indent} */`, ""].join("\n")
+    return [
+      `${indent}/**`,
+      `${indent} * ${description}`,
+      `${indent} * @deprecated`,
+      `${indent} */`,
+      "",
+    ].join("\n");
   }
-  if (description !== undefined) return `${indent}/** ${description} */\n`
-  return `${indent}/** @deprecated */\n`
+  if (description !== undefined) return `${indent}/** ${description} */\n`;
+  return `${indent}/** @deprecated */\n`;
 }
 
 /** Swift-style `///` doc comment lines plus an `@available(*, deprecated,
@@ -238,19 +248,20 @@ export function kotlinDocComment(meta: Meta, indent: string): string {
  * attribute with no message. Shared by swift-codable.ts,
  * swift-objectmapper.ts, and swift-swiftyjson.ts. */
 export function swiftDocComment(ref: { meta: Meta }): string[] {
-  const description = typeof ref.meta.description === "string" ? ref.meta.description : undefined
-  const deprecatedMessage = typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : undefined
-  const isDeprecated = ref.meta.deprecated === true || deprecatedMessage !== undefined
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`/// ${description}`)
+  const description = typeof ref.meta.description === "string" ? ref.meta.description : undefined;
+  const deprecatedMessage =
+    typeof ref.meta.deprecated === "string" ? ref.meta.deprecated : undefined;
+  const isDeprecated = ref.meta.deprecated === true || deprecatedMessage !== undefined;
+  const lines: string[] = [];
+  if (description !== undefined) lines.push(`/// ${description}`);
   if (isDeprecated) {
     lines.push(
       deprecatedMessage !== undefined
         ? `@available(*, deprecated, message: ${quote(deprecatedMessage)})`
         : "@available(*, deprecated)",
-    )
+    );
   }
-  return lines
+  return lines;
 }
 
 /** PHP-style `/** … *&#47;` doc comment: `@deprecated` (or `@deprecated
@@ -258,12 +269,17 @@ export function swiftDocComment(ref: { meta: Meta }): string[] {
  * alongside `description`. Returns `""` when there's neither. Shared by
  * php-symfony.ts, php-jms.ts, and php-native.ts. */
 export function phpDocComment(meta: Meta): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated
-  const deprecatedTag = deprecated === true ? "@deprecated" : typeof deprecated === "string" ? `@deprecated ${deprecated}` : undefined
-  if (description === undefined && deprecatedTag === undefined) return ""
-  const lines = [description, deprecatedTag].filter((line): line is string => line !== undefined)
-  return ["/**", ...lines.map((line) => ` * ${line}`), " */\n"].join("\n")
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  const deprecated = meta.deprecated;
+  const deprecatedTag =
+    deprecated === true
+      ? "@deprecated"
+      : typeof deprecated === "string"
+        ? `@deprecated ${deprecated}`
+        : undefined;
+  if (description === undefined && deprecatedTag === undefined) return "";
+  const lines = [description, deprecatedTag].filter((line): line is string => line !== undefined);
+  return ["/**", ...lines.map((line) => ` * ${line}`), " */\n"].join("\n");
 }
 
 /** Go-style `//` doc comment following Go convention (comment begins with
@@ -273,16 +289,16 @@ export function phpDocComment(meta: Meta): string {
  * when there's neither a description nor a deprecation flag/message. Shared
  * by go-jsoniter.ts, go-sonic.ts, go-easyjson.ts, and go-encoding-json.ts. */
 export function goDocComment(name: string, meta: Meta): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecatedMessage = typeof meta.deprecated === "string" ? meta.deprecated : undefined
-  const isDeprecated = meta.deprecated === true || deprecatedMessage !== undefined
-  const lines: string[] = []
-  if (description !== undefined) lines.push(`// ${name} ${description}`)
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  const deprecatedMessage = typeof meta.deprecated === "string" ? meta.deprecated : undefined;
+  const isDeprecated = meta.deprecated === true || deprecatedMessage !== undefined;
+  const lines: string[] = [];
+  if (description !== undefined) lines.push(`// ${name} ${description}`);
   if (isDeprecated) {
-    if (lines.length > 0) lines.push("//")
-    lines.push(`// Deprecated: ${deprecatedMessage ?? `${name} is deprecated.`}`)
+    if (lines.length > 0) lines.push("//");
+    lines.push(`// Deprecated: ${deprecatedMessage ?? `${name} is deprecated.`}`);
   }
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`
+  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
 /** Dart-style `///` doc comment — description only (Dart's `@Deprecated`
@@ -291,9 +307,9 @@ export function goDocComment(name: string, meta: Meta): string {
  * Returns `""` when there's no description. Shared by dart-built-value.ts,
  * dart-freezed.ts, and dart-json-serializable.ts. */
 export function dartDocComment(meta: Meta, indent = ""): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  if (description === undefined) return ""
-  return `${indent}/// ${description}\n`
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  if (description === undefined) return "";
+  return `${indent}/// ${description}\n`;
 }
 
 /** Dart's native `@Deprecated('reason')` annotation
@@ -304,10 +320,10 @@ export function dartDocComment(meta: Meta, indent = ""): string {
  * Shared by dart-built-value.ts, dart-freezed.ts, and
  * dart-json-serializable.ts. */
 export function dartDeprecatedAnnotation(meta: Meta, indent = ""): string {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return `${indent}@Deprecated('deprecated')\n`
-  if (typeof deprecated === "string") return `${indent}@Deprecated(${quoteDart(deprecated)})\n`
-  return ""
+  const deprecated = meta.deprecated;
+  if (deprecated === true) return `${indent}@Deprecated('deprecated')\n`;
+  if (typeof deprecated === "string") return `${indent}@Deprecated(${quoteDart(deprecated)})\n`;
+  return "";
 }
 
 /** Flow/TypeScript-style `/** … *&#47;` doc comment: same collapse-to-
@@ -317,12 +333,12 @@ export function dartDeprecatedAnnotation(meta: Meta, indent = ""): string {
  * there's neither a description nor a deprecation flag. Shared by
  * flow-native.ts and typescript-native.ts. */
 export function flowTsDocComment(meta: Meta): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  const deprecated = meta.deprecated === true
-  if (description === undefined && !deprecated) return ""
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  const deprecated = meta.deprecated === true;
+  if (description === undefined && !deprecated) return "";
   if (description !== undefined && deprecated) {
-    return ["/**", ` * ${description}`, " * @deprecated", " */", ""].join("\n")
+    return ["/**", ` * ${description}`, " * @deprecated", " */", ""].join("\n");
   }
-  if (description !== undefined) return `/** ${description} */\n`
-  return "/** @deprecated */\n"
+  if (description !== undefined) return `/** ${description} */\n`;
+  return "/** @deprecated */\n";
 }

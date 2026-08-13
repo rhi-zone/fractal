@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it } from "bun:test";
 
-import { t, types, typeRefDocument } from "./index.ts"
-import { kebabCase, renderTypeExpr, toMkdocsVanillaReference } from "./mkdocs-vanilla-reference.ts"
+import { t, types, typeRefDocument } from "./index.ts";
+import { kebabCase, renderTypeExpr, toMkdocsVanillaReference } from "./mkdocs-vanilla-reference.ts";
 
 // ============================================================================
 // Dedicated fixture — a small blog/CMS-flavored API surface (distinct from
@@ -19,12 +19,12 @@ const author = t(
     id: t(types.integer),
   }),
   { description: "The user who wrote a post." },
-)
+);
 
 const status = t(types.enum(["draft", "published", "archived"]), {
   description: "A post's publication state.",
   deprecated: "superseded by the `workflow_state` field; kept for backward compatibility",
-})
+});
 
 const post = t(
   types.object({
@@ -39,9 +39,14 @@ const post = t(
   }),
   {
     description: "A single blog post.",
-    example: { title: "Hello, MkDocs", author: { name: "Ada", id: 1 }, status: "published", legacyViewCount: 42 },
+    example: {
+      title: "Hello, MkDocs",
+      author: { name: "Ada", id: 1 },
+      status: "published",
+      legacyViewCount: 42,
+    },
   },
-)
+);
 
 const commentCreated = t(
   types.object({
@@ -50,7 +55,7 @@ const commentCreated = t(
     post: t(types.ref("Post")),
   }),
   { description: "A comment was posted." },
-)
+);
 
 const commentDeleted = t(
   types.object({
@@ -58,22 +63,25 @@ const commentDeleted = t(
     commentId: t(types.string),
   }),
   { description: "A comment was removed." },
-)
+);
 
 const commentEvent = t(types.union([commentCreated, commentDeleted]), {
   discriminator: "type",
   description: "A comment moderation event.",
-})
+});
 
 const moderator = t(
   types.interface({
     listFlagged: t(
-      types.function([{ name: "post", type: t(types.ref("Post")) }], t(types.array(t(types.ref("CommentEvent"))))),
+      types.function(
+        [{ name: "post", type: t(types.ref("Post")) }],
+        t(types.array(t(types.ref("CommentEvent")))),
+      ),
       { description: "List flagged comment events for a post." },
     ),
   }),
   { description: "A minimal comment-moderation client." },
-)
+);
 
 const doc = typeRefDocument(t(types.ref("Post")), {
   Post: post,
@@ -81,9 +89,9 @@ const doc = typeRefDocument(t(types.ref("Post")), {
   Status: status,
   CommentEvent: commentEvent,
   Moderator: moderator,
-})
+});
 
-const pages = toMkdocsVanillaReference(doc)
+const pages = toMkdocsVanillaReference(doc);
 
 // ============================================================================
 // Bar A (structural smoke test): non-empty, well-formed frontmatter, and —
@@ -95,34 +103,34 @@ describe("mkdocs-vanilla-reference structural validity (bar A)", () => {
   it("every page filename is the kebab-case def name plus .md", () => {
     expect([...pages.keys()].sort()).toEqual(
       ["post.md", "author.md", "status.md", "comment-event.md", "moderator.md"].sort(),
-    )
-  })
+    );
+  });
 
   for (const [filename, content] of pages) {
     it(`${filename} opens with well-formed YAML frontmatter`, () => {
-      expect(content.startsWith("---\ntitle:")).toBe(true)
-      expect(content).toContain("\n---\n")
-    })
+      expect(content.startsWith("---\ntitle:")).toBe(true);
+      expect(content).toContain("\n---\n");
+    });
 
     it(`${filename} is non-empty and ends with exactly one trailing newline`, () => {
-      expect(content.length).toBeGreaterThan(0)
-      expect(content.endsWith("\n")).toBe(true)
-      expect(content.endsWith("\n\n")).toBe(false)
-    })
+      expect(content.length).toBeGreaterThan(0);
+      expect(content.endsWith("\n")).toBe(true);
+      expect(content.endsWith("\n\n")).toBe(false);
+    });
 
     it(`${filename} contains no Material-Material-only admonition syntax`, () => {
-      expect(content).not.toMatch(/^!!!/m)
-    })
+      expect(content).not.toMatch(/^!!!/m);
+    });
 
     it(`${filename} contains no pymdownx content-tab syntax`, () => {
-      expect(content).not.toMatch(/^===\s+"/m)
-    })
+      expect(content).not.toMatch(/^===\s+"/m);
+    });
 
     it(`${filename} contains no abbreviation-glossary syntax`, () => {
-      expect(content).not.toMatch(/^\*\[[^\]]+\]:/m)
-    })
+      expect(content).not.toMatch(/^\*\[[^\]]+\]:/m);
+    });
   }
-})
+});
 
 // ============================================================================
 // Bar B (dedicated fixture, reviewed/structural assertions) — exact expected
@@ -133,110 +141,110 @@ describe("mkdocs-vanilla-reference structural validity (bar A)", () => {
 // ============================================================================
 
 describe("mkdocs-vanilla-reference — object def (Post)", () => {
-  const md = pages.get("post.md")!
+  const md = pages.get("post.md")!;
 
   it("has a title and description in frontmatter", () => {
-    expect(md).toContain('title: "Post"')
-    expect(md).toContain('description: "A single blog post."')
-  })
+    expect(md).toContain('title: "Post"');
+    expect(md).toContain('description: "A single blog post."');
+  });
 
   it("renders the page title as an H1", () => {
-    expect(md).toContain("# Post")
-  })
+    expect(md).toContain("# Post");
+  });
 
   it("renders a plain Type Signature fenced code block (no tabs)", () => {
-    expect(md).toContain("## Type Signature\n\n```typescript\ntype Post =")
-    expect(md).not.toContain('=== "')
-  })
+    expect(md).toContain("## Type Signature\n\n```typescript\ntype Post =");
+    expect(md).not.toContain('=== "');
+  });
 
   it("renders a Fields table with a header row", () => {
-    expect(md).toContain("| Field | Type | Required | Description |")
-    expect(md).toContain("| --- | --- | --- | --- |")
-  })
+    expect(md).toContain("| Field | Type | Required | Description |");
+    expect(md).toContain("| --- | --- | --- | --- |");
+  });
 
   it("cross-links ref-typed fields via plain Markdown links", () => {
-    expect(md).toContain("| author | [Author](author.md) | Yes |")
-    expect(md).toContain("| status | [Status](status.md) | Yes |")
-  })
+    expect(md).toContain("| author | [Author](author.md) | Yes |");
+    expect(md).toContain("| status | [Status](status.md) | Yes |");
+  });
 
   it("marks the optional field as not required", () => {
-    expect(md).toContain("| summary | string | No |")
-  })
+    expect(md).toContain("| summary | string | No |");
+  });
 
   it("marks the deprecated field with a bold deprecated marker in its Description cell", () => {
-    expect(md).toContain("Number of times this post was viewed. — **deprecated**")
-  })
+    expect(md).toContain("Number of times this post was viewed. — **deprecated**");
+  });
 
   it("renders the documented example as a fenced JSON block, not a Material tab", () => {
-    expect(md).toContain("## Example\n\n```json")
-    expect(md).toContain('"name": "Ada"')
-    expect(md).not.toContain('=== "Example')
-  })
-})
+    expect(md).toContain("## Example\n\n```json");
+    expect(md).toContain('"name": "Ada"');
+    expect(md).not.toContain('=== "Example');
+  });
+});
 
 describe("mkdocs-vanilla-reference — deprecated leaf field still renders its own value type correctly", () => {
   it("legacyViewCount still renders as integer despite being deprecated", () => {
-    const md = pages.get("post.md")!
-    expect(md).toContain("| legacyViewCount | integer | Yes |")
-  })
-})
+    const md = pages.get("post.md")!;
+    expect(md).toContain("| legacyViewCount | integer | Yes |");
+  });
+});
 
 describe("mkdocs-vanilla-reference — enum def (Status) with a def-level deprecation", () => {
-  const md = pages.get("status.md")!
+  const md = pages.get("status.md")!;
 
   it("renders a Members section with each enum value as an inline-code bullet", () => {
-    expect(md).toContain("## Members")
-    expect(md).toContain('- `"draft"`')
-    expect(md).toContain('- `"published"`')
-    expect(md).toContain('- `"archived"`')
-  })
+    expect(md).toContain("## Members");
+    expect(md).toContain('- `"draft"`');
+    expect(md).toContain('- `"published"`');
+    expect(md).toContain('- `"archived"`');
+  });
 
   it("renders the def-level deprecation as a plain blockquote, not a Material admonition", () => {
     expect(md).toContain(
       "> **Deprecated.** superseded by the `workflow_state` field; kept for backward compatibility",
-    )
-    expect(md).not.toContain("!!! warning")
-  })
-})
+    );
+    expect(md).not.toContain("!!! warning");
+  });
+});
 
 describe("mkdocs-vanilla-reference — union def (CommentEvent)", () => {
-  const md = pages.get("comment-event.md")!
+  const md = pages.get("comment-event.md")!;
 
   it("names the discriminator", () => {
-    expect(md).toContain("Discriminated by `type`.")
-  })
+    expect(md).toContain("Discriminated by `type`.");
+  });
 
   it("renders one H3 subsection per variant, named by the discriminator's literal tag", () => {
-    expect(md).toContain("### created")
-    expect(md).toContain("### deleted")
-  })
+    expect(md).toContain("### created");
+    expect(md).toContain("### deleted");
+  });
 
   it("cross-links a ref-typed field inside a variant's nested Fields table", () => {
-    expect(md).toContain("[Post](post.md)")
-  })
-})
+    expect(md).toContain("[Post](post.md)");
+  });
+});
 
 describe("mkdocs-vanilla-reference — interface def (Moderator)", () => {
-  const md = pages.get("moderator.md")!
+  const md = pages.get("moderator.md")!;
 
   it("renders a Methods table instead of a Fields table", () => {
-    expect(md).toContain("## Methods")
-    expect(md).toContain("| Method | Signature | Description |")
-  })
+    expect(md).toContain("## Methods");
+    expect(md).toContain("| Method | Signature | Description |");
+  });
 
   it("renders the method's parameter and return-type cross-links", () => {
-    expect(md).toContain("[Post](post.md)")
-    expect(md).toContain("[CommentEvent](comment-event.md)")
-  })
-})
+    expect(md).toContain("[Post](post.md)");
+    expect(md).toContain("[CommentEvent](comment-event.md)");
+  });
+});
 
 describe("mkdocs-vanilla-reference — options.basePath", () => {
   it("prefixes every returned filename", () => {
-    const prefixed = toMkdocsVanillaReference(doc, { basePath: "reference/" })
-    expect([...prefixed.keys()].every((k) => k.startsWith("reference/"))).toBe(true)
-    expect(prefixed.has("reference/post.md")).toBe(true)
-  })
-})
+    const prefixed = toMkdocsVanillaReference(doc, { basePath: "reference/" });
+    expect([...prefixed.keys()].every((k) => k.startsWith("reference/"))).toBe(true);
+    expect(prefixed.has("reference/post.md")).toBe(true);
+  });
+});
 
 // ============================================================================
 // Helper coverage — exported alongside the projector for callers assembling
@@ -245,15 +253,15 @@ describe("mkdocs-vanilla-reference — options.basePath", () => {
 
 describe("mkdocs-vanilla-reference — exported helpers", () => {
   it("kebabCase matches the filenames toMkdocsVanillaReference actually produces", () => {
-    expect(kebabCase("CommentEvent")).toBe("comment-event")
-    expect(pages.has(`${kebabCase("CommentEvent")}.md`)).toBe(true)
-  })
+    expect(kebabCase("CommentEvent")).toBe("comment-event");
+    expect(pages.has(`${kebabCase("CommentEvent")}.md`)).toBe(true);
+  });
 
   it("renderTypeExpr(linked: true) on a ref produces a Markdown link", () => {
-    expect(renderTypeExpr(t(types.ref("Author")), true)).toBe("[Author](author.md)")
-  })
+    expect(renderTypeExpr(t(types.ref("Author")), true)).toBe("[Author](author.md)");
+  });
 
   it("renderTypeExpr(linked: false) on a ref renders the bare name", () => {
-    expect(renderTypeExpr(t(types.ref("Author")), false)).toBe("Author")
-  })
-})
+    expect(renderTypeExpr(t(types.ref("Author")), false)).toBe("Author");
+  });
+});

@@ -10,11 +10,17 @@
 //
 // See docs/design/routing-and-transforms.md § DX — constructor sugar.
 
-import { api, fallback, op } from "@rhi-zone/fractal-api-tree"
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "./verbs.ts"
-import { applyMethods, applyMoveTo, applyResponse, composeTransforms, naiveTransform } from "./route.ts"
-import type { HttpRoute } from "./route.ts"
+import { api, fallback, op } from "@rhi-zone/fractal-api-tree";
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "./verbs.ts";
+import {
+  applyMethods,
+  applyMoveTo,
+  applyResponse,
+  composeTransforms,
+  naiveTransform,
+} from "./route.ts";
+import type { HttpRoute } from "./route.ts";
 
 // ============================================================================
 // crud() — convention constructor for the standard 5-op REST resource
@@ -25,12 +31,12 @@ import type { HttpRoute } from "./route.ts"
  * resource supports; `crud()` wires the rest for you.
  */
 export type CrudHandlers = {
-  readonly list?: Handler
-  readonly create?: Handler
-  readonly get?: Handler
-  readonly update?: Handler
-  readonly delete?: Handler
-}
+  readonly list?: Handler;
+  readonly create?: Handler;
+  readonly get?: Handler;
+  readonly update?: Handler;
+  readonly delete?: Handler;
+};
 
 /**
  * Convention constructor: returns a node with standard CRUD operations and
@@ -45,13 +51,13 @@ export type CrudHandlers = {
  * `api()` + `op()` + `http.*`. This is the batteries-included default.
  */
 export function crud(handlers: CrudHandlers): Node {
-  const children: Record<string, Node> = {}
-  if (handlers.list !== undefined) children.list = op(handlers.list, http.get)
-  if (handlers.create !== undefined) children.create = op(handlers.create, http.post)
-  if (handlers.get !== undefined) children.get = op(handlers.get, http.get)
-  if (handlers.update !== undefined) children.update = op(handlers.update, http.put)
-  if (handlers.delete !== undefined) children.delete = op(handlers.delete, http.delete)
-  return api(children)
+  const children: Record<string, Node> = {};
+  if (handlers.list !== undefined) children.list = op(handlers.list, http.get);
+  if (handlers.create !== undefined) children.create = op(handlers.create, http.post);
+  if (handlers.get !== undefined) children.get = op(handlers.get, http.get);
+  if (handlers.update !== undefined) children.update = op(handlers.update, http.put);
+  if (handlers.delete !== undefined) children.delete = op(handlers.delete, http.delete);
+  return api(children);
 }
 
 // ============================================================================
@@ -66,8 +72,8 @@ export type RestCrudOptions = {
    * Name of the dynamic id segment's fallback param, e.g. `"bookId"` binds
    * `input.bookId` for `get`/`update`/`delete`. Defaults to `"id"`.
    */
-  readonly idParam?: string
-}
+  readonly idParam?: string;
+};
 
 /**
  * Convention constructor, sibling to `crud()` above but producing the actual
@@ -117,20 +123,24 @@ export type RestCrudOptions = {
  * ```
  */
 export function restCrud(handlers: CrudHandlers, opts: RestCrudOptions = {}): Node {
-  const idParam = opts.idParam ?? "id"
+  const idParam = opts.idParam ?? "id";
 
-  const rootChildren: Record<string, Node> = {}
-  if (handlers.list !== undefined) rootChildren.list = op(handlers.list, http.get, http.moveTo(".."))
-  if (handlers.create !== undefined) rootChildren.create = op(handlers.create, http.post, http.moveTo(".."))
+  const rootChildren: Record<string, Node> = {};
+  if (handlers.list !== undefined)
+    rootChildren.list = op(handlers.list, http.get, http.moveTo(".."));
+  if (handlers.create !== undefined)
+    rootChildren.create = op(handlers.create, http.post, http.moveTo(".."));
 
-  const idChildren: Record<string, Node> = {}
-  if (handlers.get !== undefined) idChildren.get = op(handlers.get, http.get, http.moveTo(".."))
-  if (handlers.update !== undefined) idChildren.update = op(handlers.update, http.put, http.moveTo(".."))
-  if (handlers.delete !== undefined) idChildren.delete = op(handlers.delete, http.delete, http.moveTo(".."))
+  const idChildren: Record<string, Node> = {};
+  if (handlers.get !== undefined) idChildren.get = op(handlers.get, http.get, http.moveTo(".."));
+  if (handlers.update !== undefined)
+    idChildren.update = op(handlers.update, http.put, http.moveTo(".."));
+  if (handlers.delete !== undefined)
+    idChildren.delete = op(handlers.delete, http.delete, http.moveTo(".."));
 
   return Object.keys(idChildren).length > 0
     ? api(rootChildren, { fallback: fallback(idParam, idChildren) })
-    : api(rootChildren)
+    : api(rootChildren);
 }
 
 // ============================================================================
@@ -143,8 +153,8 @@ export type HttpProjectionOptions = {
    * to `[applyMethods, applyMoveTo, applyResponse]`. Order matters —
    * `composeTransforms` runs them left to right.
    */
-  readonly transforms?: ReadonlyArray<(route: HttpRoute) => HttpRoute>
-}
+  readonly transforms?: ReadonlyArray<(route: HttpRoute) => HttpRoute>;
+};
 
 /**
  * One-call `Node => HttpRoute` projection with the standard rewriter
@@ -165,7 +175,7 @@ export type HttpProjectionOptions = {
  * ```
  */
 export function httpProjection(tree: Node, opts?: HttpProjectionOptions): HttpRoute {
-  const transforms = opts?.transforms ?? [applyMethods, applyMoveTo, applyResponse]
-  const rewrite = composeTransforms(...transforms)
-  return rewrite(naiveTransform(tree))
+  const transforms = opts?.transforms ?? [applyMethods, applyMoveTo, applyResponse];
+  const rewrite = composeTransforms(...transforms);
+  return rewrite(naiveTransform(tree));
 }

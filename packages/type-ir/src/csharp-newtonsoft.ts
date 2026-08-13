@@ -10,52 +10,52 @@
 // and the polymorphism strategy differ, since Newtonsoft has no built-in
 // `[JsonPolymorphic]`/`[JsonDerivedType]` equivalent (see emitUnionType
 // below for the custom-converter fallback this drives).
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { indent4, isA, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { indent4, isA, quote } from "./codegen-helpers.ts";
 
 interface Ctx {
-  readonly decls: string[]
+  readonly decls: string[];
 }
 
 /** camelCase/snake_case/kebab-case (or already-PascalCase) -> PascalCase —
  * used for both C# property names (from field keys) and type/member names
  * (from field keys used as a naming seed, and enum member strings). */
 function pascalCase(raw: string): string {
-  const parts = raw.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0)
-  if (parts.length === 0) return raw
-  return parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join("")
+  const parts = raw.split(/[^A-Za-z0-9]+/).filter((p) => p.length > 0);
+  if (parts.length === 0) return raw;
+  return parts.map((p) => p[0]!.toUpperCase() + p.slice(1)).join("");
 }
 
 // Render a `meta.default` value (JSON-ish: string/number/boolean/null/array/
 // object) as a C# literal, for `[DefaultValue(...)]`. Mirrors
 // python-pydantic.ts's `pythonLiteral` but targets C# literal syntax.
 function csharpLiteral(value: unknown): string {
-  if (value === null || value === undefined) return "null"
-  if (typeof value === "boolean") return value ? "true" : "false"
-  if (typeof value === "number") return String(value)
-  if (typeof value === "string") return quote(value)
-  if (Array.isArray(value)) return `new object[] { ${value.map(csharpLiteral).join(", ")} }`
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return quote(value);
+  if (Array.isArray(value)) return `new object[] { ${value.map(csharpLiteral).join(", ")} }`;
   if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-    return `new Dictionary<string, object> { ${entries.map(([k, v]) => `{ ${quote(k)}, ${csharpLiteral(v)} }`).join(", ")} }`
+    const entries = Object.entries(value as Record<string, unknown>);
+    return `new Dictionary<string, object> { ${entries.map(([k, v]) => `{ ${quote(k)}, ${csharpLiteral(v)} }`).join(", ")} }`;
   }
-  return "null"
+  return "null";
 }
 
-type Converter = (shape: TypeShape, suggestedName: string, ctx: Ctx) => string
+type Converter = (shape: TypeShape, suggestedName: string, ctx: Ctx) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // XML doc-comment convention (https://learn.microsoft.com/dotnet/csharp/language-reference/xmldoc/)
 // — `<summary>` from `meta.description`, rendered as a `///`-prefixed block
 // immediately above the declaration it documents.
 function xmlDocComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  if (description === undefined) return ""
-  return `/// <summary>\n/// ${description}\n/// </summary>\n`
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  if (description === undefined) return "";
+  return `/// <summary>\n/// ${description}\n/// </summary>\n`;
 }
 
 // [Obsolete] (https://learn.microsoft.com/dotnet/api/system.obsoleteattribute)
@@ -63,9 +63,9 @@ function xmlDocComment(meta: Readonly<Record<string, unknown>>): string {
 // every use site) — `meta.deprecated` may be `true` (no message) or a string
 // (becomes the attribute's message argument).
 function obsoleteAttr(meta: Readonly<Record<string, unknown>>): string {
-  if (typeof meta.deprecated === "string") return `[Obsolete(${quote(meta.deprecated)})]\n`
-  if (meta.deprecated === true) return "[Obsolete]\n"
-  return ""
+  if (typeof meta.deprecated === "string") return `[Obsolete(${quote(meta.deprecated)})]\n`;
+  if (meta.deprecated === true) return "[Obsolete]\n";
+  return "";
 }
 
 function emitObjectType(
@@ -76,10 +76,10 @@ function emitObjectType(
 ): string {
   const props = Object.entries(shape.fields).map(([fieldName, fieldRef]) =>
     renderProperty(fieldName, fieldRef, name, ctx),
-  )
-  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`
-  ctx.decls.push(`${doc}public record ${name}\n{\n${props.join("\n\n")}\n}`)
-  return name
+  );
+  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`;
+  ctx.decls.push(`${doc}public record ${name}\n{\n${props.join("\n\n")}\n}`);
+  return name;
 }
 
 /** Builds one property's `[JsonProperty(...)]` attribute + declaration.
@@ -90,24 +90,24 @@ function emitObjectType(
  * (Newtonsoft substitutes the default when the incoming JSON omits the
  * property, mirroring STJ's implicit missing-property behavior explicitly). */
 function renderProperty(fieldName: string, fieldRef: TypeRef, ownerName: string, ctx: Ctx): string {
-  const propName = pascalCase(fieldName)
-  const optional = fieldRef.meta.optional === true
-  let type = typeExpr(fieldRef, `${ownerName}${propName}`, ctx)
-  if (optional && !type.endsWith("?")) type += "?"
+  const propName = pascalCase(fieldName);
+  const optional = fieldRef.meta.optional === true;
+  let type = typeExpr(fieldRef, `${ownerName}${propName}`, ctx);
+  if (optional && !type.endsWith("?")) type += "?";
 
-  const jsonPropertyArgs = [quote(fieldName)]
-  const hasDefault = fieldRef.meta.default !== undefined
+  const jsonPropertyArgs = [quote(fieldName)];
+  const hasDefault = fieldRef.meta.default !== undefined;
   if (hasDefault) {
-    jsonPropertyArgs.push("DefaultValueHandling = DefaultValueHandling.Populate")
+    jsonPropertyArgs.push("DefaultValueHandling = DefaultValueHandling.Populate");
   } else if (optional) {
-    jsonPropertyArgs.push("NullValueHandling = NullValueHandling.Ignore")
+    jsonPropertyArgs.push("NullValueHandling = NullValueHandling.Ignore");
   }
 
-  const attrs: string[] = []
-  if (hasDefault) attrs.push(`    [DefaultValue(${csharpLiteral(fieldRef.meta.default)})]`)
-  attrs.push(`    [JsonProperty(${jsonPropertyArgs.join(", ")})]`)
+  const attrs: string[] = [];
+  if (hasDefault) attrs.push(`    [DefaultValue(${csharpLiteral(fieldRef.meta.default)})]`);
+  attrs.push(`    [JsonProperty(${jsonPropertyArgs.join(", ")})]`);
 
-  return `${attrs.join("\n")}\n    public ${type} ${propName} { get; init; }`
+  return `${attrs.join("\n")}\n    public ${type} ${propName} { get; init; }`;
 }
 
 function emitEnumType(
@@ -116,29 +116,34 @@ function emitEnumType(
   ctx: Ctx,
   meta: Readonly<Record<string, unknown>> = {},
 ): string {
-  const members = shape.members.map((m) => `    ${pascalCase(m)}`)
-  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`
+  const members = shape.members.map((m) => `    ${pascalCase(m)}`);
+  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`;
   ctx.decls.push(
     `${doc}[JsonConverter(typeof(StringEnumConverter))]\npublic enum ${name}\n{\n${members.join(",\n")}\n}`,
-  )
-  return name
+  );
+  return name;
 }
 
 /** Name a union variant — prefers the variant's own `meta.typeName` (a named
  * alias the extractor recorded), then the discriminator field's own literal
  * value (the natural "tag" name for a discriminated variant), falling back
  * to a positional `{Base}Variant{N}` when neither is available. */
-function variantName(variant: TypeRef, discriminator: string | undefined, base: string, index: number): string {
-  if (typeof variant.meta.typeName === "string") return variant.meta.typeName
+function variantName(
+  variant: TypeRef,
+  discriminator: string | undefined,
+  base: string,
+  index: number,
+): string {
+  if (typeof variant.meta.typeName === "string") return variant.meta.typeName;
   if (discriminator !== undefined && variant.shape.kind === "object") {
-    const fields = (variant.shape as TypeShape & { kind: "object" }).fields
-    const tag = fields[discriminator]
+    const fields = (variant.shape as TypeShape & { kind: "object" }).fields;
+    const tag = fields[discriminator];
     if (tag !== undefined && tag.shape.kind === "literal") {
-      const value = (tag.shape as TypeShape & { kind: "literal" }).value
-      if (typeof value === "string") return pascalCase(value)
+      const value = (tag.shape as TypeShape & { kind: "literal" }).value;
+      if (typeof value === "string") return pascalCase(value);
     }
   }
-  return `${base}Variant${index + 1}`
+  return `${base}Variant${index + 1}`;
 }
 
 /** Discriminated (`meta.discriminator`) or plain union -> an abstract base
@@ -161,25 +166,29 @@ function emitUnionType(
   name: string,
   ctx: Ctx,
 ): string {
-  const discriminator = typeof meta.discriminator === "string" ? meta.discriminator : undefined
-  const names = shape.variants.map((variant, i) => variantName(variant, discriminator, name, i))
-  const converterName = `${name}JsonConverter`
+  const discriminator = typeof meta.discriminator === "string" ? meta.discriminator : undefined;
+  const names = shape.variants.map((variant, i) => variantName(variant, discriminator, name, i));
+  const converterName = `${name}JsonConverter`;
 
-  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`
-  ctx.decls.push(`${doc}[JsonConverter(typeof(${converterName}))]\npublic abstract record ${name};`)
+  const doc = `${xmlDocComment(meta)}${obsoleteAttr(meta)}`;
+  ctx.decls.push(
+    `${doc}[JsonConverter(typeof(${converterName}))]\npublic abstract record ${name};`,
+  );
 
   shape.variants.forEach((variant, i) => {
-    const vName = names[i]!
+    const vName = names[i]!;
     if (variant.shape.kind === "object") {
-      const fields = { ...(variant.shape as TypeShape & { kind: "object" }).fields }
-      if (discriminator !== undefined) delete fields[discriminator]
-      const props = Object.entries(fields).map(([fieldName, fieldRef]) => renderProperty(fieldName, fieldRef, vName, ctx))
-      ctx.decls.push(`public record ${vName} : ${name}\n{\n${props.join("\n\n")}\n}`)
+      const fields = { ...(variant.shape as TypeShape & { kind: "object" }).fields };
+      if (discriminator !== undefined) delete fields[discriminator];
+      const props = Object.entries(fields).map(([fieldName, fieldRef]) =>
+        renderProperty(fieldName, fieldRef, vName, ctx),
+      );
+      ctx.decls.push(`public record ${vName} : ${name}\n{\n${props.join("\n\n")}\n}`);
     } else {
-      const inner = typeExpr(variant, `${vName}Value`, ctx)
-      ctx.decls.push(`public record ${vName}(${inner} Value) : ${name};`)
+      const inner = typeExpr(variant, `${vName}Value`, ctx);
+      ctx.decls.push(`public record ${vName}(${inner} Value) : ${name};`);
     }
-  })
+  });
 
   const readBody =
     discriminator !== undefined
@@ -188,17 +197,17 @@ function emitUnionType(
           "        return discriminator switch",
           "        {",
           ...shape.variants.map((variant, i) => {
-            const vName = names[i]!
+            const vName = names[i]!;
             const tagValue =
               variant.shape.kind === "object"
                 ? (variant.shape as TypeShape & { kind: "object" }).fields[discriminator]
-                : undefined
+                : undefined;
             const literalValue =
               tagValue !== undefined && tagValue.shape.kind === "literal"
                 ? (tagValue.shape as TypeShape & { kind: "literal" }).value
-                : undefined
-            const tag = typeof literalValue === "string" ? quote(literalValue) : quote(vName)
-            return `            ${tag} => jObject.ToObject<${vName}>(serializer),`
+                : undefined;
+            const tag = typeof literalValue === "string" ? quote(literalValue) : quote(vName);
+            return `            ${tag} => jObject.ToObject<${vName}>(serializer),`;
           }),
           `            _ => throw new JsonSerializationException($"Unknown ${quote(discriminator)} discriminator: {discriminator}"),`,
           "        };",
@@ -211,7 +220,7 @@ function emitUnionType(
               `        try { return jObject.ToObject<${vName}>(serializer); } catch (JsonException) { }`,
           ),
           `        throw new JsonSerializationException("No ${name} variant matched the given JSON");`,
-        ].join("\n")
+        ].join("\n");
 
   ctx.decls.push(
     [
@@ -229,9 +238,9 @@ function emitUnionType(
       "    }",
       "}",
     ].join("\n"),
-  )
+  );
 
-  return name
+  return name;
 }
 
 const handlers: Record<string, Converter> = {
@@ -270,43 +279,43 @@ const handlers: Record<string, Converter> = {
   // that brings `className` into scope.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape, suggestedName, ctx) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `List<${typeExpr(s.element, `${suggestedName}Item`, ctx)}>`
+    const s = shape as TypeShape & { kind: "array" };
+    return `List<${typeExpr(s.element, `${suggestedName}Item`, ctx)}>`;
   },
   tuple: (shape, suggestedName, ctx) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    const elements = s.elements.map((e, i) => typeExpr(e, `${suggestedName}Item${i + 1}`, ctx))
-    return `(${elements.join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    const elements = s.elements.map((e, i) => typeExpr(e, `${suggestedName}Item${i + 1}`, ctx));
+    return `(${elements.join(", ")})`;
   },
   // IAsyncEnumerable<T> (System.Collections.Generic) is C#'s native
   // asynchronously-produced sequence — the direct analogue of TS's
   // AsyncIterable<T> (see typescript.ts's `stream` handler).
   stream: (shape, suggestedName, ctx) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `IAsyncEnumerable<${typeExpr(s.element, `${suggestedName}Item`, ctx)}>`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `IAsyncEnumerable<${typeExpr(s.element, `${suggestedName}Item`, ctx)}>`;
   },
   // No native pagination vocabulary — degrades to List<T> of the page's
   // element type, same honest-degrade convention as other data-only
   // projectors (openapi30.ts, zod.ts, …).
   page: (shape, suggestedName, ctx) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `List<${typeExpr(s.element, `${suggestedName}Item`, ctx)}>`
+    const s = shape as TypeShape & { kind: "page" };
+    return `List<${typeExpr(s.element, `${suggestedName}Item`, ctx)}>`;
   },
   map: (shape, suggestedName, ctx) => {
-    const s = shape as TypeShape & { kind: "map" }
-    const key = typeExpr(s.key, `${suggestedName}Key`, ctx)
-    const value = typeExpr(s.value, `${suggestedName}Value`, ctx)
-    return `Dictionary<${key}, ${value}>`
+    const s = shape as TypeShape & { kind: "map" };
+    const key = typeExpr(s.key, `${suggestedName}Key`, ctx);
+    const value = typeExpr(s.value, `${suggestedName}Value`, ctx);
+    return `Dictionary<${key}, ${value}>`;
   },
   // C# has no literal types outside `enum`/`const` — degrades to the
   // underlying primitive (same "closest structural analogue" convention as
   // stream/page's array degrade above).
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (typeof s.value === "string") return "string"
-    if (typeof s.value === "boolean") return "bool"
-    if (typeof s.value === "number") return Number.isInteger(s.value) ? "int" : "double"
-    return "object?"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (typeof s.value === "string") return "string";
+    if (typeof s.value === "boolean") return "bool";
+    if (typeof s.value === "number") return Number.isInteger(s.value) ? "int" : "double";
+    return "object?";
   },
   // Assumes the target is declared elsewhere in the emitted file/assembly —
   // same convention as typescript.ts's `ref` handler.
@@ -315,52 +324,52 @@ const handlers: Record<string, Converter> = {
   // fields into a single record (non-object members contribute nothing,
   // since there's no field surface to merge).
   intersection: (shape, suggestedName, ctx) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const fields: Record<string, TypeRef> = {}
+    const s = shape as TypeShape & { kind: "intersection" };
+    const fields: Record<string, TypeRef> = {};
     for (const member of s.members) {
       if (member.shape.kind === "object") {
-        Object.assign(fields, (member.shape as TypeShape & { kind: "object" }).fields)
+        Object.assign(fields, (member.shape as TypeShape & { kind: "object" }).fields);
       }
     }
-    return emitObjectType({ kind: "object", fields }, suggestedName, ctx)
+    return emitObjectType({ kind: "object", fields }, suggestedName, ctx);
   },
   // Callables have no data-record equivalent — degrade honestly (see `never`
   // above for the same comment-then-strip convention).
   function: leaf("object /* function */"),
   method: leaf("object /* method */"),
   interface: leaf("object /* interface */"),
-}
+};
 
 function typeExpr(ref: TypeRef, suggestedName: string, ctx: Ctx): string {
-  const { shape, meta } = ref
-  const kind = shape.kind
+  const { shape, meta } = ref;
+  const kind = shape.kind;
 
-  let type: string
+  let type: string;
   if (isA(kind, "object")) {
-    type = emitObjectType(shape as TypeShape & { kind: "object" }, suggestedName, ctx, meta)
+    type = emitObjectType(shape as TypeShape & { kind: "object" }, suggestedName, ctx, meta);
   } else if (isA(kind, "enum")) {
-    type = emitEnumType(shape as TypeShape & { kind: "enum" }, suggestedName, ctx, meta)
+    type = emitEnumType(shape as TypeShape & { kind: "enum" }, suggestedName, ctx, meta);
   } else if (isA(kind, "union")) {
-    type = emitUnionType(shape as TypeShape & { kind: "union" }, meta, suggestedName, ctx)
+    type = emitUnionType(shape as TypeShape & { kind: "union" }, meta, suggestedName, ctx);
   } else {
-    const converter = resolve(kind, handlers)
-    type = converter === undefined ? "object" : converter(shape, suggestedName, ctx)
+    const converter = resolve(kind, handlers);
+    type = converter === undefined ? "object" : converter(shape, suggestedName, ctx);
   }
 
-  if (meta.nullable === true && !type.endsWith("?")) type += "?"
-  return type
+  if (meta.nullable === true && !type.endsWith("?")) type += "?";
+  return type;
 }
 
 /** Kinds that produce their own named declaration (record/enum/abstract
  * record hierarchy) when they appear at the document root — everything else
  * falls back to a C# `using` alias directive (see `toCSharpNewtonsoft`). */
 function isDeclarationKind(kind: string): boolean {
-  return isA(kind, "object") || isA(kind, "enum") || isA(kind, "union") || kind === "intersection"
+  return isA(kind, "object") || isA(kind, "enum") || isA(kind, "union") || kind === "intersection";
 }
 
 export interface CSharpOptions {
   /** Wraps every declaration in `namespace {namespace} { ... }`. */
-  readonly namespace?: string
+  readonly namespace?: string;
 }
 
 /**
@@ -375,33 +384,38 @@ export interface CSharpOptions {
  * csharp-systemtextjson.ts's `toCSharp` for the STJ sibling.
  */
 export function toCSharpNewtonsoft(ref: TypeRef, name = "Root", options?: CSharpOptions): string {
-  const ctx: Ctx = { decls: [] }
+  const ctx: Ctx = { decls: [] };
 
   if (isDeclarationKind(ref.shape.kind)) {
-    typeExpr(ref, name, ctx)
+    typeExpr(ref, name, ctx);
   } else {
-    const type = typeExpr(ref, name, ctx)
+    const type = typeExpr(ref, name, ctx);
     // Strip any degrade comment (`/* never */`, `/* interface */`, …) — valid
     // inside a property/field type position, not inside a `using` alias.
-    const clean = type.replace(/\s*\/\*.*?\*\/\s*/g, " ").trim()
-    ctx.decls.push(`using ${name} = ${clean};`)
+    const clean = type.replace(/\s*\/\*.*?\*\/\s*/g, " ").trim();
+    ctx.decls.push(`using ${name} = ${clean};`);
   }
 
-  const body = ctx.decls.join("\n\n")
-  const usings: string[] = []
-  if (/\bList<|\bDictionary<|IAsyncEnumerable</.test(body)) usings.push("using System.Collections.Generic;")
-  if (/\bGuid\b|\bUri\b|\bDateTimeOffset\b|\bDateOnly\b|\bTimeOnly\b|\bTimeSpan\b|\bType\b/.test(body)) {
-    usings.push("using System;")
+  const body = ctx.decls.join("\n\n");
+  const usings: string[] = [];
+  if (/\bList<|\bDictionary<|IAsyncEnumerable</.test(body))
+    usings.push("using System.Collections.Generic;");
+  if (
+    /\bGuid\b|\bUri\b|\bDateTimeOffset\b|\bDateOnly\b|\bTimeOnly\b|\bTimeSpan\b|\bType\b/.test(body)
+  ) {
+    usings.push("using System;");
   }
-  if (/\[DefaultValue\(/.test(body)) usings.push("using System.ComponentModel;")
+  if (/\[DefaultValue\(/.test(body)) usings.push("using System.ComponentModel;");
   if (/\bJson[A-Za-z]*\(|\[JsonConverter|JsonSerializationException|JsonException/.test(body)) {
-    usings.push("using Newtonsoft.Json;")
+    usings.push("using Newtonsoft.Json;");
   }
-  if (/StringEnumConverter/.test(body)) usings.push("using Newtonsoft.Json.Converters;")
-  if (/\bJObject\b/.test(body)) usings.push("using Newtonsoft.Json.Linq;")
+  if (/StringEnumConverter/.test(body)) usings.push("using Newtonsoft.Json.Converters;");
+  if (/\bJObject\b/.test(body)) usings.push("using Newtonsoft.Json.Linq;");
 
   const withNamespace =
-    options?.namespace === undefined ? body : `namespace ${options.namespace}\n{\n${indent4(body)}\n}`
+    options?.namespace === undefined
+      ? body
+      : `namespace ${options.namespace}\n{\n${indent4(body)}\n}`;
 
-  return usings.length === 0 ? `${withNamespace}\n` : `${usings.join("\n")}\n\n${withNamespace}\n`
+  return usings.length === 0 ? `${withNamespace}\n` : `${usings.join("\n")}\n\n${withNamespace}\n`;
 }

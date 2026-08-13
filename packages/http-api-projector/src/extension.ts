@@ -35,11 +35,11 @@
 //   packages/http-api-projector/src/codegen.ts  — codegen; CodegenOptions.extensions
 //   packages/http-api-projector/src/layers.ts   — the server-side analogue this mirrors
 
-import type { RouteLeafMeta } from "./route.ts"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
+import type { RouteLeafMeta } from "./route.ts";
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
 
 /** A fetch-shaped function: takes a `Request`, returns a `Response`. */
-export type FetchImpl = (req: Request) => Promise<Response>
+export type FetchImpl = (req: Request) => Promise<Response>;
 
 /**
  * Context handed to `decodeResponse` alongside the raw `Response` — the
@@ -57,9 +57,9 @@ export type FetchImpl = (req: Request) => Promise<Response>
  * needed).
  */
 export type DecodeContext = {
-  readonly request: Request
-  readonly refetch: FetchImpl
-  readonly meta: RouteLeafMeta
+  readonly request: Request;
+  readonly refetch: FetchImpl;
+  readonly meta: RouteLeafMeta;
   /**
    * The `SchemaMap` key identifying this operation (e.g. `"books_bookId_read"`
    * — see `@rhi-zone/fractal-api-tree/tree`'s `extractToolSchemas`), when the
@@ -72,8 +72,8 @@ export type DecodeContext = {
    * `extensions/validation.ts`) look up this operation's own entry in a
    * `SchemaMap` without re-deriving tree-position naming itself.
    */
-  readonly codegenName?: string | undefined
-}
+  readonly codegenName?: string | undefined;
+};
 
 /**
  * Codegen-side interpreter contribution: how an extension modifies the
@@ -96,9 +96,9 @@ export type DecodeContext = {
  * `extensions/streaming.ts` for the one extension that implements it.
  */
 export type ClientExtensionCodegen = {
-  readonly wrap?: (innerExpr: string) => string
-  readonly helpers?: string
-  readonly streamingCall?: (args: StreamingCallArgs) => string
+  readonly wrap?: (innerExpr: string) => string;
+  readonly helpers?: string;
+  readonly streamingCall?: (args: StreamingCallArgs) => string;
   /**
    * Wraps the expression for ONE operation's decoded result — the per-
    * operation analogue of `wrap` (which wraps the fetch impl once for the
@@ -112,7 +112,7 @@ export type ClientExtensionCodegen = {
    * `__request(...).then((v) => __validate(v, __SCHEMA_books_bookId_read, "throw"))`.
    * Optional: most extensions (retry, timeout, errors) only need `wrap`.
    */
-  readonly wrapResult?: (innerExpr: string, codegenName: string) => string
+  readonly wrapResult?: (innerExpr: string, codegenName: string) => string;
   /**
    * Emits helper declarations that need the FULL list of operations up
    * front — e.g. one schema constant per operation — computed once codegen
@@ -121,8 +121,8 @@ export type ClientExtensionCodegen = {
    * `undefined` when this extension has nothing to emit (e.g. no operation
    * has an output schema to validate).
    */
-  readonly resultHelpers?: (operations: readonly CodegenOperationInfo[]) => string | undefined
-}
+  readonly resultHelpers?: (operations: readonly CodegenOperationInfo[]) => string | undefined;
+};
 
 /**
  * Per-operation facts codegen has already resolved by the time result-
@@ -131,9 +131,9 @@ export type ClientExtensionCodegen = {
  * constant per operation without re-deriving codegen names/schemas itself.
  */
 export type CodegenOperationInfo = {
-  readonly codegenName: string
-  readonly responseSchema?: JsonSchema
-}
+  readonly codegenName: string;
+  readonly responseSchema?: JsonSchema;
+};
 
 /**
  * Inputs `ClientExtensionCodegen.streamingCall` needs to emit a call
@@ -145,24 +145,24 @@ export type CodegenOperationInfo = {
  */
 export type StreamingCallArgs = {
   /** Expression evaluating to the client's base URL (e.g. `"baseUrl"`). */
-  readonly baseUrlExpr: string
+  readonly baseUrlExpr: string;
   /** Expression evaluating to the composed fetch impl (e.g. `"fetchImpl"`). */
-  readonly fetchExpr: string
+  readonly fetchExpr: string;
   /** Expression evaluating to the base headers record, if any (e.g. `"headers"`). */
-  readonly headersExpr: string
+  readonly headersExpr: string;
   /** Uppercase HTTP verb, e.g. `"GET"`. */
-  readonly method: string
+  readonly method: string;
   /** Template-literal BODY (no surrounding backticks) for the request path, e.g. `` /books/${encodeURIComponent(bookId)} ``. */
-  readonly pathLiteral: string
+  readonly pathLiteral: string;
   /** Expression evaluating to the request input, or `"undefined"` when the operation takes none. */
-  readonly inputExpr: string
+  readonly inputExpr: string;
   /** Expression evaluating to the client's base timeout, if any. */
-  readonly baseTimeoutExpr: string
+  readonly baseTimeoutExpr: string;
   /** Expression evaluating to the client's base abort signal, if any. */
-  readonly baseSignalExpr: string
+  readonly baseSignalExpr: string;
   /** Expression evaluating to this call's per-call `CallOptions`, if any. */
-  readonly callOptsExpr: string
-}
+  readonly callOptsExpr: string;
+};
 
 /**
  * Result of a runtime response decoder (see `ClientExtension.decodeResponse`
@@ -173,7 +173,7 @@ export type StreamingCallArgs = {
  * `isStreamEffect`'s `kind`-tag check documents for not letting a
  * legitimate value collide with the "not handled" signal.
  */
-export type DecodedResponse = { readonly value: unknown }
+export type DecodedResponse = { readonly value: unknown };
 
 /**
  * An extension to the HTTP client, usable by both `createClient`/
@@ -185,9 +185,9 @@ export type DecodedResponse = { readonly value: unknown }
  */
 export type ClientExtension = {
   /** Identifies the extension in error messages / debugging. Not required to be unique. */
-  readonly name: string
+  readonly name: string;
   /** Runtime interpreter: wraps the fetch implementation the client calls. */
-  readonly wrapFetch?: (inner: FetchImpl) => FetchImpl
+  readonly wrapFetch?: (inner: FetchImpl) => FetchImpl;
   /**
    * Runtime interpreter: decodes a raw `Response` BEFORE the client's
    * default JSON/text body decode (`client.ts`'s `makeCaller`) runs. Returns
@@ -207,10 +207,10 @@ export type ClientExtension = {
    * `streaming()`) stay valid unchanged, since a function declared with
    * fewer parameters than a call site passes is ordinary, safe JS/TS.
    */
-  readonly decodeResponse?: (res: Response, ctx: DecodeContext) => DecodedResponse | undefined
+  readonly decodeResponse?: (res: Response, ctx: DecodeContext) => DecodedResponse | undefined;
   /** Codegen interpreter: contributes to the emitted client source. */
-  readonly codegen?: ClientExtensionCodegen
-}
+  readonly codegen?: ClientExtensionCodegen;
+};
 
 // ============================================================================
 // Runtime interpreter
@@ -222,9 +222,12 @@ export type ClientExtension = {
  * `wrapFetch` are skipped. Returns `fetchImpl` unchanged when `extensions`
  * is empty or undefined — no wrapper overhead when no extensions are used.
  */
-export function composeFetch(fetchImpl: FetchImpl, extensions: readonly ClientExtension[] | undefined): FetchImpl {
-  if (extensions === undefined || extensions.length === 0) return fetchImpl
-  return extensions.reduceRight((inner, ext) => ext.wrapFetch?.(inner) ?? inner, fetchImpl)
+export function composeFetch(
+  fetchImpl: FetchImpl,
+  extensions: readonly ClientExtension[] | undefined,
+): FetchImpl {
+  if (extensions === undefined || extensions.length === 0) return fetchImpl;
+  return extensions.reduceRight((inner, ext) => ext.wrapFetch?.(inner) ?? inner, fetchImpl);
 }
 
 /**
@@ -240,12 +243,12 @@ export function composeDecodeResponse(
   ctx: DecodeContext,
   extensions: readonly ClientExtension[] | undefined,
 ): DecodedResponse | undefined {
-  if (extensions === undefined) return undefined
+  if (extensions === undefined) return undefined;
   for (const ext of extensions) {
-    const result = ext.decodeResponse?.(res, ctx)
-    if (result !== undefined) return result
+    const result = ext.decodeResponse?.(res, ctx);
+    if (result !== undefined) return result;
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -260,12 +263,12 @@ export function composeDecodeResponse(
 export function findStreamingCall(
   extensions: readonly ClientExtension[] | undefined,
 ): ((args: StreamingCallArgs) => string) | undefined {
-  if (extensions === undefined) return undefined
+  if (extensions === undefined) return undefined;
   for (const ext of extensions) {
-    const call = ext.codegen?.streamingCall
-    if (call !== undefined) return call
+    const call = ext.codegen?.streamingCall;
+    if (call !== undefined) return call;
   }
-  return undefined
+  return undefined;
 }
 
 // ============================================================================
@@ -284,14 +287,14 @@ export function composeCodegenFetch(
   innerExpr: string,
   extensions: readonly ClientExtension[] | undefined,
 ): { readonly expr: string; readonly helpers: readonly string[] } {
-  if (extensions === undefined || extensions.length === 0) return { expr: innerExpr, helpers: [] }
-  const helperSet = new Set<string>()
+  if (extensions === undefined || extensions.length === 0) return { expr: innerExpr, helpers: [] };
+  const helperSet = new Set<string>();
   const expr = extensions.reduceRight((inner, ext) => {
-    if (ext.codegen === undefined) return inner
-    if (ext.codegen.helpers !== undefined) helperSet.add(ext.codegen.helpers)
-    return ext.codegen.wrap?.(inner) ?? inner
-  }, innerExpr)
-  return { expr, helpers: [...helperSet] }
+    if (ext.codegen === undefined) return inner;
+    if (ext.codegen.helpers !== undefined) helperSet.add(ext.codegen.helpers);
+    return ext.codegen.wrap?.(inner) ?? inner;
+  }, innerExpr);
+  return { expr, helpers: [...helperSet] };
 }
 
 /**
@@ -305,8 +308,11 @@ export function composeCodegenResult(
   codegenName: string,
   extensions: readonly ClientExtension[] | undefined,
 ): string {
-  if (extensions === undefined || extensions.length === 0) return innerExpr
-  return extensions.reduceRight((inner, ext) => ext.codegen?.wrapResult?.(inner, codegenName) ?? inner, innerExpr)
+  if (extensions === undefined || extensions.length === 0) return innerExpr;
+  return extensions.reduceRight(
+    (inner, ext) => ext.codegen?.wrapResult?.(inner, codegenName) ?? inner,
+    innerExpr,
+  );
 }
 
 /**
@@ -318,11 +324,11 @@ export function collectResultHelpers(
   operations: readonly CodegenOperationInfo[],
   extensions: readonly ClientExtension[] | undefined,
 ): readonly string[] {
-  if (extensions === undefined) return []
-  const out: string[] = []
+  if (extensions === undefined) return [];
+  const out: string[] = [];
   for (const ext of extensions) {
-    const helper = ext.codegen?.resultHelpers?.(operations)
-    if (helper !== undefined) out.push(helper)
+    const helper = ext.codegen?.resultHelpers?.(operations);
+    if (helper !== undefined) out.push(helper);
   }
-  return out
+  return out;
 }

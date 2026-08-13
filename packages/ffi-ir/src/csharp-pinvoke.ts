@@ -1,12 +1,12 @@
-import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir"
+import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir";
 // Side-effect import: registers type-ir's extension kinds (int8..64/uint8..64/
 // float32/float64, etc.) into the shared `TypeKinds` interface via declaration
 // merging — required here because this file's kind-keyed lookup tables
 // reference those kind names as string literals, the same reason
 // `wasm-bindgen.ts` (ffi-ir's own sibling) imports this module for its own
 // "bytes" reference. Not modified, just relied on.
-import "@rhi-zone/fractal-type-ir/kinds/common"
-import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import "@rhi-zone/fractal-type-ir/kinds/common";
+import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // .NET/P-Invoke consumer-side projector — the CALLER of a C-ABI shared
 // library (the counterpart to `rust-c-abi.ts`'s Rust/`#[no_mangle] pub extern "C"`
@@ -138,7 +138,7 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 function toPascalCase(name: string): string {
@@ -146,37 +146,105 @@ function toPascalCase(name: string): string {
     .split(/[^a-zA-Z0-9]+/)
     .filter((part) => part.length > 0)
     .map((part) => part[0]!.toUpperCase() + part.slice(1))
-    .join("")
+    .join("");
 }
 
 function indent(block: string, prefix = "    "): string {
   return block
     .split("\n")
     .map((line) => (line.length === 0 ? line : `${prefix}${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 // C# reserved keywords (ECMA-334 §7.4.4 / the C# language reference's
 // keyword list) that cannot appear as a plain identifier and require `@`
 // verbatim-identifier escaping.
 const CSHARP_KEYWORDS = new Set([
-  "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
-  "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
-  "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
-  "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock",
-  "long", "namespace", "new", "null", "object", "operator", "out", "override", "params",
-  "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed",
-  "short", "sizeof", "stackalloc", "static", "string", "struct", "switch", "this",
-  "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort",
-  "using", "virtual", "void", "volatile", "while",
-])
+  "abstract",
+  "as",
+  "base",
+  "bool",
+  "break",
+  "byte",
+  "case",
+  "catch",
+  "char",
+  "checked",
+  "class",
+  "const",
+  "continue",
+  "decimal",
+  "default",
+  "delegate",
+  "do",
+  "double",
+  "else",
+  "enum",
+  "event",
+  "explicit",
+  "extern",
+  "false",
+  "finally",
+  "fixed",
+  "float",
+  "for",
+  "foreach",
+  "goto",
+  "if",
+  "implicit",
+  "in",
+  "int",
+  "interface",
+  "internal",
+  "is",
+  "lock",
+  "long",
+  "namespace",
+  "new",
+  "null",
+  "object",
+  "operator",
+  "out",
+  "override",
+  "params",
+  "private",
+  "protected",
+  "public",
+  "readonly",
+  "ref",
+  "return",
+  "sbyte",
+  "sealed",
+  "short",
+  "sizeof",
+  "stackalloc",
+  "static",
+  "string",
+  "struct",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "uint",
+  "ulong",
+  "unchecked",
+  "unsafe",
+  "ushort",
+  "using",
+  "virtual",
+  "void",
+  "volatile",
+  "while",
+]);
 
 function escapeCSharpIdent(name: string): string {
-  return CSHARP_KEYWORDS.has(name) ? `@${name}` : name
+  return CSHARP_KEYWORDS.has(name) ? `@${name}` : name;
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 // Structural (non-ownership) type-ir kind -> C# type mapping — the "copy"/
@@ -200,7 +268,7 @@ const SCALAR_TYPES: Record<string, string> = {
   string: "string",
   void: "void",
   null: "void",
-}
+};
 
 /**
  * `true` for `"boolean"` kind (or a registered descendant of it) under
@@ -210,9 +278,9 @@ const SCALAR_TYPES: Record<string, string> = {
  * so this returns false for those without inspecting the structural kind.
  */
 function isBoolType(ref: TypeRef): boolean {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline !== undefined && discipline.kind !== "copy") return false
-  return resolve(ref.shape.kind, { boolean: true }) === true
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline !== undefined && discipline.kind !== "copy") return false;
+  return resolve(ref.shape.kind, { boolean: true }) === true;
 }
 
 /**
@@ -222,9 +290,9 @@ function isBoolType(ref: TypeRef): boolean {
  * "String marshaling, verified" note).
  */
 function isStringType(ref: TypeRef): boolean {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline !== undefined && discipline.kind !== "copy") return false
-  return resolve(ref.shape.kind, { string: true }) === true
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline !== undefined && discipline.kind !== "copy") return false;
+  return resolve(ref.shape.kind, { string: true }) === true;
 }
 
 /**
@@ -242,14 +310,14 @@ function isStringType(ref: TypeRef): boolean {
  *     distinction).
  */
 export function toDotNetType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline !== undefined && discipline.kind !== "copy") return "IntPtr"
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline !== undefined && discipline.kind !== "copy") return "IntPtr";
 
-  const kind = ref.shape.kind
-  const direct = SCALAR_TYPES[kind]
-  if (direct !== undefined) return direct
-  const viaAncestor = resolve(kind, SCALAR_TYPES)
-  if (viaAncestor !== undefined) return viaAncestor
+  const kind = ref.shape.kind;
+  const direct = SCALAR_TYPES[kind];
+  if (direct !== undefined) return direct;
+  const viaAncestor = resolve(kind, SCALAR_TYPES);
+  if (viaAncestor !== undefined) return viaAncestor;
 
   throw new Error(
     `toDotNet: unsupported type-ir kind "${kind}" for the .NET/P-Invoke target — this backend implements only the flat scalar kinds ` +
@@ -258,17 +326,17 @@ export function toDotNetType(ref: TypeRef): string {
       "(object/array/map/tuple/union/enum/intersection/interface, or a bare ref with no ownership metadata) would require a matching " +
       "repr(C)-equivalent C# struct declaration this backend does not generate (no producer-side struct-layout projector exists yet to " +
       "verify such a struct against).",
-  )
+  );
 }
 
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`/// <summary>${meta.description}</summary>`] : []
+  return typeof meta.description === "string" ? [`/// <summary>${meta.description}</summary>`] : [];
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly FfiParam[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly FfiParam[];
+  readonly returnType: TypeRef;
+};
 
 /**
  * One `[LibraryImport]`-annotated `internal static partial` method for a
@@ -288,27 +356,38 @@ type FfiFunctionLike = {
  * doesn't rely on any implicit exact-spelling assumption) even though it
  * equals the method's own escaped name in every case emitted here.
  */
-function buildFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, libraryName: string, selfParam?: string): string {
-  const paramDecls: string[] = []
-  if (selfParam !== undefined) paramDecls.push("IntPtr handle")
+function buildFunction(
+  fnName: string,
+  ref: FfiRef,
+  shape: FfiFunctionLike,
+  libraryName: string,
+  selfParam?: string,
+): string {
+  const paramDecls: string[] = [];
+  if (selfParam !== undefined) paramDecls.push("IntPtr handle");
   for (const p of shape.params) {
-    const ident = escapeCSharpIdent(p.name)
-    const marshalAs = isBoolType(p.type) ? "[MarshalAs(UnmanagedType.U1)] " : ""
-    paramDecls.push(`${marshalAs}${toDotNetType(p.type)} ${ident}`)
+    const ident = escapeCSharpIdent(p.name);
+    const marshalAs = isBoolType(p.type) ? "[MarshalAs(UnmanagedType.U1)] " : "";
+    paramDecls.push(`${marshalAs}${toDotNetType(p.type)} ${ident}`);
   }
 
-  const isVoidReturn = shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null"
-  const returnType = isVoidReturn ? "void" : toDotNetType(shape.returnType)
-  const hasString = shape.params.some((p) => isStringType(p.type)) || (!isVoidReturn && isStringType(shape.returnType))
-  const returnIsBool = !isVoidReturn && isBoolType(shape.returnType)
+  const isVoidReturn =
+    shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null";
+  const returnType = isVoidReturn ? "void" : toDotNetType(shape.returnType);
+  const hasString =
+    shape.params.some((p) => isStringType(p.type)) ||
+    (!isVoidReturn && isStringType(shape.returnType));
+  const returnIsBool = !isVoidReturn && isBoolType(shape.returnType);
 
-  const attrArgs = [quote(libraryName), `EntryPoint = ${quote(fnName)}`]
-  if (hasString) attrArgs.push("StringMarshalling = StringMarshalling.Utf8")
+  const attrArgs = [quote(libraryName), `EntryPoint = ${quote(fnName)}`];
+  if (hasString) attrArgs.push("StringMarshalling = StringMarshalling.Utf8");
 
-  const lines: string[] = [...docComment(ref.meta), `[LibraryImport(${attrArgs.join(", ")})]`]
-  if (returnIsBool) lines.push("[return: MarshalAs(UnmanagedType.U1)]")
-  lines.push(`internal static partial ${returnType} ${escapeCSharpIdent(fnName)}(${paramDecls.join(", ")});`)
-  return lines.join("\n")
+  const lines: string[] = [...docComment(ref.meta), `[LibraryImport(${attrArgs.join(", ")})]`];
+  if (returnIsBool) lines.push("[return: MarshalAs(UnmanagedType.U1)]");
+  lines.push(
+    `internal static partial ${returnType} ${escapeCSharpIdent(fnName)}(${paramDecls.join(", ")});`,
+  );
+  return lines.join("\n");
 }
 
 /** The paired free-function declaration for a resource — `rust-c-abi.ts`'s
@@ -321,7 +400,7 @@ function buildFreeFunction(freeFnName: string, libraryName: string): string {
   return [
     `[LibraryImport(${quote(libraryName)}, EntryPoint = ${quote(freeFnName)})]`,
     `internal static partial void ${escapeCSharpIdent(freeFnName)}(IntPtr handle);`,
-  ].join("\n")
+  ].join("\n");
 }
 
 function buildResource(
@@ -330,47 +409,51 @@ function buildResource(
   shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
   libraryName: string,
 ): string {
-  const resourceSnake = toSnakeCase(name)
-  const decls: string[] = []
+  const resourceSnake = toSnakeCase(name);
+  const decls: string[] = [];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
-    const methodShape = methodRef.shape as FfiShape & { kind: "method" }
-    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`
-    decls.push(buildFunction(fnName, methodRef, methodShape, libraryName, name))
+    const methodShape = methodRef.shape as FfiShape & { kind: "method" };
+    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`;
+    decls.push(buildFunction(fnName, methodRef, methodShape, libraryName, name));
   }
 
-  decls.push(buildFreeFunction(`${resourceSnake}_free`, libraryName))
+  decls.push(buildFreeFunction(`${resourceSnake}_free`, libraryName));
 
-  const body = decls.join("\n\n")
+  const body = decls.join("\n\n");
   return [
     ...docComment(ref.meta),
     "// Handle representation: IntPtr, uniformly, for every ownership discipline",
     "// a reference to this resource might carry (opaque-handle/refcount/",
     "// resource own-or-borrow) — see this file's header for why that's a",
-    '// caller-side bookkeeping distinction, not a marshaling one. Call the',
+    "// caller-side bookkeeping distinction, not a marshaling one. Call the",
     `// paired ${quote(`${resourceSnake}_free`)} export exactly once per handle`,
     "// when using the opaque-handle discipline's manual-free convention.",
     `internal static partial class ${name}`,
     "{",
     indent(body),
     "}",
-  ].join("\n")
+  ].join("\n");
 }
 
-function buildModule(name: string, shape: FfiShape & { kind: "module" }, libraryName: string): string {
+function buildModule(
+  name: string,
+  shape: FfiShape & { kind: "module" },
+  libraryName: string,
+): string {
   const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) => {
-    const fnShape = fnRef.shape as FfiShape & { kind: "function" }
-    return buildFunction(toSnakeCase(fnName), fnRef, fnShape, libraryName)
-  })
+    const fnShape = fnRef.shape as FfiShape & { kind: "function" };
+    return buildFunction(toSnakeCase(fnName), fnRef, fnShape, libraryName);
+  });
   const resourceDecls = Object.entries(shape.resources).map(([, resRef]) => {
     const resShape = resRef.shape as FfiShape & {
-      kind: "resource"
-      name: string
-      methods: Readonly<Record<string, FfiRef>>
-    }
-    return buildResource(resShape.name, resRef, resShape, libraryName)
-  })
-  const body = [...resourceDecls, ...functionDecls].join("\n\n")
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    return buildResource(resShape.name, resRef, resShape, libraryName);
+  });
+  const body = [...resourceDecls, ...functionDecls].join("\n\n");
   return [
     "using System;",
     "using System.Runtime.InteropServices;",
@@ -379,7 +462,7 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }, library
     "{",
     indent(body),
     "}",
-  ].join("\n")
+  ].join("\n");
 }
 
 /**
@@ -415,58 +498,64 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }, library
  * from) and an optional override for `module`.
  */
 export function toDotNet(ref: FfiRef, name?: string, libraryName?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toDotNet: "function" requires a name — a P/Invoke declaration is a named symbol, not an anonymous inline type')
+      throw new Error(
+        'toDotNet: "function" requires a name — a P/Invoke declaration is a named symbol, not an anonymous inline type',
+      );
     }
     if (libraryName === undefined) {
       throw new Error(
         'toDotNet: "function" requires a libraryName (the native shared library to load) when projected standalone — pass it explicitly, or project the enclosing "module" instead, which defaults it from the module\'s own name',
-      )
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    return buildFunction(toSnakeCase(name), ref, shape, libraryName)
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    return buildFunction(toSnakeCase(name), ref, shape, libraryName);
   }
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toDotNet: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error(
+        "toDotNet: \"method\" requires a name — the method's own key in its resource's methods map",
+      );
     }
     if (libraryName === undefined) {
       throw new Error(
         'toDotNet: "method" requires a libraryName (the native shared library to load) when projected standalone — pass it explicitly, or project the enclosing "module" instead',
-      )
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "method" }
-    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`
-    return buildFunction(fnName, ref, shape, libraryName, shape.receiver)
+    const shape = ref.shape as FfiShape & { kind: "method" };
+    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`;
+    return buildFunction(fnName, ref, shape, libraryName, shape.receiver);
   }
 
   if (kind === "resource") {
     if (libraryName === undefined) {
       throw new Error(
         'toDotNet: "resource" requires a libraryName (the native shared library to load) when projected standalone — pass it explicitly, or project the enclosing "module" instead',
-      )
+      );
     }
     const shape = ref.shape as FfiShape & {
-      kind: "resource"
-      name: string
-      methods: Readonly<Record<string, FfiRef>>
-    }
-    return buildResource(shape.name, ref, shape, libraryName)
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    return buildResource(shape.name, ref, shape, libraryName);
   }
 
   if (kind === "module") {
     const shape = ref.shape as FfiShape & {
-      kind: "module"
-      name: string
-      functions: Readonly<Record<string, FfiRef>>
-      resources: Readonly<Record<string, FfiRef>>
-    }
-    return buildModule(shape.name, shape, libraryName ?? shape.name)
+      kind: "module";
+      name: string;
+      functions: Readonly<Record<string, FfiRef>>;
+      resources: Readonly<Record<string, FfiRef>>;
+    };
+    return buildModule(shape.name, shape, libraryName ?? shape.name);
   }
 
-  throw new Error(`toDotNet: unhandled ffi-ir kind "${kind}" — no .NET P/Invoke mapping implemented for this backend`)
+  throw new Error(
+    `toDotNet: unhandled ffi-ir kind "${kind}" — no .NET P/Invoke mapping implemented for this backend`,
+  );
 }

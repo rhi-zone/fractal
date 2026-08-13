@@ -31,8 +31,8 @@
 // kind only needs a `checkHandlers`/`validateHandlers` entry (or inherits
 // its parent's via `ancestors()`).
 
-import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { defTypeAliasName, sanitizeDefName, toTypeScript } from "./typescript-native.ts"
+import { ancestors, resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { defTypeAliasName, sanitizeDefName, toTypeScript } from "./typescript-native.ts";
 
 // ============================================================================
 // ValidationError — the structured error shape `errors()`/`parse()` emit.
@@ -75,11 +75,11 @@ export type ValidationError =
   // could have caught. `message` carries the thrown value's message
   // (`error instanceof Error ? error.message : String(error)`) — a decoder
   // can throw anything, not just an `Error`, so this is never a lossy cast.
-  | { kind: "decode"; path: string[]; message: string }
+  | { kind: "decode"; path: string[]; message: string };
 
 /** Display string for a TypeRef — reuses the TypeScript projector's rendering. */
 export function typeRefToString(ref: TypeRef): string {
-  return toTypeScript(ref)
+  return toTypeScript(ref);
 }
 
 // ============================================================================
@@ -87,8 +87,10 @@ export function typeRefToString(ref: TypeRef): string {
 // ============================================================================
 
 function indentLines(lines: readonly string[], spaces: number): string[] {
-  const pad = " ".repeat(spaces)
-  return lines.flatMap((line) => line.split("\n")).map((line) => (line.length > 0 ? pad + line : line))
+  const pad = " ".repeat(spaces);
+  return lines
+    .flatMap((line) => line.split("\n"))
+    .map((line) => (line.length > 0 ? pad + line : line));
 }
 
 /** Per-entry codegen context: hoists regexes/enum-arrays/known-field-sets to
@@ -106,49 +108,49 @@ class GenCtx {
    * name) is the fix, done once here rather than by post-hoc textual renaming at
    * every assembly site that splices more than one instance's declarations together. */
   constructor(private readonly namespace: string = "") {}
-  private consts: string[] = []
-  private constCounter = 0
+  private consts: string[] = [];
+  private constCounter = 0;
   // Keyed by `${prefix}\0${expr}` — check/errors/parse each walk the same
   // TypeRef tree independently against the SAME ctx (see `compileEntryBody`),
   // so an enum's member array or an object's known-field Set gets requested
   // up to three times with identical content. Caching by content (not just
   // by regex pattern, which `addRegex` already did) means each unique
   // literal is hoisted once and shared across all three functions' bodies.
-  private constCache = new Map<string, string>()
-  private regexCache = new Map<string, string>()
-  private varCounter = 0
+  private constCache = new Map<string, string>();
+  private regexCache = new Map<string, string>();
+  private varCounter = 0;
 
   /** Names of `defs` entries in scope for this compile — populated by
    * `compileDefs` before `genCheckExpr`/`genValidate` walk any body that
    * might reference them via `ref`. A `ref` whose target ISN'T in this set has
    * no generated function to call (no `defs` passed in) and passes through,
    * preserving pre-`defs` behavior for bare-`TypeRef` callers. */
-  readonly defNames = new Set<string>()
+  readonly defNames = new Set<string>();
 
   addConst(prefix: string, expr: string): string {
-    const cacheKey = `${prefix}\0${expr}`
-    const cached = this.constCache.get(cacheKey)
-    if (cached !== undefined) return cached
-    const name = `__${this.namespace}${prefix}${this.constCounter++}`
-    this.consts.push(`const ${name} = ${expr};`)
-    this.constCache.set(cacheKey, name)
-    return name
+    const cacheKey = `${prefix}\0${expr}`;
+    const cached = this.constCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    const name = `__${this.namespace}${prefix}${this.constCounter++}`;
+    this.consts.push(`const ${name} = ${expr};`);
+    this.constCache.set(cacheKey, name);
+    return name;
   }
 
   addRegex(pattern: string): string {
-    const cached = this.regexCache.get(pattern)
-    if (cached !== undefined) return cached
-    const name = this.addConst("re", `new RegExp(${JSON.stringify(pattern)})`)
-    this.regexCache.set(pattern, name)
-    return name
+    const cached = this.regexCache.get(pattern);
+    if (cached !== undefined) return cached;
+    const name = this.addConst("re", `new RegExp(${JSON.stringify(pattern)})`);
+    this.regexCache.set(pattern, name);
+    return name;
   }
 
   fresh(prefix: string): string {
-    return `__${prefix}${this.varCounter++}`
+    return `__${prefix}${this.varCounter++}`;
   }
 
   declarations(): string[] {
-    return this.consts
+    return this.consts;
   }
 }
 
@@ -159,7 +161,7 @@ class GenCtx {
  * identifier fragment so def names containing characters JS identifiers
  * can't (e.g. `"Foo.Bar"`, generic instantiation names) still emit valid code. */
 function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
-  return `__def_${sanitizeDefName(name)}_${facet}`
+  return `__def_${sanitizeDefName(name)}_${facet}`;
 }
 
 /** A JSON-serializable TypeRef literal, hoisted to a shared const (via `ctx`)
@@ -174,21 +176,25 @@ function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
  * whose real definition (imported from type-ir, see `compileValidatorModule`
  * and this file's own `ValidationError` export) still requires `TypeRef`. */
 function refLiteral(ref: TypeRef, ctx: GenCtx): string {
-  return ctx.addConst("ref", `${JSON.stringify(ref)} as any`)
+  return ctx.addConst("ref", `${JSON.stringify(ref)} as any`);
 }
 
 function typeErrorStmt(pathExpr: string, expected: TypeRef, v: string, ctx: GenCtx): string {
-  return `errs.push({ kind: "type", path: ${pathExpr}, expected: ${refLiteral(expected, ctx)}, actual: __inferTypeRef(${v}) });`
+  return `errs.push({ kind: "type", path: ${pathExpr}, expected: ${refLiteral(expected, ctx)}, actual: __inferTypeRef(${v}) });`;
 }
 
 // A kind is "stringlike"/"numericlike" if it (or an ancestor) is "string" /
 // "number" or "integer" — covers built-in extension kinds (uuid, int32, …)
 // registered via `registerParent` without hardcoding their names here.
 function isStringlike(kind: string): boolean {
-  return kind === "string" || ancestors(kind).includes("string")
+  return kind === "string" || ancestors(kind).includes("string");
 }
 function isNumericlike(kind: string): boolean {
-  return kind === "number" || kind === "integer" || ancestors(kind).some((a) => a === "number" || a === "integer")
+  return (
+    kind === "number" ||
+    kind === "integer" ||
+    ancestors(kind).some((a) => a === "number" || a === "integer")
+  );
 }
 
 /** Extra constraint checks driven by `meta` (minLength/maxLength/pattern for
@@ -197,64 +203,70 @@ function isNumericlike(kind: string): boolean {
  * check) so a wrong-type value doesn't also produce spurious constraint
  * errors. Shared between errors() and parse() (parse calls this on the
  * coerced value, after coercion, with its own base-type guard). */
-function metaConstraintStmts(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, guardCond: string): string[] {
-  const meta = ref.meta
-  const kind = ref.shape.kind
-  const clauses: string[] = []
+function metaConstraintStmts(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  guardCond: string,
+): string[] {
+  const meta = ref.meta;
+  const kind = ref.shape.kind;
+  const clauses: string[] = [];
   if (isStringlike(kind) || kind === "array") {
     if (typeof meta.minLength === "number") {
       clauses.push(
         `if (${v}.length < ${meta.minLength}) { errs.push({ kind: "min_length", path: ${pathExpr}, expected: ${meta.minLength}, actual: ${v}.length }); }`,
-      )
+      );
     }
     if (typeof meta.maxLength === "number") {
       clauses.push(
         `if (${v}.length > ${meta.maxLength}) { errs.push({ kind: "max_length", path: ${pathExpr}, expected: ${meta.maxLength}, actual: ${v}.length }); }`,
-      )
+      );
     }
   }
   if (isStringlike(kind) && typeof meta.pattern === "string") {
-    const re = ctx.addRegex(meta.pattern)
+    const re = ctx.addRegex(meta.pattern);
     clauses.push(
       `if (!${re}.test(${v})) { errs.push({ kind: "pattern", path: ${pathExpr}, expected: ${JSON.stringify(meta.pattern)}, actual: ${v} }); }`,
-    )
+    );
   }
   if (isNumericlike(kind)) {
     if (typeof meta.minimum === "number") {
       clauses.push(
         `if (!(${v} >= ${meta.minimum})) { errs.push({ kind: "min", path: ${pathExpr}, expected: ${meta.minimum}, actual: ${v}, exclusive: false }); }`,
-      )
+      );
     }
     if (typeof meta.exclusiveMinimum === "number") {
       clauses.push(
         `if (!(${v} > ${meta.exclusiveMinimum})) { errs.push({ kind: "min", path: ${pathExpr}, expected: ${meta.exclusiveMinimum}, actual: ${v}, exclusive: true }); }`,
-      )
+      );
     }
     if (typeof meta.maximum === "number") {
       clauses.push(
         `if (!(${v} <= ${meta.maximum})) { errs.push({ kind: "max", path: ${pathExpr}, expected: ${meta.maximum}, actual: ${v}, exclusive: false }); }`,
-      )
+      );
     }
     if (typeof meta.exclusiveMaximum === "number") {
       clauses.push(
         `if (!(${v} < ${meta.exclusiveMaximum})) { errs.push({ kind: "max", path: ${pathExpr}, expected: ${meta.exclusiveMaximum}, actual: ${v}, exclusive: true }); }`,
-      )
+      );
     }
     if (typeof meta.multipleOf === "number") {
       clauses.push(
         `if (${v} % ${meta.multipleOf} !== 0) { errs.push({ kind: "multiple_of", path: ${pathExpr}, expected: ${meta.multipleOf}, actual: ${v} }); }`,
-      )
+      );
     }
   }
-  if (clauses.length === 0) return []
-  return [`if (${guardCond}) {`, ...indentLines(clauses, 2), `}`]
+  if (clauses.length === 0) return [];
+  return [`if (${guardCond}) {`, ...indentLines(clauses, 2), `}`];
 }
 
 // ============================================================================
 // check(value): value is T — pure boolean expression, no statements.
 // ============================================================================
 
-type CheckHandler = (ref: TypeRef, v: string, ctx: GenCtx) => string
+type CheckHandler = (ref: TypeRef, v: string, ctx: GenCtx) => string;
 
 const FORMAT_PATTERNS: Record<string, string> = {
   uuid: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
@@ -263,10 +275,11 @@ const FORMAT_PATTERNS: Record<string, string> = {
   time: "^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})?$",
   duration: "^P(?:\\d+Y)?(?:\\d+M)?(?:\\d+D)?(?:T(?:\\d+H)?(?:\\d+M)?(?:\\d+(?:\\.\\d+)?S)?)?$",
   bytes: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-}
+};
 
 function formatCheck(formatName: keyof typeof FORMAT_PATTERNS): CheckHandler {
-  return (_ref, v, ctx) => `typeof ${v} === "string" && ${ctx.addRegex(FORMAT_PATTERNS[formatName]!)}.test(${v})`
+  return (_ref, v, ctx) =>
+    `typeof ${v} === "string" && ${ctx.addRegex(FORMAT_PATTERNS[formatName]!)}.test(${v})`;
 }
 
 // datetime/date are the domain type `Date` (see kinds/date-time.ts), not a
@@ -274,7 +287,7 @@ function formatCheck(formatName: keyof typeof FORMAT_PATTERNS): CheckHandler {
 // isn't `NaN` (an "Invalid Date" is a `Date` instance too, so `instanceof`
 // alone isn't sufficient).
 function dateCheck(): CheckHandler {
-  return (_ref, v) => `(${v} instanceof Date && !Number.isNaN(${v}.getTime()))`
+  return (_ref, v) => `(${v} instanceof Date && !Number.isNaN(${v}.getTime()))`;
 }
 
 // `stream` (AsyncIterable<T>) is a runtime construct, not a materialized
@@ -286,7 +299,7 @@ function dateCheck(): CheckHandler {
 // Elements are NOT validated (see the `stream` doc comment in index.ts and
 // TODO.md — this is the documented carve-out, not an oversight).
 function isAsyncIterableExpr(v: string): string {
-  return `(typeof ${v} === "object" && ${v} !== null && typeof ${v}[Symbol.asyncIterator] === "function")`
+  return `(typeof ${v} === "object" && ${v} !== null && typeof ${v}[Symbol.asyncIterator] === "function")`;
 }
 
 // `page` (CursorPage<T>/OffsetPage<T>, see api-tree/src/page.ts) IS a
@@ -297,9 +310,9 @@ function isAsyncIterableExpr(v: string): string {
 // reusing `objectValidate`'s per-field optional handling for `cursor?`
 // rather than duplicating it.
 function pageAsObjectRef(ref: TypeRef): TypeRef {
-  const s = ref.shape as TypeShape & { kind: "page" }
-  const items: TypeRef = { shape: { kind: "array", element: s.element }, meta: {} }
-  const hasMore: TypeRef = { shape: { kind: "boolean" }, meta: {} }
+  const s = ref.shape as TypeShape & { kind: "page" };
+  const items: TypeRef = { shape: { kind: "array", element: s.element }, meta: {} };
+  const hasMore: TypeRef = { shape: { kind: "boolean" }, meta: {} };
   const fields: Record<string, TypeRef> =
     s.style === "cursor"
       ? { items, cursor: { shape: { kind: "string" }, meta: { optional: true } }, hasMore }
@@ -308,15 +321,16 @@ function pageAsObjectRef(ref: TypeRef): TypeRef {
           offset: { shape: { kind: "number" }, meta: {} },
           total: { shape: { kind: "number" }, meta: {} },
           hasMore,
-        }
-  return { shape: { kind: "object", fields }, meta: {} }
+        };
+  return { shape: { kind: "object", fields }, meta: {} };
 }
 
 const checkHandlers: Record<string, CheckHandler> = {
   boolean: (_r, v) => `typeof ${v} === "boolean"`,
   number: (_r, v) => `typeof ${v} === "number"`,
   integer: (_r, v) => `typeof ${v} === "number" && Number.isInteger(${v})`,
-  int32: (_r, v) => `typeof ${v} === "number" && Number.isInteger(${v}) && ${v} >= -2147483648 && ${v} <= 2147483647`,
+  int32: (_r, v) =>
+    `typeof ${v} === "number" && Number.isInteger(${v}) && ${v} >= -2147483648 && ${v} <= 2147483647`,
   int64: (_r, v) =>
     `typeof ${v} === "number" && Number.isInteger(${v}) && ${v} >= Number.MIN_SAFE_INTEGER && ${v} <= Number.MAX_SAFE_INTEGER`,
   float32: (_r, v) => `typeof ${v} === "number"`,
@@ -345,40 +359,42 @@ const checkHandlers: Record<string, CheckHandler> = {
   // no `defs` passed to `compileValidator`/`compileValidatorModule`) has
   // nothing to call and passes through, same as before this change.
   ref: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "ref" }
-    return ctx.defNames.has(s.target) ? `${defFnName(s.target, "check")}(${v})` : "true"
+    const s = ref.shape as TypeShape & { kind: "ref" };
+    return ctx.defNames.has(s.target) ? `${defFnName(s.target, "check")}(${v})` : "true";
   },
   function: (_r, v) => `typeof ${v} === "function"`,
   object: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "object" }
+    const s = ref.shape as TypeShape & { kind: "object" };
     const fieldClauses = Object.entries(s.fields).map(([name, field]) => {
-      const fv = `${v}[${JSON.stringify(name)}]`
-      const inner = genCheckExpr(field, fv, ctx)
-      return field.meta.optional === true ? `(${fv} === undefined || (${inner}))` : `(${inner})`
-    })
-    const base = `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}))`
-    const parts = [base, ...fieldClauses]
+      const fv = `${v}[${JSON.stringify(name)}]`;
+      const inner = genCheckExpr(field, fv, ctx);
+      return field.meta.optional === true ? `(${fv} === undefined || (${inner}))` : `(${inner})`;
+    });
+    const base = `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}))`;
+    const parts = [base, ...fieldClauses];
     if (ref.meta.additionalProperties === false) {
-      const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`)
-      parts.push(`Object.keys(${v}).every((__k) => ${known}.has(__k))`)
+      const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`);
+      parts.push(`Object.keys(${v}).every((__k) => ${known}.has(__k))`);
     }
-    return parts.join(" && ")
+    return parts.join(" && ");
   },
   array: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "array" }
-    return `(Array.isArray(${v}) && ${v}.every((__e) => (${genCheckExpr(s.element, "__e", ctx)})))`
+    const s = ref.shape as TypeShape & { kind: "array" };
+    return `(Array.isArray(${v}) && ${v}.every((__e) => (${genCheckExpr(s.element, "__e", ctx)})))`;
   },
   // See `isAsyncIterableExpr`'s doc comment above — elements aren't checked.
   stream: (_ref, v) => isAsyncIterableExpr(v),
   // See `pageAsObjectRef`'s doc comment above — delegates to `object`.
   page: (ref, v, ctx) => genCheckExpr(pageAsObjectRef(ref), v, ctx),
   tuple: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "tuple" }
-    const elementChecks = s.elements.map((e, i) => `(${genCheckExpr(e, `${v}[${i}]`, ctx)})`)
-    return [`Array.isArray(${v})`, `${v}.length === ${s.elements.length}`, ...elementChecks].join(" && ")
+    const s = ref.shape as TypeShape & { kind: "tuple" };
+    const elementChecks = s.elements.map((e, i) => `(${genCheckExpr(e, `${v}[${i}]`, ctx)})`);
+    return [`Array.isArray(${v})`, `${v}.length === ${s.elements.length}`, ...elementChecks].join(
+      " && ",
+    );
   },
   map: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "map" }
+    const s = ref.shape as TypeShape & { kind: "map" };
     // `Object.values(${v})` — NOT `Object.keys` (always `string[]`, no
     // generic ambiguity) — hits a genuine TS overload-resolution quirk when
     // `${v}` is `any`: `values<T>(o: { [s: string]: T } | ArrayLike<T>): T[]`
@@ -393,93 +409,104 @@ const checkHandlers: Record<string, CheckHandler> = {
     // pass-through semantics for the callback parameter — this is a type-
     // level cast only, erased at runtime, with no effect on the emitted
     // module's actual validation behavior.
-    return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.keys(${v}).every((__k) => (${genCheckExpr(s.key, "__k", ctx)})) && (Object.values(${v}) as any[]).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`
+    return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.keys(${v}).every((__k) => (${genCheckExpr(s.key, "__k", ctx)})) && (Object.values(${v}) as any[]).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`;
   },
   union: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "union" }
-    if (s.variants.length === 0) return "false"
-    return `(${s.variants.map((m) => `(${genCheckExpr(m, v, ctx)})`).join(" || ")})`
+    const s = ref.shape as TypeShape & { kind: "union" };
+    if (s.variants.length === 0) return "false";
+    return `(${s.variants.map((m) => `(${genCheckExpr(m, v, ctx)})`).join(" || ")})`;
   },
   literal: (ref, v) => {
-    const s = ref.shape as TypeShape & { kind: "literal" }
-    return `${v} === ${JSON.stringify(s.value)}`
+    const s = ref.shape as TypeShape & { kind: "literal" };
+    return `${v} === ${JSON.stringify(s.value)}`;
   },
   enum: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "enum" }
-    const members = ctx.addConst("members", JSON.stringify(s.members))
-    return `${members}.includes(${v})`
+    const s = ref.shape as TypeShape & { kind: "enum" };
+    const members = ctx.addConst("members", JSON.stringify(s.members));
+    return `${members}.includes(${v})`;
   },
   intersection: (ref, v, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "intersection" }
-    if (s.members.length === 0) return "true"
-    return s.members.map((m) => `(${genCheckExpr(m, v, ctx)})`).join(" && ")
+    const s = ref.shape as TypeShape & { kind: "intersection" };
+    if (s.members.length === 0) return "true";
+    return s.members.map((m) => `(${genCheckExpr(m, v, ctx)})`).join(" && ");
   },
   interface: (ref, v) => {
-    const s = ref.shape as TypeShape & { kind: "interface" }
-    const methodChecks = Object.keys(s.methods).map((name) => `typeof ${v}[${JSON.stringify(name)}] === "function"`)
-    const base = `(typeof ${v} === "object" && ${v} !== null)`
-    return [base, ...methodChecks].join(" && ")
+    const s = ref.shape as TypeShape & { kind: "interface" };
+    const methodChecks = Object.keys(s.methods).map(
+      (name) => `typeof ${v}[${JSON.stringify(name)}] === "function"`,
+    );
+    const base = `(typeof ${v} === "object" && ${v} !== null)`;
+    return [base, ...methodChecks].join(" && ");
   },
-}
+};
 
 function genCheckExpr(ref: TypeRef, v: string, ctx: GenCtx): string {
-  const handler = resolve(ref.shape.kind, checkHandlers)
-  const base = handler === undefined ? "true" : handler(ref, v, ctx)
-  const withConstraints = metaConstraintCheckClause(ref, v, base, ctx)
-  return ref.meta.nullable === true ? `(${v} === null || (${withConstraints}))` : withConstraints
+  const handler = resolve(ref.shape.kind, checkHandlers);
+  const base = handler === undefined ? "true" : handler(ref, v, ctx);
+  const withConstraints = metaConstraintCheckClause(ref, v, base, ctx);
+  return ref.meta.nullable === true ? `(${v} === null || (${withConstraints}))` : withConstraints;
 }
 
 function metaConstraintCheckClause(ref: TypeRef, v: string, base: string, ctx: GenCtx): string {
-  const meta = ref.meta
-  const kind = ref.shape.kind
-  const clauses: string[] = []
+  const meta = ref.meta;
+  const kind = ref.shape.kind;
+  const clauses: string[] = [];
   if (isStringlike(kind) || kind === "array") {
-    if (typeof meta.minLength === "number") clauses.push(`${v}.length >= ${meta.minLength}`)
-    if (typeof meta.maxLength === "number") clauses.push(`${v}.length <= ${meta.maxLength}`)
+    if (typeof meta.minLength === "number") clauses.push(`${v}.length >= ${meta.minLength}`);
+    if (typeof meta.maxLength === "number") clauses.push(`${v}.length <= ${meta.maxLength}`);
   }
   if (isStringlike(kind) && typeof meta.pattern === "string") {
-    clauses.push(`${ctx.addRegex(meta.pattern)}.test(${v})`)
+    clauses.push(`${ctx.addRegex(meta.pattern)}.test(${v})`);
   }
   if (isNumericlike(kind)) {
-    if (typeof meta.minimum === "number") clauses.push(`${v} >= ${meta.minimum}`)
-    if (typeof meta.exclusiveMinimum === "number") clauses.push(`${v} > ${meta.exclusiveMinimum}`)
-    if (typeof meta.maximum === "number") clauses.push(`${v} <= ${meta.maximum}`)
-    if (typeof meta.exclusiveMaximum === "number") clauses.push(`${v} < ${meta.exclusiveMaximum}`)
-    if (typeof meta.multipleOf === "number") clauses.push(`${v} % ${meta.multipleOf} === 0`)
+    if (typeof meta.minimum === "number") clauses.push(`${v} >= ${meta.minimum}`);
+    if (typeof meta.exclusiveMinimum === "number") clauses.push(`${v} > ${meta.exclusiveMinimum}`);
+    if (typeof meta.maximum === "number") clauses.push(`${v} <= ${meta.maximum}`);
+    if (typeof meta.exclusiveMaximum === "number") clauses.push(`${v} < ${meta.exclusiveMaximum}`);
+    if (typeof meta.multipleOf === "number") clauses.push(`${v} % ${meta.multipleOf} === 0`);
   }
-  if (clauses.length === 0) return `(${base})`
-  return `((${base}) && ${clauses.join(" && ")})`
+  if (clauses.length === 0) return `(${base})`;
+  return `((${base}) && ${clauses.join(" && ")})`;
 }
 
 // ============================================================================
 // errors(value)/parse(value) — statement-based codegen (shared traversal).
 // ============================================================================
 
-type Mode = "errors" | "parse"
-type ValidateResult = { stmts: string[]; outExpr: string }
-type ValidateHandler = (ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode) => ValidateResult
+type Mode = "errors" | "parse";
+type ValidateResult = { stmts: string[]; outExpr: string };
+type ValidateHandler = (
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+) => ValidateResult;
 
 /** A leaf kind with no coercion available in parse mode: valid input passes
  * through unchanged, invalid input records a `type` error and keeps the raw
  * value (best-effort — the caller only cares whether `errs` stayed empty). */
 function nonCoercingLeaf(cond: (v: string, ctx: GenCtx) => string): ValidateHandler {
   return (ref, v, pathExpr, ctx) => {
-    const c = cond(v, ctx)
-    const stmts = [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)]
-    return { stmts, outExpr: v }
-  }
+    const c = cond(v, ctx);
+    const stmts = [
+      `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+      ...metaConstraintStmts(ref, v, pathExpr, ctx, c),
+    ];
+    return { stmts, outExpr: v };
+  };
 }
 
 function formatLeaf(formatName: keyof typeof FORMAT_PATTERNS): ValidateHandler {
   return (ref, v, pathExpr, ctx) => {
-    const re = ctx.addRegex(FORMAT_PATTERNS[formatName]!)
+    const re = ctx.addRegex(FORMAT_PATTERNS[formatName]!);
     const stmts = [
       `if (typeof ${v} !== "string") { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
       `else if (!${re}.test(${v})) { errs.push({ kind: "format", path: ${pathExpr}, expected: ${JSON.stringify(formatName)}, actual: ${v} }); }`,
       ...metaConstraintStmts(ref, v, pathExpr, ctx, `typeof ${v} === "string"`),
-    ]
-    return { stmts, outExpr: v }
-  }
+    ];
+    return { stmts, outExpr: v };
+  };
 }
 
 /** datetime/date: valid input is a `Date` instance with a non-NaN
@@ -489,21 +516,21 @@ function formatLeaf(formatName: keyof typeof FORMAT_PATTERNS): ValidateHandler {
  * "right shape, unparseable content" split `numberFamilyLeaf` draws between
  * `type` and `coerce` errors. */
 function dateLeaf(): ValidateHandler {
-  const isValidDate = (v: string) => `${v} instanceof Date && !Number.isNaN(${v}.getTime())`
+  const isValidDate = (v: string) => `${v} instanceof Date && !Number.isNaN(${v}.getTime())`;
   return (ref, v, pathExpr, ctx, mode) => {
-    const c = isValidDate(v)
+    const c = isValidDate(v);
     if (mode === "errors") {
-      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v }
+      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
     }
-    const out = ctx.fresh("d")
+    const out = ctx.fresh("d");
     const stmts = [
       `let ${out};`,
       `if (${c}) { ${out} = ${v}; }`,
       `else if (typeof ${v} === "string") { const __d = new Date(${v}); if (!Number.isNaN(__d.getTime())) { ${out} = __d; } else { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; } }`,
       `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
-    ]
-    return { stmts, outExpr: out }
-  }
+    ];
+    return { stmts, outExpr: out };
+  };
 }
 
 /** number/integer/int32/int64/float32/float64: coerces a numeric string in
@@ -511,14 +538,21 @@ function dateLeaf(): ValidateHandler {
  * valid number and a `type` error if neither the raw value nor its coercion
  * matches `extra` (e.g. integer-ness). */
 function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
-  const cond = (v: string) => (extra === undefined ? `typeof ${v} === "number"` : `typeof ${v} === "number" && ${extra(v)}`)
+  const cond = (v: string) =>
+    extra === undefined ? `typeof ${v} === "number"` : `typeof ${v} === "number" && ${extra(v)}`;
   return (ref, v, pathExpr, ctx, mode) => {
-    const c = cond(v)
+    const c = cond(v);
     if (mode === "errors") {
-      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)], outExpr: v }
+      return {
+        stmts: [
+          `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+          ...metaConstraintStmts(ref, v, pathExpr, ctx, c),
+        ],
+        outExpr: v,
+      };
     }
-    const out = ctx.fresh("n")
-    const coercedOk = extra === undefined ? "true" : extra(out)
+    const out = ctx.fresh("n");
+    const coercedOk = extra === undefined ? "true" : extra(out);
     const stmts = [
       `let ${out};`,
       `if (${c}) { ${out} = ${v}; }`,
@@ -529,15 +563,16 @@ function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
       `else if (typeof ${v} === "string") { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; }`,
       `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
       ...metaConstraintStmts(ref, out, pathExpr, ctx, `typeof ${out} === "number"`),
-    ]
-    return { stmts, outExpr: out }
-  }
+    ];
+    return { stmts, outExpr: out };
+  };
 }
 
 const booleanLeaf: ValidateHandler = (ref, v, pathExpr, ctx, mode) => {
-  const c = `typeof ${v} === "boolean"`
-  if (mode === "errors") return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v }
-  const out = ctx.fresh("b")
+  const c = `typeof ${v} === "boolean"`;
+  if (mode === "errors")
+    return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
+  const out = ctx.fresh("b");
   const stmts = [
     `let ${out};`,
     `if (${c}) { ${out} = ${v}; }`,
@@ -548,50 +583,64 @@ const booleanLeaf: ValidateHandler = (ref, v, pathExpr, ctx, mode) => {
     // errors() would report, so the two modes agree.
     `else if (typeof ${v} === "string") { errs.push({ kind: "coerce", path: ${pathExpr}, expected: "boolean", actual: ${v} }); ${out} = ${v}; }`,
     `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
-  ]
-  return { stmts, outExpr: out }
-}
+  ];
+  return { stmts, outExpr: out };
+};
 
 const stringLeaf: ValidateHandler = (ref, v, pathExpr, ctx) => {
-  const c = `typeof ${v} === "string"`
-  const stmts = [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`, ...metaConstraintStmts(ref, v, pathExpr, ctx, c)]
-  return { stmts, outExpr: v }
-}
+  const c = `typeof ${v} === "string"`;
+  const stmts = [
+    `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+    ...metaConstraintStmts(ref, v, pathExpr, ctx, c),
+  ];
+  return { stmts, outExpr: v };
+};
 
 const literalLeaf: ValidateHandler = (ref, v, pathExpr) => {
-  const s = ref.shape as TypeShape & { kind: "literal" }
+  const s = ref.shape as TypeShape & { kind: "literal" };
   const stmts = [
     `if (${v} !== ${JSON.stringify(s.value)}) { errs.push({ kind: "literal", path: ${pathExpr}, expected: ${JSON.stringify(s.value)}, actual: ${v} }); }`,
-  ]
-  return { stmts, outExpr: v }
-}
+  ];
+  return { stmts, outExpr: v };
+};
 
 function enumLeaf(): ValidateHandler {
   return (ref, v, pathExpr, ctx) => {
-    const s = ref.shape as TypeShape & { kind: "enum" }
-    const members = ctx.addConst("members", JSON.stringify(s.members))
+    const s = ref.shape as TypeShape & { kind: "enum" };
+    const members = ctx.addConst("members", JSON.stringify(s.members));
     const stmts = [
       `if (!${members}.includes(${v})) { errs.push({ kind: "enum", path: ${pathExpr}, expected: ${members}, actual: ${v} }); }`,
-    ]
-    return { stmts, outExpr: v }
-  }
+    ];
+    return { stmts, outExpr: v };
+  };
 }
 
-function objectValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
-  const out = mode === "parse" ? ctx.fresh("o") : undefined
-  const stmts: string[] = []
-  if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`)
-  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
-  const body: string[] = []
+function objectValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`;
+  const out = mode === "parse" ? ctx.fresh("o") : undefined;
+  const stmts: string[] = [];
+  if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`);
+  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  const body: string[] = [];
   for (const [name, field] of Object.entries(s.fields)) {
-    const fv = `${v}[${JSON.stringify(name)}]`
-    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
-    const inner = genValidate(field, fv, fpath, ctx, mode)
-    const assign = out === undefined ? [] : [`${out}[${JSON.stringify(name)}] = ${inner.outExpr};`]
+    const fv = `${v}[${JSON.stringify(name)}]`;
+    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`;
+    const inner = genValidate(field, fv, fpath, ctx, mode);
+    const assign = out === undefined ? [] : [`${out}[${JSON.stringify(name)}] = ${inner.outExpr};`];
     if (field.meta.optional === true) {
-      body.push(`if (${fv} !== undefined) {`, ...indentLines(inner.stmts, 2), ...indentLines(assign, 2), `}`)
+      body.push(
+        `if (${fv} !== undefined) {`,
+        ...indentLines(inner.stmts, 2),
+        ...indentLines(assign, 2),
+        `}`,
+      );
     } else {
       body.push(
         `if (${fv} === undefined) { errs.push({ kind: "missing", path: ${fpath} }); }`,
@@ -599,29 +648,35 @@ function objectValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, 
         ...indentLines(inner.stmts, 2),
         ...indentLines(assign, 2),
         `}`,
-      )
+      );
     }
   }
   if (ref.meta.additionalProperties === false) {
-    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`)
+    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`);
     body.push(
       `for (const __k of Object.keys(${v})) { if (!${known}.has(__k)) { errs.push({ kind: "unexpected", path: ${pathExpr}.concat([__k]) }); } }`,
-    )
+    );
   }
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out ?? v }
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out ?? v };
 }
 
-function arrayValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "array" }
-  const out = mode === "parse" ? ctx.fresh("a") : undefined
-  const stmts: string[] = []
-  if (out !== undefined) stmts.push(`let ${out}: any[] = [];`)
-  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
-  const idx = ctx.fresh("i")
-  const ev = ctx.fresh("e")
-  const epath = ctx.fresh("p")
-  const inner = genValidate(s.element, ev, epath, ctx, mode)
+function arrayValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "array" };
+  const out = mode === "parse" ? ctx.fresh("a") : undefined;
+  const stmts: string[] = [];
+  if (out !== undefined) stmts.push(`let ${out}: any[] = [];`);
+  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  const idx = ctx.fresh("i");
+  const ev = ctx.fresh("e");
+  const epath = ctx.fresh("p");
+  const inner = genValidate(s.element, ev, epath, ctx, mode);
   const body = [
     `for (let ${idx} = 0; ${idx} < ${v}.length; ${idx}++) {`,
     `  const ${ev} = ${v}[${idx}];`,
@@ -630,48 +685,60 @@ function arrayValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, m
     out === undefined ? "" : `  ${out}.push(${inner.outExpr});`,
     `}`,
     ...metaConstraintStmts(ref, v, pathExpr, ctx, "true"),
-  ].filter((l) => l !== "")
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out ?? v }
+  ].filter((l) => l !== "");
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out ?? v };
 }
 
-function tupleValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "tuple" }
-  const out = mode === "parse" ? ctx.fresh("t") : undefined
-  const stmts: string[] = []
-  if (out !== undefined) stmts.push(`let ${out}: any[] = [];`)
-  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
+function tupleValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "tuple" };
+  const out = mode === "parse" ? ctx.fresh("t") : undefined;
+  const stmts: string[] = [];
+  if (out !== undefined) stmts.push(`let ${out}: any[] = [];`);
+  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
   const body: string[] = [
     `if (${v}.length !== ${s.elements.length}) { errs.push({ kind: "tuple_length", path: ${pathExpr}, expected: ${s.elements.length}, actual: ${v}.length }); }`,
-  ]
+  ];
   s.elements.forEach((element, i) => {
-    const ev = `${v}[${i}]`
-    const epath = `${pathExpr}.concat([${JSON.stringify(String(i))}])`
-    const inner = genValidate(element, ev, epath, ctx, mode)
-    body.push(`if (${v}.length > ${i}) {`, ...indentLines(inner.stmts, 2))
-    if (out !== undefined) body.push(`  ${out}.push(${inner.outExpr});`)
-    body.push(`}`)
-  })
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out ?? v }
+    const ev = `${v}[${i}]`;
+    const epath = `${pathExpr}.concat([${JSON.stringify(String(i))}])`;
+    const inner = genValidate(element, ev, epath, ctx, mode);
+    body.push(`if (${v}.length > ${i}) {`, ...indentLines(inner.stmts, 2));
+    if (out !== undefined) body.push(`  ${out}.push(${inner.outExpr});`);
+    body.push(`}`);
+  });
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out ?? v };
 }
 
-function mapValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "map" }
-  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
-  const out = mode === "parse" ? ctx.fresh("m") : undefined
-  const stmts: string[] = []
-  if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`)
-  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`)
-  const key = ctx.fresh("k")
-  const ev = ctx.fresh("e")
-  const epath = ctx.fresh("p")
+function mapValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "map" };
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`;
+  const out = mode === "parse" ? ctx.fresh("m") : undefined;
+  const stmts: string[] = [];
+  if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`);
+  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  const key = ctx.fresh("k");
+  const ev = ctx.fresh("e");
+  const epath = ctx.fresh("p");
   // The key is always validated in "errors" mode regardless of `mode` — keys
   // come from `Object.keys` as strings, so there's nothing to coerce; a
   // constrained key type (uuid/enum/pattern) still needs its errors
   // collected, but the key itself is never replaced in the parsed output.
-  const keyCheck = genValidate(s.key, key, epath, ctx, "errors")
-  const inner = genValidate(s.value, ev, epath, ctx, mode)
+  const keyCheck = genValidate(s.key, key, epath, ctx, "errors");
+  const inner = genValidate(s.value, ev, epath, ctx, mode);
   const body = [
     `for (const ${key} of Object.keys(${v})) {`,
     `  const ${ev} = ${v}[${key}];`,
@@ -680,9 +747,9 @@ function mapValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mod
     ...indentLines(inner.stmts, 2),
     out === undefined ? "" : `  ${out}[${key}] = ${inner.outExpr};`,
     `}`,
-  ].filter((l) => l !== "")
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out ?? v }
+  ].filter((l) => l !== "");
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out ?? v };
 }
 
 /** Union: tries each variant's parse in sequence against a scratch `errs`
@@ -690,33 +757,41 @@ function mapValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mod
  * codegen references `errs.push` unmodified); the first variant with zero
  * new errors wins. If none succeed, all variants' collected errors are
  * reported together under a single `union` error. */
-function unionValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "union" }
-  const out = mode === "parse" ? ctx.fresh("u") : undefined
-  const matched = ctx.fresh("matched")
-  const scratchNames: string[] = []
-  const stmts: string[] = []
-  if (out !== undefined) stmts.push(`let ${out} = ${v};`)
-  stmts.push(`let ${matched} = false;`)
+function unionValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "union" };
+  const out = mode === "parse" ? ctx.fresh("u") : undefined;
+  const matched = ctx.fresh("matched");
+  const scratchNames: string[] = [];
+  const stmts: string[] = [];
+  if (out !== undefined) stmts.push(`let ${out} = ${v};`);
+  stmts.push(`let ${matched} = false;`);
   for (const _variant of s.variants) {
-    const scratch = ctx.fresh("ue")
-    scratchNames.push(scratch)
-    stmts.push(`const ${scratch}: ValidationError[] = [];`)
+    const scratch = ctx.fresh("ue");
+    scratchNames.push(scratch);
+    stmts.push(`const ${scratch}: ValidationError[] = [];`);
   }
   s.variants.forEach((variant, i) => {
-    const scratch = scratchNames[i]!
-    const inner = genValidate(variant, v, pathExpr, ctx, mode)
-    stmts.push(`if (!${matched}) {`)
-    stmts.push(`  { const errs = ${scratch};`)
-    stmts.push(...indentLines(inner.stmts, 4))
-    stmts.push(`    if (${scratch}.length === 0) { ${matched} = true;${out === undefined ? "" : ` ${out} = ${inner.outExpr};`} }`)
-    stmts.push(`  }`)
-    stmts.push(`}`)
-  })
+    const scratch = scratchNames[i]!;
+    const inner = genValidate(variant, v, pathExpr, ctx, mode);
+    stmts.push(`if (!${matched}) {`);
+    stmts.push(`  { const errs = ${scratch};`);
+    stmts.push(...indentLines(inner.stmts, 4));
+    stmts.push(
+      `    if (${scratch}.length === 0) { ${matched} = true;${out === undefined ? "" : ` ${out} = ${inner.outExpr};`} }`,
+    );
+    stmts.push(`  }`);
+    stmts.push(`}`);
+  });
   stmts.push(
     `if (!${matched}) { errs.push({ kind: "union", path: ${pathExpr}, errors: [${scratchNames.join(", ")}] }); }`,
-  )
-  return { stmts, outExpr: out ?? v }
+  );
+  return { stmts, outExpr: out ?? v };
 }
 
 /** Intersection: every member validates against the SAME value (not
@@ -725,51 +800,62 @@ function unionValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, m
  * merges object-shaped members' outputs via `Object.assign`, in order; a
  * non-object member's parsed value is only used if no object member exists
  * (intersections of non-object types are a degenerate case). */
-function intersectionValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "intersection" }
-  if (s.members.length === 0) return { stmts: [], outExpr: v }
-  const out = mode === "parse" ? ctx.fresh("x") : undefined
-  const stmts: string[] = []
-  if (out !== undefined) stmts.push(`let ${out} = ${v};`)
-  const hasObjectMember = s.members.some((m) => m.shape.kind === "object")
-  if (out !== undefined && hasObjectMember) stmts.push(`${out} = {};`)
+function intersectionValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const s = ref.shape as TypeShape & { kind: "intersection" };
+  if (s.members.length === 0) return { stmts: [], outExpr: v };
+  const out = mode === "parse" ? ctx.fresh("x") : undefined;
+  const stmts: string[] = [];
+  if (out !== undefined) stmts.push(`let ${out} = ${v};`);
+  const hasObjectMember = s.members.some((m) => m.shape.kind === "object");
+  if (out !== undefined && hasObjectMember) stmts.push(`${out} = {};`);
   for (const member of s.members) {
-    const inner = genValidate(member, v, pathExpr, ctx, mode)
-    stmts.push(...inner.stmts)
+    const inner = genValidate(member, v, pathExpr, ctx, mode);
+    stmts.push(...inner.stmts);
     if (out !== undefined) {
       if (hasObjectMember && member.shape.kind === "object") {
-        stmts.push(`Object.assign(${out}, ${inner.outExpr});`)
+        stmts.push(`Object.assign(${out}, ${inner.outExpr});`);
       } else if (!hasObjectMember) {
-        stmts.push(`${out} = ${inner.outExpr};`)
+        stmts.push(`${out} = ${inner.outExpr};`);
       }
     }
   }
-  return { stmts, outExpr: out ?? v }
+  return { stmts, outExpr: out ?? v };
 }
 
 function interfaceValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "interface" }
-  const baseCond = `typeof ${v} === "object" && ${v} !== null`
-  const stmts = [`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`]
-  const body: string[] = []
+  const s = ref.shape as TypeShape & { kind: "interface" };
+  const baseCond = `typeof ${v} === "object" && ${v} !== null`;
+  const stmts = [`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`];
+  const body: string[] = [];
   for (const name of Object.keys(s.methods)) {
-    const fv = `${v}[${JSON.stringify(name)}]`
-    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
+    const fv = `${v}[${JSON.stringify(name)}]`;
+    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`;
     body.push(
       `if (typeof ${fv} === "undefined") { errs.push({ kind: "missing", path: ${fpath} }); }`,
       `else if (typeof ${fv} !== "function") { ${typeErrorStmt(fpath, ref, fv, ctx)} }`,
-    )
+    );
   }
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: v }
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: v };
 }
 
 const validateHandlers: Record<string, ValidateHandler> = {
   boolean: booleanLeaf,
   number: numberFamilyLeaf(),
   integer: numberFamilyLeaf((v) => `Number.isInteger(${v})`),
-  int32: numberFamilyLeaf((v) => `Number.isInteger(${v}) && ${v} >= -2147483648 && ${v} <= 2147483647`),
-  int64: numberFamilyLeaf((v) => `Number.isInteger(${v}) && ${v} >= Number.MIN_SAFE_INTEGER && ${v} <= Number.MAX_SAFE_INTEGER`),
+  int32: numberFamilyLeaf(
+    (v) => `Number.isInteger(${v}) && ${v} >= -2147483648 && ${v} <= 2147483647`,
+  ),
+  int64: numberFamilyLeaf(
+    (v) =>
+      `Number.isInteger(${v}) && ${v} >= Number.MIN_SAFE_INTEGER && ${v} <= Number.MAX_SAFE_INTEGER`,
+  ),
   float32: numberFamilyLeaf(),
   float64: numberFamilyLeaf(),
   string: stringLeaf,
@@ -799,16 +885,21 @@ const validateHandlers: Record<string, ValidateHandler> = {
   // passed in) there's nothing to call, so — like `unknown`/`instance` above —
   // it's a structural no-op that aliases the input.
   ref: (ref, v, pathExpr, ctx, mode) => {
-    const s = ref.shape as TypeShape & { kind: "ref" }
-    if (!ctx.defNames.has(s.target)) return { stmts: [], outExpr: v }
+    const s = ref.shape as TypeShape & { kind: "ref" };
+    if (!ctx.defNames.has(s.target)) return { stmts: [], outExpr: v };
     if (mode === "errors") {
-      return { stmts: [`errs.push(...${defFnName(s.target, "errors")}(${v}, ${pathExpr}));`], outExpr: v }
+      return {
+        stmts: [`errs.push(...${defFnName(s.target, "errors")}(${v}, ${pathExpr}));`],
+        outExpr: v,
+      };
     }
-    const out = ctx.fresh("d")
+    const out = ctx.fresh("d");
     return {
-      stmts: [`const ${out} = ${defFnName(s.target, "parse")}(${v}, ${pathExpr}); errs.push(...${out}.errors);`],
+      stmts: [
+        `const ${out} = ${defFnName(s.target, "parse")}(${v}, ${pathExpr}); errs.push(...${out}.errors);`,
+      ],
       outExpr: `${out}.value`,
-    }
+    };
   },
   function: nonCoercingLeaf((v) => `typeof ${v} === "function"`),
   literal: literalLeaf,
@@ -826,18 +917,30 @@ const validateHandlers: Record<string, ValidateHandler> = {
   union: unionValidate,
   intersection: intersectionValidate,
   interface: interfaceValidate,
+};
+
+function genValidateShape(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
+  const handler = resolve(ref.shape.kind, validateHandlers);
+  if (handler === undefined) return { stmts: [], outExpr: v };
+  return handler(ref, v, pathExpr, ctx, mode);
 }
 
-function genValidateShape(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
-  const handler = resolve(ref.shape.kind, validateHandlers)
-  if (handler === undefined) return { stmts: [], outExpr: v }
-  return handler(ref, v, pathExpr, ctx, mode)
-}
-
-function genValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mode: Mode): ValidateResult {
+function genValidate(
+  ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+  mode: Mode,
+): ValidateResult {
   if (ref.meta.nullable === true) {
-    const out = mode === "parse" ? ctx.fresh("n") : undefined
-    const inner = genValidateShape(ref, v, pathExpr, ctx, mode)
+    const out = mode === "parse" ? ctx.fresh("n") : undefined;
+    const inner = genValidateShape(ref, v, pathExpr, ctx, mode);
     const stmts = [
       out === undefined ? "" : `let ${out};`,
       `if (${v} === null) {`,
@@ -846,10 +949,10 @@ function genValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx, mod
       ...indentLines(inner.stmts, 2),
       out === undefined ? "" : `  ${out} = ${inner.outExpr};`,
       `}`,
-    ].filter((l) => l !== "")
-    return { stmts, outExpr: out ?? v }
+    ].filter((l) => l !== "");
+    return { stmts, outExpr: out ?? v };
   }
-  return genValidateShape(ref, v, pathExpr, ctx, mode)
+  return genValidateShape(ref, v, pathExpr, ctx, mode);
 }
 
 // ============================================================================
@@ -877,7 +980,7 @@ export const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
   if (typeof v === "object") return { shape: { kind: "object", fields: {} }, meta: {} };
   if (typeof v === "function") return { shape: { kind: "function", params: [], returnType: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
   return { shape: { kind: typeof v }, meta: {} };
-}`
+}`;
 
 // ============================================================================
 // Top-level assembly: one TypeRef -> { check, errors, parse } source.
@@ -905,12 +1008,13 @@ function guardAnnotation(
   resolveImport: ((declarationFile: string) => string) | undefined,
   defNames: ReadonlySet<string> = new Set(),
 ): { annotation: string; typeImport?: { typeName: string; from: string } } {
-  const typeName = typeof ref.meta.typeName === "string" ? ref.meta.typeName : undefined
-  const declarationFile = typeof ref.meta.declarationFile === "string" ? ref.meta.declarationFile : undefined
+  const typeName = typeof ref.meta.typeName === "string" ? ref.meta.typeName : undefined;
+  const declarationFile =
+    typeof ref.meta.declarationFile === "string" ? ref.meta.declarationFile : undefined;
   if (typeName !== undefined && declarationFile !== undefined && resolveImport !== undefined) {
-    return { annotation: typeName, typeImport: { typeName, from: resolveImport(declarationFile) } }
+    return { annotation: typeName, typeImport: { typeName, from: resolveImport(declarationFile) } };
   }
-  return { annotation: toTypeScript(ref, defNames) }
+  return { annotation: toTypeScript(ref, defNames) };
 }
 
 /**
@@ -940,32 +1044,34 @@ function guardAnnotation(
  * below already have.
  */
 function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
-  for (const name of Object.keys(defs)) ctx.defNames.add(name)
-  const lines: string[] = []
+  for (const name of Object.keys(defs)) ctx.defNames.add(name);
+  const lines: string[] = [];
   for (const [name, ref] of Object.entries(defs)) {
-    lines.push(`type ${defTypeAliasName(name)} = ${toTypeScript(ref, ctx.defNames)};`)
+    lines.push(`type ${defTypeAliasName(name)} = ${toTypeScript(ref, ctx.defNames)};`);
   }
   for (const [name, ref] of Object.entries(defs)) {
-    const checkExpr = genCheckExpr(ref, "value", ctx)
-    const errorsBody = genValidate(ref, "value", "path", ctx, "errors")
-    const parseBody = genValidate(ref, "value", "path", ctx, "parse")
-    lines.push(`function ${defFnName(name, "check")}(value: any): boolean {`)
-    lines.push(`  return (${checkExpr});`)
-    lines.push(`}`)
-    lines.push(`function ${defFnName(name, "errors")}(value: any, path: string[]): ValidationError[] {`)
-    lines.push(`  const errs: ValidationError[] = [];`)
-    lines.push(...indentLines(errorsBody.stmts, 2))
-    lines.push(`  return errs;`)
-    lines.push(`}`)
+    const checkExpr = genCheckExpr(ref, "value", ctx);
+    const errorsBody = genValidate(ref, "value", "path", ctx, "errors");
+    const parseBody = genValidate(ref, "value", "path", ctx, "parse");
+    lines.push(`function ${defFnName(name, "check")}(value: any): boolean {`);
+    lines.push(`  return (${checkExpr});`);
+    lines.push(`}`);
+    lines.push(
+      `function ${defFnName(name, "errors")}(value: any, path: string[]): ValidationError[] {`,
+    );
+    lines.push(`  const errs: ValidationError[] = [];`);
+    lines.push(...indentLines(errorsBody.stmts, 2));
+    lines.push(`  return errs;`);
+    lines.push(`}`);
     lines.push(
       `function ${defFnName(name, "parse")}(value: any, path: string[]): { errors: ValidationError[]; value: any } {`,
-    )
-    lines.push(`  const errs: ValidationError[] = [];`)
-    lines.push(...indentLines(parseBody.stmts, 2))
-    lines.push(`  return { errors: errs, value: ${parseBody.outExpr} };`)
-    lines.push(`}`)
+    );
+    lines.push(`  const errs: ValidationError[] = [];`);
+    lines.push(...indentLines(parseBody.stmts, 2));
+    lines.push(`  return { errors: errs, value: ${parseBody.outExpr} };`);
+    lines.push(`}`);
   }
-  return lines
+  return lines;
 }
 
 /** Emit the `{ check, errors, parse }` triple's body lines (no wrapping
@@ -994,18 +1100,18 @@ function compileEntryBody(
   // declare); `compileValidatorModule` only ever passes this one.
   externalDefNames?: ReadonlySet<string>,
 ): string[] {
-  const ctx = new GenCtx()
+  const ctx = new GenCtx();
   // `defs`' function declarations are generated FIRST (populating
   // `ctx.defNames` before the entry body itself is walked), so a `ref` at
   // the entry's own top level — not just inside a def — also resolves to a
   // call rather than a no-op passthrough.
-  const defLines = defs !== undefined ? compileDefs(defs, ctx) : []
-  if (externalDefNames !== undefined) for (const name of externalDefNames) ctx.defNames.add(name)
-  const checkExpr = genCheckExpr(ref, "value", ctx)
-  const errorsBody = genValidate(ref, "value", "path", ctx, "errors")
-  const parseBody = genValidate(ref, "value", "path", ctx, "parse")
+  const defLines = defs !== undefined ? compileDefs(defs, ctx) : [];
+  if (externalDefNames !== undefined) for (const name of externalDefNames) ctx.defNames.add(name);
+  const checkExpr = genCheckExpr(ref, "value", ctx);
+  const errorsBody = genValidate(ref, "value", "path", ctx, "errors");
+  const parseBody = genValidate(ref, "value", "path", ctx, "parse");
 
-  const lines: string[] = []
+  const lines: string[] = [];
   // `withHelper` is true only for `compileValidator`'s single-expression,
   // truly-standalone output — there's no module scope to hoist a shared
   // `ValidationError` type/`__inferTypeRef` helper to, so both are declared
@@ -1015,11 +1121,11 @@ function compileEntryBody(
   if (withHelper) {
     // A local `type` declaration inside the IIFE body — NOT `export type`
     // (module-level export syntax is invalid inside a function body).
-    lines.push(VALIDATION_ERROR_TYPE_SOURCE.replace(/^export /, ""))
-    lines.push(INFER_TYPE_REF_SOURCE)
+    lines.push(VALIDATION_ERROR_TYPE_SOURCE.replace(/^export /, ""));
+    lines.push(INFER_TYPE_REF_SOURCE);
   }
-  lines.push(...ctx.declarations())
-  lines.push(...defLines)
+  lines.push(...ctx.declarations());
+  lines.push(...defLines);
   // `value: any` (not `unknown`) throughout the raw compiled body — bracket
   // access (`value["field"]`) only type-checks against `any`; the ANNOTATED,
   // narrower signature (`value is T`, the discriminated `parse` return type)
@@ -1030,32 +1136,36 @@ function compileEntryBody(
   // would otherwise trip `noUnusedParameters`/`noUnusedLocals` on the emitted
   // module. Unconditional no-op reads keep every entry compiling regardless
   // of whether the shape-specific body ends up using them.
-  lines.push(`function check(value: any) {`)
-  lines.push(`  void value;`)
-  lines.push(`  return (${checkExpr});`)
-  lines.push(`}`)
-  lines.push(`function errors(value: any): ValidationError[] {`)
-  lines.push(`  void value;`)
-  lines.push(`  const path: string[] = [];`)
-  lines.push(`  void path;`)
-  lines.push(`  const errs: ValidationError[] = [];`)
-  lines.push(...indentLines(errorsBody.stmts, 2))
-  lines.push(`  return errs;`)
-  lines.push(`}`)
-  lines.push(`function parse(value: any) {`)
-  lines.push(`  const path: string[] = [];`)
-  lines.push(`  void path;`)
-  lines.push(`  const errs: ValidationError[] = [];`)
-  lines.push(...indentLines(parseBody.stmts, 2))
-  lines.push(`  if (errs.length === 0) return { kind: "ok" as const, value: ${parseBody.outExpr} };`)
-  lines.push(`  return { kind: "err" as const, errors: errs };`)
-  lines.push(`}`)
-  lines.push(`return { check: check, errors: errors, parse: parse } as unknown as {`)
-  lines.push(`  check: (value: unknown) => value is ${annotation};`)
-  lines.push(`  errors: (value: unknown) => ValidationError[];`)
-  lines.push(`  parse: (value: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
-  lines.push(`};`)
-  return lines
+  lines.push(`function check(value: any) {`);
+  lines.push(`  void value;`);
+  lines.push(`  return (${checkExpr});`);
+  lines.push(`}`);
+  lines.push(`function errors(value: any): ValidationError[] {`);
+  lines.push(`  void value;`);
+  lines.push(`  const path: string[] = [];`);
+  lines.push(`  void path;`);
+  lines.push(`  const errs: ValidationError[] = [];`);
+  lines.push(...indentLines(errorsBody.stmts, 2));
+  lines.push(`  return errs;`);
+  lines.push(`}`);
+  lines.push(`function parse(value: any) {`);
+  lines.push(`  const path: string[] = [];`);
+  lines.push(`  void path;`);
+  lines.push(`  const errs: ValidationError[] = [];`);
+  lines.push(...indentLines(parseBody.stmts, 2));
+  lines.push(
+    `  if (errs.length === 0) return { kind: "ok" as const, value: ${parseBody.outExpr} };`,
+  );
+  lines.push(`  return { kind: "err" as const, errors: errs };`);
+  lines.push(`}`);
+  lines.push(`return { check: check, errors: errors, parse: parse } as unknown as {`);
+  lines.push(`  check: (value: unknown) => value is ${annotation};`);
+  lines.push(`  errors: (value: unknown) => ValidationError[];`);
+  lines.push(
+    `  parse: (value: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`,
+  );
+  lines.push(`};`);
+  return lines;
 }
 
 /**
@@ -1073,10 +1183,10 @@ function compileEntryBody(
  * hoist to, unlike `compileValidatorModule`).
  */
 export function compileValidator(ref: TypeRef, defs?: Record<string, TypeRef>): string {
-  const defNames = new Set(Object.keys(defs ?? {}))
-  const { annotation } = guardAnnotation(ref, undefined, defNames)
-  const body = compileEntryBody(ref, annotation, true, defs)
-  return ["(function () {", ...indentLines(body, 2), "})()"].join("\n")
+  const defNames = new Set(Object.keys(defs ?? {}));
+  const { annotation } = guardAnnotation(ref, undefined, defNames);
+  const body = compileEntryBody(ref, annotation, true, defs);
+  return ["(function () {", ...indentLines(body, 2), "})()"].join("\n");
 }
 
 const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
@@ -1096,7 +1206,7 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
   | { kind: "union"; path: string[]; errors: ValidationError[][] }
   | { kind: "coerce"; path: string[]; expected: string; actual: unknown }
   | { kind: "encoding"; path: string[]; expected: string; actual: unknown }
-  | { kind: "decode"; path: string[]; message: string };`
+  | { kind: "decode"; path: string[]; message: string };`;
 
 /** The module-scope `defs` block (shared `__def_NAME_check/errors/parse`
  * function declarations + their own hoisted consts) — declared ONCE per
@@ -1107,9 +1217,9 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
  * generated names (`defCtx`'s sequential counters) depend on the FULL `defs`
  * record's content and iteration order, not any one def in isolation. */
 export type CompiledDefsBlock = {
-  readonly lines: readonly string[]
-  readonly defNames: ReadonlySet<string>
-}
+  readonly lines: readonly string[];
+  readonly defNames: ReadonlySet<string>;
+};
 
 /** Compile a `defs` record (structural-sharing's shared/recursive named
  * types — see `finalizeSharedDefs`, from-typescript.ts) to its module-scope
@@ -1121,11 +1231,11 @@ export type CompiledDefsBlock = {
  * compile it once per Tier-2 run independent of per-leaf
  * fragment compilation. */
 export function compileDefsBlock(defs: Record<string, TypeRef>): CompiledDefsBlock {
-  const defNames = new Set(Object.keys(defs))
-  if (defNames.size === 0) return { lines: [], defNames }
-  const defCtx = new GenCtx()
-  const defLines = compileDefs(defs, defCtx)
-  return { lines: [...defCtx.declarations(), ...defLines], defNames }
+  const defNames = new Set(Object.keys(defs));
+  if (defNames.size === 0) return { lines: [], defNames };
+  const defCtx = new GenCtx();
+  const defLines = compileDefs(defs, defCtx);
+  return { lines: [...defCtx.declarations(), ...defLines], defNames };
 }
 
 // ============================================================================
@@ -1182,19 +1292,19 @@ export type WireLeafHandler = {
    * design doc calls out — the MODEL still has both, as the two things this
    * one pass does: push `errs` on a wire-shape mismatch, or produce a valid
    * `T`-shaped `outExpr`, never both for the same input). */
-  readonly decode: (ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx) => ValidateResult
+  readonly decode: (ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx) => ValidateResult;
   /** The `ValidWire` type text for this leaf kind under this profile — e.g.
    * `"string"` for a `number` field under `argvProfile`. */
-  readonly wireType: (ref: TypeRef) => string
-}
+  readonly wireType: (ref: TypeRef) => string;
+};
 
 export type WireProfile = {
-  readonly name: string
-  readonly leafHandlers: Readonly<Record<string, WireLeafHandler>>
-}
+  readonly name: string;
+  readonly leafHandlers: Readonly<Record<string, WireLeafHandler>>;
+};
 
 function encodingErrorStmt(pathExpr: string, expectedText: string, v: string): string {
-  return `errs.push({ kind: "encoding", path: ${pathExpr}, expected: ${JSON.stringify(expectedText)}, actual: ${v} });`
+  return `errs.push({ kind: "encoding", path: ${pathExpr}, expected: ${JSON.stringify(expectedText)}, actual: ${v} });`;
 }
 
 /** Fallback leaf handling for every kind a profile doesn't override: the
@@ -1207,13 +1317,13 @@ function encodingErrorStmt(pathExpr: string, expectedText: string, v: string): s
  * This IS `identityProfile`'s entire behavior, and any other profile's
  * behavior for whichever kinds it doesn't list. */
 function defaultWireLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
-  const handler = resolve(ref.shape.kind, checkHandlers)
-  const cond = handler === undefined ? "true" : handler(ref, v, ctx)
-  return { stmts: [`if (!(${cond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v }
+  const handler = resolve(ref.shape.kind, checkHandlers);
+  const cond = handler === undefined ? "true" : handler(ref, v, ctx);
+  return { stmts: [`if (!(${cond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
 }
 
 function defaultWireType(ref: TypeRef): string {
-  return toTypeScript({ shape: ref.shape, meta: {} })
+  return toTypeScript({ shape: ref.shape, meta: {} });
 }
 
 /** number/integer/int32/int64/float32/float64 (argv, query): the wire value
@@ -1224,31 +1334,36 @@ function defaultWireType(ref: TypeRef): string {
  * `defaultWireLeaf` uses for every other kind, just reached via a coercion
  * step first. */
 function numericStringLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
-  const out = ctx.fresh("n")
-  const ok = ctx.fresh("ok")
-  const kindCheck = resolve(ref.shape.kind, checkHandlers)
-  const wireDesc = `numeric string (${ref.shape.kind})`
-  const rangeCheck = kindCheck === undefined ? "" : ` || !(${kindCheck(ref, out, ctx)})`
+  const out = ctx.fresh("n");
+  const ok = ctx.fresh("ok");
+  const kindCheck = resolve(ref.shape.kind, checkHandlers);
+  const wireDesc = `numeric string (${ref.shape.kind})`;
+  const rangeCheck = kindCheck === undefined ? "" : ` || !(${kindCheck(ref, out, ctx)})`;
   const stmts = [
     `let ${out} = ${v};`,
     `let ${ok} = false;`,
     `if (typeof ${v} === "string" && ${v}.trim() !== "" && !Number.isNaN(Number(${v}))) { ${out} = Number(${v}); ${ok} = true; }`,
     `if (!${ok}${rangeCheck}) { ${encodingErrorStmt(pathExpr, wireDesc, v)} }`,
-  ]
-  return { stmts, outExpr: out }
+  ];
+  return { stmts, outExpr: out };
 }
 
 /** boolean (query): strict `"true"`/`"false"` string only — no native
  * boolean passthrough, matching query-string's always-a-string wire shape. */
-function strictBoolFromStringLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
-  const out = ctx.fresh("b")
+function strictBoolFromStringLeaf(
+  _ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+): ValidateResult {
+  const out = ctx.fresh("b");
   const stmts = [
     `let ${out};`,
     `if (${v} === "true") { ${out} = true; }`,
     `else if (${v} === "false") { ${out} = false; }`,
     `else { ${encodingErrorStmt(pathExpr, `"true" or "false"`, v)} ${out} = ${v}; }`,
-  ]
-  return { stmts, outExpr: out }
+  ];
+  return { stmts, outExpr: out };
 }
 
 /** boolean (argv): native `true` (argv's bare-flag-presence sentinel,
@@ -1257,15 +1372,15 @@ function strictBoolFromStringLeaf(_ref: TypeRef, v: string, pathExpr: string, ct
  * (`"1"`/`"yes"`/…): see the design doc's "(c) Default argv boolean
  * encoding" decision (strict, chosen explicitly over loose). */
 function argvBoolLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
-  const out = ctx.fresh("b")
+  const out = ctx.fresh("b");
   const stmts = [
     `let ${out};`,
     `if (typeof ${v} === "boolean") { ${out} = ${v}; }`,
     `else if (${v} === "true") { ${out} = true; }`,
     `else if (${v} === "false") { ${out} = false; }`,
     `else { ${encodingErrorStmt(pathExpr, `boolean, "true", or "false"`, v)} ${out} = ${v}; }`,
-  ]
-  return { stmts, outExpr: out }
+  ];
+  return { stmts, outExpr: out };
 }
 
 /** date/datetime (argv, query, json): an ISO-ish string decoded via `new
@@ -1273,22 +1388,27 @@ function argvBoolLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): 
  * date literal" (design doc). Shared by all three non-identity profiles;
  * `identityProfile`'s fallback (`defaultWireLeaf`) requires an already-`Date`
  * wire value instead, with no coercion at all. */
-function isoDateStringLeaf(_ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
-  const out = ctx.fresh("d")
-  const tmp = ctx.fresh("dt")
+function isoDateStringLeaf(
+  _ref: TypeRef,
+  v: string,
+  pathExpr: string,
+  ctx: GenCtx,
+): ValidateResult {
+  const out = ctx.fresh("d");
+  const tmp = ctx.fresh("dt");
   const stmts = [
     `let ${out};`,
     `if (typeof ${v} === "string") { const ${tmp} = new Date(${v}); if (!Number.isNaN(${tmp}.getTime())) { ${out} = ${tmp}; } else { ${encodingErrorStmt(pathExpr, "ISO date string", v)} ${out} = ${v}; } }`,
     `else { ${encodingErrorStmt(pathExpr, "ISO date string", v)} ${out} = ${v}; }`,
-  ]
-  return { stmts, outExpr: out }
+  ];
+  return { stmts, outExpr: out };
 }
 
 /** Trivial encoding check + identity decode, for every kind — no coercion at
  * all. This IS strict validation: the mcp/graphql in-process/already-typed-
  * value posture `check`/`errors`/`parse` above have always assumed. An empty
  * `leafHandlers` map means every kind falls through to `defaultWireLeaf`. */
-export const identityProfile: WireProfile = { name: "identity", leafHandlers: {} }
+export const identityProfile: WireProfile = { name: "identity", leafHandlers: {} };
 
 /** Typed JSON in, except `Date` — JSON has no date literal, so a date/
  * datetime field arrives as an ISO string even on an otherwise-typed JSON
@@ -1299,7 +1419,7 @@ export const jsonProfile: WireProfile = {
     date: { decode: isoDateStringLeaf, wireType: () => "string" },
     datetime: { decode: isoDateStringLeaf, wireType: () => "string" },
   },
-}
+};
 
 /** HTTP query/path segments: every leaf arrives as a string (never a native
  * number/boolean/Date) — strict `"true"`/`"false"` booleans, numeric
@@ -1319,7 +1439,7 @@ export const queryProfile: WireProfile = {
     date: { decode: isoDateStringLeaf, wireType: () => "string" },
     datetime: { decode: isoDateStringLeaf, wireType: () => "string" },
   },
-}
+};
 
 /** CLI argv: `string | string[] | true` per field (`parseFlags`) — identical
  * to `queryProfile` except booleans, which additionally accept argv's bare-
@@ -1342,9 +1462,17 @@ export const argvProfile: WireProfile = {
     date: { decode: isoDateStringLeaf, wireType: () => "string" },
     datetime: { decode: isoDateStringLeaf, wireType: () => "string" },
   },
-}
+};
 
-const STRUCTURAL_WIRE_KINDS = new Set(["object", "array", "tuple", "map", "union", "intersection", "page"])
+const STRUCTURAL_WIRE_KINDS = new Set([
+  "object",
+  "array",
+  "tuple",
+  "map",
+  "union",
+  "intersection",
+  "page",
+]);
 
 /**
  * Module-scope registry of wire-decode functions + `ValidWire` type aliases
@@ -1368,15 +1496,15 @@ const STRUCTURAL_WIRE_KINDS = new Set(["object", "array", "tuple", "map", "union
  * every entry, not just one.
  */
 export class WireDefsRegistry {
-  private readonly defs: Readonly<Record<string, TypeRef>>
+  private readonly defs: Readonly<Record<string, TypeRef>>;
   /** Names with a `defs` entry in scope for this compile — a `ref` whose
    * target ISN'T in this set has nothing to call (bare `TypeRef`, no `defs`
    * passed in) and falls through to today's structural no-op, same carve-out
    * as `checkHandlers.ref`/`validateHandlers.ref`. */
-  readonly defNames: ReadonlySet<string>
-  private readonly decodeFnNames = new Map<string, string>()
-  private readonly typeAliasNames = new Map<string, string>()
-  private readonly lines: string[] = []
+  readonly defNames: ReadonlySet<string>;
+  private readonly decodeFnNames = new Map<string, string>();
+  private readonly typeAliasNames = new Map<string, string>();
+  private readonly lines: string[] = [];
 
   // NOT a parameter property (`private readonly defs: ...` in the
   // constructor signature): a parameter property's assignment runs AFTER
@@ -1386,8 +1514,8 @@ export class WireDefsRegistry {
   // explicit assignments below run in the constructor BODY, after every
   // field initializer, so `this.defs` is guaranteed set first.
   constructor(defs: Readonly<Record<string, TypeRef>>) {
-    this.defs = defs
-    this.defNames = new Set(Object.keys(defs))
+    this.defs = defs;
+    this.defNames = new Set(Object.keys(defs));
   }
 
   /** The wire-decode function name for `(defName, profile.name)`, compiling
@@ -1396,16 +1524,17 @@ export class WireDefsRegistry {
    * comment for why NOT constraints, which stay the constraints fn's job) on
    * first request. */
   decodeFnName(defName: string, profile: WireProfile): string {
-    const key = `${defName}\0${profile.name}`
-    const existing = this.decodeFnNames.get(key)
-    if (existing !== undefined) return existing
-    const fnName = `__wiredecode_${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}`
-    this.decodeFnNames.set(key, fnName)
-    const ref = this.defs[defName]
-    if (ref === undefined) throw new Error(`WireDefsRegistry: unknown def ${JSON.stringify(defName)}`)
-    const ctx = new GenCtx(`${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}_`)
-    const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile, this)
-    const fillStmts = genDefaultsFillChildren(ref, "__decoded")
+    const key = `${defName}\0${profile.name}`;
+    const existing = this.decodeFnNames.get(key);
+    if (existing !== undefined) return existing;
+    const fnName = `__wiredecode_${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}`;
+    this.decodeFnNames.set(key, fnName);
+    const ref = this.defs[defName];
+    if (ref === undefined)
+      throw new Error(`WireDefsRegistry: unknown def ${JSON.stringify(defName)}`);
+    const ctx = new GenCtx(`${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}_`);
+    const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile, this);
+    const fillStmts = genDefaultsFillChildren(ref, "__decoded");
     this.lines.push(
       ...ctx.declarations(),
       `function ${fnName}(wire: any, path: string[], errs: ValidationError[]): any {`,
@@ -1414,8 +1543,8 @@ export class WireDefsRegistry {
       ...indentLines(fillStmts, 2),
       `  return __decoded;`,
       `}`,
-    )
-    return fnName
+    );
+    return fnName;
   }
 
   /** The local `ValidWire` type-alias name for `(defName, profile.name)`,
@@ -1426,15 +1555,16 @@ export class WireDefsRegistry {
    * `compileDefs`'s own `type __def_NAME = ...` alias, profile-qualified
    * since `ValidWire` (unlike `T`) varies per profile. */
   typeAliasName(defName: string, profile: WireProfile): string {
-    const key = `${defName}\0${profile.name}`
-    const existing = this.typeAliasNames.get(key)
-    if (existing !== undefined) return existing
-    const aliasName = `__wiretype_${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}`
-    this.typeAliasNames.set(key, aliasName)
-    const ref = this.defs[defName]
-    if (ref === undefined) throw new Error(`WireDefsRegistry: unknown def ${JSON.stringify(defName)}`)
-    this.lines.push(`type ${aliasName} = ${wireTypeText(ref, profile, this)};`)
-    return aliasName
+    const key = `${defName}\0${profile.name}`;
+    const existing = this.typeAliasNames.get(key);
+    if (existing !== undefined) return existing;
+    const aliasName = `__wiretype_${sanitizeDefName(defName)}_${sanitizeDefName(profile.name)}`;
+    this.typeAliasNames.set(key, aliasName);
+    const ref = this.defs[defName];
+    if (ref === undefined)
+      throw new Error(`WireDefsRegistry: unknown def ${JSON.stringify(defName)}`);
+    this.lines.push(`type ${aliasName} = ${wireTypeText(ref, profile, this)};`);
+    return aliasName;
   }
 
   /** Every wire-decode function + type-alias declaration compiled so far —
@@ -1442,7 +1572,7 @@ export class WireDefsRegistry {
    * `assembleWireApplyValidationModule`), alongside (not instead of) the
    * constraints layer's own `compileDefsBlock` output. */
   moduleLines(): readonly string[] {
-    return this.lines
+    return this.lines;
   }
 }
 
@@ -1451,7 +1581,7 @@ export class WireDefsRegistry {
  * uses, since `WireDefsRegistry`'s constructor is otherwise this file's own
  * implementation detail. */
 export function createWireDefsRegistry(defs: Readonly<Record<string, TypeRef>>): WireDefsRegistry {
-  return new WireDefsRegistry(defs)
+  return new WireDefsRegistry(defs);
 }
 
 /** Structural recursion for the fused `validateEncoding` + `decode` stage.
@@ -1482,18 +1612,18 @@ function genWireEncodeDecode(
   registry?: WireDefsRegistry,
 ): ValidateResult {
   if (ref.meta.nullable === true) {
-    const out = ctx.fresh("n")
-    const inner = genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile, registry)
+    const out = ctx.fresh("n");
+    const inner = genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile, registry);
     const stmts = [
       `let ${out};`,
       `if (${v} === null) { ${out} = null; } else {`,
       ...indentLines(inner.stmts, 2),
       `  ${out} = ${inner.outExpr};`,
       `}`,
-    ]
-    return { stmts, outExpr: out }
+    ];
+    return { stmts, outExpr: out };
   }
-  return genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile, registry)
+  return genWireEncodeDecodeShape(ref, v, pathExpr, ctx, profile, registry);
 }
 
 /** `ref`'s own wire-decode handling (phase D): delegates to
@@ -1510,11 +1640,12 @@ function wireRefDecode(
   profile: WireProfile,
   registry: WireDefsRegistry | undefined,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "ref" }
-  if (registry === undefined || !registry.defNames.has(s.target)) return defaultWireLeaf(ref, v, pathExpr, ctx)
-  const fnName = registry.decodeFnName(s.target, profile)
-  const out = ctx.fresh("d")
-  return { stmts: [`const ${out} = ${fnName}(${v}, ${pathExpr}, errs);`], outExpr: out }
+  const s = ref.shape as TypeShape & { kind: "ref" };
+  if (registry === undefined || !registry.defNames.has(s.target))
+    return defaultWireLeaf(ref, v, pathExpr, ctx);
+  const fnName = registry.decodeFnName(s.target, profile);
+  const out = ctx.fresh("d");
+  return { stmts: [`const ${out} = ${fnName}(${v}, ${pathExpr}, errs);`], outExpr: out };
 }
 
 function genWireEncodeDecodeShape(
@@ -1525,28 +1656,31 @@ function genWireEncodeDecodeShape(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const kind = ref.shape.kind
-  if (kind === "page") return genWireEncodeDecode(pageAsObjectRef(ref), v, pathExpr, ctx, profile, registry)
-  if (kind === "ref") return wireRefDecode(ref, v, pathExpr, ctx, profile, registry)
+  const kind = ref.shape.kind;
+  if (kind === "page")
+    return genWireEncodeDecode(pageAsObjectRef(ref), v, pathExpr, ctx, profile, registry);
+  if (kind === "ref") return wireRefDecode(ref, v, pathExpr, ctx, profile, registry);
   if (!STRUCTURAL_WIRE_KINDS.has(kind)) {
-    const handler = resolve(kind, profile.leafHandlers)
-    return handler === undefined ? defaultWireLeaf(ref, v, pathExpr, ctx) : handler.decode(ref, v, pathExpr, ctx)
+    const handler = resolve(kind, profile.leafHandlers);
+    return handler === undefined
+      ? defaultWireLeaf(ref, v, pathExpr, ctx)
+      : handler.decode(ref, v, pathExpr, ctx);
   }
   switch (kind) {
     case "object":
-      return wireObject(ref, v, pathExpr, ctx, profile, registry)
+      return wireObject(ref, v, pathExpr, ctx, profile, registry);
     case "array":
-      return wireArray(ref, v, pathExpr, ctx, profile, registry)
+      return wireArray(ref, v, pathExpr, ctx, profile, registry);
     case "tuple":
-      return wireTuple(ref, v, pathExpr, ctx, profile, registry)
+      return wireTuple(ref, v, pathExpr, ctx, profile, registry);
     case "map":
-      return wireMap(ref, v, pathExpr, ctx, profile, registry)
+      return wireMap(ref, v, pathExpr, ctx, profile, registry);
     case "union":
-      return wireUnion(ref, v, pathExpr, ctx, profile, registry)
+      return wireUnion(ref, v, pathExpr, ctx, profile, registry);
     case "intersection":
-      return wireIntersection(ref, v, pathExpr, ctx, profile, registry)
+      return wireIntersection(ref, v, pathExpr, ctx, profile, registry);
     default:
-      return { stmts: [], outExpr: v }
+      return { stmts: [], outExpr: v };
   }
 }
 
@@ -1558,31 +1692,31 @@ function wireObject(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
-  const out = ctx.fresh("o")
-  const stmts: string[] = [`let ${out}: Record<string, any> = {};`]
-  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`)
-  const body: string[] = []
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`;
+  const out = ctx.fresh("o");
+  const stmts: string[] = [`let ${out}: Record<string, any> = {};`];
+  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`);
+  const body: string[] = [];
   for (const [name, field] of Object.entries(s.fields)) {
-    const fv = `${v}[${JSON.stringify(name)}]`
-    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
-    const inner = genWireEncodeDecode(field, fv, fpath, ctx, profile, registry)
+    const fv = `${v}[${JSON.stringify(name)}]`;
+    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`;
+    const inner = genWireEncodeDecode(field, fv, fpath, ctx, profile, registry);
     body.push(
       `if (${fv} !== undefined) {`,
       ...indentLines(inner.stmts, 2),
       `  ${out}[${JSON.stringify(name)}] = ${inner.outExpr};`,
       `}`,
-    )
+    );
   }
   if (ref.meta.additionalProperties === false) {
-    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`)
+    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`);
     body.push(
       `for (const __k of Object.keys(${v})) { if (!${known}.has(__k)) { errs.push({ kind: "unexpected", path: ${pathExpr}.concat([__k]) }); } }`,
-    )
+    );
   }
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out }
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out };
 }
 
 function wireArray(
@@ -1593,14 +1727,14 @@ function wireArray(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "array" }
-  const out = ctx.fresh("a")
-  const stmts: string[] = [`let ${out}: any[] = [];`]
-  stmts.push(`if (!Array.isArray(${v})) { ${encodingErrorStmt(pathExpr, "array", v)} } else {`)
-  const idx = ctx.fresh("i")
-  const ev = ctx.fresh("e")
-  const epath = ctx.fresh("p")
-  const inner = genWireEncodeDecode(s.element, ev, epath, ctx, profile, registry)
+  const s = ref.shape as TypeShape & { kind: "array" };
+  const out = ctx.fresh("a");
+  const stmts: string[] = [`let ${out}: any[] = [];`];
+  stmts.push(`if (!Array.isArray(${v})) { ${encodingErrorStmt(pathExpr, "array", v)} } else {`);
+  const idx = ctx.fresh("i");
+  const ev = ctx.fresh("e");
+  const epath = ctx.fresh("p");
+  const inner = genWireEncodeDecode(s.element, ev, epath, ctx, profile, registry);
   const body = [
     `for (let ${idx} = 0; ${idx} < ${v}.length; ${idx}++) {`,
     `  const ${ev} = ${v}[${idx}];`,
@@ -1608,9 +1742,9 @@ function wireArray(
     ...indentLines(inner.stmts, 2),
     `  ${out}.push(${inner.outExpr});`,
     `}`,
-  ]
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out }
+  ];
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out };
 }
 
 function wireTuple(
@@ -1621,21 +1755,26 @@ function wireTuple(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "tuple" }
-  const out = ctx.fresh("t")
-  const stmts: string[] = [`let ${out}: any[] = [];`]
-  stmts.push(`if (!Array.isArray(${v})) { ${encodingErrorStmt(pathExpr, "array", v)} } else {`)
+  const s = ref.shape as TypeShape & { kind: "tuple" };
+  const out = ctx.fresh("t");
+  const stmts: string[] = [`let ${out}: any[] = [];`];
+  stmts.push(`if (!Array.isArray(${v})) { ${encodingErrorStmt(pathExpr, "array", v)} } else {`);
   const body: string[] = [
     `if (${v}.length !== ${s.elements.length}) { errs.push({ kind: "tuple_length", path: ${pathExpr}, expected: ${s.elements.length}, actual: ${v}.length }); }`,
-  ]
+  ];
   s.elements.forEach((element, i) => {
-    const ev = `${v}[${i}]`
-    const epath = `${pathExpr}.concat([${JSON.stringify(String(i))}])`
-    const inner = genWireEncodeDecode(element, ev, epath, ctx, profile, registry)
-    body.push(`if (${v}.length > ${i}) {`, ...indentLines(inner.stmts, 2), `  ${out}.push(${inner.outExpr});`, `}`)
-  })
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out }
+    const ev = `${v}[${i}]`;
+    const epath = `${pathExpr}.concat([${JSON.stringify(String(i))}])`;
+    const inner = genWireEncodeDecode(element, ev, epath, ctx, profile, registry);
+    body.push(
+      `if (${v}.length > ${i}) {`,
+      ...indentLines(inner.stmts, 2),
+      `  ${out}.push(${inner.outExpr});`,
+      `}`,
+    );
+  });
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out };
 }
 
 function wireMap(
@@ -1646,15 +1785,15 @@ function wireMap(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "map" }
-  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
-  const out = ctx.fresh("m")
-  const stmts: string[] = [`let ${out}: Record<string, any> = {};`]
-  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`)
-  const key = ctx.fresh("k")
-  const ev = ctx.fresh("e")
-  const epath = ctx.fresh("p")
-  const inner = genWireEncodeDecode(s.value, ev, epath, ctx, profile, registry)
+  const s = ref.shape as TypeShape & { kind: "map" };
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`;
+  const out = ctx.fresh("m");
+  const stmts: string[] = [`let ${out}: Record<string, any> = {};`];
+  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`);
+  const key = ctx.fresh("k");
+  const ev = ctx.fresh("e");
+  const epath = ctx.fresh("p");
+  const inner = genWireEncodeDecode(s.value, ev, epath, ctx, profile, registry);
   const body = [
     `for (const ${key} of Object.keys(${v})) {`,
     `  const ${ev} = ${v}[${key}];`,
@@ -1662,9 +1801,9 @@ function wireMap(
     ...indentLines(inner.stmts, 2),
     `  ${out}[${key}] = ${inner.outExpr};`,
     `}`,
-  ]
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out }
+  ];
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out };
 }
 
 /** Union: same "try each variant, keep the first with zero new errors" idiom
@@ -1680,28 +1819,32 @@ function wireUnion(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "union" }
-  const out = ctx.fresh("u")
-  const matched = ctx.fresh("matched")
-  const scratchNames: string[] = []
-  const stmts: string[] = [`let ${out} = ${v};`, `let ${matched} = false;`]
+  const s = ref.shape as TypeShape & { kind: "union" };
+  const out = ctx.fresh("u");
+  const matched = ctx.fresh("matched");
+  const scratchNames: string[] = [];
+  const stmts: string[] = [`let ${out} = ${v};`, `let ${matched} = false;`];
   for (const _variant of s.variants) {
-    const scratch = ctx.fresh("ue")
-    scratchNames.push(scratch)
-    stmts.push(`const ${scratch}: ValidationError[] = [];`)
+    const scratch = ctx.fresh("ue");
+    scratchNames.push(scratch);
+    stmts.push(`const ${scratch}: ValidationError[] = [];`);
   }
   s.variants.forEach((variant, i) => {
-    const scratch = scratchNames[i]!
-    const inner = genWireEncodeDecode(variant, v, pathExpr, ctx, profile, registry)
-    stmts.push(`if (!${matched}) {`)
-    stmts.push(`  { const errs = ${scratch};`)
-    stmts.push(...indentLines(inner.stmts, 4))
-    stmts.push(`    if (${scratch}.length === 0) { ${matched} = true; ${out} = ${inner.outExpr}; }`)
-    stmts.push(`  }`)
-    stmts.push(`}`)
-  })
-  stmts.push(`if (!${matched}) { errs.push({ kind: "union", path: ${pathExpr}, errors: [${scratchNames.join(", ")}] }); }`)
-  return { stmts, outExpr: out }
+    const scratch = scratchNames[i]!;
+    const inner = genWireEncodeDecode(variant, v, pathExpr, ctx, profile, registry);
+    stmts.push(`if (!${matched}) {`);
+    stmts.push(`  { const errs = ${scratch};`);
+    stmts.push(...indentLines(inner.stmts, 4));
+    stmts.push(
+      `    if (${scratch}.length === 0) { ${matched} = true; ${out} = ${inner.outExpr}; }`,
+    );
+    stmts.push(`  }`);
+    stmts.push(`}`);
+  });
+  stmts.push(
+    `if (!${matched}) { errs.push({ kind: "union", path: ${pathExpr}, errors: [${scratchNames.join(", ")}] }); }`,
+  );
+  return { stmts, outExpr: out };
 }
 
 function wireIntersection(
@@ -1712,22 +1855,22 @@ function wireIntersection(
   profile: WireProfile,
   registry?: WireDefsRegistry,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "intersection" }
-  if (s.members.length === 0) return { stmts: [], outExpr: v }
-  const out = ctx.fresh("x")
-  const stmts: string[] = [`let ${out} = ${v};`]
-  const hasObjectMember = s.members.some((m) => m.shape.kind === "object")
-  if (hasObjectMember) stmts.push(`${out} = {};`)
+  const s = ref.shape as TypeShape & { kind: "intersection" };
+  if (s.members.length === 0) return { stmts: [], outExpr: v };
+  const out = ctx.fresh("x");
+  const stmts: string[] = [`let ${out} = ${v};`];
+  const hasObjectMember = s.members.some((m) => m.shape.kind === "object");
+  if (hasObjectMember) stmts.push(`${out} = {};`);
   for (const member of s.members) {
-    const inner = genWireEncodeDecode(member, v, pathExpr, ctx, profile, registry)
-    stmts.push(...inner.stmts)
+    const inner = genWireEncodeDecode(member, v, pathExpr, ctx, profile, registry);
+    stmts.push(...inner.stmts);
     if (hasObjectMember && member.shape.kind === "object") {
-      stmts.push(`Object.assign(${out}, ${inner.outExpr});`)
+      stmts.push(`Object.assign(${out}, ${inner.outExpr});`);
     } else if (!hasObjectMember) {
-      stmts.push(`${out} = ${inner.outExpr};`)
+      stmts.push(`${out} = ${inner.outExpr};`);
     }
   }
-  return { stmts, outExpr: out }
+  return { stmts, outExpr: out };
 }
 
 /** `ValidWire`'s TypeScript rendering for `ref` under `profile` — a real,
@@ -1736,48 +1879,56 @@ function wireIntersection(
  * `meta.optional`, matching `wireObject`'s "absent field, no error" decode
  * semantics above — decode only ever produces what the wire actually
  * carried. */
-export function wireTypeText(ref: TypeRef, profile: WireProfile, registry?: WireDefsRegistry): string {
-  const base = wireTypeTextShape(ref, profile, registry)
-  return ref.meta.nullable === true ? `${base} | null` : base
+export function wireTypeText(
+  ref: TypeRef,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): string {
+  const base = wireTypeTextShape(ref, profile, registry);
+  return ref.meta.nullable === true ? `${base} | null` : base;
 }
 
-function wireTypeTextShape(ref: TypeRef, profile: WireProfile, registry?: WireDefsRegistry): string {
-  const kind = ref.shape.kind
-  if (kind === "page") return wireTypeTextShape(pageAsObjectRef(ref), profile, registry)
+function wireTypeTextShape(
+  ref: TypeRef,
+  profile: WireProfile,
+  registry?: WireDefsRegistry,
+): string {
+  const kind = ref.shape.kind;
+  if (kind === "page") return wireTypeTextShape(pageAsObjectRef(ref), profile, registry);
   if (kind === "ref") {
-    const s = ref.shape as TypeShape & { kind: "ref" }
-    if (registry === undefined || !registry.defNames.has(s.target)) return defaultWireType(ref)
-    return registry.typeAliasName(s.target, profile)
+    const s = ref.shape as TypeShape & { kind: "ref" };
+    if (registry === undefined || !registry.defNames.has(s.target)) return defaultWireType(ref);
+    return registry.typeAliasName(s.target, profile);
   }
   if (kind === "object") {
-    const s = ref.shape as TypeShape & { kind: "object" }
+    const s = ref.shape as TypeShape & { kind: "object" };
     const fields = Object.entries(s.fields).map(
       ([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, profile, registry)}`,
-    )
-    return `{ ${fields.join("; ")} }`
+    );
+    return `{ ${fields.join("; ")} }`;
   }
   if (kind === "array") {
-    const s = ref.shape as TypeShape & { kind: "array" }
-    return `(${wireTypeText(s.element, profile, registry)})[]`
+    const s = ref.shape as TypeShape & { kind: "array" };
+    return `(${wireTypeText(s.element, profile, registry)})[]`;
   }
   if (kind === "tuple") {
-    const s = ref.shape as TypeShape & { kind: "tuple" }
-    return `[${s.elements.map((e) => wireTypeText(e, profile, registry)).join(", ")}]`
+    const s = ref.shape as TypeShape & { kind: "tuple" };
+    return `[${s.elements.map((e) => wireTypeText(e, profile, registry)).join(", ")}]`;
   }
   if (kind === "map") {
-    const s = ref.shape as TypeShape & { kind: "map" }
-    return `Record<string, ${wireTypeText(s.value, profile, registry)}>`
+    const s = ref.shape as TypeShape & { kind: "map" };
+    return `Record<string, ${wireTypeText(s.value, profile, registry)}>`;
   }
   if (kind === "union") {
-    const s = ref.shape as TypeShape & { kind: "union" }
-    return s.variants.map((m) => `(${wireTypeText(m, profile, registry)})`).join(" | ")
+    const s = ref.shape as TypeShape & { kind: "union" };
+    return s.variants.map((m) => `(${wireTypeText(m, profile, registry)})`).join(" | ");
   }
   if (kind === "intersection") {
-    const s = ref.shape as TypeShape & { kind: "intersection" }
-    return s.members.map((m) => `(${wireTypeText(m, profile, registry)})`).join(" & ")
+    const s = ref.shape as TypeShape & { kind: "intersection" };
+    return s.members.map((m) => `(${wireTypeText(m, profile, registry)})`).join(" & ");
   }
-  const override = resolve(kind, profile.leafHandlers)
-  return override === undefined ? defaultWireType(ref) : override.wireType(ref)
+  const override = resolve(kind, profile.leafHandlers);
+  return override === undefined ? defaultWireType(ref) : override.wireType(ref);
 }
 
 /** `defaults-fill` — see "Where defaults-fill sits" in the design doc: runs
@@ -1791,32 +1942,36 @@ function wireTypeTextShape(ref: TypeRef, profile: WireProfile, registry?: WireDe
  * totality-by-construction guarantee for no benefit. */
 function genDefaultsFillChildren(ref: TypeRef, v: string): string[] {
   if (ref.shape.kind === "object") {
-    const s = ref.shape as TypeShape & { kind: "object" }
-    const stmts: string[] = []
+    const s = ref.shape as TypeShape & { kind: "object" };
+    const stmts: string[] = [];
     for (const [name, field] of Object.entries(s.fields)) {
-      stmts.push(...genDefaultsFillField(field, `${v}[${JSON.stringify(name)}]`))
+      stmts.push(...genDefaultsFillField(field, `${v}[${JSON.stringify(name)}]`));
     }
-    return stmts
+    return stmts;
   }
   if (ref.shape.kind === "array") {
-    const s = ref.shape as TypeShape & { kind: "array" }
-    const nested = genDefaultsFillField(s.element, "__el")
-    if (nested.length === 0) return []
-    return [`if (Array.isArray(${v})) { for (const __el of ${v}) {`, ...indentLines(nested, 2), `} }`]
+    const s = ref.shape as TypeShape & { kind: "array" };
+    const nested = genDefaultsFillField(s.element, "__el");
+    if (nested.length === 0) return [];
+    return [
+      `if (Array.isArray(${v})) { for (const __el of ${v}) {`,
+      ...indentLines(nested, 2),
+      `} }`,
+    ];
   }
-  return []
+  return [];
 }
 
 function genDefaultsFillField(field: TypeRef, fv: string): string[] {
-  const stmts: string[] = []
+  const stmts: string[] = [];
   if (field.meta.default !== undefined) {
-    stmts.push(`if (${fv} === undefined) { ${fv} = ${JSON.stringify(field.meta.default)}; }`)
+    stmts.push(`if (${fv} === undefined) { ${fv} = ${JSON.stringify(field.meta.default)}; }`);
   }
-  const nested = genDefaultsFillChildren(field, fv)
+  const nested = genDefaultsFillChildren(field, fv);
   if (nested.length > 0) {
-    stmts.push(`if (${fv} !== undefined) {`, ...indentLines(nested, 2), `}`)
+    stmts.push(`if (${fv} !== undefined) {`, ...indentLines(nested, 2), `}`);
   }
-  return stmts
+  return stmts;
 }
 
 /** `validateConstraints` — min/max/pattern/enum/minLength/maxLength/
@@ -1842,26 +1997,27 @@ function genDefaultsFillField(field: TypeRef, fv: string): string[] {
  * `defs`' own bodies — that stays `compileDefsBlock`'s job, shared with the
  * non-wire `check`/`errors`/`parse` path, so a def reused by BOTH paths in
  * one module still compiles once. */
-export type CompiledConstraintsFn = { readonly fnName: string; readonly lines: readonly string[] }
+export type CompiledConstraintsFn = { readonly fnName: string; readonly lines: readonly string[] };
 
 export function compileConstraintsFn(
   name: string,
   ref: TypeRef,
   externalDefNames?: ReadonlySet<string>,
 ): CompiledConstraintsFn {
-  const fnName = `__constraints_${sanitizeDefName(name)}`
+  const fnName = `__constraints_${sanitizeDefName(name)}`;
   // Namespaced by entry name (not the module-shared default `""`) — see `GenCtx`'s
   // `namespace` doc comment: this function's `.lines` (including its hoisted consts)
   // get spliced at MODULE scope alongside every other entry's own `compileConstraintsFn`
   // output (`assembleWireModule`/`assembleWireApplyValidationModule`), so two entries'
   // consts must never collide on `__ref0`-style names the way two `GenCtx()` instances
   // both starting their counters at 0 otherwise would.
-  const ctx = new GenCtx(`${sanitizeDefName(name)}_`)
+  const ctx = new GenCtx(`${sanitizeDefName(name)}_`);
   // Seed `ctx.defNames` BEFORE walking the body (mirrors `compileEntryBody`'s
   // own `externalDefNames` seeding) — the def function DECLARATIONS
   // themselves live in the caller's shared `compileDefsBlock` output, not here.
-  if (externalDefNames !== undefined) for (const defName of externalDefNames) ctx.defNames.add(defName)
-  const body = genValidate(ref, "value", "path", ctx, "errors")
+  if (externalDefNames !== undefined)
+    for (const defName of externalDefNames) ctx.defNames.add(defName);
+  const body = genValidate(ref, "value", "path", ctx, "errors");
   const lines = [
     ...ctx.declarations(),
     `function ${fnName}(value: any): ValidationError[] {`,
@@ -1872,8 +2028,8 @@ export function compileConstraintsFn(
     ...indentLines(body.stmts, 2),
     `  return errs;`,
     `}`,
-  ]
-  return { fnName, lines }
+  ];
+  return { fnName, lines };
 }
 
 /** One (entry, profile) pair's compiled `{ parse }` — the staged pipeline
@@ -1890,9 +2046,9 @@ export function compileConstraintsFn(
  * `profile.name` changed; `constraintsFnName` is a pure naming convention,
  * not part of the fingerprint, since it's derived from the entry name alone). */
 export type CompiledWireEntryFragment = {
-  readonly code: string
-  readonly wireType: string
-  readonly typeImport?: { readonly typeName: string; readonly from: string }
+  readonly code: string;
+  readonly wireType: string;
+  readonly typeImport?: { readonly typeName: string; readonly from: string };
   /** Field names this fragment's generated `parse` expects a custom-decoder
    * HOOK for, supplied at WRAP time (function-form `encodingMap` — see
    * `wireObjectWithFieldProfiles`'s doc comment). Always `[]` for a fragment
@@ -1904,8 +2060,8 @@ export type CompiledWireEntryFragment = {
    * object), not just carried on this compile-time wrapper — api-tree's
    * `apply-validation.ts` reads it off the RUNTIME generated entry, which
    * never sees this TypeScript-only wrapper type. */
-  readonly hookFields: readonly string[]
-}
+  readonly hookFields: readonly string[];
+};
 
 export function compileWireEntryFragment(
   ref: TypeRef,
@@ -1914,31 +2070,37 @@ export function compileWireEntryFragment(
   resolveImport?: (declarationFile: string) => string,
   registry?: WireDefsRegistry,
 ): CompiledWireEntryFragment {
-  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames)
-  const wireType = wireTypeText(ref, profile, registry)
-  const ctx = new GenCtx()
-  const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile, registry)
-  const fillStmts = genDefaultsFillChildren(ref, "__decoded")
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames);
+  const wireType = wireTypeText(ref, profile, registry);
+  const ctx = new GenCtx();
+  const decodeBody = genWireEncodeDecode(ref, "wire", "path", ctx, profile, registry);
+  const fillStmts = genDefaultsFillChildren(ref, "__decoded");
 
-  const lines: string[] = [...ctx.declarations()]
-  lines.push(`function parse(wire: any) {`)
-  lines.push(`  const path: string[] = [];`)
-  lines.push(`  void path;`)
-  lines.push(`  const errs: ValidationError[] = [];`)
-  lines.push(...indentLines(decodeBody.stmts, 2))
-  lines.push(`  if (errs.length > 0) { return { kind: "err" as const, errors: errs }; }`)
-  lines.push(`  let __decoded: any = ${decodeBody.outExpr};`)
-  lines.push(...indentLines(fillStmts, 2))
-  lines.push(`  const constraintErrs = ${constraintsFnName}(__decoded);`)
-  lines.push(`  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`)
-  lines.push(`  return { kind: "ok" as const, value: __decoded };`)
-  lines.push(`}`)
-  lines.push(`return { parse: parse, hookFields: [] } as unknown as {`)
-  lines.push(`  parse: (wire: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`)
-  lines.push(`  hookFields: readonly string[];`)
-  lines.push(`};`)
-  const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n")
-  return typeImport === undefined ? { code, wireType, hookFields: [] } : { code, wireType, typeImport, hookFields: [] }
+  const lines: string[] = [...ctx.declarations()];
+  lines.push(`function parse(wire: any) {`);
+  lines.push(`  const path: string[] = [];`);
+  lines.push(`  void path;`);
+  lines.push(`  const errs: ValidationError[] = [];`);
+  lines.push(...indentLines(decodeBody.stmts, 2));
+  lines.push(`  if (errs.length > 0) { return { kind: "err" as const, errors: errs }; }`);
+  lines.push(`  let __decoded: any = ${decodeBody.outExpr};`);
+  lines.push(...indentLines(fillStmts, 2));
+  lines.push(`  const constraintErrs = ${constraintsFnName}(__decoded);`);
+  lines.push(
+    `  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`,
+  );
+  lines.push(`  return { kind: "ok" as const, value: __decoded };`);
+  lines.push(`}`);
+  lines.push(`return { parse: parse, hookFields: [] } as unknown as {`);
+  lines.push(
+    `  parse: (wire: unknown) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`,
+  );
+  lines.push(`  hookFields: readonly string[];`);
+  lines.push(`};`);
+  const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n");
+  return typeImport === undefined
+    ? { code, wireType, hookFields: [] }
+    : { code, wireType, typeImport, hookFields: [] };
 }
 
 /** True when `ref` (accounting for `meta.nullable` and `page`, the same
@@ -1946,9 +2108,9 @@ export function compileWireEntryFragment(
  * is an `object` at the top level — the only shape
  * `compileWireEntryFragmentComposite`'s per-field dispatch applies to. */
 function isTopLevelObjectRef(ref: TypeRef): boolean {
-  const kind = ref.shape.kind
-  if (kind === "page") return true
-  return kind === "object"
+  const kind = ref.shape.kind;
+  if (kind === "page") return true;
+  return kind === "object";
 }
 
 /** Sibling of `wireObject` (unchanged) whose per-field profile lookup varies
@@ -1991,28 +2153,28 @@ function wireObjectWithFieldProfiles(
   registry?: WireDefsRegistry,
   hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): ValidateResult {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`
-  const out = ctx.fresh("o")
-  const stmts: string[] = [`let ${out}: Record<string, any> = {};`]
-  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`)
-  const body: string[] = []
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const baseCond = `typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v})`;
+  const out = ctx.fresh("o");
+  const stmts: string[] = [`let ${out}: Record<string, any> = {};`];
+  stmts.push(`if (!(${baseCond})) { ${encodingErrorStmt(pathExpr, "object", v)} } else {`);
+  const body: string[] = [];
   for (const [name, field] of Object.entries(s.fields)) {
-    const fv = `${v}[${JSON.stringify(name)}]`
-    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`
-    const fieldProfile = fieldProfiles[name] ?? defaultProfile
-    const inner = genWireEncodeDecode(field, fv, fpath, ctx, fieldProfile, registry)
+    const fv = `${v}[${JSON.stringify(name)}]`;
+    const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`;
+    const fieldProfile = fieldProfiles[name] ?? defaultProfile;
+    const inner = genWireEncodeDecode(field, fv, fpath, ctx, fieldProfile, registry);
     if (!hookFields.has(name)) {
       body.push(
         `if (${fv} !== undefined) {`,
         ...indentLines(inner.stmts, 2),
         `  ${out}[${JSON.stringify(name)}] = ${inner.outExpr};`,
         `}`,
-      )
-      continue
+      );
+      continue;
     }
-    const preErrs = ctx.fresh("preErrs")
-    const hook = ctx.fresh("hook")
+    const preErrs = ctx.fresh("preErrs");
+    const hook = ctx.fresh("hook");
     body.push(
       `if (${fv} !== undefined) {`,
       `  const ${preErrs} = errs.length;`,
@@ -2027,22 +2189,22 @@ function wireObjectWithFieldProfiles(
       `    }`,
       `  }`,
       `}`,
-    )
+    );
   }
   if (ref.meta.additionalProperties === false) {
-    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`)
+    const known = ctx.addConst("known", `new Set(${JSON.stringify(Object.keys(s.fields))})`);
     body.push(
       `for (const __k of Object.keys(${v})) { if (!${known}.has(__k)) { errs.push({ kind: "unexpected", path: ${pathExpr}.concat([__k]) }); } }`,
-    )
+    );
   }
-  stmts.push(...indentLines(body, 2), `}`)
-  return { stmts, outExpr: out }
+  stmts.push(...indentLines(body, 2), `}`);
+  return { stmts, outExpr: out };
 }
 
 /** Shared empty-set default for `wireObjectWithFieldProfiles`'s `hookFields`
  * parameter — a single frozen instance rather than allocating a fresh `Set`
  * per call for the (overwhelmingly common) no-hooks case. */
-const EMPTY_HOOK_FIELDS: ReadonlySet<string> = new Set()
+const EMPTY_HOOK_FIELDS: ReadonlySet<string> = new Set();
 
 /** Composite-top wrapper: unwraps `meta.nullable`/`page` (mirroring
  * `genWireEncodeDecode`/`genWireEncodeDecodeShape`'s own unwrapping) then
@@ -2062,7 +2224,7 @@ function genWireEncodeDecodeCompositeTop(
   hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): ValidateResult {
   if (ref.meta.nullable === true) {
-    const out = ctx.fresh("n")
+    const out = ctx.fresh("n");
     const inner = genWireEncodeDecodeCompositeTopShape(
       ref,
       v,
@@ -2072,17 +2234,26 @@ function genWireEncodeDecodeCompositeTop(
       defaultProfile,
       registry,
       hookFields,
-    )
+    );
     const stmts = [
       `let ${out};`,
       `if (${v} === null) { ${out} = null; } else {`,
       ...indentLines(inner.stmts, 2),
       `  ${out} = ${inner.outExpr};`,
       `}`,
-    ]
-    return { stmts, outExpr: out }
+    ];
+    return { stmts, outExpr: out };
   }
-  return genWireEncodeDecodeCompositeTopShape(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry, hookFields)
+  return genWireEncodeDecodeCompositeTopShape(
+    ref,
+    v,
+    pathExpr,
+    ctx,
+    fieldProfiles,
+    defaultProfile,
+    registry,
+    hookFields,
+  );
 }
 
 function genWireEncodeDecodeCompositeTopShape(
@@ -2105,9 +2276,18 @@ function genWireEncodeDecodeCompositeTopShape(
       defaultProfile,
       registry,
       hookFields,
-    )
+    );
   }
-  return wireObjectWithFieldProfiles(ref, v, pathExpr, ctx, fieldProfiles, defaultProfile, registry, hookFields)
+  return wireObjectWithFieldProfiles(
+    ref,
+    v,
+    pathExpr,
+    ctx,
+    fieldProfiles,
+    defaultProfile,
+    registry,
+    hookFields,
+  );
 }
 
 /** Sibling of `wireTypeTextShape`'s `"object"` branch whose per-field
@@ -2119,11 +2299,12 @@ function wireTypeTextObjectWithFieldProfiles(
   defaultProfile: WireProfile,
   registry?: WireDefsRegistry,
 ): string {
-  const s = ref.shape as TypeShape & { kind: "object" }
+  const s = ref.shape as TypeShape & { kind: "object" };
   const fields = Object.entries(s.fields).map(
-    ([name, field]) => `${JSON.stringify(name)}?: ${wireTypeText(field, fieldProfiles[name] ?? defaultProfile, registry)}`,
-  )
-  return `{ ${fields.join("; ")} }`
+    ([name, field]) =>
+      `${JSON.stringify(name)}?: ${wireTypeText(field, fieldProfiles[name] ?? defaultProfile, registry)}`,
+  );
+  return `{ ${fields.join("; ")} }`;
 }
 
 function wireTypeTextCompositeTopShape(
@@ -2133,9 +2314,14 @@ function wireTypeTextCompositeTopShape(
   registry?: WireDefsRegistry,
 ): string {
   if (ref.shape.kind === "page") {
-    return wireTypeTextCompositeTopShape(pageAsObjectRef(ref), fieldProfiles, defaultProfile, registry)
+    return wireTypeTextCompositeTopShape(
+      pageAsObjectRef(ref),
+      fieldProfiles,
+      defaultProfile,
+      registry,
+    );
   }
-  return wireTypeTextObjectWithFieldProfiles(ref, fieldProfiles, defaultProfile, registry)
+  return wireTypeTextObjectWithFieldProfiles(ref, fieldProfiles, defaultProfile, registry);
 }
 
 /** `wireTypeText`'s composite-top analogue: mirrors `wireTypeText`'s own
@@ -2147,8 +2333,8 @@ function wireTypeTextComposite(
   defaultProfile: WireProfile,
   registry?: WireDefsRegistry,
 ): string {
-  const base = wireTypeTextCompositeTopShape(ref, fieldProfiles, defaultProfile, registry)
-  return ref.meta.nullable === true ? `${base} | null` : base
+  const base = wireTypeTextCompositeTopShape(ref, fieldProfiles, defaultProfile, registry);
+  return ref.meta.nullable === true ? `${base} | null` : base;
 }
 
 /**
@@ -2202,11 +2388,17 @@ export function compileWireEntryFragmentComposite(
   hookFields: ReadonlySet<string> = EMPTY_HOOK_FIELDS,
 ): CompiledWireEntryFragment {
   if (!isTopLevelObjectRef(ref)) {
-    return compileWireEntryFragment(ref, defaultProfile, constraintsFnName, resolveImport, registry)
+    return compileWireEntryFragment(
+      ref,
+      defaultProfile,
+      constraintsFnName,
+      resolveImport,
+      registry,
+    );
   }
-  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames)
-  const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile, registry)
-  const ctx = new GenCtx()
+  const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames);
+  const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile, registry);
+  const ctx = new GenCtx();
   const decodeBody = genWireEncodeDecodeCompositeTop(
     ref,
     "wire",
@@ -2216,34 +2408,36 @@ export function compileWireEntryFragmentComposite(
     defaultProfile,
     registry,
     hookFields,
-  )
-  const fillStmts = genDefaultsFillChildren(ref, "__decoded")
-  const hookFieldsLiteral = JSON.stringify([...hookFields])
+  );
+  const fillStmts = genDefaultsFillChildren(ref, "__decoded");
+  const hookFieldsLiteral = JSON.stringify([...hookFields]);
 
-  const lines: string[] = [...ctx.declarations()]
-  lines.push(`function parse(wire: any, hooks?: Readonly<Record<string, (w: any) => any>>) {`)
-  lines.push(`  const path: string[] = [];`)
-  lines.push(`  void path;`)
-  lines.push(`  const errs: ValidationError[] = [];`)
-  lines.push(...indentLines(decodeBody.stmts, 2))
-  lines.push(`  if (errs.length > 0) { return { kind: "err" as const, errors: errs }; }`)
-  lines.push(`  let __decoded: any = ${decodeBody.outExpr};`)
-  lines.push(...indentLines(fillStmts, 2))
-  lines.push(`  const constraintErrs = ${constraintsFnName}(__decoded);`)
-  lines.push(`  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`)
-  lines.push(`  return { kind: "ok" as const, value: __decoded };`)
-  lines.push(`}`)
-  lines.push(`return { parse: parse, hookFields: ${hookFieldsLiteral} } as unknown as {`)
+  const lines: string[] = [...ctx.declarations()];
+  lines.push(`function parse(wire: any, hooks?: Readonly<Record<string, (w: any) => any>>) {`);
+  lines.push(`  const path: string[] = [];`);
+  lines.push(`  void path;`);
+  lines.push(`  const errs: ValidationError[] = [];`);
+  lines.push(...indentLines(decodeBody.stmts, 2));
+  lines.push(`  if (errs.length > 0) { return { kind: "err" as const, errors: errs }; }`);
+  lines.push(`  let __decoded: any = ${decodeBody.outExpr};`);
+  lines.push(...indentLines(fillStmts, 2));
+  lines.push(`  const constraintErrs = ${constraintsFnName}(__decoded);`);
+  lines.push(
+    `  if (constraintErrs.length > 0) { return { kind: "err" as const, errors: constraintErrs }; }`,
+  );
+  lines.push(`  return { kind: "ok" as const, value: __decoded };`);
+  lines.push(`}`);
+  lines.push(`return { parse: parse, hookFields: ${hookFieldsLiteral} } as unknown as {`);
   lines.push(
     `  parse: (wire: unknown, hooks?: Readonly<Record<string, (w: unknown) => unknown>>) => { kind: "ok"; value: ${annotation} } | { kind: "err"; errors: ValidationError[] };`,
-  )
-  lines.push(`  hookFields: readonly string[];`)
-  lines.push(`};`)
-  const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n")
-  const hookFieldsArr = [...hookFields]
+  );
+  lines.push(`  hookFields: readonly string[];`);
+  lines.push(`};`);
+  const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n");
+  const hookFieldsArr = [...hookFields];
   return typeImport === undefined
     ? { code, wireType, hookFields: hookFieldsArr }
-    : { code, wireType, typeImport, hookFields: hookFieldsArr }
+    : { code, wireType, typeImport, hookFields: hookFieldsArr };
 }
 
 /** The key `assembleWireModule`'s `wireValidators` map uses for one
@@ -2253,7 +2447,7 @@ export function compileWireEntryFragmentComposite(
  * `apply-validation-build.ts`) constructs the SAME key deterministically
  * rather than re-deriving the joining convention itself. */
 export function wireValidatorKey(name: string, profileName: string): string {
-  return `${name} ${profileName}`
+  return `${name} ${profileName}`;
 }
 
 /**
@@ -2281,56 +2475,60 @@ export function assembleWireModule(
   defsBlockLines: readonly string[] = [],
   wireDefsLines: readonly string[] = [],
 ): string {
-  const imports = new Map<string, Set<string>>()
-  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]))
+  const imports = new Map<string, Set<string>>();
+  imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]));
 
-  const constraintsLines: string[] = []
+  const constraintsLines: string[] = [];
   for (const { name } of entries) {
-    const fn = constraintsFns[name]
-    if (!fn) throw new Error(`assembleWireModule: missing constraints fn for entry ${JSON.stringify(name)}`)
-    constraintsLines.push(...fn.lines)
+    const fn = constraintsFns[name];
+    if (!fn)
+      throw new Error(
+        `assembleWireModule: missing constraints fn for entry ${JSON.stringify(name)}`,
+      );
+    constraintsLines.push(...fn.lines);
   }
 
-  const entryLines: string[] = []
+  const entryLines: string[] = [];
   for (const { name } of entries) {
     for (const profileName of profileNames) {
-      const key = wireValidatorKey(name, profileName)
-      const frag = wireFragments[key]
-      if (!frag) throw new Error(`assembleWireModule: missing wire fragment for ${JSON.stringify(key)}`)
+      const key = wireValidatorKey(name, profileName);
+      const frag = wireFragments[key];
+      if (!frag)
+        throw new Error(`assembleWireModule: missing wire fragment for ${JSON.stringify(key)}`);
       if (frag.typeImport) {
-        const names = imports.get(frag.typeImport.from) ?? new Set<string>()
-        names.add(frag.typeImport.typeName)
-        imports.set(frag.typeImport.from, names)
+        const names = imports.get(frag.typeImport.from) ?? new Set<string>();
+        names.add(frag.typeImport.typeName);
+        imports.set(frag.typeImport.from, names);
       }
-      const codeLines = frag.code.split("\n")
+      const codeLines = frag.code.split("\n");
       entryLines.push(
         `  ${JSON.stringify(key)}: ${codeLines[0]}`,
         ...indentLines(codeLines.slice(1, -1), 2),
         `  ${codeLines[codeLines.length - 1]},`,
-      )
+      );
     }
   }
 
-  const lines: string[] = []
-  lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.")
-  lines.push("")
+  const lines: string[] = [];
+  lines.push("// AUTO-GENERATED by @rhi-zone/fractal-type-ir. Do not edit by hand.");
+  lines.push("");
   for (const [from, names] of imports) {
-    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`)
+    lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`);
   }
-  if (imports.size > 0) lines.push("")
-  lines.push(INFER_TYPE_REF_SOURCE)
-  lines.push("")
-  lines.push(...defsBlockLines)
-  if (defsBlockLines.length > 0) lines.push("")
-  lines.push(...wireDefsLines)
-  if (wireDefsLines.length > 0) lines.push("")
-  lines.push(...constraintsLines)
-  if (constraintsLines.length > 0) lines.push("")
-  lines.push("export const wireValidators = {")
-  lines.push(...entryLines)
-  lines.push("}")
-  lines.push("")
-  return lines.join("\n")
+  if (imports.size > 0) lines.push("");
+  lines.push(INFER_TYPE_REF_SOURCE);
+  lines.push("");
+  lines.push(...defsBlockLines);
+  if (defsBlockLines.length > 0) lines.push("");
+  lines.push(...wireDefsLines);
+  if (wireDefsLines.length > 0) lines.push("");
+  lines.push(...constraintsLines);
+  if (constraintsLines.length > 0) lines.push("");
+  lines.push("export const wireValidators = {");
+  lines.push(...entryLines);
+  lines.push("}");
+  lines.push("");
+  return lines.join("\n");
 }
 
 /**
@@ -2351,16 +2549,22 @@ export function compileWireModule(
   profiles: readonly WireProfile[],
   options?: { resolveImport?: (declarationFile: string) => string; defs?: Record<string, TypeRef> },
 ): string {
-  const defs = options?.defs ?? {}
-  const defsBlock = compileDefsBlock(defs)
-  const registry = createWireDefsRegistry(defs)
-  const constraintsFns: Record<string, CompiledConstraintsFn> = {}
-  const wireFragments: Record<string, CompiledWireEntryFragment> = {}
+  const defs = options?.defs ?? {};
+  const defsBlock = compileDefsBlock(defs);
+  const registry = createWireDefsRegistry(defs);
+  const constraintsFns: Record<string, CompiledConstraintsFn> = {};
+  const wireFragments: Record<string, CompiledWireEntryFragment> = {};
   for (const { name, ref } of entries) {
-    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames)
+    constraintsFns[name] = compileConstraintsFn(name, ref, defsBlock.defNames);
     for (const profile of profiles) {
-      const key = wireValidatorKey(name, profile.name)
-      wireFragments[key] = compileWireEntryFragment(ref, profile, constraintsFns[name].fnName, options?.resolveImport, registry)
+      const key = wireValidatorKey(name, profile.name);
+      wireFragments[key] = compileWireEntryFragment(
+        ref,
+        profile,
+        constraintsFns[name].fnName,
+        options?.resolveImport,
+        registry,
+      );
     }
   }
   return assembleWireModule(
@@ -2370,5 +2574,5 @@ export function compileWireModule(
     wireFragments,
     defsBlock.lines,
     registry.moduleLines(),
-  )
+  );
 }

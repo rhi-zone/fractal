@@ -11,8 +11,8 @@
 // Not a `.test.ts` file itself, so bun test skips it; imported for its
 // side effect (the `declare module` augmentation) by tests that need it.
 
-import "@rhi-zone/fractal-api-tree/node"
-import type { McpBranchMeta, McpLeafMeta } from "./project.ts"
+import "@rhi-zone/fractal-api-tree/node";
+import type { McpBranchMeta, McpLeafMeta } from "./project.ts";
 
 declare module "@rhi-zone/fractal-api-tree/node" {
   interface LeafMeta extends McpLeafMeta {}

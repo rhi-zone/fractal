@@ -7,14 +7,19 @@ and (de)serialization mechanism differ.
 ## Native (JsonSerializable)
 
 ```ts
-import { toPhp } from "@rhi-zone/fractal-type-ir/php-native"
+import { toPhp } from "@rhi-zone/fractal-type-ir/php-native";
 
-toPhp(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toPhp(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```php
@@ -46,9 +51,9 @@ for PHPStan/Psalm.
 ### Symfony Serializer
 
 ```ts
-import { toSymfony } from "@rhi-zone/fractal-type-ir/php-symfony"
+import { toSymfony } from "@rhi-zone/fractal-type-ir/php-symfony";
 
-toSymfony(t(types.object({ id: t(types.string) })), "Item")
+toSymfony(t(types.object({ id: t(types.string) })), "Item");
 ```
 
 No `jsonSerialize()` — Symfony's `ObjectNormalizer` walks the class's
@@ -67,9 +72,9 @@ final readonly class Item
 ### JMS Serializer
 
 ```ts
-import { toJms } from "@rhi-zone/fractal-type-ir/php-jms"
+import { toJms } from "@rhi-zone/fractal-type-ir/php-jms";
 
-toJms(t(types.object({ id: t(types.string) })), "Item")
+toJms(t(types.object({ id: t(types.string) })), "Item");
 ```
 
 JMS defaults to an "opt out" inclusion model, but the projector emits the

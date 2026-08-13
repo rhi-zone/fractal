@@ -66,17 +66,22 @@ import {
   parse,
   subscribe,
   validate,
-} from "graphql"
-import type { DocumentNode, ExecutionResult, GraphQLFieldResolver, GraphQLSchema } from "graphql"
-import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context"
-import type { DetectionOptions } from "@rhi-zone/fractal-api-tree"
-import { getGraphQLMeta, projectGraphQL } from "./project.ts"
-import type { Dispatch, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts"
-import { toSchema } from "./schema.ts"
-import { createResolver } from "./resolve.ts"
-import type { GraphQLErrorEncoder, GraphQLHandlerMiddleware, ResolverOptions, SubscriptionFieldConfig } from "./resolve.ts"
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+} from "graphql";
+import type { DocumentNode, ExecutionResult, GraphQLFieldResolver, GraphQLSchema } from "graphql";
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context";
+import type { DetectionOptions } from "@rhi-zone/fractal-api-tree";
+import { getGraphQLMeta, projectGraphQL } from "./project.ts";
+import type { Dispatch, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts";
+import { toSchema } from "./schema.ts";
+import { createResolver } from "./resolve.ts";
+import type {
+  GraphQLErrorEncoder,
+  GraphQLHandlerMiddleware,
+  ResolverOptions,
+  SubscriptionFieldConfig,
+} from "./resolve.ts";
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 
 // ============================================================================
 // Naming helpers — mirror project.ts's own (unexported) pascalJoin/capitalize,
@@ -85,11 +90,11 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 // ============================================================================
 
 function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1)
+  return s.length === 0 ? s : s[0]!.toUpperCase() + s.slice(1);
 }
 
 function pascalJoin(path: readonly string[]): string {
-  return path.map(capitalize).join("")
+  return path.map(capitalize).join("");
 }
 
 // ============================================================================
@@ -98,17 +103,17 @@ function pascalJoin(path: readonly string[]): string {
 
 /** Dispatch context `CreateGraphQLServerOptions.als`'s `init` receives. */
 export type GraphQLAlsContext = {
-  readonly meta: LeafMeta
+  readonly meta: LeafMeta;
   /** The field's rendered SDL name (query fields: just the leaf's own field name, not the qualified namespace path). */
-  readonly fieldName: string
-  readonly operationType: OperationType
-}
+  readonly fieldName: string;
+  readonly operationType: OperationType;
+};
 
 export type CreateGraphQLServerOptions<T = unknown> = {
   /** Underscore-joined tree-path → derived input/output TypeRefs (from codegen). Forwarded to `projectGraphQL`. */
-  readonly types?: FieldTypeMap
+  readonly types?: FieldTypeMap;
   /** Named type declarations referenced by any supplied `FieldTypeInfo`. Forwarded to `projectGraphQL`. */
-  readonly namedTypes?: Readonly<Record<string, TypeRef>>
+  readonly namedTypes?: Readonly<Record<string, TypeRef>>;
   /**
    * Additional `Node => Node` passes, applied in array order, to `tree`
    * BEFORE `projectGraphQL` runs — GraphQL's counterpart to HTTP's
@@ -149,7 +154,7 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * before `projectGraphQL` runs. Leaves with no matching generated entry
    * keep their original handler untouched.
    */
-  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>
+  readonly rewriters?: ReadonlyArray<(tree: Node) => Node>;
   /**
    * Around-hooks wrapping each field's handler call — `F => F` where
    * `F = (input, stores) => result` (see
@@ -158,7 +163,7 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * middleware conventions. Threaded straight through to every resolver via
    * `resolve.ts`'s `ResolverOptions.middleware`.
    */
-  readonly middleware?: readonly GraphQLHandlerMiddleware[]
+  readonly middleware?: readonly GraphQLHandlerMiddleware[];
   /**
    * Wrap each field's handler call so it runs inside its own
    * `AsyncLocalStorage` context. `init` computes the per-invocation context
@@ -167,7 +172,7 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * ALS is the INNERMOST wrapper — see module doc. Absent by default (no ALS
    * wrapping).
    */
-  readonly als?: AlsConfig<GraphQLAlsContext, T>
+  readonly als?: AlsConfig<GraphQLAlsContext, T>;
   /**
    * Opt-in configuration for each field resolver's structural sniffing of a
    * handler's return value — `result` gates `Result`-shape unwrapping for
@@ -176,7 +181,7 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * resolve.ts's `ResolverOptions.detection`). Defaults to `true`. Mirrors
    * HTTP's `PresetOptions.detection` and MCP's `CreateMcpServerOptions.detection`.
    */
-  readonly detection?: DetectionOptions
+  readonly detection?: DetectionOptions;
   /**
    * Maps a handler's `Result.err(E)` error value to a `GraphQLErrorResponse`
    * (message + optional `extensions`) — see resolve.ts's
@@ -184,15 +189,15 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * when `errorEncoder` itself is omitted) falls back to a generic
    * `GraphQLError` wrapping the raw error value.
    */
-  readonly errorEncoder?: GraphQLErrorEncoder
-}
+  readonly errorEncoder?: GraphQLErrorEncoder;
+};
 
 /** `createGraphQLServer`'s return value. */
 export type GraphQLServer = {
   /** The fully executable graphql-js schema — resolvers already wired (see module doc). */
-  readonly schema: GraphQLSchema
+  readonly schema: GraphQLSchema;
   /** The rendered SDL text `schema` was built from (`buildSchema`) — for introspection/debugging/serving `GET /graphql` schema requests. */
-  readonly sdl: string
+  readonly sdl: string;
   /**
    * Placeholder root value for callers who want to drive `schema` through
    * their own `graphql-js` `execute`/`subscribe` call directly. Always `{}` —
@@ -202,14 +207,14 @@ export type GraphQLServer = {
    * meaningful to put here; it exists for API parity with `execute`'s own
    * `rootValue` parameter.
    */
-  readonly rootValue: Record<string, unknown>
+  readonly rootValue: Record<string, unknown>;
   /** Parse + validate + execute one GraphQL query/mutation document against `schema`. */
   execute(
     query: string,
     variableValues?: Record<string, unknown>,
     contextValue?: unknown,
     operationName?: string,
-  ): Promise<ExecutionResult>
+  ): Promise<ExecutionResult>;
   /**
    * Parse + validate + `graphql-js` `subscribe` one GraphQL subscription
    * document against `schema` — returns an `AsyncIterable<ExecutionResult>`
@@ -223,23 +228,23 @@ export type GraphQLServer = {
     variableValues?: Record<string, unknown>,
     contextValue?: unknown,
     operationName?: string,
-  ): Promise<AsyncIterable<ExecutionResult> | ExecutionResult>
-}
+  ): Promise<AsyncIterable<ExecutionResult> | ExecutionResult>;
+};
 
 /** Parse + validate one query document against `schema`; either its `DocumentNode`, or the `errors` an `ExecutionResult` should carry instead of ever reaching `execute`/`subscribe`. */
 function parseAndValidate(
   schema: GraphQLSchema,
   query: string,
 ): { readonly document: DocumentNode } | { readonly errors: readonly GraphQLError[] } {
-  let document: DocumentNode
+  let document: DocumentNode;
   try {
-    document = parse(query)
+    document = parse(query);
   } catch (error) {
-    return { errors: [error instanceof GraphQLError ? error : new GraphQLError(String(error))] }
+    return { errors: [error instanceof GraphQLError ? error : new GraphQLError(String(error))] };
   }
-  const validationErrors = validate(schema, document)
-  if (validationErrors.length > 0) return { errors: validationErrors }
-  return { document }
+  const validationErrors = validate(schema, document);
+  if (validationErrors.length > 0) return { errors: validationErrors };
+  return { document };
 }
 
 /**
@@ -263,21 +268,21 @@ export function createGraphQLServer<T = unknown>(
   // walk — see CreateGraphQLServerOptions.rewriters. This is where generated
   // validation wires in (`applyValidation`), same integration point HTTP's
   // `PresetOptions.rewriters` provides.
-  const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree)
+  const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree);
 
   const projection = projectGraphQL(workingTree, {
     ...(opts.types !== undefined ? { types: opts.types } : {}),
     ...(opts.namedTypes !== undefined ? { namedTypes: opts.namedTypes } : {}),
-  })
+  });
 
-  const sdl = toSchema(projection)
-  const schema = buildSchema(sdl)
+  const sdl = toSchema(projection);
+  const schema = buildSchema(sdl);
 
   const resolverOptions: ResolverOptions = {
     ...(opts.errorEncoder !== undefined ? { errorEncoder: opts.errorEncoder } : {}),
     ...(opts.middleware !== undefined ? { middleware: opts.middleware } : {}),
     ...(opts.detection !== undefined ? { detection: opts.detection } : {}),
-  }
+  };
 
   // ALS wrapping (see CreateGraphQLServerOptions.als) — innermost, closer to
   // the handler than `opts.middleware` (which resolve.ts's createResolver
@@ -286,67 +291,80 @@ export function createGraphQLServer<T = unknown>(
     opts.als === undefined
       ? handler
       : (input: unknown) => {
-          const store = opts.als!.init(context)
+          const store = opts.als!.init(context);
           return store instanceof Promise
             ? store.then((resolved) => opts.als!.storage.run(resolved, () => handler(input)))
-            : opts.als!.storage.run(store, () => handler(input))
-        }
+            : opts.als!.storage.run(store, () => handler(input));
+        };
 
   const wrapDispatch = (dispatch: Dispatch, fieldName: string): Dispatch => {
-    if (opts.als === undefined) return dispatch
-    const context: GraphQLAlsContext = { meta: dispatch.meta, fieldName, operationType: dispatch.operationType }
-    return { ...dispatch, handler: withAls(dispatch.handler, context) }
-  }
+    if (opts.als === undefined) return dispatch;
+    const context: GraphQLAlsContext = {
+      meta: dispatch.meta,
+      fieldName,
+      operationType: dispatch.operationType,
+    };
+    return { ...dispatch, handler: withAls(dispatch.handler, context) };
+  };
 
-  const queryType = schema.getQueryType()
-  const mutationType = schema.getMutationType()
-  const subscriptionType = schema.getSubscriptionType()
+  const queryType = schema.getQueryType();
+  const mutationType = schema.getMutationType();
+  const subscriptionType = schema.getSubscriptionType();
 
   /** Resolve the synthesized namespace `GraphQLObjectType` at `path` — the root `Query` type itself for `path: []`. */
   const typeForNamespacePath = (path: readonly string[]): GraphQLObjectType | undefined => {
-    if (path.length === 0) return queryType ?? undefined
-    const candidate = schema.getType(`${pascalJoin(path)}Query`)
-    return candidate instanceof GraphQLObjectType ? candidate : undefined
-  }
+    if (path.length === 0) return queryType ?? undefined;
+    const candidate = schema.getType(`${pascalJoin(path)}Query`);
+    return candidate instanceof GraphQLObjectType ? candidate : undefined;
+  };
 
-  const passthroughResolver: GraphQLFieldResolver<unknown, unknown> = () => ({})
+  const passthroughResolver: GraphQLFieldResolver<unknown, unknown> = () => ({});
 
   for (const [key, dispatch] of projection.handlers) {
     if (dispatch.operationType === "mutation") {
-      const field = mutationType?.getFields()[key]
-      if (field === undefined) continue
-      field.resolve = createResolver(wrapDispatch(dispatch, key), resolverOptions) as GraphQLFieldResolver<unknown, unknown>
-      continue
+      const field = mutationType?.getFields()[key];
+      if (field === undefined) continue;
+      field.resolve = createResolver(
+        wrapDispatch(dispatch, key),
+        resolverOptions,
+      ) as GraphQLFieldResolver<unknown, unknown>;
+      continue;
     }
 
     if (dispatch.operationType === "subscription") {
-      const field = subscriptionType?.getFields()[key]
-      if (field === undefined) continue
-      const config = createResolver(wrapDispatch(dispatch, key), resolverOptions) as SubscriptionFieldConfig
-      field.subscribe = config.subscribe as GraphQLFieldResolver<unknown, unknown>
-      field.resolve = config.resolve as GraphQLFieldResolver<unknown, unknown>
-      continue
+      const field = subscriptionType?.getFields()[key];
+      if (field === undefined) continue;
+      const config = createResolver(
+        wrapDispatch(dispatch, key),
+        resolverOptions,
+      ) as SubscriptionFieldConfig;
+      field.subscribe = config.subscribe as GraphQLFieldResolver<unknown, unknown>;
+      field.resolve = config.resolve as GraphQLFieldResolver<unknown, unknown>;
+      continue;
     }
 
     // Query (nested) — reconstruct namespace path + field name from the
     // dispatch key + this leaf's own meta (see module doc's "Query (nested)" case).
-    const segments = key.split("_")
-    const gql = getGraphQLMeta(dispatch.meta as GraphQLLeafMeta)
-    const fieldName = typeof gql.name === "string" ? gql.name : segments[segments.length - 1]!
-    const namespacePath = segments.slice(0, -1)
+    const segments = key.split("_");
+    const gql = getGraphQLMeta(dispatch.meta as GraphQLLeafMeta);
+    const fieldName = typeof gql.name === "string" ? gql.name : segments[segments.length - 1]!;
+    const namespacePath = segments.slice(0, -1);
 
     for (let i = 0; i < namespacePath.length; i++) {
-      const parentType = typeForNamespacePath(namespacePath.slice(0, i))
-      const pointerField = parentType?.getFields()[namespacePath[i]!]
+      const parentType = typeForNamespacePath(namespacePath.slice(0, i));
+      const pointerField = parentType?.getFields()[namespacePath[i]!];
       if (pointerField !== undefined && pointerField.resolve === undefined) {
-        pointerField.resolve = passthroughResolver
+        pointerField.resolve = passthroughResolver;
       }
     }
 
-    const leafType = typeForNamespacePath(namespacePath)
-    const field = leafType?.getFields()[fieldName]
-    if (field === undefined) continue
-    field.resolve = createResolver(wrapDispatch(dispatch, fieldName), resolverOptions) as GraphQLFieldResolver<unknown, unknown>
+    const leafType = typeForNamespacePath(namespacePath);
+    const field = leafType?.getFields()[fieldName];
+    if (field === undefined) continue;
+    field.resolve = createResolver(
+      wrapDispatch(dispatch, fieldName),
+      resolverOptions,
+    ) as GraphQLFieldResolver<unknown, unknown>;
   }
 
   return {
@@ -354,14 +372,28 @@ export function createGraphQLServer<T = unknown>(
     sdl,
     rootValue: {},
     execute: async (query, variableValues, contextValue, operationName) => {
-      const parsed = parseAndValidate(schema, query)
-      if ("errors" in parsed) return { errors: parsed.errors }
-      return execute({ schema, document: parsed.document, rootValue: {}, contextValue, variableValues, operationName })
+      const parsed = parseAndValidate(schema, query);
+      if ("errors" in parsed) return { errors: parsed.errors };
+      return execute({
+        schema,
+        document: parsed.document,
+        rootValue: {},
+        contextValue,
+        variableValues,
+        operationName,
+      });
     },
     subscribe: async (query, variableValues, contextValue, operationName) => {
-      const parsed = parseAndValidate(schema, query)
-      if ("errors" in parsed) return { errors: parsed.errors }
-      return subscribe({ schema, document: parsed.document, rootValue: {}, contextValue, variableValues, operationName })
+      const parsed = parseAndValidate(schema, query);
+      if ("errors" in parsed) return { errors: parsed.errors };
+      return subscribe({
+        schema,
+        document: parsed.document,
+        rootValue: {},
+        contextValue,
+        variableValues,
+        operationName,
+      });
     },
-  }
+  };
 }

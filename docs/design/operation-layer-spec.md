@@ -9,6 +9,7 @@ cites the the consumer app file(s)/lines it is drawn from. No design proposal fo
 fractal itself is made here — only the shape of the problem.
 
 Evidence base (read in full for this spec):
+
 - `apps/web/src/server/lib/locations-usecases.ts` (lifted use-case handlers)
 - `apps/web/src/client/components/admin/admin-location-descriptor.ts` (EntityDescriptor)
 - `apps/web/src/server/api/admin-locations.ts` (route file, part generated / part hand-written)
@@ -52,6 +53,7 @@ tag as ONE declaration, not two files kept in sync by string convention.
 (`useCaseDescriptor.ts:49,56`) — runtime validators AND the compile-time type
 source (`InferOutput<S>`). Three schemas exist per entity today, hand-written
 independently:
+
 - `LocationCreateSchema` (`locations-usecases.ts:29-35`, reused for `formFields`)
 - `ListLocationsInputSchema` / `ArchiveLocationInputSchema` (`locations-usecases.ts:38,41`)
 - `LocationPatchSchema` (`admin-locations.ts:60-66`) — a NEAR-DUPLICATE of
@@ -83,13 +85,14 @@ alone and structurally identical each time.
 ### 1.4 HTTP stereotype (method, path, input source, success status)
 
 Two overlapping vocabularies exist:
+
 - `EntityHttpBinding` derivation (`entityDescriptor.ts:1993-2090`) — stereotypes:
   `list→GET {base}` (query), `get→GET {base}/:id` (params), `create→POST
-  {base}` (json, 201), `update→PATCH {base}/:id` (json), action→`POST
-  {base}/:id/{action.id}` (json). Per-op `HttpBindingOverride`
+{base}` (json, 201), `update→PATCH {base}/:id` (json), action→`POST
+{base}/:id/{action.id}` (json). Per-op `HttpBindingOverride`
   (`entityDescriptor.ts:1970-1983`) replaces method/path/inputSource/successStatus;
   locations overrides `create.successStatus: 200` and `archive.{method:
-  DELETE, path: "/:id", inputSource: "params"}` (`admin-location-descriptor.ts:45-48`).
+DELETE, path: "/:id", inputSource: "params"}` (`admin-location-descriptor.ts:45-48`).
 - Independently, `mountUseCase.ts`'s `InputSource` union (`mountUseCase.ts:69-80`)
   is a SUPERSET of `HttpInputSourceKind` (`entityDescriptor.ts:1963`) — it adds
   `session` and `merge` kinds the entity-descriptor stereotype vocabulary
@@ -121,6 +124,7 @@ an operation could NOT be lifted into the declarative layer.
 ### 1.6 Authorization (scope/role, self-guards)
 
 Two disjoint mechanisms:
+
 - `UseCaseDescriptor.scopes: readonly string[]` (`useCaseDescriptor.ts:60`) —
   declared but EMPTY (`scopes: []`) on all three locations use-cases
   (`locations-usecases.ts:58,72,86`); the real gate is
@@ -155,6 +159,7 @@ lifted handler "MUST NOT call `recordAuditEvent`" to avoid double-audit
 **Gap, evidenced**: the `update` op's audit is NOT expressible in
 `EntityAuditSpec` and stays hand-written (`admin-locations.ts:94-100`,
 `recordAuditEvent` called directly) because it needs:
+
 - a `before` value (a DB read PRIOR to the mutation) — `EntityAuditSpec` has no
   `before` field at all;
 - a noop-skip (`if (result.kind === "noop") return ... /* no audit */`,
@@ -235,16 +240,16 @@ the generic default), rather than relying on suffix-matching a string.
 
 ## 2. What a single declaration should derive (projections)
 
-| Projection | Current mechanism | Evidence |
-|---|---|---|
-| HTTP route registration | Partially generated (`registerEntityRoutes` from `EntityHttpBinding`), partially hand-written per exception | `admin-locations.ts:54-56` (generated) vs `:68-103` (hand-written PATCH) |
-| Valibot input schema | 100% hand-written per op, including a near-duplicate `partial()` schema for update | `locations-usecases.ts:29-41`, `admin-locations.ts:60-66` |
-| CLI command | Design intent exists (`mountUseCase.ts:16-18`: "OpenAPI / CLI (built next): enumerate `routeManifest`... `{method, path, descriptorName, inputSource}` + the registry is enough") but NOT evidenced as built in the files read | `mountUseCase.ts:1-23` |
-| OpenAPI spec | Same comment block states OpenAPI is a planned consumer of the manifest, not generated today | `mountUseCase.ts:16-18` |
-| Audit recording at execution boundary | Split: generated for `create`/`archive` via `EntityAuditSpec` (`registerEntityRoutes`), hand-written for `update` (`recordAuditEvent` call) because of the `before`/noop-skip gap (§1.7) | `admin-location-descriptor.ts:50-62`; `admin-locations.ts:94-100` |
-| Admin page projection | Via `EntityDescriptor` + `formFields`/`editFields`/`fields` consumed by a page-level projector (`page-admin-locations-projected.ts`, referenced but not read) plus a wrapper file (`admin-location-descriptor.ts` header comment lines 3-8 explains the descriptor was split into its own module specifically so BOTH the client projector and the server route generator import the same object without pulling in DOM side effects) | `admin-location-descriptor.ts:1-16` |
-| Test mock registration | Hand-copied — `boot.ts` registers descriptors imperatively per slice (`for (const d of adminLocationsUseCaseDescriptors({db})) { registry.register(d) }`, repeated near-identically 4x for locations/api-keys/admin-staff/admin-onboarding, `boot.ts:1075-1163`), each block guarded by a duplicated `if (!composedUseCaseRegistry) logger.error(...)` | `boot.ts:1080-1095, 1102-1117, 1125-1140, 1148-1163` |
-| Route manifest entry | `mountUseCase`'s module-level array, appended at mount time (`mountUseCase.ts:20-22`) | `mountUseCase.ts:1-23` |
+| Projection                            | Current mechanism                                                                                                                                                                                                                                                                                                                                                                                                                     | Evidence                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| HTTP route registration               | Partially generated (`registerEntityRoutes` from `EntityHttpBinding`), partially hand-written per exception                                                                                                                                                                                                                                                                                                                           | `admin-locations.ts:54-56` (generated) vs `:68-103` (hand-written PATCH) |
+| Valibot input schema                  | 100% hand-written per op, including a near-duplicate `partial()` schema for update                                                                                                                                                                                                                                                                                                                                                    | `locations-usecases.ts:29-41`, `admin-locations.ts:60-66`                |
+| CLI command                           | Design intent exists (`mountUseCase.ts:16-18`: "OpenAPI / CLI (built next): enumerate `routeManifest`... `{method, path, descriptorName, inputSource}` + the registry is enough") but NOT evidenced as built in the files read                                                                                                                                                                                                        | `mountUseCase.ts:1-23`                                                   |
+| OpenAPI spec                          | Same comment block states OpenAPI is a planned consumer of the manifest, not generated today                                                                                                                                                                                                                                                                                                                                          | `mountUseCase.ts:16-18`                                                  |
+| Audit recording at execution boundary | Split: generated for `create`/`archive` via `EntityAuditSpec` (`registerEntityRoutes`), hand-written for `update` (`recordAuditEvent` call) because of the `before`/noop-skip gap (§1.7)                                                                                                                                                                                                                                              | `admin-location-descriptor.ts:50-62`; `admin-locations.ts:94-100`        |
+| Admin page projection                 | Via `EntityDescriptor` + `formFields`/`editFields`/`fields` consumed by a page-level projector (`page-admin-locations-projected.ts`, referenced but not read) plus a wrapper file (`admin-location-descriptor.ts` header comment lines 3-8 explains the descriptor was split into its own module specifically so BOTH the client projector and the server route generator import the same object without pulling in DOM side effects) | `admin-location-descriptor.ts:1-16`                                      |
+| Test mock registration                | Hand-copied — `boot.ts` registers descriptors imperatively per slice (`for (const d of adminLocationsUseCaseDescriptors({db})) { registry.register(d) }`, repeated near-identically 4x for locations/api-keys/admin-staff/admin-onboarding, `boot.ts:1075-1163`), each block guarded by a duplicated `if (!composedUseCaseRegistry) logger.error(...)`                                                                                | `boot.ts:1080-1095, 1102-1117, 1125-1140, 1148-1163`                     |
+| Route manifest entry                  | `mountUseCase`'s module-level array, appended at mount time (`mountUseCase.ts:20-22`)                                                                                                                                                                                                                                                                                                                                                 | `mountUseCase.ts:1-23`                                                   |
 
 The `boot.ts` registration blocks (§ table row "Test mock registration") are
 the clearest EVIDENCE of a missing derivation: four structurally-identical
@@ -258,6 +263,7 @@ per-instantiation boilerplate a single declaration + a generic
 ## 3. Current gap between EntityDescriptor and the ideal operation IR
 
 **Gets right:**
+
 - CRUD + action/command HTTP stereotyping with per-op override escape hatch
   (`HttpBindingOverride`) — covers the common case (`entityHttpBindings`,
   `entityDescriptor.ts:2042-2090`) while allowing exceptions to stay data, not
@@ -271,6 +277,7 @@ per-instantiation boilerplate a single declaration + a generic
   how) is architecturally sound — the split itself is not the gap.
 
 **Gets wrong / incomplete:**
+
 - Two competing, only-partially-overlapping HTTP-shape vocabularies
   (`HttpInputSourceKind` at the descriptor layer vs `InputSource` at the mount
   layer) — the descriptor layer is a strict subset missing exactly the cases
@@ -299,6 +306,7 @@ per-instantiation boilerplate a single declaration + a generic
   slice publishes."
 
 **Can't express at all (found nowhere in the read files):**
+
 - Before/after audit with a genuinely computed `before` (pre-mutation read).
 - Conditional/skip-if-noop audit.
 - Self-referential / relational authorization predicates.
@@ -380,6 +388,7 @@ operation admin.location.archive:
 
 **What would no longer need to exist**, if the above were real and every
 projection listed in §2 were generated from it:
+
 - `LocationCreateSchema`, `ArchiveLocationInputSchema`,
   `ListLocationsInputSchema` (hand-written valibot, `locations-usecases.ts:29-41`)
   — replaced by type-ir-derived schemas.

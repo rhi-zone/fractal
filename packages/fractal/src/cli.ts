@@ -2,4 +2,4 @@
 //
 // Re-exports `@rhi-zone/fractal-cli-api-projector`'s root surface.
 
-export * from "@rhi-zone/fractal-cli-api-projector"
+export * from "@rhi-zone/fractal-cli-api-projector";

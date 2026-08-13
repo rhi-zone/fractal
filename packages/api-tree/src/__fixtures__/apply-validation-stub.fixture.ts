@@ -8,6 +8,6 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { createApplyValidation } from "../apply-validation.ts"
+import { createApplyValidation } from "../apply-validation.ts";
 
-export const applyValidation = createApplyValidation({})
+export const applyValidation = createApplyValidation({});

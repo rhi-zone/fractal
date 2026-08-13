@@ -32,13 +32,13 @@ The "combinator identity gap" was a symptom of unclear self-description, not
 a structural deficiency. The routing-expression-model.md's proposed primitives
 (`match`/`consume`/`capture`) map onto existing Node features:
 
-| Proposed primitive | Existing realization |
-|--------------------|---------------------|
-| `consume(segment, next)` | `children[key]` — keyed dispatch on path segment |
-| `capture(name, next)` | `fallback: { name, subtree }` — wildcard capture |
+| Proposed primitive       | Existing realization                              |
+| ------------------------ | ------------------------------------------------- |
+| `consume(segment, next)` | `children[key]` — keyed dispatch on path segment  |
+| `capture(name, next)`    | `fallback: { name, subtree }` — wildcard capture  |
 | `match(accessor, cases)` | `children` + `meta.http.dispatch: DispatchMarker` |
-| `pipe(f, g)` | `compose()` in `packages/api-tree` |
-| `alt(f, g)` | Multiple candidates from `candidatesForUrl()` |
+| `pipe(f, g)`             | `compose()` in `packages/api-tree`                |
+| `alt(f, g)`              | Multiple candidates from `candidatesForUrl()`     |
 
 **What this means for the operation layer**: an operation declaration is another
 aspect of the skeleton — the single source of truth about what an operation IS.
@@ -64,8 +64,8 @@ by reading metadata.
 ```typescript
 node({
   children: { GET: op(getUser), POST: op(createUser) },
-  meta: { http: { dispatch: { kind: "method" } } }
-})
+  meta: { http: { dispatch: { kind: "method" } } },
+});
 ```
 
 - Pro: simpler Node type, fewer variants to handle
@@ -79,17 +79,17 @@ node({
 ```typescript
 // Node gains a `match` field
 type Node = {
-  handler?: Handler
-  children?: Record<string, Node>       // path segments (keyed dispatch)
-  fallback?: { name: string; subtree: Node }  // wildcard capture
-  match?: { on: string; cases: Record<string, Node> }  // case analysis
-  meta: Meta
-}
+  handler?: Handler;
+  children?: Record<string, Node>; // path segments (keyed dispatch)
+  fallback?: { name: string; subtree: Node }; // wildcard capture
+  match?: { on: string; cases: Record<string, Node> }; // case analysis
+  meta: Meta;
+};
 
 // Usage — accessor is protocol-agnostic
 node({
-  match: { on: "method", cases: { GET: op(getUser), POST: op(createUser) } }
-})
+  match: { on: "method", cases: { GET: op(getUser), POST: op(createUser) } },
+});
 ```
 
 - Pro: expression is unambiguous — `children` is always path segments,
@@ -127,11 +127,13 @@ The operation-layer-spec documents 10 capabilities. The question is: does
 "operation" need its own type, or is it a Node leaf with rich metadata?
 
 **Argument for a separate Operation type:**
+
 - Operations have richer semantics than a bare Node leaf
 - A typed Operation could provide structure guarantees
 - Operations might exist outside routing trees (batch jobs, event handlers)
 
 **Argument for operations-as-nodes:**
+
 - Consistent with "open metadata bag over fixed schema" (CLAUDE.md)
 - Consistent with how type-ir works — TypeRef.meta can be arbitrarily complex
 - A Node without children/fallback is already `{ handler, meta }` — works
@@ -161,39 +163,39 @@ across projections) vs projection-specific metadata.
 
 **Operation-level (meta.op.\*) — any projector might use:**
 
-| Key | Shape | Source in spec |
-|-----|-------|---------------|
-| `meta.op.name` | `string` | §1.1 — operation identity |
-| `meta.op.entity` | `string` | §1.1 — owning entity |
-| `meta.op.auth` | `AuthSpec` | §6 — scope/role + relational guards |
-| `meta.op.audit` | `AuditSpec` | §7 — action/entity/payload sources |
-| `meta.op.sideEffects` | `SideEffect[]` | §8 — events, cache, session |
-| `meta.op.sessionInput` | `Record<string, Source>` | §5 — session-derived fields |
+| Key                    | Shape                    | Source in spec                      |
+| ---------------------- | ------------------------ | ----------------------------------- |
+| `meta.op.name`         | `string`                 | §1.1 — operation identity           |
+| `meta.op.entity`       | `string`                 | §1.1 — owning entity                |
+| `meta.op.auth`         | `AuthSpec`               | §6 — scope/role + relational guards |
+| `meta.op.audit`        | `AuditSpec`              | §7 — action/entity/payload sources  |
+| `meta.op.sideEffects`  | `SideEffect[]`           | §8 — events, cache, session         |
+| `meta.op.sessionInput` | `Record<string, Source>` | §5 — session-derived fields         |
 
 **Type-level (already exists as TypeRef):**
 
-| Key | Shape | Source in spec |
-|-----|-------|---------------|
-| `meta.input` | `TypeRef` | §1.2 — input type |
+| Key           | Shape     | Source in spec     |
+| ------------- | --------- | ------------------ |
+| `meta.input`  | `TypeRef` | §1.2 — input type  |
 | `meta.output` | `TypeRef` | §1.2 — output type |
 
 **HTTP-projection (meta.http.\*) — HTTP projector only:**
 
-| Key | Shape | Source in spec |
-|-----|-------|---------------|
-| `meta.http.verb` | `string` | §4 — HTTP method |
-| `meta.http.path` | `string` | §4 — path override |
-| `meta.http.status` | `number` | §4 — success status |
-| `meta.http.errorMap` | `Record<string, number>` | §10 — error→status |
+| Key                  | Shape                    | Source in spec      |
+| -------------------- | ------------------------ | ------------------- |
+| `meta.http.verb`     | `string`                 | §4 — HTTP method    |
+| `meta.http.path`     | `string`                 | §4 — path override  |
+| `meta.http.status`   | `number`                 | §4 — success status |
+| `meta.http.errorMap` | `Record<string, number>` | §10 — error→status  |
 
 **UI-projection (meta.ui.\*) — admin/client UI projector:**
 
-| Key | Shape | Source in spec |
-|-----|-------|---------------|
-| `meta.ui.label` | `string` | §9 — display label |
-| `meta.ui.confirm` | `string \| boolean` | §9 — confirmation prompt |
-| `meta.ui.enabledExpr` | `string` | §9 — conditional enable |
-| `meta.ui.fixedInput` | `Record<string, unknown>` | §9 — pre-filled fields |
+| Key                   | Shape                     | Source in spec           |
+| --------------------- | ------------------------- | ------------------------ |
+| `meta.ui.label`       | `string`                  | §9 — display label       |
+| `meta.ui.confirm`     | `string \| boolean`       | §9 — confirmation prompt |
+| `meta.ui.enabledExpr` | `string`                  | §9 — conditional enable  |
+| `meta.ui.fixedInput`  | `Record<string, unknown>` | §9 — pre-filled fields   |
 
 This namespacing falls out of the "which projector reads it" question.
 Operation-level metadata is cross-cutting (auth is enforced by HTTP, CLI,
@@ -214,11 +216,11 @@ base is T => U + compose."
 ```typescript
 // Handler
 async function createLocation(input: CreateInput): Promise<Location> {
-  if (duplicate) throw new OpError("LOCATION_DUPLICATE")
-  return location
+  if (duplicate) throw new OpError("LOCATION_DUPLICATE");
+  return location;
 }
 // Metadata
-meta.http.errorMap = { LOCATION_DUPLICATE: 409 }
+meta.http.errorMap = { LOCATION_DUPLICATE: 409 };
 ```
 
 - Pro: simplest for handler authors — no monadic ceremony
@@ -231,8 +233,8 @@ meta.http.errorMap = { LOCATION_DUPLICATE: 409 }
 
 ```typescript
 async function createLocation(input: CreateInput): Promise<Result<Location, OpError>> {
-  if (duplicate) return err({ code: "LOCATION_DUPLICATE" })
-  return ok(location)
+  if (duplicate) return err({ code: "LOCATION_DUPLICATE" });
+  return ok(location);
 }
 ```
 
@@ -245,7 +247,7 @@ async function createLocation(input: CreateInput): Promise<Result<Location, OpEr
 
 ```typescript
 // Projector normalizes: if handler returns Result, use it; if it throws, catch
-type HandlerResult<O, E> = O | Result<O, E>
+type HandlerResult<O, E> = O | Result<O, E>;
 ```
 
 - Pro: handler authors choose their style

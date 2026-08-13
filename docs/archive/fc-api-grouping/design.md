@@ -1,8 +1,8 @@
 # Design v1 — Carrier-Grouped Function Core (committed)
 
-*This is the committed design, made concrete. It implements the position fixed by the
+_This is the committed design, made concrete. It implements the position fixed by the
 owner; it does not re-open it. Background: `synthesis.md` (same directory). Provenance:
-everything here is design decision, not survey.*
+everything here is design decision, not survey._
 
 ---
 
@@ -10,7 +10,7 @@ everything here is design decision, not survey.*
 
 Every operation is a plain function `(...args) => Result`. It is filed under exactly one
 **carrier** — the invariant-bearing type it is responsible for keeping true. The carrier +
-its ops is the protocol-agnostic truth. HTTP/CLI are computed *from* a carrier, downstream,
+its ops is the protocol-agnostic truth. HTTP/CLI are computed _from_ a carrier, downstream,
 never authored per-surface. Truth lives in inferred TS types + JSDoc, never in a reified
 runtime schema tree.
 
@@ -55,14 +55,14 @@ That is the entire authoring surface. Ops are ordinary functions; `carrier` only
 
 ### Capability (second tier) — a typeclass-like interface
 
-A capability is declared once as an interface over a *carrier variable*, then implemented
+A capability is declared once as an interface over a _carrier variable_, then implemented
 per carrier. It is promoted only when the same op-set recurs across ≥2 carriers. Default is
 capability; a functor/module is used ONLY for genuine map/traverse structure-preservation.
 
 ```ts
 // declare the shape once (verb-keyed, ranges over carriers)
 interface Archivable<T> {
-  archive(t: T): T;      // endomap-shaped -> the impls live on each carrier
+  archive(t: T): T; // endomap-shaped -> the impls live on each carrier
   restore(t: T): T;
 }
 function capability<Name extends string, Shape>(name: Name): CapabilityDef<Name, Shape>;
@@ -76,14 +76,14 @@ User.implement(Archivable, {
 });
 ```
 
-Key rule: a capability does not move ops off their carrier. The implementation *is* the
+Key rule: a capability does not move ops off their carrier. The implementation _is_ the
 carrier's own `op`s, just conforming to a shared signature so cross-carrier code can be
 written once. It is an index, never a home.
 
 ### Reified relation carrier
 
 A relation is not special syntax — it is just `carrier<Transfer>()`. What makes it a
-*relation* is only that its invariant/law ranges over more than one subject. The authoring
+_relation_ is only that its invariant/law ranges over more than one subject. The authoring
 API is identical; that uniformity is the point.
 
 ---
@@ -93,18 +93,20 @@ API is identical; that uniformity is the point.
 ### (a) Endomap on an entity — `rename` → carrier **User**
 
 ```ts
-const User = carrier<User>("User", { invariant: u => u.email.includes("@") });
+const User = carrier<User>("User", { invariant: (u) => u.email.includes("@") });
 User.op("rename", (u, name: string): User => ({ ...u, name }));
 ```
+
 **Why:** `User => User`. The op mutates a User and is responsible for keeping User's
 invariant true. Source = target = User; the home is unambiguous. Carrier = the subject.
 
 ### (b) Pure producer / constructor — `draft` → carrier **Document**
 
 ```ts
-const Document = carrier<Document>("Document", { invariant: d => d.title.length > 0 });
+const Document = carrier<Document>("Document", { invariant: (d) => d.title.length > 0 });
 Document.make("draft", (author: User): Document => ({ author, title: "", state: "draft" }));
 ```
+
 **Why:** `User => Document`. Its point is to yield a valid Document. The invariant it must
 satisfy on exit is Document's, not User's. Carrier = the constructed type (target), via
 `make`. (It reads a User but introduces no User invariant, so it is not filed under User.)
@@ -113,14 +115,20 @@ satisfy on exit is Document's, not User's. Carrier = the constructed type (targe
 
 ```ts
 const Transfer = carrier<Transfer>("Transfer", {
-  invariant: t => t.amount > 0,
+  invariant: (t) => t.amount > 0,
   law: (before, after) => before.total === after.total, // conservation across the pair
 });
-Transfer.make("transfer", (from: Account, to: Account, amount: Money): Transfer =>
-  ({ from: from.id, to: to.id, amount, total: from.balance + to.balance, at: now() }));
+Transfer.make("transfer", (from: Account, to: Account, amount: Money): Transfer => ({
+  from: from.id,
+  to: to.id,
+  amount,
+  total: from.balance + to.balance,
+  at: now(),
+}));
 Transfer.op("reverse", (t): Transfer => ({ ...t, amount: -t.amount as Money }));
 ```
-**Why:** the conservation law is a property of the *pair* `(from, to)`, not of either
+
+**Why:** the conservation law is a property of the _pair_ `(from, to)`, not of either
 Account. No single Account owns it. That absence is the signal a carrier is missing — so
 the relation is reified as `Transfer`, whose invariant/law is exactly the conserved
 property. `transfer` is its constructor; `reverse` its endomap. Home = the reified relation.
@@ -129,26 +137,40 @@ property. `transfer` is its constructor; `reverse` its endomap. Home = the reifi
 
 ```ts
 const Assignment = carrier<Assignment>("Assignment", {
-  invariant: a => a.active,  // membership predicate: a live edge
+  invariant: (a) => a.active, // membership predicate: a live edge
 });
-Assignment.make("assign", (user: User, project: Project): Assignment =>
-  ({ user: user.id, project: project.id, active: true, at: now() }));
+Assignment.make("assign", (user: User, project: Project): Assignment => ({
+  user: user.id,
+  project: project.id,
+  active: true,
+  at: now(),
+}));
 Assignment.op("revoke", (a): Assignment => ({ ...a, active: false }));
 ```
+
 **Why:** the membership invariant ("this user is currently on this project") lives on the
-*edge*, not on User and not on Project. Reify the edge as `Assignment`. `assign` constructs
+_edge_, not on User and not on Project. Reify the edge as `Assignment`. `assign` constructs
 it, `revoke` is its endomap. Home = the reified relation. Same rule as (c); m-to-m is just a
 relation with no cardinality constraint.
 
 ### (e) Capability across 2 carriers — `Archivable` on **User** and **Document**
 
 ```ts
-const Archivable = capability<"Archivable", { archive<T>(t: T): T; restore<T>(t: T): T }>("Archivable");
-User.implement(Archivable,     { archive: u => ({ ...u, archivedAt: now() }), restore: u => ({ ...u, archivedAt: null }) });
-Document.implement(Archivable, { archive: d => ({ ...d, archivedAt: now() }), restore: d => ({ ...d, archivedAt: null }) });
+const Archivable = capability<"Archivable", { archive<T>(t: T): T; restore<T>(t: T): T }>(
+  "Archivable",
+);
+User.implement(Archivable, {
+  archive: (u) => ({ ...u, archivedAt: now() }),
+  restore: (u) => ({ ...u, archivedAt: null }),
+});
+Document.implement(Archivable, {
+  archive: (d) => ({ ...d, archivedAt: now() }),
+  restore: (d) => ({ ...d, archivedAt: null }),
+});
 ```
+
 **Why:** the same `archive`/`restore` endomap-set recurred on ≥2 carriers, so it is
-promoted to a capability. The ops still *live on* User and Document (they are those
+promoted to a capability. The ops still _live on_ User and Document (they are those
 carriers' own endomaps); the capability only lets `archiveAll(xs)` be written once over any
 `Archivable`. Capability, not functor: there is no map/traverse structure being preserved,
 just a recurring signature.
@@ -158,6 +180,7 @@ just a recurring signature.
 ```ts
 User.read("displayName", (u): string => u.name ?? u.email);
 ```
+
 **Why:** `User => string`. Elim morphism; introduces no new invariant; the string is not a
 carrier. It docks to its source carrier, User, via `read`. Reads always dock to their single
 source subject — a read has nothing to reify because it asserts no cross-subject law.
@@ -171,7 +194,7 @@ source subject — a read has nothing to reify because it asserts no cross-subje
 A dev with a signature runs this, top to bottom, first match wins. It is total and
 deterministic — every op lands in exactly one carrier.
 
-1. **Does `f` return `T` and its *purpose* is to yield a valid `T`?** (intro / `_ => T`,
+1. **Does `f` return `T` and its _purpose_ is to yield a valid `T`?** (intro / `_ => T`,
    or `... => T` where the incoming args are ingredients, not the maintained subject.)
    → file under **T** with `make`. [examples b, c-ctor, d-ctor]
 2. **Is `f` an endomap `T => T` (or `T => small view of T`) for a single `T`?**
@@ -192,8 +215,8 @@ Not philosophy — a mechanical test the dev can run:
 > that predicate read?**
 
 - `rename` buggy → `email.includes("@")` could still hold, but the predicate that breaks is
-  about *this User's* consistency → User owns it.
-- `transfer` buggy → `before.total === after.total` breaks; that predicate reads *both*
+  about _this User's_ consistency → User owns it.
+- `transfer` buggy → `before.total === after.total` breaks; that predicate reads _both_
   accounts → no single Account owns it → reify Transfer, whose fields the predicate reads.
 - `displayName` buggy → nothing becomes false (it asserts no invariant) → it is a read,
   docks to source.
@@ -201,35 +224,35 @@ Not philosophy — a mechanical test the dev can run:
 If the breaking predicate reads exactly one subject's fields → that subject is the carrier.
 If it reads two-or-more subjects' fields and none is a superset → reify the relation and the
 predicate becomes the relation's invariant/law. This makes "the invariant it maintains"
-decidable from the predicate's *read-set*, not from taste.
+decidable from the predicate's _read-set_, not from taste.
 
 **Tie-break (the one arbitrary-looking case made deterministic):** an op that both
 constructs a `T` and could be read as mutating an input `A` (e.g. `transfer` "changes"
 accounts) — the carrier is the type **whose invariant the breaking predicate reads**, and
 producers win over mutators when both apply (step 1 before step 2). Transfer's predicate
 reads the pair, so it reifies rather than docking to `from`. This is why the rule is "one
-rule, not source-xor-target": you never choose source vs target; you choose *whose
-predicate breaks*, and reify when the answer is "the pair's."
+rule, not source-xor-target": you never choose source vs target; you choose _whose
+predicate breaks_, and reify when the answer is "the pair's."
 
 ### 3.3 Carrier → HTTP projection without leaking HTTP back into the op
 
-The carrier is protocol-agnostic. A projector is a *separate, downstream* function that
+The carrier is protocol-agnostic. A projector is a _separate, downstream_ function that
 reads a carrier's op catalogue (via its `type` tag + op names/arities inferred from TS) and
 emits a surface. The op never imports, mentions, or shapes itself for HTTP.
 
 ```ts
 // downstream, in the http package — NOT in the carrier authoring:
 const routes = projectHttp(Transfer, {
-  make:  "POST",   // intro  -> create resource
-  op:    "PATCH",  // endomap-> mutate resource
-  read:  "GET",    // elim   -> query
+  make: "POST", // intro  -> create resource
+  op: "PATCH", // endomap-> mutate resource
+  read: "GET", // elim   -> query
 });
 // yields: POST /transfers (transfer), PATCH /transfers/:id (reverse) ...
 ```
 
 The rule that prevents leakage: **the mapping is verb-kind → method** (`make`→POST,
 `op`→PATCH, `read`→GET), derived purely from which of the three authoring verbs filed the
-op. HTTP semantics are a function of the *category-theoretic role* (intro/endo/elim), which
+op. HTTP semantics are a function of the _category-theoretic role_ (intro/endo/elim), which
 is already recorded structurally by the choice of `make`/`op`/`read`. So no per-op HTTP
 annotation is ever needed, and nothing HTTP-shaped can flow back: the op author only ever
 picks a role, and the role is meaningful independent of HTTP (it is equally the source of
@@ -244,7 +267,7 @@ adding a surface adds a projector, never an op edit.
    it.** The design claims "one rule, not source-xor-target," but step 1 ("purpose is to
    yield a valid T") smuggles intent back in. `transfer(from, to) => Transfer` and a
    hypothetical `withdraw(acct, amt) => Account` are structurally identical (both `... =>
-   SomeType`); the first reifies, the second docks to Account — and the *only* thing
+SomeType`); the first reifies, the second docks to Account — and the _only_ thing
    separating them is the read-set of the breaking predicate. If a dev writes `transfer` to
    return an updated `Account` pair instead of a `Transfer`, the rule silently files it
    wrong. The determinism depends on the dev having already chosen the right return type,
@@ -266,10 +289,13 @@ adding a surface adds a projector, never an op edit.
    weaker tier by making it the default.
 
 4. **HTTP projection by verb-kind is too coarse for real APIs.** `make→POST, op→PATCH,
-   read→GET` breaks on: reads that must be POST (large query bodies), endomaps that are
+read→GET` breaks on: reads that must be POST (large query bodies), endomaps that are
    idempotent PUTs vs non-idempotent PATCHes, sub-resource routing, bulk ops, and any op
    whose natural URL is not `/{carrier}s/:id`. The moment one op needs a non-default method,
    the projector needs per-op override config — and that override config becomes a second,
    surface-shaped source of truth, which is exactly what the design forbids. The clean
    three-way mapping is likely to survive only the demo.
+
+```
+
 ```

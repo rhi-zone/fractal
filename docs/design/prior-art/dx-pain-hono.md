@@ -49,7 +49,7 @@ theme. No editorializing — what people actually said hurts.
   ([catalins.tech writeup](https://catalins.tech/hono-rpc-in-monorepos/),
   [GitHub discussion #4643](https://github.com/orgs/honojs/discussions/4643))
 - **Env types leak across the monorepo boundary.** With Nx/esbuild builds, the frontend
-  build complains about missing *backend* environment/binding types, even though those
+  build complains about missing _backend_ environment/binding types, even though those
   should be irrelevant to a pure API-shape import.
 
 ## Context Variables (`c.get`/`c.set`) — Optimistic Typing

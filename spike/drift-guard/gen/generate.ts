@@ -24,8 +24,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, "..", "out");
 mkdirSync(outDir, { recursive: true });
 
-const Ns = (process.argv.length > 2 ? process.argv.slice(2) : ["100", "300", "600", "900"])
-  .map((s) => Math.round(Number(s) / 3)); // arg is route count target; /3 → resources
+const Ns = (process.argv.length > 2 ? process.argv.slice(2) : ["100", "300", "600", "900"]).map(
+  (s) => Math.round(Number(s) / 3),
+); // arg is route count target; /3 → resources
 
 // Relative import roots (out/ → spike root packages).
 const CORE = "@rhi-zone/fractal-api-tree";
@@ -42,12 +43,16 @@ const DERIVE = "../derive.ts";
 
 function appSource(resources: number): string {
   const lines: string[] = [];
-  lines.push(`// SOURCE app (${resources} resources ≈ ${resources * 3} routes). Its TYPE carries .meta.`);
+  lines.push(
+    `// SOURCE app (${resources} resources ≈ ${resources * 3} routes). Its TYPE carries .meta.`,
+  );
   lines.push(`import { choice, methods, param, path } from "${CORE}";`);
   lines.push(`import type { Handler, ReturnsHandler, ValidatedHandler } from "${CORE}";`);
   lines.push(``);
   // Body/response phantom handler factories (type-level only; runtime is a stub).
-  lines.push(`// Phantom-typed handlers: the TYPE carries body (i) / response (o); runtime is inert.`);
+  lines.push(
+    `// Phantom-typed handlers: the TYPE carries body (i) / response (o); runtime is inert.`,
+  );
   lines.push(`declare function vh<I>(): ValidatedHandler<I>;`);
   lines.push(`declare function rh<O>(): ReturnsHandler<O>;`);
   lines.push(`declare function h(): Handler<{ id: string }>;`);
@@ -62,7 +67,9 @@ function appSource(resources: number): string {
   lines.push(`export const app = path({`);
   for (let i = 0; i < resources; i++) {
     lines.push(`  res${i}: choice(`);
-    lines.push(`    methods({ GET: rh<{ id: number; name: string }>(), POST: vh<{ title: string }>() }),`);
+    lines.push(
+      `    methods({ GET: rh<{ id: number; name: string }>(), POST: vh<{ title: string }>() }),`,
+    );
     lines.push(`    param("id", methods(idTbl)),`);
     lines.push(`  ),`);
   }
@@ -97,10 +104,31 @@ function routesFor(resources: number): RouteSpec[] {
     // POST has a typed BODY (validated) but NO typed response — `validated` types
     // input only; a typed response would require composing `returns`. So its
     // derived `o` is `unknown`, and the generated side must mirror that.
-    r.push({ key: `GET /res${i}`, pathKey: `/res${i}`, verb: "get", params: "{}", body: "never", response: "{ id: number; name: string }" });
-    r.push({ key: `POST /res${i}`, pathKey: `/res${i}`, verb: "post", params: "{}", body: "{ title: string }", response: "unknown" });
+    r.push({
+      key: `GET /res${i}`,
+      pathKey: `/res${i}`,
+      verb: "get",
+      params: "{}",
+      body: "never",
+      response: "{ id: number; name: string }",
+    });
+    r.push({
+      key: `POST /res${i}`,
+      pathKey: `/res${i}`,
+      verb: "post",
+      params: "{}",
+      body: "{ title: string }",
+      response: "unknown",
+    });
     // param("id", methods<{id}>({GET}))  at /res{i}/{id}
-    r.push({ key: `GET /res${i}/{id}`, pathKey: `/res${i}/{id}`, verb: "get", params: "{ id: string }", body: "never", response: "unknown" });
+    r.push({
+      key: `GET /res${i}/{id}`,
+      pathKey: `/res${i}/{id}`,
+      verb: "get",
+      params: "{ id: string }",
+      body: "never",
+      response: "unknown",
+    });
   }
   return r;
 }
@@ -112,7 +140,9 @@ function genRoutesSource(resources: number, opts?: { drift?: Drift }): string {
   lines.push(`// GENERATED flat route map (concrete types). Mirrors FlatRoutes<typeof app>.`);
   lines.push(`export interface GenRoutes {`);
   for (const rt of routes) {
-    lines.push(`  ${JSON.stringify(rt.key)}: { params: ${rt.params}; body: ${rt.body}; response: ${rt.response} };`);
+    lines.push(
+      `  ${JSON.stringify(rt.key)}: { params: ${rt.params}; body: ${rt.body}; response: ${rt.response} };`,
+    );
   }
   lines.push(`}`);
   return lines.join("\n") + "\n";
@@ -152,7 +182,9 @@ function apiClientSource(resources: number): string {
       if (rt.params !== "{}") fields.push(`params: ${rt.params}`);
       if (rt.body !== "never") fields.push(`body: ${rt.body}`);
       const arg = fields.length ? `args: { ${fields.join("; ")} }` : "";
-      lines.push(`    ${rt.verb}: (${arg}) => Promise<${rt.response === "unknown" ? "unknown" : rt.response}>;`);
+      lines.push(
+        `    ${rt.verb}: (${arg}) => Promise<${rt.response === "unknown" ? "unknown" : rt.response}>;`,
+      );
     }
     lines.push(`  };`);
   }
@@ -173,11 +205,18 @@ function applyDrift(routes: RouteSpec[], drift: Drift): RouteSpec[] {
   switch (drift) {
     case "add":
       // generated has an EXTRA route the source lacks.
-      r.push({ key: `GET /ghost`, pathKey: `/ghost`, verb: "get", params: "{}", body: "never", response: "unknown" });
+      r.push({
+        key: `GET /ghost`,
+        pathKey: `/ghost`,
+        verb: "get",
+        params: "{}",
+        body: "never",
+        response: "unknown",
+      });
       return r;
     case "remove":
       // generated is MISSING a route the source has (drop the last GET /{id}).
-      return r.filter((x) => x.key !== `GET /res${(routes.length / 3 | 0) - 1}/{id}`);
+      return r.filter((x) => x.key !== `GET /res${((routes.length / 3) | 0) - 1}/{id}`);
     case "renameParam": {
       // a param renamed in source but not generated: generated still says {id},
       // source would derive {ident}. We simulate by renaming generated's param key
@@ -334,11 +373,19 @@ for (const resources of Ns) {
   // Drift variants (for the drift proof) — only at the smallest N to keep it fast.
   if (resources === Ns[0]) {
     for (const d of ["add", "remove", "renameParam", "changeBody"] as const) {
-      writeFileSync(resolve(outDir, `genroutes-${N}-${d}.ts`), genRoutesSource(resources, { drift: d }));
-      writeFileSync(resolve(outDir, `genunion-${N}-${d}.ts`), genUnionSource(resources, { drift: d }));
+      writeFileSync(
+        resolve(outDir, `genroutes-${N}-${d}.ts`),
+        genRoutesSource(resources, { drift: d }),
+      );
+      writeFileSync(
+        resolve(outDir, `genunion-${N}-${d}.ts`),
+        genUnionSource(resources, { drift: d }),
+      );
     }
   }
-  process.stdout.write(`resources=${resources} (~${routes} routes): wrote app/genroutes/apiclient + f1..f4 + noguard\n`);
+  process.stdout.write(
+    `resources=${resources} (~${routes} routes): wrote app/genroutes/apiclient + f1..f4 + noguard\n`,
+  );
 }
 
 process.stdout.write(`done. out: ${outDir}\n`);

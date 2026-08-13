@@ -1,6 +1,7 @@
 # fractal — concrete TS authoring API, v2
 
 Replaces v1. Changes:
+
 - **Removes** all free-form `path` strings in op metadata — path is entirely tree-derived
   ([CERTIFIED] invariant: one tree, grouping = addressing, moving a node moves its URL).
 - **Adds** `ParamNode` / `param()` — a parameterized child node that contributes `{name}` to the
@@ -35,13 +36,13 @@ bag, inference defaults, both authoring surfaces lower to one value.
  *                   all tree-walk logic for this op. Reaching for this is a smell; it
  *                   divorces address from tree position. Not the normal mechanism.
  */
-export type Meta = { readonly [projection: string]: Readonly<Record<string, unknown>> | undefined }
+export type Meta = { readonly [projection: string]: Readonly<Record<string, unknown>> | undefined };
 
 /** [CERTIFIED] An operation IS a function T => U, carrying an open metadata bag. */
 export type Op<I = unknown, O = unknown> = {
-  readonly fn: (input: I) => O | Promise<O>
-  readonly meta: Meta
-}
+  readonly fn: (input: I) => O | Promise<O>;
+  readonly meta: Meta;
+};
 
 /**
  * A parameterized child node (server-less: `slug_mounts`).
@@ -51,16 +52,16 @@ export type Op<I = unknown, O = unknown> = {
  * it does not know whether it came from a path segment, a query param, or the body).
  */
 export type ParamNode = {
-  readonly _tag: "param"
-  readonly name: string
-  readonly subtree: Node
-}
+  readonly _tag: "param";
+  readonly name: string;
+  readonly subtree: Node;
+};
 
 /**
  * A child slot in a Node is either a static subtree or a parameterized subtree.
  * Distinguishable at runtime via `isParamNode`.
  */
-export type ChildEntry = Node | ParamNode
+export type ChildEntry = Node | ParamNode;
 
 /**
  * [CERTIFIED] One tree = grouping AND addressing.
@@ -68,20 +69,20 @@ export type ChildEntry = Node | ParamNode
  * Both authoring surfaces (service / standalone) lower to this value.
  */
 export type Node = {
-  readonly ops: Readonly<Record<string, Op>>
-  readonly children: Readonly<Record<string, ChildEntry>>
-  readonly meta: Meta
-}
+  readonly ops: Readonly<Record<string, Op>>;
+  readonly children: Readonly<Record<string, ChildEntry>>;
+  readonly meta: Meta;
+};
 ```
 
 Discriminators:
 
 ```ts
 const isNode = (v: unknown): v is Node =>
-  typeof v === "object" && v !== null && "ops" in v && "children" in v && !("_tag" in v)
+  typeof v === "object" && v !== null && "ops" in v && "children" in v && !("_tag" in v);
 
 const isParamNode = (v: unknown): v is ParamNode =>
-  typeof v === "object" && v !== null && "_tag" in v && (v as ParamNode)._tag === "param"
+  typeof v === "object" && v !== null && "_tag" in v && (v as ParamNode)._tag === "param";
 ```
 
 ---
@@ -89,34 +90,32 @@ const isParamNode = (v: unknown): v is ParamNode =>
 ## 2. Constructors
 
 ```ts
-type OpLike = Op | ((input: never) => unknown)
-const asOp = (o: OpLike): Op =>
-  typeof o === "function" ? { fn: o as Op["fn"], meta: {} } : o
+type OpLike = Op | ((input: never) => unknown);
+const asOp = (o: OpLike): Op => (typeof o === "function" ? { fn: o as Op["fn"], meta: {} } : o);
 
 /** Wrap a function into an Op with metadata. Bare fn → empty meta bag. */
-export const op = <I, O>(
-  fn: (input: I) => O | Promise<O>,
-  meta: Meta = {},
-): Op<I, O> => ({ fn, meta })
+export const op = <I, O>(fn: (input: I) => O | Promise<O>, meta: Meta = {}): Op<I, O> => ({
+  fn,
+  meta,
+});
 
 /**
  * Parameterized child node. `name` becomes the `{name}` segment in the HTTP path.
  * The actual slug value is merged into descendant op inputs at runtime dispatch.
  * TS equivalent of server-less `slug_mounts`.
  */
-export const param = (name: string, subtree: Node): ParamNode =>
-  ({ _tag: "param", name, subtree })
+export const param = (name: string, subtree: Node): ParamNode => ({ _tag: "param", name, subtree });
 
 /** [CERTIFIED] Standalone-function authoring surface. Keys are address segments. */
 export const node = (def: {
-  ops?: Record<string, OpLike>
-  children?: Record<string, ChildEntry>
-  meta?: Meta
+  ops?: Record<string, OpLike>;
+  children?: Record<string, ChildEntry>;
+  meta?: Meta;
 }): Node => ({
   ops: Object.fromEntries(Object.entries(def.ops ?? {}).map(([k, v]) => [k, asOp(v)])),
   children: def.children ?? {},
   meta: def.meta ?? {},
-})
+});
 
 /**
  * Lower a service instance to a Node (the `impl`-block / method surface).
@@ -125,25 +124,22 @@ export const node = (def: {
  *  - each ParamNode-valued field → children[name] (server-less: slug mount)
  *  - opts.meta[name]             → that op's metadata bag
  */
-export const service = (
-  instance: object,
-  opts: { meta?: Record<string, Meta> } = {},
-): Node => {
-  const ops: Record<string, Op> = {}
-  const children: Record<string, ChildEntry> = {}
-  const proto = Object.getPrototypeOf(instance) as object
+export const service = (instance: object, opts: { meta?: Record<string, Meta> } = {}): Node => {
+  const ops: Record<string, Op> = {};
+  const children: Record<string, ChildEntry> = {};
+  const proto = Object.getPrototypeOf(instance) as object;
   for (const key of Object.getOwnPropertyNames(proto)) {
-    if (key === "constructor") continue
-    const val = (instance as Record<string, unknown>)[key]
+    if (key === "constructor") continue;
+    const val = (instance as Record<string, unknown>)[key];
     if (typeof val === "function")
-      ops[key] = { fn: (val as Op["fn"]).bind(instance), meta: opts.meta?.[key] ?? {} }
+      ops[key] = { fn: (val as Op["fn"]).bind(instance), meta: opts.meta?.[key] ?? {} };
   }
   for (const key of Object.getOwnPropertyNames(instance)) {
-    const val = (instance as Record<string, unknown>)[key]
-    if (isNode(val) || isParamNode(val)) children[key] = val
+    const val = (instance as Record<string, unknown>)[key];
+    if (isNode(val) || isParamNode(val)) children[key] = val;
   }
-  return { ops, children, meta: {} }
-}
+  return { ops, children, meta: {} };
+};
 ```
 
 ---
@@ -154,13 +150,11 @@ No path strings in metadata (except `legacyPath`, which is explicit debt). The w
 every path from tree structure alone.
 
 ```ts
-type Route = { verb: string; path: string; handler: Op["fn"] }
+type Route = { verb: string; path: string; handler: Op["fn"] };
 
 /** Default verb from op name — overrideable, never authoritative ([CERTIFIED]). */
 const inferVerb = (name: string): string =>
-  /^(get|list|find|read)/.test(name) ? "GET"
-  : /^(delete|remove)/.test(name) ? "DELETE"
-  : "POST" // method call / mutation / send / award → POST
+  /^(get|list|find|read)/.test(name) ? "GET" : /^(delete|remove)/.test(name) ? "DELETE" : "POST"; // method call / mutation / send / award → POST
 
 /**
  * Default URL segment from a name:
@@ -172,39 +166,39 @@ const inferSegment = (name: string): string => {
     .replace(/^(get|list|find|read|create|send|award|delete|remove)/i, "")
     .replace(/([a-z])([A-Z])/g, "$1-$2")
     .replace(/^-/, "")
-    .toLowerCase()
-  return stripped || name.toLowerCase()
-}
+    .toLowerCase();
+  return stripped || name.toLowerCase();
+};
 
 /** The HTTP-projection keys this walk reads from `meta.http`. */
 type HttpMeta = {
-  verb?: string
+  verb?: string;
   /**
    * Rename THIS node or op's URL segment.
    * One plain name (no slashes, no braces). Overrides `inferSegment(name)`.
    */
-  segment?: string
+  segment?: string;
   /**
    * [DEBT] Full-path override. Use ONLY for external-contract / legacy-URL pinning.
    * When present, the walk uses this path verbatim for the op and ignores all
    * tree-derived prefix + segment logic. Not a normal mechanism.
    */
-  legacyPath?: string
-}
+  legacyPath?: string;
+};
 
 export function httpRoutes(n: Node, prefix = ""): Route[] {
-  const out: Route[] = []
+  const out: Route[] = [];
 
   // Leaf ops on this node
   for (const [name, o] of Object.entries(n.ops)) {
-    const http = (o.meta.http ?? {}) as HttpMeta
-    const verb = http.verb ?? inferVerb(name)
+    const http = (o.meta.http ?? {}) as HttpMeta;
+    const verb = http.verb ?? inferVerb(name);
     if (http.legacyPath) {
       // [DEBT] escape hatch: full path override bypasses all tree-walk logic
-      out.push({ verb, path: http.legacyPath, handler: o.fn })
+      out.push({ verb, path: http.legacyPath, handler: o.fn });
     } else {
-      const seg = http.segment ?? inferSegment(name)
-      out.push({ verb, path: `${prefix}/${seg}`, handler: o.fn })
+      const seg = http.segment ?? inferSegment(name);
+      out.push({ verb, path: `${prefix}/${seg}`, handler: o.fn });
     }
   }
 
@@ -212,16 +206,16 @@ export function httpRoutes(n: Node, prefix = ""): Route[] {
   for (const [key, child] of Object.entries(n.children)) {
     if (isParamNode(child)) {
       // Parameterized: contributes {name} segment; recurse into subtree
-      out.push(...httpRoutes(child.subtree, `${prefix}/{${child.name}}`))
+      out.push(...httpRoutes(child.subtree, `${prefix}/{${child.name}}`));
     } else {
       // Static: key is the default segment, overrideable via child's own meta.http.segment
-      const http = (child.meta.http ?? {}) as HttpMeta
-      const seg = http.segment ?? key
-      out.push(...httpRoutes(child, `${prefix}/${seg}`))
+      const http = (child.meta.http ?? {}) as HttpMeta;
+      const seg = http.segment ?? key;
+      out.push(...httpRoutes(child, `${prefix}/${seg}`));
     }
   }
 
-  return out
+  return out;
 }
 ```
 
@@ -236,7 +230,7 @@ class ProgressService {
   /** Award progress on lesson completion: log event, bump skill thread, bust caches.
    *  (curilo award-progress) */
   awardProgress(input: { sessionId: string; skillFocus: string }): { success: boolean } {
-    /* real body elided */ return { success: true }
+    /* real body elided */ return { success: true };
   }
 }
 
@@ -245,13 +239,15 @@ const progressNode = service(new ProgressService(), {
     // verb inferred (POST); inferSegment("awardProgress") → "progress"; rename to "award"
     awardProgress: { http: { segment: "award" } },
   },
-})
+});
 
 // ── Surface B: standalone functions ──────────────────────────────────────────
 
 /** Render + send the welcome email via Resend. (curilo send-welcome-email) */
-const sendWelcomeEmail = (input: { userName: string; dashboardUrl: string }) =>
-  ({ success: true, messageId: "msg_…" })
+const sendWelcomeEmail = (input: { userName: string; dashboardUrl: string }) => ({
+  success: true,
+  messageId: "msg_…",
+});
 
 /**
  * Create a hosted checkout session; guard against a pending charge.
@@ -261,53 +257,57 @@ const sendWelcomeEmail = (input: { userName: string; dashboardUrl: string }) =>
  * the handler does NOT know or care whether it came from the URL path, a query param,
  * or the body. Provenance-blind by design.
  */
-const createCheckoutSession = (input: { invoiceId: string }) =>
-  ({ url: "https://pay.stripe.com/…" })
+const createCheckoutSession = (input: { invoiceId: string }) => ({
+  url: "https://pay.stripe.com/…",
+});
 
 /** Run health passes over an indexed tree. (normalize analyze.health) */
-const analyzeHealth = (input: { target?: string; limit?: number }) => ({ report: "…" })
+const analyzeHealth = (input: { target?: string; limit?: number }) => ({ report: "…" });
 
 // ── Tree construction ─────────────────────────────────────────────────────────
 
 const notificationsNode = node({
   ops: { sendWelcomeEmail },
   // all inferred: POST /send-welcome-email (under the notifications prefix)
-})
+});
 
 const invoicesNode = node({
   children: {
     // The key "invoiceId" is just the slot identifier; the HTTP projection emits {invoiceId}
     // because this is a ParamNode. The actual slug value is merged into op input at dispatch.
-    invoiceId: param("invoiceId", node({
-      ops: {
-        createCheckoutSession: op(createCheckoutSession, {
-          http: {
-            verb: "POST",
-            // inferSegment("createCheckoutSession") → "checkout-session"; rename to "checkout"
-            segment: "checkout",
-          },
-        }),
-      },
-    })),
+    invoiceId: param(
+      "invoiceId",
+      node({
+        ops: {
+          createCheckoutSession: op(createCheckoutSession, {
+            http: {
+              verb: "POST",
+              // inferSegment("createCheckoutSession") → "checkout-session"; rename to "checkout"
+              segment: "checkout",
+            },
+          }),
+        },
+      }),
+    ),
   },
-})
+});
 
 const analyzeNode = node({
   ops: {
     // HTTP inferred (GET /health under /analyze); CLI key is ignored by the HTTP projection
     health: op(analyzeHealth, { cli: { name: "analyze:health", aliases: ["ah"] } }),
   },
-})
+});
 
 /** Root: grouping AND addressing are this one tree ([CERTIFIED]). */
 const api = node({
   children: {
-    progress:      progressNode,      // Surface A: service/impl-block
+    progress: progressNode, // Surface A: service/impl-block
     notifications: notificationsNode, // Surface B: bare standalone fn, all inferred
-    invoices:      invoicesNode,      // Surface B: param child inside
-    analyze:       analyzeNode,       // Surface B: CLI metadata, HTTP inferred
+    invoices: invoicesNode, // Surface B: param child inside
+    analyze: analyzeNode, // Surface B: CLI metadata, HTTP inferred
   },
-})
+});
 ```
 
 `httpRoutes(api)` walks the tree and produces — **no path string in metadata anywhere**:
@@ -320,6 +320,7 @@ GET   /analyze/health                    (verb + segment inferred; CLI meta igno
 ```
 
 Path `/invoices/{invoiceId}/checkout` is the product of three tree-walk steps:
+
 1. static key `invoices` → `/invoices`
 2. `param("invoiceId", …)` → `/{invoiceId}`
 3. `segment: "checkout"` on the op → `/checkout`
@@ -347,29 +348,29 @@ calling `fn`. This is independent of types:
 // Runtime dispatch (pseudocode — real dispatch will live in the projection layer)
 function dispatch(
   n: Node,
-  segments: string[],      // remaining path segments, e.g. ["invoiceId-value", "checkout"]
-  slugs: Record<string, string>,  // accumulated slug values, e.g. {}
-  input: unknown,          // request body / query merged object
+  segments: string[], // remaining path segments, e.g. ["invoiceId-value", "checkout"]
+  slugs: Record<string, string>, // accumulated slug values, e.g. {}
+  input: unknown, // request body / query merged object
 ): unknown {
-  if (segments.length === 0) throw new Error("no op segment")
-  const [head, ...tail] = segments
+  if (segments.length === 0) throw new Error("no op segment");
+  const [head, ...tail] = segments;
 
   if (tail.length === 0) {
     // head names the op
-    const o = n.ops[head]
-    if (!o) throw new Error(`op not found: ${head}`)
+    const o = n.ops[head];
+    if (!o) throw new Error(`op not found: ${head}`);
     // Merge slugs into input — provenance-blind, handler sees one flat object
-    return o.fn({ ...(input as object), ...slugs })
+    return o.fn({ ...(input as object), ...slugs });
   }
 
-  const child = n.children[head]
-  if (!child) throw new Error(`child not found: ${head}`)
+  const child = n.children[head];
+  if (!child) throw new Error(`child not found: ${head}`);
 
   if (isParamNode(child)) {
     // Accumulate: the URL segment value (head) becomes child.name in slugs
-    return dispatch(child.subtree, tail, { ...slugs, [child.name]: head }, input)
+    return dispatch(child.subtree, tail, { ...slugs, [child.name]: head }, input);
   }
-  return dispatch(child, tail, slugs, input)
+  return dispatch(child, tail, slugs, input);
 }
 ```
 
@@ -384,25 +385,25 @@ A typed variant of `Op` and `param` can thread the accumulated params type:
  * The handler receives `I & P` — its declared params merged with the slugs.
  */
 type TypedOp<I, O, P extends Record<string, string> = Record<never, never>> = {
-  readonly fn: (input: I & P) => O | Promise<O>
-  readonly meta: Meta
-}
+  readonly fn: (input: I & P) => O | Promise<O>;
+  readonly meta: Meta;
+};
 
 /**
  * TypedNode accumulates `P` across param() boundaries.
  * Each TypedParamNode<P, N> extends P with Record<N, string> for its subtree.
  */
 type TypedNode<P extends Record<string, string>> = {
-  ops: { [K: string]: TypedOp<unknown, unknown, P> }
-  children: { [K: string]: TypedNode<P> | TypedParamNode<P, string> }
-  meta: Meta
-}
+  ops: { [K: string]: TypedOp<unknown, unknown, P> };
+  children: { [K: string]: TypedNode<P> | TypedParamNode<P, string> };
+  meta: Meta;
+};
 
 type TypedParamNode<P extends Record<string, string>, N extends string> = {
-  _tag: "param"
-  name: N
-  subtree: TypedNode<P & Record<N, string>>  // subtree sees P plus the new slug
-}
+  _tag: "param";
+  name: N;
+  subtree: TypedNode<P & Record<N, string>>; // subtree sees P plus the new slug
+};
 ```
 
 With these types, a single-level param is fully expressible:
@@ -410,16 +411,16 @@ With these types, a single-level param is fully expressible:
 ```ts
 // The op declares only its "own" inputs; P supplies the slug.
 type CheckoutOp = TypedOp<
-  Record<never, never>,  // op's own params (checkout needs no extra fields)
+  Record<never, never>, // op's own params (checkout needs no extra fields)
   { url: string },
-  { invoiceId: string }  // contributed by the ancestor param("invoiceId")
->
+  { invoiceId: string } // contributed by the ancestor param("invoiceId")
+>;
 
 // Or equivalently — the op just declares the full merged type:
 const typedCheckout: TypedOp<{ invoiceId: string }, { url: string }> = op(
   (input: { invoiceId: string }) => ({ url: "…" }),
   { http: { verb: "POST", segment: "checkout" } },
-)
+);
 // ^ This is the pragmatic today shape: author the full input type, let dispatch merge at runtime.
 ```
 
@@ -436,7 +437,7 @@ function typedParam<N extends string, P extends Record<string, string> = Record<
   name: N,
   subtree: TypedNode<P & Record<N, string>>,
 ): TypedParamNode<P, N> {
-  return { _tag: "param", name, subtree }
+  return { _tag: "param", name, subtree };
 }
 // The subtree must already be typed as TypedNode<{ invoiceId: string }> — inward flow.
 ```
@@ -452,6 +453,7 @@ breaking API change. The pragmatic path is the untyped `Node` now, with a parall
 
 Types are erased at runtime. A codegen step (tsc transformer or `tsgo`-style AST extractor)
 can:
+
 1. Read the function signature `(input: { invoiceId: string }) => ...` and the tree structure.
 2. Emit a runtime validator for the merged input, knowing that `invoiceId` is contributed by
    the `param("invoiceId", …)` ancestor.
@@ -479,14 +481,14 @@ question.
 
 ## 6. Changes from v1 / resolved items
 
-| v1 | v2 |
-|---|---|
-| `http: { path: "/invoices/{invoiceId}/checkout" }` — full path string on op | **Removed.** Path is entirely tree-derived. |
-| `http: { path: "/award" }` — path fragment on op | Replaced by `http: { segment: "award" }`. |
-| `children: Record<string, Node>` | `children: Record<string, ChildEntry>` (`Node \| ParamNode`). |
-| No parameterized child | `param(name, subtree): ParamNode` — maps to server-less `slug_mounts`. |
-| No distinction between segment rename and full-path override | `segment?` (normal, one name) vs `legacyPath?` (debt, full path) — distinguished with doc comments. |
-| HTTP projection: `http.path` override wins over tree prefix | HTTP projection: only `legacyPath` bypasses tree walk; `segment` renames one step. |
+| v1                                                                          | v2                                                                                                  |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `http: { path: "/invoices/{invoiceId}/checkout" }` — full path string on op | **Removed.** Path is entirely tree-derived.                                                         |
+| `http: { path: "/award" }` — path fragment on op                            | Replaced by `http: { segment: "award" }`.                                                           |
+| `children: Record<string, Node>`                                            | `children: Record<string, ChildEntry>` (`Node \| ParamNode`).                                       |
+| No parameterized child                                                      | `param(name, subtree): ParamNode` — maps to server-less `slug_mounts`.                              |
+| No distinction between segment rename and full-path override                | `segment?` (normal, one name) vs `legacyPath?` (debt, full path) — distinguished with doc comments. |
+| HTTP projection: `http.path` override wins over tree prefix                 | HTTP projection: only `legacyPath` bypasses tree walk; `segment` renames one step.                  |
 
 **Remaining open from v1 §6.2** (per-param HTTP location `query`/`path`/`body`/`header`) is
 still open. With `ParamNode` now explicit in the tree, `path` location is structurally

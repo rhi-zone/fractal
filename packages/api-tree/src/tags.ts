@@ -19,7 +19,7 @@
 // only `.shape.kind`, never constructs or otherwise touches a `TypeRef` at
 // runtime, so this stays a type-only import (no runtime dependency on
 // type-ir, matching tree.ts's own type-only `TypeRef` import).
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 
 // ============================================================================
 // Standard tag keys
@@ -37,21 +37,21 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
  *
  * Implies `idempotent`. Mutually exclusive with `destructive`.
  */
-export const TAG_READ_ONLY = "readOnly" as const
+export const TAG_READ_ONLY = "readOnly" as const;
 
 /**
  * `idempotent`: Calling the operation multiple times with the same arguments
  * produces the same state as calling it once.
  * Implied by `readOnly`. Valid in combination with `destructive` (e.g. DELETE).
  */
-export const TAG_IDEMPOTENT = "idempotent" as const
+export const TAG_IDEMPOTENT = "idempotent" as const;
 
 /**
  * `destructive`: The operation irrevocably destroys or removes existing state;
  * the effect cannot be undone by a subsequent call without out-of-band recovery.
  * Mutually exclusive with `readOnly`. Valid in combination with `idempotent`.
  */
-export const TAG_DESTRUCTIVE = "destructive" as const
+export const TAG_DESTRUCTIVE = "destructive" as const;
 
 /**
  * `openWorld`: The operation may reach external systems, networks, or resources
@@ -63,7 +63,7 @@ export const TAG_DESTRUCTIVE = "destructive" as const
  * It is MCP-specific, not a general tree-level tag — no other projector reads
  * (or should read) it. In particular, it has no HTTP projection.
  */
-export const TAG_OPEN_WORLD = "openWorld" as const
+export const TAG_OPEN_WORLD = "openWorld" as const;
 
 /**
  * `streaming`: The operation yields a sequence of items over time rather than
@@ -74,7 +74,7 @@ export const TAG_OPEN_WORLD = "openWorld" as const
  * optional `outputType` parameter. An explicit `meta.tags.streaming` still
  * wins outright (authored fact over derived one).
  */
-export const TAG_STREAMING = "streaming" as const
+export const TAG_STREAMING = "streaming" as const;
 
 /**
  * `deprecated`: The operation is slated for removal; callers should migrate
@@ -86,7 +86,7 @@ export const TAG_STREAMING = "streaming" as const
  * (CLI, MCP, HTTP, …) can surface it. `meta.openapi.deprecated` still works
  * as a per-projection override (see http-api-projector/src/openapi.ts).
  */
-export const TAG_DEPRECATED = "deprecated" as const
+export const TAG_DEPRECATED = "deprecated" as const;
 
 /**
  * `unvalidated`: this leaf is DELIBERATELY exempt from `build.ts`'s
@@ -102,7 +102,7 @@ export const TAG_DEPRECATED = "deprecated" as const
  * `wrapValidators` itself — a build-time escape hatch, not a behavioral
  * fact about the operation the way `readOnly`/`destructive`/etc. are.
  */
-export const TAG_UNVALIDATED = "unvalidated" as const
+export const TAG_UNVALIDATED = "unvalidated" as const;
 
 // ============================================================================
 // Tags sub-bag — open three-valued dict
@@ -115,24 +115,24 @@ export const TAG_UNVALIDATED = "unvalidated" as const
  * tags via the index signature. Three-valued: true / false / undefined (unknown).
  */
 export type Tags = {
-  readOnly?: boolean | undefined
-  idempotent?: boolean | undefined
-  destructive?: boolean | undefined
-  openWorld?: boolean | undefined
-  streaming?: boolean | undefined
-  deprecated?: boolean | undefined
+  readOnly?: boolean | undefined;
+  idempotent?: boolean | undefined;
+  destructive?: boolean | undefined;
+  openWorld?: boolean | undefined;
+  streaming?: boolean | undefined;
+  deprecated?: boolean | undefined;
   /** See `TAG_UNVALIDATED`'s doc comment above — read directly by
    * `wrapValidators` (build.ts), not part of the implication lattice below. */
-  unvalidated?: boolean | undefined
-  [custom: string]: boolean | undefined
-}
+  unvalidated?: boolean | undefined;
+  [custom: string]: boolean | undefined;
+};
 
 // ============================================================================
 // Tag resolution — implication lattice
 // ============================================================================
 
 /** A tag value in the Tags bag (three-valued: true / false / unknown). */
-export type TagValue = boolean | undefined
+export type TagValue = boolean | undefined;
 
 /**
  * The resolved tag set produced by `resolveTags`. Carries both the original
@@ -140,14 +140,14 @@ export type TagValue = boolean | undefined
  * `conflict` is present only when mutually-exclusive tags are both asserted.
  */
 export type ResolvedTags = {
-  readonly readOnly: TagValue
-  readonly idempotent: TagValue
-  readonly destructive: TagValue
-  readonly openWorld: TagValue
-  readonly streaming: TagValue
-  readonly deprecated: TagValue
-  readonly conflict?: string
-}
+  readonly readOnly: TagValue;
+  readonly idempotent: TagValue;
+  readonly destructive: TagValue;
+  readonly openWorld: TagValue;
+  readonly streaming: TagValue;
+  readonly deprecated: TagValue;
+  readonly conflict?: string;
+};
 
 /**
  * Apply the implication lattice to a Tags bag (from `meta.tags`).
@@ -174,24 +174,24 @@ export type ResolvedTags = {
  * hand-authoring `tags: { streaming: true }` on every streaming op.
  */
 export function resolveTags(tags: Tags, outputType?: TypeRef): ResolvedTags {
-  const readOnly = tags[TAG_READ_ONLY] as TagValue
-  const destructive = tags[TAG_DESTRUCTIVE] as TagValue
-  const rawIdempotent = tags[TAG_IDEMPOTENT] as TagValue
-  const openWorld = tags[TAG_OPEN_WORLD] as TagValue
-  const rawStreaming = tags[TAG_STREAMING] as TagValue
+  const readOnly = tags[TAG_READ_ONLY] as TagValue;
+  const destructive = tags[TAG_DESTRUCTIVE] as TagValue;
+  const rawIdempotent = tags[TAG_IDEMPOTENT] as TagValue;
+  const openWorld = tags[TAG_OPEN_WORLD] as TagValue;
+  const rawStreaming = tags[TAG_STREAMING] as TagValue;
   const streaming: TagValue =
-    rawStreaming === undefined && outputType?.shape.kind === "stream" ? true : rawStreaming
-  const deprecated = tags[TAG_DEPRECATED] as TagValue
+    rawStreaming === undefined && outputType?.shape.kind === "stream" ? true : rawStreaming;
+  const deprecated = tags[TAG_DEPRECATED] as TagValue;
 
   // readOnly ⇒ idempotent: lift unknown to true when readOnly is asserted
   const idempotent: TagValue =
-    readOnly === true && rawIdempotent === undefined ? true : rawIdempotent
+    readOnly === true && rawIdempotent === undefined ? true : rawIdempotent;
 
   // readOnly ∧ destructive is a contradiction (both cannot be true)
   const conflict: string | undefined =
     readOnly === true && destructive === true
       ? `readOnly and destructive are mutually exclusive (both asserted true)`
-      : undefined
+      : undefined;
 
   return {
     readOnly,
@@ -201,7 +201,7 @@ export function resolveTags(tags: Tags, outputType?: TypeRef): ResolvedTags {
     streaming,
     deprecated,
     ...(conflict !== undefined ? { conflict } : {}),
-  }
+  };
 }
 
 // ============================================================================
@@ -222,7 +222,7 @@ export function resolveTags(tags: Tags, outputType?: TypeRef): ResolvedTags {
 // A minimal structural view of Node, avoiding a runtime import of node.ts
 // (node.ts imports Tags from this module as a type-only import; keeping this
 // import type-only too avoids introducing a runtime circular dependency).
-import type { Node } from "./node.ts"
+import type { Node } from "./node.ts";
 
 /**
  * Pre-order visitor over a Node tree: `fn` sees each node BEFORE its children
@@ -234,18 +234,18 @@ import type { Node } from "./node.ts"
  * closest-wins tag inheritance walk.
  */
 export function mapNodes(tree: Node, fn: (node: Node) => Node): Node {
-  const mapped = fn(tree)
-  const children = mapped.children === undefined
-    ? undefined
-    : Object.fromEntries(
-        Object.entries(mapped.children).map(([k, v]) => [k, mapNodes(v, fn)]),
-      )
-  const fallback = mapped.fallback === undefined
-    ? undefined
-    : { name: mapped.fallback.name, subtree: mapNodes(mapped.fallback.subtree, fn) }
+  const mapped = fn(tree);
+  const children =
+    mapped.children === undefined
+      ? undefined
+      : Object.fromEntries(Object.entries(mapped.children).map(([k, v]) => [k, mapNodes(v, fn)]));
+  const fallback =
+    mapped.fallback === undefined
+      ? undefined
+      : { name: mapped.fallback.name, subtree: mapNodes(mapped.fallback.subtree, fn) };
   return {
     ...mapped,
     ...(children !== undefined ? { children } : {}),
     ...(fallback !== undefined ? { fallback } : {}),
-  }
+  };
 }

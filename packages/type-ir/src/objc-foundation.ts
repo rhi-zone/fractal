@@ -18,12 +18,12 @@
 // instead typed `NSNumber *` (boxed) so a missing/null value can be
 // represented as `nil` — the raw C scalar types (`BOOL`, `NSInteger`, ...)
 // have no nil representation.
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA } from "./codegen-helpers.ts";
 
 export interface ObjCOutput {
-  readonly header: string
-  readonly implementation: string
+  readonly header: string;
+  readonly implementation: string;
 }
 
 /** Turn an arbitrary enum-member string (`"in_progress"`, `"IN-PROGRESS"`, …)
@@ -33,15 +33,15 @@ function sanitizeIdentifier(value: string): string {
     .split(/[^a-zA-Z0-9]+/)
     .filter((part) => part.length > 0)
     .map(capitalize)
-    .join("")
+    .join("");
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Primitive/collection Objective-C type mapping — mirrors typescript.ts's
 // `handlers` table in shape, but every non-scalar type is a pointer type
@@ -84,34 +84,34 @@ const handlers: Record<string, Converter> = {
   // same convention typescript.ts uses for the bare class name.
   instance: (shape) => `${(shape as TypeShape & { kind: "instance" }).className} *`,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `NSArray<${toObjCGenericArgType(s.element)}> *`
+    const s = shape as TypeShape & { kind: "array" };
+    return `NSArray<${toObjCGenericArgType(s.element)}> *`;
   },
   // No native async-sequence construct in Objective-C — degrades to the
   // materialized NSArray<T> equivalent, same honest-degrade convention
   // typescript.ts/capnp.ts use for `stream`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `NSArray<${toObjCGenericArgType(s.element)}> *`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `NSArray<${toObjCGenericArgType(s.element)}> *`;
   },
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `NSArray<${toObjCGenericArgType(s.element)}> *`
+    const s = shape as TypeShape & { kind: "page" };
+    return `NSArray<${toObjCGenericArgType(s.element)}> *`;
   },
   // No tuple construct — lossy, degrades to an opaque-element array.
   tuple: () => "NSArray<id> *",
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `NSDictionary<${toObjCGenericArgType(s.key)}, ${toObjCGenericArgType(s.value)}> *`
+    const s = shape as TypeShape & { kind: "map" };
+    return `NSDictionary<${toObjCGenericArgType(s.key)}, ${toObjCGenericArgType(s.value)}> *`;
   },
   // No tagged-union construct — lossy, degrades to `id`.
   union: () => "id",
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "NSNull *"
-    if (typeof s.value === "string") return "NSString *"
-    if (typeof s.value === "boolean") return "BOOL"
-    return Number.isInteger(s.value) ? "NSInteger" : "double"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "NSNull *";
+    if (typeof s.value === "string") return "NSString *";
+    if (typeof s.value === "boolean") return "BOOL";
+    return Number.isInteger(s.value) ? "NSInteger" : "double";
   },
   // Bare reference to an enum type name (set by the in-class field-hoisting
   // path via `meta.enumName`); otherwise degrades to plain NSString*, since a
@@ -120,9 +120,9 @@ const handlers: Record<string, Converter> = {
   ref: (shape) => `${(shape as TypeShape & { kind: "ref" }).target} *`,
   // No intersection/mixin construct — lossy: falls back to the first member.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "id" : toObjCType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "id" : toObjCType(first);
   },
   // No first-class callable-type construct in Objective-C's type system
   // (blocks need a full `returnType (^)(paramTypes)` spelling this generic
@@ -130,19 +130,19 @@ const handlers: Record<string, Converter> = {
   // degrades honestly to `id`.
   function: () => "id",
   interface: () => "id",
-}
+};
 
 /** Core primitive/collection type mapping — the Objective-C equivalent of
  * typescript.ts's `toTypeScript`. Does not apply nullable/optional handling;
  * see `buildFieldDescriptor` for the property-position wrapping (NSNumber
  * boxing for optional scalars, `nullable` attribute for optional pointers). */
 export function toObjCType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "id" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "id" : converter(ref.shape, ref.meta);
 }
 
 function isPointerObjCType(type: string): boolean {
-  return type.endsWith("*") || type === "id"
+  return type.endsWith("*") || type === "id";
 }
 
 /** Objective-C generics require the type argument to be an object pointer
@@ -155,8 +155,8 @@ function isPointerObjCType(type: string): boolean {
  * required unconditionally here since collection generics have no analog of
  * `nullable` scalar. */
 function toObjCGenericArgType(ref: TypeRef): string {
-  const type = toObjCType(ref)
-  return isPointerObjCType(type) ? type : "NSNumber *"
+  const type = toObjCType(ref);
+  return isPointerObjCType(type) ? type : "NSNumber *";
 }
 
 // NSNumber unboxing accessor per raw scalar ObjC type — used to read a
@@ -175,43 +175,53 @@ const numberAccessors: Record<string, string> = {
   uint16_t: "unsignedShortValue",
   uint32_t: "unsignedIntValue",
   uint64_t: "unsignedLongLongValue",
-}
+};
 
 function propertyAttributes(type: string, nullable: boolean): string {
-  const nullPart = nullable ? "nullable, " : ""
+  const nullPart = nullable ? "nullable, " : "";
   // Value-semantic Foundation classes are conventionally `copy`d (defensive
   // against a caller later mutating a passed-in mutable subclass instance);
   // everything else pointer-typed is `strong` (ARC-retained); C scalars are
   // `assign` (no retain/release applies).
-  if (type === "NSString *" || type === "NSData *" || type.startsWith("NSArray<") || type.startsWith("NSDictionary<")) {
-    return `nonatomic, ${nullPart}copy`
+  if (
+    type === "NSString *" ||
+    type === "NSData *" ||
+    type.startsWith("NSArray<") ||
+    type.startsWith("NSDictionary<")
+  ) {
+    return `nonatomic, ${nullPart}copy`;
   }
   if (isPointerObjCType(type)) {
-    return `nonatomic, ${nullPart}strong`
+    return `nonatomic, ${nullPart}strong`;
   }
-  return "nonatomic, assign"
+  return "nonatomic, assign";
 }
 
 type FieldDescriptor = {
-  readonly name: string
-  readonly objcType: string
-  readonly attrs: string
-  readonly kind: "object" | "arrayOfObject" | "scalar" | "pointer"
-  readonly nestedClassName?: string | undefined
-  readonly elemClassName?: string | undefined
-  readonly numberAccessor?: string | undefined
-  readonly boxed: boolean
-  readonly description?: string | undefined
-}
+  readonly name: string;
+  readonly objcType: string;
+  readonly attrs: string;
+  readonly kind: "object" | "arrayOfObject" | "scalar" | "pointer";
+  readonly nestedClassName?: string | undefined;
+  readonly elemClassName?: string | undefined;
+  readonly numberAccessor?: string | undefined;
+  readonly boxed: boolean;
+  readonly description?: string | undefined;
+};
 
-function buildFieldDescriptor(parentName: string, fieldName: string, fieldRef: TypeRef): FieldDescriptor {
-  const kind = fieldRef.shape.kind
-  const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-  const description = typeof fieldRef.meta.description === "string" ? fieldRef.meta.description : undefined
+function buildFieldDescriptor(
+  parentName: string,
+  fieldName: string,
+  fieldRef: TypeRef,
+): FieldDescriptor {
+  const kind = fieldRef.shape.kind;
+  const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+  const description =
+    typeof fieldRef.meta.description === "string" ? fieldRef.meta.description : undefined;
 
   if (isA(kind, "object")) {
-    const nestedClassName = `${parentName}${capitalize(fieldName)}`
-    const objcType = `${nestedClassName} *`
+    const nestedClassName = `${parentName}${capitalize(fieldName)}`;
+    const objcType = `${nestedClassName} *`;
     return {
       name: fieldName,
       objcType,
@@ -220,14 +230,14 @@ function buildFieldDescriptor(parentName: string, fieldName: string, fieldRef: T
       nestedClassName,
       boxed: false,
       description,
-    }
+    };
   }
 
   if (kind === "array") {
-    const elem = (fieldRef.shape as TypeShape & { kind: "array" }).element
+    const elem = (fieldRef.shape as TypeShape & { kind: "array" }).element;
     if (isA(elem.shape.kind, "object")) {
-      const elemClassName = `${parentName}${capitalize(fieldName)}`
-      const objcType = `NSArray<${elemClassName} *> *`
+      const elemClassName = `${parentName}${capitalize(fieldName)}`;
+      const objcType = `NSArray<${elemClassName} *> *`;
       return {
         name: fieldName,
         objcType,
@@ -236,15 +246,15 @@ function buildFieldDescriptor(parentName: string, fieldName: string, fieldRef: T
         elemClassName,
         boxed: false,
         description,
-      }
+      };
     }
   }
 
-  const rawType = toObjCType(fieldRef)
-  const isPointer = isPointerObjCType(rawType)
-  const boxed = optional && !isPointer && rawType !== "void"
-  const finalType = boxed ? "NSNumber *" : rawType
-  const nullable = optional && isPointerObjCType(finalType)
+  const rawType = toObjCType(fieldRef);
+  const isPointer = isPointerObjCType(rawType);
+  const boxed = optional && !isPointer && rawType !== "void";
+  const finalType = boxed ? "NSNumber *" : rawType;
+  const nullable = optional && isPointerObjCType(finalType);
   return {
     name: fieldName,
     objcType: finalType,
@@ -253,22 +263,22 @@ function buildFieldDescriptor(parentName: string, fieldName: string, fieldRef: T
     numberAccessor: numberAccessors[rawType],
     boxed,
     description,
-  }
+  };
 }
 
 function renderProperty(desc: FieldDescriptor): string {
-  const doc = desc.description === undefined ? "" : `/** ${desc.description} */\n`
-  const spacer = desc.objcType.endsWith("*") ? "" : " "
-  return `${doc}@property (${desc.attrs}) ${desc.objcType}${spacer}${desc.name};`
+  const doc = desc.description === undefined ? "" : `/** ${desc.description} */\n`;
+  const spacer = desc.objcType.endsWith("*") ? "" : " ";
+  return `${doc}@property (${desc.attrs}) ${desc.objcType}${spacer}${desc.name};`;
 }
 
 function renderInitField(desc: FieldDescriptor): string {
-  const key = `@"${desc.name}"`
+  const key = `@"${desc.name}"`;
   if (desc.kind === "object" && desc.nestedClassName !== undefined) {
     return [
       `    NSDictionary *${desc.name}Dict = dictionary[${key}];`,
       `    self.${desc.name} = ${desc.name}Dict ? [[${desc.nestedClassName} alloc] initWithDictionary:${desc.name}Dict] : nil;`,
-    ].join("\n")
+    ].join("\n");
   }
   if (desc.kind === "arrayOfObject" && desc.elemClassName !== undefined) {
     return [
@@ -277,18 +287,18 @@ function renderInitField(desc: FieldDescriptor): string {
       `        [${desc.name}Array addObject:[[${desc.elemClassName} alloc] initWithDictionary:item]];`,
       `    }`,
       `    self.${desc.name} = ${desc.name}Array;`,
-    ].join("\n")
+    ].join("\n");
   }
   if (desc.kind === "scalar" && desc.numberAccessor !== undefined) {
-    return `    self.${desc.name} = [dictionary[${key}] ${desc.numberAccessor}];`
+    return `    self.${desc.name} = [dictionary[${key}] ${desc.numberAccessor}];`;
   }
-  return `    self.${desc.name} = dictionary[${key}];`
+  return `    self.${desc.name} = dictionary[${key}];`;
 }
 
 function renderToDictField(desc: FieldDescriptor): string {
-  const key = `@"${desc.name}"`
+  const key = `@"${desc.name}"`;
   if (desc.kind === "object") {
-    return `    dict[${key}] = self.${desc.name} ? [self.${desc.name} toDictionary] : [NSNull null];`
+    return `    dict[${key}] = self.${desc.name} ? [self.${desc.name} toDictionary] : [NSNull null];`;
   }
   if (desc.kind === "arrayOfObject" && desc.elemClassName !== undefined) {
     return [
@@ -297,20 +307,20 @@ function renderToDictField(desc: FieldDescriptor): string {
       `        [${desc.name}Array addObject:[item toDictionary]];`,
       `    }`,
       `    dict[${key}] = ${desc.name}Array;`,
-    ].join("\n")
+    ].join("\n");
   }
   if (desc.kind === "scalar" && !desc.boxed) {
-    return `    dict[${key}] = @(self.${desc.name});`
+    return `    dict[${key}] = @(self.${desc.name});`;
   }
-  return `    dict[${key}] = self.${desc.name} ?: [NSNull null];`
+  return `    dict[${key}] = self.${desc.name} ?: [NSNull null];`;
 }
 
 function renderClass(name: string, ref: TypeRef): ObjCOutput {
-  const shape = ref.shape as TypeShape & { kind: "object" }
+  const shape = ref.shape as TypeShape & { kind: "object" };
   const descriptors = Object.entries(shape.fields).map(([fieldName, fieldRef]) =>
     buildFieldDescriptor(name, fieldName, fieldRef),
-  )
-  const doc = typeof ref.meta.description === "string" ? `/** ${ref.meta.description} */\n` : ""
+  );
+  const doc = typeof ref.meta.description === "string" ? `/** ${ref.meta.description} */\n` : "";
 
   const header = [
     `${doc}@interface ${name} : NSObject`,
@@ -321,7 +331,7 @@ function renderClass(name: string, ref: TypeRef): ObjCOutput {
     "- (NSDictionary<NSString *, id> *)toDictionary;",
     "",
     "@end",
-  ].join("\n")
+  ].join("\n");
 
   const implementation = [
     `@implementation ${name}`,
@@ -341,12 +351,12 @@ function renderClass(name: string, ref: TypeRef): ObjCOutput {
     "}",
     "",
     "@end",
-  ].join("\n")
+  ].join("\n");
 
-  return { header, implementation }
+  return { header, implementation };
 }
 
-type CollectedClass = { readonly name: string; readonly ref: TypeRef }
+type CollectedClass = { readonly name: string; readonly ref: TypeRef };
 
 /** Depth-first, children-before-parent collection of every named class an
  * `object` TypeRef expands to — the root plus one hoisted class per nested
@@ -357,18 +367,18 @@ type CollectedClass = { readonly name: string; readonly ref: TypeRef }
  * `@class` forward-declaration — before use; post-order sidesteps needing
  * forward declarations at all within a single generated file). */
 function collectClasses(name: string, ref: TypeRef, out: CollectedClass[]): void {
-  const shape = ref.shape as TypeShape & { kind: "object" }
+  const shape = ref.shape as TypeShape & { kind: "object" };
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     if (isA(fieldRef.shape.kind, "object")) {
-      collectClasses(`${name}${capitalize(fieldName)}`, fieldRef, out)
+      collectClasses(`${name}${capitalize(fieldName)}`, fieldRef, out);
     } else if (fieldRef.shape.kind === "array") {
-      const elem = (fieldRef.shape as TypeShape & { kind: "array" }).element
+      const elem = (fieldRef.shape as TypeShape & { kind: "array" }).element;
       if (isA(elem.shape.kind, "object")) {
-        collectClasses(`${name}${capitalize(fieldName)}`, elem, out)
+        collectClasses(`${name}${capitalize(fieldName)}`, elem, out);
       }
     }
   }
-  out.push({ name, ref })
+  out.push({ name, ref });
 }
 
 /** Lower an `object` TypeRef to a full `.h`/`.m` pair: one `@interface`
@@ -378,24 +388,24 @@ function collectClasses(name: string, ref: TypeRef, out: CollectedClass[]): void
  * `NS_ASSUME_NONNULL_BEGIN`/`END` with explicit `nullable` only where a
  * field's `meta.optional`/`meta.nullable` says so. */
 export function toObjCInterface(name: string, ref: TypeRef): ObjCOutput {
-  const classes: CollectedClass[] = []
-  collectClasses(name, ref, classes)
+  const classes: CollectedClass[] = [];
+  collectClasses(name, ref, classes);
 
-  const headerParts: string[] = ["NS_ASSUME_NONNULL_BEGIN", ""]
-  const implParts: string[] = [`#import "${name}.h"`, ""]
+  const headerParts: string[] = ["NS_ASSUME_NONNULL_BEGIN", ""];
+  const implParts: string[] = [`#import "${name}.h"`, ""];
 
   for (const cls of classes) {
-    const rendered = renderClass(cls.name, cls.ref)
-    headerParts.push(rendered.header, "")
-    implParts.push(rendered.implementation, "")
+    const rendered = renderClass(cls.name, cls.ref);
+    headerParts.push(rendered.header, "");
+    implParts.push(rendered.implementation, "");
   }
 
-  headerParts.push("NS_ASSUME_NONNULL_END", "")
+  headerParts.push("NS_ASSUME_NONNULL_END", "");
 
-  return { header: headerParts.join("\n"), implementation: implParts.join("\n") }
+  return { header: headerParts.join("\n"), implementation: implParts.join("\n") };
 }
 
-export type ObjCEnumStyle = "int" | "string"
+export type ObjCEnumStyle = "int" | "string";
 
 /**
  * Lower an `enum` TypeRef (a closed set of string members — see type-ir's
@@ -415,22 +425,22 @@ export type ObjCEnumStyle = "int" | "string"
  *    `NS_STRING_ENUM` bridges to a Swift `enum` with a `String` raw value).
  */
 export function toObjCEnum(name: string, ref: TypeRef, style: ObjCEnumStyle = "int"): string {
-  const s = ref.shape as TypeShape & { kind: "enum" }
+  const s = ref.shape as TypeShape & { kind: "enum" };
 
   if (style === "string") {
     return [
       `typedef NSString * ${name} NS_STRING_ENUM;`,
       ...s.members.map((member) => `extern ${name} const ${name}${sanitizeIdentifier(member)};`),
-    ].join("\n")
+    ].join("\n");
   }
 
-  const lines = [`typedef NS_ENUM(NSInteger, ${name}) {`]
+  const lines = [`typedef NS_ENUM(NSInteger, ${name}) {`];
   s.members.forEach((member, i) => {
-    const suffix = i === 0 ? " = 0" : ""
-    lines.push(`    ${name}${sanitizeIdentifier(member)}${suffix},`)
-  })
-  lines.push("};")
-  return lines.join("\n")
+    const suffix = i === 0 ? " = 0" : "";
+    lines.push(`    ${name}${sanitizeIdentifier(member)}${suffix},`);
+  });
+  lines.push("};");
+  return lines.join("\n");
 }
 
 /**
@@ -449,17 +459,22 @@ export function toObjCEnum(name: string, ref: TypeRef, style: ObjCEnumStyle = "i
  * reaches that case).
  */
 export function toObjC(ref: TypeRef, name = "GeneratedType"): ObjCOutput {
-  if (isA(ref.shape.kind, "object")) return toObjCInterface(name, ref)
+  if (isA(ref.shape.kind, "object")) return toObjCInterface(name, ref);
 
   if (ref.shape.kind === "enum") {
-    const header = ["NS_ASSUME_NONNULL_BEGIN", "", toObjCEnum(name, ref, "int"), "", "NS_ASSUME_NONNULL_END", ""].join(
-      "\n",
-    )
-    return { header, implementation: "" }
+    const header = [
+      "NS_ASSUME_NONNULL_BEGIN",
+      "",
+      toObjCEnum(name, ref, "int"),
+      "",
+      "NS_ASSUME_NONNULL_END",
+      "",
+    ].join("\n");
+    return { header, implementation: "" };
   }
 
-  const type = toObjCType(ref)
-  const spacer = type.endsWith("*") ? "" : " "
+  const type = toObjCType(ref);
+  const spacer = type.endsWith("*") ? "" : " ";
   const header = [
     "NS_ASSUME_NONNULL_BEGIN",
     "",
@@ -467,6 +482,6 @@ export function toObjC(ref: TypeRef, name = "GeneratedType"): ObjCOutput {
     "",
     "NS_ASSUME_NONNULL_END",
     "",
-  ].join("\n")
-  return { header, implementation: "" }
+  ].join("\n");
+  return { header, implementation: "" };
 }

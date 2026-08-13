@@ -51,6 +51,7 @@ schemas) plus a `getRoutingPath()` helper that converts OpenAPI `{id}` syntax to
 `:id`.
 
 `OpenAPIHono.openapi(route, handler)` does two things:
+
 1. Registers the handler normally (so it is a real, runnable Hono route).
 2. Records the `RouteConfig` into an `OpenAPIRegistry`.
 

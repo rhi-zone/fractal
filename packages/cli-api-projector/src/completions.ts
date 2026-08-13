@@ -21,20 +21,20 @@
 // See:
 //   packages/cli-api-projector/src/cli.ts — walkCliCommands, getCliMeta, resolveLeaf
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Node } from "@rhi-zone/fractal-api-tree/node"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import { getCliMeta } from "./cli.ts"
-import type { CliLeafMeta } from "./cli.ts"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import { getCliMeta } from "./cli.ts";
+import type { CliLeafMeta } from "./cli.ts";
 
 // ============================================================================
 // Shell selector
 // ============================================================================
 
-export type ShellName = "bash" | "zsh" | "fish"
+export type ShellName = "bash" | "zsh" | "fish";
 
 export function isShellName(v: string | undefined): v is ShellName {
-  return v === "bash" || v === "zsh" || v === "fish"
+  return v === "bash" || v === "zsh" || v === "fish";
 }
 
 // ============================================================================
@@ -43,13 +43,13 @@ export function isShellName(v: string | undefined): v is ShellName {
 
 /** True when `meta.cli.hidden === true`. */
 function isHiddenMeta(meta: CliLeafMeta): boolean {
-  return getCliMeta(meta).hidden === true
+  return getCliMeta(meta).hidden === true;
 }
 
 type FlagInfo = {
-  readonly name: string
-  readonly enumValues?: readonly string[]
-}
+  readonly name: string;
+  readonly enumValues?: readonly string[];
+};
 
 /**
  * One entry per tree position reachable in the completion script:
@@ -64,16 +64,16 @@ type FlagInfo = {
  * concrete value can't be known statically).
  */
 type LevelInfo = {
-  readonly key: string
-  readonly statics: readonly string[]
-  readonly hasFallback: boolean
-  readonly isLeaf: boolean
-  readonly flags: readonly FlagInfo[]
-}
+  readonly key: string;
+  readonly statics: readonly string[];
+  readonly hasFallback: boolean;
+  readonly isLeaf: boolean;
+  readonly flags: readonly FlagInfo[];
+};
 
 /** Same underscore-joined convention extractToolSchemas uses (see packages/api-tree/src/tree.ts). */
 function schemaKeyFor(schemaPath: readonly string[]): string {
-  return schemaPath.join("_").replace(/-/g, "_")
+  return schemaPath.join("_").replace(/-/g, "_");
 }
 
 /**
@@ -85,7 +85,7 @@ function schemaKeyFor(schemaPath: readonly string[]): string {
  * be a non-empty token. Chosen to be a string no real subcommand name would
  * plausibly collide with.
  */
-const ROOT_KEY = "__root__"
+const ROOT_KEY = "__root__";
 
 function buildLevels(
   n: Node,
@@ -93,19 +93,19 @@ function buildLevels(
   path: readonly string[] = [],
   schemaPath: readonly string[] = [],
 ): LevelInfo[] {
-  const levels: LevelInfo[] = []
-  const children = n.children ?? {}
-  const statics: string[] = []
+  const levels: LevelInfo[] = [];
+  const children = n.children ?? {};
+  const statics: string[] = [];
   for (const [childKey, child] of Object.entries(children)) {
-    if (isHiddenMeta(child.meta as CliLeafMeta)) continue
-    statics.push(childKey)
+    if (isHiddenMeta(child.meta as CliLeafMeta)) continue;
+    statics.push(childKey);
   }
   // `completions` is a reserved top-level command (see cli.ts's runCli) —
   // not part of the authored tree, so it isn't discovered by walking
   // `children`. Listed here (root level only) so it tab-completes too. Its
   // own `<bash|zsh|fish>` argument isn't modeled (no positional-arg
   // completion in this generator) — only the word "completions" itself.
-  if (path.length === 0) statics.push("completions")
+  if (path.length === 0) statics.push("completions");
 
   levels.push({
     key: path.length === 0 ? ROOT_KEY : path.join(" "),
@@ -113,36 +113,36 @@ function buildLevels(
     hasFallback: n.fallback !== undefined,
     isLeaf: false,
     flags: [],
-  })
+  });
 
   for (const [childKey, child] of Object.entries(children)) {
-    if (isHiddenMeta(child.meta as CliLeafMeta)) continue
-    const childPath = [...path, childKey]
-    const childSchemaPath = [...schemaPath, childKey]
+    if (isHiddenMeta(child.meta as CliLeafMeta)) continue;
+    const childPath = [...path, childKey];
+    const childSchemaPath = [...schemaPath, childKey];
     if (isLeaf(child)) {
-      const toolSchema = schemas[schemaKeyFor(childSchemaPath)]
-      const props = toolSchema?.inputSchema.properties ?? {}
+      const toolSchema = schemas[schemaKeyFor(childSchemaPath)];
+      const props = toolSchema?.inputSchema.properties ?? {};
       const flags: FlagInfo[] = Object.entries(props).map(([field, fieldSchema]) =>
         fieldSchema.enum !== undefined
           ? { name: field, enumValues: fieldSchema.enum }
           : { name: field },
-      )
+      );
       levels.push({
         key: childPath.join(" "),
         statics: [],
         hasFallback: false,
         isLeaf: true,
         flags,
-      })
+      });
     } else {
-      levels.push(...buildLevels(child, schemas, childPath, childSchemaPath))
+      levels.push(...buildLevels(child, schemas, childPath, childSchemaPath));
     }
   }
 
   if (n.fallback !== undefined) {
-    const subtree = n.fallback.subtree
-    const fallbackPath = [...path, "*"]
-    const fallbackSchemaPath = [...schemaPath, n.fallback.name]
+    const subtree = n.fallback.subtree;
+    const fallbackPath = [...path, "*"];
+    const fallbackSchemaPath = [...schemaPath, n.fallback.name];
 
     // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
     // not just a branch (`api({...})`) — recursing into it unconditionally
@@ -153,26 +153,26 @@ function buildLevels(
     // (same convention api-tree/tree.ts's `walkNodeType` fix, aa28952, and
     // the other projectors' identical fix use).
     if (isLeaf(subtree)) {
-      const toolSchema = schemas[schemaKeyFor(fallbackSchemaPath)]
-      const props = toolSchema?.inputSchema.properties ?? {}
+      const toolSchema = schemas[schemaKeyFor(fallbackSchemaPath)];
+      const props = toolSchema?.inputSchema.properties ?? {};
       const flags: FlagInfo[] = Object.entries(props).map(([field, fieldSchema]) =>
         fieldSchema.enum !== undefined
           ? { name: field, enumValues: fieldSchema.enum }
           : { name: field },
-      )
+      );
       levels.push({
         key: fallbackPath.join(" "),
         statics: [],
         hasFallback: false,
         isLeaf: true,
         flags,
-      })
+      });
     } else {
-      levels.push(...buildLevels(subtree, schemas, fallbackPath, fallbackSchemaPath))
+      levels.push(...buildLevels(subtree, schemas, fallbackPath, fallbackSchemaPath));
     }
   }
 
-  return levels
+  return levels;
 }
 
 // ============================================================================
@@ -181,12 +181,12 @@ function buildLevels(
 
 /** Sanitize a program name into a valid bash/zsh function-name fragment. */
 function sanitizeIdent(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_]/g, "_")
+  return name.replace(/[^a-zA-Z0-9_]/g, "_");
 }
 
 /** Escape a value for embedding inside a double-quoted bash string. */
 function bashEscape(s: string): string {
-  return s.replace(/(["\\$`])/g, "\\$1")
+  return s.replace(/(["\\$`])/g, "\\$1");
 }
 
 /**
@@ -196,77 +196,89 @@ function bashEscape(s: string): string {
  * comment).
  */
 function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string): string[] {
-  const levels = buildLevels(root, schemas)
-  const branchLevels = levels.filter((l) => !l.isLeaf)
-  const leafLevels = levels.filter((l) => l.isLeaf)
+  const levels = buildLevels(root, schemas);
+  const branchLevels = levels.filter((l) => !l.isLeaf);
+  const leafLevels = levels.filter((l) => l.isLeaf);
 
-  const lines: string[] = []
-  lines.push("_" + funcName + "() {")
-  lines.push("  local cur word path i matched c prevword")
-  lines.push("  declare -A STATICS")
+  const lines: string[] = [];
+  lines.push("_" + funcName + "() {");
+  lines.push("  local cur word path i matched c prevword");
+  lines.push("  declare -A STATICS");
   for (const l of branchLevels) {
-    lines.push('  STATICS["' + bashEscape(l.key) + '"]="' + l.statics.map(bashEscape).join(" ") + '"')
+    lines.push(
+      '  STATICS["' + bashEscape(l.key) + '"]="' + l.statics.map(bashEscape).join(" ") + '"',
+    );
   }
-  lines.push("  declare -A HAS_FALLBACK")
+  lines.push("  declare -A HAS_FALLBACK");
   for (const l of branchLevels.filter((l) => l.hasFallback)) {
-    lines.push('  HAS_FALLBACK["' + bashEscape(l.key) + '"]=1')
+    lines.push('  HAS_FALLBACK["' + bashEscape(l.key) + '"]=1');
   }
-  lines.push("  declare -A FLAGS")
+  lines.push("  declare -A FLAGS");
   for (const l of leafLevels) {
-    const flagWords = l.flags.map((f) => "--" + f.name)
-    lines.push('  FLAGS["' + bashEscape(l.key) + '"]="' + flagWords.map(bashEscape).join(" ") + '"')
+    const flagWords = l.flags.map((f) => "--" + f.name);
+    lines.push(
+      '  FLAGS["' + bashEscape(l.key) + '"]="' + flagWords.map(bashEscape).join(" ") + '"',
+    );
   }
-  lines.push("  declare -A ENUMS")
+  lines.push("  declare -A ENUMS");
   for (const l of leafLevels) {
     for (const f of l.flags) {
       if (f.enumValues !== undefined && f.enumValues.length > 0) {
-        const enumKey = l.key + "|--" + f.name
-        lines.push('  ENUMS["' + bashEscape(enumKey) + '"]="' + f.enumValues.map(bashEscape).join(" ") + '"')
+        const enumKey = l.key + "|--" + f.name;
+        lines.push(
+          '  ENUMS["' + bashEscape(enumKey) + '"]="' + f.enumValues.map(bashEscape).join(" ") + '"',
+        );
       }
     }
   }
-  lines.push("")
-  lines.push("  cur=${COMP_WORDS[COMP_CWORD]}")
-  lines.push("  path=\"" + ROOT_KEY + "\"")
-  lines.push("  i=1")
-  lines.push("  while [ \"$i\" -lt \"$COMP_CWORD\" ]; do")
-  lines.push("    word=${COMP_WORDS[$i]}")
-  lines.push("    if [[ \"$word\" == --* ]]; then")
-  lines.push("      i=$((i+1))")
-  lines.push("      continue")
-  lines.push("    fi")
-  lines.push("    matched=0")
-  lines.push("    for c in ${STATICS[\"$path\"]}; do")
-  lines.push("      if [ \"$c\" = \"$word\" ]; then")
+  lines.push("");
+  lines.push("  cur=${COMP_WORDS[COMP_CWORD]}");
+  lines.push('  path="' + ROOT_KEY + '"');
+  lines.push("  i=1");
+  lines.push('  while [ "$i" -lt "$COMP_CWORD" ]; do');
+  lines.push("    word=${COMP_WORDS[$i]}");
+  lines.push('    if [[ "$word" == --* ]]; then');
+  lines.push("      i=$((i+1))");
+  lines.push("      continue");
+  lines.push("    fi");
+  lines.push("    matched=0");
+  lines.push('    for c in ${STATICS["$path"]}; do');
+  lines.push('      if [ "$c" = "$word" ]; then');
   // path is either the root sentinel (replaced outright — the sentinel
   // isn't a real prefix) or a real space-joined prefix (appended to),
   // matching how buildLevels joins non-root keys with plain spaces.
-  lines.push("        if [ \"$path\" = \"" + ROOT_KEY + "\" ]; then path=\"$word\"; else path=\"$path $word\"; fi")
-  lines.push("        matched=1")
-  lines.push("        break")
-  lines.push("      fi")
-  lines.push("    done")
-  lines.push("    if [ \"$matched\" -eq 0 ] && [ -n \"${HAS_FALLBACK[\"$path\"]}\" ]; then")
-  lines.push("      if [ \"$path\" = \"" + ROOT_KEY + "\" ]; then path=\"*\"; else path=\"$path *\"; fi")
-  lines.push("    fi")
-  lines.push("    i=$((i+1))")
-  lines.push("  done")
-  lines.push("")
-  lines.push("  prevword=${COMP_WORDS[$((COMP_CWORD-1))]}")
-  lines.push("  if [[ \"$prevword\" == --* ]] && [ -n \"${ENUMS[\"$path|$prevword\"]}\" ]; then")
-  lines.push("    COMPREPLY=($(compgen -W \"${ENUMS[\"$path|$prevword\"]}\" -- \"$cur\"))")
-  lines.push("  elif [[ \"$cur\" == --* ]]; then")
-  lines.push("    COMPREPLY=($(compgen -W \"${FLAGS[\"$path\"]}\" -- \"$cur\"))")
-  lines.push("  else")
-  lines.push("    COMPREPLY=($(compgen -W \"${STATICS[\"$path\"]} ${FLAGS[\"$path\"]}\" -- \"$cur\"))")
-  lines.push("  fi")
-  lines.push("}")
-  return lines
+  lines.push(
+    '        if [ "$path" = "' + ROOT_KEY + '" ]; then path="$word"; else path="$path $word"; fi',
+  );
+  lines.push("        matched=1");
+  lines.push("        break");
+  lines.push("      fi");
+  lines.push("    done");
+  lines.push('    if [ "$matched" -eq 0 ] && [ -n "${HAS_FALLBACK["$path"]}" ]; then');
+  lines.push('      if [ "$path" = "' + ROOT_KEY + '" ]; then path="*"; else path="$path *"; fi');
+  lines.push("    fi");
+  lines.push("    i=$((i+1))");
+  lines.push("  done");
+  lines.push("");
+  lines.push("  prevword=${COMP_WORDS[$((COMP_CWORD-1))]}");
+  lines.push('  if [[ "$prevword" == --* ]] && [ -n "${ENUMS["$path|$prevword"]}" ]; then');
+  lines.push('    COMPREPLY=($(compgen -W "${ENUMS["$path|$prevword"]}" -- "$cur"))');
+  lines.push('  elif [[ "$cur" == --* ]]; then');
+  lines.push('    COMPREPLY=($(compgen -W "${FLAGS["$path"]}" -- "$cur"))');
+  lines.push("  else");
+  lines.push('    COMPREPLY=($(compgen -W "${STATICS["$path"]} ${FLAGS["$path"]}" -- "$cur"))');
+  lines.push("  fi");
+  lines.push("}");
+  return lines;
 }
 
 /** Generate a bash completion script (`complete -F ... programName`, source it or drop it in a completions dir). */
-export function generateBashCompletion(root: Node, schemas: SchemaMap, programName: string): string {
-  const funcName = sanitizeIdent(programName) + "_completions"
+export function generateBashCompletion(
+  root: Node,
+  schemas: SchemaMap,
+  programName: string,
+): string {
+  const funcName = sanitizeIdent(programName) + "_completions";
   const lines: string[] = [
     "# bash completion for " + programName,
     "# Generated by @rhi-zone/fractal-cli-api-projector (static — see completions.ts).",
@@ -276,8 +288,8 @@ export function generateBashCompletion(root: Node, schemas: SchemaMap, programNa
     "",
     "complete -F _" + funcName + " " + programName,
     "",
-  ]
-  return lines.join("\n")
+  ];
+  return lines.join("\n");
 }
 
 /**
@@ -289,7 +301,7 @@ export function generateBashCompletion(root: Node, schemas: SchemaMap, programNa
  * Compatibility"), not a hack specific to this generator.
  */
 export function generateZshCompletion(root: Node, schemas: SchemaMap, programName: string): string {
-  const funcName = sanitizeIdent(programName) + "_completions"
+  const funcName = sanitizeIdent(programName) + "_completions";
   const lines: string[] = [
     "#compdef " + programName,
     "# zsh completion for " + programName,
@@ -302,8 +314,8 @@ export function generateZshCompletion(root: Node, schemas: SchemaMap, programNam
     "",
     "complete -F _" + funcName + " " + programName,
     "",
-  ]
-  return lines.join("\n")
+  ];
+  return lines.join("\n");
 }
 
 // ============================================================================
@@ -312,7 +324,7 @@ export function generateZshCompletion(root: Node, schemas: SchemaMap, programNam
 
 /** Escape a value for embedding inside a single-quoted fish string. */
 function fishEscape(s: string): string {
-  return s.replace(/'/g, "\\'")
+  return s.replace(/'/g, "\\'");
 }
 
 /**
@@ -329,46 +341,63 @@ function fishEscape(s: string): string {
  * typed by hand — they just don't tab-complete under fish. bash/zsh (above)
  * do not have this limitation.
  */
-export function generateFishCompletion(root: Node, schemas: SchemaMap, programName: string): string {
-  const levels = buildLevels(root, schemas).filter((l) => !l.key.includes("*"))
+export function generateFishCompletion(
+  root: Node,
+  schemas: SchemaMap,
+  programName: string,
+): string {
+  const levels = buildLevels(root, schemas).filter((l) => !l.key.includes("*"));
   const lines: string[] = [
     "# fish completion for " + programName,
     "# Generated by @rhi-zone/fractal-cli-api-projector (static — see completions.ts).",
     "# Limitation: fallback (wildcard-capture) subtrees are not completed — see",
     "# generateFishCompletion's doc comment in completions.ts.",
     "",
-  ]
+  ];
 
   for (const l of levels) {
-    const ancestorWords = l.key === ROOT_KEY ? [] : l.key.split(" ")
-    const condition = ancestorWords.length > 0
-      ? "__fish_seen_subcommand_from " + ancestorWords.map((w) => "'" + fishEscape(w) + "'").join(" ")
-      : "__fish_use_subcommand"
+    const ancestorWords = l.key === ROOT_KEY ? [] : l.key.split(" ");
+    const condition =
+      ancestorWords.length > 0
+        ? "__fish_seen_subcommand_from " +
+          ancestorWords.map((w) => "'" + fishEscape(w) + "'").join(" ")
+        : "__fish_use_subcommand";
 
     if (!l.isLeaf) {
       for (const name of l.statics) {
         lines.push(
-          "complete -c " + programName +
-          " -n \"" + condition + "\"" +
-          " -a '" + fishEscape(name) + "'",
-        )
+          "complete -c " +
+            programName +
+            ' -n "' +
+            condition +
+            '"' +
+            " -a '" +
+            fishEscape(name) +
+            "'",
+        );
       }
     } else {
       for (const f of l.flags) {
-        const base = "complete -c " + programName +
-          " -n \"" + condition + "\"" +
-          " -l '" + fishEscape(f.name) + "'"
+        const base =
+          "complete -c " +
+          programName +
+          ' -n "' +
+          condition +
+          '"' +
+          " -l '" +
+          fishEscape(f.name) +
+          "'";
         if (f.enumValues !== undefined && f.enumValues.length > 0) {
-          lines.push(base + " -a '" + f.enumValues.map(fishEscape).join(" ") + "'")
+          lines.push(base + " -a '" + f.enumValues.map(fishEscape).join(" ") + "'");
         } else {
-          lines.push(base)
+          lines.push(base);
         }
       }
     }
   }
 
-  lines.push("")
-  return lines.join("\n")
+  lines.push("");
+  return lines.join("\n");
 }
 
 // ============================================================================
@@ -383,10 +412,10 @@ export function generateCompletions(
 ): string {
   switch (shell) {
     case "bash":
-      return generateBashCompletion(root, schemas, programName)
+      return generateBashCompletion(root, schemas, programName);
     case "zsh":
-      return generateZshCompletion(root, schemas, programName)
+      return generateZshCompletion(root, schemas, programName);
     case "fish":
-      return generateFishCompletion(root, schemas, programName)
+      return generateFishCompletion(root, schemas, programName);
   }
 }

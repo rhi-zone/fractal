@@ -2,116 +2,118 @@
 // Standalone: no imports, depends only on the global `fetch`/`Request`/`URL` surface.
 
 export type BooksListOutput = Array<{
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}>
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+}>;
 
 export type BooksAddInput = {
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksAddOutput = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksBookIdReadOutput = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksBookIdReplaceInput = {
-  readonly title?: string
-  readonly author?: string
-  readonly genre?: string
-}
+  readonly title?: string;
+  readonly author?: string;
+  readonly genre?: string;
+};
 
 export type BooksBookIdReplaceOutput = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksBookIdRemoveOutput = {
-  readonly deleted: boolean
-}
+  readonly deleted: boolean;
+};
 
 export type BooksBookIdCheckoutStartOutput = {
-  readonly sessionId: string
-}
+  readonly sessionId: string;
+};
 
 export type BooksBookIdCheckoutReserveInput = {
-  readonly patronId: string
-}
+  readonly patronId: string;
+};
 
 export type BooksBookIdCheckoutReserveOutput = {
-  readonly reservationId: string
-  readonly patronId: string
-}
+  readonly reservationId: string;
+  readonly patronId: string;
+};
 
 export type CatalogSearchInput = {
-  readonly q?: string
-}
+  readonly q?: string;
+};
 
 export type CatalogSearchOutput = Array<{
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}>
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+}>;
 
 export type CatalogGenresInput = {
-  readonly prefix?: string
-}
+  readonly prefix?: string;
+};
 
-export type CatalogGenresOutput = Array<string>
+export type CatalogGenresOutput = Array<string>;
 
 export type Client = {
   readonly books: {
     readonly bookId: (bookId: string) => {
       readonly checkout: {
-        readonly start: () => Promise<BooksBookIdCheckoutStartOutput>
-        readonly reserve: (input: BooksBookIdCheckoutReserveInput) => Promise<BooksBookIdCheckoutReserveOutput>
-      }
-      readonly read: () => Promise<BooksBookIdReadOutput>
-      readonly replace: (input: BooksBookIdReplaceInput) => Promise<BooksBookIdReplaceOutput>
-      readonly remove: () => Promise<BooksBookIdRemoveOutput>
-    }
-    readonly list: () => Promise<BooksListOutput>
-    readonly add: (input: BooksAddInput) => Promise<BooksAddOutput>
-  }
+        readonly start: () => Promise<BooksBookIdCheckoutStartOutput>;
+        readonly reserve: (
+          input: BooksBookIdCheckoutReserveInput,
+        ) => Promise<BooksBookIdCheckoutReserveOutput>;
+      };
+      readonly read: () => Promise<BooksBookIdReadOutput>;
+      readonly replace: (input: BooksBookIdReplaceInput) => Promise<BooksBookIdReplaceOutput>;
+      readonly remove: () => Promise<BooksBookIdRemoveOutput>;
+    };
+    readonly list: () => Promise<BooksListOutput>;
+    readonly add: (input: BooksAddInput) => Promise<BooksAddOutput>;
+  };
   readonly catalog: {
-    readonly search: (input: CatalogSearchInput) => Promise<CatalogSearchOutput>
-    readonly genres: (input: CatalogGenresInput) => Promise<CatalogGenresOutput>
-  }
-}
+    readonly search: (input: CatalogSearchInput) => Promise<CatalogSearchOutput>;
+    readonly genres: (input: CatalogGenresInput) => Promise<CatalogGenresOutput>;
+  };
+};
 
 export type CreateClientOptions = {
-  readonly fetch?: typeof fetch
-  readonly headers?: Record<string, string>
-}
+  readonly fetch?: typeof fetch;
+  readonly headers?: Record<string, string>;
+};
 
 /** Thrown by the generated client when the server responds with a non-2xx status. */
 export class ClientError extends Error {
-  readonly status: number
-  readonly statusText: string
-  readonly body: unknown
+  readonly status: number;
+  readonly statusText: string;
+  readonly body: unknown;
 
   constructor(status: number, statusText: string, body: unknown) {
-    super(`HTTP ${status} ${statusText}`)
-    this.name = "ClientError"
-    this.status = status
-    this.statusText = statusText
-    this.body = body
+    super(`HTTP ${status} ${statusText}`);
+    this.name = "ClientError";
+    this.status = status;
+    this.statusText = statusText;
+    this.body = body;
   }
 }
 
@@ -123,63 +125,140 @@ async function __request(
   path: string,
   input: unknown,
 ): Promise<unknown> {
-  let url: string
-  const init: RequestInit = { method, headers: { ...(headers ?? {}) } }
+  let url: string;
+  const init: RequestInit = { method, headers: { ...(headers ?? {}) } };
 
   if (method === "GET" || method === "HEAD" || method === "DELETE") {
     // Input goes into query params for read-only/deletion ops.
-    const isAbsolute = baseUrl.startsWith("http")
-    const u = new URL(path, isAbsolute ? baseUrl : "http://localhost")
+    const isAbsolute = baseUrl.startsWith("http");
+    const u = new URL(path, isAbsolute ? baseUrl : "http://localhost");
     if (input !== null && input !== undefined && typeof input === "object") {
       for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-        if (v !== undefined && v !== null) u.searchParams.set(k, String(v))
+        if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
       }
     }
-    url = isAbsolute ? u.toString() : `${baseUrl}${u.pathname}${u.search}`
+    url = isAbsolute ? u.toString() : `${baseUrl}${u.pathname}${u.search}`;
   } else {
     // POST/PUT/PATCH: input as JSON body.
-    url = `${baseUrl}${path}`
-    init.headers = { ...(init.headers as Record<string, string>), "Content-Type": "application/json" }
-    init.body = JSON.stringify(input ?? {})
+    url = `${baseUrl}${path}`;
+    init.headers = {
+      ...(init.headers as Record<string, string>),
+      "Content-Type": "application/json",
+    };
+    init.body = JSON.stringify(input ?? {});
   }
 
-  const res = await fetchImpl(url, init)
+  const res = await fetchImpl(url, init);
 
-  let body: unknown
-  const ct = res.headers.get("Content-Type") ?? ""
+  let body: unknown;
+  const ct = res.headers.get("Content-Type") ?? "";
   if (ct.includes("application/json")) {
-    body = await res.json()
+    body = await res.json();
   } else {
-    body = await res.text()
+    body = await res.text();
   }
 
   if (!res.ok) {
-    throw new ClientError(res.status, res.statusText, body)
+    throw new ClientError(res.status, res.statusText, body);
   }
 
-  return body
+  return body;
 }
 
 export function createClient(baseUrl: string, options: CreateClientOptions = {}): Client {
-  const fetchImpl = options.fetch ?? fetch
-  const headers = options.headers
+  const fetchImpl = options.fetch ?? fetch;
+  const headers = options.headers;
   return {
     books: {
       bookId: (bookId: string) => ({
         checkout: {
-          start: (): Promise<BooksBookIdCheckoutStartOutput> => __request(baseUrl, fetchImpl, headers, "POST", `/books/${encodeURIComponent(bookId)}/checkout/start`, undefined) as Promise<BooksBookIdCheckoutStartOutput>,
-          reserve: (input: BooksBookIdCheckoutReserveInput): Promise<BooksBookIdCheckoutReserveOutput> => __request(baseUrl, fetchImpl, headers, "PUT", `/books/${encodeURIComponent(bookId)}/checkout/reserve`, input) as Promise<BooksBookIdCheckoutReserveOutput>,
+          start: (): Promise<BooksBookIdCheckoutStartOutput> =>
+            __request(
+              baseUrl,
+              fetchImpl,
+              headers,
+              "POST",
+              `/books/${encodeURIComponent(bookId)}/checkout/start`,
+              undefined,
+            ) as Promise<BooksBookIdCheckoutStartOutput>,
+          reserve: (
+            input: BooksBookIdCheckoutReserveInput,
+          ): Promise<BooksBookIdCheckoutReserveOutput> =>
+            __request(
+              baseUrl,
+              fetchImpl,
+              headers,
+              "PUT",
+              `/books/${encodeURIComponent(bookId)}/checkout/reserve`,
+              input,
+            ) as Promise<BooksBookIdCheckoutReserveOutput>,
         },
-        read: (): Promise<BooksBookIdReadOutput> => __request(baseUrl, fetchImpl, headers, "GET", `/books/${encodeURIComponent(bookId)}`, undefined) as Promise<BooksBookIdReadOutput>,
-        replace: (input: BooksBookIdReplaceInput): Promise<BooksBookIdReplaceOutput> => __request(baseUrl, fetchImpl, headers, "PUT", `/books/${encodeURIComponent(bookId)}`, input) as Promise<BooksBookIdReplaceOutput>,
-        remove: (): Promise<BooksBookIdRemoveOutput> => __request(baseUrl, fetchImpl, headers, "DELETE", `/books/${encodeURIComponent(bookId)}`, undefined) as Promise<BooksBookIdRemoveOutput>,
+        read: (): Promise<BooksBookIdReadOutput> =>
+          __request(
+            baseUrl,
+            fetchImpl,
+            headers,
+            "GET",
+            `/books/${encodeURIComponent(bookId)}`,
+            undefined,
+          ) as Promise<BooksBookIdReadOutput>,
+        replace: (input: BooksBookIdReplaceInput): Promise<BooksBookIdReplaceOutput> =>
+          __request(
+            baseUrl,
+            fetchImpl,
+            headers,
+            "PUT",
+            `/books/${encodeURIComponent(bookId)}`,
+            input,
+          ) as Promise<BooksBookIdReplaceOutput>,
+        remove: (): Promise<BooksBookIdRemoveOutput> =>
+          __request(
+            baseUrl,
+            fetchImpl,
+            headers,
+            "DELETE",
+            `/books/${encodeURIComponent(bookId)}`,
+            undefined,
+          ) as Promise<BooksBookIdRemoveOutput>,
       }),
-      list: (): Promise<BooksListOutput> => __request(baseUrl, fetchImpl, headers, "GET", `/books/list`, undefined) as Promise<BooksListOutput>,
-      add: (input: BooksAddInput): Promise<BooksAddOutput> => __request(baseUrl, fetchImpl, headers, "POST", `/books/add`, input) as Promise<BooksAddOutput>,
+      list: (): Promise<BooksListOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "GET",
+          `/books/list`,
+          undefined,
+        ) as Promise<BooksListOutput>,
+      add: (input: BooksAddInput): Promise<BooksAddOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "POST",
+          `/books/add`,
+          input,
+        ) as Promise<BooksAddOutput>,
     },
     catalog: {
-      search: (input: CatalogSearchInput): Promise<CatalogSearchOutput> => __request(baseUrl, fetchImpl, headers, "GET", `/catalog/search`, input) as Promise<CatalogSearchOutput>,
-      genres: (input: CatalogGenresInput): Promise<CatalogGenresOutput> => __request(baseUrl, fetchImpl, headers, "GET", `/catalog/genres`, input) as Promise<CatalogGenresOutput>,
+      search: (input: CatalogSearchInput): Promise<CatalogSearchOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "GET",
+          `/catalog/search`,
+          input,
+        ) as Promise<CatalogSearchOutput>,
+      genres: (input: CatalogGenresInput): Promise<CatalogGenresOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "GET",
+          `/catalog/genres`,
+          input,
+        ) as Promise<CatalogGenresOutput>,
     },
-  }
+  };
 }

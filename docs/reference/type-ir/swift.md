@@ -11,15 +11,20 @@ struct/enum literal syntax), same convention across all three.
 ## Codable
 
 ```ts
-import { toSwift } from "@rhi-zone/fractal-type-ir/swift-codable"
+import { toSwift } from "@rhi-zone/fractal-type-ir/swift-codable";
 
-toSwift(t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  isActive: t(types.boolean),
-  tags: t(types.array(t(types.string))),
-})), "User")
+toSwift(
+  t(
+    types.object({
+      id: t(types.integer),
+      name: t(types.string),
+      email: t(types.string),
+      isActive: t(types.boolean),
+      tags: t(types.array(t(types.string))),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```swift
@@ -35,7 +40,7 @@ struct User: Codable {
 ### SwiftyJSON
 
 ```ts
-import { toSwiftyJSON } from "@rhi-zone/fractal-type-ir/swift-swiftyjson"
+import { toSwiftyJSON } from "@rhi-zone/fractal-type-ir/swift-swiftyjson";
 ```
 
 No `Codable` conformance — a plain struct plus a hand-written
@@ -59,7 +64,7 @@ struct User {
 ### ObjectMapper
 
 ```ts
-import { toObjectMapper } from "@rhi-zone/fractal-type-ir/swift-objectmapper"
+import { toObjectMapper } from "@rhi-zone/fractal-type-ir/swift-objectmapper";
 ```
 
 Conforms to `Mappable`; each property is wired with the `<-` operator inside

@@ -2,9 +2,9 @@
 
 Unlike every code-generating projector above (`TypeRef => string`), these
 four take a whole `TypeRefDocument` — `root` + `defs` — and produce a
-`Map<string, string>` of generated documentation *pages* (filename → Markdown/
+`Map<string, string>` of generated documentation _pages_ (filename → Markdown/
 MDX/RST content), one per named `defs` entry. `doc.root` gets no page of its
-own (it's typically the operation/entry-point shape that *uses* the named
+own (it's typically the operation/entry-point shape that _uses_ the named
 types, not a named type itself) — a caller wanting a page for it adds it to
 `defs` under a name first. All four cross-link `ref` targets to each other's
 pages by kebab-case filename (Sphinx via an explicit `:ref:`/`.. _label:`
@@ -14,17 +14,20 @@ anchor — see its section below).
 ## Docusaurus
 
 ```ts
-import { toDocusaurusReference } from "@rhi-zone/fractal-type-ir/docusaurus-reference"
+import { toDocusaurusReference } from "@rhi-zone/fractal-type-ir/docusaurus-reference";
 
 const pages = toDocusaurusReference({
   root: t(types.ref("User")),
   defs: {
-    User: t(types.object({
-      id: t(types.integer),
-      name: t(types.string),
-    }), { description: "A registered user." }),
+    User: t(
+      types.object({
+        id: t(types.integer),
+        name: t(types.string),
+      }),
+      { description: "A registered user." },
+    ),
   },
-})
+});
 // pages.get("user.mdx")
 ```
 
@@ -36,10 +39,10 @@ description: "A registered user."
 sidebar_position: 1
 ---
 
-{/* This page uses a `<TypeRef name="..." summary="..." />` component for
+{/_ This page uses a `<TypeRef name="..." summary="..." />` component for
 inline hover-card type references. It is not shipped by type-ir — add a
 companion `TypeRef` React component to this Docusaurus site's
-`src/components/` ... */}
+`src/components/` ... _/}
 
 # User
 
@@ -53,10 +56,10 @@ type User = { id: number; name: string };
 
 ## Fields
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | number | yes |  |
-| `name` | string | yes |  |
+| Field  | Type   | Required | Description |
+| ------ | ------ | -------- | ----------- |
+| `id`   | number | yes      |             |
+| `name` | string | yes      |             |
 ````
 
 One MDX page per `defs` entry, one `## Fields`/`## Variants`/`## Members`/
@@ -64,7 +67,7 @@ One MDX page per `defs` entry, one `## Fields`/`## Variants`/`## Members`/
 subtyping chain — `resolve`/`ancestors` — the same way a code projector's
 handler table does), plus a `## Referenced Types` section listing every `ref`
 touched while rendering, rendered as a `<TypeRef name=… summary=… />`
-component the generated page does *not* ship (a companion component the
+component the generated page does _not_ ship (a companion component the
 consuming Docusaurus site must add). `options.basePath` prefixes the returned
 map's keys (`"api/types"` → `"api/types/user.mdx"`); cross-link hrefs stay
 page-relative regardless, since every page in the set lives in one directory.
@@ -72,12 +75,12 @@ page-relative regardless, since every page in the set lives in one directory.
 ## Starlight
 
 ```ts
-import { toStarlightReference } from "@rhi-zone/fractal-type-ir/starlight-reference"
+import { toStarlightReference } from "@rhi-zone/fractal-type-ir/starlight-reference";
 
 const pages = toStarlightReference({
   root: t(types.ref("User")),
   defs: { User: t(types.object({ id: t(types.integer) })) },
-})
+});
 // pages.get("user.mdx")
 ```
 
@@ -89,7 +92,7 @@ tableOfContents:
   maxHeadingLevel: 4
 ---
 
-import { Tabs, TabItem, Aside, LinkCard, Code } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, LinkCard, Code } from "@astrojs/starlight/components";
 
 ### Type Signature
 
@@ -107,6 +110,7 @@ type User = { id: number };
 </Tabs>
 
 ### Fields
+
 ...
 ````
 
@@ -121,15 +125,20 @@ relative-link prefix used for cross-page references.
 ## MkDocs (Material)
 
 ```ts
-import { toMkdocsReference, toMkdocsYaml, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/mkdocs-reference"
+import {
+  toMkdocsReference,
+  toMkdocsYaml,
+  renderTypeExpr,
+  kebabCase,
+} from "@rhi-zone/fractal-type-ir/mkdocs-reference";
 
 const doc = {
   root: t(types.ref("User")),
   defs: { User: t(types.object({ id: t(types.integer) })) },
-}
-const pages = toMkdocsReference(doc)
+};
+const pages = toMkdocsReference(doc);
 // pages.get("user.md")
-const mkdocsYml = toMkdocsYaml(doc)
+const mkdocsYml = toMkdocsYaml(doc);
 ```
 
 ````markdown
@@ -156,9 +165,9 @@ description: "Reference for User."
 
 ## Fields
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | number | yes |  |
+| Field | Type   | Required | Description |
+| ----- | ------ | -------- | ----------- |
+| `id`  | number | yes      |             |
 ````
 
 This target is the **Material for MkDocs** theme (squidfunk's
@@ -218,12 +227,16 @@ filename, e.g. `"reference/"` → `"reference/user.md"`.
 ## MkDocs (vanilla)
 
 ```ts
-import { toMkdocsVanillaReference, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/mkdocs-vanilla-reference"
+import {
+  toMkdocsVanillaReference,
+  renderTypeExpr,
+  kebabCase,
+} from "@rhi-zone/fractal-type-ir/mkdocs-vanilla-reference";
 
 const pages = toMkdocsVanillaReference({
   root: t(types.ref("User")),
   defs: { User: t(types.object({ id: t(types.integer) })) },
-})
+});
 // pages.get("user.md")
 ```
 
@@ -238,14 +251,14 @@ description: "Reference for User."
 ## Type Signature
 
 ```typescript
-type User = { id: number }
+type User = { id: number };
 ```
 
 ## Fields
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `id` | number | yes |  |
+| Field | Type   | Required | Description |
+| ----- | ------ | -------- | ----------- |
+| `id`  | number | yes      |             |
 ````
 
 Plain **MkDocs** (the `mkdocs` PyPI project, #2 in docs/roadmap.md's
@@ -276,16 +289,20 @@ filename, e.g. `"reference/"` → `"reference/user.md"`.
 ## Sphinx
 
 ```ts
-import { toSphinxReference, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/sphinx-reference"
+import {
+  toSphinxReference,
+  renderTypeExpr,
+  kebabCase,
+} from "@rhi-zone/fractal-type-ir/sphinx-reference";
 
 const pages = toSphinxReference({
   root: t(types.ref("User")),
   defs: { User: t(types.object({ id: t(types.integer) })) },
-})
+});
 // pages.get("user.rst")
 ```
 
-````rst
+```rst
 .. _user:
 
 User
@@ -313,10 +330,10 @@ Fields
      - integer
      - Yes
      -
-````
+```
 
 Native docutils/Sphinx markup — reStructuredText, not MyST Markdown (MyST is
-a Sphinx *option*, not its default/idiomatic form, and using it here would
+a Sphinx _option_, not its default/idiomatic form, and using it here would
 blur the line with the MkDocs Markdown target above). Unlike the three
 Markdown/MDX targets above, there is no YAML frontmatter block — RST has no
 frontmatter convention, and Sphinx's own analogue (docinfo fields) is for
@@ -326,7 +343,7 @@ back to a synthesized `"Reference for X."` line the way the frontmatter-
 carrying targets do. One `.rst` page per `defs` entry; each page opens with an explicit `.. _kebab-name:`
 cross-reference target immediately before its title, which is what every
 other page's `ref`-typed field/method/variant cross-links to via
-```` :ref:`Name <kebab-name>` ````. Section headings use a fixed
+`` :ref:`Name <kebab-name>` ``. Section headings use a fixed
 underline-character-per-level convention consistent across every generated
 page (`=` page title, `-` sections, `~` variant subsections, `^` a variant's
 nested Fields table) — `docutils` is strict about underline length matching

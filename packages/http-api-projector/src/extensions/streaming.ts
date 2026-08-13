@@ -39,17 +39,17 @@
 // rethrown with a descriptive message — both propagate as the generator's
 // `.next()` rejecting, ordinary async-iterator error semantics.
 
-import type { ClientExtension, DecodedResponse } from "../extension.ts"
+import type { ClientExtension, DecodedResponse } from "../extension.ts";
 
 // ============================================================================
 // Runtime
 // ============================================================================
 
 function isSseResponse(res: Response): boolean {
-  return (res.headers.get("Content-Type") ?? "").includes("text/event-stream")
+  return (res.headers.get("Content-Type") ?? "").includes("text/event-stream");
 }
 
-type SseFrame = { readonly event?: string | undefined; readonly data: unknown }
+type SseFrame = { readonly event?: string | undefined; readonly data: unknown };
 
 /**
  * Parse a `ReadableStream<Uint8Array>` of SSE bytes into a stream of
@@ -57,43 +57,48 @@ type SseFrame = { readonly event?: string | undefined; readonly data: unknown }
  * SSE spec, and exactly what `route.ts`'s `sseFrame` writes: `event: <name>`
  * optional, then `data: <json>`, then a blank line).
  */
-async function* parseSseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<SseFrame, void, undefined> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
+async function* parseSseFrames(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<SseFrame, void, undefined> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
   try {
     for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      let idx: number
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
       while ((idx = buffer.indexOf("\n\n")) !== -1) {
-        const rawFrame = buffer.slice(0, idx)
-        buffer = buffer.slice(idx + 2)
-        if (rawFrame.length === 0) continue
+        const rawFrame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (rawFrame.length === 0) continue;
 
-        let event: string | undefined
-        let dataLine: string | undefined
+        let event: string | undefined;
+        let dataLine: string | undefined;
         for (const line of rawFrame.split("\n")) {
-          if (line.startsWith("event: ")) event = line.slice(7)
-          else if (line.startsWith("data: ")) dataLine = line.slice(6)
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) dataLine = line.slice(6);
         }
-        if (dataLine === undefined) continue
+        if (dataLine === undefined) continue;
 
-        let data: unknown
+        let data: unknown;
         try {
-          data = JSON.parse(dataLine)
+          data = JSON.parse(dataLine);
         } catch (err) {
-          throw new Error(`Malformed SSE frame: could not JSON.parse data line ${JSON.stringify(dataLine)}`, {
-            cause: err,
-          })
+          throw new Error(
+            `Malformed SSE frame: could not JSON.parse data line ${JSON.stringify(dataLine)}`,
+            {
+              cause: err,
+            },
+          );
         }
-        yield { event, data }
+        yield { event, data };
       }
     }
   } finally {
     try {
-      await reader.cancel()
+      await reader.cancel();
     } catch {
       // Already closed/errored — cancel() on a dead reader is a no-op we don't care about.
     }
@@ -111,9 +116,9 @@ async function* parseSseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator
  */
 function toYieldedValue(frame: SseFrame): unknown {
   if (frame.event === "progress") {
-    return { kind: "progress", ...(frame.data as Record<string, unknown>) }
+    return { kind: "progress", ...(frame.data as Record<string, unknown>) };
   }
-  return frame.data
+  return frame.data;
 }
 
 /**
@@ -124,11 +129,11 @@ function toYieldedValue(frame: SseFrame): unknown {
  */
 async function* consumeSseStream(res: Response): AsyncGenerator<unknown, unknown, undefined> {
   if (res.body === null) {
-    throw new Error("Streaming response has no body")
+    throw new Error("Streaming response has no body");
   }
   for await (const frame of parseSseFrames(res.body)) {
-    if (frame.event === "done") return frame.data
-    yield toYieldedValue(frame)
+    if (frame.event === "done") return frame.data;
+    yield toYieldedValue(frame);
   }
 }
 
@@ -143,9 +148,9 @@ async function* consumeSseStream(res: Response): AsyncGenerator<unknown, unknown
  */
 export function streaming(): ClientExtension {
   const decodeResponse = (res: Response): DecodedResponse | undefined => {
-    if (!isSseResponse(res)) return undefined
-    return { value: consumeSseStream(res) }
-  }
+    if (!isSseResponse(res)) return undefined;
+    return { value: consumeSseStream(res) };
+  };
 
   return {
     name: "streaming",
@@ -156,7 +161,7 @@ export function streaming(): ClientExtension {
         `__requestStream(${args.baseUrlExpr}, ${args.fetchExpr}, ${args.headersExpr}, "${args.method}", ` +
         `\`${args.pathLiteral}\`, ${args.inputExpr}, ${args.baseTimeoutExpr}, ${args.baseSignalExpr}, ${args.callOptsExpr})`,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -271,4 +276,4 @@ async function* __requestStream(
     if (frame.event === "done") return frame.data
     yield __sseYieldedValue(frame)
   }
-}`.trim()
+}`.trim();

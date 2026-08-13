@@ -1,22 +1,28 @@
-import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"
-import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"
-import type { ClientOfContract } from "../contract"
+import { json, withValidation } from "@rhi-zone/fractal-http-api-projector";
+import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree";
+import type { ClientOfContract } from "../contract";
 
 // Minimal Standard-Schema validator (no zod — isolate fractal's cost).
-interface Body { readonly name: string; readonly qty: number }
+interface Body {
+  readonly name: string;
+  readonly qty: number;
+}
 const bodySchema: StandardSchema<unknown, Body> = {
   "~standard": {
     version: 1,
     validate(v: unknown) {
-      const o = v as Body
-      return { value: { name: String(o?.name ?? ""), qty: Number(o?.qty ?? 0) } }
+      const o = v as Body;
+      return { value: { name: String(o?.name ?? ""), qty: Number(o?.qty ?? 0) } };
     },
   },
-}
+};
 
 type Ctx<P extends string> = RoutingCtx & { params: PathParams<P> } & {
-  query: URLSearchParams; headers: Headers; body: () => Promise<unknown>; request: Request
-}
+  query: URLSearchParams;
+  headers: Headers;
+  body: () => Promise<unknown>;
+  request: Request;
+};
 
 const contract = {
   "/res0/:id": {
@@ -347,7 +353,10 @@ const contract = {
     get: async (ctx: Ctx<"/res108/:id">) => json({ id: 108, key: ctx.params.id }),
   },
   "/res109": {
-    post: withValidation(async (b: Body) => json({ id: 109, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 109, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res110/:id": {
     put: async (ctx: Ctx<"/res110/:id">) => json({ id: 110, key: ctx.params.id }),
@@ -383,7 +392,10 @@ const contract = {
     get: async (ctx: Ctx<"/res120/:id">) => json({ id: 120, key: ctx.params.id }),
   },
   "/res121": {
-    post: withValidation(async (b: Body) => json({ id: 121, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 121, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res122/:id": {
     put: async (ctx: Ctx<"/res122/:id">) => json({ id: 122, key: ctx.params.id }),
@@ -419,7 +431,10 @@ const contract = {
     get: async (ctx: Ctx<"/res132/:id">) => json({ id: 132, key: ctx.params.id }),
   },
   "/res133": {
-    post: withValidation(async (b: Body) => json({ id: 133, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 133, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res134/:id": {
     put: async (ctx: Ctx<"/res134/:id">) => json({ id: 134, key: ctx.params.id }),
@@ -455,7 +470,10 @@ const contract = {
     get: async (ctx: Ctx<"/res144/:id">) => json({ id: 144, key: ctx.params.id }),
   },
   "/res145": {
-    post: withValidation(async (b: Body) => json({ id: 145, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 145, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res146/:id": {
     put: async (ctx: Ctx<"/res146/:id">) => json({ id: 146, key: ctx.params.id }),
@@ -491,7 +509,10 @@ const contract = {
     get: async (ctx: Ctx<"/res156/:id">) => json({ id: 156, key: ctx.params.id }),
   },
   "/res157": {
-    post: withValidation(async (b: Body) => json({ id: 157, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 157, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res158/:id": {
     put: async (ctx: Ctx<"/res158/:id">) => json({ id: 158, key: ctx.params.id }),
@@ -527,7 +548,10 @@ const contract = {
     get: async (ctx: Ctx<"/res168/:id">) => json({ id: 168, key: ctx.params.id }),
   },
   "/res169": {
-    post: withValidation(async (b: Body) => json({ id: 169, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 169, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res170/:id": {
     put: async (ctx: Ctx<"/res170/:id">) => json({ id: 170, key: ctx.params.id }),
@@ -563,7 +587,10 @@ const contract = {
     get: async (ctx: Ctx<"/res180/:id">) => json({ id: 180, key: ctx.params.id }),
   },
   "/res181": {
-    post: withValidation(async (b: Body) => json({ id: 181, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 181, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res182/:id": {
     put: async (ctx: Ctx<"/res182/:id">) => json({ id: 182, key: ctx.params.id }),
@@ -599,7 +626,10 @@ const contract = {
     get: async (ctx: Ctx<"/res192/:id">) => json({ id: 192, key: ctx.params.id }),
   },
   "/res193": {
-    post: withValidation(async (b: Body) => json({ id: 193, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 193, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res194/:id": {
     put: async (ctx: Ctx<"/res194/:id">) => json({ id: 194, key: ctx.params.id }),
@@ -635,7 +665,10 @@ const contract = {
     get: async (ctx: Ctx<"/res204/:id">) => json({ id: 204, key: ctx.params.id }),
   },
   "/res205": {
-    post: withValidation(async (b: Body) => json({ id: 205, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 205, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res206/:id": {
     put: async (ctx: Ctx<"/res206/:id">) => json({ id: 206, key: ctx.params.id }),
@@ -671,7 +704,10 @@ const contract = {
     get: async (ctx: Ctx<"/res216/:id">) => json({ id: 216, key: ctx.params.id }),
   },
   "/res217": {
-    post: withValidation(async (b: Body) => json({ id: 217, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 217, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res218/:id": {
     put: async (ctx: Ctx<"/res218/:id">) => json({ id: 218, key: ctx.params.id }),
@@ -707,7 +743,10 @@ const contract = {
     get: async (ctx: Ctx<"/res228/:id">) => json({ id: 228, key: ctx.params.id }),
   },
   "/res229": {
-    post: withValidation(async (b: Body) => json({ id: 229, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 229, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res230/:id": {
     put: async (ctx: Ctx<"/res230/:id">) => json({ id: 230, key: ctx.params.id }),
@@ -743,7 +782,10 @@ const contract = {
     get: async (ctx: Ctx<"/res240/:id">) => json({ id: 240, key: ctx.params.id }),
   },
   "/res241": {
-    post: withValidation(async (b: Body) => json({ id: 241, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 241, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res242/:id": {
     put: async (ctx: Ctx<"/res242/:id">) => json({ id: 242, key: ctx.params.id }),
@@ -779,7 +821,10 @@ const contract = {
     get: async (ctx: Ctx<"/res252/:id">) => json({ id: 252, key: ctx.params.id }),
   },
   "/res253": {
-    post: withValidation(async (b: Body) => json({ id: 253, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 253, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res254/:id": {
     put: async (ctx: Ctx<"/res254/:id">) => json({ id: 254, key: ctx.params.id }),
@@ -815,7 +860,10 @@ const contract = {
     get: async (ctx: Ctx<"/res264/:id">) => json({ id: 264, key: ctx.params.id }),
   },
   "/res265": {
-    post: withValidation(async (b: Body) => json({ id: 265, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 265, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res266/:id": {
     put: async (ctx: Ctx<"/res266/:id">) => json({ id: 266, key: ctx.params.id }),
@@ -851,7 +899,10 @@ const contract = {
     get: async (ctx: Ctx<"/res276/:id">) => json({ id: 276, key: ctx.params.id }),
   },
   "/res277": {
-    post: withValidation(async (b: Body) => json({ id: 277, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 277, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res278/:id": {
     put: async (ctx: Ctx<"/res278/:id">) => json({ id: 278, key: ctx.params.id }),
@@ -887,7 +938,10 @@ const contract = {
     get: async (ctx: Ctx<"/res288/:id">) => json({ id: 288, key: ctx.params.id }),
   },
   "/res289": {
-    post: withValidation(async (b: Body) => json({ id: 289, name: b.name, qty: b.qty }), bodySchema),
+    post: withValidation(
+      async (b: Body) => json({ id: 289, name: b.name, qty: b.qty }),
+      bodySchema,
+    ),
   },
   "/res290/:id": {
     put: async (ctx: Ctx<"/res290/:id">) => json({ id: 290, key: ctx.params.id }),
@@ -919,23 +973,23 @@ const contract = {
   "/res299": {
     put: async (ctx: Ctx<"/res299">) => json({ id: 299, key: "res299" }),
   },
-} as const
+} as const;
 
-type Api = ClientOfContract<typeof contract>
-declare const api: Api
-const r0 = api["/res0/:id"].get({ params: { id: "1" } })
-void r0.then((v) => v)
-const r42 = api["/res42/:id"].get({ params: { id: "1" } })
-void r42.then((v) => v)
-const r85 = api["/res85"].post({ body: { name: "x", qty: 1 } })
-void r85.then((v) => v)
-const r128 = api["/res128/:id"].put({ params: { id: "1" } })
-void r128.then((v) => v)
-const r170 = api["/res170/:id"].put({ params: { id: "1" } })
-void r170.then((v) => v)
-const r213 = api["/res213"].get()
-void r213.then((v) => v)
-const r256 = api["/res256/:id"].post({ params: { id: "1" } })
-void r256.then((v) => v)
-const r299 = api["/res299"].put()
-void r299.then((v) => v)
+type Api = ClientOfContract<typeof contract>;
+declare const api: Api;
+const r0 = api["/res0/:id"].get({ params: { id: "1" } });
+void r0.then((v) => v);
+const r42 = api["/res42/:id"].get({ params: { id: "1" } });
+void r42.then((v) => v);
+const r85 = api["/res85"].post({ body: { name: "x", qty: 1 } });
+void r85.then((v) => v);
+const r128 = api["/res128/:id"].put({ params: { id: "1" } });
+void r128.then((v) => v);
+const r170 = api["/res170/:id"].put({ params: { id: "1" } });
+void r170.then((v) => v);
+const r213 = api["/res213"].get();
+void r213.then((v) => v);
+const r256 = api["/res256/:id"].post({ params: { id: "1" } });
+void r256.then((v) => v);
+const r299 = api["/res299"].put();
+void r299.then((v) => v);

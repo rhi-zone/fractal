@@ -12,9 +12,9 @@ pattern underneath both.
 Fractal has two independent domains that share one structural pattern:
 
 - **`@rhi-zone/fractal-api-tree`** — a `Node` discriminated union representing
-  *routing* (which operation handles which request).
+  _routing_ (which operation handles which request).
 - **`@rhi-zone/fractal-type-ir`** — a `TypeRef` discriminated union
-  representing *types* (what shape a value has), language-agnostic, feeding
+  representing _types_ (what shape a value has), language-agnostic, feeding
   60+ projectors and importers.
 
 Both are instances of the same three-layer separation — constructors that
@@ -29,15 +29,15 @@ the type-IR side.
 ```ts
 // packages/type-ir/src/index.ts
 export type TypeRef = {
-  readonly shape: TypeShape
-  readonly meta: Readonly<Record<string, unknown>>
-}
+  readonly shape: TypeShape;
+  readonly meta: Readonly<Record<string, unknown>>;
+};
 ```
 
 - **`shape`** — a discriminated union on `kind`, the structural payload
   (`{ kind: "object", fields }`, `{ kind: "array", element }`, …).
 - **`meta`** — an open bag of side-channel conventions (§4). Never a second
-  source of structural truth — `shape` alone determines what a `TypeRef` *is*.
+  source of structural truth — `shape` alone determines what a `TypeRef` _is_.
 
 `TypeShape = TypeKinds[keyof TypeKinds]`, where `TypeKinds` is the
 augmentable interface (§3) enumerating every registered kind.
@@ -45,14 +45,16 @@ augmentable interface (§3) enumerating every registered kind.
 ### Constructors: `t()` and `types.*`
 
 ```ts
-import { t, types } from "@rhi-zone/fractal-type-ir"
+import { t, types } from "@rhi-zone/fractal-type-ir";
 
-const user = t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string, { format: "email" }),
-  bio: t(types.string, { optional: true }),
-}))
+const user = t(
+  types.object({
+    id: t(types.integer),
+    name: t(types.string),
+    email: t(types.string, { format: "email" }),
+    bio: t(types.string, { optional: true }),
+  }),
+);
 ```
 
 `t(shape, meta?)` wraps a shape into a `TypeRef` (`meta` defaults to `{}`).
@@ -74,14 +76,14 @@ defines the structural + universal-primitive kinds only:
 
 ```ts
 export interface TypeKinds {
-  boolean: { readonly kind: "boolean" }
-  number: { readonly kind: "number" }
-  integer: { readonly kind: "integer" }
-  string: { readonly kind: "string" }
-  object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> }
-  array: { readonly kind: "array"; readonly element: TypeRef }
-  union: { readonly kind: "union"; readonly variants: readonly TypeRef[] }
-  ref: { readonly kind: "ref"; readonly target: string }
+  boolean: { readonly kind: "boolean" };
+  number: { readonly kind: "number" };
+  integer: { readonly kind: "integer" };
+  string: { readonly kind: "string" };
+  object: { readonly kind: "object"; readonly fields: Readonly<Record<string, TypeRef>> };
+  array: { readonly kind: "array"; readonly element: TypeRef };
+  union: { readonly kind: "union"; readonly variants: readonly TypeRef[] };
+  ref: { readonly kind: "ref"; readonly target: string };
   // … null, void, unknown, never, instance, stream, page, tuple, map,
   //     literal, enum, intersection, function, method, interface
 }
@@ -100,16 +102,16 @@ parent:
 // packages/type-ir/src/kinds/int-widths.ts
 declare module "../index.ts" {
   interface TypeKinds {
-    int8: { readonly kind: "int8" }
-    int32: { readonly kind: "int32" }
+    int8: { readonly kind: "int8" };
+    int32: { readonly kind: "int32" };
     // …
   }
 }
 
-registerParent("int8", "integer")
-registerParent("int32", "integer")
+registerParent("int8", "integer");
+registerParent("int32", "integer");
 
-export const int32 = (meta?: Record<string, unknown>): TypeRef => t({ kind: "int32" }, meta)
+export const int32 = (meta?: Record<string, unknown>): TypeRef => t({ kind: "int32" }, meta);
 ```
 
 ### Hierarchy via subtyping, not taxonomy
@@ -117,39 +119,36 @@ export const int32 = (meta?: Record<string, unknown>): TypeRef => t({ kind: "int
 Kinds form a hierarchy that mirrors actual subtyping (`int32 → integer →
 number`, `uuid → string`), never an invented taxonomic superclass. Some kinds
 are deliberately parentless even though they resemble another kind
-structurally: `instance` is *not* a subtype of `object` (a class's fields are
+structurally: `instance` is _not_ a subtype of `object` (a class's fields are
 only half its surface — methods are the other half); `stream` and `page` are
-*not* subtypes of `array` (they encode laziness/backpressure and pagination
-that plain arrays can't express); `interface` is *not* a subtype of `object`
+_not_ subtypes of `array` (they encode laziness/backpressure and pagination
+that plain arrays can't express); `interface` is _not_ a subtype of `object`
 (its members are callables, not data fields). `method` is the one kind that
-*does* register a parent — `function` — because a method genuinely is a
+_does_ register a parent — `function` — because a method genuinely is a
 callable.
 
 ### `ancestors` / `resolve` / `registerParent`
 
 ```ts
 // packages/type-ir/src/index.ts
-export function registerParent(kind: string, parent: string | null): void
+export function registerParent(kind: string, parent: string | null): void;
 
 export function ancestors(kind: string): string[] {
-  const chain: string[] = []
-  let current = parents[kind] ?? undefined
+  const chain: string[] = [];
+  let current = parents[kind] ?? undefined;
   while (current !== undefined) {
-    chain.push(current)
-    current = parents[current] ?? undefined
+    chain.push(current);
+    current = parents[current] ?? undefined;
   }
-  return chain
+  return chain;
 }
 
-export function resolve<T>(
-  kind: string,
-  handlers: Record<string, T>,
-): T | undefined {
-  if (kind in handlers) return handlers[kind]
+export function resolve<T>(kind: string, handlers: Record<string, T>): T | undefined {
+  if (kind in handlers) return handlers[kind];
   for (const ancestor of ancestors(kind)) {
-    if (ancestor in handlers) return handlers[ancestor]
+    if (ancestor in handlers) return handlers[ancestor];
   }
-  return undefined
+  return undefined;
 }
 ```
 
@@ -175,22 +174,22 @@ enumerates the full set of recognized keys; consumers agree on keys by
 convention. Documented conventions in `packages/type-ir/src/index.ts`
 include:
 
-| Key | Meaning |
-|---|---|
-| `optional: boolean` | the field may be omitted (set by `partial`/`required`/`deepPartial`/`deepRequired`) |
-| `nullable: boolean` | the type additionally accepts `null` (set by `nullable()`) |
-| `readonly: boolean` | field is immutable after construction (e.g. from a TS `readonly` modifier) |
-| `description: string` | doc text, typically from JSDoc |
-| `deprecated: boolean` | the field/type is deprecated |
-| `brand: string` | nominal branding on an otherwise-structural type |
-| `format: string` | schema-format hint (e.g. JSON Schema's `format: "email"`) |
-| `typeName` + `declarationFile` | a top-level `TypeRef`'s named-type provenance, for codegen that references a type by name instead of inlining its structure |
-| `additionalProperties: boolean` | JSON-Schema/OpenAPI-style closedness on an `object` kind |
+| Key                             | Meaning                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `optional: boolean`             | the field may be omitted (set by `partial`/`required`/`deepPartial`/`deepRequired`)                                         |
+| `nullable: boolean`             | the type additionally accepts `null` (set by `nullable()`)                                                                  |
+| `readonly: boolean`             | field is immutable after construction (e.g. from a TS `readonly` modifier)                                                  |
+| `description: string`           | doc text, typically from JSDoc                                                                                              |
+| `deprecated: boolean`           | the field/type is deprecated                                                                                                |
+| `brand: string`                 | nominal branding on an otherwise-structural type                                                                            |
+| `format: string`                | schema-format hint (e.g. JSON Schema's `format: "email"`)                                                                   |
+| `typeName` + `declarationFile`  | a top-level `TypeRef`'s named-type provenance, for codegen that references a type by name instead of inlining its structure |
+| `additionalProperties: boolean` | JSON-Schema/OpenAPI-style closedness on an `object` kind                                                                    |
 
 Projectors read what they recognize and ignore the rest — no fixed axes, no
 blessed set of fields. As with `Meta` on the API tree, `meta` is never a
 second source of structural truth: `shape` alone determines what a `TypeRef`
-*is*; `meta` carries only side-channel presence/provenance/format concerns.
+_is_; `meta` carries only side-channel presence/provenance/format concerns.
 
 ---
 
@@ -203,11 +202,11 @@ on each other's internals — a constructor doesn't know which projectors
 exist; a projector doesn't know which constructor produced the DU it's
 walking.
 
-| Layer | API tree | Type IR |
-|---|---|---|
-| 1. Authoring (constructors) | `op(fn, ...contributions)`, `api(children, opts?)` | `t(shape, meta?)`, `types.*` shape constructors |
-| 2. DU (inspectable data) | `Node` — discriminated by `handler`/`children`/`fallback` presence | `TypeRef` — `{ shape, meta }`, `shape` discriminated on `kind` via `TypeKinds` |
-| 3. Interpreters / projections | HTTP (`createFetch`), MCP (`toTools`), CLI (`runCli`), GraphQL | 60+ projectors (`toZod`, `toPython`, `toJsonSchema`, `toProtobuf`, …) |
+| Layer                         | API tree                                                           | Type IR                                                                        |
+| ----------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 1. Authoring (constructors)   | `op(fn, ...contributions)`, `api(children, opts?)`                 | `t(shape, meta?)`, `types.*` shape constructors                                |
+| 2. DU (inspectable data)      | `Node` — discriminated by `handler`/`children`/`fallback` presence | `TypeRef` — `{ shape, meta }`, `shape` discriminated on `kind` via `TypeKinds` |
+| 3. Interpreters / projections | HTTP (`createFetch`), MCP (`toTools`), CLI (`runCli`), GraphQL     | 60+ projectors (`toZod`, `toPython`, `toJsonSchema`, `toProtobuf`, …)          |
 
 The type-IR layer 3 also runs in reverse: **importers** go source → DU
 instead of DU → source, e.g. `from-json.ts`, `from-sql.ts`,
@@ -250,9 +249,9 @@ degrade a purely-nominal `instance`, like Cap'n Proto) an explicit throw.
 ```ts
 // packages/type-ir/src/index.ts
 export type TypeRefDocument = {
-  readonly root: TypeRef
-  readonly defs: Readonly<Record<string, TypeRef>>
-}
+  readonly root: TypeRef;
+  readonly defs: Readonly<Record<string, TypeRef>>;
+};
 ```
 
 A bare `TypeRef` has no registry to resolve `{ kind: "ref", target }` against
@@ -274,18 +273,18 @@ Doc-page projectors and importers that produce multiple related types (e.g.
 
 ## Quick reference
 
-| Symbol | Package | What it is |
-|---|---|---|
-| `TypeRef` | `@rhi-zone/fractal-type-ir` | `{ shape, meta }` — the one type-IR value |
-| `TypeShape` | `@rhi-zone/fractal-type-ir` | `TypeKinds[keyof TypeKinds]`, the discriminated shape union |
-| `TypeKinds` | `@rhi-zone/fractal-type-ir` | Augmentable interface enumerating registered kinds |
-| `TypeRefDocument` | `@rhi-zone/fractal-type-ir` | `{ root, defs }` — named/recursive types with a ref registry |
-| `t(shape, meta?)` | `@rhi-zone/fractal-type-ir` | Wrap a shape into a `TypeRef` |
-| `types.*` | `@rhi-zone/fractal-type-ir` | One shape constructor per kind |
-| `registerParent(kind, parent)` | `@rhi-zone/fractal-type-ir` | Wire a kind into the subtyping chain |
-| `ancestors(kind)` | `@rhi-zone/fractal-type-ir` | Walk a kind's parent chain |
-| `resolve(kind, handlers)` | `@rhi-zone/fractal-type-ir` | Dispatch with fallback through `ancestors` |
-| `partial`/`required`/`pick`/`omit`/`extend`/`nullable`/`withMeta`/`deepPartial`/`deepRequired` | `@rhi-zone/fractal-type-ir/derive` | Structural `TypeRef → TypeRef` transforms |
-| `packages/type-ir/src/kinds/*.ts` | `@rhi-zone/fractal-type-ir/kinds/*` | Extension modules registering semantic-refinement kinds |
-| `toZod`, `toPython`, `toJsonSchema`, … | `@rhi-zone/fractal-type-ir` | Projectors: `TypeRef(Document) => target` |
-| `from-json.ts`, `from-sql.ts`, `from-protobuf.ts`, … | `@rhi-zone/fractal-type-ir` | Importers: `source => TypeRef(Document)` |
+| Symbol                                                                                         | Package                             | What it is                                                   |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------ |
+| `TypeRef`                                                                                      | `@rhi-zone/fractal-type-ir`         | `{ shape, meta }` — the one type-IR value                    |
+| `TypeShape`                                                                                    | `@rhi-zone/fractal-type-ir`         | `TypeKinds[keyof TypeKinds]`, the discriminated shape union  |
+| `TypeKinds`                                                                                    | `@rhi-zone/fractal-type-ir`         | Augmentable interface enumerating registered kinds           |
+| `TypeRefDocument`                                                                              | `@rhi-zone/fractal-type-ir`         | `{ root, defs }` — named/recursive types with a ref registry |
+| `t(shape, meta?)`                                                                              | `@rhi-zone/fractal-type-ir`         | Wrap a shape into a `TypeRef`                                |
+| `types.*`                                                                                      | `@rhi-zone/fractal-type-ir`         | One shape constructor per kind                               |
+| `registerParent(kind, parent)`                                                                 | `@rhi-zone/fractal-type-ir`         | Wire a kind into the subtyping chain                         |
+| `ancestors(kind)`                                                                              | `@rhi-zone/fractal-type-ir`         | Walk a kind's parent chain                                   |
+| `resolve(kind, handlers)`                                                                      | `@rhi-zone/fractal-type-ir`         | Dispatch with fallback through `ancestors`                   |
+| `partial`/`required`/`pick`/`omit`/`extend`/`nullable`/`withMeta`/`deepPartial`/`deepRequired` | `@rhi-zone/fractal-type-ir/derive`  | Structural `TypeRef → TypeRef` transforms                    |
+| `packages/type-ir/src/kinds/*.ts`                                                              | `@rhi-zone/fractal-type-ir/kinds/*` | Extension modules registering semantic-refinement kinds      |
+| `toZod`, `toPython`, `toJsonSchema`, …                                                         | `@rhi-zone/fractal-type-ir`         | Projectors: `TypeRef(Document) => target`                    |
+| `from-json.ts`, `from-sql.ts`, `from-protobuf.ts`, …                                           | `@rhi-zone/fractal-type-ir`         | Importers: `source => TypeRef(Document)`                     |

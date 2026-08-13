@@ -88,12 +88,12 @@
 //   packages/api-tree/src/tree.ts                    — SchemaMap, ToolSchema, extractToolSchemas
 //   docs/design/framework-router-codegen.md          — settled decisions this module implements
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector"
-import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector";
+import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route";
 
 // ============================================================================
 // Public API
@@ -101,8 +101,8 @@ import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
 
 export type FastifyCodegenOptions = {
   /** Base name for the emitted `<RouterName>Handlers` type and `create<RouterName>Routes` factory. Defaults to "Api". */
-  readonly routerName?: string
-}
+  readonly routerName?: string;
+};
 
 /**
  * Generate Fastify plugin source directly from an already-projected
@@ -129,7 +129,7 @@ export function generateFastifyRoutes(
   schemas?: SchemaMap,
   options: FastifyCodegenOptions = {},
 ): string {
-  return render(buildTree(route, "", schemas, undefined, undefined), options)
+  return render(buildTree(route, "", schemas, undefined, undefined), options);
 }
 
 /**
@@ -144,10 +144,10 @@ export function generateFastifyRoutesFromNode(
   schemas?: SchemaMap,
   options: FastifyCodegenOptions = {},
 ): string {
-  const route = httpProjection(node)
-  const codegenNames = buildCodegenNameMap(node)
-  const memberNames = buildMemberNameMap(node)
-  return render(buildTree(route, "", schemas, codegenNames, memberNames), options)
+  const route = httpProjection(node);
+  const codegenNames = buildCodegenNameMap(node);
+  const memberNames = buildMemberNameMap(node);
+  return render(buildTree(route, "", schemas, codegenNames, memberNames), options);
 }
 
 // ============================================================================
@@ -162,66 +162,67 @@ export function generateFastifyRoutesFromNode(
 
 /** Full underscore-joined path name (e.g. "books_bookId_read") — for SchemaMap lookups. */
 function buildCodegenNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
+  const out = new Map<Handler, string>();
   const visit = (node: Node, prefix: string): void => {
     for (const [key, child] of Object.entries(node.children ?? {})) {
-      const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+      const seg = prefix.length > 0 ? `${prefix}_${key}` : key;
       if (isLeaf(child)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(child.handler!, seg)
+        out.set(child.handler!, seg);
       } else {
-        visit(child, seg)
+        visit(child, seg);
       }
     }
     if (node.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name
+      const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name;
       if (isLeaf(node.fallback.subtree)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(node.fallback.subtree.handler!, seg)
+        out.set(node.fallback.subtree.handler!, seg);
       } else {
-        visit(node.fallback.subtree, seg)
+        visit(node.fallback.subtree, seg);
       }
     }
-  }
-  visit(n, "")
-  return out
+  };
+  visit(n, "");
+  return out;
 }
 
 /** Own authored child key (e.g. "read") — for Handlers object member names. */
 function buildMemberNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
+  const out = new Map<Handler, string>();
   const visit = (node: Node): void => {
     for (const [key, child] of Object.entries(node.children ?? {})) {
       if (isLeaf(child)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(child.handler!, key)
+        out.set(child.handler!, key);
       } else {
-        visit(child)
+        visit(child);
       }
     }
     if (node.fallback !== undefined) {
       if (isLeaf(node.fallback.subtree)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(node.fallback.subtree.handler!, node.fallback.name)
+        out.set(node.fallback.subtree.handler!, node.fallback.name);
       } else {
-        visit(node.fallback.subtree)
+        visit(node.fallback.subtree);
       }
     }
-  }
-  visit(n)
-  return out
+  };
+  visit(n);
+  return out;
 }
 
 /** Fallback name derived purely from path + verb, for handlers absent from a name map. */
 function nameFromPath(path: string, verb: string): string {
-  const base = path === "/"
-    ? "root"
-    : path
-        .split("/")
-        .filter((s) => s.length > 0)
-        .map((s) => (s.startsWith(":") ? s.slice(1) : s))
-        .join("_")
-  return `${base}_${verb.toLowerCase()}`
+  const base =
+    path === "/"
+      ? "root"
+      : path
+          .split("/")
+          .filter((s) => s.length > 0)
+          .map((s) => (s.startsWith(":") ? s.slice(1) : s))
+          .join("_");
+  return `${base}_${verb.toLowerCase()}`;
 }
 
 // ============================================================================
@@ -229,21 +230,21 @@ function nameFromPath(path: string, verb: string): string {
 // ============================================================================
 
 type OperationEntry = {
-  readonly memberName: string
-  readonly codegenName: string
-  readonly fastifyPath: string // e.g. "/books/:bookId" — real Fastify (find-my-way) route syntax, same as Express
-  readonly verb: string // uppercase HTTP method
-  readonly requestSchema?: JsonSchema
-  readonly responseSchema?: JsonSchema
-}
+  readonly memberName: string;
+  readonly codegenName: string;
+  readonly fastifyPath: string; // e.g. "/books/:bookId" — real Fastify (find-my-way) route syntax, same as Express
+  readonly verb: string; // uppercase HTTP method
+  readonly requestSchema?: JsonSchema;
+  readonly responseSchema?: JsonSchema;
+};
 
 type FastifyTreeNode = {
   // Unified: both literal path-segment children AND a fallback (dynamic
   // path-param) child live in the same map, keyed by their own name — no
   // currying needed, same reasoning as express.ts.
-  readonly children: Map<string, FastifyTreeNode>
-  readonly operations: Map<string, OperationEntry>
-}
+  readonly children: Map<string, FastifyTreeNode>;
+  readonly operations: Map<string, OperationEntry>;
+};
 
 /** A route position that is exactly one operation and nothing else. Mirrors express.ts's `isSingleLeafMethod`. */
 function isSingleLeafMethod(route: HttpRoute): boolean {
@@ -251,7 +252,7 @@ function isSingleLeafMethod(route: HttpRoute): boolean {
     Object.keys(route.methods ?? {}).length === 1 &&
     Object.keys(route.children ?? {}).length === 0 &&
     route.fallback === undefined
-  )
+  );
 }
 
 function attachOperation(
@@ -263,8 +264,8 @@ function attachOperation(
   schemas: SchemaMap | undefined,
   codegenNames: ReadonlyMap<Handler, string> | undefined,
 ): void {
-  const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(fastifyPath, verb)
-  const toolSchema = schemas?.[codegenName]
+  const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(fastifyPath, verb);
+  const toolSchema = schemas?.[codegenName];
 
   node.operations.set(memberName, {
     memberName,
@@ -273,7 +274,7 @@ function attachOperation(
     verb: verb.toUpperCase(),
     ...(toolSchema?.inputSchema !== undefined ? { requestSchema: toolSchema.inputSchema } : {}),
     ...(toolSchema?.outputSchema !== undefined ? { responseSchema: toolSchema.outputSchema } : {}),
-  })
+  });
 }
 
 /**
@@ -289,34 +290,34 @@ function buildTree(
   codegenNames: ReadonlyMap<Handler, string> | undefined,
   memberNames: ReadonlyMap<Handler, string> | undefined,
 ): FastifyTreeNode {
-  const node: FastifyTreeNode = { children: new Map(), operations: new Map() }
-  const displayPath = fastifyPath === "" ? "/" : fastifyPath
+  const node: FastifyTreeNode = { children: new Map(), operations: new Map() };
+  const displayPath = fastifyPath === "" ? "/" : fastifyPath;
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
-    const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase()
-    attachOperation(node, memberName, verb, entry, displayPath, schemas, codegenNames)
+    const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase();
+    attachOperation(node, memberName, verb, entry, displayPath, schemas, codegenNames);
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
-    const childPath = `${fastifyPath}/${seg}`
+    const childPath = `${fastifyPath}/${seg}`;
     if (isSingleLeafMethod(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const [verb] = Object.keys(child.methods!)
+      const [verb] = Object.keys(child.methods!);
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const entry = child.methods![verb!]!
-      attachOperation(node, seg, verb!, entry, childPath, schemas, codegenNames)
+      const entry = child.methods![verb!]!;
+      attachOperation(node, seg, verb!, entry, childPath, schemas, codegenNames);
     } else {
-      node.children.set(seg, buildTree(child, childPath, schemas, codegenNames, memberNames))
+      node.children.set(seg, buildTree(child, childPath, schemas, codegenNames, memberNames));
     }
   }
 
   if (route.fallback !== undefined) {
-    const { name, subtree } = route.fallback
-    const childPath = `${fastifyPath}/:${name}`
-    node.children.set(name, buildTree(subtree, childPath, schemas, codegenNames, memberNames))
+    const { name, subtree } = route.fallback;
+    const childPath = `${fastifyPath}/:${name}`;
+    node.children.set(name, buildTree(subtree, childPath, schemas, codegenNames, memberNames));
   }
 
-  return node
+  return node;
 }
 
 // ============================================================================
@@ -325,7 +326,7 @@ function buildTree(
 
 /** A valid bare JS identifier, or a quoted string literal key otherwise. */
 function safeKey(key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 
 function pascalCase(part: string): string {
@@ -333,17 +334,17 @@ function pascalCase(part: string): string {
     .split(/[^A-Za-z0-9]+/)
     .filter((s) => s.length > 0)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("")
+    .join("");
 }
 
 /** `"books_bookId_read"` -> `"BooksBookIdRead"` — base name for that op's `<Base>Input`/`<Base>Output`. */
 function typeBaseName(codegenName: string): string {
-  return codegenName.split("_").map(pascalCase).join("")
+  return codegenName.split("_").map(pascalCase).join("");
 }
 
 /** `.books.bookId.read` — dotted accessor chain onto the `handlers` argument. */
 function handlerAccessExpr(pathKeys: readonly string[], memberName: string): string {
-  return ["handlers", ...pathKeys, memberName].map(safeKey).join(".")
+  return ["handlers", ...pathKeys, memberName].map(safeKey).join(".");
 }
 
 /** `"/books/:bookId"` -> `["bookId"]` — path-param names, for splitting a combined input schema. */
@@ -351,7 +352,7 @@ function pathParamNames(path: string): string[] {
   return path
     .split("/")
     .filter((seg) => seg.startsWith(":"))
-    .map((seg) => seg.slice(1))
+    .map((seg) => seg.slice(1));
 }
 
 // ============================================================================
@@ -362,58 +363,58 @@ function pathParamNames(path: string): string[] {
 // ============================================================================
 
 function schemaToType(schema: JsonSchema | undefined, indent: string): string {
-  if (schema === undefined) return "unknown"
+  if (schema === undefined) return "unknown";
 
-  if ("const" in schema) return JSON.stringify(schema.const)
+  if ("const" in schema) return JSON.stringify(schema.const);
 
-  const enumValues = schema.enum
+  const enumValues = schema.enum;
   if (Array.isArray(enumValues)) {
-    if (enumValues.length === 0) return "never"
-    return enumValues.map((v) => JSON.stringify(v)).join(" | ")
+    if (enumValues.length === 0) return "never";
+    return enumValues.map((v) => JSON.stringify(v)).join(" | ");
   }
 
-  const anyOf = schema.anyOf ?? schema.oneOf
+  const anyOf = schema.anyOf ?? schema.oneOf;
   if (Array.isArray(anyOf)) {
-    if (anyOf.length === 0) return "unknown"
-    return anyOf.map((s) => schemaToType(s, indent)).join(" | ")
+    if (anyOf.length === 0) return "unknown";
+    return anyOf.map((s) => schemaToType(s, indent)).join(" | ");
   }
 
-  const allOf = (schema as { allOf?: JsonSchema[] }).allOf
+  const allOf = (schema as { allOf?: JsonSchema[] }).allOf;
   if (Array.isArray(allOf)) {
-    if (allOf.length === 0) return "unknown"
-    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ")
+    if (allOf.length === 0) return "unknown";
+    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ");
   }
 
-  const type = schema.type
+  const type = schema.type;
 
-  const properties = schema.properties
+  const properties = schema.properties;
   if (type === "object" || properties !== undefined) {
     if (properties === undefined || Object.keys(properties).length === 0) {
-      return "Record<string, unknown>"
+      return "Record<string, unknown>";
     }
-    const required = new Set(schema.required ?? [])
-    const nextIndent = indent + "  "
+    const required = new Set(schema.required ?? []);
+    const nextIndent = indent + "  ";
     const lines = Object.entries(properties).map(([key, propSchema]) => {
-      const optional = required.has(key) ? "" : "?"
-      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`
-    })
-    return `{\n${lines.join("\n")}\n${indent}}`
+      const optional = required.has(key) ? "" : "?";
+      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`;
+    });
+    return `{\n${lines.join("\n")}\n${indent}}`;
   }
 
-  const items = schema.items
+  const items = schema.items;
   if (type === "array" || items !== undefined) {
-    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`
+    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`;
   }
 
   switch (type) {
     case "string":
-      return "string"
+      return "string";
     case "number":
-      return "number"
+      return "number";
     case "boolean":
-      return "boolean"
+      return "boolean";
     default:
-      return "unknown"
+      return "unknown";
   }
 }
 
@@ -423,9 +424,9 @@ function schemaToType(schema: JsonSchema | undefined, indent: string): string {
 // ============================================================================
 
 type SplitInputSchema = {
-  readonly params?: JsonSchema
-  readonly rest?: JsonSchema // querystring (GET/HEAD/DELETE) or body (POST/PUT/PATCH)
-}
+  readonly params?: JsonSchema;
+  readonly rest?: JsonSchema; // querystring (GET/HEAD/DELETE) or body (POST/PUT/PATCH)
+};
 
 /**
  * Splits `schema.properties` by whether each key is a path-param name.
@@ -438,36 +439,44 @@ type SplitInputSchema = {
  * `schema` option is emitted for that operation, a documented degradation
  * rather than a guess at how to partition a non-object shape.
  */
-function splitInputSchema(schema: JsonSchema | undefined, paramNames: readonly string[]): SplitInputSchema {
-  if (schema === undefined) return {}
-  if ("const" in schema || schema.enum !== undefined || schema.anyOf !== undefined || schema.oneOf !== undefined) {
-    return {}
+function splitInputSchema(
+  schema: JsonSchema | undefined,
+  paramNames: readonly string[],
+): SplitInputSchema {
+  if (schema === undefined) return {};
+  if (
+    "const" in schema ||
+    schema.enum !== undefined ||
+    schema.anyOf !== undefined ||
+    schema.oneOf !== undefined
+  ) {
+    return {};
   }
-  const properties = schema.properties
-  if (properties === undefined) return {}
+  const properties = schema.properties;
+  if (properties === undefined) return {};
 
-  const paramNameSet = new Set(paramNames)
-  const required = new Set(schema.required ?? [])
+  const paramNameSet = new Set(paramNames);
+  const required = new Set(schema.required ?? []);
 
-  const paramEntries = Object.entries(properties).filter(([key]) => paramNameSet.has(key))
-  const restEntries = Object.entries(properties).filter(([key]) => !paramNameSet.has(key))
+  const paramEntries = Object.entries(properties).filter(([key]) => paramNameSet.has(key));
+  const restEntries = Object.entries(properties).filter(([key]) => !paramNameSet.has(key));
 
   const toObjectSchema = (entries: [string, JsonSchema][]): JsonSchema | undefined => {
-    if (entries.length === 0) return undefined
-    const reqKeys = entries.map(([key]) => key).filter((key) => required.has(key))
+    if (entries.length === 0) return undefined;
+    const reqKeys = entries.map(([key]) => key).filter((key) => required.has(key));
     return {
       type: "object",
       properties: Object.fromEntries(entries),
       ...(reqKeys.length > 0 ? { required: reqKeys } : {}),
-    } as JsonSchema
-  }
+    } as JsonSchema;
+  };
 
-  const params = toObjectSchema(paramEntries)
-  const rest = toObjectSchema(restEntries)
+  const params = toObjectSchema(paramEntries);
+  const rest = toObjectSchema(restEntries);
   return {
     ...(params !== undefined ? { params } : {}),
     ...(rest !== undefined ? { rest } : {}),
-  }
+  };
 }
 
 // ============================================================================
@@ -475,21 +484,23 @@ function splitInputSchema(schema: JsonSchema | undefined, paramNames: readonly s
 // ============================================================================
 
 function nodeTypeLiteral(node: FastifyTreeNode, indent: string): string {
-  const nextIndent = indent + "  "
-  const lines: string[] = []
+  const nextIndent = indent + "  ";
+  const lines: string[] = [];
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`)
+    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`);
   }
 
   for (const [memberName, entry] of node.operations) {
-    const base = typeBaseName(entry.codegenName)
-    const inputType = entry.requestSchema !== undefined ? `${base}Input` : "unknown"
-    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown"
-    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: Handler<${inputType}, ${outputType}>`)
+    const base = typeBaseName(entry.codegenName);
+    const inputType = entry.requestSchema !== undefined ? `${base}Input` : "unknown";
+    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown";
+    lines.push(
+      `${nextIndent}readonly ${safeKey(memberName)}: Handler<${inputType}, ${outputType}>`,
+    );
   }
 
-  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
+  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
 }
 
 // ============================================================================
@@ -497,16 +508,16 @@ function nodeTypeLiteral(node: FastifyTreeNode, indent: string): string {
 // route registration)
 // ============================================================================
 
-type CollectedOperation = OperationEntry & { readonly pathKeys: readonly string[] }
+type CollectedOperation = OperationEntry & { readonly pathKeys: readonly string[] };
 
 function collectOperations(
   node: FastifyTreeNode,
   pathKeys: readonly string[] = [],
   out: CollectedOperation[] = [],
 ): CollectedOperation[] {
-  for (const entry of node.operations.values()) out.push({ ...entry, pathKeys })
-  for (const [key, child] of node.children) collectOperations(child, [...pathKeys, key], out)
-  return out
+  for (const entry of node.operations.values()) out.push({ ...entry, pathKeys });
+  for (const [key, child] of node.children) collectOperations(child, [...pathKeys, key], out);
+  return out;
 }
 
 // ============================================================================
@@ -515,76 +526,85 @@ function collectOperations(
 
 /** Indented JSON.stringify — for embedding a JsonSchema object literal as a JS source expression. */
 function schemaLiteral(schema: JsonSchema, indent: string): string {
-  return JSON.stringify(schema, null, 2).split("\n").join(`\n${indent}`)
+  return JSON.stringify(schema, null, 2).split("\n").join(`\n${indent}`);
 }
 
 function render(root: FastifyTreeNode, options: FastifyCodegenOptions): string {
-  const routerName = options.routerName ?? "Api"
-  const handlersTypeName = `${routerName}Handlers`
-  const factoryName = `create${routerName}Routes`
-  const entries = collectOperations(root)
+  const routerName = options.routerName ?? "Api";
+  const handlersTypeName = `${routerName}Handlers`;
+  const factoryName = `create${routerName}Routes`;
+  const entries = collectOperations(root);
 
-  const typeDecls: string[] = []
-  const seenBases = new Set<string>()
+  const typeDecls: string[] = [];
+  const seenBases = new Set<string>();
   for (const entry of entries) {
-    const base = typeBaseName(entry.codegenName)
-    if (seenBases.has(base)) continue
-    seenBases.add(base)
+    const base = typeBaseName(entry.codegenName);
+    if (seenBases.has(base)) continue;
+    seenBases.add(base);
     if (entry.requestSchema !== undefined) {
-      typeDecls.push(`export type ${base}Input = ${schemaToType(entry.requestSchema, "")}`)
+      typeDecls.push(`export type ${base}Input = ${schemaToType(entry.requestSchema, "")}`);
     }
     if (entry.responseSchema !== undefined) {
-      typeDecls.push(`export type ${base}Output = ${schemaToType(entry.responseSchema, "")}`)
+      typeDecls.push(`export type ${base}Output = ${schemaToType(entry.responseSchema, "")}`);
     }
   }
 
-  const handlersTypeDecl = `export type ${handlersTypeName} = ${nodeTypeLiteral(root, "")}`
+  const handlersTypeDecl = `export type ${handlersTypeName} = ${nodeTypeLiteral(root, "")}`;
 
   const registrations = entries
     .map((entry) => {
-      const accessExpr = handlerAccessExpr(entry.pathKeys, entry.memberName)
-      const method = entry.verb.toLowerCase()
-      const isBodyVerb = entry.verb === "POST" || entry.verb === "PUT" || entry.verb === "PATCH"
+      const accessExpr = handlerAccessExpr(entry.pathKeys, entry.memberName);
+      const method = entry.verb.toLowerCase();
+      const isBodyVerb = entry.verb === "POST" || entry.verb === "PUT" || entry.verb === "PATCH";
       const inputExpr = isBodyVerb
         ? "{ ...(request.params as object), ...((request.body as object) ?? {}) }"
-        : "{ ...(request.params as object), ...(request.query as object) }"
+        : "{ ...(request.params as object), ...(request.query as object) }";
 
-      const { params, rest } = splitInputSchema(entry.requestSchema, pathParamNames(entry.fastifyPath))
-      const schemaLines: string[] = []
-      if (params !== undefined) schemaLines.push(`      params: ${schemaLiteral(params, "      ")},`)
+      const { params, rest } = splitInputSchema(
+        entry.requestSchema,
+        pathParamNames(entry.fastifyPath),
+      );
+      const schemaLines: string[] = [];
+      if (params !== undefined)
+        schemaLines.push(`      params: ${schemaLiteral(params, "      ")},`);
       if (rest !== undefined) {
-        const restKey = isBodyVerb ? "body" : "querystring"
-        schemaLines.push(`      ${restKey}: ${schemaLiteral(rest, "      ")},`)
+        const restKey = isBodyVerb ? "body" : "querystring";
+        schemaLines.push(`      ${restKey}: ${schemaLiteral(rest, "      ")},`);
       }
       if (entry.responseSchema !== undefined) {
-        schemaLines.push(`      response: { 200: ${schemaLiteral(entry.responseSchema, "      ")} },`)
+        schemaLines.push(
+          `      response: { 200: ${schemaLiteral(entry.responseSchema, "      ")} },`,
+        );
       }
-      const optionsExpr = schemaLines.length > 0 ? `{\n    schema: {\n${schemaLines.join("\n")}\n    },\n  }` : "{}"
+      const optionsExpr =
+        schemaLines.length > 0 ? `{\n    schema: {\n${schemaLines.join("\n")}\n    },\n  }` : "{}";
 
       return [
         `  fastify.${method}(${JSON.stringify(entry.fastifyPath)}, ${optionsExpr}, async (request, reply) => {`,
         `    const input = ${inputExpr}`,
         `    return await ${accessExpr}(input)`,
         `  })`,
-      ].join("\n")
+      ].join("\n");
     })
-    .join("\n\n")
+    .join("\n\n");
 
-  return [
-    HEADER,
-    IMPORTS,
-    typeDecls.join("\n\n"),
-    handlersTypeDecl,
+  return (
     [
-      `export function ${factoryName}(handlers: ${handlersTypeName}): FastifyPluginAsync {`,
-      `  return async (fastify) => {`,
-      registrations,
-      `  }`,
-      `}`,
-    ].join("\n"),
-  ]
-    .filter((chunk) => chunk.length > 0)
-    .join("\n\n") + "\n"
+      HEADER,
+      IMPORTS,
+      typeDecls.join("\n\n"),
+      handlersTypeDecl,
+      [
+        `export function ${factoryName}(handlers: ${handlersTypeName}): FastifyPluginAsync {`,
+        `  return async (fastify) => {`,
+        registrations,
+        `  }`,
+        `}`,
+      ].join("\n"),
+    ]
+      .filter((chunk) => chunk.length > 0)
+      .join("\n\n") + "\n"
+  );
 }
 
 // ============================================================================
@@ -600,6 +620,8 @@ const HEADER =
   "// Register the returned plugin on an existing Fastify instance, e.g.\n" +
   "// `app.register(createApiRoutes(handlers))`. `params`/`querystring`/`body`/`response`\n" +
   "// JSON Schemas are attached per-route when a SchemaMap was available at codegen time —\n" +
-  "// Fastify validates (and, where types allow, coerces) requests against them natively."
+  "// Fastify validates (and, where types allow, coerces) requests against them natively.";
 
-const IMPORTS = 'import type { FastifyPluginAsync } from "fastify"\n' + 'import type { Handler } from "@rhi-zone/fractal-api-tree/node"'
+const IMPORTS =
+  'import type { FastifyPluginAsync } from "fastify"\n' +
+  'import type { Handler } from "@rhi-zone/fractal-api-tree/node"';

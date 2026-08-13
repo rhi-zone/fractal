@@ -1,44 +1,44 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { isA } from "./codegen-helpers.ts";
 
 export type SqlColumn = {
-  type: string
-  nullable: boolean
-  default?: string
+  type: string;
+  nullable: boolean;
+  default?: string;
   // CHECK constraint clauses derived from open metadata (minimum/maximum/minLength/
   // pattern/multipleOf, ...). Each clause contains the literal placeholder token
   // `{name}` in place of the column name — `columnDef` is the one place that knows
   // the final column name, so it substitutes it in. Keeps `SqlColumn` itself plain,
   // name-agnostic, serializable data (no closures), consistent with the "DU is the
   // contract" pattern used across the other projectors in this package.
-  checks?: string[]
+  checks?: string[];
   // Dialect-appropriate rendering of `meta.description` — MySQL's native inline
   // `COMMENT '...'` clause, or a `/* ... */` block comment for the others. Already
   // fully rendered (no `{name}` needed — comments don't reference the column name).
-  comment?: string
+  comment?: string;
   // FOREIGN KEY target, mirrored from `meta.references` (from-sql.ts's own
   // convention for the column-level SQL concepts this package's forward
   // direction doesn't have a dedicated IR shape for — see that module's
   // header comment). `column` omitted means the referenced table's own
   // primary key, i.e. `REFERENCES table` with no column list.
-  references?: { table: string; column?: string }
-}
+  references?: { table: string; column?: string };
+};
 
-export type SqlDialect = "postgres" | "sqlite" | "mysql"
+export type SqlDialect = "postgres" | "sqlite" | "mysql";
 
-type Converter = (shape: TypeShape) => string
+type Converter = (shape: TypeShape) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 const literalHandler: Converter = (shape) => {
-  const s = shape as TypeShape & { kind: "literal" }
-  if (typeof s.value === "number") return "NUMERIC"
-  if (typeof s.value === "boolean") return "BOOLEAN"
-  return "TEXT"
-}
+  const s = shape as TypeShape & { kind: "literal" };
+  if (typeof s.value === "number") return "NUMERIC";
+  if (typeof s.value === "boolean") return "BOOLEAN";
+  return "TEXT";
+};
 
 const postgresHandlers: Record<string, Converter> = {
   boolean: leaf("BOOLEAN"),
@@ -80,10 +80,10 @@ const postgresHandlers: Record<string, Converter> = {
   // Functions aren't persistable column data — same opaque-fallback treatment
   // as `instance`/`unknown` above.
   function: leaf("JSONB"),
-}
+};
 // Assigned after construction (not inline) so the closure captures the fully
 // initialized `postgresHandlers` map, not a `const` reference mid-TDZ.
-postgresHandlers.intersection = intersectionFallback(postgresHandlers, "JSONB")
+postgresHandlers.intersection = intersectionFallback(postgresHandlers, "JSONB");
 
 const sqliteHandlers: Record<string, Converter> = {
   ...postgresHandlers,
@@ -105,10 +105,10 @@ const sqliteHandlers: Record<string, Converter> = {
   map: leaf("TEXT"),
   union: leaf("TEXT"),
   function: leaf("TEXT"),
-}
+};
 // Overridden (not inherited from the postgres spread) so the fallback
 // resolves against sqlite's own type names, not postgres's.
-sqliteHandlers.intersection = intersectionFallback(sqliteHandlers, "TEXT")
+sqliteHandlers.intersection = intersectionFallback(sqliteHandlers, "TEXT");
 
 // SQL has no intersection/mixin column type — lossy fallback: resolve the
 // first member's shape against the SAME dialect handler map, dropping the
@@ -118,18 +118,18 @@ sqliteHandlers.intersection = intersectionFallback(sqliteHandlers, "TEXT")
 // parameter, so sqlite/mysql don't fall back through postgres's types.
 function intersectionFallback(handlers: Record<string, Converter>, fallback: string): Converter {
   return (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    if (first === undefined) return fallback
-    const converter = resolve(first.shape.kind, handlers)
-    return converter === undefined ? fallback : converter(first.shape)
-  }
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    if (first === undefined) return fallback;
+    const converter = resolve(first.shape.kind, handlers);
+    return converter === undefined ? fallback : converter(first.shape);
+  };
 }
 
 function sqlLiteral(value: unknown): string {
-  if (value === null) return "NULL"
-  if (typeof value === "string") return `'${value.replace(/'/g, "''")}'`
-  return String(value)
+  if (value === null) return "NULL";
+  if (typeof value === "string") return `'${value.replace(/'/g, "''")}'`;
+  return String(value);
 }
 
 // Builds CHECK constraint clause templates from the same open-metadata constraint
@@ -137,54 +137,68 @@ function sqlLiteral(value: unknown): string {
 // effect-schema.ts, ...): minimum/maximum/exclusiveMinimum/exclusiveMaximum (numeric),
 // minLength/maxLength/pattern (string), multipleOf (numeric). Each returned clause
 // contains the `{name}` placeholder in place of the column name.
-function buildChecks(kind: string, meta: Readonly<Record<string, unknown>>, dialect: SqlDialect | undefined): string[] {
-  const numberLike = isA(kind, "number")
-  const stringLike = isA(kind, "string")
-  const checks: string[] = []
+function buildChecks(
+  kind: string,
+  meta: Readonly<Record<string, unknown>>,
+  dialect: SqlDialect | undefined,
+): string[] {
+  const numberLike = isA(kind, "number");
+  const stringLike = isA(kind, "string");
+  const checks: string[] = [];
 
-  if (typeof meta.minimum === "number" && numberLike) checks.push(`CHECK ({name} >= ${meta.minimum})`)
-  if (typeof meta.maximum === "number" && numberLike) checks.push(`CHECK ({name} <= ${meta.maximum})`)
-  if (typeof meta.exclusiveMinimum === "number" && numberLike) checks.push(`CHECK ({name} > ${meta.exclusiveMinimum})`)
-  if (typeof meta.exclusiveMaximum === "number" && numberLike) checks.push(`CHECK ({name} < ${meta.exclusiveMaximum})`)
-  if (typeof meta.minLength === "number" && stringLike) checks.push(`CHECK (LENGTH({name}) >= ${meta.minLength})`)
-  if (typeof meta.maxLength === "number" && stringLike) checks.push(`CHECK (LENGTH({name}) <= ${meta.maxLength})`)
+  if (typeof meta.minimum === "number" && numberLike)
+    checks.push(`CHECK ({name} >= ${meta.minimum})`);
+  if (typeof meta.maximum === "number" && numberLike)
+    checks.push(`CHECK ({name} <= ${meta.maximum})`);
+  if (typeof meta.exclusiveMinimum === "number" && numberLike)
+    checks.push(`CHECK ({name} > ${meta.exclusiveMinimum})`);
+  if (typeof meta.exclusiveMaximum === "number" && numberLike)
+    checks.push(`CHECK ({name} < ${meta.exclusiveMaximum})`);
+  if (typeof meta.minLength === "number" && stringLike)
+    checks.push(`CHECK (LENGTH({name}) >= ${meta.minLength})`);
+  if (typeof meta.maxLength === "number" && stringLike)
+    checks.push(`CHECK (LENGTH({name}) <= ${meta.maxLength})`);
   if (typeof meta.pattern === "string" && stringLike) {
     if (dialect === "mysql") {
-      checks.push(`CHECK ({name} REGEXP ${sqlLiteral(meta.pattern)})`)
+      checks.push(`CHECK ({name} REGEXP ${sqlLiteral(meta.pattern)})`);
     } else if (dialect !== "sqlite") {
       // Postgres: `~` is the native POSIX regex match operator. SQLite has no native
       // regex operator — `REGEXP` only works if the host application registers a
       // user-defined function for it, so emitting a REGEXP/~ clause here would
       // produce DDL that fails on a stock sqlite3 connection. Skip for sqlite.
-      checks.push(`CHECK ({name} ~ ${sqlLiteral(meta.pattern)})`)
+      checks.push(`CHECK ({name} ~ ${sqlLiteral(meta.pattern)})`);
     }
   }
-  if (typeof meta.multipleOf === "number" && numberLike) checks.push(`CHECK ({name} % ${meta.multipleOf} = 0)`)
+  if (typeof meta.multipleOf === "number" && numberLike)
+    checks.push(`CHECK ({name} % ${meta.multipleOf} = 0)`);
 
-  return checks
+  return checks;
 }
 
 // Renders `meta.description` as dialect-appropriate SQL. MySQL has a native inline
 // `COMMENT '...'` column clause. The others don't — a trailing `-- ...` line comment
 // would swallow the trailing comma `toCreateTable` appends after each column in a
 // multi-column CREATE TABLE, so a `/* ... */` block comment is used instead.
-function buildComment(meta: Readonly<Record<string, unknown>>, dialect: SqlDialect | undefined): string | undefined {
-  if (typeof meta.description !== "string") return undefined
-  if (dialect === "mysql") return `COMMENT ${sqlLiteral(meta.description)}`
-  return `/* ${meta.description} */`
+function buildComment(
+  meta: Readonly<Record<string, unknown>>,
+  dialect: SqlDialect | undefined,
+): string | undefined {
+  if (typeof meta.description !== "string") return undefined;
+  if (dialect === "mysql") return `COMMENT ${sqlLiteral(meta.description)}`;
+  return `/* ${meta.description} */`;
 }
 
 const mysqlLiteralHandler: Converter = (shape) => {
-  const s = shape as TypeShape & { kind: "literal" }
-  if (typeof s.value === "number") return "NUMERIC"
-  if (typeof s.value === "boolean") return "TINYINT(1)"
-  return "TEXT"
-}
+  const s = shape as TypeShape & { kind: "literal" };
+  if (typeof s.value === "number") return "NUMERIC";
+  if (typeof s.value === "boolean") return "TINYINT(1)";
+  return "TEXT";
+};
 
 const mysqlEnumHandler: Converter = (shape) => {
-  const s = shape as TypeShape & { kind: "enum" }
-  return `ENUM(${s.members.map((m) => sqlLiteral(m)).join(", ")})`
-}
+  const s = shape as TypeShape & { kind: "enum" };
+  return `ENUM(${s.members.map((m) => sqlLiteral(m)).join(", ")})`;
+};
 
 // MySQL has no native BOOLEAN (TINYINT(1) is the conventional stand-in), no native
 // UUID/interval/array/union types, and requires an explicit length on VARCHAR.
@@ -220,23 +234,23 @@ const mysqlHandlers: Record<string, Converter> = {
   enum: mysqlEnumHandler,
   ref: leaf("TEXT"),
   function: leaf("JSON"),
-}
-mysqlHandlers.intersection = intersectionFallback(mysqlHandlers, "JSON")
+};
+mysqlHandlers.intersection = intersectionFallback(mysqlHandlers, "JSON");
 
 function handlersFor(dialect: SqlDialect | undefined): Record<string, Converter> {
-  if (dialect === "sqlite") return sqliteHandlers
-  if (dialect === "mysql") return mysqlHandlers
-  return postgresHandlers
+  if (dialect === "sqlite") return sqliteHandlers;
+  if (dialect === "mysql") return mysqlHandlers;
+  return postgresHandlers;
 }
 
 export interface SqlOptions {
-  dialect?: SqlDialect
+  dialect?: SqlDialect;
   // Strategy for lowering a union-rooted TypeRef to DDL — a function, not an
   // enum, so a caller can hand in either of the two built-in factories below
   // (`singleTableInheritanceSqlLayout()` / `tablePerVariantSqlLayout()`) or
   // their own `SqlUnionLayout`, with no closed set of "kinds" for this
   // package to gatekeep. Defaults to `singleTableInheritanceSqlLayout()`.
-  unionLayout?: SqlUnionLayout
+  unionLayout?: SqlUnionLayout;
 }
 
 // Everything a union layout needs to render DDL for a union-rooted TypeRef,
@@ -245,33 +259,33 @@ export interface SqlOptions {
 // better than position at both the declaration and the call site.
 export type SqlUnionLayoutInput = {
   // The union's own table/type name (`toCreateTable`'s `tableName`).
-  name: string
+  name: string;
   // `meta.discriminator`, when the union is a tagged/discriminated union —
   // undefined for a plain (untagged) union.
-  discriminator: string | undefined
+  discriminator: string | undefined;
   // Each variant paired with its resolved name: the literal value of its
   // discriminator field when one is present (e.g. `"success"`), otherwise a
   // positional `variant1`, `variant2`, ... fallback.
-  variants: { name: string; ref: TypeRef }[]
+  variants: { name: string; ref: TypeRef }[];
   // Reuses the projector's own dialect-aware type mapping (`toSqlDdl` bound
   // to the caller's `opts`) so a layout never needs to duplicate — or drift
   // from — the kind → column-type table above.
-  toColumn: (ref: TypeRef) => SqlColumn
-}
+  toColumn: (ref: TypeRef) => SqlColumn;
+};
 
 // A union-lowering strategy: given a union's name/discriminator/variants and
 // a way to resolve a member TypeRef to a column, render whatever DDL that
 // strategy produces (one CREATE TABLE, several, ...). Kept as a plain
 // function type — see `SqlOptions.unionLayout` above — rather than a fixed
 // enum of named strategies.
-export type SqlUnionLayout = (input: SqlUnionLayoutInput) => string
+export type SqlUnionLayout = (input: SqlUnionLayoutInput) => string;
 
 // Resolves the dialect-appropriate string column type via `toColumn` itself
 // (rather than hardcoding "TEXT"), so the discriminator column tracks each
 // dialect's own string type the same way every other column does.
 function stringColumn(toColumn: (ref: TypeRef) => SqlColumn): SqlColumn {
-  const ref: TypeRef = { shape: { kind: "string" } as TypeShape, meta: {} }
-  return { ...toColumn(ref), nullable: false }
+  const ref: TypeRef = { shape: { kind: "string" } as TypeShape, meta: {} };
+  return { ...toColumn(ref), nullable: false };
 }
 
 /**
@@ -289,26 +303,28 @@ function stringColumn(toColumn: (ref: TypeRef) => SqlColumn): SqlColumn {
  * the discriminator column's fallback name — has somewhere to live without
  * widening `SqlUnionLayout`'s own signature.
  */
-export function singleTableInheritanceSqlLayout(opts?: { discriminatorColumn?: string }): SqlUnionLayout {
-  const fallbackDiscriminatorColumn = opts?.discriminatorColumn ?? "kind"
+export function singleTableInheritanceSqlLayout(opts?: {
+  discriminatorColumn?: string;
+}): SqlUnionLayout {
+  const fallbackDiscriminatorColumn = opts?.discriminatorColumn ?? "kind";
   return ({ name, discriminator, variants, toColumn }) => {
-    const discriminatorName = discriminator ?? fallbackDiscriminatorColumn
-    const columns: string[] = [columnDef(discriminatorName, stringColumn(toColumn))]
+    const discriminatorName = discriminator ?? fallbackDiscriminatorColumn;
+    const columns: string[] = [columnDef(discriminatorName, stringColumn(toColumn))];
 
-    const seen = new Set<string>()
+    const seen = new Set<string>();
     for (const { ref } of variants) {
-      if (!isA(ref.shape.kind, "object")) continue
-      const s = ref.shape as TypeShape & { kind: "object" }
+      if (!isA(ref.shape.kind, "object")) continue;
+      const s = ref.shape as TypeShape & { kind: "object" };
       for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
-        if (fieldName === discriminatorName) continue
-        if (seen.has(fieldName)) continue
-        seen.add(fieldName)
-        columns.push(columnDef(fieldName, { ...toColumn(fieldRef), nullable: true }))
+        if (fieldName === discriminatorName) continue;
+        if (seen.has(fieldName)) continue;
+        seen.add(fieldName);
+        columns.push(columnDef(fieldName, { ...toColumn(fieldRef), nullable: true }));
       }
     }
 
-    return `CREATE TABLE ${name} (\n  ${columns.join(",\n  ")}\n);`
-  }
+    return `CREATE TABLE ${name} (\n  ${columns.join(",\n  ")}\n);`;
+  };
 }
 
 /**
@@ -321,23 +337,28 @@ export function singleTableInheritanceSqlLayout(opts?: { discriminatorColumn?: s
  * A constructor (not a bare layout value) so the table-naming callback has
  * somewhere to live without widening `SqlUnionLayout`'s own signature.
  */
-export function tablePerVariantSqlLayout(opts?: { tableName?: (unionName: string, variantName: string) => string }): SqlUnionLayout {
-  const tableName = opts?.tableName ?? ((unionName: string, variantName: string) => `${unionName}_${variantName}`)
+export function tablePerVariantSqlLayout(opts?: {
+  tableName?: (unionName: string, variantName: string) => string;
+}): SqlUnionLayout {
+  const tableName =
+    opts?.tableName ?? ((unionName: string, variantName: string) => `${unionName}_${variantName}`);
   return ({ name, variants, toColumn }) => {
     const tables = variants.map(({ name: variantName, ref }) => {
-      const table = tableName(name, variantName)
+      const table = tableName(name, variantName);
       if (isA(ref.shape.kind, "object")) {
-        const s = ref.shape as TypeShape & { kind: "object" }
-        const columns = Object.entries(s.fields).map(([fieldName, fieldRef]) => columnDef(fieldName, toColumn(fieldRef)))
-        return `CREATE TABLE ${table} (\n  ${columns.join(",\n  ")}\n);`
+        const s = ref.shape as TypeShape & { kind: "object" };
+        const columns = Object.entries(s.fields).map(([fieldName, fieldRef]) =>
+          columnDef(fieldName, toColumn(fieldRef)),
+        );
+        return `CREATE TABLE ${table} (\n  ${columns.join(",\n  ")}\n);`;
       }
       // A non-object variant (e.g. a plain `union([string(), integer()])`
       // member) has no fields to spread into columns — it lowers to a
       // single `value` column instead.
-      return `CREATE TABLE ${table} (\n  ${columnDef("value", toColumn(ref))}\n);`
-    })
-    return tables.join("\n\n")
-  }
+      return `CREATE TABLE ${table} (\n  ${columnDef("value", toColumn(ref))}\n);`;
+    });
+    return tables.join("\n\n");
+  };
 }
 
 /**
@@ -360,69 +381,76 @@ export function tablePerVariantSqlLayout(opts?: { tableName?: (unionName: string
  * doesn't carry the caller's dialect — override them for other dialects.
  */
 export function baseTablePerVariantSqlLayout(opts?: {
-  baseTableName?: (unionName: string) => string
-  tableName?: (unionName: string, variantName: string) => string
-  foreignKeyColumn?: (unionName: string) => string
-  foreignKeyType?: string
-  primaryKeyColumn?: string
-  primaryKeyType?: string
-  discriminatorColumn?: string
+  baseTableName?: (unionName: string) => string;
+  tableName?: (unionName: string, variantName: string) => string;
+  foreignKeyColumn?: (unionName: string) => string;
+  foreignKeyType?: string;
+  primaryKeyColumn?: string;
+  primaryKeyType?: string;
+  discriminatorColumn?: string;
 }): SqlUnionLayout {
-  const baseTableName = opts?.baseTableName ?? ((unionName: string) => unionName)
-  const tableName = opts?.tableName ?? ((unionName: string, variantName: string) => `${unionName}_${variantName}`)
-  const foreignKeyColumn = opts?.foreignKeyColumn ?? ((unionName: string) => `${unionName}_id`)
-  const foreignKeyType = opts?.foreignKeyType ?? "INTEGER"
-  const primaryKeyColumn = opts?.primaryKeyColumn ?? "id"
-  const primaryKeyType = opts?.primaryKeyType ?? "SERIAL PRIMARY KEY"
-  const fallbackDiscriminatorColumn = opts?.discriminatorColumn ?? "kind"
+  const baseTableName = opts?.baseTableName ?? ((unionName: string) => unionName);
+  const tableName =
+    opts?.tableName ?? ((unionName: string, variantName: string) => `${unionName}_${variantName}`);
+  const foreignKeyColumn = opts?.foreignKeyColumn ?? ((unionName: string) => `${unionName}_id`);
+  const foreignKeyType = opts?.foreignKeyType ?? "INTEGER";
+  const primaryKeyColumn = opts?.primaryKeyColumn ?? "id";
+  const primaryKeyType = opts?.primaryKeyType ?? "SERIAL PRIMARY KEY";
+  const fallbackDiscriminatorColumn = opts?.discriminatorColumn ?? "kind";
 
   return ({ name, discriminator, variants, toColumn }) => {
-    const discriminatorName = discriminator ?? fallbackDiscriminatorColumn
-    const base = baseTableName(name)
-    const fk = foreignKeyColumn(name)
+    const discriminatorName = discriminator ?? fallbackDiscriminatorColumn;
+    const base = baseTableName(name);
+    const fk = foreignKeyColumn(name);
 
-    const objectVariants = variants.filter(({ ref }) => isA(ref.shape.kind, "object"))
+    const objectVariants = variants.filter(({ ref }) => isA(ref.shape.kind, "object"));
 
     // Fields present on EVERY object variant (excluding the discriminator
     // itself) are "shared" and belong on the base table; a field only some
     // variants carry stays on those variants' own child tables.
-    let commonFieldNames: string[] | undefined
+    let commonFieldNames: string[] | undefined;
     for (const { ref } of objectVariants) {
-      const s = ref.shape as TypeShape & { kind: "object" }
-      const fieldNames = Object.keys(s.fields).filter((f) => f !== discriminatorName)
-      commonFieldNames = commonFieldNames === undefined ? fieldNames : commonFieldNames.filter((f) => fieldNames.includes(f))
+      const s = ref.shape as TypeShape & { kind: "object" };
+      const fieldNames = Object.keys(s.fields).filter((f) => f !== discriminatorName);
+      commonFieldNames =
+        commonFieldNames === undefined
+          ? fieldNames
+          : commonFieldNames.filter((f) => fieldNames.includes(f));
     }
-    const common = new Set(commonFieldNames ?? [])
+    const common = new Set(commonFieldNames ?? []);
 
-    const baseColumns: string[] = [`${primaryKeyColumn} ${primaryKeyType}`, columnDef(discriminatorName, stringColumn(toColumn))]
-    const seen = new Set<string>()
+    const baseColumns: string[] = [
+      `${primaryKeyColumn} ${primaryKeyType}`,
+      columnDef(discriminatorName, stringColumn(toColumn)),
+    ];
+    const seen = new Set<string>();
     for (const { ref } of objectVariants) {
-      const s = ref.shape as TypeShape & { kind: "object" }
+      const s = ref.shape as TypeShape & { kind: "object" };
       for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
-        if (!common.has(fieldName) || seen.has(fieldName)) continue
-        seen.add(fieldName)
-        baseColumns.push(columnDef(fieldName, toColumn(fieldRef)))
+        if (!common.has(fieldName) || seen.has(fieldName)) continue;
+        seen.add(fieldName);
+        baseColumns.push(columnDef(fieldName, toColumn(fieldRef)));
       }
     }
-    const baseTable = `CREATE TABLE ${base} (\n  ${baseColumns.join(",\n  ")}\n);`
+    const baseTable = `CREATE TABLE ${base} (\n  ${baseColumns.join(",\n  ")}\n);`;
 
     const childTables = variants.map(({ name: variantLabel, ref }) => {
-      const table = tableName(name, variantLabel)
-      const fkColumn = `${fk} ${foreignKeyType} NOT NULL REFERENCES ${base}(${primaryKeyColumn})`
+      const table = tableName(name, variantLabel);
+      const fkColumn = `${fk} ${foreignKeyType} NOT NULL REFERENCES ${base}(${primaryKeyColumn})`;
       if (isA(ref.shape.kind, "object")) {
-        const s = ref.shape as TypeShape & { kind: "object" }
+        const s = ref.shape as TypeShape & { kind: "object" };
         const columns = Object.entries(s.fields)
           .filter(([fieldName]) => fieldName !== discriminatorName && !common.has(fieldName))
-          .map(([fieldName, fieldRef]) => columnDef(fieldName, toColumn(fieldRef)))
-        return `CREATE TABLE ${table} (\n  ${[fkColumn, ...columns].join(",\n  ")}\n);`
+          .map(([fieldName, fieldRef]) => columnDef(fieldName, toColumn(fieldRef)));
+        return `CREATE TABLE ${table} (\n  ${[fkColumn, ...columns].join(",\n  ")}\n);`;
       }
       // A non-object variant has no fields to spread beyond the FK — same
       // single-`value`-column fallback as tablePerVariantSqlLayout.
-      return `CREATE TABLE ${table} (\n  ${[fkColumn, columnDef("value", toColumn(ref))].join(",\n  ")}\n);`
-    })
+      return `CREATE TABLE ${table} (\n  ${[fkColumn, columnDef("value", toColumn(ref))].join(",\n  ")}\n);`;
+    });
 
-    return [baseTable, ...childTables].join("\n\n")
-  }
+    return [baseTable, ...childTables].join("\n\n");
+  };
 }
 
 // Resolves a union variant's name for both the discriminator-column merge
@@ -433,34 +461,34 @@ export function baseTablePerVariantSqlLayout(opts?: {
 // positional `variant1`, `variant2`, ... fallback.
 function variantName(discriminator: string | undefined, ref: TypeRef, index: number): string {
   if (discriminator !== undefined && isA(ref.shape.kind, "object")) {
-    const s = ref.shape as TypeShape & { kind: "object" }
-    const tagShape = s.fields[discriminator]?.shape
+    const s = ref.shape as TypeShape & { kind: "object" };
+    const tagShape = s.fields[discriminator]?.shape;
     if (tagShape !== undefined && tagShape.kind === "literal") {
-      const value = (tagShape as TypeShape & { kind: "literal" }).value
-      if (typeof value === "string") return value
+      const value = (tagShape as TypeShape & { kind: "literal" }).value;
+      if (typeof value === "string") return value;
     }
   }
-  return `variant${index}`
+  return `variant${index}`;
 }
 
 export function toSqlDdl(ref: TypeRef, opts?: SqlOptions): SqlColumn {
-  const handlers = handlersFor(opts?.dialect)
-  const converter = resolve(ref.shape.kind, handlers)
-  const type = converter === undefined ? "TEXT" : converter(ref.shape)
+  const handlers = handlersFor(opts?.dialect);
+  const converter = resolve(ref.shape.kind, handlers);
+  const type = converter === undefined ? "TEXT" : converter(ref.shape);
 
-  const column: SqlColumn = { type, nullable: ref.meta.nullable === true }
-  if (ref.meta.default !== undefined) column.default = sqlLiteral(ref.meta.default)
+  const column: SqlColumn = { type, nullable: ref.meta.nullable === true };
+  if (ref.meta.default !== undefined) column.default = sqlLiteral(ref.meta.default);
 
-  const checks = buildChecks(ref.shape.kind, ref.meta, opts?.dialect)
-  if (checks.length > 0) column.checks = checks
+  const checks = buildChecks(ref.shape.kind, ref.meta, opts?.dialect);
+  if (checks.length > 0) column.checks = checks;
 
-  const comment = buildComment(ref.meta, opts?.dialect)
-  if (comment !== undefined) column.comment = comment
+  const comment = buildComment(ref.meta, opts?.dialect);
+  if (comment !== undefined) column.comment = comment;
 
-  const references = buildReferences(ref.meta)
-  if (references !== undefined) column.references = references
+  const references = buildReferences(ref.meta);
+  if (references !== undefined) column.references = references;
 
-  return column
+  return column;
 }
 
 // Reads `meta.references` (from-sql.ts's `{ table, column? }` FK-target
@@ -470,38 +498,52 @@ export function toSqlDdl(ref: TypeRef, opts?: SqlOptions): SqlColumn {
 // from-sql.ts actually writes (non-empty `table` string, optional `column`
 // string) — anything else in `meta.references` is ignored rather than
 // guessed at.
-function buildReferences(meta: Record<string, unknown>): { table: string; column?: string } | undefined {
-  const refs = meta.references
-  if (typeof refs !== "object" || refs === null) return undefined
-  const { table, column } = refs as { table?: unknown; column?: unknown }
-  if (typeof table !== "string" || table.length === 0) return undefined
-  if (column !== undefined && typeof column !== "string") return undefined
-  return column === undefined ? { table } : { table, column }
+function buildReferences(
+  meta: Record<string, unknown>,
+): { table: string; column?: string } | undefined {
+  const refs = meta.references;
+  if (typeof refs !== "object" || refs === null) return undefined;
+  const { table, column } = refs as { table?: unknown; column?: unknown };
+  if (typeof table !== "string" || table.length === 0) return undefined;
+  if (column !== undefined && typeof column !== "string") return undefined;
+  return column === undefined ? { table } : { table, column };
 }
 
 export function columnDef(name: string, col: SqlColumn): string {
-  let ddl = `${name} ${col.type}`
-  if (!col.nullable) ddl += " NOT NULL"
-  if (col.default !== undefined) ddl += ` DEFAULT ${col.default}`
-  if (col.checks) for (const check of col.checks) ddl += ` ${check.replaceAll("{name}", name)}`
+  let ddl = `${name} ${col.type}`;
+  if (!col.nullable) ddl += " NOT NULL";
+  if (col.default !== undefined) ddl += ` DEFAULT ${col.default}`;
+  if (col.checks) for (const check of col.checks) ddl += ` ${check.replaceAll("{name}", name)}`;
   if (col.references !== undefined) {
-    ddl += ` REFERENCES ${col.references.table}`
-    if (col.references.column !== undefined) ddl += `(${col.references.column})`
+    ddl += ` REFERENCES ${col.references.table}`;
+    if (col.references.column !== undefined) ddl += `(${col.references.column})`;
   }
-  if (col.comment !== undefined) ddl += ` ${col.comment}`
-  return ddl
+  if (col.comment !== undefined) ddl += ` ${col.comment}`;
+  return ddl;
 }
 
 export function toCreateTable(tableName: string, ref: TypeRef, opts?: SqlOptions): string {
   if (isA(ref.shape.kind, "union")) {
-    const s = ref.shape as TypeShape & { kind: "union" }
-    const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
-    const variants = s.variants.map((variant, i) => ({ name: variantName(discriminator, variant, i + 1), ref: variant }))
-    const layout = opts?.unionLayout ?? singleTableInheritanceSqlLayout()
-    return layout({ name: tableName, discriminator, variants, toColumn: (fieldRef) => toSqlDdl(fieldRef, opts) })
+    const s = ref.shape as TypeShape & { kind: "union" };
+    const discriminator =
+      typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
+    const variants = s.variants.map((variant, i) => ({
+      name: variantName(discriminator, variant, i + 1),
+      ref: variant,
+    }));
+    const layout = opts?.unionLayout ?? singleTableInheritanceSqlLayout();
+    return layout({
+      name: tableName,
+      discriminator,
+      variants,
+      toColumn: (fieldRef) => toSqlDdl(fieldRef, opts),
+    });
   }
-  if (!isA(ref.shape.kind, "object")) throw new Error(`toCreateTable requires an object or union type, got "${ref.shape.kind}"`)
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const columns = Object.entries(s.fields).map(([name, field]) => columnDef(name, toSqlDdl(field, opts)))
-  return `CREATE TABLE ${tableName} (\n  ${columns.join(",\n  ")}\n);`
+  if (!isA(ref.shape.kind, "object"))
+    throw new Error(`toCreateTable requires an object or union type, got "${ref.shape.kind}"`);
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const columns = Object.entries(s.fields).map(([name, field]) =>
+    columnDef(name, toSqlDdl(field, opts)),
+  );
+  return `CREATE TABLE ${tableName} (\n  ${columns.join(",\n  ")}\n);`;
 }

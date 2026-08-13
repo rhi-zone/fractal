@@ -23,10 +23,10 @@
  * reached the last page.
  */
 export type CursorPage<T> = {
-  readonly items: readonly T[]
-  readonly cursor?: string
-  readonly hasMore: boolean
-}
+  readonly items: readonly T[];
+  readonly cursor?: string;
+  readonly hasMore: boolean;
+};
 
 /**
  * Offset-based pagination: a numeric window over a known-size collection.
@@ -34,11 +34,11 @@ export type CursorPage<T> = {
  * the full collection's size.
  */
 export type OffsetPage<T> = {
-  readonly items: readonly T[]
-  readonly offset: number
-  readonly total: number
-  readonly hasMore: boolean
-}
+  readonly items: readonly T[];
+  readonly offset: number;
+  readonly total: number;
+  readonly hasMore: boolean;
+};
 
 /**
  * Either pagination style — the type a handler signature typically names
@@ -48,23 +48,28 @@ export type OffsetPage<T> = {
  * OffsetPage<Book>`); `Page<T>` is the reader-facing union, not a third shape
  * of its own.
  */
-export type Page<T> = CursorPage<T> | OffsetPage<T>
+export type Page<T> = CursorPage<T> | OffsetPage<T>;
 
 /** True when `v` structurally matches `CursorPage<unknown>` — has `items`/`hasMore` but not `OffsetPage`'s numeric `offset`/`total`. */
 export function isCursorPage(v: unknown): v is CursorPage<unknown> {
-  if (typeof v !== "object" || v === null) return false
-  const o = v as Record<string, unknown>
-  return Array.isArray(o.items) && typeof o.hasMore === "boolean" && typeof o.offset !== "number"
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return Array.isArray(o.items) && typeof o.hasMore === "boolean" && typeof o.offset !== "number";
 }
 
 /** True when `v` structurally matches `OffsetPage<unknown>` — numeric `offset`/`total` alongside `items`/`hasMore`. */
 export function isOffsetPage(v: unknown): v is OffsetPage<unknown> {
-  if (typeof v !== "object" || v === null) return false
-  const o = v as Record<string, unknown>
-  return Array.isArray(o.items) && typeof o.hasMore === "boolean" && typeof o.offset === "number" && typeof o.total === "number"
+  if (typeof v !== "object" || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    Array.isArray(o.items) &&
+    typeof o.hasMore === "boolean" &&
+    typeof o.offset === "number" &&
+    typeof o.total === "number"
+  );
 }
 
 /** True when `v` matches either pagination shape — the opt-in runtime sniff, mirroring `isStreamEffect`/`isResultShape` in index.ts. */
 export function isPageShape(v: unknown): v is Page<unknown> {
-  return isOffsetPage(v) || isCursorPage(v)
+  return isOffsetPage(v) || isCursorPage(v);
 }

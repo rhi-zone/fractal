@@ -1,32 +1,32 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA } from "./codegen-helpers.ts";
 
 // FlatBuffers schema language (.fbs): https://flatbuffers.dev/schema/
 export type FbField = {
-  type: string
-  required: boolean
-  deprecated?: boolean
-  description?: string
-}
+  type: string;
+  required: boolean;
+  deprecated?: boolean;
+  description?: string;
+};
 
 export type FbTable = {
-  name: string
-  fields: Array<{ name: string; field: FbField }>
-  description?: string
-}
+  name: string;
+  fields: Array<{ name: string; field: FbField }>;
+  description?: string;
+};
 
 export type FbEnum = {
-  name: string
-  base: string
-  values: readonly string[]
-  description?: string
-}
+  name: string;
+  base: string;
+  values: readonly string[];
+  description?: string;
+};
 
 export type FbUnion = {
-  name: string
-  types: readonly string[]
-  description?: string
-}
+  name: string;
+  types: readonly string[];
+  description?: string;
+};
 
 // FlatBuffers RPC declarations (§ "Services": https://flatbuffers.dev/schema/#services)
 // — `MethodName(Request): Response;`. Both request and response must be table
@@ -35,17 +35,17 @@ export type FbUnion = {
 // field per param) and its return type into a `<Method>Response` table (a
 // single `result` field, or none at all for a `void` return).
 export type FbRpc = {
-  name: string
-  requestType: string
-  responseType: string
-}
+  name: string;
+  requestType: string;
+  responseType: string;
+};
 
 export type FbService = {
-  name: string
-  rpcs: FbRpc[]
-  tables: FbTable[]
-  description?: string
-}
+  name: string;
+  rpcs: FbRpc[];
+  tables: FbTable[];
+  description?: string;
+};
 
 // A declaration hoisted out while lowering a table field whose type has no
 // inline FlatBuffers representation (nested object, tuple, enum, union, map).
@@ -54,14 +54,17 @@ export type FbService = {
 // https://flatbuffers.dev/schema/ — every table/struct/enum/union is a
 // top-level declaration) — so these must always be hoisted out as sibling
 // top-level declarations rather than inlined inside the enclosing braces.
-type FbDecl = { kind: "table"; value: FbTable } | { kind: "enum"; value: FbEnum } | { kind: "union"; value: FbUnion }
+type FbDecl =
+  | { kind: "table"; value: FbTable }
+  | { kind: "enum"; value: FbEnum }
+  | { kind: "union"; value: FbUnion };
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Scalar types: https://flatbuffers.dev/schema/#scalars
 const handlers: Record<string, Converter> = {
@@ -102,16 +105,16 @@ const handlers: Record<string, Converter> = {
   // protobuf's/Cap'n Proto's opaque Any/AnyPointer degrade).
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `[${toFlatBuffers(s.element)}]`
+    const s = shape as TypeShape & { kind: "array" };
+    return `[${toFlatBuffers(s.element)}]`;
   },
   // FlatBuffers's schema language has no streaming construct (§ "Tables" —
   // it's a serialization format for materialized buffers, not a wire
   // protocol with its own RPC streaming semantics like protobuf/gRPC) —
   // degrades to the same `[T]` vector encoding `array` uses above.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `[${toFlatBuffers(s.element)}]`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `[${toFlatBuffers(s.element)}]`;
   },
   // No tuple construct (§ "Tables"); tuples lower to a table with positional
   // e0/e1/... fields — `buildTable`/`buildTupleTable` special-case tuple fields
@@ -120,28 +123,29 @@ const handlers: Record<string, Converter> = {
   tuple: (_shape, meta) => (typeof meta.tableName === "string" ? meta.tableName : "AnyTuple"),
   // No native map (§ "Tables" has no map primitive) — the idiomatic workaround
   // is a vector of a synthesized key/value entry table.
-  map: (_shape, meta) => `[${typeof meta.entryName === "string" ? meta.entryName : "KeyValuePair"}]`,
+  map: (_shape, meta) =>
+    `[${typeof meta.entryName === "string" ? meta.entryName : "KeyValuePair"}]`,
   // Standalone reference falls back to meta.unionName; `buildTable` special-cases
   // union fields to hoist a named sibling `union` declaration.
   union: (_shape, meta) => (typeof meta.unionName === "string" ? meta.unionName : "AnyUnion"),
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "bool"
-    if (typeof s.value === "string") return "string"
-    if (typeof s.value === "boolean") return "bool"
-    return Number.isInteger(s.value) ? "int" : "double"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "bool";
+    if (typeof s.value === "string") return "string";
+    if (typeof s.value === "boolean") return "bool";
+    return Number.isInteger(s.value) ? "int" : "double";
   },
   enum: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`
+    const s = shape as TypeShape & { kind: "enum" };
+    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`;
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // No intersection/mixin construct (§ "Tables") — lossy: falls back to the
   // first member's type, dropping the rest.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "[ubyte]" : toFlatBuffers(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "[ubyte]" : toFlatBuffers(first);
   },
   // FlatBuffers has no callable-type construct — degrades honestly to opaque
   // bytes, same as `unknown` above. (`method` falls back here too via
@@ -154,11 +158,11 @@ const handlers: Record<string, Converter> = {
   // construct to degrade to, so this falls back to opaque bytes same as
   // `function`/`unknown` above. `toFlatBuffersService` is the real encoding.
   interface: leaf("[ubyte]"),
-}
+};
 
 export function toFlatBuffers(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "[ubyte]" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "[ubyte]" : converter(ref.shape, ref.meta);
 }
 
 // FlatBuffers table fields are optional-by-default (unlike structs, § "Tables
@@ -168,7 +172,7 @@ export function toFlatBuffers(ref: TypeRef): string {
 // `(required)` attribute (§ "Attributes": https://flatbuffers.dev/schema/#attributes)
 // rather than leaving the field silently optional.
 function fieldRequired(meta: Readonly<Record<string, unknown>>): boolean {
-  return !(meta.optional === true || meta.nullable === true)
+  return !(meta.optional === true || meta.nullable === true);
 }
 
 // § "Attributes" (https://flatbuffers.dev/schema/#attributes): `required`
@@ -201,10 +205,10 @@ const FB_SCALAR_TYPES = new Set([
   "uint64",
   "double",
   "float64",
-])
+]);
 
 function requiredFor(type: string, required: boolean): boolean {
-  return required && !FB_SCALAR_TYPES.has(type)
+  return required && !FB_SCALAR_TYPES.has(type);
 }
 
 // § "Unions" (https://flatbuffers.dev/schema/#unions): a union may only
@@ -218,12 +222,12 @@ function requiredFor(type: string, required: boolean): boolean {
 // arrays, ...) needs a synthesized single-field wrapper table, the same
 // hoisting pattern used for nested objects/tuples/maps/arrays-of-arrays above.
 function unionVariantIsTableLike(kind: string): boolean {
-  return isA(kind, "object") || kind === "tuple" || kind === "ref" || kind === "instance"
+  return isA(kind, "object") || kind === "tuple" || kind === "ref" || kind === "instance";
 }
 
 function wrapperNameFor(fbType: string): string {
-  const alnum = fbType.replace(/[^A-Za-z0-9]/g, "")
-  return `${capitalize(alnum.length > 0 ? alnum : "Value")}Wrapper`
+  const alnum = fbType.replace(/[^A-Za-z0-9]/g, "");
+  return `${capitalize(alnum.length > 0 ? alnum : "Value")}Wrapper`;
 }
 
 // Resolve a union variant to the type name usable inside a `union { ... }`
@@ -232,52 +236,66 @@ function wrapperNameFor(fbType: string): string {
 // itself (e.g. two different unions both containing a `string` variant
 // should share one `StringWrapper` rather than redeclaring it).
 function wrapUnionVariant(variant: TypeRef, pushWrapper: (table: FbTable) => void): string {
-  const fbType = toFlatBuffers(variant)
-  if (unionVariantIsTableLike(variant.shape.kind)) return fbType
-  const name = wrapperNameFor(fbType)
-  pushWrapper({ name, fields: [{ name: "value", field: { type: fbType, required: requiredFor(fbType, true) } }] })
-  return name
+  const fbType = toFlatBuffers(variant);
+  if (unionVariantIsTableLike(variant.shape.kind)) return fbType;
+  const name = wrapperNameFor(fbType);
+  pushWrapper({
+    name,
+    fields: [{ name: "value", field: { type: fbType, required: requiredFor(fbType, true) } }],
+  });
+  return name;
 }
 
 function buildTupleTable(name: string, ref: TypeRef): FbTable {
-  const shape = ref.shape as TypeShape & { kind: "tuple" }
+  const shape = ref.shape as TypeShape & { kind: "tuple" };
   const fields: FbTable["fields"] = shape.elements.map((element, i) => ({
     name: `e${i}`,
-    field: { type: toFlatBuffers(element), required: requiredFor(toFlatBuffers(element), fieldRequired(element.meta)) },
-  }))
-  const table: FbTable = { name, fields }
-  if (typeof ref.meta.description === "string") table.description = ref.meta.description
-  return table
+    field: {
+      type: toFlatBuffers(element),
+      required: requiredFor(toFlatBuffers(element), fieldRequired(element.meta)),
+    },
+  }));
+  const table: FbTable = { name, fields };
+  if (typeof ref.meta.description === "string") table.description = ref.meta.description;
+  return table;
 }
 
 function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const fields: FbTable["fields"] = []
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const fields: FbTable["fields"] = [];
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
     // No null/void primitive (§ "Scalars") — skipped entirely rather than
     // degraded to a placeholder scalar, since an omitted (optional-by-default)
     // table field is the honest FlatBuffers encoding of "no value".
-    if (isA(fieldRef.shape.kind, "null") || isA(fieldRef.shape.kind, "void")) continue
+    if (isA(fieldRef.shape.kind, "null") || isA(fieldRef.shape.kind, "void")) continue;
 
     const deprecated: { deprecated: true } | Record<string, never> =
-      fieldRef.meta.deprecated === true ? { deprecated: true } : {}
+      fieldRef.meta.deprecated === true ? { deprecated: true } : {};
     const description: { description: string } | Record<string, never> =
-      typeof fieldRef.meta.description === "string" ? { description: fieldRef.meta.description } : {}
-    const required = fieldRequired(fieldRef.meta)
+      typeof fieldRef.meta.description === "string"
+        ? { description: fieldRef.meta.description }
+        : {};
+    const required = fieldRequired(fieldRef.meta);
 
     if (isA(fieldRef.shape.kind, "object")) {
-      const nestedName = capitalize(fieldName)
-      decls.push({ kind: "table", value: buildTable(nestedName, fieldRef, decls) })
-      fields.push({ name: fieldName, field: { type: nestedName, required, ...deprecated, ...description } })
+      const nestedName = capitalize(fieldName);
+      decls.push({ kind: "table", value: buildTable(nestedName, fieldRef, decls) });
+      fields.push({
+        name: fieldName,
+        field: { type: nestedName, required, ...deprecated, ...description },
+      });
     } else if (
       fieldRef.shape.kind === "array" &&
       isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
     ) {
-      const nestedName = capitalize(fieldName)
-      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-      decls.push({ kind: "table", value: buildTable(nestedName, element, decls) })
-      fields.push({ name: fieldName, field: { type: `[${nestedName}]`, required: false, ...deprecated, ...description } })
+      const nestedName = capitalize(fieldName);
+      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+      decls.push({ kind: "table", value: buildTable(nestedName, element, decls) });
+      fields.push({
+        name: fieldName,
+        field: { type: `[${nestedName}]`, required: false, ...deprecated, ...description },
+      });
     } else if (
       fieldRef.shape.kind === "array" &&
       (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "array"
@@ -288,161 +306,208 @@ function buildTable(name: string, ref: TypeRef, decls: FbDecl[]): FbTable {
       // one-field wrapper table around the inner vector (mirroring how
       // nested objects/tuples/maps above get hoisted sibling tables) and
       // making the outer field a vector of that wrapper.
-      const nestedName = `${capitalize(fieldName)}Item`
-      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-      const innerType = toFlatBuffers(element)
+      const nestedName = `${capitalize(fieldName)}Item`;
+      const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+      const innerType = toFlatBuffers(element);
       decls.push({
         kind: "table",
         value: {
           name: nestedName,
-          fields: [{ name: "items", field: { type: innerType, required: requiredFor(innerType, true) } }],
+          fields: [
+            { name: "items", field: { type: innerType, required: requiredFor(innerType, true) } },
+          ],
         },
-      })
-      fields.push({ name: fieldName, field: { type: `[${nestedName}]`, required: false, ...deprecated, ...description } })
+      });
+      fields.push({
+        name: fieldName,
+        field: { type: `[${nestedName}]`, required: false, ...deprecated, ...description },
+      });
     } else if (fieldRef.shape.kind === "enum") {
-      const enumName = capitalize(fieldName)
-      const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members
-      decls.push({ kind: "enum", value: { name: enumName, base: "int", values: members } })
+      const enumName = capitalize(fieldName);
+      const members = (fieldRef.shape as TypeShape & { kind: "enum" }).members;
+      decls.push({ kind: "enum", value: { name: enumName, base: "int", values: members } });
       // Enums are int-backed (§ "Enums"), thus scalar, regardless of their own declared name.
-      fields.push({ name: fieldName, field: { type: enumName, required: false, ...deprecated, ...description } })
+      fields.push({
+        name: fieldName,
+        field: { type: enumName, required: false, ...deprecated, ...description },
+      });
     } else if (fieldRef.shape.kind === "union") {
-      const unionName = capitalize(fieldName)
-      const variants = (fieldRef.shape as TypeShape & { kind: "union" }).variants
+      const unionName = capitalize(fieldName);
+      const variants = (fieldRef.shape as TypeShape & { kind: "union" }).variants;
       const pushWrapper = (wrapper: FbTable) => {
-        if (!decls.some((d) => d.kind === "table" && d.value.name === wrapper.name)) decls.push({ kind: "table", value: wrapper })
-      }
-      decls.push({ kind: "union", value: { name: unionName, types: variants.map((v) => wrapUnionVariant(v, pushWrapper)) } })
-      fields.push({ name: fieldName, field: { type: unionName, required: false, ...deprecated, ...description } })
+        if (!decls.some((d) => d.kind === "table" && d.value.name === wrapper.name))
+          decls.push({ kind: "table", value: wrapper });
+      };
+      decls.push({
+        kind: "union",
+        value: { name: unionName, types: variants.map((v) => wrapUnionVariant(v, pushWrapper)) },
+      });
+      fields.push({
+        name: fieldName,
+        field: { type: unionName, required: false, ...deprecated, ...description },
+      });
     } else if (fieldRef.shape.kind === "map") {
-      const mapShape = fieldRef.shape as TypeShape & { kind: "map" }
-      const entryName = `${capitalize(fieldName)}Entry`
+      const mapShape = fieldRef.shape as TypeShape & { kind: "map" };
+      const entryName = `${capitalize(fieldName)}Entry`;
       decls.push({
         kind: "table",
         value: {
           name: entryName,
           fields: [
-            { name: "key", field: { type: toFlatBuffers(mapShape.key), required: requiredFor(toFlatBuffers(mapShape.key), true) } },
-            { name: "value", field: { type: toFlatBuffers(mapShape.value), required: requiredFor(toFlatBuffers(mapShape.value), true) } },
+            {
+              name: "key",
+              field: {
+                type: toFlatBuffers(mapShape.key),
+                required: requiredFor(toFlatBuffers(mapShape.key), true),
+              },
+            },
+            {
+              name: "value",
+              field: {
+                type: toFlatBuffers(mapShape.value),
+                required: requiredFor(toFlatBuffers(mapShape.value), true),
+              },
+            },
           ],
         },
-      })
-      fields.push({ name: fieldName, field: { type: `[${entryName}]`, required: false, ...deprecated, ...description } })
+      });
+      fields.push({
+        name: fieldName,
+        field: { type: `[${entryName}]`, required: false, ...deprecated, ...description },
+      });
     } else if (fieldRef.shape.kind === "tuple") {
-      const nestedName = capitalize(fieldName)
-      decls.push({ kind: "table", value: buildTupleTable(nestedName, fieldRef) })
-      fields.push({ name: fieldName, field: { type: nestedName, required, ...deprecated, ...description } })
+      const nestedName = capitalize(fieldName);
+      decls.push({ kind: "table", value: buildTupleTable(nestedName, fieldRef) });
+      fields.push({
+        name: fieldName,
+        field: { type: nestedName, required, ...deprecated, ...description },
+      });
     } else {
       fields.push({
         name: fieldName,
-        field: { type: toFlatBuffers(fieldRef), required: requiredFor(toFlatBuffers(fieldRef), required), ...deprecated, ...description },
-      })
+        field: {
+          type: toFlatBuffers(fieldRef),
+          required: requiredFor(toFlatBuffers(fieldRef), required),
+          ...deprecated,
+          ...description,
+        },
+      });
     }
   }
 
-  const table: FbTable = { name, fields }
-  if (typeof ref.meta.description === "string") table.description = ref.meta.description
-  return table
+  const table: FbTable = { name, fields };
+  if (typeof ref.meta.description === "string") table.description = ref.meta.description;
+  return table;
 }
 
 function buildService(name: string, ref: TypeRef): FbService {
-  const shape = ref.shape as TypeShape & { kind: "interface" }
-  const rpcs: FbRpc[] = []
-  const tables: FbTable[] = []
+  const shape = ref.shape as TypeShape & { kind: "interface" };
+  const rpcs: FbRpc[] = [];
+  const tables: FbTable[] = [];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
     const m = methodRef.shape as TypeShape & {
-      kind: "method" | "function"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-    }
-    const rpcName = capitalize(methodName)
+      kind: "method" | "function";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+    };
+    const rpcName = capitalize(methodName);
 
-    const requestType = `${rpcName}Request`
+    const requestType = `${rpcName}Request`;
     tables.push({
       name: requestType,
       fields: m.params.map((p) => ({
         name: p.name,
         field: { type: toFlatBuffers(p.type), required: requiredFor(toFlatBuffers(p.type), true) },
       })),
-    })
+    });
 
-    const responseType = `${rpcName}Response`
-    const isVoid = m.returnType.shape.kind === "void"
+    const responseType = `${rpcName}Response`;
+    const isVoid = m.returnType.shape.kind === "void";
     tables.push({
       name: responseType,
       fields: isVoid
         ? []
-        : [{ name: "result", field: { type: toFlatBuffers(m.returnType), required: requiredFor(toFlatBuffers(m.returnType), true) } }],
-    })
+        : [
+            {
+              name: "result",
+              field: {
+                type: toFlatBuffers(m.returnType),
+                required: requiredFor(toFlatBuffers(m.returnType), true),
+              },
+            },
+          ],
+    });
 
-    rpcs.push({ name: rpcName, requestType, responseType })
+    rpcs.push({ name: rpcName, requestType, responseType });
   }
 
-  const service: FbService = { name, rpcs, tables }
-  if (typeof ref.meta.description === "string") service.description = ref.meta.description
-  return service
+  const service: FbService = { name, rpcs, tables };
+  if (typeof ref.meta.description === "string") service.description = ref.meta.description;
+  return service;
 }
 
 function renderFieldLine(entry: FbTable["fields"][number]): string[] {
-  const { field } = entry
-  const lines: string[] = []
+  const { field } = entry;
+  const lines: string[] = [];
   // FlatBuffers has no doc-comment keyword of its own (§ "Schemas"); `///`
   // line comments immediately above a field are the idiomatic convention read
   // by flatc and downstream tooling.
-  if (typeof field.description === "string") lines.push(`  /// ${field.description}`)
-  const attrs: string[] = []
+  if (typeof field.description === "string") lines.push(`  /// ${field.description}`);
+  const attrs: string[] = [];
   // § "Attributes": https://flatbuffers.dev/schema/#attributes
-  if (field.required) attrs.push("required")
-  if (field.deprecated === true) attrs.push("deprecated")
-  const suffix = attrs.length > 0 ? ` (${attrs.join(", ")})` : ""
-  lines.push(`  ${entry.name}:${field.type}${suffix};`)
-  return lines
+  if (field.required) attrs.push("required");
+  if (field.deprecated === true) attrs.push("deprecated");
+  const suffix = attrs.length > 0 ? ` (${attrs.join(", ")})` : "";
+  lines.push(`  ${entry.name}:${field.type}${suffix};`);
+  return lines;
 }
 
 function renderTable(table: FbTable): string {
-  const lines: string[] = []
-  if (typeof table.description === "string") lines.push(`/// ${table.description}`)
-  lines.push(`table ${table.name} {`)
-  for (const entry of table.fields) lines.push(...renderFieldLine(entry))
-  lines.push("}")
-  return lines.join("\n")
+  const lines: string[] = [];
+  if (typeof table.description === "string") lines.push(`/// ${table.description}`);
+  lines.push(`table ${table.name} {`);
+  for (const entry of table.fields) lines.push(...renderFieldLine(entry));
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function renderEnum(e: FbEnum): string {
-  const lines: string[] = []
-  if (typeof e.description === "string") lines.push(`/// ${e.description}`)
-  lines.push(`enum ${e.name} : ${e.base} {`)
-  lines.push(`  ${e.values.join(", ")}`)
-  lines.push("}")
-  return lines.join("\n")
+  const lines: string[] = [];
+  if (typeof e.description === "string") lines.push(`/// ${e.description}`);
+  lines.push(`enum ${e.name} : ${e.base} {`);
+  lines.push(`  ${e.values.join(", ")}`);
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function renderUnion(u: FbUnion): string {
-  const lines: string[] = []
-  if (typeof u.description === "string") lines.push(`/// ${u.description}`)
-  lines.push(`union ${u.name} { ${u.types.join(", ")} }`)
-  return lines.join("\n")
+  const lines: string[] = [];
+  if (typeof u.description === "string") lines.push(`/// ${u.description}`);
+  lines.push(`union ${u.name} { ${u.types.join(", ")} }`);
+  return lines.join("\n");
 }
 
 function renderDecl(decl: FbDecl): string {
   switch (decl.kind) {
     case "table":
-      return renderTable(decl.value)
+      return renderTable(decl.value);
     case "enum":
-      return renderEnum(decl.value)
+      return renderEnum(decl.value);
     case "union":
-      return renderUnion(decl.value)
+      return renderUnion(decl.value);
   }
 }
 
 function renderService(service: FbService): string {
-  const lines: string[] = []
-  for (const table of service.tables) lines.push(renderTable(table), "")
-  if (typeof service.description === "string") lines.push(`/// ${service.description}`)
-  lines.push(`rpc_service ${service.name} {`)
-  for (const rpc of service.rpcs) lines.push(`  ${rpc.name}(${rpc.requestType}):${rpc.responseType};`)
-  lines.push("}")
-  return lines.join("\n")
+  const lines: string[] = [];
+  for (const table of service.tables) lines.push(renderTable(table), "");
+  if (typeof service.description === "string") lines.push(`/// ${service.description}`);
+  lines.push(`rpc_service ${service.name} {`);
+  for (const rpc of service.rpcs)
+    lines.push(`  ${rpc.name}(${rpc.requestType}):${rpc.responseType};`);
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /**
@@ -453,9 +518,10 @@ function renderService(service: FbService): string {
  * declarations first, in the order they were discovered.
  */
 export function toFlatBuffersTable(name: string, ref: TypeRef): string {
-  const decls: FbDecl[] = []
-  const table = ref.shape.kind === "tuple" ? buildTupleTable(name, ref) : buildTable(name, ref, decls)
-  return [...decls.map(renderDecl), renderTable(table)].join("\n\n")
+  const decls: FbDecl[] = [];
+  const table =
+    ref.shape.kind === "tuple" ? buildTupleTable(name, ref) : buildTable(name, ref, decls);
+  return [...decls.map(renderDecl), renderTable(table)].join("\n\n");
 }
 
 /**
@@ -468,7 +534,7 @@ export function toFlatBuffersTable(name: string, ref: TypeRef): string {
  * a `<Method>Response` table, rendered alongside the `rpc_service` block.
  */
 export function toFlatBuffersService(name: string, ref: TypeRef): string {
-  return renderService(buildService(name, ref))
+  return renderService(buildService(name, ref));
 }
 
 /**
@@ -478,35 +544,35 @@ export function toFlatBuffersService(name: string, ref: TypeRef): string {
  * via their positional e0/e1/... encoding).
  */
 export function toFlatBuffersDeclarations(registry: Record<string, TypeRef>): string {
-  const blocks: string[] = []
+  const blocks: string[] = [];
   for (const [name, ref] of Object.entries(registry)) {
     if (ref.shape.kind === "interface") {
-      blocks.push(toFlatBuffersService(name, ref))
-      continue
+      blocks.push(toFlatBuffersService(name, ref));
+      continue;
     }
     if (ref.shape.kind === "enum") {
-      const members = (ref.shape as TypeShape & { kind: "enum" }).members
-      const e: FbEnum = { name, base: "int", values: members }
-      if (typeof ref.meta.description === "string") e.description = ref.meta.description
-      blocks.push(renderEnum(e))
-      continue
+      const members = (ref.shape as TypeShape & { kind: "enum" }).members;
+      const e: FbEnum = { name, base: "int", values: members };
+      if (typeof ref.meta.description === "string") e.description = ref.meta.description;
+      blocks.push(renderEnum(e));
+      continue;
     }
     if (ref.shape.kind === "union") {
-      const variants = (ref.shape as TypeShape & { kind: "union" }).variants
-      const wrapperTables: FbTable[] = []
+      const variants = (ref.shape as TypeShape & { kind: "union" }).variants;
+      const wrapperTables: FbTable[] = [];
       const pushWrapper = (wrapper: FbTable) => {
-        if (!wrapperTables.some((t) => t.name === wrapper.name)) wrapperTables.push(wrapper)
-      }
-      const types = variants.map((v) => wrapUnionVariant(v, pushWrapper))
-      for (const wrapper of wrapperTables) blocks.push(renderTable(wrapper))
-      const u: FbUnion = { name, types }
-      if (typeof ref.meta.description === "string") u.description = ref.meta.description
-      blocks.push(renderUnion(u))
-      continue
+        if (!wrapperTables.some((t) => t.name === wrapper.name)) wrapperTables.push(wrapper);
+      };
+      const types = variants.map((v) => wrapUnionVariant(v, pushWrapper));
+      for (const wrapper of wrapperTables) blocks.push(renderTable(wrapper));
+      const u: FbUnion = { name, types };
+      if (typeof ref.meta.description === "string") u.description = ref.meta.description;
+      blocks.push(renderUnion(u));
+      continue;
     }
-    blocks.push(toFlatBuffersTable(name, ref))
+    blocks.push(toFlatBuffersTable(name, ref));
   }
-  return blocks.join("\n\n")
+  return blocks.join("\n\n");
 }
 
 /**
@@ -522,12 +588,12 @@ export function renderFlatBuffers(
   unions: FbUnion[] = [],
   services: FbService[] = [],
 ): string {
-  const lines: string[] = []
-  for (const e of enums) lines.push(renderEnum(e), "")
-  for (const u of unions) lines.push(renderUnion(u), "")
-  for (const table of tables) lines.push(renderTable(table), "")
+  const lines: string[] = [];
+  for (const e of enums) lines.push(renderEnum(e), "");
+  for (const u of unions) lines.push(renderUnion(u), "");
+  for (const table of tables) lines.push(renderTable(table), "");
   for (const service of services) {
-    lines.push(renderService(service), "")
+    lines.push(renderService(service), "");
   }
-  return `${lines.join("\n").trimEnd()}\n`
+  return `${lines.join("\n").trimEnd()}\n`;
 }

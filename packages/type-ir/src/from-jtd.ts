@@ -31,7 +31,7 @@
 //     recover a single member (the "first element / first member" toJtd
 //     kept) — the rest were already dropped on the way out.
 
-import { t, types, type TypeRef, type TypeShape } from "./index.ts"
+import { t, types, type TypeRef, type TypeShape } from "./index.ts";
 import {
   bytes,
   datetime,
@@ -49,22 +49,24 @@ import {
   uint32,
   uri,
   uuid,
-} from "./kinds/common.ts"
-import type { Jtd } from "./jtd.ts"
+} from "./kinds/common.ts";
+import type { Jtd } from "./jtd.ts";
 
-export type { Jtd }
+export type { Jtd };
 
 function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
-  if (Object.keys(extra).length === 0) return ref
-  return { shape: ref.shape, meta: { ...ref.meta, ...extra } }
+  if (Object.keys(extra).length === 0) return ref;
+  return { shape: ref.shape, meta: { ...ref.meta, ...extra } };
 }
 
 function objectFields(ref: TypeRef): Record<string, TypeRef> {
-  return ref.shape.kind === "object" ? { ...(ref.shape as TypeShape & { kind: "object" }).fields } : {}
+  return ref.shape.kind === "object"
+    ? { ...(ref.shape as TypeShape & { kind: "object" }).fields }
+    : {};
 }
 
 function arrayElement(ref: TypeRef): TypeRef {
-  return (ref.shape as TypeShape & { kind: "array" }).element
+  return (ref.shape as TypeShape & { kind: "array" }).element;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +88,7 @@ const typeForms: Record<string, () => TypeRef> = {
   int32: () => int32(),
   uint32: () => uint32(),
   timestamp: () => datetime(),
-}
+};
 
 // `metadata.format` values jtd.ts's string handlers stamp onto an otherwise
 // plain `{ type: "string" }` form — consumed (deleted from `metadata`) when
@@ -97,30 +99,30 @@ const stringFormats: Record<string, () => TypeRef> = {
   email: () => email(),
   time: () => time(),
   duration: () => duration(),
-}
+};
 
 function fromTypeForm(typeName: string, metadata: Record<string, unknown>): TypeRef {
   if (typeName === "string") {
     if (metadata.contentEncoding === "base64") {
-      delete metadata.contentEncoding
-      return bytes()
+      delete metadata.contentEncoding;
+      return bytes();
     }
     if (typeof metadata.format === "string") {
-      const known = stringFormats[metadata.format]
+      const known = stringFormats[metadata.format];
       if (known !== undefined) {
-        delete metadata.format
-        return known()
+        delete metadata.format;
+        return known();
       }
     }
-    return t(types.string)
+    return t(types.string);
   }
 
-  const known = typeForms[typeName]
-  if (known !== undefined) return known()
+  const known = typeForms[typeName];
+  if (known !== undefined) return known();
 
   // Unrecognized type name (future JTD revision, or a non-standard
   // extension) — keep it visible rather than silently guessing a kind.
-  return t(types.string, { jtdType: typeName })
+  return t(types.string, { jtdType: typeName });
 }
 
 // ---------------------------------------------------------------------------
@@ -128,21 +130,21 @@ function fromTypeForm(typeName: string, metadata: Record<string, unknown>): Type
 // ---------------------------------------------------------------------------
 
 function fromProperties(jtd: Jtd): TypeRef {
-  const properties = (jtd.properties as Record<string, Jtd> | undefined) ?? {}
-  const optionalProperties = (jtd.optionalProperties as Record<string, Jtd> | undefined) ?? {}
+  const properties = (jtd.properties as Record<string, Jtd> | undefined) ?? {};
+  const optionalProperties = (jtd.optionalProperties as Record<string, Jtd> | undefined) ?? {};
 
-  const fields: Record<string, TypeRef> = {}
-  for (const [name, schema] of Object.entries(properties)) fields[name] = fromJtd(schema)
+  const fields: Record<string, TypeRef> = {};
+  for (const [name, schema] of Object.entries(properties)) fields[name] = fromJtd(schema);
   for (const [name, schema] of Object.entries(optionalProperties)) {
-    fields[name] = withMeta(fromJtd(schema), { optional: true })
+    fields[name] = withMeta(fromJtd(schema), { optional: true });
   }
 
-  const ref = t(types.object(fields))
+  const ref = t(types.object(fields));
   // `additionalProperties` (RFC 8927 §3.3.5) is a bare boolean flag (unlike
   // JSON Schema's schema-valued keyword of the same name) — no structural
   // TypeRef equivalent, so it rides in meta like any other JTD-only
   // annotation.
-  return jtd.additionalProperties === true ? withMeta(ref, { additionalProperties: true }) : ref
+  return jtd.additionalProperties === true ? withMeta(ref, { additionalProperties: true }) : ref;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,15 +157,15 @@ function fromProperties(jtd: Jtd): TypeRef {
 // ---------------------------------------------------------------------------
 
 function fromDiscriminator(jtd: Jtd): TypeRef {
-  const discriminator = String(jtd.discriminator)
-  const mapping = (jtd.mapping as Record<string, Jtd> | undefined) ?? {}
+  const discriminator = String(jtd.discriminator);
+  const mapping = (jtd.mapping as Record<string, Jtd> | undefined) ?? {};
 
   const variants: TypeRef[] = Object.entries(mapping).map(([tag, schema]) => {
-    const variantRef = fromJtd(schema)
-    return t(types.object({ [discriminator]: t(types.literal(tag)), ...objectFields(variantRef) }))
-  })
+    const variantRef = fromJtd(schema);
+    return t(types.object({ [discriminator]: t(types.literal(tag)), ...objectFields(variantRef) }));
+  });
 
-  return withMeta(t(types.union(variants)), { discriminator })
+  return withMeta(t(types.union(variants)), { discriminator });
 }
 
 // ---------------------------------------------------------------------------
@@ -175,54 +177,56 @@ function fromDiscriminator(jtd: Jtd): TypeRef {
 // ---------------------------------------------------------------------------
 
 function baseFromForm(jtd: Jtd, metadata: Record<string, unknown>): TypeRef {
-  if (typeof jtd.ref === "string") return t(types.ref(jtd.ref))
-  if (typeof jtd.type === "string") return fromTypeForm(jtd.type, metadata)
-  if (Array.isArray(jtd.enum)) return t(types.enum(jtd.enum as string[]))
-  if (jtd.elements !== undefined) return t(types.array(fromJtd(jtd.elements as Jtd)))
-  if (jtd.properties !== undefined || jtd.optionalProperties !== undefined) return fromProperties(jtd)
-  if (jtd.values !== undefined) return t(types.map(t(types.string), fromJtd(jtd.values as Jtd)))
-  if (typeof jtd.discriminator === "string" && jtd.mapping !== undefined) return fromDiscriminator(jtd)
+  if (typeof jtd.ref === "string") return t(types.ref(jtd.ref));
+  if (typeof jtd.type === "string") return fromTypeForm(jtd.type, metadata);
+  if (Array.isArray(jtd.enum)) return t(types.enum(jtd.enum as string[]));
+  if (jtd.elements !== undefined) return t(types.array(fromJtd(jtd.elements as Jtd)));
+  if (jtd.properties !== undefined || jtd.optionalProperties !== undefined)
+    return fromProperties(jtd);
+  if (jtd.values !== undefined) return t(types.map(t(types.string), fromJtd(jtd.values as Jtd)));
+  if (typeof jtd.discriminator === "string" && jtd.mapping !== undefined)
+    return fromDiscriminator(jtd);
   // Empty form (RFC 8927 §3.3.1) — matches anything.
-  return t(types.unknown)
+  return t(types.unknown);
 }
 
 function applyEscapeHatches(base: TypeRef, metadata: Record<string, unknown>): TypeRef {
-  let result = base
+  let result = base;
 
   if (metadata.type === "int64") {
-    result = int64()
-    delete metadata.type
+    result = int64();
+    delete metadata.type;
   }
   if (metadata.never === true) {
-    result = t(types.never)
-    delete metadata.never
+    result = t(types.never);
+    delete metadata.never;
   }
   if (metadata.const !== undefined) {
-    result = t(types.literal(metadata.const as string | number | boolean | null))
-    delete metadata.const
+    result = t(types.literal(metadata.const as string | number | boolean | null));
+    delete metadata.const;
   }
   if (metadata.function === true) {
-    result = t(types.function([], t(types.unknown)))
-    delete metadata.function
+    result = t(types.function([], t(types.unknown)));
+    delete metadata.function;
   }
   if (Array.isArray(metadata.union)) {
-    result = t(types.union((metadata.union as Jtd[]).map(fromJtd)))
-    delete metadata.union
+    result = t(types.union((metadata.union as Jtd[]).map(fromJtd)));
+    delete metadata.union;
   }
   if (metadata.tuple === true && result.shape.kind === "array") {
-    result = t(types.tuple([arrayElement(result)]))
-    delete metadata.tuple
+    result = t(types.tuple([arrayElement(result)]));
+    delete metadata.tuple;
   }
   if (metadata.intersection === true) {
-    result = t(types.intersection([result]))
-    delete metadata.intersection
+    result = t(types.intersection([result]));
+    delete metadata.intersection;
   }
   if (metadata.stream === true && result.shape.kind === "array") {
-    result = t(types.stream(arrayElement(result)))
-    delete metadata.stream
+    result = t(types.stream(arrayElement(result)));
+    delete metadata.stream;
   }
 
-  return result
+  return result;
 }
 
 /**
@@ -237,10 +241,12 @@ function applyEscapeHatches(base: TypeRef, metadata: Record<string, unknown>): T
  * `definitions` into a `TypeRefDocument`'s `defs` alongside it.
  */
 export function fromJtd(jtd: Jtd): TypeRef {
-  const metadata: Record<string, unknown> = { ...((jtd.metadata as Record<string, unknown> | undefined) ?? {}) }
-  const nullable = jtd.nullable === true
+  const metadata: Record<string, unknown> = {
+    ...((jtd.metadata as Record<string, unknown> | undefined) ?? {}),
+  };
+  const nullable = jtd.nullable === true;
 
-  const base = applyEscapeHatches(baseFromForm(jtd, metadata), metadata)
+  const base = applyEscapeHatches(baseFromForm(jtd, metadata), metadata);
 
   // jtd.ts's null/void handlers both degrade to exactly `{ nullable: true }`
   // (empty form, forced nullable, no metadata) — indistinguishable from each
@@ -248,13 +254,13 @@ export function fromJtd(jtd: Jtd): TypeRef {
   // from-json-schema.ts's forward direction already settled on ("void
   // projects forward to null; null round-trips to null, not void").
   if (base.shape.kind === "unknown" && nullable && Object.keys(metadata).length === 0) {
-    return t(types.null)
+    return t(types.null);
   }
 
-  let result = base
-  if (Object.keys(metadata).length > 0) result = withMeta(result, metadata)
-  if (nullable) result = withMeta(result, { nullable: true })
-  return result
+  let result = base;
+  if (Object.keys(metadata).length > 0) result = withMeta(result, metadata);
+  if (nullable) result = withMeta(result, { nullable: true });
+  return result;
 }
 
 /**
@@ -267,10 +273,12 @@ export function fromJtd(jtd: Jtd): TypeRef {
  * (index.ts).
  */
 export function fromJtdDocument(jtd: Jtd): { root: TypeRef; defs: Record<string, TypeRef> } {
-  const { definitions, ...rest } = jtd
-  const defs: Record<string, TypeRef> = {}
-  for (const [name, schema] of Object.entries((definitions as Record<string, Jtd> | undefined) ?? {})) {
-    defs[name] = fromJtd(schema)
+  const { definitions, ...rest } = jtd;
+  const defs: Record<string, TypeRef> = {};
+  for (const [name, schema] of Object.entries(
+    (definitions as Record<string, Jtd> | undefined) ?? {},
+  )) {
+    defs[name] = fromJtd(schema);
   }
-  return { root: fromJtd(rest), defs }
+  return { root: fromJtd(rest), defs };
 }

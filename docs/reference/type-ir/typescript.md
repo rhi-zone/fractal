@@ -12,10 +12,10 @@ spec link).
 ## TypeScript (native)
 
 ```ts
-import { t, types } from "@rhi-zone/fractal-type-ir"
-import { toTypeDeclaration } from "@rhi-zone/fractal-type-ir/typescript"
+import { t, types } from "@rhi-zone/fractal-type-ir";
+import { toTypeDeclaration } from "@rhi-zone/fractal-type-ir/typescript";
 
-const variant = t(types.enum(["small", "medium", "large"]))
+const variant = t(types.enum(["small", "medium", "large"]));
 const orderItem = t(
   types.object({
     productId: t(types.string),
@@ -23,9 +23,9 @@ const orderItem = t(
     price: t(types.number),
     variant: { ...variant, meta: { ...variant.meta, optional: true } },
   }),
-)
+);
 
-toTypeDeclaration("OrderItem", orderItem)
+toTypeDeclaration("OrderItem", orderItem);
 // type OrderItem = { productId: string; quantity: number; price: number; variant?: "small" | "medium" | "large" };
 ```
 
@@ -36,10 +36,12 @@ in `type Name = ...;` with a TSDoc comment from `meta.description`/`meta.depreca
 ### Zod
 
 ```ts
-import { toZod } from "@rhi-zone/fractal-type-ir/zod"
+import { toZod } from "@rhi-zone/fractal-type-ir/zod";
 
-const ref = t(types.object({ name: t(types.string), nickname: t(types.string, { optional: true }) }))
-toZod(ref)
+const ref = t(
+  types.object({ name: t(types.string), nickname: t(types.string, { optional: true }) }),
+);
+toZod(ref);
 // z.object({ name: z.string(), nickname: z.string().optional() })
 ```
 
@@ -48,9 +50,9 @@ toZod(ref)
 ### Valibot
 
 ```ts
-import { toValibot } from "@rhi-zone/fractal-type-ir/valibot"
+import { toValibot } from "@rhi-zone/fractal-type-ir/valibot";
 
-toValibot(ref)
+toValibot(ref);
 // v.object({ name: v.string(), nickname: v.optional(v.string()) })
 ```
 
@@ -60,9 +62,9 @@ Constraints compose via `v.pipe(schema, ...actions)`; optional/nullable are wrap
 ### TypeBox
 
 ```ts
-import { toTypeBox } from "@rhi-zone/fractal-type-ir/typebox"
+import { toTypeBox } from "@rhi-zone/fractal-type-ir/typebox";
 
-toTypeBox(ref)
+toTypeBox(ref);
 // Type.Object({ name: Type.String(), nickname: Type.Optional(Type.String()) })
 ```
 
@@ -72,9 +74,9 @@ rather than a chained call.
 ### io-ts
 
 ```ts
-import { toIoTs } from "@rhi-zone/fractal-type-ir/io-ts"
+import { toIoTs } from "@rhi-zone/fractal-type-ir/io-ts";
 
-toIoTs(ref)
+toIoTs(ref);
 // t.intersection([t.type({ name: t.string }), t.partial({ nickname: t.string })])
 ```
 
@@ -86,9 +88,9 @@ with a trailing `/* note */` comment.
 ### Yup
 
 ```ts
-import { toYup } from "@rhi-zone/fractal-type-ir/yup"
+import { toYup } from "@rhi-zone/fractal-type-ir/yup";
 
-toYup(ref)
+toYup(ref);
 // yup.object({ name: yup.string().required(), nickname: yup.string() })
 ```
 
@@ -100,9 +102,9 @@ a best-effort runtime type guard per variant.
 ### Superstruct
 
 ```ts
-import { toSuperstruct } from "@rhi-zone/fractal-type-ir/superstruct"
+import { toSuperstruct } from "@rhi-zone/fractal-type-ir/superstruct";
 
-toSuperstruct(ref)
+toSuperstruct(ref);
 // s.object({ name: s.string(), nickname: s.optional(s.string()) })
 ```
 
@@ -111,9 +113,9 @@ Constraints wrap the expression outside-in (`s.size(s.string(), 1, 50)`) rather 
 ### runtypes
 
 ```ts
-import { toRuntypes } from "@rhi-zone/fractal-type-ir/runtypes"
+import { toRuntypes } from "@rhi-zone/fractal-type-ir/runtypes";
 
-toRuntypes(ref)
+toRuntypes(ref);
 // R.Record({ name: R.String, nickname: R.String.optional() })
 ```
 
@@ -124,21 +126,21 @@ back to `R.String` with a comment.
 ### ArkType
 
 ```ts
-import { toArkType } from "@rhi-zone/fractal-type-ir/arktype"
+import { toArkType } from "@rhi-zone/fractal-type-ir/arktype";
 
-toArkType(ref)
+toArkType(ref);
 // type({ name: "string", "nickname?": "string" })
 ```
 
-ArkType's string-based syntax marks optionality on the *key* (`"nickname?"`), not the value —
+ArkType's string-based syntax marks optionality on the _key_ (`"nickname?"`), not the value —
 the only variant here where "optional" isn't a wrapper or chained call at all.
 
 ### Effect Schema
 
 ```ts
-import { toEffectSchema } from "@rhi-zone/fractal-type-ir/effect-schema"
+import { toEffectSchema } from "@rhi-zone/fractal-type-ir/effect-schema";
 
-toEffectSchema(ref)
+toEffectSchema(ref);
 // S.Struct({ name: S.String, nickname: S.optional(S.String) })
 ```
 
@@ -149,7 +151,7 @@ method, unlike the zod/typebox/valibot projectors.
 ### JSDoc
 
 ```ts
-import { toJsDocTypedef } from "@rhi-zone/fractal-type-ir/jsdoc"
+import { toJsDocTypedef } from "@rhi-zone/fractal-type-ir/jsdoc";
 
 const userInput = t(
   types.object({
@@ -157,8 +159,8 @@ const userInput = t(
     age: t(types.integer, { optional: true }),
     roles: t(types.array(t(types.string))),
   }),
-)
-toJsDocTypedef("UserInput", userInput)
+);
+toJsDocTypedef("UserInput", userInput);
 // /**
 //  * @typedef {Object} UserInput
 //  * @property {string} name

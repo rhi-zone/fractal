@@ -2,5 +2,5 @@
 //
 // Composite: date/time + duration kinds.
 
-export * from "./date-time.ts"
-export * from "./duration.ts"
+export * from "./date-time.ts";
+export * from "./duration.ts";

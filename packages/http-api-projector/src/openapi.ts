@@ -34,13 +34,13 @@
 //   packages/api-tree/src/tree.ts               — extractToolSchemas, SchemaMap
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node"
-import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import { httpProjection } from "./dx.ts"
-import type { HttpRoute } from "./route.ts"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import { httpProjection } from "./dx.ts";
+import type { HttpRoute } from "./route.ts";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 
 // ============================================================================
 // Types
@@ -49,22 +49,22 @@ import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
 /** Options for toOpenApi / toOpenApiFromRoute. */
 export type OpenApiOpts = {
   /** Document title (info.title). Defaults to "API". */
-  readonly title?: string
+  readonly title?: string;
   /** Document version (info.version). Defaults to "0.1.0". */
-  readonly version?: string
+  readonly version?: string;
   /**
    * Path to the source file for codegen schema extraction. When provided,
    * extractToolSchemas is called and the resulting schemas are used for
    * requestBody and 200 response schemas. When absent, schemas degrade to
    * `{ type: "object" }` placeholders.
    */
-  readonly sourceFile?: string
+  readonly sourceFile?: string;
   /**
    * Pre-computed schema map (from extractToolSchemas). Takes precedence over
    * sourceFile when both are provided. Use this to avoid re-running the
    * TypeScript compiler when the map is already available.
    */
-  readonly schemas?: SchemaMap
+  readonly schemas?: SchemaMap;
   /**
    * Spec-level default security requirement (`OpenApiDoc.security`) — applies
    * to every operation that doesn't set its own `meta.openapi.security`. A
@@ -75,7 +75,7 @@ export type OpenApiOpts = {
    * prior root-position reading of the same key was removed rather than kept
    * as a second meaning.
    */
-  readonly defaultSecurity?: OpenApiSecurityRequirement[]
+  readonly defaultSecurity?: OpenApiSecurityRequirement[];
   /**
    * `toOpenApi(n, { sourceFile })` only: the exporting binding name for `n` in
    * `sourceFile` — the same `treeId` `extractRouteSchemas` (api-tree/tree.ts)
@@ -90,11 +90,11 @@ export type OpenApiOpts = {
    * automatically. Ignored when `opts.schemas` is supplied directly (no
    * `sourceFile` auto-discovery happens, so there is no `treeId` to resolve).
    */
-  readonly treeId?: string
-}
+  readonly treeId?: string;
+};
 
 /** A JSON-Schema-compatible object (open bag — OpenAPI 3.1 allows any $schema). */
-export type OpenApiSchema = Record<string, unknown>
+export type OpenApiSchema = Record<string, unknown>;
 
 /**
  * An OpenAPI 3.1 security scheme object (`components/securitySchemes/<name>`)
@@ -102,7 +102,7 @@ export type OpenApiSchema = Record<string, unknown>
  * `openIdConnect`); the OpenAPI projector doesn't validate the shape, only
  * merges it through from `meta.openapi.securitySchemes`.
  */
-export type OpenApiSecurityScheme = Record<string, unknown>
+export type OpenApiSecurityScheme = Record<string, unknown>;
 
 /**
  * An OpenAPI 3.1 security requirement object — one entry per alternative
@@ -110,54 +110,54 @@ export type OpenApiSecurityScheme = Record<string, unknown>
  * array value is the list of scopes for oauth2/openIdConnect schemes, `[]`
  * otherwise.
  */
-export type OpenApiSecurityRequirement = Record<string, string[]>
+export type OpenApiSecurityRequirement = Record<string, string[]>;
 
 /** A single OpenAPI 3.1 path item method entry. */
 export type OpenApiOperation = {
-  readonly operationId: string
-  readonly summary?: string
-  readonly description?: string
-  readonly tags?: string[]
-  readonly deprecated?: boolean
-  readonly security?: OpenApiSecurityRequirement[]
-  readonly parameters?: OpenApiParameter[]
+  readonly operationId: string;
+  readonly summary?: string;
+  readonly description?: string;
+  readonly tags?: string[];
+  readonly deprecated?: boolean;
+  readonly security?: OpenApiSecurityRequirement[];
+  readonly parameters?: OpenApiParameter[];
   readonly requestBody?: {
-    readonly required: boolean
+    readonly required: boolean;
     readonly content: {
       readonly "application/json": {
-        readonly schema: OpenApiSchema
-      }
-    }
-  }
+        readonly schema: OpenApiSchema;
+      };
+    };
+  };
   readonly responses: {
     readonly "200": {
-      readonly description: string
+      readonly description: string;
       readonly content: {
         readonly "application/json": {
-          readonly schema: OpenApiSchema
-        }
-      }
-    }
-  }
-  readonly [key: string]: unknown
-}
+          readonly schema: OpenApiSchema;
+        };
+      };
+    };
+  };
+  readonly [key: string]: unknown;
+};
 
 /** An OpenAPI 3.1 path parameter. */
 export type OpenApiParameter = {
-  readonly name: string
-  readonly in: "path"
-  readonly required: true
-  readonly schema: { readonly type: "string" }
-}
+  readonly name: string;
+  readonly in: "path";
+  readonly required: true;
+  readonly schema: { readonly type: "string" };
+};
 
 /** An OpenAPI 3.1 document (partial — the fields this projection emits). */
 export type OpenApiDoc = {
-  readonly openapi: "3.1.0"
+  readonly openapi: "3.1.0";
   readonly info: {
-    readonly title: string
-    readonly version: string
-  }
-  readonly paths: Record<string, Record<string, OpenApiOperation>>
+    readonly title: string;
+    readonly version: string;
+  };
+  readonly paths: Record<string, Record<string, OpenApiOperation>>;
   /**
    * Spec-level default security requirement — applies to every operation
    * that doesn't override it with its own `meta.openapi.security`. Sourced
@@ -170,16 +170,16 @@ export type OpenApiDoc = {
    * happened to be authored one level up (docs/design/meta-role-split-spec.md
    * §6). Absent when the caller doesn't pass `defaultSecurity`.
    */
-  readonly security?: OpenApiSecurityRequirement[]
+  readonly security?: OpenApiSecurityRequirement[];
   /**
    * Present only when at least one node in the tree carries
    * `meta.openapi.securitySchemes` — merged from every such node (see
    * `collectSecuritySchemes` below).
    */
   readonly components?: {
-    readonly securitySchemes: Record<string, OpenApiSecurityScheme>
-  }
-}
+    readonly securitySchemes: Record<string, OpenApiSecurityScheme>;
+  };
+};
 
 // ============================================================================
 // Internal: extract path parameters from an OpenAPI path string
@@ -187,13 +187,13 @@ export type OpenApiDoc = {
 
 /** Extract param names from path segments like /books/{bookId}/details → ["bookId"]. */
 function pathParams(path: string): string[] {
-  const params: string[] = []
+  const params: string[] = [];
   for (const seg of path.split("/")) {
     if (seg.startsWith("{") && seg.endsWith("}")) {
-      params.push(seg.slice(1, -1))
+      params.push(seg.slice(1, -1));
     }
   }
-  return params
+  return params;
 }
 
 // ============================================================================
@@ -218,49 +218,49 @@ export interface OpenApiSharedMetaProperties {
    * merges every node's `securitySchemes` bag into `components.securitySchemes`
    * (see `collectSecuritySchemes`). Not itself emitted on any operation.
    */
-  readonly securitySchemes?: Record<string, OpenApiSecurityScheme>
+  readonly securitySchemes?: Record<string, OpenApiSecurityScheme>;
 }
 
 /** Wraps `OpenApiSharedMetaProperties` under the `openapi` key — combined into `HttpSharedMeta` (see meta.ts). */
 export interface OpenApiSharedMeta {
-  readonly openapi?: OpenApiSharedMetaProperties
+  readonly openapi?: OpenApiSharedMetaProperties;
 }
 
 /** `meta.openapi` fields valid at LEAF (operation) position only — see `toOpenApi`. */
 export interface OpenApiLeafMetaProperties extends OpenApiSharedMetaProperties {
-  readonly operationId?: string
-  readonly summary?: string
-  readonly description?: string
-  readonly tags?: string[]
-  readonly deprecated?: boolean
+  readonly operationId?: string;
+  readonly summary?: string;
+  readonly description?: string;
+  readonly tags?: string[];
+  readonly deprecated?: boolean;
   /**
    * Per-operation security requirement — set on a method entry's own meta.
    * "This operation requires scheme A OR scheme B": `[{ a: [] }, { b: [] }]`.
    * The spec-level default is `OpenApiOpts.defaultSecurity`, not a second
    * meaning of this same field (§6) — see `OpenApiDoc.security`'s doc above.
    */
-  readonly security?: OpenApiSecurityRequirement[]
-  readonly [key: string]: unknown
+  readonly security?: OpenApiSecurityRequirement[];
+  readonly [key: string]: unknown;
 }
 
 /** Wraps `OpenApiLeafMetaProperties` under the `openapi` key — combined into `HttpLeafMeta` (see meta.ts). */
 export interface OpenApiLeafMeta {
-  readonly openapi?: OpenApiLeafMetaProperties
+  readonly openapi?: OpenApiLeafMetaProperties;
 }
 
 /** Public alias kept for the exported "resolved per-operation openapi meta" shape — see `getOpenApiMeta`. */
-export type OpenApiMeta = OpenApiLeafMetaProperties
+export type OpenApiMeta = OpenApiLeafMetaProperties;
 
 function getOpenApiSharedMeta(meta: OpenApiSharedMeta): OpenApiSharedMetaProperties {
-  const o = meta.openapi
-  if (typeof o !== "object" || o === null) return {}
-  return o
+  const o = meta.openapi;
+  if (typeof o !== "object" || o === null) return {};
+  return o;
 }
 
 function getOpenApiMeta(meta: OpenApiLeafMeta): OpenApiLeafMetaProperties {
-  const o = meta.openapi
-  if (typeof o !== "object" || o === null) return {}
-  return o
+  const o = meta.openapi;
+  if (typeof o !== "object" || o === null) return {};
+  return o;
 }
 
 // ============================================================================
@@ -286,21 +286,21 @@ function collectSecuritySchemes(
   // `RouteLeafMeta` doc comment for why no OTHER cast in this file needs
   // this — this is the one place `openapi` fields are read directly off an
   // `HttpRoute` value rather than through `RouteEntry.meta`, below).
-  const nodeSchemes = getOpenApiSharedMeta(route.meta as OpenApiSharedMeta).securitySchemes
+  const nodeSchemes = getOpenApiSharedMeta(route.meta as OpenApiSharedMeta).securitySchemes;
   if (typeof nodeSchemes === "object" && nodeSchemes !== null) {
-    Object.assign(out, nodeSchemes)
+    Object.assign(out, nodeSchemes);
   }
   for (const entry of Object.values(route.methods ?? {})) {
-    const entrySchemes = getOpenApiSharedMeta(entry.meta as OpenApiSharedMeta).securitySchemes
+    const entrySchemes = getOpenApiSharedMeta(entry.meta as OpenApiSharedMeta).securitySchemes;
     if (typeof entrySchemes === "object" && entrySchemes !== null) {
-      Object.assign(out, entrySchemes)
+      Object.assign(out, entrySchemes);
     }
   }
   for (const child of Object.values(route.children ?? {})) {
-    collectSecuritySchemes(child, out)
+    collectSecuritySchemes(child, out);
   }
   if (route.fallback !== undefined) {
-    collectSecuritySchemes(route.fallback.subtree, out)
+    collectSecuritySchemes(route.fallback.subtree, out);
   }
 }
 
@@ -324,16 +324,16 @@ function collectSecuritySchemes(
 
 function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
   for (const [key, child] of Object.entries(n.children ?? {})) {
-    const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+    const seg = prefix.length > 0 ? `${prefix}_${key}` : key;
     if (isLeaf(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(child.handler!, seg)
+      out.set(child.handler!, seg);
     } else {
-      nameLeaves(child, seg, out)
+      nameLeaves(child, seg, out);
     }
   }
   if (n.fallback !== undefined) {
-    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name
+    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
 
     // Same bare-leaf `fallback.subtree` case as client.ts's
     // `collectHandlerNames`/`collectCodegenNames` — key it directly at `seg`
@@ -341,30 +341,31 @@ function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
     // recursing into a leaf's nonexistent `children`.
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(n.fallback.subtree.handler!, seg)
+      out.set(n.fallback.subtree.handler!, seg);
     } else {
-      nameLeaves(n.fallback.subtree, seg, out)
+      nameLeaves(n.fallback.subtree, seg, out);
     }
   }
 }
 
 /** Build the handler → codegen-name map for a Node tree — see module doc above. */
 function buildNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
-  nameLeaves(n, "", out)
-  return out
+  const out = new Map<Handler, string>();
+  nameLeaves(n, "", out);
+  return out;
 }
 
 /** Fallback name derived purely from path + verb, for handlers absent from a name map. */
 function nameFromPath(path: string, verb: string): string {
-  const base = path === "/"
-    ? "root"
-    : path
-        .split("/")
-        .filter((s) => s.length > 0)
-        .map((s) => (s.startsWith("{") && s.endsWith("}") ? s.slice(1, -1) : s))
-        .join("_")
-  return `${base}_${verb.toLowerCase()}`
+  const base =
+    path === "/"
+      ? "root"
+      : path
+          .split("/")
+          .filter((s) => s.length > 0)
+          .map((s) => (s.startsWith("{") && s.endsWith("}") ? s.slice(1, -1) : s))
+          .join("_");
+  return `${base}_${verb.toLowerCase()}`;
 }
 
 // ============================================================================
@@ -383,12 +384,12 @@ function nameFromPath(path: string, verb: string): string {
 
 function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string>): void {
   for (const [key, child] of Object.entries(n.children ?? {})) {
-    const seg = [...prefix, key]
+    const seg = [...prefix, key];
     if (isLeaf(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(child.handler!, seg.join("/"))
+      out.set(child.handler!, seg.join("/"));
     } else {
-      pathLeaves(child, seg, out)
+      pathLeaves(child, seg, out);
     }
   }
   if (n.fallback !== undefined) {
@@ -397,12 +398,12 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
     // `wrapValidators`'s runtime `path.join("/")` lookup key already uses,
     // deliberately different from buildNameMap's bare-name fallback segment
     // (that one feeds operationId defaults, not schema/validator lookup).
-    const seg = [...prefix, `:${n.fallback.name}`]
+    const seg = [...prefix, `:${n.fallback.name}`];
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(n.fallback.subtree.handler!, seg.join("/"))
+      out.set(n.fallback.subtree.handler!, seg.join("/"));
     } else {
-      pathLeaves(n.fallback.subtree, seg, out)
+      pathLeaves(n.fallback.subtree, seg, out);
     }
   }
 }
@@ -415,9 +416,9 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
  * unprefixed behavior for a caller-supplied (non-auto-discovered) schema map.
  */
 function buildPathMap(n: Node, prefix: readonly string[] = []): Map<Handler, string> {
-  const out = new Map<Handler, string>()
-  pathLeaves(n, prefix, out)
-  return out
+  const out = new Map<Handler, string>();
+  pathLeaves(n, prefix, out);
+  return out;
 }
 
 /**
@@ -428,12 +429,12 @@ function buildPathMap(n: Node, prefix: readonly string[] = []): Map<Handler, str
  * `resolveTreeId`.
  */
 function distinctTreeIds(schemas: SchemaMap): string[] {
-  const ids = new Set<string>()
+  const ids = new Set<string>();
   for (const key of Object.keys(schemas)) {
-    const slash = key.indexOf("/")
-    ids.add(slash === -1 ? key : key.slice(0, slash))
+    const slash = key.indexOf("/");
+    ids.add(slash === -1 ? key : key.slice(0, slash));
   }
-  return [...ids]
+  return [...ids];
 }
 
 /**
@@ -451,15 +452,15 @@ function distinctTreeIds(schemas: SchemaMap): string[] {
  * applies, unchanged.
  */
 function resolveTreeId(schemas: SchemaMap, explicit: string | undefined): string | undefined {
-  if (explicit !== undefined) return explicit
-  const ids = distinctTreeIds(schemas)
+  if (explicit !== undefined) return explicit;
+  const ids = distinctTreeIds(schemas);
   if (ids.length > 1) {
     throw new Error(
       `toOpenApi: sourceFile exports ${ids.length} trees (${ids.join(", ")}) — schema correlation ` +
         `can't tell which one "n" is. Pass opts.treeId to disambiguate.`,
-    )
+    );
   }
-  return ids[0]
+  return ids[0];
 }
 
 // ============================================================================
@@ -469,7 +470,7 @@ function resolveTreeId(schemas: SchemaMap, explicit: string | undefined): string
 /** One `(path, method)` leaf produced by walking an `HttpRoute` tree — see `listRoutes`. */
 export type RouteEntry = {
   /** Underscore-joined name (default operationId source) — see `nameFromPath`. */
-  readonly codenName: string
+  readonly codenName: string;
   /**
    * Tree-relative "/"-joined path (schema-map lookup key when the schema
    * map was built via `extractRouteSchemas`, api-tree/tree.ts) — see
@@ -479,25 +480,26 @@ export type RouteEntry = {
    * fallback shape) when `pathMap` is omitted or has no entry for a given
    * handler, the same degrade `codenName` already has for `names`.
    */
-  readonly schemaKey: string
+  readonly schemaKey: string;
   /** HTTP path string, e.g. `/books/{bookId}/details`. */
-  readonly path: string
+  readonly path: string;
   /** HTTP method, in whatever case the route tree's `methods` keys use (uppercase for trees built via `httpProjection`). */
-  readonly verb: string
+  readonly verb: string;
   /** The method entry's own meta bag. */
-  readonly meta: LeafMeta & OpenApiLeafMeta
-}
+  readonly meta: LeafMeta & OpenApiLeafMeta;
+};
 
 /** Fallback "/"-joined path+verb key, for handlers absent from a `pathMap` — mirrors `nameFromPath`'s shape with `/` instead of `_`. */
 function pathKeyFromPath(path: string, verb: string): string {
-  const base = path === "/"
-    ? ""
-    : path
-        .split("/")
-        .filter((s) => s.length > 0)
-        .map((s) => (s.startsWith("{") && s.endsWith("}") ? `:${s.slice(1, -1)}` : s))
-        .join("/")
-  return base.length > 0 ? `${base}/${verb.toLowerCase()}` : verb.toLowerCase()
+  const base =
+    path === "/"
+      ? ""
+      : path
+          .split("/")
+          .filter((s) => s.length > 0)
+          .map((s) => (s.startsWith("{") && s.endsWith("}") ? `:${s.slice(1, -1)}` : s))
+          .join("/");
+  return base.length > 0 ? `${base}/${verb.toLowerCase()}` : verb.toLowerCase();
 }
 
 /**
@@ -529,25 +531,26 @@ export function listRoutes(
   names?: ReadonlyMap<Handler, string>,
   pathMap?: ReadonlyMap<Handler, string>,
 ): RouteEntry[] {
-  const out: RouteEntry[] = []
+  const out: RouteEntry[] = [];
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
-    const codenName = names?.get(entry.handler) ?? nameFromPath(path === "" ? "/" : path, verb)
-    const schemaKey = pathMap?.get(entry.handler) ?? pathKeyFromPath(path === "" ? "/" : path, verb)
-    out.push({ codenName, schemaKey, path: path === "" ? "/" : path, verb, meta: entry.meta })
+    const codenName = names?.get(entry.handler) ?? nameFromPath(path === "" ? "/" : path, verb);
+    const schemaKey =
+      pathMap?.get(entry.handler) ?? pathKeyFromPath(path === "" ? "/" : path, verb);
+    out.push({ codenName, schemaKey, path: path === "" ? "/" : path, verb, meta: entry.meta });
   }
 
   for (const [key, child] of Object.entries(route.children ?? {})) {
-    out.push(...listRoutes(child, `${path}/${key}`, names, pathMap))
+    out.push(...listRoutes(child, `${path}/${key}`, names, pathMap));
   }
 
   if (route.fallback !== undefined) {
     out.push(
       ...listRoutes(route.fallback.subtree, `${path}/{${route.fallback.name}}`, names, pathMap),
-    )
+    );
   }
 
-  return out
+  return out;
 }
 
 // ============================================================================
@@ -580,8 +583,11 @@ export function listRoutes(
  * @param route - The (already rewritten) HttpRoute tree to project.
  * @param opts  - Options: title, version, sourceFile, schemas.
  */
-export async function toOpenApiFromRoute(route: HttpRoute, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
-  return buildDoc(route, opts, undefined, undefined)
+export async function toOpenApiFromRoute(
+  route: HttpRoute,
+  opts: OpenApiOpts = {},
+): Promise<OpenApiDoc> {
+  return buildDoc(route, opts, undefined, undefined);
 }
 
 // ============================================================================
@@ -601,8 +607,8 @@ export async function toOpenApiFromRoute(route: HttpRoute, opts: OpenApiOpts = {
  * @param opts - Options: title, version, sourceFile, schemas, treeId.
  */
 export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenApiDoc> {
-  const route = httpProjection(n)
-  const names = buildNameMap(n)
+  const route = httpProjection(n);
+  const names = buildNameMap(n);
 
   // Auto-discovery (`sourceFile`, no caller-supplied `schemas`) keys every
   // entry `${treeId}/${path}` (extractRouteSchemas) — `buildPathMap` must be
@@ -613,8 +619,8 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
   // — a caller-supplied `opts.schemas` skips this entirely (no `sourceFile`
   // extraction to correlate against, `buildPathMap` stays unprefixed exactly
   // as before this fix).
-  let schemas: SchemaMap = opts.schemas ?? {}
-  let treeId: string | undefined
+  let schemas: SchemaMap = opts.schemas ?? {};
+  let treeId: string | undefined;
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
     // `webpackIgnore` (Rspack honors the webpack-prefixed spelling too, see
     // the comment on buildDoc's identical import below) — found via
@@ -637,13 +643,15 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
     // `sourceFile` extraction is inherently Node-only (real filesystem +
     // TypeScript compiler) and was never going to work in a browser bundle
     // regardless; this only stops it from poisoning callers who never use it.
-    const { extractRouteSchemas } = await import(/* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree")
-    schemas = extractRouteSchemas(opts.sourceFile)
-    treeId = resolveTreeId(schemas, opts.treeId)
+    const { extractRouteSchemas } = await import(
+      /* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree"
+    );
+    schemas = extractRouteSchemas(opts.sourceFile);
+    treeId = resolveTreeId(schemas, opts.treeId);
   }
 
-  const pathMap = buildPathMap(n, treeId !== undefined ? [treeId] : [])
-  return buildDoc(route, { ...opts, schemas }, names, pathMap)
+  const pathMap = buildPathMap(n, treeId !== undefined ? [treeId] : []);
+  return buildDoc(route, { ...opts, schemas }, names, pathMap);
 }
 
 // ============================================================================
@@ -656,69 +664,77 @@ async function buildDoc(
   names: ReadonlyMap<Handler, string> | undefined,
   pathMap: ReadonlyMap<Handler, string> | undefined,
 ): Promise<OpenApiDoc> {
-  const title = opts.title ?? "API"
-  const version = opts.version ?? "0.1.0"
+  const title = opts.title ?? "API";
+  const version = opts.version ?? "0.1.0";
 
   // Resolve schema map: caller-supplied > sourceFile > empty. The
   // auto-discovery path uses extractRouteSchemas (path-keyed), matching
   // this module's own preferred schemaKey lookup above — a caller-supplied
   // `opts.schemas` may still be either convention (or a merge of several
   // files' extractRouteSchemas output), handled by the fallback chain above.
-  let schemas: SchemaMap = opts.schemas ?? {}
+  let schemas: SchemaMap = opts.schemas ?? {};
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
     // See the identical import's doc comment in `toOpenApi` above — same
     // bundler-safety `webpackIgnore` fix, same reason.
-    const { extractRouteSchemas } = await import(/* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree")
-    schemas = extractRouteSchemas(opts.sourceFile)
+    const { extractRouteSchemas } = await import(
+      /* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree"
+    );
+    schemas = extractRouteSchemas(opts.sourceFile);
   }
 
-  const entries = listRoutes(route, "", names, pathMap)
+  const entries = listRoutes(route, "", names, pathMap);
 
   // Security schemes: merged from every node in the tree (see
   // collectSecuritySchemes doc above). Only emitted on the doc when at least
   // one scheme was found — an empty components.securitySchemes would be
   // noise on documents that don't use this feature.
-  const securitySchemes: Record<string, OpenApiSecurityScheme> = {}
-  collectSecuritySchemes(route, securitySchemes)
+  const securitySchemes: Record<string, OpenApiSecurityScheme> = {};
+  collectSecuritySchemes(route, securitySchemes);
 
   // Spec-level default security: an explicit builder option now, not read
   // off any node's meta — see `OpenApiOpts.defaultSecurity`'s doc comment
   // and docs/design/meta-role-split-spec.md §6.
-  const rootSecurity = opts.defaultSecurity
+  const rootSecurity = opts.defaultSecurity;
 
-  const paths: Record<string, Record<string, OpenApiOperation>> = {}
+  const paths: Record<string, Record<string, OpenApiOperation>> = {};
 
   for (const entry of entries) {
-    const { codenName, schemaKey, path, verb, meta } = entry
-    const method = verb.toLowerCase()
-    const openApiMeta = getOpenApiMeta(meta)
+    const { codenName, schemaKey, path, verb, meta } = entry;
+    const method = verb.toLowerCase();
+    const openApiMeta = getOpenApiMeta(meta);
     // Path-keyed lookup first (schemas built via extractRouteSchemas — the
     // convention that stays unique under composition, buildPathMap's module
     // doc), falling back to the legacy name-keyed lookup (schemas built via
     // extractToolSchemas, or hand-authored with that convention) — a pure
     // fallback CHAIN, not a replacement, so every existing caller passing a
     // name-keyed SchemaMap keeps resolving exactly as before.
-    const toolSchema = schemas[schemaKey] ?? schemas[codenName]
+    const toolSchema = schemas[schemaKey] ?? schemas[codenName];
 
     // Derive operationId from meta.openapi.operationId, or from the codegen name
-    const operationId = typeof openApiMeta.operationId === "string"
-      ? openApiMeta.operationId
-      : codenName.replace(/_/g, ".")
+    const operationId =
+      typeof openApiMeta.operationId === "string"
+        ? openApiMeta.operationId
+        : codenName.replace(/_/g, ".");
 
     // Path parameters: extracted from the computed path
-    const paramNames = pathParams(path)
+    const paramNames = pathParams(path);
     const parameters: OpenApiParameter[] = paramNames.map((name) => ({
       name,
       in: "path" as const,
       required: true as const,
       schema: { type: "string" as const },
-    }))
+    }));
 
     // requestBody: for non-GET methods that have a non-empty inputSchema
-    const inputSchema = toolSchema?.inputSchema as OpenApiSchema | undefined
-    const hasRequestBody = method !== "get" && inputSchema !== undefined &&
-      !(Object.keys(inputSchema).length === 1 && inputSchema["type"] === "object" &&
-        inputSchema["properties"] === undefined)
+    const inputSchema = toolSchema?.inputSchema as OpenApiSchema | undefined;
+    const hasRequestBody =
+      method !== "get" &&
+      inputSchema !== undefined &&
+      !(
+        Object.keys(inputSchema).length === 1 &&
+        inputSchema["type"] === "object" &&
+        inputSchema["properties"] === undefined
+      );
 
     const requestBody = hasRequestBody
       ? {
@@ -729,10 +745,12 @@ async function buildDoc(
             },
           },
         }
-      : undefined
+      : undefined;
 
     // 200 response schema from codegen output
-    const outputSchema: OpenApiSchema = (toolSchema?.outputSchema as OpenApiSchema | undefined) ?? { type: "object" }
+    const outputSchema: OpenApiSchema = (toolSchema?.outputSchema as OpenApiSchema | undefined) ?? {
+      type: "object",
+    };
 
     // Build operation, merging any passthrough keys from meta.openapi
     const {
@@ -744,14 +762,13 @@ async function buildDoc(
       security: opSecurity,
       securitySchemes: _securitySchemes,
       ...extraOpenApiMeta
-    } = openApiMeta
+    } = openApiMeta;
 
     // deprecated: meta.openapi.deprecated (per-projection override) wins when
     // explicitly set; otherwise fall back to the tree-level meta.tags.deprecated
     // tag so the same authored fact reaches every projector.
-    const resolvedDeprecated = deprecated === true
-      ? true
-      : resolveTags((meta.tags ?? {}) as Tags).deprecated === true
+    const resolvedDeprecated =
+      deprecated === true ? true : resolveTags((meta.tags ?? {}) as Tags).deprecated === true;
 
     const operation: OpenApiOperation = {
       operationId,
@@ -773,13 +790,13 @@ async function buildDoc(
         },
       },
       ...extraOpenApiMeta,
-    }
+    };
 
     if (paths[path] === undefined) {
-      paths[path] = {}
+      paths[path] = {};
     }
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    paths[path]![method] = operation
+    paths[path]![method] = operation;
   }
 
   return {
@@ -788,7 +805,7 @@ async function buildDoc(
     paths,
     ...(Array.isArray(rootSecurity) ? { security: rootSecurity } : {}),
     ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
-  }
+  };
 }
 
 // ============================================================================
@@ -822,35 +839,35 @@ async function buildDoc(
  */
 export function mergeOpenApiDocs(docs: readonly OpenApiDoc[]): OpenApiDoc {
   if (docs.length === 0) {
-    throw new Error("mergeOpenApiDocs: at least one document is required")
+    throw new Error("mergeOpenApiDocs: at least one document is required");
   }
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const first = docs[0]!
+  const first = docs[0]!;
 
-  const paths: Record<string, Record<string, OpenApiOperation>> = {}
-  const securitySchemes: Record<string, OpenApiSecurityScheme> = {}
+  const paths: Record<string, Record<string, OpenApiOperation>> = {};
+  const securitySchemes: Record<string, OpenApiSecurityScheme> = {};
 
   for (const doc of docs) {
     for (const [path, methods] of Object.entries(doc.paths)) {
-      const existing = paths[path] ?? {}
+      const existing = paths[path] ?? {};
       for (const [method, operation] of Object.entries(methods)) {
         if (method in existing) {
           throw new Error(
             `mergeOpenApiDocs: conflicting route — ${method} ${path} is defined by more than one document`,
-          )
+          );
         }
-        existing[method] = operation
+        existing[method] = operation;
       }
-      paths[path] = existing
+      paths[path] = existing;
     }
 
     for (const [name, scheme] of Object.entries(doc.components?.securitySchemes ?? {})) {
       if (name in securitySchemes) {
         throw new Error(
           `mergeOpenApiDocs: conflicting security scheme — "${name}" is defined by more than one document`,
-        )
+        );
       }
-      securitySchemes[name] = scheme
+      securitySchemes[name] = scheme;
     }
   }
 
@@ -860,5 +877,5 @@ export function mergeOpenApiDocs(docs: readonly OpenApiDoc[]): OpenApiDoc {
     paths,
     ...(first.security !== undefined ? { security: first.security } : {}),
     ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
-  }
+  };
 }

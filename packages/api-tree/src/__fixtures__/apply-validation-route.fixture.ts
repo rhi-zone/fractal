@@ -9,18 +9,18 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import type { Node } from "../node.ts"
+import type { Node } from "../node.ts";
 
 export type FakeRoute = {
   readonly methods?: Readonly<
     Record<string, { readonly handler: (input: never) => unknown; readonly meta: object }>
-  >
-  readonly children?: Readonly<Record<string, FakeRoute>>
-  readonly fallback?: { readonly name: string; readonly subtree: FakeRoute }
-  readonly meta: object
-}
+  >;
+  readonly children?: Readonly<Record<string, FakeRoute>>;
+  readonly fallback?: { readonly name: string; readonly subtree: FakeRoute };
+  readonly meta: object;
+};
 
 /** The `httpProjection(apiTree)`-shaped wrapper a call site has to be traced
  * through (unwrap one level, find the Node-typed argument). Ambient: no
  * fixture ever runs, only its types are read. */
-export declare function fakeProjection(node: Node): FakeRoute
+export declare function fakeProjection(node: Node): FakeRoute;

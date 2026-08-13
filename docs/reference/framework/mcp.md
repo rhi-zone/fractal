@@ -4,41 +4,45 @@
 
 ## What it does
 
-Walks the tree once per surface: leaves default to MCP **tools**; a leaf tagged `meta.mcp.as: "resource"` becomes a fixed resource (or a resource *template* when it sits under a `fallback`, e.g. `books/{bookId}`); a leaf tagged `meta.mcp.as: "prompt"` becomes a prompt. `readOnlyHint`/`idempotentHint`/`destructiveHint` annotations are derived from `meta.tags` (three-valued: a hint key is emitted only when the tag resolves, never guessed).
+Walks the tree once per surface: leaves default to MCP **tools**; a leaf tagged `meta.mcp.as: "resource"` becomes a fixed resource (or a resource _template_ when it sits under a `fallback`, e.g. `books/{bookId}`); a leaf tagged `meta.mcp.as: "prompt"` becomes a prompt. `readOnlyHint`/`idempotentHint`/`destructiveHint` annotations are derived from `meta.tags` (three-valued: a hint key is emitted only when the tag resolves, never guessed).
 
-`createMcpServer` returns an *unconnected* `Server` — same stance as `createFetch` returning a plain fetch handler — leaving transport choice to the caller. `createStdioMcpServer`/`createHttpMcpServer` are one-call presets for the two common transports.
+`createMcpServer` returns an _unconnected_ `Server` — same stance as `createFetch` returning a plain fetch handler — leaving transport choice to the caller. `createStdioMcpServer`/`createHttpMcpServer` are one-call presets for the two common transports.
 
 ## Basic usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
-import { toTools, createMcpServer, createStdioMcpServer } from "@rhi-zone/fractal-mcp-api-projector"
+import { api, op } from "@rhi-zone/fractal-api-tree";
+import {
+  toTools,
+  createMcpServer,
+  createStdioMcpServer,
+} from "@rhi-zone/fractal-mcp-api-projector";
 
 const tree = api({
   books: api({
     list: op(() => [{ id: "1", title: "Dune" }], { tags: { readOnly: true } }),
   }),
   config: op(() => ({ theme: "dark" }), { mcp: { as: "resource" } }),
-})
+});
 
 // Just the tool descriptors:
-const tools = toTools(tree)
+const tools = toTools(tree);
 // [{ name: "books_list", description: ..., inputSchema: {...}, annotations: { readOnlyHint: true } }]
 
 // A full server, wired to stdio (Claude Desktop, local dev):
-const server = await createStdioMcpServer(tree, { name: "books", version: "1.0.0" })
+const server = await createStdioMcpServer(tree, { name: "books", version: "1.0.0" });
 
 // ...or take the unconnected Server and pick your own transport:
-const raw = createMcpServer(tree, { name: "books", version: "1.0.0" })
-await raw.connect(myTransport)
+const raw = createMcpServer(tree, { name: "books", version: "1.0.0" });
+await raw.connect(myTransport);
 ```
 
 ## HTTP transport
 
 ```ts
-import { createHttpMcpServer } from "@rhi-zone/fractal-mcp-api-projector"
+import { createHttpMcpServer } from "@rhi-zone/fractal-mcp-api-projector";
 
-const handler = await createHttpMcpServer(tree, { name: "books", version: "1.0.0" })
+const handler = await createHttpMcpServer(tree, { name: "books", version: "1.0.0" });
 // (req: Request) => Promise<Response> — drop into Bun.serve/Deno.serve/a Worker directly
 ```
 
@@ -47,23 +51,23 @@ Session-based per the Streamable HTTP spec: requests are routed by `Mcp-Session-
 ## Typed client
 
 ```ts
-import { createMcpClient } from "@rhi-zone/fractal-mcp-api-projector"
+import { createMcpClient } from "@rhi-zone/fractal-mcp-api-projector";
 
-const client = createMcpClient(tree, sdkClient) // sdkClient: an SDK Client already connected to the server
-await client.books.list()
+const client = createMcpClient(tree, sdkClient); // sdkClient: an SDK Client already connected to the server
+await client.books.list();
 ```
 
 Mirrors the tree the same way the HTTP client does — the client's independently-derived tool names/URIs land on the exact handlers the server's own projection dispatches to.
 
 ## Key exports
 
-| Export | Description |
-|---|---|
-| `toTools(node, opts?)` | `Node` → `McpTool[]` |
-| `projectTools`/`projectResources`/`projectPrompts` | Lower-level: descriptors + dispatch table in one walk |
-| `createMcpServer(tree, opts)` | Unconnected `Server` |
-| `createStdioMcpServer(tree, opts)` / `createHttpMcpServer(tree, opts)` | Transport-owning one-call presets |
-| `createMcpClient(tree, sdkClient)` | Typed proxy client |
-| `mcpErrors` | Error mapping helper |
+| Export                                                                 | Description                                           |
+| ---------------------------------------------------------------------- | ----------------------------------------------------- |
+| `toTools(node, opts?)`                                                 | `Node` → `McpTool[]`                                  |
+| `projectTools`/`projectResources`/`projectPrompts`                     | Lower-level: descriptors + dispatch table in one walk |
+| `createMcpServer(tree, opts)`                                          | Unconnected `Server`                                  |
+| `createStdioMcpServer(tree, opts)` / `createHttpMcpServer(tree, opts)` | Transport-owning one-call presets                     |
+| `createMcpClient(tree, sdkClient)`                                     | Typed proxy client                                    |
+| `mcpErrors`                                                            | Error mapping helper                                  |
 
 Validation is wired via `applyValidation(key, tree, "mcp")` (`@rhi-zone/fractal-api-tree/apply-validation`), passed through `createMcpServer`'s `rewriters` option — see `docs/design/wire-profiles-and-staged-validation.md`. The `"mcp"` profile is identity + JSON-date coercion (MCP's wire is already-typed JSON: numbers are numbers, booleans are booleans); a stringified number is a structured rejection, not silently coerced. There is no other validation path — a leaf `applyValidation` doesn't cover gets no validation at all.

@@ -7,7 +7,17 @@ own partial/pick/omit logic; it composes these instead). All of them pass
 non-object refs through unchanged unless noted, and none mutate their input.
 
 ```ts
-import { partial, required, pick, omit, extend, nullable, withMeta, deepPartial, deepRequired } from "@rhi-zone/fractal-type-ir"
+import {
+  partial,
+  required,
+  pick,
+  omit,
+  extend,
+  nullable,
+  withMeta,
+  deepPartial,
+  deepRequired,
+} from "@rhi-zone/fractal-type-ir";
 ```
 
 ## `partial`
@@ -15,8 +25,8 @@ import { partial, required, pick, omit, extend, nullable, withMeta, deepPartial,
 All fields become optional (`meta.optional = true`).
 
 ```ts
-const before = t(types.object({ id: t(types.integer), name: t(types.string) }))
-partial(before)
+const before = t(types.object({ id: t(types.integer), name: t(types.string) }));
+partial(before);
 // t(types.object({
 //   id: t(types.integer, { optional: true }),
 //   name: t(types.string, { optional: true }),
@@ -28,8 +38,8 @@ partial(before)
 Inverse of `partial` — removes `meta.optional` from every field.
 
 ```ts
-const before = t(types.object({ id: t(types.integer, { optional: true }) }))
-required(before)
+const before = t(types.object({ id: t(types.integer, { optional: true }) }));
+required(before);
 // t(types.object({ id: t(types.integer) }))
 ```
 
@@ -38,8 +48,10 @@ required(before)
 Keep only the named fields; missing keys are silently skipped.
 
 ```ts
-const before = t(types.object({ id: t(types.integer), name: t(types.string), email: t(types.string) }))
-pick(before, ["id", "name"])
+const before = t(
+  types.object({ id: t(types.integer), name: t(types.string), email: t(types.string) }),
+);
+pick(before, ["id", "name"]);
 // t(types.object({ id: t(types.integer), name: t(types.string) }))
 ```
 
@@ -48,8 +60,10 @@ pick(before, ["id", "name"])
 Drop the named fields; missing keys are silently skipped.
 
 ```ts
-const before = t(types.object({ id: t(types.integer), name: t(types.string), email: t(types.string) }))
-omit(before, ["email"])
+const before = t(
+  types.object({ id: t(types.integer), name: t(types.string), email: t(types.string) }),
+);
+omit(before, ["email"]);
 // t(types.object({ id: t(types.integer), name: t(types.string) }))
 ```
 
@@ -60,9 +74,11 @@ fields with the same name, last-write-wins. If either side isn't an object,
 the extension wins outright (no error).
 
 ```ts
-const base = t(types.object({ id: t(types.integer), name: t(types.string) }))
-const extension = t(types.object({ name: t(types.string, { minLength: 1 }), email: t(types.string) }))
-extend(base, extension)
+const base = t(types.object({ id: t(types.integer), name: t(types.string) }));
+const extension = t(
+  types.object({ name: t(types.string, { minLength: 1 }), email: t(types.string) }),
+);
+extend(base, extension);
 // t(types.object({
 //   id: t(types.integer),
 //   name: t(types.string, { minLength: 1 }),
@@ -75,8 +91,8 @@ extend(base, extension)
 Sets `meta.nullable = true` on the ref.
 
 ```ts
-const before = t(types.string)
-nullable(before)
+const before = t(types.string);
+nullable(before);
 // t(types.string, { nullable: true })
 ```
 
@@ -85,8 +101,8 @@ nullable(before)
 Merge additional metadata into a TypeRef (constraints, descriptions, etc.).
 
 ```ts
-const before = t(types.integer)
-withMeta(before, { minimum: 0, description: "must be non-negative" })
+const before = t(types.integer);
+withMeta(before, { minimum: 0, description: "must be non-negative" });
 // t(types.integer, { minimum: 0, description: "must be non-negative" })
 ```
 
@@ -98,11 +114,13 @@ fields just get `meta.optional = true`. Cycle-safe — a shape already visited
 is returned as-is rather than reprocessed.
 
 ```ts
-const before = t(types.object({
-  id: t(types.integer),
-  address: t(types.object({ city: t(types.string) })),
-}))
-deepPartial(before)
+const before = t(
+  types.object({
+    id: t(types.integer),
+    address: t(types.object({ city: t(types.string) })),
+  }),
+);
+deepPartial(before);
 // t(types.object({
 //   id: t(types.integer, { optional: true }),
 //   address: t(types.object({
@@ -118,11 +136,13 @@ elements of arrays/streams/pages), removing `meta.optional` at every level.
 Cycle-safe like `deepPartial`.
 
 ```ts
-const before = t(types.object({
-  id: t(types.integer, { optional: true }),
-  address: t(types.object({ city: t(types.string, { optional: true }) }), { optional: true }),
-}))
-deepRequired(before)
+const before = t(
+  types.object({
+    id: t(types.integer, { optional: true }),
+    address: t(types.object({ city: t(types.string, { optional: true }) }), { optional: true }),
+  }),
+);
+deepRequired(before);
 // t(types.object({
 //   id: t(types.integer),
 //   address: t(types.object({ city: t(types.string) })),

@@ -1,6 +1,7 @@
 # CLI Projection — Concept Inventory and server-less Analysis
 
 > Source files examined:
+>
 > - `server-less/crates/server-less-macros/src/cli.rs` (2560 lines, cited below as `cli.rs:N`)
 > - `server-less/crates/server-less-parse/src/lib.rs` (cited as `parse/lib.rs:N`)
 > - POSIX.1-2017, GNU Coding Standards, clap 4 docs (for concepts not in server-less source)
@@ -473,6 +474,7 @@ generated dispatch arms; not configurable per-operation.
 ### [LIKELY-AGNOSTIC] Streaming / Iterator Return
 
 A method whose return type is an iterator is dispatched via the streaming arm (cli.rs:2140–2157):
+
 - Default and `--jsonl`: iterate and emit one JSON line per item (avoids collecting into memory).
 - `--json`/`--jq`: collect, serialize as array, then format.
 
@@ -523,50 +525,50 @@ They are noted for completeness:
 
 ### [LIKELY-AGNOSTIC] — Other protocols plausibly share this concern
 
-| Concept | Source in cli.rs | Notes |
-|---|---|---|
-| Operation name | cli.rs:597–599 | `wire_name_or` used across all projections |
-| Description / help text | cli.rs:1422–1451 | Universal: OpenAPI, MCP, gRPC, CLI |
-| Skip / exclude | cli.rs:311–333 | `has_server_skip` is cross-protocol |
-| Hidden (not discoverable) | cli.rs:499–521 | `has_server_hidden` is cross-protocol |
-| Method grouping / sections | cli.rs:796–885 | Drives OpenAPI tags, markdown docs |
-| Static mount (subcommand group) | cli.rs:1489–1519 | Same `&T` shape drives HTTP/MCP/RPC |
-| Slug mount (parameterized group) | cli.rs:1521–1570 | Same shape drives HTTP path params |
-| Optional parameter (`Option<T>`) | cli.rs:1722–1735 | Type-inferred; universal optionality |
-| Multi-value parameter (`Vec<T>`) | cli.rs:1693–1707 | Type-inferred; universal array params |
-| Parameter name override | cli.rs:601–611 | `wire_name` read by all projections |
-| Parameter default value | cli.rs:1654–1659 | OpenAPI `default`, JSON Schema `default` |
-| Parameter help text | cli.rs:1683–1739 | OpenAPI/MCP param descriptions |
-| Input schema | cli.rs:1773–1797 | Same data as MCP `inputSchema`, OpenAPI params |
-| Output schema | cli.rs:1800–1834 | Same data as OpenAPI response schema |
-| Streaming / iterator return | cli.rs:2140–2157 | HTTP SSE, WS frames, etc. |
-| Exclude from reference docs | cli.rs:357–382 | "is-this-in-generated-docs" is agnostic |
-| Homepage URL | cli.rs:118 | OpenAPI `info.contact.url`, etc. |
+| Concept                          | Source in cli.rs | Notes                                          |
+| -------------------------------- | ---------------- | ---------------------------------------------- |
+| Operation name                   | cli.rs:597–599   | `wire_name_or` used across all projections     |
+| Description / help text          | cli.rs:1422–1451 | Universal: OpenAPI, MCP, gRPC, CLI             |
+| Skip / exclude                   | cli.rs:311–333   | `has_server_skip` is cross-protocol            |
+| Hidden (not discoverable)        | cli.rs:499–521   | `has_server_hidden` is cross-protocol          |
+| Method grouping / sections       | cli.rs:796–885   | Drives OpenAPI tags, markdown docs             |
+| Static mount (subcommand group)  | cli.rs:1489–1519 | Same `&T` shape drives HTTP/MCP/RPC            |
+| Slug mount (parameterized group) | cli.rs:1521–1570 | Same shape drives HTTP path params             |
+| Optional parameter (`Option<T>`) | cli.rs:1722–1735 | Type-inferred; universal optionality           |
+| Multi-value parameter (`Vec<T>`) | cli.rs:1693–1707 | Type-inferred; universal array params          |
+| Parameter name override          | cli.rs:601–611   | `wire_name` read by all projections            |
+| Parameter default value          | cli.rs:1654–1659 | OpenAPI `default`, JSON Schema `default`       |
+| Parameter help text              | cli.rs:1683–1739 | OpenAPI/MCP param descriptions                 |
+| Input schema                     | cli.rs:1773–1797 | Same data as MCP `inputSchema`, OpenAPI params |
+| Output schema                    | cli.rs:1800–1834 | Same data as OpenAPI response schema           |
+| Streaming / iterator return      | cli.rs:2140–2157 | HTTP SSE, WS frames, etc.                      |
+| Exclude from reference docs      | cli.rs:357–382   | "is-this-in-generated-docs" is agnostic        |
+| Homepage URL                     | cli.rs:118       | OpenAPI `info.contact.url`, etc.               |
 
 ### [CLI-SPECIFIC] — Only CLI cares
 
-| Concept | Source in cli.rs | Notes |
-|---|---|---|
-| Version string | cli.rs:202–204, 1354 | `--version`/`-V` via clap |
-| Default action (no-subcommand) | cli.rs:336–355, 904–954 | `#[cli(default)]` |
-| Display formatter | cli.rs:566–594, 2047–2050 | `#[cli(display_with)]`, text output only |
-| Hidden alias / migration | cli.rs:535–564 | Renames/moves in CLI path |
-| Boolean flag (`bool` → `--flag`) | cli.rs:1681–1691 | SetTrue rendering |
-| Positional argument | cli.rs:1708–1721 | `.index(N)` ordering |
-| Short flag character | cli.rs:1649 | `-x` single-char alias |
-| Output format flags (--json/--jsonl/--jq) | cli.rs:1202–1232 | Machine-readable output switching |
-| --params-json bulk input | cli.rs:1226–1232 | JSON-object-as-all-params |
-| --manual reference document | cli.rs:1142–1201 | Terminal reference aggregation |
-| Global flags | cli.rs:1116–1135 | `.global(true)` clap propagation |
-| Shell completions | cli.rs:1237–1250 | `clap_complete` |
-| Man page | cli.rs:1252–1255 | `clap_mangen` roff output |
-| Exit codes (0/1) | cli.rs:2115, 2135 | POSIX convention, not parameterized |
-| stdout vs stderr routing | cli.rs:2095–2116 | Encoded in generated arms |
-| Unit return → "Done" | cli.rs:2090 | Terminal feedback convention |
-| Confirmation prompts | not in cli.rs | Convention; not generated |
-| --dry-run | not in cli.rs | Convention; not generated |
-| Env-var fallback | not in cli.rs | clap `.env()`, not wired |
-| Arg files (@file) | not in cli.rs | clap feature, not enabled |
+| Concept                                   | Source in cli.rs          | Notes                                    |
+| ----------------------------------------- | ------------------------- | ---------------------------------------- |
+| Version string                            | cli.rs:202–204, 1354      | `--version`/`-V` via clap                |
+| Default action (no-subcommand)            | cli.rs:336–355, 904–954   | `#[cli(default)]`                        |
+| Display formatter                         | cli.rs:566–594, 2047–2050 | `#[cli(display_with)]`, text output only |
+| Hidden alias / migration                  | cli.rs:535–564            | Renames/moves in CLI path                |
+| Boolean flag (`bool` → `--flag`)          | cli.rs:1681–1691          | SetTrue rendering                        |
+| Positional argument                       | cli.rs:1708–1721          | `.index(N)` ordering                     |
+| Short flag character                      | cli.rs:1649               | `-x` single-char alias                   |
+| Output format flags (--json/--jsonl/--jq) | cli.rs:1202–1232          | Machine-readable output switching        |
+| --params-json bulk input                  | cli.rs:1226–1232          | JSON-object-as-all-params                |
+| --manual reference document               | cli.rs:1142–1201          | Terminal reference aggregation           |
+| Global flags                              | cli.rs:1116–1135          | `.global(true)` clap propagation         |
+| Shell completions                         | cli.rs:1237–1250          | `clap_complete`                          |
+| Man page                                  | cli.rs:1252–1255          | `clap_mangen` roff output                |
+| Exit codes (0/1)                          | cli.rs:2115, 2135         | POSIX convention, not parameterized      |
+| stdout vs stderr routing                  | cli.rs:2095–2116          | Encoded in generated arms                |
+| Unit return → "Done"                      | cli.rs:2090               | Terminal feedback convention             |
+| Confirmation prompts                      | not in cli.rs             | Convention; not generated                |
+| --dry-run                                 | not in cli.rs             | Convention; not generated                |
+| Env-var fallback                          | not in cli.rs             | clap `.env()`, not wired                 |
+| Arg files (@file)                         | not in cli.rs             | clap feature, not enabled                |
 
 ---
 

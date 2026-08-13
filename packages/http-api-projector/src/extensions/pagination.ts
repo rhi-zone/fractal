@@ -53,10 +53,10 @@
 //   const client = createClient(tree, { extensions: [pagination()] })
 //   for await (const book of await client.books.list()) { ... }
 
-import { isPageShape } from "@rhi-zone/fractal-api-tree"
-import { ClientError } from "../client-error.ts"
-import { getHttpMeta } from "../project.ts"
-import type { ClientExtension, DecodeContext, DecodedResponse, FetchImpl } from "../extension.ts"
+import { isPageShape } from "@rhi-zone/fractal-api-tree";
+import { ClientError } from "../client-error.ts";
+import { getHttpMeta } from "../project.ts";
+import type { ClientExtension, DecodeContext, DecodedResponse, FetchImpl } from "../extension.ts";
 
 // ============================================================================
 // Public types
@@ -64,10 +64,10 @@ import type { ClientExtension, DecodeContext, DecodedResponse, FetchImpl } from 
 
 export type PaginationOptions = {
   /** Input field name the client sends carrying a cursor-style next-page token. Default `"cursor"`. */
-  readonly cursorParam?: string
+  readonly cursorParam?: string;
   /** Input field name the client sends carrying an offset-style next-page position. Default `"offset"`. */
-  readonly offsetParam?: string
-}
+  readonly offsetParam?: string;
+};
 
 /**
  * A page value enriched with auto-pagination: every field the server's
@@ -81,28 +81,32 @@ export type PaginationOptions = {
 export type PageIterator<P extends { readonly items: readonly unknown[] }> = P &
   AsyncIterable<P["items"][number]> & {
     /** Fetch the next not-yet-fetched page. `undefined` once there is nothing left (`hasMore` was `false`). */
-    getPage(): Promise<P | undefined>
-  }
+    getPage(): Promise<P | undefined>;
+  };
 
 // ============================================================================
 // Internal: page-shape classification + next-page request
 // ============================================================================
 
-type CursorPageLike = { readonly items: readonly unknown[]; readonly cursor?: string; readonly hasMore: boolean }
+type CursorPageLike = {
+  readonly items: readonly unknown[];
+  readonly cursor?: string;
+  readonly hasMore: boolean;
+};
 type OffsetPageLike = {
-  readonly items: readonly unknown[]
-  readonly offset: number
-  readonly total: number
-  readonly hasMore: boolean
-}
+  readonly items: readonly unknown[];
+  readonly offset: number;
+  readonly total: number;
+  readonly hasMore: boolean;
+};
 
 type ResolvedPaginationOptions = {
-  readonly cursorParam: string
-  readonly offsetParam: string
-}
+  readonly cursorParam: string;
+  readonly offsetParam: string;
+};
 
 function isOffsetPageLike(page: CursorPageLike | OffsetPageLike): page is OffsetPageLike {
-  return "offset" in page && "total" in page
+  return "offset" in page && "total" in page;
 }
 
 /**
@@ -126,25 +130,29 @@ function nextRequestFor(
   if (original.method !== "GET" && original.method !== "HEAD" && original.method !== "DELETE") {
     throw new TypeError(
       `pagination(): auto-pagination only supports GET/HEAD/DELETE-style (query-param) requests; got ${original.method}. Expose a paginated list endpoint via http.get.`,
-    )
+    );
   }
-  const isAbsolute = original.url.startsWith("http://") || original.url.startsWith("https://")
-  const url = new URL(original.url, isAbsolute ? undefined : "http://localhost")
+  const isAbsolute = original.url.startsWith("http://") || original.url.startsWith("https://");
+  const url = new URL(original.url, isAbsolute ? undefined : "http://localhost");
   if (isOffsetPageLike(page)) {
-    url.searchParams.set(options.offsetParam, String(page.offset + page.items.length))
+    url.searchParams.set(options.offsetParam, String(page.offset + page.items.length));
   } else if (page.cursor !== undefined) {
-    url.searchParams.set(options.cursorParam, page.cursor)
+    url.searchParams.set(options.cursorParam, page.cursor);
   }
-  const finalUrl = isAbsolute ? url.toString() : url.pathname + url.search
-  return new Request(finalUrl, { method: original.method, headers: original.headers, signal: original.signal })
+  const finalUrl = isAbsolute ? url.toString() : url.pathname + url.search;
+  return new Request(finalUrl, {
+    method: original.method,
+    headers: original.headers,
+    signal: original.signal,
+  });
 }
 
 /** Parse a `Response` the same way `client.ts`'s default decode does, throwing `ClientError` on a non-`ok` status. */
 async function decodeOrThrow(res: Response): Promise<unknown> {
-  const ct = res.headers.get("Content-Type") ?? ""
-  const body = ct.includes("application/json") ? await res.json() : await res.text()
-  if (!res.ok) throw new ClientError(res.status, body)
-  return body
+  const ct = res.headers.get("Content-Type") ?? "";
+  const body = ct.includes("application/json") ? await res.json() : await res.text();
+  if (!res.ok) throw new ClientError(res.status, body);
+  return body;
 }
 
 // ============================================================================
@@ -164,56 +172,56 @@ function enrichPage(
   refetch: FetchImpl,
   options: ResolvedPaginationOptions,
 ): unknown {
-  let currentPage: CursorPageLike | OffsetPageLike | undefined = first
+  let currentPage: CursorPageLike | OffsetPageLike | undefined = first;
   let nextRequest: Request | undefined = first.hasMore
     ? nextRequestFor(originalRequest, first, options)
-    : undefined
-  let firstPending = true
+    : undefined;
+  let firstPending = true;
 
   /** Advance to (and return) the next not-yet-returned page; `undefined` once exhausted. */
   async function fetchNext(): Promise<CursorPageLike | OffsetPageLike | undefined> {
     if (firstPending) {
-      firstPending = false
-      return currentPage
+      firstPending = false;
+      return currentPage;
     }
-    if (nextRequest === undefined) return undefined
-    const res = await refetch(nextRequest)
-    const value = await decodeOrThrow(res)
+    if (nextRequest === undefined) return undefined;
+    const res = await refetch(nextRequest);
+    const value = await decodeOrThrow(res);
     if (!isPageShape(value)) {
-      nextRequest = undefined
-      return undefined
+      nextRequest = undefined;
+      return undefined;
     }
-    const page = value as CursorPageLike | OffsetPageLike
-    currentPage = page
-    nextRequest = page.hasMore ? nextRequestFor(originalRequest, page, options) : undefined
-    return page
+    const page = value as CursorPageLike | OffsetPageLike;
+    currentPage = page;
+    nextRequest = page.hasMore ? nextRequestFor(originalRequest, page, options) : undefined;
+    return page;
   }
 
-  const getPage = (): Promise<unknown> => fetchNext()
+  const getPage = (): Promise<unknown> => fetchNext();
 
   const asyncIterator = (): AsyncIterator<unknown> => {
-    let page: CursorPageLike | OffsetPageLike | undefined
-    let itemIndex = 0
+    let page: CursorPageLike | OffsetPageLike | undefined;
+    let itemIndex = 0;
     return {
       async next() {
         for (;;) {
           if (page === undefined) {
-            const fetched = await fetchNext()
-            if (fetched === undefined) return { done: true, value: undefined }
-            page = fetched
-            itemIndex = 0
+            const fetched = await fetchNext();
+            if (fetched === undefined) return { done: true, value: undefined };
+            page = fetched;
+            itemIndex = 0;
           }
           if (itemIndex < page.items.length) {
-            return { done: false, value: page.items[itemIndex++] }
+            return { done: false, value: page.items[itemIndex++] };
           }
-          if (!page.hasMore) return { done: true, value: undefined }
-          page = undefined
+          if (!page.hasMore) return { done: true, value: undefined };
+          page = undefined;
         }
       },
-    }
-  }
+    };
+  };
 
-  return Object.assign({}, first, { getPage, [Symbol.asyncIterator]: asyncIterator })
+  return Object.assign({}, first, { getPage, [Symbol.asyncIterator]: asyncIterator });
 }
 
 /** Decode `res`; if page-shaped, enrich it with auto-pagination; otherwise pass the raw value through unchanged. */
@@ -223,9 +231,9 @@ async function buildResult(
   refetch: FetchImpl,
   options: ResolvedPaginationOptions,
 ): Promise<unknown> {
-  const first = await decodeOrThrow(res)
-  if (!isPageShape(first)) return first
-  return enrichPage(first as CursorPageLike | OffsetPageLike, originalRequest, refetch, options)
+  const first = await decodeOrThrow(res);
+  if (!isPageShape(first)) return first;
+  return enrichPage(first as CursorPageLike | OffsetPageLike, originalRequest, refetch, options);
 }
 
 // ============================================================================
@@ -247,16 +255,16 @@ export function pagination(options: PaginationOptions = {}): ClientExtension {
   const defaults: ResolvedPaginationOptions = {
     cursorParam: options.cursorParam ?? "cursor",
     offsetParam: options.offsetParam ?? "offset",
-  }
+  };
 
   const decodeResponse = (res: Response, ctx: DecodeContext): DecodedResponse => {
-    const paginatedMeta = getHttpMeta(ctx.meta).paginated
+    const paginatedMeta = getHttpMeta(ctx.meta).paginated;
     const resolved: ResolvedPaginationOptions = {
       cursorParam: paginatedMeta?.inputCursorParam ?? defaults.cursorParam,
       offsetParam: paginatedMeta?.inputOffsetParam ?? defaults.offsetParam,
-    }
-    return { value: buildResult(res, ctx.request, ctx.refetch, resolved) }
-  }
+    };
+    return { value: buildResult(res, ctx.request, ctx.refetch, resolved) };
+  };
 
-  return { name: "pagination", decodeResponse }
+  return { name: "pagination", decodeResponse };
 }

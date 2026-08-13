@@ -7,7 +7,7 @@
 // `./fastify`, future `./koa`, ...) — the same one-IR/many-named-target-emitters
 // shape `type-ir`'s doc projectors use (docs/reference/type-ir/doc-projectors.md).
 
-export { generateExpressRouter, generateExpressRouterFromNode } from "./express.ts"
-export type { ExpressCodegenOptions } from "./express.ts"
-export { generateFastifyRoutes, generateFastifyRoutesFromNode } from "./fastify.ts"
-export type { FastifyCodegenOptions } from "./fastify.ts"
+export { generateExpressRouter, generateExpressRouterFromNode } from "./express.ts";
+export type { ExpressCodegenOptions } from "./express.ts";
+export { generateFastifyRoutes, generateFastifyRoutesFromNode } from "./fastify.ts";
+export type { FastifyCodegenOptions } from "./fastify.ts";

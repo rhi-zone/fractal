@@ -24,16 +24,16 @@
 // Tags are read directly from the node's own meta — there is no ancestor
 // inheritance (see docs/design/router-model.md — "Tags").
 
-import { resolveTags } from "@rhi-zone/fractal-api-tree/tags"
-import type { Tags } from "@rhi-zone/fractal-api-tree/tags"
-import type { LeafMeta } from "@rhi-zone/fractal-api-tree/node"
-import type { HttpLeafMeta } from "./project.ts"
+import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import type { LeafMeta } from "@rhi-zone/fractal-api-tree/node";
+import type { HttpLeafMeta } from "./project.ts";
 
 /** Read the flat `meta.http.verb` scalar key, if present. */
 function verbDirective(meta: HttpLeafMeta): string | undefined {
-  const h = meta.http
-  if (typeof h !== "object" || h === null) return undefined
-  return typeof h.verb === "string" ? h.verb : undefined
+  const h = meta.http;
+  if (typeof h !== "object" || h === null) return undefined;
+  return typeof h.verb === "string" ? h.verb : undefined;
 }
 
 /**
@@ -45,16 +45,16 @@ function verbDirective(meta: HttpLeafMeta): string | undefined {
  * within this package's own unaugmented view).
  */
 export function verbFromTags(meta: LeafMeta & HttpLeafMeta): string {
-  const httpVerb = verbDirective(meta)
-  if (httpVerb !== undefined) return httpVerb.toUpperCase()
+  const httpVerb = verbDirective(meta);
+  if (httpVerb !== undefined) return httpVerb.toUpperCase();
 
-  const tags = resolveTags((meta.tags ?? {}) as Tags)
+  const tags = resolveTags((meta.tags ?? {}) as Tags);
   // readOnly = true → GET (lattice: safe ⇒ idempotent; safe ⇒ ¬destructive)
-  if (tags.readOnly === true) return "GET"
+  if (tags.readOnly === true) return "GET";
   // idempotent = true, destructive = true → DELETE
-  if (tags.idempotent === true && tags.destructive === true) return "DELETE"
+  if (tags.idempotent === true && tags.destructive === true) return "DELETE";
   // idempotent = true, destructive ≠ true → PUT (unknown destructive treated as ¬destructive)
-  if (tags.idempotent === true) return "PUT"
+  if (tags.idempotent === true) return "PUT";
   // Conservative default: unknown or false idempotent → POST
-  return "POST"
+  return "POST";
 }

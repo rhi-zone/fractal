@@ -27,7 +27,7 @@ entirely.
 **Revision note**: an earlier draft of this spec proposed a NEW core
 mechanism — a generic `layers` slot on `Node` plus a `layered(layer,
 subtree) → subtree'` combinator, with core defining nesting/composition
-semantics and projectors only interpreting layer *content*. The owner
+semantics and projectors only interpreting layer _content_. The owner
 rejected that shape: **no new core attach slot, no new combinator.** A
 wrapper belongs in the EXISTING meta channel, the same place `mcp.segment`
 already lives — a branch-position (or leaf-position) member on a
@@ -131,10 +131,10 @@ function-valued meta field.** This is not a style preference — §7's
 folded across two `op()` meta contributions loses its call signature at the
 type level. The `source` directive (`project.ts:107-117`, quoted in full
 here because it is the exact precedent this design follows) already
-documents the sibling class of this problem and its fix: *"Deliberately a
+documents the sibling class of this problem and its fix: _"Deliberately a
 directive — appended to the array — rather than a plain merged object...
 Arrays dodge it entirely: `MergeMetaValue`'s array branch concatenates
-without recursing into elements."* Two new `HttpDirective` variants, added
+without recursing into elements."_ Two new `HttpDirective` variants, added
 to the DU at `project.ts:155-178`:
 
 ```ts
@@ -153,8 +153,12 @@ New `verbs.ts` helpers, matching `http.source()`'s own shape (one directive
 per call, `directives` array element, not a merged object):
 
 ```ts
-export function middleware(...fns: readonly ((inner: Fetch) => Fetch)[]): { readonly http: { readonly directives: readonly HttpDirective[] } }
-export function handlerMiddleware(...fns: readonly HttpHandlerMiddleware[]): { readonly http: { readonly directives: readonly HttpDirective[] } }
+export function middleware(...fns: readonly ((inner: Fetch) => Fetch)[]): {
+  readonly http: { readonly directives: readonly HttpDirective[] };
+};
+export function handlerMiddleware(...fns: readonly HttpHandlerMiddleware[]): {
+  readonly http: { readonly directives: readonly HttpDirective[] };
+};
 ```
 
 `getHttpMeta` (`project.ts:242-...`) gains a THIRD resolution shape,
@@ -267,9 +271,9 @@ function collectRoutes(
   ancestorMiddleware: readonly ((inner: Fetch) => Fetch)[],
   ancestorHandlerMiddleware: readonly HttpHandlerMiddleware[],
 ): CollectedRoute[] {
-  const { middleware = [], handlerMiddleware = [] } = getHttpMeta(route.meta)
-  const mw = [...ancestorMiddleware, ...middleware]
-  const hmw = [...ancestorHandlerMiddleware, ...handlerMiddleware]
+  const { middleware = [], handlerMiddleware = [] } = getHttpMeta(route.meta);
+  const mw = [...ancestorMiddleware, ...middleware];
+  const hmw = [...ancestorHandlerMiddleware, ...handlerMiddleware];
   // ...each method entry ALSO composes its own (leaf-position) directives on top of `mw`/`hmw`...
   // ...recursive calls into children/fallback pass `mw`/`hmw` down...
 }
@@ -390,24 +394,24 @@ Two scratch checks, both against real `op()`/`FoldMeta` code (not a
 simplified stand-in):
 
 1. **Array-valued member (the shape §3 mandates)**: `op(fn, { http: {
-   middleware: [mw1] } }, { http: { middleware: [mw2] } })` — the folded
+middleware: [mw1] } }, { http: { middleware: [mw2] } })` — the folded
    type's `middleware` member type-checked cleanly against `readonly
-   ((inner: Fetch) => Fetch)[]`. `MergeMetaValue`'s ARRAY branch
+((inner: Fetch) => Fetch)[]`. `MergeMetaValue`'s ARRAY branch
    (`node.ts:177-180`) fires first (both sides are tuples), concatenating
    `readonly [mw1, mw2]` — the function values inside the array are never
    individually merged as "objects," only the array itself is spread.
 2. **Bare (non-array) function member — BREAKS**: `op(fn, { http: { onError:
-   mw1 } }, { http: { onError: mw2 } })` — the folded type's `onError`
+mw1 } }, { http: { onError: mw2 } })` — the folded type's `onError`
    member does **NOT** type-check against `(inner: Fetch) => Fetch`
    (`FoldedOnError extends (inner: Fetch) => Fetch ? true : false` evaluated
    to `false`, confirmed by a deliberate `true`-vs-`false` type mismatch
    diagnostic). Forcing TypeScript to print the unevaluated type showed it
    stuck as `MergeTwoMeta<(inner: Fetch) => Fetch, (inner: Fetch) => Fetch,
-   [unknown, unknown]>` — i.e. `MergeMetaValue` took the OBJECT-merge branch
+[unknown, unknown]>` — i.e. `MergeMetaValue` took the OBJECT-merge branch
    (`A extends object`, `node.ts:181-189`) for a bare function member,
    because a function type structurally satisfies `extends object` in
    TypeScript. `MergeTwoMeta`'s own mechanism (`Omit<A, keyof B> & Omit<B,
-   keyof A> & {...mapped over keyof A & keyof B...}`, `node.ts:213-231`) is
+keyof A> & {...mapped over keyof A & keyof B...}`, `node.ts:213-231`) is
    built from MAPPED TYPES (`Omit`/`Pick`), which structurally strip a call
    signature — `keyof` a plain function type is empty, so every piece of the
    intersection reduces toward `{}`, losing callability. (A value was still
@@ -576,31 +580,31 @@ un-scoped-here future work (§9).
   (2026-08-02): a `middleware` throw — subtree-scoped or global — is now
   CAUGHT and run through `thrownErrorEncoder`, identically to a
   `handlerMiddleware` throw**, instead of propagating uncaught:
-    - `PresetOptions.middleware` (dispatch-around) still wraps OUTSIDE the
-      compiled router entirely, in `createFetch`'s own composition chain,
-      OUTSIDE `runRoute`'s try/catch — but `createFetch` now wraps that
-      composed chain in its own try/catch, encoding a throw via the same
-      `encodeThrownError` helper (route.ts) `runRoute`'s catch block uses.
-      No route context (`meta`/path) is available at that point — a
-      pre-decode, pre-route-match throw can't be, since matching hasn't
-      happened yet — but `ThrownErrorEncoder`'s signature never took route
-      context anyway, so nothing is lost or fabricated; the encoder just
-      sees the raw error, same as every other call site.
-    - `PresetOptions.handlerMiddleware` (handler-around) is UNCHANGED: wraps
-      INSIDE `runRoute`, around the handler call, INSIDE the try/catch —
-      caught and encoded via `thrownErrorEncoder` exactly as before.
-  §5's mechanism composes subtree `middleware` OUTSIDE each route's
-  `runRoute` call (`toRouter`, compile.ts — now wrapped in its own
-  try/catch, since matching HAS already happened by the time subtree
-  middleware runs) and subtree `handlerMiddleware` INSIDE `runRoute` (via
-  the SAME `handlerMiddleware` parameter `runRoute` already threads a global
-  array through, unchanged) — so both phases now funnel through
-  `encodeThrownError` identically, matching their own global counterpart
-  exactly, per phase: a subtree `middleware` throw is caught and encoded
-  (same as global); a subtree `handlerMiddleware` throw is caught and
-  encoded (same as global, same as before). Never silent, no special
-  channel. Permanent regression tests: `subtree-layers.test.ts`'s "error
-  semantics" `describe` block, `preset.test.ts`'s middleware-throw tests.
+  - `PresetOptions.middleware` (dispatch-around) still wraps OUTSIDE the
+    compiled router entirely, in `createFetch`'s own composition chain,
+    OUTSIDE `runRoute`'s try/catch — but `createFetch` now wraps that
+    composed chain in its own try/catch, encoding a throw via the same
+    `encodeThrownError` helper (route.ts) `runRoute`'s catch block uses.
+    No route context (`meta`/path) is available at that point — a
+    pre-decode, pre-route-match throw can't be, since matching hasn't
+    happened yet — but `ThrownErrorEncoder`'s signature never took route
+    context anyway, so nothing is lost or fabricated; the encoder just
+    sees the raw error, same as every other call site.
+  - `PresetOptions.handlerMiddleware` (handler-around) is UNCHANGED: wraps
+    INSIDE `runRoute`, around the handler call, INSIDE the try/catch —
+    caught and encoded via `thrownErrorEncoder` exactly as before.
+    §5's mechanism composes subtree `middleware` OUTSIDE each route's
+    `runRoute` call (`toRouter`, compile.ts — now wrapped in its own
+    try/catch, since matching HAS already happened by the time subtree
+    middleware runs) and subtree `handlerMiddleware` INSIDE `runRoute` (via
+    the SAME `handlerMiddleware` parameter `runRoute` already threads a global
+    array through, unchanged) — so both phases now funnel through
+    `encodeThrownError` identically, matching their own global counterpart
+    exactly, per phase: a subtree `middleware` throw is caught and encoded
+    (same as global); a subtree `handlerMiddleware` throw is caught and
+    encoded (same as global, same as before). Never silent, no special
+    channel. Permanent regression tests: `subtree-layers.test.ts`'s "error
+    semantics" `describe` block, `preset.test.ts`'s middleware-throw tests.
 - **Cross-protocol phase vocabulary** (§8) — MCP/CLI/JSON-RPC/GraphQL
   analogues of dispatch-around/handler-around are each that projector's own
   future design, not specified here.

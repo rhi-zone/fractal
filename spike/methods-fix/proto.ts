@@ -18,8 +18,7 @@ export type Handler<P = {}> = (
   req: Request & { params: P },
 ) => Response | undefined | Promise<Response | undefined>;
 
-export type Method =
-  | "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 export type Reflected<M, P = {}> = Handler<P> & { readonly meta: M };
 
@@ -47,10 +46,7 @@ export type ValidatedHandler<I, O> = Handler & {
 export type ReturnsHandler<O> = Handler & { readonly [RETURNS]: O };
 
 type MethodsIO<T> = {
-  readonly [K in Extract<keyof T, string>]: T[K] extends ValidatedHandler<
-    infer I,
-    infer O
-  >
+  readonly [K in Extract<keyof T, string>]: T[K] extends ValidatedHandler<infer I, infer O>
     ? { i: I; o: O }
     : T[K] extends ReturnsHandler<infer O>
       ? { i: never; o: Awaited<O> }
@@ -62,9 +58,9 @@ type MethodsIO<T> = {
 // ---------------------------------------------------------------------------
 
 // Standard UnionToIntersection.
-type UnionToIntersection<U> = (
-  U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
   ? I
   : never;
 
@@ -73,21 +69,18 @@ type UnionToIntersection<U> = (
 // {slug} => the methods node needs {id} & {slug}). The dicey part: P sits
 // CONTRAVARIANTLY inside `Request & { params: P }`, so `infer P` there is the
 // uncertain case the brief flags. We probe it below.
-type ParamsOf<T> = UnionToIntersection<
-  {
-    [K in keyof T]: T[K] extends (req: Request & { params: infer P }) => unknown
-      ? P
-      : never;
-  }[keyof T]
-> extends infer R
-  ? // collapse `unknown`/`{}` cleanly
-    R
-  : never;
+type ParamsOf<T> =
+  UnionToIntersection<
+    {
+      [K in keyof T]: T[K] extends (req: Request & { params: infer P }) => unknown ? P : never;
+    }[keyof T]
+  > extends infer R
+    ? // collapse `unknown`/`{}` cleanly
+      R
+    : never;
 
 declare function withMeta<M, P = {}>(h: Handler<P>, meta: M): Reflected<M, P>;
-declare function methodsRT<P = {}>(
-  table: Partial<Record<Method, Handler<P>>>,
-): Handler<P>;
+declare function methodsRT<P = {}>(table: Partial<Record<Method, Handler<P>>>): Handler<P>;
 
 // ===========================================================================
 // CANDIDATE A — extract P from handlers; verbs literal via `const T`.
@@ -95,9 +88,7 @@ declare function methodsRT<P = {}>(
 // No explicit P type-arg. `const T` is the SOLE inference site, so `.meta.verbs`
 // is the literal union of the table's keys. P is derived from the table.
 // ===========================================================================
-declare function methodsA<
-  const T extends Partial<Record<Method, Handler<any>>>,
->(
+declare function methodsA<const T extends Partial<Record<Method, Handler<any>>>>(
   table: T,
 ): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, ParamsOf<T>>;
 
@@ -116,9 +107,7 @@ declare function json(x: unknown): Response;
 
 // ---- type-equality utility ----
 type Equals<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Expect<T extends true> = T;
 
 // ===== GOAL 1: literal verbs =====
@@ -148,16 +137,14 @@ type _G2_RpP = RpP; // inspect
 type _G2_RpP_isAny = Expect<Equals<RpP, any>>;
 
 // A handler that DECLARES its obligation explicitly:
-const declHandler = (req: Request & { params: { id: string } }) =>
-  json(req.params.id);
+const declHandler = (req: Request & { params: { id: string } }) => json(req.params.id);
 const rp2 = methodsA({ GET: declHandler });
 type Rp2P = typeof rp2 extends Reflected<any, infer P> ? P : never;
 type _G2a = Expect<Equals<Rp2P, { id: string }>>;
 
 // Two handlers with different obligations -> intersection.
 const declA = (req: Request & { params: { id: string } }) => json(req.params.id);
-const declB = (req: Request & { params: { slug: string } }) =>
-  json(req.params.slug);
+const declB = (req: Request & { params: { slug: string } }) => json(req.params.slug);
 const rp3 = methodsA({ GET: declA, POST: declB });
 type Rp3P = typeof rp3 extends Reflected<any, infer P> ? P : never;
 type _G2b = Expect<Equals<Rp3P, { id: string } & { slug: string }>>;

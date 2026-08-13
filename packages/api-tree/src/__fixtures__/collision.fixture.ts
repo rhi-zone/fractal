@@ -11,18 +11,18 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "../node.ts"
+import { api, op } from "../node.ts";
 
 export const catalogTree = api({
   list: op(
     /** List items in the catalog. */
     (_input: { limit: number }) => ({ items: [] as string[] }),
   ),
-})
+});
 
 export const inventoryTree = api({
   list: op(
     /** List warehouse inventory rows. */
     (_input: { warehouseId: string }) => ({ rows: [] as string[] }),
   ),
-})
+});

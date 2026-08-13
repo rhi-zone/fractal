@@ -6,9 +6,9 @@ content-addressed build cache + JSON-Schema codegen artifact", `711dfbb4`
 "perf(api-tree): tier build-cache warm check — mtime+size before content
 hash", `25fa9fc` "perf(api-tree): per-entry module-graph reachability —
 precise cache-key granularity in a shared Program") is FILE-closure-keyed: a
-cache entry's validity is a function of which *files* an entry's transitive
+cache entry's validity is a function of which _files_ an entry's transitive
 import closure contains and their content hashes. This spec supersedes that
-key granularity — the cache unit becomes the *leaf* (one `op`'s resolved
+key granularity — the cache unit becomes the _leaf_ (one `op`'s resolved
 input/output type), keyed by a fingerprint of its extracted type-IR, with
 file identity demoted to a cheap pre-filter (§2 Tier 1) rather than the
 source of truth for invalidation. Sibling to `typed-store-spec.md` /
@@ -67,7 +67,7 @@ paraphrased:
 
 **Regression to record**: the per-entry-file granularity introduced by
 `25fa9fc` — computing a PRECISE file closure per entry and hashing every
-file in it — is superseded here as a cache-*key* design, not removed as a
+file in it — is superseded here as a cache-_key_ design, not removed as a
 mechanism. §2 keeps Tier 1's file-closure gate (reachability computation and
 all) as a cheap "could anything have changed" pre-filter; what changes is
 that a Tier-1 MISS no longer directly implies "re-emit," it implies "go
@@ -120,7 +120,7 @@ against the previously recorded per-leaf fingerprints before deciding what
 to re-emit:
 
 1. For each leaf path in the entry, compute `fingerprint = sha256(canonical
-   JSON of {input, output})` (canonicalization requirement discharged by
+JSON of {input, output})` (canonicalization requirement discharged by
    §6's determinism check — no further canonicalization needed for the
    TypeRef shape as it exists today, see §6 for the precise scope of that
    finding).
@@ -253,22 +253,22 @@ migration discussion:
 
 ```ts
 type CacheFileShapeV3 = {
-  readonly version: 3
-  readonly tsVersion: string
-  readonly typeIrVersion: string
-  readonly entryFile: string
+  readonly version: 3;
+  readonly tsVersion: string;
+  readonly typeIrVersion: string;
+  readonly entryFile: string;
   // Tier 1 — unchanged from v2's `files`, still the whole-closure gate.
-  readonly files: Record<string, TrackedFileEntry>
+  readonly files: Record<string, TrackedFileEntry>;
   // Tier 2 — new: one fingerprint per leaf path, keyed the same way
   // extractRouteTypeRefs's own TypeRefMap already keys leaves.
-  readonly leafFingerprints: Record<string, string>
+  readonly leafFingerprints: Record<string, string>;
   // Rollup over leafFingerprints, sorted by leaf path (§3) — lets a v3
   // consumer short-circuit "did the bundle change at all" without
   // recomputing every member comparison, though nothing in this spec
   // requires that as a distinct fast path beyond the per-leaf compare.
-  readonly bundleFingerprint: string
-  readonly outputHash: string
-}
+  readonly bundleFingerprint: string;
+  readonly outputHash: string;
+};
 ```
 
 `outputHash` is kept (same role as v2: catches `outFile` being hand-edited
@@ -293,6 +293,7 @@ uses) over the identical fixture source, ran `typeRefFromFunctionNode` +
 compared byte-for-byte.
 
 Result: **identical**, both runs:
+
 ```
 {"input":{"shape":{"kind":"object","fields":{"id":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}},"output":{"shape":{"kind":"object","fields":{"id":{"shape":{"kind":"string"},"meta":{"readonly":true}},"label":{"shape":{"kind":"string"},"meta":{"readonly":true}},"count":{"shape":{"kind":"number"},"meta":{"readonly":true}}}},"meta":{}}}
 ```
@@ -415,7 +416,7 @@ Under this spec, that collapse changes Tier 1's SHAPE but not Tier 2's:
   entry simply misses once under v3 and gets rebuilt with the new shape,
   which is the same "changed cache format → treat as cold" behavior this
   cache has ALREADY exercised at least once (v1 → v2, implied by `version:
-  2`'s own existence as a literal in `CacheFileShape`) — not a new kind of
+2`'s own existence as a literal in `CacheFileShape`) — not a new kind of
   event for this cache to handle.
 - **Extraction errors: fail loud, no cache write.** If Tier 2's extraction
   step throws (a type the checker cannot resolve in a way

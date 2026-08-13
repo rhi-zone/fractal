@@ -10,15 +10,20 @@ inclusion semantics differ.
 ## kotlinx.serialization
 
 ```ts
-import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin-kotlinx"
+import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin-kotlinx";
 
-toKotlin(t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  isActive: t(types.boolean),
-  tags: t(types.array(t(types.string))),
-})), "User")
+toKotlin(
+  t(
+    types.object({
+      id: t(types.integer),
+      name: t(types.string),
+      email: t(types.string),
+      isActive: t(types.boolean),
+      tags: t(types.array(t(types.string))),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```kotlin
@@ -35,7 +40,7 @@ data class User(
 ### Jackson
 
 ```ts
-import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin-jackson"
+import { toKotlin } from "@rhi-zone/fractal-type-ir/kotlin-jackson";
 ```
 
 `com.fasterxml.jackson.module.kotlin` reads Kotlin constructor parameters
@@ -55,7 +60,7 @@ data class User(
 ### Gson
 
 ```ts
-import { toKotlinGson } from "@rhi-zone/fractal-type-ir/kotlin-gson"
+import { toKotlinGson } from "@rhi-zone/fractal-type-ir/kotlin-gson";
 ```
 
 `@SerializedName("wire-name")` per field (no class-level marker — Gson reads

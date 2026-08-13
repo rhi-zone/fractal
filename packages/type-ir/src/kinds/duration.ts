@@ -2,14 +2,14 @@
 //
 // Elapsed-time kind (duration) — subtypes "string".
 
-import { registerParent, t, type TypeRef } from "../index.ts"
+import { registerParent, t, type TypeRef } from "../index.ts";
 
 declare module "../index.ts" {
   interface TypeKinds {
-    duration: { readonly kind: "duration" }
+    duration: { readonly kind: "duration" };
   }
 }
 
-registerParent("duration", "string")
+registerParent("duration", "string");
 
-export const duration = (meta?: Record<string, unknown>): TypeRef => t({ kind: "duration" }, meta)
+export const duration = (meta?: Record<string, unknown>): TypeRef => t({ kind: "duration" }, meta);

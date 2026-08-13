@@ -12,12 +12,12 @@
 // documents literally (key order, `$ref` spelling, spurious annotations a
 // projector adds are all expected to differ) — only the ingested TypeRef
 // trees are compared, via `toEqual` (structural deep equality).
-import { describe, expect, test } from "bun:test"
-import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts"
-import { fromJsonSchema, type JsonSchema } from "./from-json-schema.ts"
-import { toJsonSchema, toJsonSchemaDocument } from "./json-schema.ts"
-import { fromOpenApi30 } from "./from-openapi.ts"
-import { toOpenApi30, toOpenApi30Document, type OpenApi30Schema } from "./openapi30.ts"
+import { describe, expect, test } from "bun:test";
+import { t, types, typeRefDocument, type TypeRef, type TypeRefDocument } from "./index.ts";
+import { fromJsonSchema, type JsonSchema } from "./from-json-schema.ts";
+import { toJsonSchema, toJsonSchemaDocument } from "./json-schema.ts";
+import { fromOpenApi30 } from "./from-openapi.ts";
+import { toOpenApi30, toOpenApi30Document, type OpenApi30Schema } from "./openapi30.ts";
 
 // ============================================================================
 // Helpers
@@ -25,10 +25,10 @@ import { toOpenApi30, toOpenApi30Document, type OpenApi30Schema } from "./openap
 
 /** `fromJsonSchema(original)` vs `fromJsonSchema(toJsonSchema(fromJsonSchema(original)))`. */
 function roundTrip(schema: JsonSchema): TypeRef {
-  const original = fromJsonSchema(schema)
-  const reingested = fromJsonSchema(toJsonSchema(original))
-  expect(reingested).toEqual(original)
-  return original
+  const original = fromJsonSchema(schema);
+  const reingested = fromJsonSchema(toJsonSchema(original));
+  expect(reingested).toEqual(original);
+  return original;
 }
 
 /** Neither `fromJsonSchema` nor `toJsonSchema` knows about a top-level
@@ -37,46 +37,50 @@ function roundTrip(schema: JsonSchema): TypeRef {
  * per-schema ingester's). This assembles/disassembles the document layer by
  * hand, exactly the way a caller wiring the two together would. */
 function fromJsonSchemaDocument(schema: JsonSchema): TypeRefDocument {
-  const { $defs, ...rest } = schema as JsonSchema & { $defs?: Record<string, JsonSchema> }
-  const defs: Record<string, TypeRef> = {}
+  const { $defs, ...rest } = schema as JsonSchema & { $defs?: Record<string, JsonSchema> };
+  const defs: Record<string, TypeRef> = {};
   if ($defs !== undefined) {
-    for (const [name, defSchema] of Object.entries($defs)) defs[name] = fromJsonSchema(defSchema)
+    for (const [name, defSchema] of Object.entries($defs)) defs[name] = fromJsonSchema(defSchema);
   }
-  return typeRefDocument(fromJsonSchema(rest), defs)
+  return typeRefDocument(fromJsonSchema(rest), defs);
 }
 
 function roundTripDocument(schema: JsonSchema): TypeRefDocument {
-  const original = fromJsonSchemaDocument(schema)
-  const projected = toJsonSchemaDocument(original)
-  const reingested = fromJsonSchemaDocument(projected)
-  expect(reingested).toEqual(original)
-  return original
+  const original = fromJsonSchemaDocument(schema);
+  const projected = toJsonSchemaDocument(original);
+  const reingested = fromJsonSchemaDocument(projected);
+  expect(reingested).toEqual(original);
+  return original;
 }
 
 function roundTripOpenApi(schema: OpenApi30Schema): TypeRef {
-  const original = fromOpenApi30(schema)
-  const reingested = fromOpenApi30(toOpenApi30(original))
-  expect(reingested).toEqual(original)
-  return original
+  const original = fromOpenApi30(schema);
+  const reingested = fromOpenApi30(toOpenApi30(original));
+  expect(reingested).toEqual(original);
+  return original;
 }
 
 /** Same caller-assembles-the-document-layer approach as
  * `fromJsonSchemaDocument`, but for OAS 3.0's `components.schemas` map
  * (see openapi30.ts's `toOpenApi30Document` doc comment — it explicitly
  * says merging into a full document is "the caller's" job). */
-function roundTripOpenApiDocument(rootSchema: OpenApi30Schema, componentSchemas: Record<string, OpenApi30Schema>): TypeRefDocument {
-  const defs: Record<string, TypeRef> = {}
-  for (const [name, s] of Object.entries(componentSchemas)) defs[name] = fromOpenApi30(s)
-  const original = typeRefDocument(fromOpenApi30(rootSchema), defs)
+function roundTripOpenApiDocument(
+  rootSchema: OpenApi30Schema,
+  componentSchemas: Record<string, OpenApi30Schema>,
+): TypeRefDocument {
+  const defs: Record<string, TypeRef> = {};
+  for (const [name, s] of Object.entries(componentSchemas)) defs[name] = fromOpenApi30(s);
+  const original = typeRefDocument(fromOpenApi30(rootSchema), defs);
 
-  const projected = toOpenApi30Document(original)
+  const projected = toOpenApi30Document(original);
 
-  const reDefs: Record<string, TypeRef> = {}
-  for (const [name, s] of Object.entries(projected.components.schemas)) reDefs[name] = fromOpenApi30(s)
-  const reingested = typeRefDocument(fromOpenApi30(projected.schema), reDefs)
+  const reDefs: Record<string, TypeRef> = {};
+  for (const [name, s] of Object.entries(projected.components.schemas))
+    reDefs[name] = fromOpenApi30(s);
+  const reingested = typeRefDocument(fromOpenApi30(projected.schema), reDefs);
 
-  expect(reingested).toEqual(original)
-  return original
+  expect(reingested).toEqual(original);
+  return original;
 }
 
 // ============================================================================
@@ -85,11 +89,11 @@ function roundTripOpenApiDocument(rootSchema: OpenApi30Schema, componentSchemas:
 
 describe("JSON Schema round-trips", () => {
   test("primitives", () => {
-    expect(roundTrip({ type: "boolean" })).toEqual(t(types.boolean))
-    expect(roundTrip({ type: "number" })).toEqual(t(types.number))
-    expect(roundTrip({ type: "integer" })).toEqual(t(types.integer))
-    expect(roundTrip({ type: "string" })).toEqual(t(types.string))
-  })
+    expect(roundTrip({ type: "boolean" })).toEqual(t(types.boolean));
+    expect(roundTrip({ type: "number" })).toEqual(t(types.number));
+    expect(roundTrip({ type: "integer" })).toEqual(t(types.integer));
+    expect(roundTrip({ type: "string" })).toEqual(t(types.string));
+  });
 
   test("object with required and optional fields", () => {
     const ref = roundTrip({
@@ -100,7 +104,7 @@ describe("JSON Schema round-trips", () => {
         nickname: { type: "string" },
       },
       required: ["id", "name"],
-    })
+    });
     expect(ref).toEqual(
       t(
         types.object({
@@ -109,8 +113,8 @@ describe("JSON Schema round-trips", () => {
           nickname: t(types.string, { optional: true }),
         }),
       ),
-    )
-  })
+    );
+  });
 
   test("nested objects", () => {
     roundTrip({
@@ -126,39 +130,43 @@ describe("JSON Schema round-trips", () => {
         },
       },
       required: ["address"],
-    })
-  })
+    });
+  });
 
   test("arrays with typed items", () => {
-    roundTrip({ type: "array", items: { type: "integer" } })
+    roundTrip({ type: "array", items: { type: "integer" } });
     roundTrip({
       type: "array",
       items: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-    })
-  })
+    });
+  });
 
   test("string enum", () => {
-    roundTrip({ enum: ["active", "inactive", "pending"] })
-  })
+    roundTrip({ enum: ["active", "inactive", "pending"] });
+  });
 
   test("integer enum", () => {
-    roundTrip({ type: "integer", enum: [1, 2, 3] })
-  })
+    roundTrip({ type: "integer", enum: [1, 2, 3] });
+  });
 
   test("allOf composition (intersection)", () => {
     roundTrip({
       allOf: [
         { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
-        { type: "object", properties: { createdAt: { type: "string", format: "date-time" } }, required: ["createdAt"] },
+        {
+          type: "object",
+          properties: { createdAt: { type: "string", format: "date-time" } },
+          required: ["createdAt"],
+        },
       ],
-    })
-  })
+    });
+  });
 
   test("oneOf union", () => {
     roundTrip({
       oneOf: [{ type: "string" }, { type: "integer" }, { type: "boolean" }],
-    })
-  })
+    });
+  });
 
   test("anyOf union", () => {
     roundTrip({
@@ -166,8 +174,8 @@ describe("JSON Schema round-trips", () => {
         { type: "object", properties: { a: { type: "string" } }, required: ["a"] },
         { type: "object", properties: { b: { type: "integer" } }, required: ["b"] },
       ],
-    })
-  })
+    });
+  });
 
   test("discriminated union (oneOf + discriminator)", () => {
     const ref = roundTrip({
@@ -184,17 +192,17 @@ describe("JSON Schema round-trips", () => {
         },
       ],
       discriminator: { propertyName: "kind" },
-    })
-    expect(ref.meta.discriminator).toBe("kind")
-  })
+    });
+    expect(ref.meta.discriminator).toBe("kind");
+  });
 
   test("nullable via type array form", () => {
-    roundTrip({ type: ["string", "null"] })
-  })
+    roundTrip({ type: ["string", "null"] });
+  });
 
   test("nullable via anyOf-with-null form (complex type)", () => {
-    roundTrip({ anyOf: [{ type: "array", items: { type: "string" } }, { type: "null" }] })
-  })
+    roundTrip({ anyOf: [{ type: "array", items: { type: "string" } }, { type: "null" }] });
+  });
 
   test("$ref resolution through $defs", () => {
     const doc = roundTripDocument({
@@ -206,12 +214,10 @@ describe("JSON Schema round-trips", () => {
           required: ["id", "name"],
         },
       },
-    })
-    expect(doc.root).toEqual(t(types.ref("User")))
-    expect(doc.defs.User).toEqual(
-      t(types.object({ id: t(types.string), name: t(types.string) })),
-    )
-  })
+    });
+    expect(doc.root).toEqual(t(types.ref("User")));
+    expect(doc.defs.User).toEqual(t(types.object({ id: t(types.string), name: t(types.string) })));
+  });
 
   test("recursive type (tree node $refs itself)", () => {
     const doc = roundTripDocument({
@@ -226,7 +232,7 @@ describe("JSON Schema round-trips", () => {
           required: ["value", "children"],
         },
       },
-    })
+    });
     expect(doc.defs.TreeNode).toEqual(
       t(
         types.object({
@@ -234,39 +240,39 @@ describe("JSON Schema round-trips", () => {
           children: t(types.array(t(types.ref("TreeNode")))),
         }),
       ),
-    )
-  })
+    );
+  });
 
   test("string formats", () => {
-    roundTrip({ type: "string", format: "date-time" })
-    roundTrip({ type: "string", format: "email" })
-    roundTrip({ type: "string", format: "uuid" })
-    roundTrip({ type: "string", format: "uri" })
-  })
+    roundTrip({ type: "string", format: "date-time" });
+    roundTrip({ type: "string", format: "email" });
+    roundTrip({ type: "string", format: "uuid" });
+    roundTrip({ type: "string", format: "uri" });
+  });
 
   test("numeric constraints", () => {
-    roundTrip({ type: "integer", minimum: 0, maximum: 100, multipleOf: 5 })
-  })
+    roundTrip({ type: "integer", minimum: 0, maximum: 100, multipleOf: 5 });
+  });
 
   test("string constraints", () => {
-    roundTrip({ type: "string", minLength: 1, maxLength: 20, pattern: "^[a-z]+$" })
-  })
+    roundTrip({ type: "string", minLength: 1, maxLength: 20, pattern: "^[a-z]+$" });
+  });
 
   test("default values", () => {
-    const ref = roundTrip({ type: "integer", default: 0 })
-    expect(ref.meta.default).toBe(0)
-  })
+    const ref = roundTrip({ type: "integer", default: 0 });
+    expect(ref.meta.default).toBe(0);
+  });
 
   test("description metadata", () => {
-    const ref = roundTrip({ type: "string", description: "a human name" })
-    expect(ref.meta.description).toBe("a human name")
-  })
+    const ref = roundTrip({ type: "string", description: "a human name" });
+    expect(ref.meta.description).toBe("a human name");
+  });
 
   test("title metadata", () => {
-    const ref = roundTrip({ type: "string", title: "User Name" })
-    expect(ref.meta.title).toBe("User Name")
-  })
-})
+    const ref = roundTrip({ type: "string", title: "User Name" });
+    expect(ref.meta.title).toBe("User Name");
+  });
+});
 
 // ============================================================================
 // OpenAPI 3.0 round-trips
@@ -283,20 +289,28 @@ describe("OpenAPI 3.0 round-trips", () => {
           required: ["id", "name"],
         },
       },
-    )
-    expect(doc.root).toEqual(t(types.ref("User")))
-  })
+    );
+    expect(doc.root).toEqual(t(types.ref("User")));
+  });
 
   test("discriminated union via discriminator object", () => {
     const ref = roundTripOpenApi({
       oneOf: [
-        { type: "object", properties: { kind: { enum: ["cat"] }, meow: { type: "boolean" } }, required: ["kind"] },
-        { type: "object", properties: { kind: { enum: ["dog"] }, bark: { type: "boolean" } }, required: ["kind"] },
+        {
+          type: "object",
+          properties: { kind: { enum: ["cat"] }, meow: { type: "boolean" } },
+          required: ["kind"],
+        },
+        {
+          type: "object",
+          properties: { kind: { enum: ["dog"] }, bark: { type: "boolean" } },
+          required: ["kind"],
+        },
       ],
       discriminator: { propertyName: "kind" },
-    })
-    expect(ref.meta.discriminator).toBe("kind")
-  })
+    });
+    expect(ref.meta.discriminator).toBe("kind");
+  });
 
   test("nested object with nullable field and numeric constraints", () => {
     roundTripOpenApi({
@@ -307,8 +321,8 @@ describe("OpenAPI 3.0 round-trips", () => {
         note: { type: "string", nullable: true },
       },
       required: ["id", "score"],
-    })
-  })
+    });
+  });
 
   // Request/response body schemas and full path/operation documents are
   // outside fromOpenApi30/toOpenApi30's scope — both operate purely at the
@@ -319,4 +333,4 @@ describe("OpenAPI 3.0 round-trips", () => {
   // own note pointing at "http-api-projector's openapi.ts" — not present in
   // this package, so there is nothing here to round-trip beyond the
   // component-schema case above.
-})
+});

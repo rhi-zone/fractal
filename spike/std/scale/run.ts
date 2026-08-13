@@ -89,7 +89,11 @@ function runTsc(tc: string): { ok: boolean; inst?: number; note: string } {
       },
     );
     const d = parseDiag(out);
-    return { ok: d.errors === 0, inst: d.instantiations, note: d.errors === 0 ? "ok" : `${d.errors} errors` };
+    return {
+      ok: d.errors === 0,
+      inst: d.instantiations,
+      note: d.errors === 0 ? "ok" : `${d.errors} errors`,
+    };
   } catch (e) {
     const err = e as { stdout?: string; stderr?: string };
     const all = (err.stdout ?? "") + (err.stderr ?? "");
@@ -97,7 +101,11 @@ function runTsc(tc: string): { ok: boolean; inst?: number; note: string } {
       return { ok: false, note: "CRASH (stack overflow)" };
     }
     const d = parseDiag(all);
-    return { ok: d.errors === 0, inst: d.instantiations, note: d.errors === 0 ? "ok" : `${d.errors} errors` };
+    return {
+      ok: d.errors === 0,
+      inst: d.instantiations,
+      note: d.errors === 0 ? "ok" : `${d.errors} errors`,
+    };
   }
 }
 
@@ -138,7 +146,19 @@ for (const n of Ns) {
 const csv = ["n,tsgoOk,errors,types,instantiations,memoryK,checkMs,wallMs,tscOk,tscInst,tscNote"];
 for (const m of results) {
   csv.push(
-    [m.n, m.ok, m.errors, m.types ?? "", m.instantiations ?? "", m.memoryK ?? "", m.checkMs ?? "", m.wallMs, m.tscOk, m.tscInst ?? "", `"${m.tscNote}"`].join(","),
+    [
+      m.n,
+      m.ok,
+      m.errors,
+      m.types ?? "",
+      m.instantiations ?? "",
+      m.memoryK ?? "",
+      m.checkMs ?? "",
+      m.wallMs,
+      m.tscOk,
+      m.tscInst ?? "",
+      `"${m.tscNote}"`,
+    ].join(","),
   );
 }
 writeFileSync(join(LOGS, "results.csv"), csv.join("\n") + "\n");

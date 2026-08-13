@@ -31,13 +31,13 @@ cross-service use.
 ## Usage
 
 ```ts
-import { toTools, createStdioMcpServer } from "@rhi-zone/fractal-mcp-api-projector"
-import { api } from "./tree.ts"
+import { toTools, createStdioMcpServer } from "@rhi-zone/fractal-mcp-api-projector";
+import { api } from "./tree.ts";
 
-const tools = toTools(api)
+const tools = toTools(api);
 // tools[i] -> { name: "books_add", inputSchema: {...}, annotations: {...} }
 
-await createStdioMcpServer(api, { name: "library", version: "1.0.0" })
+await createStdioMcpServer(api, { name: "library", version: "1.0.0" });
 ```
 
 ## Install

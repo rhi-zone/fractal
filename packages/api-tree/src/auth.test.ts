@@ -86,7 +86,8 @@ describe("authMiddleware", () => {
         const header = req.headers.get("Authorization");
         return header === "Bearer valid" ? { id: "user-1" } : null;
       },
-      guard: (_req, user) => (user === null ? new Response("Unauthorized", { status: 401 }) : undefined),
+      guard: (_req, user) =>
+        user === null ? new Response("Unauthorized", { status: 401 }) : undefined,
     };
     const storage = new AsyncLocalStorage<User | null>();
     const tree = api({

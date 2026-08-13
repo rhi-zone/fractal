@@ -8,4 +8,4 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-export const notATree = { plain: true }
+export const notATree = { plain: true };

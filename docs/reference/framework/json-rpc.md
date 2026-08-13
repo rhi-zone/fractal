@@ -9,16 +9,16 @@
 ## Basic usage
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
-import { createJsonRpcHttpHandler } from "@rhi-zone/fractal-json-rpc-api-projector"
+import { api, op } from "@rhi-zone/fractal-api-tree";
+import { createJsonRpcHttpHandler } from "@rhi-zone/fractal-json-rpc-api-projector";
 
 const tree = api({
   books: api({
     list: op(() => [{ id: "1", title: "Dune" }]),
   }),
-})
+});
 
-const handler = createJsonRpcHttpHandler(tree)
+const handler = createJsonRpcHttpHandler(tree);
 // (req: Request) => Promise<Response>
 // POST { "jsonrpc": "2.0", "method": "books.list", "params": {}, "id": 1 }
 // -> { "jsonrpc": "2.0", "result": [{ "id": "1", "title": "Dune" }], "id": 1 }
@@ -27,34 +27,38 @@ const handler = createJsonRpcHttpHandler(tree)
 ## WebSocket
 
 ```ts
-import { createJsonRpcWebSocketHandlers } from "@rhi-zone/fractal-json-rpc-api-projector"
+import { createJsonRpcWebSocketHandlers } from "@rhi-zone/fractal-json-rpc-api-projector";
 
-const handlers = createJsonRpcWebSocketHandlers(tree)
+const handlers = createJsonRpcWebSocketHandlers(tree);
 // { onMessage(socket, data), ... } — wire into ws/Bun's WebSocket handlers
 ```
 
 ## Typed client
 
 ```ts
-import { createJsonRpcHttpClient, createJsonRpcClient, createJsonRpcHttpCall } from "@rhi-zone/fractal-json-rpc-api-projector"
+import {
+  createJsonRpcHttpClient,
+  createJsonRpcClient,
+  createJsonRpcHttpCall,
+} from "@rhi-zone/fractal-json-rpc-api-projector";
 
-const client = createJsonRpcHttpClient(tree, "http://localhost:3000/rpc")
-await client.books.list() // -> JSON-RPC call to method "books.list"
+const client = createJsonRpcHttpClient(tree, "http://localhost:3000/rpc");
+await client.books.list(); // -> JSON-RPC call to method "books.list"
 
 // or bring your own transport function:
-const call = createJsonRpcHttpCall("http://localhost:3000/rpc")
-const custom = createJsonRpcClient(tree, call)
+const call = createJsonRpcHttpCall("http://localhost:3000/rpc");
+const custom = createJsonRpcClient(tree, call);
 ```
 
 `ClientError` (`JsonRpcClientError`) wraps a JSON-RPC error response (`code`/`message`/`data`).
 
 ## Key exports
 
-| Export | Description |
-|---|---|
-| `toMethods(node, opts?)` / `projectMethods(node, opts?)` | `Node` → `JsonRpcMethod[]` / full result + dispatch table |
-| `createJsonRpcHttpHandler(tree, opts?)` | Fetch-compatible HTTP handler |
-| `createJsonRpcWebSocketHandlers(tree, opts?)` | WebSocket message handlers |
-| `jsonRpcErrors(mapping)` | Error-to-JSON-RPC-code mapping |
-| `createJsonRpcClient(tree, call)` | Typed proxy client over a `JsonRpcCall` function |
-| `createJsonRpcHttpClient(tree, url, opts?)` / `createJsonRpcHttpCall(url, opts?)` | HTTP-transport client / raw call function |
+| Export                                                                            | Description                                               |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `toMethods(node, opts?)` / `projectMethods(node, opts?)`                          | `Node` → `JsonRpcMethod[]` / full result + dispatch table |
+| `createJsonRpcHttpHandler(tree, opts?)`                                           | Fetch-compatible HTTP handler                             |
+| `createJsonRpcWebSocketHandlers(tree, opts?)`                                     | WebSocket message handlers                                |
+| `jsonRpcErrors(mapping)`                                                          | Error-to-JSON-RPC-code mapping                            |
+| `createJsonRpcClient(tree, call)`                                                 | Typed proxy client over a `JsonRpcCall` function          |
+| `createJsonRpcHttpClient(tree, url, opts?)` / `createJsonRpcHttpCall(url, opts?)` | HTTP-transport client / raw call function                 |

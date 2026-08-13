@@ -20,6 +20,7 @@ didn't match the built code. The actual pattern: inspectable declarations
 `docs/design/invariants.md` § Identity.
 
 This resolved two long-standing open threads:
+
 - **Combinator identity gap** — was a symptom of unclear self-description,
   not a structural deficiency
 - **"Is it too general?"** — dissolved. The scope is bounded by what the
@@ -42,12 +43,12 @@ The HTTP route tree has its own type with explicit method dispatch:
 
 ```typescript
 type HttpRoute = {
-  methods?: Record<string, { handler: Handler; meta: Meta }>
-  children?: Record<string, HttpRoute>
-  fallback?: { name: string; subtree: HttpRoute }
-  meta: Meta
-  pipeline?: Pipeline
-}
+  methods?: Record<string, { handler: Handler; meta: Meta }>;
+  children?: Record<string, HttpRoute>;
+  fallback?: { name: string; subtree: HttpRoute };
+  meta: Meta;
+  pipeline?: Pipeline;
+};
 ```
 
 ### Transform pipeline
@@ -74,9 +75,11 @@ skeleton structure.
 ### Interceptable pipeline
 
 Request/response lifecycle decomposed into typed stages:
+
 ```
 Req → [Req transforms] → decode → [T transforms] → handler → [U transforms] → encode → [Res transforms] → Res
 ```
+
 `decode`/`encode` are the symmetric protocol boundary. Every stage has meta
 access. Pipeline lives on HttpRoute.
 
@@ -96,6 +99,7 @@ access. Pipeline lives on HttpRoute.
 ### In-flight (may or may not have landed by handoff)
 
 Two parallel agents were spawned:
+
 1. **DX sugar**: `api()` constructor, `http.*` meta bundles, `crud()`,
    `httpProjection()` preset, `HttpMethods` interface
 2. **Pipeline**: interceptable stages on HttpRoute, updated
@@ -133,6 +137,7 @@ careful migration, not a flag-day rewrite.
 ### Operation layer design (§3-§7)
 
 `docs/design/operation-layer-design.md` has open questions:
+
 - §3: Operations as nodes vs separate type
 - §5: Handler error model (throws vs Result)
 - §6: Builder API shape

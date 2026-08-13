@@ -18,27 +18,36 @@
 // docs/design/routing-and-transforms.md § DX — constructor sugar, plus the
 // two HTTP-derived projections.
 
-export { http, httpVerbBundle } from "./verbs.ts"
-export type { HttpMethods, Method, SourceMapInput, VerbBundle } from "./verbs.ts"
-export { crud, httpProjection } from "./dx.ts"
-export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts"
-export { getHttpMeta } from "./project.ts"
+export { http, httpVerbBundle } from "./verbs.ts";
+export type { HttpMethods, Method, SourceMapInput, VerbBundle } from "./verbs.ts";
+export { crud, httpProjection } from "./dx.ts";
+export type { CrudHandlers, HttpProjectionOptions } from "./dx.ts";
+export { getHttpMeta } from "./project.ts";
 export type {
   HttpLeafMetaProperties,
   HttpSharedMetaProperties,
   ParamSource,
   SourceMap,
-} from "./project.ts"
-export type { HttpLeafMeta, HttpSharedMeta } from "./meta.ts"
-export type { HttpStoreBag, HttpStores } from "./decode.ts"
-export { BUILTIN_HTTP_STORE_NAMES } from "./decode.ts"
-export type { HttpStore, HttpStoreRegistry, StandardSchemaOutcome, StandardSchemaV1 } from "./decode.ts"
-export { runStandardSchema } from "./decode.ts"
-export type { Sources } from "./route.ts"
-export type { SourceCoverageOptions, SourceCoverageProblem } from "./route.ts"
-export { SourceCoverageError, checkRouteSourceCoverage, findRouteSourceCoverageProblems } from "./route.ts"
-export type { HttpManifest } from "./http-manifest.ts"
-export { mapRoute } from "./route.ts"
+} from "./project.ts";
+export type { HttpLeafMeta, HttpSharedMeta } from "./meta.ts";
+export type { HttpStoreBag, HttpStores } from "./decode.ts";
+export { BUILTIN_HTTP_STORE_NAMES } from "./decode.ts";
+export type {
+  HttpStore,
+  HttpStoreRegistry,
+  StandardSchemaOutcome,
+  StandardSchemaV1,
+} from "./decode.ts";
+export { runStandardSchema } from "./decode.ts";
+export type { Sources } from "./route.ts";
+export type { SourceCoverageOptions, SourceCoverageProblem } from "./route.ts";
+export {
+  SourceCoverageError,
+  checkRouteSourceCoverage,
+  findRouteSourceCoverageProblems,
+} from "./route.ts";
+export type { HttpManifest } from "./http-manifest.ts";
+export { mapRoute } from "./route.ts";
 export {
   chainMatchers,
   compiledCharMatcher,
@@ -49,9 +58,9 @@ export {
   radixRouter,
   toRouter,
   withALS,
-} from "./compile.ts"
-export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts"
-export { listRoutes, mergeOpenApiDocs, toOpenApi, toOpenApiFromRoute } from "./openapi.ts"
+} from "./compile.ts";
+export type { CompiledRouter, Matcher, RouteMatch } from "./compile.ts";
+export { listRoutes, mergeOpenApiDocs, toOpenApi, toOpenApiFromRoute } from "./openapi.ts";
 export type {
   OpenApiDoc,
   OpenApiLeafMetaProperties,
@@ -62,12 +71,12 @@ export type {
   OpenApiSchema,
   OpenApiSharedMetaProperties,
   RouteEntry,
-} from "./openapi.ts"
-export { toDocusaurusRouteReference, toStarlightRouteReference } from "./http-route-reference.ts"
-export type { HttpRouteReferenceOpts } from "./http-route-reference.ts"
-export { createClient, createClientFromRoute } from "./client.ts"
-export type { AnyClient, ClientOptions } from "./client.ts"
-export { ClientError } from "./client-error.ts"
+} from "./openapi.ts";
+export { toDocusaurusRouteReference, toStarlightRouteReference } from "./http-route-reference.ts";
+export type { HttpRouteReferenceOpts } from "./http-route-reference.ts";
+export { createClient, createClientFromRoute } from "./client.ts";
+export type { AnyClient, ClientOptions } from "./client.ts";
+export { ClientError } from "./client-error.ts";
 export {
   collectResultHelpers,
   composeCodegenFetch,
@@ -75,7 +84,7 @@ export {
   composeDecodeResponse,
   composeFetch,
   findStreamingCall,
-} from "./extension.ts"
+} from "./extension.ts";
 export type {
   ClientExtension,
   ClientExtensionCodegen,
@@ -84,15 +93,15 @@ export type {
   DecodedResponse,
   FetchImpl,
   StreamingCallArgs,
-} from "./extension.ts"
-export { retry } from "./extensions/retry.ts"
-export type { RetryOptions } from "./extensions/retry.ts"
-export { timeout } from "./extensions/timeout.ts"
-export type { TimeoutOptions } from "./extensions/timeout.ts"
-export { interceptors } from "./extensions/interceptors.ts"
-export type { InterceptorsOptions } from "./extensions/interceptors.ts"
-export { DEFAULT_SENSITIVE_HEADERS, logging } from "./extensions/logging.ts"
-export type { LogEntry, LoggingOptions, LogLevel } from "./extensions/logging.ts"
+} from "./extension.ts";
+export { retry } from "./extensions/retry.ts";
+export type { RetryOptions } from "./extensions/retry.ts";
+export { timeout } from "./extensions/timeout.ts";
+export type { TimeoutOptions } from "./extensions/timeout.ts";
+export { interceptors } from "./extensions/interceptors.ts";
+export type { InterceptorsOptions } from "./extensions/interceptors.ts";
+export { DEFAULT_SENSITIVE_HEADERS, logging } from "./extensions/logging.ts";
+export type { LogEntry, LoggingOptions, LogLevel } from "./extensions/logging.ts";
 export {
   errors,
   BadRequestError,
@@ -103,21 +112,21 @@ export {
   UnprocessableEntityError,
   RateLimitError,
   InternalServerError,
-} from "./extensions/errors.ts"
-export { pagination } from "./extensions/pagination.ts"
-export type { PageIterator, PaginationOptions } from "./extensions/pagination.ts"
-export { streaming } from "./extensions/streaming.ts"
-export { ValidationError, validation } from "./extensions/validation.ts"
-export type { ValidationMode, ValidationOptions } from "./extensions/validation.ts"
-export { idempotencyKey } from "./extensions/idempotency.ts"
-export type { IdempotencyKeyOptions } from "./extensions/idempotency.ts"
-export { idempotencyMiddleware, InMemoryIdempotencyStore } from "./idempotency.ts"
-export type { IdempotencyMiddlewareOptions, IdempotencyStore } from "./idempotency.ts"
-export { tracing } from "./extensions/tracing.ts"
-export type { TracingOptions } from "./extensions/tracing.ts"
-export { tracingLayer } from "./tracing.ts"
-export type { HttpTracingOptions } from "./tracing.ts"
-export { createFetch, httpErrors, toDropInFetch } from "./preset.ts"
+} from "./extensions/errors.ts";
+export { pagination } from "./extensions/pagination.ts";
+export type { PageIterator, PaginationOptions } from "./extensions/pagination.ts";
+export { streaming } from "./extensions/streaming.ts";
+export { ValidationError, validation } from "./extensions/validation.ts";
+export type { ValidationMode, ValidationOptions } from "./extensions/validation.ts";
+export { idempotencyKey } from "./extensions/idempotency.ts";
+export type { IdempotencyKeyOptions } from "./extensions/idempotency.ts";
+export { idempotencyMiddleware, InMemoryIdempotencyStore } from "./idempotency.ts";
+export type { IdempotencyMiddlewareOptions, IdempotencyStore } from "./idempotency.ts";
+export { tracing } from "./extensions/tracing.ts";
+export type { TracingOptions } from "./extensions/tracing.ts";
+export { tracingLayer } from "./tracing.ts";
+export type { HttpTracingOptions } from "./tracing.ts";
+export { createFetch, httpErrors, toDropInFetch } from "./preset.ts";
 export type {
   CorsOptions,
   DropInFetch,
@@ -127,4 +136,4 @@ export type {
   HttpHandlerMiddleware,
   PresetOptions,
   ThrownErrorEncoder,
-} from "./preset.ts"
+} from "./preset.ts";

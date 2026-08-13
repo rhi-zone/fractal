@@ -40,7 +40,11 @@ type WalkFlat<M, Pfx extends string, P> =
           readonly verb: Lowercase<V & string>;
           readonly params: P;
           readonly body: V extends keyof IO ? (IO[V] extends { i: infer I } ? I : never) : never;
-          readonly response: V extends keyof IO ? (IO[V] extends { o: infer O } ? O : never) : never;
+          readonly response: V extends keyof IO
+            ? IO[V] extends { o: infer O }
+              ? O
+              : never
+            : never;
         };
       }[Verbs]
     : M extends PathMeta<infer R>
@@ -53,21 +57,19 @@ type WalkFlat<M, Pfx extends string, P> =
             ? WalkAltsFlat<Alts, Pfx, P>
             : never;
 
-type WalkAltsFlat<Alts, Pfx extends string, P> = Alts extends readonly [
-  infer Head,
-  ...infer Tail,
-]
+type WalkAltsFlat<Alts, Pfx extends string, P> = Alts extends readonly [infer Head, ...infer Tail]
   ? WalkFlat<Head, Pfx, P> | WalkAltsFlat<Tail, Pfx, P>
   : never;
 
 // Build a call signature from a flat entry (the heavy nested assembly).
-type CallSig<F extends Flat> = F["params"] extends Record<string, never>
-  ? F["body"] extends never
-    ? () => Promise<F["response"]>
-    : (args: { body: F["body"] }) => Promise<F["response"]>
-  : F["body"] extends never
-    ? (args: { params: F["params"] }) => Promise<F["response"]>
-    : (args: { params: F["params"]; body: F["body"] }) => Promise<F["response"]>;
+type CallSig<F extends Flat> =
+  F["params"] extends Record<string, never>
+    ? F["body"] extends never
+      ? () => Promise<F["response"]>
+      : (args: { body: F["body"] }) => Promise<F["response"]>
+    : F["body"] extends never
+      ? (args: { params: F["params"] }) => Promise<F["response"]>
+      : (args: { params: F["params"]; body: F["body"] }) => Promise<F["response"]>;
 
 // Group the union of flat entries by path, then by verb → call sig. This is the
 // nested fold that, combined with the per-path key narrowing, is the quadratic
@@ -80,8 +82,6 @@ type AllPaths<F extends Flat> = F["path"];
 
 type Group<F extends Flat> = {
   [P in AllPaths<F>]: {
-    [V in (F extends { path: P } ? F : never)["verb"]]: CallSig<
-      Extract<F, { path: P; verb: V }>
-    >;
+    [V in (F extends { path: P } ? F : never)["verb"]]: CallSig<Extract<F, { path: P; verb: V }>>;
   };
 };

@@ -7,14 +7,19 @@ Dart has no nested-class construct, so in every variant a nested
 ## json_serializable
 
 ```ts
-import { toDart } from "@rhi-zone/fractal-type-ir/dart-json-serializable"
+import { toDart } from "@rhi-zone/fractal-type-ir/dart-json-serializable";
 
-toDart(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toDart(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```dart
@@ -53,13 +58,13 @@ to hook into, so the output is a standalone, already-working module.
 ### freezed
 
 ```ts
-import { toFreezed } from "@rhi-zone/fractal-type-ir/dart-freezed"
+import { toFreezed } from "@rhi-zone/fractal-type-ir/dart-freezed";
 
-toFreezed(t(types.object({ id: t(types.string) })), "Item")
+toFreezed(t(types.object({ id: t(types.string) })), "Item");
 ```
 
-Unlike json_serializable's standalone output, this emits the *annotated
-declaration* a real project runs `build_runner` over — `copyWith`, deep
+Unlike json_serializable's standalone output, this emits the _annotated
+declaration_ a real project runs `build_runner` over — `copyWith`, deep
 equality, and JSON (de)serialization all come from freezed's generated mixin,
 not hand-rolled code:
 
@@ -81,9 +86,9 @@ abstract class Item with _$Item {
 ### built_value
 
 ```ts
-import { toBuiltValue } from "@rhi-zone/fractal-type-ir/dart-built-value"
+import { toBuiltValue } from "@rhi-zone/fractal-type-ir/dart-built-value";
 
-toBuiltValue(t(types.object({ id: t(types.string) })), "Item")
+toBuiltValue(t(types.object({ id: t(types.string) })), "Item");
 ```
 
 Fields are abstract getters, not constructor parameters — built_value's

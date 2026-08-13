@@ -1,5 +1,11 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, indentLines, quote, swiftDocComment, toCamelCaseStripSeparators } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import {
+  capitalize,
+  indentLines,
+  quote,
+  swiftDocComment,
+  toCamelCaseStripSeparators,
+} from "./codegen-helpers.ts";
 
 // packages/type-ir/src/swift-objectmapper.ts — @rhi-zone/fractal-type-ir/swift-objectmapper
 //
@@ -20,10 +26,10 @@ import { capitalize, indentLines, quote, swiftDocComment, toCamelCaseStripSepara
 // fields are plain `T?`, matching `<-`'s own optional-property overload.
 
 function swiftIdentifier(name: string): string {
-  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "")
-  if (ident.length === 0) ident = "_"
-  if (/^[0-9]/.test(ident)) ident = `_${ident}`
-  return ident
+  let ident = toCamelCaseStripSeparators(name).replace(/[^A-Za-z0-9_]/g, "");
+  if (ident.length === 0) ident = "_";
+  if (/^[0-9]/.test(ident)) ident = `_${ident}`;
+  return ident;
 }
 
 // Every leaf/primitive kind's underlying Swift property type — ObjectMapper
@@ -64,10 +70,10 @@ const primitiveHandlers: Record<string, string> = {
   void: "Any",
   unknown: "Any",
   never: "Any",
-}
+};
 
 interface Ctx {
-  nested: string[]
+  nested: string[];
 }
 
 /**
@@ -86,35 +92,35 @@ interface Ctx {
  * swift-codable.ts's/swift-swiftyjson.ts's own hint-naming convention.
  */
 function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const kind = ref.shape.kind
-  let base: string
+  const kind = ref.shape.kind;
+  let base: string;
 
   if (kind === "object") {
-    const name = typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint)
-    ctx.nested.push(structDecl(name, ref))
-    base = name
+    const name = typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint);
+    ctx.nested.push(structDecl(name, ref));
+    base = name;
   } else if (kind === "enum") {
-    const name = typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint)
-    ctx.nested.push(enumDecl(name, ref))
-    base = name
+    const name = typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint);
+    ctx.nested.push(enumDecl(name, ref));
+    base = name;
   } else if (kind === "union") {
-    const name = typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint)
-    ctx.nested.push(unionDecl(name, ref))
-    base = name
+    const name = typeof ref.meta.typeName === "string" ? ref.meta.typeName : capitalize(hint);
+    ctx.nested.push(unionDecl(name, ref));
+    base = name;
   } else if (kind === "array" || kind === "stream" || kind === "page") {
     // No native ObjectMapper streaming/pagination-window transform —
     // degrades honestly to an array of the element type, same convention
     // swift-codable.ts uses for `stream`/`page`. ObjectMapper's `<-` maps a
     // `[T]` property transparently as long as `T` is itself Mappable or a
     // basic type.
-    const s = ref.shape as TypeShape & { element: TypeRef }
-    base = `[${fieldType(s.element, `${hint}Element`, ctx)}]`
+    const s = ref.shape as TypeShape & { element: TypeRef };
+    base = `[${fieldType(s.element, `${hint}Element`, ctx)}]`;
   } else if (kind === "map") {
-    const s = ref.shape as TypeShape & { kind: "map" }
+    const s = ref.shape as TypeShape & { kind: "map" };
     // JSON object keys are always strings — ObjectMapper's dictionary
     // transform is keyed by String, same assumption swift-swiftyjson.ts's
     // `map` branch documents.
-    base = `[String: ${fieldType(s.value, `${hint}Value`, ctx)}]`
+    base = `[String: ${fieldType(s.value, `${hint}Value`, ctx)}]`;
   } else if (kind === "tuple") {
     // ObjectMapper's `<-` operator has no tuple overload — a Swift tuple
     // isn't itself Mappable/Transformable, so there's no built-in way to
@@ -122,15 +128,15 @@ function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
     // tuple-typed field and leaves a comment instead; the type is still
     // rendered here so the property declaration itself is honest about what
     // it holds.
-    const s = ref.shape as TypeShape & { kind: "tuple" }
-    base = `(${s.elements.map((element, i) => fieldType(element, `${hint}${i}`, ctx)).join(", ")})`
+    const s = ref.shape as TypeShape & { kind: "tuple" };
+    base = `(${s.elements.map((element, i) => fieldType(element, `${hint}${i}`, ctx)).join(", ")})`;
   } else if (kind === "ref") {
-    base = capitalize((ref.shape as TypeShape & { kind: "ref" }).target)
+    base = capitalize((ref.shape as TypeShape & { kind: "ref" }).target);
   } else if (kind === "instance") {
-    base = (ref.shape as TypeShape & { kind: "instance" }).className
+    base = (ref.shape as TypeShape & { kind: "instance" }).className;
   } else if (kind === "literal") {
-    const s = ref.shape as TypeShape & { kind: "literal" }
-    const value = s.value
+    const s = ref.shape as TypeShape & { kind: "literal" };
+    const value = s.value;
     base =
       value === null
         ? "Any"
@@ -140,18 +146,18 @@ function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
             ? "Bool"
             : Number.isInteger(value)
               ? "Int"
-              : "Double"
+              : "Double";
   } else if (kind === "intersection") {
-    const s = ref.shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    base = first === undefined ? "Any" : fieldType(first, hint, ctx)
+    const s = ref.shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    base = first === undefined ? "Any" : fieldType(first, hint, ctx);
   } else {
-    base = resolve(kind, primitiveHandlers) ?? "Any"
+    base = resolve(kind, primitiveHandlers) ?? "Any";
   }
 
-  const optional = ref.meta.optional === true || ref.meta.nullable === true
-  if (optional && !base.endsWith("?")) return `${base}?`
-  return base
+  const optional = ref.meta.optional === true || ref.meta.nullable === true;
+  if (optional && !base.endsWith("?")) return `${base}?`;
+  return base;
 }
 
 /** The struct-property spelling of `fieldType`'s result: implicitly
@@ -161,9 +167,9 @@ function fieldType(ref: TypeRef, hint: string, ctx: Ctx): string {
  * declarations are the only place this file emits `!`; see `fieldType`'s
  * doc comment for why it doesn't happen recursively. */
 function propertyType(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const type = fieldType(ref, hint, ctx)
-  const optional = ref.meta.optional === true || ref.meta.nullable === true
-  return optional ? type : `${type}!`
+  const type = fieldType(ref, hint, ctx);
+  const optional = ref.meta.optional === true || ref.meta.nullable === true;
+  return optional ? type : `${type}!`;
 }
 
 /** The `<- map[...]` mapping line for one field, or a degrade comment for a
@@ -173,9 +179,9 @@ function propertyType(ref: TypeRef, hint: string, ctx: Ctx): string {
  * `EnumTransform()` needed for a plain String-backed enum. */
 function mappingLine(fieldName: string, swiftName: string, fieldRef: TypeRef): string {
   if (fieldRef.shape.kind === "tuple") {
-    return `        // ObjectMapper has no tuple transform — ${swiftName} is not wired to map[${quote(fieldName)}]; split into separate fields or provide a custom TransformType.`
+    return `        // ObjectMapper has no tuple transform — ${swiftName} is not wired to map[${quote(fieldName)}]; split into separate fields or provide a custom TransformType.`;
   }
-  return `        ${swiftName} <- map[${quote(fieldName)}]`
+  return `        ${swiftName} <- map[${quote(fieldName)}]`;
 }
 
 // `struct Name: Mappable { var field: T!; init?(map: Map) {}; mutating func
@@ -185,16 +191,16 @@ function mappingLine(fieldName: string, swiftName: string, fieldRef: TypeRef): s
 // the JSON key is simply the subscript literal used directly in `mapping`,
 // same as swift-swiftyjson.ts.
 function structDecl(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "object" }
-  const ctx: Ctx = { nested: [] }
-  const propLines: string[] = []
-  const mappingLines: string[] = []
+  const s = ref.shape as TypeShape & { kind: "object" };
+  const ctx: Ctx = { nested: [] };
+  const propLines: string[] = [];
+  const mappingLines: string[] = [];
 
   for (const [fieldName, fieldRef] of Object.entries(s.fields)) {
-    const swiftName = swiftIdentifier(fieldName)
-    const typeName = propertyType(fieldRef, capitalize(fieldName), ctx)
-    propLines.push(`    var ${swiftName}: ${typeName}`)
-    mappingLines.push(mappingLine(fieldName, swiftName, fieldRef))
+    const swiftName = swiftIdentifier(fieldName);
+    const typeName = propertyType(fieldRef, capitalize(fieldName), ctx);
+    propLines.push(`    var ${swiftName}: ${typeName}`);
+    mappingLines.push(mappingLine(fieldName, swiftName, fieldRef));
   }
 
   const lines = [
@@ -207,32 +213,32 @@ function structDecl(name: string, ref: TypeRef): string {
     "    mutating func mapping(map: Map) {",
     ...mappingLines,
     "    }",
-  ]
+  ];
   if (ctx.nested.length > 0) {
-    lines.push("")
-    for (const decl of ctx.nested) lines.push(...indentLines(decl, 4))
+    lines.push("");
+    for (const decl of ctx.nested) lines.push(...indentLines(decl, 4));
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function enumDecl(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "enum" }
-  const lines = [...swiftDocComment(ref), `enum ${name}: String, CaseIterable {`]
+  const s = ref.shape as TypeShape & { kind: "enum" };
+  const lines = [...swiftDocComment(ref), `enum ${name}: String, CaseIterable {`];
   for (const member of s.members) {
-    const ident = swiftIdentifier(member)
-    lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`)
+    const ident = swiftIdentifier(member);
+    lines.push(ident === member ? `    case ${ident}` : `    case ${ident} = ${quote(member)}`);
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function variantCaseName(ref: TypeRef, index: number): string {
-  if (typeof ref.meta.typeName === "string") return swiftIdentifier(ref.meta.typeName)
-  const kind = ref.shape.kind
-  if (kind === "ref") return swiftIdentifier((ref.shape as TypeShape & { kind: "ref" }).target)
-  if (kind in primitiveHandlers) return swiftIdentifier(kind)
-  return `variant${index + 1}`
+  if (typeof ref.meta.typeName === "string") return swiftIdentifier(ref.meta.typeName);
+  const kind = ref.shape.kind;
+  if (kind === "ref") return swiftIdentifier((ref.shape as TypeShape & { kind: "ref" }).target);
+  if (kind in primitiveHandlers) return swiftIdentifier(kind);
+  return `variant${index + 1}`;
 }
 
 // ObjectMapper's `Map` wraps a keyed JSON *object* — `Map.JSON` (see
@@ -248,20 +254,20 @@ function variantCaseName(ref: TypeRef, index: number): string {
 // papering over the gap with a cast that wouldn't type-check (`Map.JSON`
 // can't be cast to `String`/`Int`/etc. — it's always a dictionary).
 function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]): string {
-  const ctx: Ctx = { nested: [] }
+  const ctx: Ctx = { nested: [] };
   const cases = variants.map((variant, i) => ({
     caseName: variantCaseName(variant, i),
     typeName: fieldType(variant, capitalize(variantCaseName(variant, i)), ctx),
     isMappable: variant.shape.kind === "object" || variant.shape.kind === "union",
-  }))
+  }));
 
-  const lines = [...swiftDocComment(ref), `enum ${name} {`]
-  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
-  lines.push("", `    static func from(map: Map) -> ${name}? {`)
-  const mappableCases = cases.filter((c) => c.isMappable)
-  const unmappableCases = cases.filter((c) => !c.isMappable)
+  const lines = [...swiftDocComment(ref), `enum ${name} {`];
+  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`);
+  lines.push("", `    static func from(map: Map) -> ${name}? {`);
+  const mappableCases = cases.filter((c) => c.isMappable);
+  const unmappableCases = cases.filter((c) => !c.isMappable);
   for (const c of mappableCases) {
-    lines.push(`        if let value = ${c.typeName}(map: map) { return .${c.caseName}(value) }`)
+    lines.push(`        if let value = ${c.typeName}(map: map) { return .${c.caseName}(value) }`);
   }
   if (unmappableCases.length > 0) {
     lines.push(
@@ -270,24 +276,29 @@ function plainUnionDecl(name: string, ref: TypeRef, variants: readonly TypeRef[]
           .map((c) => `.${c.caseName}`)
           .join(", ")} ${unmappableCases.length === 1 ? "is" : "are"} unreachable here; ` +
         `provide a custom TransformType if the wire format actually needs ${unmappableCases.length === 1 ? "it" : "them"}.`,
-    )
+    );
   }
-  lines.push("        return nil", "    }", "}")
+  lines.push("        return nil", "    }", "}");
   if (ctx.nested.length > 0) {
-    return [...lines.slice(0, -1), "", ...ctx.nested.flatMap((decl) => indentLines(decl, 4)), "}"].join("\n")
+    return [
+      ...lines.slice(0, -1),
+      "",
+      ...ctx.nested.flatMap((decl) => indentLines(decl, 4)),
+      "}",
+    ].join("\n");
   }
-  return lines.join("\n")
+  return lines.join("\n");
 }
 
 function discriminatorTag(ref: TypeRef, discriminator: string, index: number): string {
   if (ref.shape.kind === "object") {
-    const field = (ref.shape as TypeShape & { kind: "object" }).fields[discriminator]
+    const field = (ref.shape as TypeShape & { kind: "object" }).fields[discriminator];
     if (field !== undefined && field.shape.kind === "literal") {
-      const value = (field.shape as TypeShape & { kind: "literal" }).value
-      if (typeof value === "string") return value
+      const value = (field.shape as TypeShape & { kind: "literal" }).value;
+      if (typeof value === "string") return value;
     }
   }
-  return `variant${index + 1}`
+  return `variant${index + 1}`;
 }
 
 // Discriminated union -> an enum of Mappable-wrapped variants, resolved by
@@ -302,41 +313,42 @@ function discriminatedUnionDecl(
   variants: readonly TypeRef[],
   discriminator: string,
 ): string {
-  const nested: string[] = []
+  const nested: string[] = [];
   const cases = variants.map((variant, i) => {
-    const tag = discriminatorTag(variant, discriminator, i)
-    const typeName = typeof variant.meta.typeName === "string" ? variant.meta.typeName : capitalize(tag)
-    if (variant.shape.kind === "object") nested.push(structDecl(typeName, variant))
-    return { tag, caseName: swiftIdentifier(tag), typeName }
-  })
+    const tag = discriminatorTag(variant, discriminator, i);
+    const typeName =
+      typeof variant.meta.typeName === "string" ? variant.meta.typeName : capitalize(tag);
+    if (variant.shape.kind === "object") nested.push(structDecl(typeName, variant));
+    return { tag, caseName: swiftIdentifier(tag), typeName };
+  });
 
-  const lines = [...swiftDocComment(ref), `enum ${name} {`]
-  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`)
+  const lines = [...swiftDocComment(ref), `enum ${name} {`];
+  for (const c of cases) lines.push(`    case ${c.caseName}(${c.typeName})`);
   lines.push(
     "",
     `    static func from(map: Map) -> ${name}? {`,
     `        guard let ${swiftIdentifier(discriminator)} = map.JSON[${quote(discriminator)}] as? String else { return nil }`,
     `        switch ${swiftIdentifier(discriminator)} {`,
-  )
+  );
   for (const c of cases) {
     lines.push(
       `        case ${quote(c.tag)}: return ${c.typeName}(map: map).map { .${c.caseName}($0) }`,
-    )
+    );
   }
-  lines.push("        default: return nil", "        }", "    }")
+  lines.push("        default: return nil", "        }", "    }");
   if (nested.length > 0) {
-    lines.push("")
-    for (const decl of nested) lines.push(...indentLines(decl, 4))
+    lines.push("");
+    for (const decl of nested) lines.push(...indentLines(decl, 4));
   }
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function unionDecl(name: string, ref: TypeRef): string {
-  const s = ref.shape as TypeShape & { kind: "union" }
+  const s = ref.shape as TypeShape & { kind: "union" };
   return typeof ref.meta.discriminator === "string"
     ? discriminatedUnionDecl(name, ref, s.variants, ref.meta.discriminator)
-    : plainUnionDecl(name, ref, s.variants)
+    : plainUnionDecl(name, ref, s.variants);
 }
 
 /**
@@ -352,13 +364,13 @@ function unionDecl(name: string, ref: TypeRef): string {
  * position inside a struct.
  */
 export function toObjectMapper(ref: TypeRef, name = "Root"): string {
-  const kind = ref.shape.kind
-  if (kind === "object") return structDecl(name, ref)
-  if (kind === "enum") return enumDecl(name, ref)
-  if (kind === "union") return unionDecl(name, ref)
+  const kind = ref.shape.kind;
+  if (kind === "object") return structDecl(name, ref);
+  if (kind === "enum") return enumDecl(name, ref);
+  if (kind === "union") return unionDecl(name, ref);
 
-  const ctx: Ctx = { nested: [] }
-  const typeName = fieldType(ref, name, ctx)
-  const nested = ctx.nested.length > 0 ? `\n\n${ctx.nested.join("\n\n")}` : ""
-  return `typealias ${name} = ${typeName}${nested}`
+  const ctx: Ctx = { nested: [] };
+  const typeName = fieldType(ref, name, ctx);
+  const nested = ctx.nested.length > 0 ? `\n\n${ctx.nested.join("\n\n")}` : "";
+  return `typealias ${name} = ${typeName}${nested}`;
 }

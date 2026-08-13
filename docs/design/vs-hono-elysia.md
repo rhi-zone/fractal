@@ -5,6 +5,7 @@ snippets, idiomatic per current (2026) docs — not run, but API-accurate (sourc
 the end).
 
 Frameworks compared:
+
 - **Hono 4.x** — `zValidator`, `c.req.valid()`, `hc<App>()`.
 - **Elysia (current)** — `t.Object`, `.resolve`/`.derive`, Eden `treaty<App>()`.
 - **fractal** — `Handler<P>`, `path`/`methods`/`param`/`choice`, `validated`/`returns`,
@@ -23,30 +24,46 @@ Frameworks compared:
 ```ts
 // app.ts
 import { choice, methods, param, paramValue, path } from "@rhi-zone/fractal-api-tree";
-import { json, status, text, toFetch, validated, returns } from "@rhi-zone/fractal-http-api-projector";
+import {
+  json,
+  status,
+  text,
+  toFetch,
+  validated,
+  returns,
+} from "@rhi-zone/fractal-http-api-projector";
 import { schema } from "./schema.ts"; // hand-rolled StandardSchemaV1 fixture
 
 const createSchema = schema({ title: "string" });
-const todoSchema   = schema({ id: "string", title: "string", done: "boolean" });
+const todoSchema = schema({ id: "string", title: "string", done: "boolean" });
 
 const todosCollection = methods({
-  GET:  returns(() => json(todos), todoListSchema),
-  POST: returns(validated(createSchema, (v) => {
-    const t = { id: String(seq++), title: v.title, done: false };
-    todos.push(t);
-    return status(201, t);
-  }), todoSchema),
+  GET: returns(() => json(todos), todoListSchema),
+  POST: returns(
+    validated(createSchema, (v) => {
+      const t = { id: String(seq++), title: v.title, done: false };
+      todos.push(t);
+      return status(201, t);
+    }),
+    todoSchema,
+  ),
 });
 
-const todoItem = param("id", methods({
-  GET: returns((req) => {
-    const id = paramValue(req, "id");    // id: string — typed, no ?? ""
-    const t = todos.find(t => t.id === id);
-    return t ? json(t) : json({ error: "TODO_NOT_FOUND", id }, { status: 404 });
-  }, todoSchema),
-}));
+const todoItem = param(
+  "id",
+  methods({
+    GET: returns((req) => {
+      const id = paramValue(req, "id"); // id: string — typed, no ?? ""
+      const t = todos.find((t) => t.id === id);
+      return t ? json(t) : json({ error: "TODO_NOT_FOUND", id }, { status: 404 });
+    }, todoSchema),
+  }),
+);
 
-export const app = path({ todos: choice(todosCollection, todoItem), health: methods({ GET: () => text("ok") }) });
+export const app = path({
+  todos: choice(todosCollection, todoItem),
+  health: methods({ GET: () => text("ok") }),
+});
 export const handle = toFetch(app);
 ```
 
@@ -65,7 +82,7 @@ import { z } from "zod";
 const app = new Hono();
 const routes = app
   .get("/todos/:id", (c) => {
-    const t = todos.find(t => t.id === c.req.param("id"));
+    const t = todos.find((t) => t.id === c.req.param("id"));
     return t ? c.json(t) : c.json({ error: "TODO_NOT_FOUND" }, 404);
   })
   .post("/todos", zValidator("json", z.object({ title: z.string() })), (c) => {
@@ -74,7 +91,7 @@ const routes = app
     todos.push(t);
     return c.json(t, 201);
   });
-export type AppType = typeof routes;  // for hc<AppType>()
+export type AppType = typeof routes; // for hc<AppType>()
 ```
 
 ### Elysia (reference)
@@ -82,15 +99,22 @@ export type AppType = typeof routes;  // for hc<AppType>()
 ```ts
 import { Elysia, t } from "elysia";
 const app = new Elysia()
-  .get("/todos/:id", ({ params: { id }, status }) =>
-    todos.find(t => t.id === id) ?? status(404, { error: "TODO_NOT_FOUND" }))
-  .post("/todos", ({ body }) => {
-    const t = { id: String(seq++), title: body.title, done: false };
-    todos.push(t);
-    set.status = 201;
-    return t;
-  }, { body: t.Object({ title: t.String() }) });
-export type App = typeof app;  // for treaty<App>()
+  .get(
+    "/todos/:id",
+    ({ params: { id }, status }) =>
+      todos.find((t) => t.id === id) ?? status(404, { error: "TODO_NOT_FOUND" }),
+  )
+  .post(
+    "/todos",
+    ({ body }) => {
+      const t = { id: String(seq++), title: body.title, done: false };
+      todos.push(t);
+      set.status = 201;
+      return t;
+    },
+    { body: t.Object({ title: t.String() }) },
+  );
+export type App = typeof app; // for treaty<App>()
 ```
 
 ---
@@ -100,15 +124,15 @@ export type App = typeof app;  // for treaty<App>()
 Verification: `bun run test` — **100 pass, 0 fail** across all packages
 (core 18, http 30, openapi 16, client 5, codegen 15, example 16).
 
-| # | Criterion | vs Hono | vs Elysia |
-|---|-----------|---------|-----------|
-| 1 | More elegant / less ceremony | **TIE** | **TIE** |
-| 2 | More correct HTTP semantics | **WIN** | **WIN** |
-| 3 | Tighter / more uniform core | **WIN** | **WIN** |
-| 4 | Surface/runtime-agnostic core | **TIE** (deliberate trade — see below) | **TIE** |
-| 5 | Lower barrier to entry | **TIE** (with caveats at scale — see below) | **TIE** |
-| 6 | Types equally/more safe | **TIE** (contextual win on robustness/scale) | **TIE** (declared-response-schema caveat — see below) |
-| 7 | Routing-dispatch performance | **TIE** (no head-to-head timing — see below) | **TIE** (no head-to-head timing — see below) |
+| #   | Criterion                     | vs Hono                                      | vs Elysia                                             |
+| --- | ----------------------------- | -------------------------------------------- | ----------------------------------------------------- |
+| 1   | More elegant / less ceremony  | **TIE**                                      | **TIE**                                               |
+| 2   | More correct HTTP semantics   | **WIN**                                      | **WIN**                                               |
+| 3   | Tighter / more uniform core   | **WIN**                                      | **WIN**                                               |
+| 4   | Surface/runtime-agnostic core | **TIE** (deliberate trade — see below)       | **TIE**                                               |
+| 5   | Lower barrier to entry        | **TIE** (with caveats at scale — see below)  | **TIE**                                               |
+| 6   | Types equally/more safe       | **TIE** (contextual win on robustness/scale) | **TIE** (declared-response-schema caveat — see below) |
+| 7   | Routing-dispatch performance  | **TIE** (no head-to-head timing — see below) | **TIE** (no head-to-head timing — see below)          |
 
 ---
 
@@ -134,6 +158,7 @@ then walks the full `.meta` to aggregate the `Allow` set across every branch at 
 matched path.
 
 Verified by `packages/http-api-projector/src/index.test.ts` (`bun run test`, 30 pass):
+
 - "known path, wrong verb -> 405 + Allow lists the table's verbs" — single-table 405.
 - "auto-HEAD mirrors GET: status + headers preserved, empty body" — auto-HEAD.
 - "OPTIONS -> 204 + Allow union (HEAD when GET present, OPTIONS always)" — OPTIONS.
@@ -197,7 +222,7 @@ Workers, Fastly Compute, Vercel Edge, AWS Lambda). That gap is now closed —
 - `serveFastlyCompute` — registers Compute's `fetch` event listener
   (`event.request` → handler → `event.respondWith`).
 - `toCloudflareWorker` — translates to the module-worker `{ fetch(request, env,
-  ctx) }` export shape, dropping the unused `env`/`ctx` bindings.
+ctx) }` export shape, dropping the unused `env`/`ctx` bindings.
 - `toVercelEdge` — identity function; Vercel's edge runtime dispatches with the
   exact `(req: Request) => Promise<Response>` shape already used throughout the
   package, so there's nothing to translate.
@@ -261,20 +286,20 @@ survives stock tsc.
 
 **6 — Type safety (TIE on robustness/scale — with declared-response-schema caveat).**
 
-*Server-side:* param values are typed (`req.params.id: string` after `param("id", ...)`).
+_Server-side:_ param values are typed (`req.params.id: string` after `param("id", ...)`).
 Body shapes are typed via `validated(schema, fn)` — `fn`'s argument type is the
 schema's output, enforced at compile time. An undischarged param (`param("id", leaf)`
 placed without `param("id", ...)` wrapping) is caught by `toFetch`'s `Handler<{}>`
 bound. These are genuine wins over both rivals' raw string-keyed access.
 
-*Response types:* fractal types responses where `returns(handler, schema)` is
+_Response types:_ fractal types responses where `returns(handler, schema)` is
 declared — the `returns` schema becomes the codegen-emitted client return type. This
 is a gap vs Eden: **Elysia infers response types directly from return
 annotations** without a separate declaration; fractal requires an explicit
 `returns(...)` call to get a typed response in the generated client. Routes without
 `returns` produce `unknown` response types on the client side.
 
-*Drift guard:* The generated `client.ts` embeds `AssertExact<RouteUnion<typeof app>,
+_Drift guard:_ The generated `client.ts` embeds `AssertExact<RouteUnion<typeof app>,
 GenUnion>`, which is a `tsc` error the moment the app's route structure diverges from
 the generated artifacts. Verified: `packages/type-ir/test/drift.test.ts` — planted
 drift (added route, changed body field type) is caught by both tsgo and stock tsc
@@ -282,7 +307,7 @@ with a `__drift__` error; restored app is green on both. Rivals' pure inference
 cannot drift (the type IS the inference), but it also cannot survive at scale (see
 criterion 5) and cannot produce a portable artifact.
 
-*Codegen linearity:* the drift-guard spike (`spike/drift-guard/`) measured ~243k
+_Codegen linearity:_ the drift-guard spike (`spike/drift-guard/`) measured ~243k
 type instantiations at 900 routes for the linear `RouteUnion` formulation (f5) vs
 5.67M for the naïve inference (f1). Stock tsc fails f1 at 900 routes; f5 (the
 formulation fractal uses) survives to 900 routes on stock tsc. This is the concrete
@@ -316,14 +341,14 @@ dispatch cases, `bun run packages/http-api-projector/src/route.bench.ts`; saved
 run: `packages/http-api-projector/bench-results/route-bench-2026-07-17T07-29-08-288Z.json`,
 AMD Ryzen 9 9900X, Bun 1.3.9 — per-dispatch time = `totalMs * 1e6 / 500_000` iterations):
 
-| dispatch case | 1. tree-walk | 5. radix trie | 7. compiled fn | 8. Map+compiled hybrid (default) |
-|---|---|---|---|---|
-| static hit | 189ns | 88ns | 162ns | 28ns |
-| dynamic hit | 205ns | 90ns | 114ns | 52ns |
-| deep hit (5 segs) | 353ns | 130ns | 158ns | 29ns |
-| miss (404) | 183ns | 99ns | 162ns | 49ns |
-| wide branch, late (120 siblings) | 224ns | 166ns | 436ns | 28ns |
-| static path, 8k chars | 24.6µs | 9.8µs | 0.92µs | 0.57µs |
+| dispatch case                    | 1. tree-walk | 5. radix trie | 7. compiled fn | 8. Map+compiled hybrid (default) |
+| -------------------------------- | ------------ | ------------- | -------------- | -------------------------------- |
+| static hit                       | 189ns        | 88ns          | 162ns          | 28ns                             |
+| dynamic hit                      | 205ns        | 90ns          | 114ns          | 52ns                             |
+| deep hit (5 segs)                | 353ns        | 130ns         | 158ns          | 29ns                             |
+| miss (404)                       | 183ns        | 99ns          | 162ns          | 49ns                             |
+| wide branch, late (120 siblings) | 224ns        | 166ns         | 436ns          | 28ns                             |
+| static path, 8k chars            | 24.6µs       | 9.8µs         | 0.92µs         | 0.57µs                           |
 
 The hybrid (`mapCharRouter`, now fractal's default) is fastest on every case
 measured — 3-9x the tree-walker on short paths, ~40x on the 8k-char pathological

@@ -16,7 +16,7 @@ Patterns demonstrated:
 - **`api()`/`op()` module-level authoring** — the `books` subtree's `list`/
   `add` ops are plain module-level functions wrapped in `op(fn, ...metas)`,
   grouped with `api_({ list, add }, { fallback })`; a `fallback: { name,
-  subtree }` option on the node captures any other path segment as `bookId`
+subtree }` option on the node captures any other path segment as `bookId`
   and continues into the per-book fallback subtree. (`service()` — which
   reflected class-instance methods into leaf nodes — was removed; TS already
   has modules for namespacing, so `api()`/`op()` covers the same ground with
@@ -46,14 +46,14 @@ Patterns demonstrated:
 ## Usage
 
 ```ts
-import { api, httpRoutes } from "./src/tree.ts"
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset"
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector"
+import { api, httpRoutes } from "./src/tree.ts";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
 
-const fetch = createFetch(api)
-const res = await fetch(new Request("http://localhost/books/list"))
+const fetch = createFetch(api);
+const res = await fetch(new Request("http://localhost/books/list"));
 
-const tools = toTools(api) // MCP tool list for the same tree
+const tools = toTools(api); // MCP tool list for the same tree
 ```
 
 Run the tests: `bun test` (from this directory or the workspace root).

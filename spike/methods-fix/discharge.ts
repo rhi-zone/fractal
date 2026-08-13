@@ -12,8 +12,7 @@ export type Handler<P = {}> = (
   req: Request & { params: P },
 ) => Response | undefined | Promise<Response | undefined>;
 
-export type Method =
-  | "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 export type Reflected<M, P = {}> = Handler<P> & { readonly meta: M };
 
@@ -35,24 +34,20 @@ export interface ParamMeta<N extends string, T, R> {
   readonly rest: R;
 }
 
-type UnionToIntersection<U> = (
-  U extends unknown ? (k: U) => void : never
-) extends (k: infer I) => void
+type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
+  k: infer I,
+) => void
   ? I
   : never;
 
 type ParamsOf<T> = UnionToIntersection<
   {
-    [K in keyof T]: T[K] extends (req: Request & { params: infer P }) => unknown
-      ? P
-      : never;
+    [K in keyof T]: T[K] extends (req: Request & { params: infer P }) => unknown ? P : never;
   }[keyof T]
 >;
 
 // Candidate A `methods`.
-declare function methods<
-  const T extends Partial<Record<Method, Handler<any>>>,
->(
+declare function methods<const T extends Partial<Record<Method, Handler<any>>>>(
   table: T,
 ): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, ParamsOf<T>>;
 

@@ -83,7 +83,7 @@ Per-parameter, based on HTTP method + location inference
 ## 5. Multiple projections/surfaces
 
 Each protocol is a separate attribute macro (`#[http]`, `#[cli]`, `#[mcp]`,
-`#[ws]`, `#[jsonrpc]`, `#[graphql]`) that can be stacked on the *same* impl
+`#[ws]`, `#[jsonrpc]`, `#[graphql]`) that can be stacked on the _same_ impl
 block independently, each reading the same method signatures/doc-comments and
 projecting its own artifact (router, clap command, MCP tool schema, etc.).
 `#[serve(http, ws, jsonrpc, graphql)]` composes multiple protocol routers into

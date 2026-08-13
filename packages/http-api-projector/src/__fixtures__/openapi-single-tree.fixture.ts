@@ -8,8 +8,8 @@
 // file exports exactly one tree — see openapi.test.ts's "auto-discovery"
 // suite. Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "../verbs.ts"
+import { api, op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "../verbs.ts";
 
 export const widgetsTree = api({
   widgets: op(
@@ -17,4 +17,4 @@ export const widgetsTree = api({
     (input: { name: string; quantity: number }) => ({ id: "w1", ...input }),
     http.post,
   ),
-})
+});

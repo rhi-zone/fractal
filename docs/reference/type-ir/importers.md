@@ -12,7 +12,7 @@ format allows it.
 ## JSON Schema
 
 ```ts
-import { fromJsonSchema } from "@rhi-zone/fractal-type-ir/from-json-schema"
+import { fromJsonSchema } from "@rhi-zone/fractal-type-ir/from-json-schema";
 
 fromJsonSchema({
   type: "object",
@@ -21,14 +21,16 @@ fromJsonSchema({
     name: { type: "string" },
   },
   required: ["id", "name"],
-})
+});
 ```
 
 ```ts
-t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-}))
+t(
+  types.object({
+    id: t(types.integer),
+    name: t(types.string),
+  }),
+);
 ```
 
 `$ref` becomes an unresolved `types.ref(target)` (last path segment of the
@@ -39,16 +41,16 @@ becomes `types.never`.
 ## OpenAPI
 
 ```ts
-import { fromOpenApi30, fromOpenApi20 } from "@rhi-zone/fractal-type-ir/from-openapi"
+import { fromOpenApi30, fromOpenApi20 } from "@rhi-zone/fractal-type-ir/from-openapi";
 
 fromOpenApi30({
   type: "object",
   properties: { id: { type: "string", format: "uuid" } },
-})
+});
 ```
 
 ```ts
-t(types.object({ id: uuid() }))
+t(types.object({ id: uuid() }));
 ```
 
 `fromOpenApi30` reverses `toOpenApi30`'s structural subset (OAS 3.0.3
@@ -60,22 +62,24 @@ leave `$ref` unresolved, same convention as `fromJsonSchema`.
 ## Protobuf
 
 ```ts
-import { fromProtoText } from "@rhi-zone/fractal-type-ir/from-protobuf"
+import { fromProtoText } from "@rhi-zone/fractal-type-ir/from-protobuf";
 
 const doc = fromProtoText(`
   message Person {
     string name = 1;
     int32 age = 2;
   }
-`)
+`);
 ```
 
 ```ts
 // doc.defs.Person:
-t(types.object({
-  name: t(types.string, { optional: true }),
-  age: t(types.int32, { optional: true }),
-}))
+t(
+  types.object({
+    name: t(types.string, { optional: true }),
+    age: t(types.int32, { optional: true }),
+  }),
+);
 // doc.root: t(types.ref("Person"))  — first top-level declaration
 ```
 
@@ -94,22 +98,24 @@ output-only concept.
 ## FlatBuffers
 
 ```ts
-import { fromFlatbuffers } from "@rhi-zone/fractal-type-ir/from-flatbuffers"
+import { fromFlatbuffers } from "@rhi-zone/fractal-type-ir/from-flatbuffers";
 
 fromFlatbuffers(`
   table Widget {
     active:bool;
     name:string;
   }
-`)
+`);
 ```
 
 ```ts
 // result.Widget:
-t(types.object({
-  active: t(types.boolean, { optional: true }),
-  name: t(types.string, { optional: true }),
-}))
+t(
+  types.object({
+    active: t(types.boolean, { optional: true }),
+    name: t(types.string, { optional: true }),
+  }),
+);
 ```
 
 Returns a flat `Record<string, TypeRef>` (no self-describing JSON descriptor
@@ -122,22 +128,27 @@ true`; `rpc_service` blocks are recognized but not converted.
 ## SQL
 
 ```ts
-import { fromSql } from "@rhi-zone/fractal-type-ir/from-sql"
+import { fromSql } from "@rhi-zone/fractal-type-ir/from-sql";
 
-fromSql(`
+fromSql(
+  `
   CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL
   )
-`, { dialect: "postgres" })
+`,
+  { dialect: "postgres" },
+);
 ```
 
 ```ts
 // result.users:
-t(types.object({
-  id: t(types.integer, { primaryKey: true, autoincrement: true }),
-  email: t(types.string, { unique: true }),
-}))
+t(
+  types.object({
+    id: t(types.integer, { primaryKey: true, autoincrement: true }),
+    email: t(types.string, { unique: true }),
+  }),
+);
 ```
 
 Returns `Record<string, TypeRef>`, one entry per `CREATE TABLE`. `opts.dialect`
@@ -153,22 +164,24 @@ non-`CREATE TABLE` statements are silently skipped.
 ## CQL (Cassandra)
 
 ```ts
-import { fromCql } from "@rhi-zone/fractal-type-ir/from-cql"
+import { fromCql } from "@rhi-zone/fractal-type-ir/from-cql";
 
 fromCql(`
   CREATE TABLE events (
     id uuid PRIMARY KEY,
     payload blob
   )
-`)
+`);
 ```
 
 ```ts
 // result.events:
-t(types.object({
-  id: uuid({ primaryKey: true }),
-  payload: bytes(),
-}))
+t(
+  types.object({
+    id: uuid({ primaryKey: true }),
+    payload: bytes(),
+  }),
+);
 ```
 
 Returns `Record<string, TypeRef>`, one entry per `CREATE TABLE`/`CREATE TYPE`.
@@ -176,29 +189,31 @@ An independent hand-rolled parser (CQL's grammar diverges enough from SQL —
 partition/clustering keys, collection types, UDTs, `frozen<...>` — that it
 doesn't share code with `from-sql.ts`, matching this package's per-ingester
 independence convention). A table's columns may `ref()` a UDT declared by an
-earlier *or later* `CREATE TYPE` in the same string (CQL allows forward
+earlier _or later_ `CREATE TYPE` in the same string (CQL allows forward
 references). Unrecognized statements (`CREATE KEYSPACE`, `ALTER TABLE`, …)
 are silently skipped.
 
 ## Cap'n Proto
 
 ```ts
-import { fromCapnp } from "@rhi-zone/fractal-type-ir/from-capnp"
+import { fromCapnp } from "@rhi-zone/fractal-type-ir/from-capnp";
 
 fromCapnp(`
   struct Person {
     name @0 :Text;
     age @1 :UInt32;
   }
-`)
+`);
 ```
 
 ```ts
 // result.Person:
-t(types.object({
-  name: t(types.string),
-  age: t(types.uint32),
-}))
+t(
+  types.object({
+    name: t(types.string),
+    age: t(types.uint32),
+  }),
+);
 ```
 
 Returns a flat `Record<string, TypeRef>` (top-level and nested
@@ -213,21 +228,23 @@ declarations are recognized and skipped structurally.
 ## Elasticsearch
 
 ```ts
-import { fromElasticsearch } from "@rhi-zone/fractal-type-ir/from-elasticsearch"
+import { fromElasticsearch } from "@rhi-zone/fractal-type-ir/from-elasticsearch";
 
 fromElasticsearch({
   properties: {
     title: { type: "text" },
     createdAt: { type: "date" },
   },
-})
+});
 ```
 
 ```ts
-t(types.object({
-  title: t(types.string),
-  createdAt: datetime(),
-}))
+t(
+  types.object({
+    title: t(types.string),
+    createdAt: datetime(),
+  }),
+);
 ```
 
 No text parsing — an ES mapping is already structured JSON, so this is pure
@@ -241,26 +258,28 @@ detail has no `TypeRef` equivalent. Unrecognized/future ES types degrade to
 ## JSON value
 
 ```ts
-import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus"
+import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus";
 
 // One entry point, always an array. A single value is the N=1 case.
-fromJsonCorpus([{ id: 42, email: "a@b.com", tags: ["x", "y", "z"] }])
+fromJsonCorpus([{ id: 42, email: "a@b.com", tags: ["x", "y", "z"] }]);
 ```
 
 ```ts
-t(types.object({
-  id: uint8(),
-  email: t(types.string, { format: "email" }),
-  tags: t(types.array(t(types.string))),
-}))
+t(
+  types.object({
+    id: uint8(),
+    email: t(types.string, { format: "email" }),
+    tags: t(types.array(t(types.string))),
+  }),
+);
 ```
 
-Infers a `TypeRef` from JSON *values* by structural heuristic — no declared
-schema to read, only a shape to guess. Note this is a property of *this
-importer's input domain*, not of `TypeRef`: the IR is a superset across the
+Infers a `TypeRef` from JSON _values_ by structural heuristic — no declared
+schema to read, only a shape to guess. Note this is a property of _this
+importer's input domain_, not of `TypeRef`: the IR is a superset across the
 concrete type systems this package projects to, and represents plenty JSON has
 no notion of (nominal `instance` types, `function`/`method`/`interface`,
-`stream`/`page`). Inference from bare JSON values simply cannot *detect* those
+`stream`/`page`). Inference from bare JSON values simply cannot _detect_ those
 — there is nothing in the data to detect them from. There is one calling
 convention: always an array of observations. Passing `[value]` is the single-value case, and it is
 not a separate function — the same evidence machinery runs, so nested arrays
@@ -278,23 +297,25 @@ non-`undefined` result wins).
 ## JSON corpus
 
 ```ts
-import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus"
+import { fromJsonCorpus } from "@rhi-zone/fractal-type-ir/from-json-corpus";
 
 fromJsonCorpus([
   { id: 1, name: "a" },
   { id: 2, name: "b", nickname: "bee" },
-])
+]);
 ```
 
 ```ts
-t(types.object({
-  id: uint8(),
-  name: t(types.string),
-  nickname: t(types.string, { optional: true }),
-}))
+t(
+  types.object({
+    id: uint8(),
+    name: t(types.string),
+    nickname: t(types.string, { optional: true }),
+  }),
+);
 ```
 
-Infers from *multiple* JSON values, unifying evidence across the whole
+Infers from _multiple_ JSON values, unifying evidence across the whole
 corpus — this is where accumulation-only signals live: enum detection,
 discriminated-union detection, dict-vs-record detection, and (as above)
 optional-field detection from a field's absence in some samples. Two-phase
@@ -308,18 +329,20 @@ to back as a convenience.
 ## JSON Type Definition (JTD)
 
 ```ts
-import { fromJtd, fromJtdDocument } from "@rhi-zone/fractal-type-ir/from-jtd"
+import { fromJtd, fromJtdDocument } from "@rhi-zone/fractal-type-ir/from-jtd";
 
 fromJtd({
   properties: { id: { type: "uint32" }, name: { type: "string" } },
-})
+});
 ```
 
 ```ts
-t(types.object({
-  id: t(types.uint32),
-  name: t(types.string),
-}))
+t(
+  types.object({
+    id: t(types.uint32),
+    name: t(types.string),
+  }),
+);
 ```
 
 `fromJtd` reverses `jtd.ts`'s `toJtd` for a single schema (RFC 8927), including
@@ -334,7 +357,7 @@ into `{ root, defs }`.
 ## TypeScript
 
 ```ts
-import { typeRefFromType, createExtractorProgram } from "@rhi-zone/fractal-type-ir/from-typescript"
+import { typeRefFromType, createExtractorProgram } from "@rhi-zone/fractal-type-ir/from-typescript";
 ```
 
 General-purpose `ts.Type` + `ts.TypeChecker` → `TypeRef` extraction over a
@@ -359,7 +382,7 @@ guessing.
 ## GraphQL SDL
 
 ```ts
-import { fromGraphql } from "@rhi-zone/fractal-type-ir/from-graphql"
+import { fromGraphql } from "@rhi-zone/fractal-type-ir/from-graphql";
 
 fromGraphql(`
   type User {
@@ -367,16 +390,18 @@ fromGraphql(`
     name: String
     friends: [User!]!
   }
-`)
+`);
 ```
 
 ```ts
 // result.User:
-t(types.object({
-  id: t(types.string),
-  name: t(types.string, { optional: true }),
-  friends: t(types.array(t(types.ref("User")))),
-}))
+t(
+  types.object({
+    id: t(types.string),
+    name: t(types.string, { optional: true }),
+    friends: t(types.array(t(types.ref("User")))),
+  }),
+);
 ```
 
 Returns `Record<string, TypeRef>` keyed by declared name. Parses SDL text via
@@ -389,13 +414,13 @@ are ignored.
 ## Standard Schema
 
 ```ts
-import { fromStandardSchema } from "@rhi-zone/fractal-type-ir/from-standard-schema"
+import { fromStandardSchema } from "@rhi-zone/fractal-type-ir/from-standard-schema";
 
-fromStandardSchema(someZodOrValibotSchema)
+fromStandardSchema(someZodOrValibotSchema);
 ```
 
 ```ts
-t(types.object({ id: t(types.string) }), { vendor: "zod" })
+t(types.object({ id: t(types.string) }), { vendor: "zod" });
 ```
 
 Converts any [Standard Schema](https://standardschema.dev/) implementation

@@ -13,11 +13,11 @@
 
 /** `/books/{id}/reviews/{reviewId}` -> `["id", "reviewId"]`. */
 export function pathParamNames(path: string): string[] {
-  return [...path.matchAll(/\{([^}]+)\}/g)].map((m) => m[1]!)
+  return [...path.matchAll(/\{([^}]+)\}/g)].map((m) => m[1]!);
 }
 
 /** Replace every `{name}` segment in `path` with its `values[name]`
  * (percent-encoded), or an empty string when a param has no value yet. */
 export function interpolatePath(path: string, values: Readonly<Record<string, string>>): string {
-  return path.replace(/\{([^}]+)\}/g, (_, name: string) => encodeURIComponent(values[name] ?? ""))
+  return path.replace(/\{([^}]+)\}/g, (_, name: string) => encodeURIComponent(values[name] ?? ""));
 }

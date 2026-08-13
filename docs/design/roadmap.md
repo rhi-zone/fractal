@@ -19,8 +19,9 @@ this repo by design.
 The ONLY framework type:
 
 ```ts
-type Handler<R = {}> = (req: Request & { ctx: R }) =>
-  Response | undefined | Promise<Response | undefined>;
+type Handler<R = {}> = (
+  req: Request & { ctx: R },
+) => Response | undefined | Promise<Response | undefined>;
 ```
 
 It is literally `(Request) => Response` (the WHATWG standard) — NOT a custom `Ctx`/`Req`
@@ -36,16 +37,16 @@ them by meta source.
 
 ### Combinators (all return a Handler carrying inert `.meta`)
 
-| Combinator | Role | Discharge |
-|---|---|---|
-| `path({seg: h})` | literal-segment dispatch | — |
-| `methods({GET: h})` | verb dispatch (literal-verb inference) | — |
-| `choice(...alts)` | first-match dispatch | — |
-| `param(name, inner)` | capture a typed PATH-PARAM | discharges a path-param key via `Omit<Q, name>` |
-| `mount(prefix, inner)` | alias of single-key `path` | — |
-| `provide(key, produce, inner)` | inject a server-internal VAR | discharges a var key via `Omit<Q, key>` |
-| `withAuth(authenticate, inner)` | `provide` specialized to `ctx.user` | discharges `user` |
-| `logger` / `cors` / `errorBoundary` | observing wrappers | plain `Handler<R> → Handler<R>` |
+| Combinator                          | Role                                   | Discharge                                       |
+| ----------------------------------- | -------------------------------------- | ----------------------------------------------- |
+| `path({seg: h})`                    | literal-segment dispatch               | —                                               |
+| `methods({GET: h})`                 | verb dispatch (literal-verb inference) | —                                               |
+| `choice(...alts)`                   | first-match dispatch                   | —                                               |
+| `param(name, inner)`                | capture a typed PATH-PARAM             | discharges a path-param key via `Omit<Q, name>` |
+| `mount(prefix, inner)`              | alias of single-key `path`             | —                                               |
+| `provide(key, produce, inner)`      | inject a server-internal VAR           | discharges a var key via `Omit<Q, key>`         |
+| `withAuth(authenticate, inner)`     | `provide` specialized to `ctx.user`    | discharges `user`                               |
+| `logger` / `cors` / `errorBoundary` | observing wrappers                     | plain `Handler<R> → Handler<R>`                 |
 
 `param` also has a 3-arg overload `param(name, codec, inner)` carrying a Standard Schema
 for the segment (type-only; std does not decode). `withAuth` defaults the key to `"user"`
@@ -161,14 +162,14 @@ without a non-compositional in-dispatch signal.
 
 From `docs/design/vs-hono-elysia.md` (six criteria vs Hono 4.x and Elysia):
 
-| # | Criterion | vs Hono | vs Elysia |
-|---|---|---|---|
-| 1 | Elegance / less ceremony | TIE | TIE |
-| 2 | More correct HTTP semantics | **WIN** | **WIN** |
-| 3 | Tighter / more uniform core | **WIN** | **WIN** |
-| 4 | Surface/runtime-agnostic core | TIE (deliberate) | TIE |
-| 5 | Lower barrier to entry | TIE (caveats at scale) | TIE |
-| 6 | Type safety | TIE (robustness/scale edge) | TIE (declared-response caveat) |
+| #   | Criterion                     | vs Hono                     | vs Elysia                      |
+| --- | ----------------------------- | --------------------------- | ------------------------------ |
+| 1   | Elegance / less ceremony      | TIE                         | TIE                            |
+| 2   | More correct HTTP semantics   | **WIN**                     | **WIN**                        |
+| 3   | Tighter / more uniform core   | **WIN**                     | **WIN**                        |
+| 4   | Surface/runtime-agnostic core | TIE (deliberate)            | TIE                            |
+| 5   | Lower barrier to entry        | TIE (caveats at scale)      | TIE                            |
+| 6   | Type safety                   | TIE (robustness/scale edge) | TIE (declared-response caveat) |
 
 Wins HTTP-correctness + tiny-core; ties elegance/agnosticism/barrier/type-safety, with a
 scale/robustness edge from codegen + the drift guard. It is NOT yet unilaterally better
@@ -181,6 +182,7 @@ than Hono + Elysia combined — the backlog below is the path there.
 > **Note:** items 1, 4, and 5 below reference the retired `req.ctx`/`param`/`provide`/`withSegments` model and a `packages/openapi-api-projector` package path that no longer exists — read them as historical backlog framing, not an actionable plan against current code. Items 2 and 3 (error-response modeling, nullable/optional fidelity) restate as general concerns that may still apply, independent of which node model implements them.
 
 ### 1. Typed `query(...)` combinator — HIGHEST VALUE
+
 Query params have no typed story today: they are read by hand off
 `new URL(req.url).searchParams` and never reach OpenAPI or the client. Plumbing is
 half-present: `ParameterObject` in `packages/openapi-api-projector/src/index.ts` already supports
@@ -191,19 +193,23 @@ half-present: `ParameterObject` in `packages/openapi-api-projector/src/index.ts`
 routing? (Path params gate routing; query params don't.)
 
 ### 2. Error-response modeling
+
 Let a route declare its error codes → statuses → shapes, projecting to a typed client
 error union + OpenAPI non-200 responses. Today only the `returns(...)` 200 shape is typed.
 
 ### 3. Nullable / optional in the schema story
+
 The hand-rolled schema fixture dropped `string | null` → wrong client type. The schema
 projection needs nullable/optional fidelity.
 
 ### 4. OpenAPI security emission
+
 `withAuth` already stamps an inert `ProvideMeta.security` hint (`{ scheme: key }`) that no
 projection reads. Emit `securitySchemes` + per-operation `security` from it. Then build
 scoped authz (beyond binary 401).
 
 ### 5. Minor — param-clone non-bleed regression test
+
 The `param` clone-non-bleed invariant (a sibling `choice` alt must not see a leaked
 `ctx` param) is structurally guaranteed by `paramRT`/`withSegments` and tested indirectly
 via choice-correctness, but has no explicit committed regression test in

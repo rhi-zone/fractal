@@ -31,13 +31,16 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 ## THEME 1 — Design method: first principles, honor what I already said, no retrofit
 
 - **[USER-ASSERTED]** Design from first principles, do not retrofit HTTP.
+
   > "we should be designing from first principles, not 'oh yeah let's bullshit our way
   > into a HTTP api'. have you even reasoned what a good api should look like?" (CURRENT)
 
 - **[USER-ASSERTED]** The design is over-blessing — the exact premise of this mining.
+
   > "i think the design is blessing way more than it should" (CURRENT)
 
 - **[USER-ASSERTED]** My stated intent is already on record; mine it rather than re-derive.
+
   > "i'm pretty sure i've sent a lot of messages both this session and last (you should
   > have the uuid for the jsonl) about what i'm looking for. go mine?" (CURRENT)
   > "haven't i said... a nonzero amount of things this conversation? give a subagent this
@@ -49,7 +52,7 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 - **[USER-ASSERTED]** "data over code" is NOT a forcing principle — it was poisoning context.
   > "the data over code thing is kinda poisoning context" (PREVIOUS)
   > "'compiled from descriptors' was me forcing the data-over-code throughline" — user
-  told assistant to strip it from CLAUDE.md. (PREVIOUS)
+  > told assistant to strip it from CLAUDE.md. (PREVIOUS)
 
 ---
 
@@ -57,21 +60,25 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** The handler is a plain `T => U`; the transform is arbitrary `T => U`;
   composition is the base.
+
   > "the handler itself should be T => U, the transform should be arbitrary T => U as
   > well. and then: `(.) :: (a -> b) -> (b -> c) -> (a -> c)`..." (PREVIOUS)
   > "correction: it's just a fucking FUNCTION" (PREVIOUS)
 
 - **[USER-ASSERTED]** Kleisli/applicative are derived and strictly less general — separate
   combinator.
+
   > "separate combinator? obviously? i don't see how kleisli arrows aren't OBJECTIVELY
   > strictly less general" (PREVIOUS)
 
 - **[USER-REJECTED]** `view`/`review` (bidirectional) — overkill, poisons composability.
+
   > "wait, why do we need `review`." / "i think view + review is overkill and poisons the
   > architectural purity of composability" (PREVIOUS)
 
 - **[USER-ASSERTED]** The library's purpose: transform/manipulate arbitrary data into
   arbitrary other data; HTTP is dogfood + a genuinely-wanted product.
+
   > "we want to build a library/framework to transform/manipulate arbitrary data into
   > arbitrary other data" (PREVIOUS)
   > "with e.g. 'a HTTP router' as both dogfood material (proving that a generic core will
@@ -80,13 +87,14 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** API-first; the interfaces themselves must be clean; router is a
   shallow shim.
+
   > "honestly i still am a huge fan of api first for lack of a better word. the
   > interface(s) themselves should be clean. the router itself imo should be a more or less
   > shallow shim that reconciles the input with the statically typed api function" (PREVIOUS)
 
-- **[USER-ASSERTED, open]** "is it *too* general?" — the user raised the worry themselves;
+- **[USER-ASSERTED, open]** "is it _too_ general?" — the user raised the worry themselves;
   never resolved.
-  > "is it *too* general?" (PREVIOUS)
+  > "is it _too_ general?" (PREVIOUS)
 
 ---
 
@@ -94,25 +102,29 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** The handler input is a strongly-typed named-params options object,
   NOT a wire `body`.
+
   > "`body` is the wrong input for the options object. it should be a strongly typed 'named
   > params' style object. putting `body` there is... what the fuck" (PREVIOUS)
-  > "building up a typed 'context'/'options'/'parameters' object as *the* input to an
+  > "building up a typed 'context'/'options'/'parameters' object as _the_ input to an
   > arbitrary api function" (PREVIOUS)
 
 - **[USER-ASSERTED]** Inputs are already fully typed; there is no "raw"; coercion is
   impossible-by-construction via the type system.
-  > "strings *are* already typed" / "input is not 'untyped', it is fully typed" (PREVIOUS)
+
+  > "strings _are_ already typed" / "input is not 'untyped', it is fully typed" (PREVIOUS)
   > "coercion is an implementation detail, and this should be impossible by construction of
   > the combined struct via, y'know, the type system" (PREVIOUS)
 
 - **[USER-ASSERTED]** HTTP source-markers and capabilities never reach the api function;
   caps sit in the input shape and pass through untouched.
+
   > "and NEITHER of these should pass through to the api function" (PREVIOUS)
   > "do caps not just... sit in the input shape and pass through untouched? am i confused?"
   > (PREVIOUS)
 
 - **[USER-REJECTED]** `InputSource` enum (`json|query|params|merge|session|none`) and
   path/body id-collision machinery — HTTP-shaped leak.
+
   > "disturbingly http shaped" (PREVIOUS)
   > "who. the fuck. said fields are implicitly added. it. won't. fucking. typecheck."
   > (PREVIOUS)
@@ -132,21 +144,25 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** Truth = inferred TS types + JSDoc (constraints AND descriptions). No
   reified runtime meta / schema-as-second-source.
+
   > "why not? types are readable by typescript api" (PREVIOUS)
-  > "the fuck? hello? jsdoc says hi?" / "not to mention fucking *descriptions* are also
+  > "the fuck? hello? jsdoc says hi?" / "not to mention fucking _descriptions_ are also
   > readable from jsdoc..." (PREVIOUS)
   > "didn't we agree to use inferred types?" (PREVIOUS)
 
 - **[USER-REJECTED]** A reified tree / reified runtime meta as the source.
+
   > "who the fuck said reified tree" (PREVIOUS)
 
 - **[USER-REJECTED, self-abandoned]** The `{ closure, metadata }` struct — the user
   floated it, then dropped it once codegen-from-types covered it.
+
   > "{ closure, metadata } pretty sure this was already solved." (PREVIOUS) — later
-  superseded by "types are readable by typescript api".
+  > superseded by "types are readable by typescript api".
 
 - **[USER-ASSERTED]** Codegen "just works for whatever's obvious"; user writes as much or as
   little as they want; output as good as handwritten structurally AND semantically.
+
   > "the point of codegen is to just work for whatever's obvious" (PREVIOUS)
   > "user can write as much or as little as they want" (PREVIOUS)
   > "it should be as good as a handwritten one structurally and semantically" (PREVIOUS)
@@ -162,11 +178,13 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** One explicit nested routing tree with record combinators; scattered
   flat declarations make routing intractable.
+
   > "when routing is just multiple unrelated declarations then the mental model of how
   > routing slices is fucking intractable" (PREVIOUS)
   > "what happened to the fucking routing combinators" (PREVIOUS)
 
 - **[USER-REJECTED]** `tree([])`, opaque `leaf`, bound-variable / colon path-DSL.
+
   > "what the fuck is tree([]). why not path({ classes: })" (PREVIOUS)
   > "what the fuck is leaf. a) slop b) monolithic c) what the FUCK is q d) where is the
   > fucking input -> options object transformation" (PREVIOUS)
@@ -175,6 +193,7 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** There is an abstract (protocol-agnostic) tree AND an HTTP tree; the
   tree stays explicit but not protocol-specific; decisions may not cut a clean axis.
+
   > "there's the http tree and the agnostic tree, no? haven't i (AND you!??!) made that
   > incredibly clear multiple times?" (PREVIOUS)
   > "the tree (if any) should still be explicit, no? just not a protocol specific one."
@@ -183,27 +202,31 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED, CURRENT — the sharpest new cut]** The tree is ADDRESSING; behavior holds
   no address. You don't need to know where something is to know what it does.
+
   > "> But a leaf is no longer self-contained: to know what POST publish is, you walk up to
   > find you're under /users/:id/documents/:did — that's not really an issue. you don't
   > need to know where it is to know what it does" (CURRENT)
-  (Reacting to assistant's "tree holds structure and references behavior; behavior holds no
-  address" — the user confirmed the addressing/behavior split via this reply.)
+  > (Reacting to assistant's "tree holds structure and references behavior; behavior holds no
+  > address" — the user confirmed the addressing/behavior split via this reply.)
 
 - **[USER-ASSERTED]** `methods({})` is an HTTP construct and must still exist for dispatch;
   bespoke verb/path = explicit overrides.
+
   > "how the fuck is methods() not a fucking HTTP construct" / "where the FUCK did
   > methods({}) go" (PREVIOUS)
 
 - **[USER-ASSERTED, open]** User does NOT necessarily want hand-authoring trees, but thinks
   it's near-mandatory for a general library; the consumer using HTTP for internal routing
   shouldn't care about exact shape — codegen'd is more consistent.
+
   > "for hand-authoring trees. i don't necessarily want hand-authoring trees, but the way i
   > see it, it's kinda mandatory for our library to be generally useful... the consumer...
   > shouldn't give a rat's ass what specific shape the api looks like" (PREVIOUS)
 
 - **[USER-ASSERTED, not-against]** A higher-level 'global'/magic/metadata/decorator layer is
   acceptable as an even-higher level (undesigned).
-  > "a 'global'/magic/metadata/decorator based solution as an even higher level i am *not*
+
+  > "a 'global'/magic/metadata/decorator based solution as an even higher level i am _not_
   > against" (PREVIOUS)
 
 - **[USER-ASSERTED, open pain]** One tree auto-deriving both HTTP and CLI is unreconciled:
@@ -221,14 +244,17 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** The real question: how are APIs grouped to avoid a flat sprawl of free
   functions? (User posed this as THE first-principles question.)
+
   > "how are apis normally grouped to avoid a flat sprawl of free functions?" (CURRENT)
 
 - **[USER-ASSERTED]** Subject/carrier-type grouping is a good hunch the user LIKES — but it
   is NOT the be-all/end-all, because operations average ~1.5 subject types (cross-cutting).
+
   > "subject type isn't a bad hunch and i like it, but it's not necessary the be-all and
   > end-all when you have 100 slices each with 1.5 subject types on average" (CURRENT)
 
 - **[USER-REJECTED]** Grouping by full signature.
+
   > "grouping based on full signature sounnds weird :/" (CURRENT)
   > "a) what are the algebra and type theory lenses b) why are they the only two possible
   > lenses (if they even are)" (CURRENT) — user pushed back on the framing being complete.
@@ -238,9 +264,9 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
   principle, the type-theory / survey / algebra "three lenses," the reify-a-relation rule
   for cross-cutting ops, `carrier<T>()` with `.make/.op/.read`, the capability/functor
   second tier, design v1/v2, the five red-team attacks, the entropy-partition. The user
-  never blessed any of this as their decision. They liked the *subject-type hunch*, called
+  never blessed any of this as their decision. They liked the _subject-type hunch_, called
   full-signature grouping "weird," and demanded "single design, whatever you think is
-  right, plus adversarial rounds" — i.e. authorized the *process*, not any conclusion.
+  right, plus adversarial rounds" — i.e. authorized the _process_, not any conclusion.
   > "still performative. single design, whatever you think is right, plus adversarial
   > rounds" (CURRENT)
 
@@ -250,11 +276,13 @@ assistant tail each user turn reacts to so accept/reject/refine is legible.
 
 - **[USER-ASSERTED]** POST = a method call / invocation. `new T()` / "create" is NOT a
   method call. Reject `create → POST /collection`.
+
   > "i am FUCKING SAYING post is a METHOD CALL and `new T()` is NOT A FUCKING METHOD CALL"
   > (PREVIOUS)
   > "why the FUCK does create translate to POST /todos" (PREVIOUS)
 
 - **[USER-ASSERTED, lean]** For creation, user leans explicit `POST /the/:path/here/new`.
+
   > "POST is method call not fucking create... i'd probably prefer POST /the/:path/here/new"
   > (PREVIOUS)
 
@@ -273,6 +301,7 @@ actual position.
 - **[USER-ASSERTED]** There is NO single objective-correct API shape; a brainless program
   cannot divine user taste. (Rejecting the assistant's "enrich the vocabulary until
   overrides vanish / projection is total" swing.)
+
   > "you say that like there is an objective correct answer for every api shape and the
   > overrides are there for... what exactly? to be wrong?" (CURRENT)
   > "completely wrong. if there is more than one correct choice, why would a brainless
@@ -280,12 +309,14 @@ actual position.
 
 - **[USER-ASSERTED]** The definition carries a FINITE amount of Shannon entropy — residual
   taste bits exist and someone must pay them; you cannot enrich types until they vanish.
+
   > "*the definition has a finite amount of shannon entropy" (CURRENT)
-  (Correcting the assistant's "the choice isn't information latent in the definition that a
-  richer type could expose.")
+  > (Correcting the assistant's "the choice isn't information latent in the definition that a
+  > richer type could expose.")
 
 - **[USER-ASSERTED]** Unaided projection working for the obvious case is a DEALBREAKER to
   lose — the user cited their own `server-less` as existence proof it can be done.
+
   > "> Or is losing unaided-projection a dealbreaker — imo yes. our own server-less does
   > it, iirc, although it has somewhat different goals" (CURRENT)
 
@@ -315,7 +346,9 @@ actual position.
 ## THEME 9 — Local vs global understandability (the user's own stated tension)
 
 - **[USER-ASSERTED]** The mental model has two desiderata in tension (user's own words):
+
   > "there is a tension between the things i want, right? in terms of mental model:
+  >
   > - local understandability (each endpoint should be self-contained)
   > - global/large-scale/architectural understandability (the branching structure of the
   >   route tree should be understandable without having to look at every api function AND
@@ -325,6 +358,7 @@ actual position.
   behavior is understandable without its location (see Theme 5). This partially dissolves
   the tension: local = know what it does; global = the tree's branching structure is legible
   without reading every function or hand-reconciling shared prefixes.
+
   > "you don't need to know where it is to know what it does" (CURRENT)
 
 - **[ASSISTANT-PROPOSED, not user-confirmed]** "Tree is canonical; local self-containment is
@@ -341,7 +375,7 @@ actual position.
    "being wrong." > "completely wrong." (CURRENT)
 3. HTTP shape leaking into the handler/options (`body`, `verb`, `InputSource`, source
    markers). > "disturbingly http shaped"; "and NEITHER of these should pass through."
-4. Treating input as raw/untyped needing validation. > "strings *are* already typed."
+4. Treating input as raw/untyped needing validation. > "strings _are_ already typed."
 5. A reified runtime meta/schema tree as a second source. > "who the fuck said reified tree."
 6. `view`/`review`, Kleisli-as-base. > "overkill and poisons... composability."
 7. Scattered flat route declarations / `tree([])` / opaque `leaf` / bound variables.
@@ -361,7 +395,7 @@ actual position.
   CRITICAL/assistant-invented. Keep the flag; do not let it drift into "settled."
 - **`NoInfer<T>` + a root anchor is the inference mechanism** — the user asserted `NoInfer`
   ("`NoInfer<T>` says hello…") but the "+ root anchor" and the acceptance of a specific
-  mechanism are more assistant than user; the user only rejected the *rationale* ("says who,
+  mechanism are more assistant than user; the user only rejected the _rationale_ ("says who,
   exactly?"). Mild over-statement of settledness.
 - **INCOMPLETENESS is the bigger problem.** invariants.md predates the CURRENT session and
   therefore MISSES the user's deepest stated desiderata, all [USER-ASSERTED]:
@@ -375,7 +409,7 @@ actual position.
   ("you don't need to know where it is to know what it does").
 - **The entire `fc-api-grouping/` carrier apparatus** (`carrier<T>`, .make/.op/.read,
   reify-the-relation, capability/functor tiers, entropy partition, CLI-shaped-core claim) is
-  [ASSISTANT-PROPOSED, not user-confirmed]. The user authorized the *method* ("single design
-  + adversarial rounds"), liked the *subject-type hunch*, and rejected specific swings —
-  none of the concrete apparatus is a user decision. It must NOT be promoted into
-  invariants.md as settled.
+  [ASSISTANT-PROPOSED, not user-confirmed]. The user authorized the _method_ ("single design
+  - adversarial rounds"), liked the _subject-type hunch_, and rejected specific swings —
+    none of the concrete apparatus is a user decision. It must NOT be promoted into
+    invariants.md as settled.

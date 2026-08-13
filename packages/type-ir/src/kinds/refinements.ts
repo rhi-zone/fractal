@@ -24,15 +24,19 @@
 // No IR kind, no runtime constructor: this file is TS-type-only, read
 // purely by the extractor's static analysis.
 
-declare const RefinementTag: unique symbol
-export type { RefinementTag }
+declare const RefinementTag: unique symbol;
+export type { RefinementTag };
 
-export type MinLength<N extends number> = { readonly [RefinementTag]: { minLength: N } }
-export type MaxLength<N extends number> = { readonly [RefinementTag]: { maxLength: N } }
-export type Pattern<P extends string> = { readonly [RefinementTag]: { pattern: P } }
-export type Format<F extends string> = { readonly [RefinementTag]: { format: F } }
-export type Minimum<N extends number> = { readonly [RefinementTag]: { minimum: N } }
-export type Maximum<N extends number> = { readonly [RefinementTag]: { maximum: N } }
-export type ExclusiveMinimum<N extends number> = { readonly [RefinementTag]: { exclusiveMinimum: N } }
-export type ExclusiveMaximum<N extends number> = { readonly [RefinementTag]: { exclusiveMaximum: N } }
-export type MultipleOf<N extends number> = { readonly [RefinementTag]: { multipleOf: N } }
+export type MinLength<N extends number> = { readonly [RefinementTag]: { minLength: N } };
+export type MaxLength<N extends number> = { readonly [RefinementTag]: { maxLength: N } };
+export type Pattern<P extends string> = { readonly [RefinementTag]: { pattern: P } };
+export type Format<F extends string> = { readonly [RefinementTag]: { format: F } };
+export type Minimum<N extends number> = { readonly [RefinementTag]: { minimum: N } };
+export type Maximum<N extends number> = { readonly [RefinementTag]: { maximum: N } };
+export type ExclusiveMinimum<N extends number> = {
+  readonly [RefinementTag]: { exclusiveMinimum: N };
+};
+export type ExclusiveMaximum<N extends number> = {
+  readonly [RefinementTag]: { exclusiveMaximum: N };
+};
+export type MultipleOf<N extends number> = { readonly [RefinementTag]: { multipleOf: N } };

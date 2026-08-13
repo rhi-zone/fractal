@@ -24,8 +24,8 @@
 //   packages/http-api-projector/src/extensions/idempotency.ts — client half
 //   packages/http-api-projector/src/route.ts                  — HttpHandlerMiddleware, Stores
 
-import type { HttpHandlerMiddleware } from "./route.ts"
-import type { HttpStoreBag } from "./decode.ts"
+import type { HttpHandlerMiddleware } from "./route.ts";
+import type { HttpStoreBag } from "./decode.ts";
 
 // ============================================================================
 // Store interface — pluggable, matching this package's other extension-point
@@ -44,9 +44,9 @@ import type { HttpStoreBag } from "./decode.ts"
  * (or expires them a different way) may ignore it.
  */
 export type IdempotencyStore = {
-  get(key: string): Promise<unknown>
-  set(key: string, value: unknown, ttl?: number): Promise<void>
-}
+  get(key: string): Promise<unknown>;
+  set(key: string, value: unknown, ttl?: number): Promise<void>;
+};
 
 /**
  * Default `IdempotencyStore`: an in-process `Map`, so `idempotencyMiddleware()`
@@ -57,26 +57,29 @@ export type IdempotencyStore = {
  * multi-instance deployment.
  */
 export class InMemoryIdempotencyStore implements IdempotencyStore {
-  private readonly entries = new Map<string, { readonly value: unknown; readonly expiresAt: number | undefined }>()
+  private readonly entries = new Map<
+    string,
+    { readonly value: unknown; readonly expiresAt: number | undefined }
+  >();
 
   async get(key: string): Promise<unknown> {
-    const entry = this.entries.get(key)
-    if (entry === undefined) return undefined
+    const entry = this.entries.get(key);
+    if (entry === undefined) return undefined;
     if (entry.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
-      this.entries.delete(key)
-      return undefined
+      this.entries.delete(key);
+      return undefined;
     }
-    return entry.value
+    return entry.value;
   }
 
   async set(key: string, value: unknown, ttl?: number): Promise<void> {
-    const expiresAt = ttl !== undefined ? Date.now() + ttl : undefined
-    this.entries.set(key, { value, expiresAt })
+    const expiresAt = ttl !== undefined ? Date.now() + ttl : undefined;
+    this.entries.set(key, { value, expiresAt });
   }
 
   /** Number of entries currently held — test/diagnostic use. */
   get size(): number {
-    return this.entries.size
+    return this.entries.size;
   }
 }
 
@@ -86,16 +89,16 @@ export class InMemoryIdempotencyStore implements IdempotencyStore {
 
 export type IdempotencyMiddlewareOptions = {
   /** Backing store. Default a fresh `InMemoryIdempotencyStore()` (per call to `idempotencyMiddleware()`, not shared globally). */
-  readonly store?: IdempotencyStore
+  readonly store?: IdempotencyStore;
   /** Header carrying the key (case-insensitive — `stores.header` is a `Headers` pass-through). Default `"idempotency-key"`. */
-  readonly header?: string
+  readonly header?: string;
   /** TTL (milliseconds) passed to `store.set` for each cached result. Default: none (store's own default, if any). */
-  readonly ttl?: number
-}
+  readonly ttl?: number;
+};
 
 function headerValue(stores: HttpStoreBag, header: string): string | undefined {
-  const value = stores.header?.[header]
-  return typeof value === "string" ? value : undefined
+  const value = stores.header?.[header];
+  return typeof value === "string" ? value : undefined;
 }
 
 /**
@@ -112,20 +115,22 @@ function headerValue(stores: HttpStoreBag, header: string): string | undefined {
  * const store = new InMemoryIdempotencyStore()
  * makeRouterFromRoute(route, [idempotencyMiddleware({ store })])
  */
-export function idempotencyMiddleware(options: IdempotencyMiddlewareOptions = {}): HttpHandlerMiddleware {
-  const store = options.store ?? new InMemoryIdempotencyStore()
-  const header = (options.header ?? "idempotency-key").toLowerCase()
-  const ttl = options.ttl
+export function idempotencyMiddleware(
+  options: IdempotencyMiddlewareOptions = {},
+): HttpHandlerMiddleware {
+  const store = options.store ?? new InMemoryIdempotencyStore();
+  const header = (options.header ?? "idempotency-key").toLowerCase();
+  const ttl = options.ttl;
 
   return (next) => async (input, stores) => {
-    const key = headerValue(stores, header)
-    if (key === undefined) return next(input, stores)
+    const key = headerValue(stores, header);
+    if (key === undefined) return next(input, stores);
 
-    const cached = await store.get(key)
-    if (cached !== undefined) return cached
+    const cached = await store.get(key);
+    if (cached !== undefined) return cached;
 
-    const result = await next(input, stores)
-    await store.set(key, result, ttl)
-    return result
-  }
+    const result = await next(input, stores);
+    await store.set(key, result, ttl);
+    return result;
+  };
 }

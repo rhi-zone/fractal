@@ -1,9 +1,9 @@
 # Induced Operation Taxonomy v2 — bottom-up, empirical
 
-Empirical, data-led induction over **173 real *exposed* operations** sampled from real
+Empirical, data-led induction over **173 real _exposed_ operations** sampled from real
 apps (fractal + pure-transport libs excluded). No prior category scheme imported: no CRUD,
 no REST/HTTP verbs, no query/command, no safety/idempotency taxonomy. Categories and
-dimensions below were named only *after* reading operation bodies.
+dimensions below were named only _after_ reading operation bodies.
 
 Effect vocabulary used during harvest (the atoms, observed not imposed): `reads`,
 `creates`, `mutates`, `deletes`, `external-effect`, `pure-compute`. Every effect an op
@@ -11,37 +11,37 @@ exhibits is listed — not just one.
 
 ## Corpus size & per-app counts
 
-| App | Surface | Ops |
-|---|---|---|
-| the consumer app | use-cases (billing/marking/approvals/ingestion/triggers/messages/outreach/payments) | 30 |
-| the consumer app | use-cases (hr/hiring/enrolment/lessons/sessions/classes/knowledge/nps/leads/forecasting/kpis/accounting) | 33 |
-| the consumer app | CLI + HTTP routes + worker projections/secretEffects | 31 |
-| normalize | CLI commands + normalize-tools MCP adapters | 25 |
-| curilo-for-parents | Supabase edge functions | 26 |
-| interconnect | daemon RPC | 5 |
-| reincarnate | CLI subcommands | 4 |
-| rescribe | CLI subcommands | 2 |
-| myenv | CLI subcommands | 4 |
-| claude-code-hub | HTTP routes + MCP tools | 8 |
-| chub-moderate | pipeline stages | 5 |
-| **Total** | | **173** |
+| App                | Surface                                                                                                  | Ops     |
+| ------------------ | -------------------------------------------------------------------------------------------------------- | ------- |
+| the consumer app   | use-cases (billing/marking/approvals/ingestion/triggers/messages/outreach/payments)                      | 30      |
+| the consumer app   | use-cases (hr/hiring/enrolment/lessons/sessions/classes/knowledge/nps/leads/forecasting/kpis/accounting) | 33      |
+| the consumer app   | CLI + HTTP routes + worker projections/secretEffects                                                     | 31      |
+| normalize          | CLI commands + normalize-tools MCP adapters                                                              | 25      |
+| curilo-for-parents | Supabase edge functions                                                                                  | 26      |
+| interconnect       | daemon RPC                                                                                               | 5       |
+| reincarnate        | CLI subcommands                                                                                          | 4       |
+| rescribe           | CLI subcommands                                                                                          | 2       |
+| myenv              | CLI subcommands                                                                                          | 4       |
+| claude-code-hub    | HTTP routes + MCP tools                                                                                  | 8       |
+| chub-moderate      | pipeline stages                                                                                          | 5       |
+| **Total**          |                                                                                                          | **173** |
 
 ## Single-effect vs multi-effect tally — THE central finding
 
 Counting each op's distinct effect atoms:
 
-| Cluster | single-effect | multi-effect |
-|---|---|---|
-| the consumer app use-cases b1 | 6 | 24 |
-| the consumer app use-cases b2 | 11 | 22 |
-| the consumer app CLI/HTTP/worker | ~12 | ~19 |
-| normalize | 0 | 25 |
-| curilo | 3 | 23 |
-| interconnect/reincarnate/rescribe/myenv/cch/chub | 7 | 21 |
-| **Total** | **~39 (23%)** | **~134 (77%)** |
+| Cluster                                          | single-effect | multi-effect   |
+| ------------------------------------------------ | ------------- | -------------- |
+| the consumer app use-cases b1                    | 6             | 24             |
+| the consumer app use-cases b2                    | 11            | 22             |
+| the consumer app CLI/HTTP/worker                 | ~12           | ~19            |
+| normalize                                        | 0             | 25             |
+| curilo                                           | 3             | 23             |
+| interconnect/reincarnate/rescribe/myenv/cch/chub | 7             | 21             |
+| **Total**                                        | **~39 (23%)** | **~134 (77%)** |
 
 **Verdict: "one kind per operation" does not survive contact with the corpus.** ~77% of
-sampled ops carry two or more distinct effect atoms; normalize has *zero* pure single-effect
+sampled ops carry two or more distinct effect atoms; normalize has _zero_ pure single-effect
 exposed ops (every op reads source and pairs it with compute, a subprocess, or a write).
 The clearest refutation is a single handler exhibiting the whole create/mutate/delete
 quartet at once (`award-progress`: reads+creates+mutates+deletes). Operations are therefore
@@ -280,7 +280,7 @@ independently:
    extractFromText, draftOutreach), chub stage2, all cch agentic ops.
 4. **subprocess / filesystem** — spawn a linter/formatter/test runner, write files, shadow-git
    commit, self-replace binary. All of normalize's write ops; myenv install; reincarnate/rescribe emit.
-5. **email / SMS send** — Resend, Twilio, mail.send (when *not* via outbox).
+5. **email / SMS send** — Resend, Twilio, mail.send (when _not_ via outbox).
 6. **agent orchestration** — spawn/drive another autonomous agentic run (cch).
 
 Any taxonomy operating at the `external-effect` granularity throws away the corpus's most
@@ -291,7 +291,7 @@ before it can classify — the atoms as given under-resolve.**
 
 Five roughly-orthogonal axes account for the observed variation. An op is a value on each:
 
-- **D1 — Persistence footprint** {none · read · create · mutate · delete} (a *set*, multi-valued).
+- **D1 — Persistence footprint** {none · read · create · mutate · delete} (a _set_, multi-valued).
   Read-then-write is the dominant compound (guard/load then transition). Pure `none` is rare
   (previewImport, assemblePayslip, syntax.query).
 - **D2 — Boundary reach** {none · deferred-event/outbox · sync-external-IO · model-invocation ·
@@ -354,7 +354,7 @@ vector model. Cited, with rough counts:
 - **G12 · Pipeline stage** (~5) — read one materialized store, transform (rules or LLM), write the
   next store; resumable, batch. `chub:stage0-3`, `chub:refine`.
 
-The data supports roughly **10–12 gestalts** but they are *not* disjoint — ~15% of ops sit
+The data supports roughly **10–12 gestalts** but they are _not_ disjoint — ~15% of ops sit
 squarely in two (run-spot-check ∈ G6∩G7; ingestCurriculum ∈ G6∩G9; lesson-chat ∈ G7∩G10). This
 overlap is the whole point: gestalts are attractors in the D1–D5 vector space, not a classification.
 

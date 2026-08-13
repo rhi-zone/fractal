@@ -71,12 +71,12 @@
 //   packages/api-tree/src/tree.ts              — SchemaMap, ToolSchema, extractToolSchemas
 //   docs/design/framework-router-codegen.md    — settled decisions this module implements
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node"
-import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
-import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract"
-import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector"
-import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
+import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
+import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
+import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector";
+import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route";
 
 // ============================================================================
 // Public API
@@ -84,8 +84,8 @@ import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route"
 
 export type ExpressCodegenOptions = {
   /** Base name for the emitted `<RouterName>Handlers` type and `create<RouterName>Router` factory. Defaults to "Api". */
-  readonly routerName?: string
-}
+  readonly routerName?: string;
+};
 
 /**
  * Generate Express router source directly from an already-projected
@@ -110,7 +110,7 @@ export function generateExpressRouter(
   schemas?: SchemaMap,
   options: ExpressCodegenOptions = {},
 ): string {
-  return render(buildTree(route, "", schemas, undefined, undefined), options)
+  return render(buildTree(route, "", schemas, undefined, undefined), options);
 }
 
 /**
@@ -125,10 +125,10 @@ export function generateExpressRouterFromNode(
   schemas?: SchemaMap,
   options: ExpressCodegenOptions = {},
 ): string {
-  const route = httpProjection(node)
-  const codegenNames = buildCodegenNameMap(node)
-  const memberNames = buildMemberNameMap(node)
-  return render(buildTree(route, "", schemas, codegenNames, memberNames), options)
+  const route = httpProjection(node);
+  const codegenNames = buildCodegenNameMap(node);
+  const memberNames = buildMemberNameMap(node);
+  return render(buildTree(route, "", schemas, codegenNames, memberNames), options);
 }
 
 // ============================================================================
@@ -142,66 +142,67 @@ export function generateExpressRouterFromNode(
 
 /** Full underscore-joined path name (e.g. "books_bookId_read") — for SchemaMap lookups. */
 function buildCodegenNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
+  const out = new Map<Handler, string>();
   const visit = (node: Node, prefix: string): void => {
     for (const [key, child] of Object.entries(node.children ?? {})) {
-      const seg = prefix.length > 0 ? `${prefix}_${key}` : key
+      const seg = prefix.length > 0 ? `${prefix}_${key}` : key;
       if (isLeaf(child)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(child.handler!, seg)
+        out.set(child.handler!, seg);
       } else {
-        visit(child, seg)
+        visit(child, seg);
       }
     }
     if (node.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name
+      const seg = prefix.length > 0 ? `${prefix}_${node.fallback.name}` : node.fallback.name;
       if (isLeaf(node.fallback.subtree)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(node.fallback.subtree.handler!, seg)
+        out.set(node.fallback.subtree.handler!, seg);
       } else {
-        visit(node.fallback.subtree, seg)
+        visit(node.fallback.subtree, seg);
       }
     }
-  }
-  visit(n, "")
-  return out
+  };
+  visit(n, "");
+  return out;
 }
 
 /** Own authored child key (e.g. "read") — for Handlers object member names. */
 function buildMemberNameMap(n: Node): Map<Handler, string> {
-  const out = new Map<Handler, string>()
+  const out = new Map<Handler, string>();
   const visit = (node: Node): void => {
     for (const [key, child] of Object.entries(node.children ?? {})) {
       if (isLeaf(child)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(child.handler!, key)
+        out.set(child.handler!, key);
       } else {
-        visit(child)
+        visit(child);
       }
     }
     if (node.fallback !== undefined) {
       if (isLeaf(node.fallback.subtree)) {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        out.set(node.fallback.subtree.handler!, node.fallback.name)
+        out.set(node.fallback.subtree.handler!, node.fallback.name);
       } else {
-        visit(node.fallback.subtree)
+        visit(node.fallback.subtree);
       }
     }
-  }
-  visit(n)
-  return out
+  };
+  visit(n);
+  return out;
 }
 
 /** Fallback name derived purely from path + verb, for handlers absent from a name map. */
 function nameFromPath(path: string, verb: string): string {
-  const base = path === "/"
-    ? "root"
-    : path
-        .split("/")
-        .filter((s) => s.length > 0)
-        .map((s) => (s.startsWith(":") ? s.slice(1) : s))
-        .join("_")
-  return `${base}_${verb.toLowerCase()}`
+  const base =
+    path === "/"
+      ? "root"
+      : path
+          .split("/")
+          .filter((s) => s.length > 0)
+          .map((s) => (s.startsWith(":") ? s.slice(1) : s))
+          .join("_");
+  return `${base}_${verb.toLowerCase()}`;
 }
 
 // ============================================================================
@@ -209,13 +210,13 @@ function nameFromPath(path: string, verb: string): string {
 // ============================================================================
 
 type OperationEntry = {
-  readonly memberName: string
-  readonly codegenName: string
-  readonly expressPath: string // e.g. "/books/:bookId" — real Express route syntax
-  readonly verb: string // uppercase HTTP method
-  readonly requestSchema?: JsonSchema
-  readonly responseSchema?: JsonSchema
-}
+  readonly memberName: string;
+  readonly codegenName: string;
+  readonly expressPath: string; // e.g. "/books/:bookId" — real Express route syntax
+  readonly verb: string; // uppercase HTTP method
+  readonly requestSchema?: JsonSchema;
+  readonly responseSchema?: JsonSchema;
+};
 
 type ExpressTreeNode = {
   // Unified: both literal path-segment children AND a fallback (dynamic
@@ -223,9 +224,9 @@ type ExpressTreeNode = {
   // currying needed (see module doc: server-side handlers receive path
   // params as ordinary merged input fields, unlike the client's per-call
   // `(id) => ...` shape).
-  readonly children: Map<string, ExpressTreeNode>
-  readonly operations: Map<string, OperationEntry>
-}
+  readonly children: Map<string, ExpressTreeNode>;
+  readonly operations: Map<string, OperationEntry>;
+};
 
 /** A route position that is exactly one operation and nothing else. Mirrors codegen.ts's `isSingleLeafMethod`. */
 function isSingleLeafMethod(route: HttpRoute): boolean {
@@ -233,7 +234,7 @@ function isSingleLeafMethod(route: HttpRoute): boolean {
     Object.keys(route.methods ?? {}).length === 1 &&
     Object.keys(route.children ?? {}).length === 0 &&
     route.fallback === undefined
-  )
+  );
 }
 
 function attachOperation(
@@ -245,8 +246,8 @@ function attachOperation(
   schemas: SchemaMap | undefined,
   codegenNames: ReadonlyMap<Handler, string> | undefined,
 ): void {
-  const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(expressPath, verb)
-  const toolSchema = schemas?.[codegenName]
+  const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(expressPath, verb);
+  const toolSchema = schemas?.[codegenName];
 
   node.operations.set(memberName, {
     memberName,
@@ -255,7 +256,7 @@ function attachOperation(
     verb: verb.toUpperCase(),
     ...(toolSchema?.inputSchema !== undefined ? { requestSchema: toolSchema.inputSchema } : {}),
     ...(toolSchema?.outputSchema !== undefined ? { responseSchema: toolSchema.outputSchema } : {}),
-  })
+  });
 }
 
 /**
@@ -271,34 +272,34 @@ function buildTree(
   codegenNames: ReadonlyMap<Handler, string> | undefined,
   memberNames: ReadonlyMap<Handler, string> | undefined,
 ): ExpressTreeNode {
-  const node: ExpressTreeNode = { children: new Map(), operations: new Map() }
-  const displayPath = expressPath === "" ? "/" : expressPath
+  const node: ExpressTreeNode = { children: new Map(), operations: new Map() };
+  const displayPath = expressPath === "" ? "/" : expressPath;
 
   for (const [verb, entry] of Object.entries(route.methods ?? {})) {
-    const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase()
-    attachOperation(node, memberName, verb, entry, displayPath, schemas, codegenNames)
+    const memberName = memberNames?.get(entry.handler) ?? verb.toLowerCase();
+    attachOperation(node, memberName, verb, entry, displayPath, schemas, codegenNames);
   }
 
   for (const [seg, child] of Object.entries(route.children ?? {})) {
-    const childPath = `${expressPath}/${seg}`
+    const childPath = `${expressPath}/${seg}`;
     if (isSingleLeafMethod(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const [verb] = Object.keys(child.methods!)
+      const [verb] = Object.keys(child.methods!);
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const entry = child.methods![verb!]!
-      attachOperation(node, seg, verb!, entry, childPath, schemas, codegenNames)
+      const entry = child.methods![verb!]!;
+      attachOperation(node, seg, verb!, entry, childPath, schemas, codegenNames);
     } else {
-      node.children.set(seg, buildTree(child, childPath, schemas, codegenNames, memberNames))
+      node.children.set(seg, buildTree(child, childPath, schemas, codegenNames, memberNames));
     }
   }
 
   if (route.fallback !== undefined) {
-    const { name, subtree } = route.fallback
-    const childPath = `${expressPath}/:${name}`
-    node.children.set(name, buildTree(subtree, childPath, schemas, codegenNames, memberNames))
+    const { name, subtree } = route.fallback;
+    const childPath = `${expressPath}/:${name}`;
+    node.children.set(name, buildTree(subtree, childPath, schemas, codegenNames, memberNames));
   }
 
-  return node
+  return node;
 }
 
 // ============================================================================
@@ -307,7 +308,7 @@ function buildTree(
 
 /** A valid bare JS identifier, or a quoted string literal key otherwise. */
 function safeKey(key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key)
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 
 function pascalCase(part: string): string {
@@ -315,17 +316,17 @@ function pascalCase(part: string): string {
     .split(/[^A-Za-z0-9]+/)
     .filter((s) => s.length > 0)
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("")
+    .join("");
 }
 
 /** `"books_bookId_read"` -> `"BooksBookIdRead"` — base name for that op's `<Base>Input`/`<Base>Output`. */
 function typeBaseName(codegenName: string): string {
-  return codegenName.split("_").map(pascalCase).join("")
+  return codegenName.split("_").map(pascalCase).join("");
 }
 
 /** `.books.bookId.read` — dotted accessor chain onto the `handlers` argument. */
 function handlerAccessExpr(pathKeys: readonly string[], memberName: string): string {
-  return ["handlers", ...pathKeys, memberName].map(safeKey).join(".")
+  return ["handlers", ...pathKeys, memberName].map(safeKey).join(".");
 }
 
 // ============================================================================
@@ -336,58 +337,58 @@ function handlerAccessExpr(pathKeys: readonly string[], memberName: string): str
 // ============================================================================
 
 function schemaToType(schema: JsonSchema | undefined, indent: string): string {
-  if (schema === undefined) return "unknown"
+  if (schema === undefined) return "unknown";
 
-  if ("const" in schema) return JSON.stringify(schema.const)
+  if ("const" in schema) return JSON.stringify(schema.const);
 
-  const enumValues = schema.enum
+  const enumValues = schema.enum;
   if (Array.isArray(enumValues)) {
-    if (enumValues.length === 0) return "never"
-    return enumValues.map((v) => JSON.stringify(v)).join(" | ")
+    if (enumValues.length === 0) return "never";
+    return enumValues.map((v) => JSON.stringify(v)).join(" | ");
   }
 
-  const anyOf = schema.anyOf ?? schema.oneOf
+  const anyOf = schema.anyOf ?? schema.oneOf;
   if (Array.isArray(anyOf)) {
-    if (anyOf.length === 0) return "unknown"
-    return anyOf.map((s) => schemaToType(s, indent)).join(" | ")
+    if (anyOf.length === 0) return "unknown";
+    return anyOf.map((s) => schemaToType(s, indent)).join(" | ");
   }
 
-  const allOf = (schema as { allOf?: JsonSchema[] }).allOf
+  const allOf = (schema as { allOf?: JsonSchema[] }).allOf;
   if (Array.isArray(allOf)) {
-    if (allOf.length === 0) return "unknown"
-    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ")
+    if (allOf.length === 0) return "unknown";
+    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ");
   }
 
-  const type = schema.type
+  const type = schema.type;
 
-  const properties = schema.properties
+  const properties = schema.properties;
   if (type === "object" || properties !== undefined) {
     if (properties === undefined || Object.keys(properties).length === 0) {
-      return "Record<string, unknown>"
+      return "Record<string, unknown>";
     }
-    const required = new Set(schema.required ?? [])
-    const nextIndent = indent + "  "
+    const required = new Set(schema.required ?? []);
+    const nextIndent = indent + "  ";
     const lines = Object.entries(properties).map(([key, propSchema]) => {
-      const optional = required.has(key) ? "" : "?"
-      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`
-    })
-    return `{\n${lines.join("\n")}\n${indent}}`
+      const optional = required.has(key) ? "" : "?";
+      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`;
+    });
+    return `{\n${lines.join("\n")}\n${indent}}`;
   }
 
-  const items = schema.items
+  const items = schema.items;
   if (type === "array" || items !== undefined) {
-    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`
+    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`;
   }
 
   switch (type) {
     case "string":
-      return "string"
+      return "string";
     case "number":
-      return "number"
+      return "number";
     case "boolean":
-      return "boolean"
+      return "boolean";
     default:
-      return "unknown"
+      return "unknown";
   }
 }
 
@@ -396,21 +397,23 @@ function schemaToType(schema: JsonSchema | undefined, indent: string): string {
 // ============================================================================
 
 function nodeTypeLiteral(node: ExpressTreeNode, indent: string): string {
-  const nextIndent = indent + "  "
-  const lines: string[] = []
+  const nextIndent = indent + "  ";
+  const lines: string[] = [];
 
   for (const [key, child] of node.children) {
-    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`)
+    lines.push(`${nextIndent}readonly ${safeKey(key)}: ${nodeTypeLiteral(child, nextIndent)}`);
   }
 
   for (const [memberName, entry] of node.operations) {
-    const base = typeBaseName(entry.codegenName)
-    const inputType = entry.requestSchema !== undefined ? `${base}Input` : "unknown"
-    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown"
-    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: Handler<${inputType}, ${outputType}>`)
+    const base = typeBaseName(entry.codegenName);
+    const inputType = entry.requestSchema !== undefined ? `${base}Input` : "unknown";
+    const outputType = entry.responseSchema !== undefined ? `${base}Output` : "unknown";
+    lines.push(
+      `${nextIndent}readonly ${safeKey(memberName)}: Handler<${inputType}, ${outputType}>`,
+    );
   }
 
-  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`
+  return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
 }
 
 // ============================================================================
@@ -418,16 +421,16 @@ function nodeTypeLiteral(node: ExpressTreeNode, indent: string): string {
 // router registration)
 // ============================================================================
 
-type CollectedOperation = OperationEntry & { readonly pathKeys: readonly string[] }
+type CollectedOperation = OperationEntry & { readonly pathKeys: readonly string[] };
 
 function collectOperations(
   node: ExpressTreeNode,
   pathKeys: readonly string[] = [],
   out: CollectedOperation[] = [],
 ): CollectedOperation[] {
-  for (const entry of node.operations.values()) out.push({ ...entry, pathKeys })
-  for (const [key, child] of node.children) collectOperations(child, [...pathKeys, key], out)
-  return out
+  for (const entry of node.operations.values()) out.push({ ...entry, pathKeys });
+  for (const [key, child] of node.children) collectOperations(child, [...pathKeys, key], out);
+  return out;
 }
 
 // ============================================================================
@@ -435,35 +438,35 @@ function collectOperations(
 // ============================================================================
 
 function render(root: ExpressTreeNode, options: ExpressCodegenOptions): string {
-  const routerName = options.routerName ?? "Api"
-  const handlersTypeName = `${routerName}Handlers`
-  const factoryName = `create${routerName}Router`
-  const entries = collectOperations(root)
+  const routerName = options.routerName ?? "Api";
+  const handlersTypeName = `${routerName}Handlers`;
+  const factoryName = `create${routerName}Router`;
+  const entries = collectOperations(root);
 
-  const typeDecls: string[] = []
-  const seenBases = new Set<string>()
+  const typeDecls: string[] = [];
+  const seenBases = new Set<string>();
   for (const entry of entries) {
-    const base = typeBaseName(entry.codegenName)
-    if (seenBases.has(base)) continue
-    seenBases.add(base)
+    const base = typeBaseName(entry.codegenName);
+    if (seenBases.has(base)) continue;
+    seenBases.add(base);
     if (entry.requestSchema !== undefined) {
-      typeDecls.push(`export type ${base}Input = ${schemaToType(entry.requestSchema, "")}`)
+      typeDecls.push(`export type ${base}Input = ${schemaToType(entry.requestSchema, "")}`);
     }
     if (entry.responseSchema !== undefined) {
-      typeDecls.push(`export type ${base}Output = ${schemaToType(entry.responseSchema, "")}`)
+      typeDecls.push(`export type ${base}Output = ${schemaToType(entry.responseSchema, "")}`);
     }
   }
 
-  const handlersTypeDecl = `export type ${handlersTypeName} = ${nodeTypeLiteral(root, "")}`
+  const handlersTypeDecl = `export type ${handlersTypeName} = ${nodeTypeLiteral(root, "")}`;
 
   const registrations = entries
     .map((entry) => {
-      const accessExpr = handlerAccessExpr(entry.pathKeys, entry.memberName)
-      const method = entry.verb.toLowerCase()
-      const isBodyVerb = entry.verb === "POST" || entry.verb === "PUT" || entry.verb === "PATCH"
+      const accessExpr = handlerAccessExpr(entry.pathKeys, entry.memberName);
+      const method = entry.verb.toLowerCase();
+      const isBodyVerb = entry.verb === "POST" || entry.verb === "PUT" || entry.verb === "PATCH";
       const inputExpr = isBodyVerb
         ? "{ ...req.params, ...(req.body ?? {}) }"
-        : "{ ...req.params, ...req.query }"
+        : "{ ...req.params, ...req.query }";
       return [
         `  router.${method}(${JSON.stringify(entry.expressPath)}, async (req: Request, res: Response, next: NextFunction) => {`,
         `    try {`,
@@ -474,27 +477,29 @@ function render(root: ExpressTreeNode, options: ExpressCodegenOptions): string {
         `      next(err)`,
         `    }`,
         `  })`,
-      ].join("\n")
+      ].join("\n");
     })
-    .join("\n\n")
+    .join("\n\n");
 
-  return [
-    HEADER,
-    IMPORTS,
-    typeDecls.join("\n\n"),
-    handlersTypeDecl,
+  return (
     [
-      `export function ${factoryName}(handlers: ${handlersTypeName}): ReturnType<typeof Router> {`,
-      `  const router = Router()`,
-      ``,
-      registrations,
-      ``,
-      `  return router`,
-      `}`,
-    ].join("\n"),
-  ]
-    .filter((chunk) => chunk.length > 0)
-    .join("\n\n") + "\n"
+      HEADER,
+      IMPORTS,
+      typeDecls.join("\n\n"),
+      handlersTypeDecl,
+      [
+        `export function ${factoryName}(handlers: ${handlersTypeName}): ReturnType<typeof Router> {`,
+        `  const router = Router()`,
+        ``,
+        registrations,
+        ``,
+        `  return router`,
+        `}`,
+      ].join("\n"),
+    ]
+      .filter((chunk) => chunk.length > 0)
+      .join("\n\n") + "\n"
+  );
 }
 
 // ============================================================================
@@ -508,8 +513,9 @@ const HEADER =
   "// overwrites this file wholesale, so re-run only when you intend to discard local edits.\n" +
   "//\n" +
   "// Requires body-parsing middleware (e.g. `app.use(express.json())`) mounted on the\n" +
-  "// consuming app for POST/PUT/PATCH operations — this router does not add its own."
+  "// consuming app for POST/PUT/PATCH operations — this router does not add its own.";
 
 const IMPORTS =
-  'import { Router } from "express"\n' + 'import type { NextFunction, Request, Response } from "express"\n' +
-  'import type { Handler } from "@rhi-zone/fractal-api-tree/node"'
+  'import { Router } from "express"\n' +
+  'import type { NextFunction, Request, Response } from "express"\n' +
+  'import type { Handler } from "@rhi-zone/fractal-api-tree/node"';

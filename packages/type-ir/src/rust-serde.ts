@@ -1,5 +1,10 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA, quote, toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import {
+  isA,
+  quote,
+  toPascalCaseStripSeparators,
+  toSnakeCaseStripSeparators,
+} from "./codegen-helpers.ts";
 
 // Rust 2018+ reserved/strict keywords (https://doc.rust-lang.org/reference/keywords.html)
 // that cannot appear as a plain identifier. A field whose snake_case name
@@ -7,26 +12,69 @@ import { isA, quote, toPascalCaseStripSeparators, toSnakeCaseStripSeparators } f
 // to compile; `#[serde(rename = "...")]` keeps the wire-format field name
 // (the pre-escape, pre-snake_case source name) unchanged.
 const RUST_KEYWORDS = new Set([
-  "type", "struct", "enum", "fn", "let", "mut", "ref", "self", "super", "crate",
-  "mod", "pub", "use", "impl", "trait", "where", "loop", "while", "for", "if",
-  "else", "match", "return", "break", "continue", "as", "in", "move", "box",
-  "dyn", "abstract", "async", "await", "become", "const", "do", "extern",
-  "final", "macro", "override", "priv", "static", "try", "typeof", "unsafe",
-  "unsized", "virtual", "yield", "union",
-])
+  "type",
+  "struct",
+  "enum",
+  "fn",
+  "let",
+  "mut",
+  "ref",
+  "self",
+  "super",
+  "crate",
+  "mod",
+  "pub",
+  "use",
+  "impl",
+  "trait",
+  "where",
+  "loop",
+  "while",
+  "for",
+  "if",
+  "else",
+  "match",
+  "return",
+  "break",
+  "continue",
+  "as",
+  "in",
+  "move",
+  "box",
+  "dyn",
+  "abstract",
+  "async",
+  "await",
+  "become",
+  "const",
+  "do",
+  "extern",
+  "final",
+  "macro",
+  "override",
+  "priv",
+  "static",
+  "try",
+  "typeof",
+  "unsafe",
+  "unsized",
+  "virtual",
+  "yield",
+  "union",
+]);
 
 /** Escapes a snake_case Rust identifier that collides with a reserved keyword
  * using raw-identifier syntax (`r#type`); passes non-keyword identifiers through. */
 function escapeRustIdent(rustName: string): string {
-  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName
+  return RUST_KEYWORDS.has(rustName) ? `r#${rustName}` : rustName;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Base inline-expression handlers — the Rust analogue of typescript.ts's
 // `handlers` map. Used for type positions that don't carry enough naming
@@ -68,64 +116,66 @@ const handlers: Record<string, Converter> = {
   // className, trusting a struct of that name is declared/imported elsewhere.
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `Vec<${toRustType(s.element)}>`
+    const s = shape as TypeShape & { kind: "array" };
+    return `Vec<${toRustType(s.element)}>`;
   },
   // No streaming construct in a plain data type — materializes to Vec<T>,
   // same honest-degrade convention protobuf.ts/flatbuffers.ts use.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `Vec<${toRustType(s.element)}>`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `Vec<${toRustType(s.element)}>`;
   },
   page: (shape) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `Vec<${toRustType(s.element)}>`
+    const s = shape as TypeShape & { kind: "page" };
+    return `Vec<${toRustType(s.element)}>`;
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `(${s.elements.map(toRustType).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `(${s.elements.map(toRustType).join(", ")})`;
   },
   // Default to HashMap<K, V>; a map TypeRef whose own `meta.ordered` is true
   // (project convention — no prior art in this codebase to match, since no
   // existing projector distinguishes ordered/unordered maps) renders as
   // BTreeMap<K, V> instead.
   map: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "map" }
-    const container = meta.ordered === true ? "BTreeMap" : "HashMap"
-    return `${container}<${toRustType(s.key)}, ${toRustType(s.value)}>`
+    const s = shape as TypeShape & { kind: "map" };
+    const container = meta.ordered === true ? "BTreeMap" : "HashMap";
+    return `${container}<${toRustType(s.key)}, ${toRustType(s.value)}>`;
   },
   // No naming context here — see the `bareType`/`buildStruct` field-context
   // hoisting path below for the real (named) struct-generating case.
-  object: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "serde_json::Value"),
+  object: (_shape, meta) =>
+    typeof meta.typeName === "string" ? meta.typeName : "serde_json::Value",
   enum: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`
+    const s = shape as TypeShape & { kind: "enum" };
+    return typeof meta.enumName === "string" ? meta.enumName : `Enum${s.members.length}`;
   },
-  union: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "serde_json::Value"),
+  union: (_shape, meta) =>
+    typeof meta.typeName === "string" ? meta.typeName : "serde_json::Value",
   // Rust has no literal-type construct usable in a serde-derived struct field
   // (const generics don't cover strings/floats generally) — degrades to the
   // literal's base scalar type, same lossy convention protobuf.ts/flatbuffers.ts
   // use for their own literal handling.
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "()"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "bool"
-    return Number.isInteger(s.value) ? "i64" : "f64"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "()";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "bool";
+    return Number.isInteger(s.value) ? "i64" : "f64";
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   // No struct-merge/mixin construct in Rust — lossy: falls back to the first
   // member's type, dropping the rest (same convention as protobuf.ts/flatbuffers.ts).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "serde_json::Value" : toRustType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "serde_json::Value" : toRustType(first);
   },
   // Not serializable data — degrades honestly to serde_json::Value, same as
   // `unknown` above.
   function: leaf("serde_json::Value"),
   interface: leaf("serde_json::Value"),
-}
+};
 
 /** Inline Rust type expression for `ref`, wrapping in `Option<T>` when
  * `meta.nullable` is set. Used for positions with no naming context of their
@@ -133,9 +183,9 @@ const handlers: Record<string, Converter> = {
  * named-declaration-hoisting counterpart used inside struct fields / enum
  * variants. */
 export function toRustType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const base = converter === undefined ? "serde_json::Value" : converter(ref.shape, ref.meta)
-  return ref.meta.nullable === true ? `Option<${base}>` : base
+  const converter = resolve(ref.shape.kind, handlers);
+  const base = converter === undefined ? "serde_json::Value" : converter(ref.shape, ref.meta);
+  return ref.meta.nullable === true ? `Option<${base}>` : base;
 }
 
 /**
@@ -148,33 +198,33 @@ export function toRustType(ref: TypeRef): string {
  * element type under the same name hint and wrap it in `Vec<...>`.
  */
 function bareType(nameHint: string, ref: TypeRef, decls: string[]): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   if (isA(kind, "object")) {
-    decls.push(buildStruct(nameHint, ref, decls))
-    return nameHint
+    decls.push(buildStruct(nameHint, ref, decls));
+    return nameHint;
   }
   if (kind === "enum") {
-    decls.push(buildEnum(nameHint, ref))
-    return nameHint
+    decls.push(buildEnum(nameHint, ref));
+    return nameHint;
   }
   if (kind === "union") {
     decls.push(
       typeof ref.meta.discriminator === "string"
         ? buildTaggedEnum(nameHint, ref, decls)
         : buildUntaggedEnum(nameHint, ref, decls),
-    )
-    return nameHint
+    );
+    return nameHint;
   }
   if (kind === "array") {
-    const s = ref.shape as TypeShape & { kind: "array" }
-    const elementKind = s.element.shape.kind
+    const s = ref.shape as TypeShape & { kind: "array" };
+    const elementKind = s.element.shape.kind;
     if (isA(elementKind, "object") || elementKind === "enum" || elementKind === "union") {
-      return `Vec<${bareType(nameHint, s.element, decls)}>`
+      return `Vec<${bareType(nameHint, s.element, decls)}>`;
     }
-    return `Vec<${toRustType(s.element)}>`
+    return `Vec<${toRustType(s.element)}>`;
   }
-  const converter = resolve(kind, handlers)
-  return converter === undefined ? "serde_json::Value" : converter(ref.shape, ref.meta)
+  const converter = resolve(kind, handlers);
+  return converter === undefined ? "serde_json::Value" : converter(ref.shape, ref.meta);
 }
 
 /** Field type + whether it needs `#[serde(skip_serializing_if = "Option::is_none")]`.
@@ -183,51 +233,56 @@ function bareType(nameHint: string, ref: TypeRef, decls: string[]): string {
  * serde convention doesn't distinguish "missing key" from "explicit null" the
  * way the IR's two flags do, so both collapse onto one `Option` wrap rather
  * than `Option<Option<T>>`. */
-function fieldType(fieldName: string, fieldRef: TypeRef, decls: string[]): { type: string; skip: boolean } {
-  const bare = bareType(toPascalCaseStripSeparators(fieldName), fieldRef, decls)
-  const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-  return optional ? { type: `Option<${bare}>`, skip: true } : { type: bare, skip: false }
+function fieldType(
+  fieldName: string,
+  fieldRef: TypeRef,
+  decls: string[],
+): { type: string; skip: boolean } {
+  const bare = bareType(toPascalCaseStripSeparators(fieldName), fieldRef, decls);
+  const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+  return optional ? { type: `Option<${bare}>`, skip: true } : { type: bare, skip: false };
 }
 
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`${indent}/// ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`${indent}/// ${meta.description}`] : [];
 }
 
-const DERIVE = "#[derive(Debug, Clone, Serialize, Deserialize)]"
+const DERIVE = "#[derive(Debug, Clone, Serialize, Deserialize)]";
 
 function buildStruct(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const lines: string[] = [...docComment("", ref.meta)]
-  if (ref.meta.deprecated === true) lines.push("#[deprecated]")
-  lines.push(DERIVE, `pub struct ${name} {`)
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const lines: string[] = [...docComment("", ref.meta)];
+  if (ref.meta.deprecated === true) lines.push("#[deprecated]");
+  lines.push(DERIVE, `pub struct ${name} {`);
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const rustName = toSnakeCaseStripSeparators(fieldName)
-    const ident = escapeRustIdent(rustName)
-    const { type, skip } = fieldType(fieldName, fieldRef, decls)
-    lines.push(...docComment("    ", fieldRef.meta))
-    if (rustName !== fieldName || ident !== rustName) lines.push(`    #[serde(rename = ${quote(fieldName)})]`)
-    if (skip) lines.push('    #[serde(skip_serializing_if = "Option::is_none")]')
-    if (fieldRef.meta.deprecated === true) lines.push("    #[deprecated]")
-    lines.push(`    pub ${ident}: ${type},`)
+    const rustName = toSnakeCaseStripSeparators(fieldName);
+    const ident = escapeRustIdent(rustName);
+    const { type, skip } = fieldType(fieldName, fieldRef, decls);
+    lines.push(...docComment("    ", fieldRef.meta));
+    if (rustName !== fieldName || ident !== rustName)
+      lines.push(`    #[serde(rename = ${quote(fieldName)})]`);
+    if (skip) lines.push('    #[serde(skip_serializing_if = "Option::is_none")]');
+    if (fieldRef.meta.deprecated === true) lines.push("    #[deprecated]");
+    lines.push(`    pub ${ident}: ${type},`);
   }
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 function buildEnum(name: string, ref: TypeRef): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const lines: string[] = [...docComment("", ref.meta), DERIVE, `pub enum ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const lines: string[] = [...docComment("", ref.meta), DERIVE, `pub enum ${name} {`];
 
   for (const member of shape.members) {
-    const variant = toPascalCaseStripSeparators(member)
-    if (variant !== member) lines.push(`    #[serde(rename = ${quote(member)})]`)
-    lines.push(`    ${variant},`)
+    const variant = toPascalCaseStripSeparators(member);
+    if (variant !== member) lines.push(`    #[serde(rename = ${quote(member)})]`);
+    lines.push(`    ${variant},`);
   }
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 // Internally-tagged enum (https://serde.rs/enum-representations.html#internally-tagged) —
@@ -239,44 +294,49 @@ function buildEnum(name: string, ref: TypeRef): string {
 // since serde synthesizes the tag from the variant selection itself, not from
 // a real struct field.
 function buildTaggedEnum(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = ref.meta.discriminator as string
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator = ref.meta.discriminator as string;
   const lines: string[] = [
     ...docComment("", ref.meta),
     DERIVE,
     `#[serde(tag = ${quote(discriminator)})]`,
     `pub enum ${name} {`,
-  ]
+  ];
 
   shape.variants.forEach((variant, i) => {
-    const variantShape = variant.shape as TypeShape & { kind: "object" }
-    const tagField = variantShape.fields?.[discriminator]
+    const variantShape = variant.shape as TypeShape & { kind: "object" };
+    const tagField = variantShape.fields?.[discriminator];
     const tagValue =
-      tagField !== undefined && tagField.shape.kind === "literal" && typeof (tagField.shape as { value: unknown }).value === "string"
+      tagField !== undefined &&
+      tagField.shape.kind === "literal" &&
+      typeof (tagField.shape as { value: unknown }).value === "string"
         ? ((tagField.shape as { value: string }).value as string)
-        : `Variant${i}`
-    const variantName = toPascalCaseStripSeparators(tagValue)
-    const otherFields = Object.entries(variantShape.fields ?? {}).filter(([k]) => k !== discriminator)
+        : `Variant${i}`;
+    const variantName = toPascalCaseStripSeparators(tagValue);
+    const otherFields = Object.entries(variantShape.fields ?? {}).filter(
+      ([k]) => k !== discriminator,
+    );
 
-    if (variantName !== tagValue) lines.push(`    #[serde(rename = ${quote(tagValue)})]`)
+    if (variantName !== tagValue) lines.push(`    #[serde(rename = ${quote(tagValue)})]`);
     if (otherFields.length === 0) {
-      lines.push(`    ${variantName},`)
-      return
+      lines.push(`    ${variantName},`);
+      return;
     }
-    lines.push(`    ${variantName} {`)
+    lines.push(`    ${variantName} {`);
     for (const [fieldName, fieldRef] of otherFields) {
-      const rustName = toSnakeCaseStripSeparators(fieldName)
-      const ident = escapeRustIdent(rustName)
-      const { type, skip } = fieldType(fieldName, fieldRef, decls)
-      if (rustName !== fieldName || ident !== rustName) lines.push(`        #[serde(rename = ${quote(fieldName)})]`)
-      if (skip) lines.push('        #[serde(skip_serializing_if = "Option::is_none")]')
-      lines.push(`        ${ident}: ${type},`)
+      const rustName = toSnakeCaseStripSeparators(fieldName);
+      const ident = escapeRustIdent(rustName);
+      const { type, skip } = fieldType(fieldName, fieldRef, decls);
+      if (rustName !== fieldName || ident !== rustName)
+        lines.push(`        #[serde(rename = ${quote(fieldName)})]`);
+      if (skip) lines.push('        #[serde(skip_serializing_if = "Option::is_none")]');
+      lines.push(`        ${ident}: ${type},`);
     }
-    lines.push("    },")
-  })
+    lines.push("    },");
+  });
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 // Untagged enum (https://serde.rs/enum-representations.html#untagged) — used
@@ -285,17 +345,22 @@ function buildTaggedEnum(name: string, ref: TypeRef, decls: string[]): string {
 // synthesized (`Variant0`, `Variant1`, ...) since a bare union carries no
 // per-arm naming of its own.
 function buildUntaggedEnum(name: string, ref: TypeRef, decls: string[]): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const lines: string[] = [...docComment("", ref.meta), DERIVE, "#[serde(untagged)]", `pub enum ${name} {`]
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const lines: string[] = [
+    ...docComment("", ref.meta),
+    DERIVE,
+    "#[serde(untagged)]",
+    `pub enum ${name} {`,
+  ];
 
   shape.variants.forEach((variant, i) => {
-    const variantName = `Variant${i}`
-    const type = bareType(`${name}${variantName}`, variant, decls)
-    lines.push(`    ${variantName}(${type}),`)
-  })
+    const variantName = `Variant${i}`;
+    const type = bareType(`${name}${variantName}`, variant, decls);
+    lines.push(`    ${variantName}(${type}),`);
+  });
 
-  lines.push("}")
-  return lines.join("\n")
+  lines.push("}");
+  return lines.join("\n");
 }
 
 /**
@@ -311,23 +376,23 @@ function buildUntaggedEnum(name: string, ref: TypeRef, decls: string[]): string 
  * own declarations.
  */
 export function toRust(ref: TypeRef, name?: string): string {
-  if (name === undefined) return toRustType(ref)
+  if (name === undefined) return toRustType(ref);
 
-  const decls: string[] = []
-  const kind = ref.shape.kind
-  let mainDecl: string
+  const decls: string[] = [];
+  const kind = ref.shape.kind;
+  let mainDecl: string;
   if (isA(kind, "object")) {
-    mainDecl = buildStruct(name, ref, decls)
+    mainDecl = buildStruct(name, ref, decls);
   } else if (kind === "enum") {
-    mainDecl = buildEnum(name, ref)
+    mainDecl = buildEnum(name, ref);
   } else if (kind === "union") {
     mainDecl =
       typeof ref.meta.discriminator === "string"
         ? buildTaggedEnum(name, ref, decls)
-        : buildUntaggedEnum(name, ref, decls)
+        : buildUntaggedEnum(name, ref, decls);
   } else {
-    mainDecl = `pub type ${name} = ${toRustType(ref)};`
+    mainDecl = `pub type ${name} = ${toRustType(ref)};`;
   }
 
-  return [...decls, mainDecl].join("\n\n")
+  return [...decls, mainDecl].join("\n\n");
 }

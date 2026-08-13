@@ -27,23 +27,24 @@ constructor and the `httpProjection()` preset live in
 `op` produces a leaf node: a `Node` with a `handler` and merged meta.
 
 ```ts
-import { op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
+import { op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
 
 // Bare fn — empty meta, verb inferred from tags (defaults to POST)
-const listBooks = op((_: unknown): Book[] => [...store.values()])
+const listBooks = op((_: unknown): Book[] => [...store.values()]);
 
 // Single meta contribution
-const readBook = op(
-  (input: { bookId: string }) => store.get(input.bookId),
-  { tags: { readOnly: true } },
-)
+const readBook = op((input: { bookId: string }) => store.get(input.bookId), {
+  tags: { readOnly: true },
+});
 
 // Verb-helper bundle as contribution
 const reserveBook = op(
-  (input: { bookId: string; patronId: string }) => ({ reservationId: `res-${input.bookId}-${input.patronId}` }),
+  (input: { bookId: string; patronId: string }) => ({
+    reservationId: `res-${input.bookId}-${input.patronId}`,
+  }),
   http.put,
-)
+);
 ```
 
 Multiple contributions deep-merge left-to-right via `mergeMeta` (later wins
@@ -51,7 +52,7 @@ per key; `undefined` defers — see [§6 Composition](#6-composition)):
 
 ```ts
 // bundle's idempotent:true is preserved; extra destructive:false is applied
-const n = op(fn, http.put, { tags: { destructive: false } })
+const n = op(fn, http.put, { tags: { destructive: false } });
 ```
 
 The handler receives one **flat input object** — path slugs, query params,
@@ -94,26 +95,26 @@ branch node. Build the tree explicitly with `api()` and `op()`, binding
 methods yourself where needed:
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
+import { api, op } from "@rhi-zone/fractal-api-tree";
 
 class BooksService {
   list(_: unknown): Book[] {
-    return [...store.values()]
+    return [...store.values()];
   }
 
   add(input: { title: string; author: string; genre: string }): Book {
-    const id = `book-${++_seq}`
-    const book: Book = { id, ...input }
-    store.set(id, book)
-    return book
+    const id = `book-${++_seq}`;
+    const book: Book = { id, ...input };
+    store.set(id, book);
+    return book;
   }
 }
 
-const svc = new BooksService()
+const svc = new BooksService();
 const booksNode = api({
   list: op(svc.list.bind(svc), { tags: { readOnly: true } }, { description: "List all books." }),
-  add:  op(svc.add.bind(svc), { description: "Add a new book to the collection." }),
-})
+  add: op(svc.add.bind(svc), { description: "Add a new book to the collection." }),
+});
 ```
 
 ---
@@ -128,20 +129,24 @@ handler input, and continues into `subtree`. Static children always win over
 the fallback.
 
 ```ts
-import { api, op } from "@rhi-zone/fractal-api-tree"
+import { api, op } from "@rhi-zone/fractal-api-tree";
 
 // bookId becomes the wildcard segment; its runtime value flows into handler input
 const byId = api({
-  read:   op((input: { bookId: string }) => store.get(input.bookId), { tags: { readOnly: true } }),
-  remove: op((input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
-             { tags: { destructive: true, idempotent: true } }),
-})
+  read: op((input: { bookId: string }) => store.get(input.bookId), { tags: { readOnly: true } }),
+  remove: op((input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }), {
+    tags: { destructive: true, idempotent: true },
+  }),
+});
 
-const booksNode = api({
-  list: op((_: unknown): Book[] => [...store.values()], { tags: { readOnly: true } }),
-}, {
-  fallback: { name: "bookId", subtree: byId },
-})
+const booksNode = api(
+  {
+    list: op((_: unknown): Book[] => [...store.values()], { tags: { readOnly: true } }),
+  },
+  {
+    fallback: { name: "bookId", subtree: byId },
+  },
+);
 ```
 
 At dispatch time the captured segment value is merged into handler input
@@ -150,7 +155,7 @@ under `"bookId"` — provenance-blind (the handler just sees `input.bookId`).
 `fallback` sets the tree's own domain-level structure. When the API tree's
 domain shape doesn't already match the desired HTTP path shape, the
 `http.moveTo(path)` directive (§7) can converge several leaves onto a shared
-wildcard position in the *route* tree instead, without reshaping the API tree
+wildcard position in the _route_ tree instead, without reshaping the API tree
 itself.
 
 ---
@@ -163,24 +168,26 @@ absence asserts nothing).
 
 Standard tags from `@rhi-zone/fractal-api-tree/tags`:
 
-| Tag | Meaning | Implies |
-|-----|---------|---------|
-| `readOnly` | No observable side-effects; safe to call any number of times | `idempotent: true` (via lattice) |
-| `idempotent` | Same args → same state, regardless of call count | — |
-| `destructive` | Irrevocably removes or destroys state | Mutually exclusive with `readOnly` |
-| `openWorld` | May reach external systems or networks | Orthogonal |
-| `streaming` | Yields a sequence over time, not a single value | Orthogonal |
+| Tag           | Meaning                                                      | Implies                            |
+| ------------- | ------------------------------------------------------------ | ---------------------------------- |
+| `readOnly`    | No observable side-effects; safe to call any number of times | `idempotent: true` (via lattice)   |
+| `idempotent`  | Same args → same state, regardless of call count             | —                                  |
+| `destructive` | Irrevocably removes or destroys state                        | Mutually exclusive with `readOnly` |
+| `openWorld`   | May reach external systems or networks                       | Orthogonal                         |
+| `streaming`   | Yields a sequence over time, not a single value              | Orthogonal                         |
 
 Custom tags are allowed via the index signature — the bag is open.
 
 ### What each projection reads
 
 **HTTP projection** (`verbFromTags`, `packages/http-api-projector/src/tags.ts`):
+
 - Derives HTTP verb from the resolved tag lattice (see [§5a](#5a-verb-derivation)).
 - `readOnly: true` → GET; `idempotent: true, destructive: true` → DELETE;
   `idempotent: true` → PUT; otherwise → POST.
 
 **MCP projection** (`toTools`):
+
 - `readOnly: true` → `readOnlyHint: true`
 - `idempotent: true` → `idempotentHint: true`
 - `destructive: true` → `destructiveHint: true`
@@ -234,20 +241,20 @@ verb pin — two flat scalar keys, `meta.http.verb` (read by `verbFromTags`) and
 `meta.http.method` (read by the `applyMethods` rewriter), both set to the same
 value — with the behavioral tags that verb implies:
 
-| Bundle | Verb pin | Bundled tags | MCP hints lit up |
-|--------|----------|--------------|-----------------|
-| `http.get` | GET | `readOnly: true` | readOnlyHint, idempotentHint (via lattice) |
-| `http.post` | POST | _(none)_ | _(none)_ |
-| `http.put` | PUT | `idempotent: true` | idempotentHint |
-| `http.patch` | PATCH | _(none)_ | _(none)_ |
-| `http.delete` | DELETE | `destructive: true, idempotent: true` | destructiveHint, idempotentHint |
-| `http.head` | HEAD | `readOnly: true` | readOnlyHint |
-| `http.options` | OPTIONS | `readOnly: true` | readOnlyHint |
+| Bundle         | Verb pin | Bundled tags                          | MCP hints lit up                           |
+| -------------- | -------- | ------------------------------------- | ------------------------------------------ |
+| `http.get`     | GET      | `readOnly: true`                      | readOnlyHint, idempotentHint (via lattice) |
+| `http.post`    | POST     | _(none)_                              | _(none)_                                   |
+| `http.put`     | PUT      | `idempotent: true`                    | idempotentHint                             |
+| `http.patch`   | PATCH    | _(none)_                              | _(none)_                                   |
+| `http.delete`  | DELETE   | `destructive: true, idempotent: true` | destructiveHint, idempotentHint            |
+| `http.head`    | HEAD     | `readOnly: true`                      | readOnlyHint                               |
+| `http.options` | OPTIONS  | `readOnly: true`                      | readOnlyHint                               |
 
 Attach a bundle as a contribution to `op`:
 
 ```ts
-import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
 
 // PUT /books/{bookId}/checkout/reserve + idempotentHint in MCP — one declaration
 const reserve = op(
@@ -256,13 +263,13 @@ const reserve = op(
     patronId: input.patronId,
   }),
   http.put,
-)
+);
 
 // POST /books/{bookId}/checkout/start — no implied behavioral tags
 const start = op(
   (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
   http.post,
-)
+);
 ```
 
 **When to reach for `http.*` vs plain tags**: use `http.*` when you are
@@ -285,7 +292,7 @@ one path, distinguished by verb" falls out of two more primitive pieces:
 
 - **`fallback`** (§4) puts the parameterized subtree at its own tree
   position — a single wildcard segment shared by everything under it.
-- **`http.moveTo(path)`** repositions a leaf within the *route* tree
+- **`http.moveTo(path)`** repositions a leaf within the _route_ tree
   (relative-path algebra: `..` up to parent, `../newname` rename, `*` push a
   wildcard segment). Leaves that `moveTo` the same target converge onto one
   route position; `applyMoveTo` merges their methods and throws on a genuine
@@ -360,6 +367,7 @@ All constructors that accept meta use `mergeMeta` internally. Never spread meta
 bags manually — spreading is one level shallow and silently drops sub-keys.
 
 `mergeMeta` rules:
+
 - Later bags win per top-level key.
 - `undefined` values **defer** (they do not override a previously-set value).
 - When both an existing value and the incoming value are plain objects (not
@@ -370,7 +378,7 @@ bags manually — spreading is one level shallow and silently drops sub-keys.
 // http.put contributes { http: { verb: "PUT", method: "PUT" }, tags: { idempotent: true } }
 // Extra contribution adds { tags: { destructive: false } }
 // mergeMeta deep-merges the tags sub-bag: idempotent:true is preserved
-const n = op(fn, http.put, { tags: { destructive: false } })
+const n = op(fn, http.put, { tags: { destructive: false } });
 // n.meta.tags → { idempotent: true, destructive: false }
 // n.meta.http → { verb: "PUT", method: "PUT" }
 ```
@@ -406,14 +414,14 @@ export const apiTree = api({
 Routes produced by `httpProjection(apiTree)` (see
 `docs/design/routing-and-transforms.md`):
 
-| Verb | Path |
-|------|------|
-| GET | /books/list |
-| POST | /books/add |
-| GET | /books/{bookId} |
-| PUT | /books/{bookId} |
-| DELETE | /books/{bookId} |
-| POST | /books/{bookId}/checkout/start |
-| PUT | /books/{bookId}/checkout/reserve |
-| GET | /catalog/search |
-| GET | /catalog/genres |
+| Verb   | Path                             |
+| ------ | -------------------------------- |
+| GET    | /books/list                      |
+| POST   | /books/add                       |
+| GET    | /books/{bookId}                  |
+| PUT    | /books/{bookId}                  |
+| DELETE | /books/{bookId}                  |
+| POST   | /books/{bookId}/checkout/start   |
+| PUT    | /books/{bookId}/checkout/reserve |
+| GET    | /catalog/search                  |
+| GET    | /catalog/genres                  |

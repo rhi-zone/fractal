@@ -35,8 +35,8 @@
 // exported here (`parseTraceParent`/`formatTraceParent`/`runServerSpan`/
 // `runClientSpan`/`getActiveSpan`) instead of duplicating them.
 
-import { AsyncLocalStorage } from "node:async_hooks"
-import type { Handler, Node } from "./node.ts"
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { Handler, Node } from "./node.ts";
 
 // ============================================================================
 // OTel-compatible types — structural mirrors of @opentelemetry/api
@@ -49,24 +49,30 @@ export type OtelAttributeValue =
   | boolean
   | readonly string[]
   | readonly number[]
-  | readonly boolean[]
+  | readonly boolean[];
 
 /** Mirrors @opentelemetry/api's `Attributes`. */
-export type OtelAttributes = Record<string, OtelAttributeValue>
+export type OtelAttributes = Record<string, OtelAttributeValue>;
 
 /** Mirrors @opentelemetry/api's `SpanStatusCode` enum values (structurally — a `const` object, not a TS `enum`, so no runtime dependency on the real package's enum object). */
-export const OtelSpanStatusCode = { UNSET: 0, OK: 1, ERROR: 2 } as const
-export type OtelSpanStatusCode = (typeof OtelSpanStatusCode)[keyof typeof OtelSpanStatusCode]
+export const OtelSpanStatusCode = { UNSET: 0, OK: 1, ERROR: 2 } as const;
+export type OtelSpanStatusCode = (typeof OtelSpanStatusCode)[keyof typeof OtelSpanStatusCode];
 
 /** Mirrors @opentelemetry/api's `SpanKind` enum values. */
-export const OtelSpanKind = { INTERNAL: 0, SERVER: 1, CLIENT: 2, PRODUCER: 3, CONSUMER: 4 } as const
-export type OtelSpanKind = (typeof OtelSpanKind)[keyof typeof OtelSpanKind]
+export const OtelSpanKind = {
+  INTERNAL: 0,
+  SERVER: 1,
+  CLIENT: 2,
+  PRODUCER: 3,
+  CONSUMER: 4,
+} as const;
+export type OtelSpanKind = (typeof OtelSpanKind)[keyof typeof OtelSpanKind];
 
 /** Mirrors @opentelemetry/api's `SpanStatus`. */
 export type OtelSpanStatus = {
-  readonly code: OtelSpanStatusCode
-  readonly message?: string
-}
+  readonly code: OtelSpanStatusCode;
+  readonly message?: string;
+};
 
 /**
  * W3C trace-context identifiers for one span. Mirrors @opentelemetry/api's
@@ -76,17 +82,17 @@ export type OtelSpanStatus = {
  * `formatTraceParent` below).
  */
 export type OtelSpanContext = {
-  readonly traceId: string
-  readonly spanId: string
-  readonly traceFlags: number
-  readonly traceState?: string
-  readonly isRemote?: boolean
-}
+  readonly traceId: string;
+  readonly spanId: string;
+  readonly traceFlags: number;
+  readonly traceState?: string;
+  readonly isRemote?: boolean;
+};
 
 export type OtelSpanOptions = {
-  readonly kind?: OtelSpanKind
-  readonly attributes?: OtelAttributes
-}
+  readonly kind?: OtelSpanKind;
+  readonly attributes?: OtelAttributes;
+};
 
 /**
  * Structural mirror of @opentelemetry/api's `Span` — only the members this
@@ -95,13 +101,13 @@ export type OtelSpanOptions = {
  * written test double only needs to implement this subset.
  */
 export interface OtelSpan {
-  spanContext(): OtelSpanContext
-  setAttribute(key: string, value: OtelAttributeValue): unknown
-  setAttributes(attributes: OtelAttributes): unknown
-  setStatus(status: OtelSpanStatus): unknown
-  recordException(exception: unknown): unknown
-  end(): void
-  isRecording?(): boolean
+  spanContext(): OtelSpanContext;
+  setAttribute(key: string, value: OtelAttributeValue): unknown;
+  setAttributes(attributes: OtelAttributes): unknown;
+  setStatus(status: OtelSpanStatus): unknown;
+  recordException(exception: unknown): unknown;
+  end(): void;
+  isRecording?(): boolean;
 }
 
 /**
@@ -126,9 +132,9 @@ export interface OtelSpan {
  * story of its own.
  */
 export interface OtelTracer {
-  startSpan(name: string, options?: OtelSpanOptions): OtelSpan
-  startActiveSpan<T>(name: string, fn: (span: OtelSpan) => T): T
-  startActiveSpan<T>(name: string, options: OtelSpanOptions, fn: (span: OtelSpan) => T): T
+  startSpan(name: string, options?: OtelSpanOptions): OtelSpan;
+  startActiveSpan<T>(name: string, fn: (span: OtelSpan) => T): T;
+  startActiveSpan<T>(name: string, options: OtelSpanOptions, fn: (span: OtelSpan) => T): T;
 }
 
 /**
@@ -148,17 +154,17 @@ export interface OtelTracer {
  * still fully functional, just not linked to the caller's trace.
  */
 export type TracingIntegration = {
-  readonly tracer: OtelTracer
-  readonly contextFromTraceParent?: (remote: OtelSpanContext) => void
-}
+  readonly tracer: OtelTracer;
+  readonly contextFromTraceParent?: (remote: OtelSpanContext) => void;
+};
 
 // ============================================================================
 // W3C Trace Context — https://www.w3.org/TR/trace-context/#traceparent-header
 // ============================================================================
 
-const TRACEPARENT_RE = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i
-const ALL_ZERO_TRACE_ID = "0".repeat(32)
-const ALL_ZERO_SPAN_ID = "0".repeat(16)
+const TRACEPARENT_RE = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i;
+const ALL_ZERO_TRACE_ID = "0".repeat(32);
+const ALL_ZERO_SPAN_ID = "0".repeat(16);
 
 /**
  * Parse a `traceparent` header value into an `OtelSpanContext`. Returns
@@ -169,26 +175,32 @@ const ALL_ZERO_SPAN_ID = "0".repeat(16)
  * `decodeResponse`).
  */
 export function parseTraceParent(header: string | null | undefined): OtelSpanContext | undefined {
-  if (header == null) return undefined
-  const match = TRACEPARENT_RE.exec(header.trim())
-  if (match === null) return undefined
-  const [, version, traceId, spanId, flags] = match as unknown as [string, string, string, string, string]
-  if (version.toLowerCase() === "ff") return undefined
-  const lowerTraceId = traceId.toLowerCase()
-  const lowerSpanId = spanId.toLowerCase()
-  if (lowerTraceId === ALL_ZERO_TRACE_ID || lowerSpanId === ALL_ZERO_SPAN_ID) return undefined
+  if (header == null) return undefined;
+  const match = TRACEPARENT_RE.exec(header.trim());
+  if (match === null) return undefined;
+  const [, version, traceId, spanId, flags] = match as unknown as [
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+  if (version.toLowerCase() === "ff") return undefined;
+  const lowerTraceId = traceId.toLowerCase();
+  const lowerSpanId = spanId.toLowerCase();
+  if (lowerTraceId === ALL_ZERO_TRACE_ID || lowerSpanId === ALL_ZERO_SPAN_ID) return undefined;
   return {
     traceId: lowerTraceId,
     spanId: lowerSpanId,
     traceFlags: Number.parseInt(flags, 16),
     isRemote: true,
-  }
+  };
 }
 
 /** Format an `OtelSpanContext` as a `traceparent` header value (version `"00"`, per spec). */
 export function formatTraceParent(ctx: OtelSpanContext): string {
-  const flags = (ctx.traceFlags & 0xff).toString(16).padStart(2, "0")
-  return `00-${ctx.traceId}-${ctx.spanId}-${flags}`
+  const flags = (ctx.traceFlags & 0xff).toString(16).padStart(2, "0");
+  return `00-${ctx.traceId}-${ctx.spanId}-${flags}`;
 }
 
 // ============================================================================
@@ -199,19 +211,19 @@ export function formatTraceParent(ctx: OtelSpanContext): string {
 // handler, an extension) that wants to start a child span.
 // ============================================================================
 
-const activeSpanStorage = new AsyncLocalStorage<OtelSpan>()
+const activeSpanStorage = new AsyncLocalStorage<OtelSpan>();
 
 /** The span `runServerSpan`/`runClientSpan` currently has active, or `undefined` outside any of them. */
 export function getActiveSpan(): OtelSpan | undefined {
-  return activeSpanStorage.getStore()
+  return activeSpanStorage.getStore();
 }
 
 function recordFailure(span: OtelSpan, error: unknown): void {
-  span.recordException(error)
+  span.recordException(error);
   span.setStatus({
     code: OtelSpanStatusCode.ERROR,
     message: error instanceof Error ? error.message : String(error),
-  })
+  });
 }
 
 /**
@@ -231,33 +243,33 @@ function runSpan<T>(
 ): T | Promise<T> {
   return tracer.startActiveSpan(name, options, (span) =>
     activeSpanStorage.run(span, () => {
-      let result: T | Promise<T>
+      let result: T | Promise<T>;
       try {
-        result = fn(span)
+        result = fn(span);
       } catch (error) {
-        recordFailure(span, error)
-        span.end()
-        throw error
+        recordFailure(span, error);
+        span.end();
+        throw error;
       }
       if (result instanceof Promise) {
         return result.then(
           (value) => {
-            span.setStatus({ code: OtelSpanStatusCode.OK })
-            span.end()
-            return value
+            span.setStatus({ code: OtelSpanStatusCode.OK });
+            span.end();
+            return value;
           },
           (error: unknown) => {
-            recordFailure(span, error)
-            span.end()
-            throw error
+            recordFailure(span, error);
+            span.end();
+            throw error;
           },
-        ) as Promise<T>
+        ) as Promise<T>;
       }
-      span.setStatus({ code: OtelSpanStatusCode.OK })
-      span.end()
-      return result
+      span.setStatus({ code: OtelSpanStatusCode.OK });
+      span.end();
+      return result;
     }),
-  )
+  );
 }
 
 /**
@@ -273,8 +285,8 @@ export function runServerSpan<T>(
   incomingTraceParent: OtelSpanContext | undefined,
   fn: (span: OtelSpan) => T | Promise<T>,
 ): T | Promise<T> {
-  if (incomingTraceParent !== undefined) integration.contextFromTraceParent?.(incomingTraceParent)
-  return runSpan(integration.tracer, name, { kind: OtelSpanKind.SERVER, attributes }, fn)
+  if (incomingTraceParent !== undefined) integration.contextFromTraceParent?.(incomingTraceParent);
+  return runSpan(integration.tracer, name, { kind: OtelSpanKind.SERVER, attributes }, fn);
 }
 
 /** Start a CLIENT-kind span for one outgoing call and run `fn` inside it. Ends the span and sets its status from `fn`'s outcome (see `runSpan`). */
@@ -284,7 +296,7 @@ export function runClientSpan<T>(
   attributes: OtelAttributes,
   fn: (span: OtelSpan) => T | Promise<T>,
 ): T | Promise<T> {
-  return runSpan(integration.tracer, name, { kind: OtelSpanKind.CLIENT, attributes }, fn)
+  return runSpan(integration.tracer, name, { kind: OtelSpanKind.CLIENT, attributes }, fn);
 }
 
 // ============================================================================
@@ -310,14 +322,15 @@ function wrapHandler(
   path: readonly string[],
   projectorType: string | undefined,
 ): Handler {
-  const operationName = path.join("/")
-  const spanName = projectorType !== undefined ? `${projectorType}:${operationName}` : operationName
+  const operationName = path.join("/");
+  const spanName =
+    projectorType !== undefined ? `${projectorType}:${operationName}` : operationName;
   const attributes: OtelAttributes = {
     "operation.name": operationName,
     ...(projectorType !== undefined ? { "projector.type": projectorType } : {}),
-  }
+  };
   return (input: unknown) =>
-    runServerSpan(integration, spanName, attributes, undefined, () => handler(input))
+    runServerSpan(integration, spanName, attributes, undefined, () => handler(input));
 }
 
 export type WrapTracingOptions = {
@@ -328,8 +341,8 @@ export type WrapTracingOptions = {
    * `wrapValidators`'s own per-projector `validators` call sites) so each
    * surface's spans are distinguishable. Omit to leave both unset.
    */
-  readonly projectorType?: string
-}
+  readonly projectorType?: string;
+};
 
 /**
  * Walk `node`, wiring each leaf's handler through `runServerSpan` — see the
@@ -352,27 +365,33 @@ export function wrapTracing(
   options: WrapTracingOptions = {},
   path: readonly string[] = [],
 ): Node {
-  const handler = node.handler !== undefined
-    ? wrapHandler(node.handler, integration, path, options.projectorType)
-    : undefined
-  const children = node.children !== undefined
-    ? Object.fromEntries(
-        Object.entries(node.children).map(([key, child]) => [
-          key,
-          wrapTracing(child, integration, options, [...path, key]),
-        ]),
-      )
-    : undefined
-  const fallback = node.fallback !== undefined
-    ? {
-        name: node.fallback.name,
-        subtree: wrapTracing(node.fallback.subtree, integration, options, [...path, `:${node.fallback.name}`]),
-      }
-    : undefined
+  const handler =
+    node.handler !== undefined
+      ? wrapHandler(node.handler, integration, path, options.projectorType)
+      : undefined;
+  const children =
+    node.children !== undefined
+      ? Object.fromEntries(
+          Object.entries(node.children).map(([key, child]) => [
+            key,
+            wrapTracing(child, integration, options, [...path, key]),
+          ]),
+        )
+      : undefined;
+  const fallback =
+    node.fallback !== undefined
+      ? {
+          name: node.fallback.name,
+          subtree: wrapTracing(node.fallback.subtree, integration, options, [
+            ...path,
+            `:${node.fallback.name}`,
+          ]),
+        }
+      : undefined;
   return {
     ...(handler !== undefined ? { handler } : {}),
     ...(children !== undefined ? { children } : {}),
     ...(fallback !== undefined ? { fallback } : {}),
     meta: node.meta,
-  }
+  };
 }

@@ -44,7 +44,7 @@
 //     this file's own "projector doesn't ship the component" MDX note mirrors
 //   docs/design/mocked-fetch-backend.md                — full design history
 
-import type { OpenApiDoc, OpenApiOperation, OpenApiSchema } from "./openapi.ts"
+import type { OpenApiDoc, OpenApiOperation, OpenApiSchema } from "./openapi.ts";
 
 /** Options shared by both target renderers. */
 export type HttpRouteReferenceOpts = {
@@ -53,14 +53,14 @@ export type HttpRouteReferenceOpts = {
    * this projector (unlike the type-ir reference projectors, route pages
    * don't cross-link each other), so this only affects the returned keys
    * themselves. */
-  readonly basePath?: string
+  readonly basePath?: string;
   /** The package name a caller's doc site should import `ApiExplorer` from
    * — only used by the Starlight renderer's `import` line (Docusaurus's
    * `<ApiExplorer/>` tag is emitted import-free, same convention as
    * `<TypeRef>` in docusaurus-reference.ts). Defaults to
    * `"@rhi-zone/fractal-api-explorer"`, the actual companion package. */
-  readonly apiExplorerImport?: string
-}
+  readonly apiExplorerImport?: string;
+};
 
 // ============================================================================
 // Shared page-data extraction
@@ -70,19 +70,19 @@ export type HttpRouteReferenceOpts = {
  * the shape a single generated page needs — kept as an internal type since
  * neither renderer needs callers to construct one directly. */
 type RoutePage = {
-  readonly path: string
-  readonly method: string
-  readonly operation: OpenApiOperation
-}
+  readonly path: string;
+  readonly method: string;
+  readonly operation: OpenApiOperation;
+};
 
 function routePages(doc: OpenApiDoc): RoutePage[] {
-  const out: RoutePage[] = []
+  const out: RoutePage[] = [];
   for (const [path, methods] of Object.entries(doc.paths)) {
     for (const [method, operation] of Object.entries(methods)) {
-      out.push({ path, method, operation })
+      out.push({ path, method, operation });
     }
   }
-  return out
+  return out;
 }
 
 /** `"books.list"` -> `"books-list"`, `"GET /widgets/{id}"`-derived fallback
@@ -97,15 +97,15 @@ function fileStem(operationId: string): string {
     .replace(/[^a-zA-Z0-9-]+/g, "-")
     .toLowerCase()
     .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
+    .replace(/^-|-$/g, "");
 }
 
 function requestBodySchema(operation: OpenApiOperation): OpenApiSchema | undefined {
-  return operation.requestBody?.content["application/json"].schema
+  return operation.requestBody?.content["application/json"].schema;
 }
 
 function responseSchema(operation: OpenApiOperation): OpenApiSchema {
-  return operation.responses["200"].content["application/json"].schema
+  return operation.responses["200"].content["application/json"].schema;
 }
 
 /** JS-expression-safe serialization of a schema for embedding as a JSX
@@ -114,12 +114,12 @@ function responseSchema(operation: OpenApiOperation): OpenApiSchema {
  * `renderExamplesSection` and `docusaurus-reference.ts`'s example blocks
  * both rely on for embedding arbitrary JSON into generated output. */
 function schemaProp(name: string, schema: OpenApiSchema | undefined): string {
-  return schema === undefined ? "" : ` ${name}={${JSON.stringify(schema)}}`
+  return schema === undefined ? "" : ` ${name}={${JSON.stringify(schema)}}`;
 }
 
 function schemaBlock(title: string, schema: OpenApiSchema | undefined): string[] {
-  if (schema === undefined) return []
-  return [`### ${title}`, "", "```json", JSON.stringify(schema, null, 2), "```", ""]
+  if (schema === undefined) return [];
+  return [`### ${title}`, "", "```json", JSON.stringify(schema, null, 2), "```", ""];
 }
 
 /**
@@ -145,37 +145,39 @@ function schemaBlock(title: string, schema: OpenApiSchema | undefined): string[]
  * known-identical latent bug.
  */
 function mdxEscapeText(s: string): string {
-  return s.replace(/[{}]/g, (c) => `\\${c}`)
+  return s.replace(/[{}]/g, (c) => `\\${c}`);
 }
 
 function frontmatterTitle(page: RoutePage): string {
-  return page.operation.summary ?? `${page.method.toUpperCase()} ${page.path}`
+  return page.operation.summary ?? `${page.method.toUpperCase()} ${page.path}`;
 }
 
 function frontmatterDescription(page: RoutePage): string {
-  return page.operation.description ?? `Reference for \`${page.method.toUpperCase()} ${page.path}\`.`
+  return (
+    page.operation.description ?? `Reference for \`${page.method.toUpperCase()} ${page.path}\`.`
+  );
 }
 
 function bodyLines(page: RoutePage): string[] {
-  const { operation } = page
-  const lines: string[] = []
+  const { operation } = page;
+  const lines: string[] = [];
 
   if (operation.deprecated === true) {
-    lines.push("**Deprecated.**", "")
+    lines.push("**Deprecated.**", "");
   }
 
   if (operation.description !== undefined) {
-    lines.push(mdxEscapeText(operation.description), "")
+    lines.push(mdxEscapeText(operation.description), "");
   }
 
   if (operation.tags !== undefined && operation.tags.length > 0) {
-    lines.push(`Tags: ${operation.tags.map((t) => `\`${t}\``).join(", ")}`, "")
+    lines.push(`Tags: ${operation.tags.map((t) => `\`${t}\``).join(", ")}`, "");
   }
 
-  lines.push(...schemaBlock("Request Body", requestBodySchema(operation)))
-  lines.push(...schemaBlock("Response (200)", responseSchema(operation)))
+  lines.push(...schemaBlock("Request Body", requestBodySchema(operation)));
+  lines.push(...schemaBlock("Response (200)", responseSchema(operation)));
 
-  return lines
+  return lines;
 }
 
 // ============================================================================
@@ -183,17 +185,17 @@ function bodyLines(page: RoutePage): string[] {
 // ============================================================================
 
 function renderDocusaurusPage(page: RoutePage, opts: HttpRouteReferenceOpts): string {
-  const { path, method, operation } = page
-  const title = frontmatterTitle(page)
-  const description = frontmatterDescription(page)
+  const { path, method, operation } = page;
+  const title = frontmatterTitle(page);
+  const description = frontmatterDescription(page);
 
-  const lines: string[] = []
-  lines.push("---")
-  lines.push(`id: ${fileStem(operation.operationId)}`)
-  lines.push(`title: ${JSON.stringify(title)}`)
-  lines.push(`description: ${JSON.stringify(description)}`)
-  lines.push("---")
-  lines.push("")
+  const lines: string[] = [];
+  lines.push("---");
+  lines.push(`id: ${fileStem(operation.operationId)}`);
+  lines.push(`title: ${JSON.stringify(title)}`);
+  lines.push(`description: ${JSON.stringify(description)}`);
+  lines.push("---");
+  lines.push("");
   lines.push(
     "{/* This page embeds an `<ApiExplorer .../>` component for a live, in-page " +
       "request/response demo. It is not shipped by this projector — add " +
@@ -204,23 +206,23 @@ function renderDocusaurusPage(page: RoutePage, opts: HttpRouteReferenceOpts): st
       "(e.g. `toDropInFetch(createFetch(tree))` for a docs build with no deployed " +
       "server yet) — see that package's fetch-context.tsx for why a fetch " +
       "*function* can't be passed as a per-page prop here. */}",
-  )
-  lines.push("")
-  lines.push(`# ${mdxEscapeText(title)}`)
-  lines.push("")
-  lines.push(`\`${method.toUpperCase()} ${path}\``)
-  lines.push("")
-  lines.push(...bodyLines(page))
-  lines.push("## Try it")
-  lines.push("")
+  );
+  lines.push("");
+  lines.push(`# ${mdxEscapeText(title)}`);
+  lines.push("");
+  lines.push(`\`${method.toUpperCase()} ${path}\``);
+  lines.push("");
+  lines.push(...bodyLines(page));
+  lines.push("## Try it");
+  lines.push("");
   lines.push(
     `<ApiExplorer method=${JSON.stringify(method.toUpperCase())} path=${JSON.stringify(path)}` +
       `${schemaProp("requestSchema", requestBodySchema(operation))}` +
       `${schemaProp("responseSchema", responseSchema(operation))} />`,
-  )
-  lines.push("")
+  );
+  lines.push("");
 
-  return `${lines.join("\n").trimEnd()}\n`
+  return `${lines.join("\n").trimEnd()}\n`;
 }
 
 /**
@@ -231,13 +233,19 @@ function renderDocusaurusPage(page: RoutePage, opts: HttpRouteReferenceOpts): st
  * header comment for why this is a separate projector rather than an
  * extension of that one.
  */
-export function toDocusaurusRouteReference(doc: OpenApiDoc, opts: HttpRouteReferenceOpts = {}): Map<string, string> {
-  const pages = new Map<string, string>()
-  const prefix = opts.basePath !== undefined ? `${opts.basePath.replace(/\/+$/, "")}/` : ""
+export function toDocusaurusRouteReference(
+  doc: OpenApiDoc,
+  opts: HttpRouteReferenceOpts = {},
+): Map<string, string> {
+  const pages = new Map<string, string>();
+  const prefix = opts.basePath !== undefined ? `${opts.basePath.replace(/\/+$/, "")}/` : "";
   for (const page of routePages(doc)) {
-    pages.set(`${prefix}${fileStem(page.operation.operationId)}.mdx`, renderDocusaurusPage(page, opts))
+    pages.set(
+      `${prefix}${fileStem(page.operation.operationId)}.mdx`,
+      renderDocusaurusPage(page, opts),
+    );
   }
-  return pages
+  return pages;
 }
 
 // ============================================================================
@@ -245,24 +253,24 @@ export function toDocusaurusRouteReference(doc: OpenApiDoc, opts: HttpRouteRefer
 // ============================================================================
 
 function renderStarlightPage(page: RoutePage, opts: HttpRouteReferenceOpts): string {
-  const { path, method, operation } = page
-  const title = frontmatterTitle(page)
-  const description = frontmatterDescription(page)
-  const apiExplorerImport = opts.apiExplorerImport ?? "@rhi-zone/fractal-api-explorer"
+  const { path, method, operation } = page;
+  const title = frontmatterTitle(page);
+  const description = frontmatterDescription(page);
+  const apiExplorerImport = opts.apiExplorerImport ?? "@rhi-zone/fractal-api-explorer";
 
-  const lines: string[] = []
-  lines.push("---")
-  lines.push(`title: ${JSON.stringify(title)}`)
-  lines.push(`description: ${JSON.stringify(description)}`)
-  lines.push("---")
-  lines.push("")
-  lines.push(`import { ApiExplorer } from ${JSON.stringify(apiExplorerImport)};`)
-  lines.push("")
-  lines.push(`\`${method.toUpperCase()} ${path}\``)
-  lines.push("")
-  lines.push(...bodyLines(page))
-  lines.push("### Try it")
-  lines.push("")
+  const lines: string[] = [];
+  lines.push("---");
+  lines.push(`title: ${JSON.stringify(title)}`);
+  lines.push(`description: ${JSON.stringify(description)}`);
+  lines.push("---");
+  lines.push("");
+  lines.push(`import { ApiExplorer } from ${JSON.stringify(apiExplorerImport)};`);
+  lines.push("");
+  lines.push(`\`${method.toUpperCase()} ${path}\``);
+  lines.push("");
+  lines.push(...bodyLines(page));
+  lines.push("### Try it");
+  lines.push("");
   // Starlight is Astro-islands-based: a component needs an explicit
   // hydration directive to run client-side at all. `client:only` is broken
   // specifically inside MDX (see docs/design/mocked-fetch-backend.md's
@@ -272,10 +280,10 @@ function renderStarlightPage(page: RoutePage, opts: HttpRouteReferenceOpts): str
     `<ApiExplorer client:load method=${JSON.stringify(method.toUpperCase())} path=${JSON.stringify(path)}` +
       `${schemaProp("requestSchema", requestBodySchema(operation))}` +
       `${schemaProp("responseSchema", responseSchema(operation))} />`,
-  )
-  lines.push("")
+  );
+  lines.push("");
 
-  return `${lines.join("\n").trimEnd()}\n`
+  return `${lines.join("\n").trimEnd()}\n`;
 }
 
 /**
@@ -286,10 +294,13 @@ function renderStarlightPage(page: RoutePage, opts: HttpRouteReferenceOpts): str
  * Docusaurus's global-MDX-component convention) plus a `client:load`
  * hydration directive on the emitted tag, per this file's header comment.
  */
-export function toStarlightRouteReference(doc: OpenApiDoc, opts: HttpRouteReferenceOpts = {}): Map<string, string> {
-  const pages = new Map<string, string>()
+export function toStarlightRouteReference(
+  doc: OpenApiDoc,
+  opts: HttpRouteReferenceOpts = {},
+): Map<string, string> {
+  const pages = new Map<string, string>();
   for (const page of routePages(doc)) {
-    pages.set(`${fileStem(page.operation.operationId)}.mdx`, renderStarlightPage(page, opts))
+    pages.set(`${fileStem(page.operation.operationId)}.mdx`, renderStarlightPage(page, opts));
   }
-  return pages
+  return pages;
 }

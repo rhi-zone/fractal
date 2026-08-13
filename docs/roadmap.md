@@ -12,7 +12,7 @@ typeshare shares Rust types out to a smaller set of client languages from
 a Rust-first entry point, and a tool like Terraform's providers model
 infrastructure state, fractal's job is narrower and deeper: it is the hub
 through which type information moves
-*between* representations that were never designed to talk to each other
+_between_ representations that were never designed to talk to each other
 — a Zod schema becomes a Rust struct, an OpenAPI document becomes a SQL
 table, a Protobuf message becomes a Pydantic model — without every pair of
 formats needing its own bespoke converter. On top of that type layer sits
@@ -41,6 +41,7 @@ a kind-tagged `TypeShape` union, an open `meta` bag per node, a subtyping
 `TypeRefDocument` (`{ root, defs }`) for named/recursive/shared types.
 
 What exists:
+
 - Core structural + universal-primitive kinds (`boolean`, `number`,
   `integer`, `string`, `null`, `void`, `unknown`, `never`, `object`,
   `instance`, `array`, `stream`, `page`, `tuple`, `map`, `union`,
@@ -62,6 +63,7 @@ What exists:
   interpretive projectors.
 
 What's planned / open:
+
 - Kind groupings under `kinds/*` were "designed quickly" per project
   history and are flagged for a composition/orthogonality pass once the
   extension API has broader external consumers.
@@ -69,6 +71,7 @@ What's planned / open:
   AOT codegen projector (pass-through, non-throwing).
 
 Acceptance criteria for green:
+
 - Kind vocabulary and extension mechanism reviewed and stable enough to
   commit to as a public API (breaking a kind's shape post-1.0 is a major
   version event).
@@ -88,6 +91,7 @@ Every `from-*` module converts an external representation into a
 `TypeRef`/`TypeRefDocument`.
 
 What exists (`packages/type-ir/src/from-*.ts`):
+
 - `from-json-schema` — JSON Schema → TypeRef
 - `from-standard-schema` — any Standard Schema–compliant validator → TypeRef
 - `from-openapi` — OpenAPI → TypeRef
@@ -110,6 +114,7 @@ Schema, OpenAPI, Protobuf, FlatBuffers, Cap'n Proto, SQL, JTD, GraphQL),
 plus TypeScript source and any Standard Schema library.
 
 What's planned / open:
+
 - **General-purpose source-language ingestion beyond TypeScript
   (no `from-python`, `from-rust`, `from-go`, etc.) — decided out of
   scope for fractal itself, deferred indefinitely (2026-07-25).** Not a
@@ -142,6 +147,7 @@ What's planned / open:
   noted in "Output: Schema & IDL Formats" below.
 
 Acceptance criteria for green:
+
 - Every format fractal emits also has a matching ingester where that
   makes conceptual sense (round-trip coverage), or an explicit
   documented reason it doesn't — general-purpose source-language
@@ -158,6 +164,7 @@ Acceptance criteria for green:
 **Status: NOT GREEN**
 
 What exists (`packages/type-ir/src/*.ts`):
+
 - JSON Schema — `json-schema.ts` (current draft), `json-schema-07.ts`,
   `json-schema-04.ts`
 - OpenAPI — `openapi30.ts`, `openapi20.ts`
@@ -169,6 +176,7 @@ What exists (`packages/type-ir/src/*.ts`):
 - SQL — `sql.ts`, plus a dialect variant `sql-mssql.ts`
 
 What's planned / open:
+
 - Additional SQL dialects beyond the generic + MSSQL projectors —
   Postgres/MySQL/SQLite-specific output if demand emerges once the
   generic projector's coverage is evaluated against real dialect-specific
@@ -180,6 +188,7 @@ What's planned / open:
   TypeRef → JSON-RPC method/params/result/error signatures.
 
 Acceptance criteria for green:
+
 - Each format's projector has round-trip tests against its matching
   ingester (where one exists).
 - Every format handles fractal's full kind vocabulary with an explicit,
@@ -196,6 +205,7 @@ Acceptance criteria for green:
 What exists (`packages/type-ir/src/*.ts`, following the `{language}-{library}`
 naming convention — see "Projector naming convention" note in the
 General-Purpose Languages slice below):
+
 - Zod (`typescript-zod.ts`)
 - Valibot (`typescript-valibot.ts`)
 - io-ts (`typescript-io-ts.ts`)
@@ -210,6 +220,7 @@ All nine libraries named in the 1.0 scope are implemented, each with a
 matching test file.
 
 Acceptance criteria for green:
+
 - Emitted code for each library independently verified against that
   library's actual runtime (not just structural assertions on the
   generated AST/string) for a representative type suite.
@@ -233,26 +244,26 @@ that decision's history; the owner has now approved Elixir entering the
 list). Current state, audited directly against
 `packages/type-ir/src/` and each package's `package.json` `exports` map:
 
-| Language | Source module | Tests | Test count | Published export |
-|---|---|---|---|---|
-| TypeScript | `typescript-native.ts` | yes | — | yes |
-| Python | `python-dataclass.ts` | yes | 28 | yes |
-| Go | `go-encoding-json.ts` | yes | 27 | yes |
-| Rust | `rust-serde.ts` | yes | 27 | yes |
-| Java | `java-jackson.ts` | yes | 35 | yes |
-| C# | `csharp-systemtextjson.ts` | yes | 19 | yes |
-| Swift | `swift-codable.ts` | yes | 24 | yes |
-| Kotlin | `kotlin-kotlinx.ts` | yes | 29 | yes |
-| Dart | `dart-json-serializable.ts` | yes | 21 | yes |
-| Elm | `elm-json.ts` | yes | 24 | yes |
-| Haskell | `haskell-aeson.ts` | yes | 41 | yes |
-| Ruby | `ruby-sorbet.ts` | yes | 75 | yes |
-| C++ | `cpp-nlohmann.ts` | yes | 27 | yes |
-| PHP | `php-native.ts` | yes | 31 | yes |
-| Crystal | `crystal-json-serializable.ts` | yes | 43 | yes |
-| Objective-C | `objc-foundation.ts` | yes | 26 | yes |
-| Flow | `flow-native.ts` | yes | 36 | yes |
-| Elixir | `elixir-jason.ts` | yes | 42 | yes |
+| Language    | Source module                  | Tests | Test count | Published export |
+| ----------- | ------------------------------ | ----- | ---------- | ---------------- |
+| TypeScript  | `typescript-native.ts`         | yes   | —          | yes              |
+| Python      | `python-dataclass.ts`          | yes   | 28         | yes              |
+| Go          | `go-encoding-json.ts`          | yes   | 27         | yes              |
+| Rust        | `rust-serde.ts`                | yes   | 27         | yes              |
+| Java        | `java-jackson.ts`              | yes   | 35         | yes              |
+| C#          | `csharp-systemtextjson.ts`     | yes   | 19         | yes              |
+| Swift       | `swift-codable.ts`             | yes   | 24         | yes              |
+| Kotlin      | `kotlin-kotlinx.ts`            | yes   | 29         | yes              |
+| Dart        | `dart-json-serializable.ts`    | yes   | 21         | yes              |
+| Elm         | `elm-json.ts`                  | yes   | 24         | yes              |
+| Haskell     | `haskell-aeson.ts`             | yes   | 41         | yes              |
+| Ruby        | `ruby-sorbet.ts`               | yes   | 75         | yes              |
+| C++         | `cpp-nlohmann.ts`              | yes   | 27         | yes              |
+| PHP         | `php-native.ts`                | yes   | 31         | yes              |
+| Crystal     | `crystal-json-serializable.ts` | yes   | 43         | yes              |
+| Objective-C | `objc-foundation.ts`           | yes   | 26         | yes              |
+| Flow        | `flow-native.ts`               | yes   | 36         | yes              |
+| Elixir      | `elixir-jason.ts`              | yes   | 42         | yes              |
 
 Test counts are `it(`/`test(` occurrences in each module's `.test.ts`
 file, as a rough size signal, not a quality measure. Every module here
@@ -275,6 +286,7 @@ been removed; consumers must import the explicit
 No unqualified path silently "wins" for a multi-variant language.
 
 Acceptance criteria for green:
+
 - Every language in the 1.0 scope list has a source module, a test
   suite, and a published export subpath — all seventeen of seventeen
   now complete (Java's `exports` entry was added in a prior session;
@@ -307,6 +319,7 @@ language, constraint-validation libraries like Jakarta Bean Validation
 or FluentValidation layered on top of the serialization projector, etc).
 
 Acceptance criteria for green:
+
 - Folded into the acceptance criteria of "Per-Language Serialization
   Library Variants" below.
 
@@ -324,6 +337,7 @@ one fractal happens to have implemented first.
 
 What exists today (one projector per language, named for its library
 under the `{language}-{library}` convention):
+
 - Python — `dataclasses` (`python-dataclass.ts`)
 - Rust — `serde` (`rust-serde.ts`) — serde is the dominant/near-universal
   choice in Rust, so this alone may already satisfy the language's
@@ -350,22 +364,26 @@ under the `{language}-{library}` convention):
 What's planned / open — additional variants per language:
 
 **Completed (2026-07-22) — Battle-tested and union-root capable:**
+
 - Java — Gson (`java-gson.ts`) — 35 tests
-- Python — attrs (`python-attrs.ts`) — 32 tests  
+- Python — attrs (`python-attrs.ts`) — 32 tests
 - C# — Newtonsoft.Json (`csharp-newtonsoft.ts`) — 32 tests
 
 All three verified against cross-projector smoke test suite (171 tests, 4 fixture schemas). Struct-only projector union handling fixed; all three now handle union-rooted schemas.
 
 **Completed (2026-07-22, earlier pass):**
+
 - Java — Moshi (`java-moshi.ts`)
 - Dart — freezed (`dart-freezed.ts`)
 
 **Completed (2026-07-22, this session):**
+
 - Kotlin — Jackson (`kotlin-jackson.ts`) — `@JsonProperty`, `@JsonTypeInfo`/`@JsonSubTypes` for unions
 - Go — easyjson (`go-easyjson.ts`) — `//easyjson:json` directives, `json.RawMessage` unions, 29 tests
 - Ruby — dry-types (`ruby-dry-types.ts`) — `Dry::Struct` classes with `Types::*` constructors
 
 Remaining variants still planned:
+
 - C++ — RapidJSON, simdjson, Boost.JSON, glaze
 - Java — Jakarta JSON-B
 - C# — ServiceStack.Text
@@ -389,6 +407,7 @@ Remaining variants still planned:
   projector
 
 Acceptance criteria for green:
+
 - At least one additional serialization-library variant implemented and
   tested for each language listed above, beyond the existing default.
 - Each new variant follows the same "verify against the real runtime"
@@ -421,6 +440,7 @@ runtime validator), and the fractal `http.validate()` boundary directive
 — are now implemented.
 
 What exists:
+
 - Ingestion — `from-standard-schema.ts`: any compliant validator →
   `TypeRef`.
 - Emission — `standard-schema.ts`: `TypeRef` → a runtime object
@@ -435,6 +455,7 @@ What exists:
   422 on failure with the validator's own `issues`.
 
 Acceptance criteria for green:
+
 - Round-trip verified: a Standard-Schema-compliant library's schema →
   `TypeRef` → back out as a Standard Schema object → validates
   equivalently to the original for a representative type suite.
@@ -506,6 +527,7 @@ to start whenever picked up — see the design doc for phase-by-phase
 acceptance gates against the realistic-corpora harness baselines.
 
 Acceptance criteria for green:
+
 - The phased plan in `docs/design/json-inference-model.md` (P1–P6)
   executed and landed, or explicitly re-scoped by the project owner.
 - A decision on whether multi-format inference (YAML, KDL, etc.) is
@@ -546,12 +568,14 @@ real-handler) capability for the playground, plus runnable doc snippets,
 is scoped separately in `docs/design/relational-mock-data-generator.md`.
 
 What's left:
+
 - Not yet deployed to a public URL — runs locally today.
 - 13 input formats is a subset of the full ingester list (browser-safe
   only — formats requiring Node-only parsing are excluded); could grow
   as ingesters are audited for browser-safety.
 
 Acceptance criteria for green:
+
 - Deployed, publicly reachable, covering a representative slice of
   ingesters and projectors (not necessarily every single one at launch)
   — **coverage done, deployment still open**.
@@ -572,6 +596,7 @@ stub (`docs/api/index.md`), and an extensive internal design-decision
 archive (`docs/design/`).
 
 What's planned:
+
 - A documentation site on par with React's or Vite's docs — comprehensive
   API reference (auto-generated from source where feasible), guided
   onboarding for each ingestion/emission target, and a clear
@@ -580,6 +605,7 @@ What's planned:
 - Public hosting and a stable URL.
 
 Acceptance criteria for green:
+
 - Every ingester and projector documented with at least one worked
   example.
 - Site live at a public URL, navigable without needing to read source.
@@ -617,6 +643,7 @@ built against this section's basics bars (A/B/D, C explicitly out of
 scope — see "Candidate basics bars" below), and the first of the four
 site-level doc projectors overall to clear bar B and get a real (ad hoc,
 not CI-gated) bar-D visual check. Status against the bars:
+
 - **(A) Structural smoke test** — clears via `registry.test.ts`'s
   generic loop (same as the other three built targets) plus RST-specific
   structural assertions in `sphinx-reference.test.ts` (title-underline
@@ -645,9 +672,9 @@ bar D's own text ("Beyond the real tool accepting the output, a human ...
 confirms the rendered result actually looks right") presupposes bar C
 (verified against the real tool) already passed — but C is explicitly
 out of scope for this initiative, redirected to a separate heavier
-pre-release/RC workflow. The resolution used here: bar D's *intent* (a
+pre-release/RC workflow. The resolution used here: bar D's _intent_ (a
 human actually looked at rendered output and confirmed it isn't broken)
-was satisfied without adopting C's *scope* (an automated, CI-gated,
+was satisfied without adopting C's _scope_ (an automated, CI-gated,
 always-required `sphinx-build` step) by running the real `sphinx-build`
 tool locally, once, ad hoc, purely to render this target's dedicated
 fixture to HTML for direct visual review — not committed as a CI gate,
@@ -663,23 +690,24 @@ reading before it becomes the unstated precedent every subsequent target
 follows.**
 
 What the ad hoc bar-D check actually found and fixed (recorded here
-because it demonstrates *why* D's real-tool step earns its cost even
+because it demonstrates _why_ D's real-tool step earns its cost even
 when scoped down to one-time/local rather than C's full CI-gated form —
 none of these three defects were structurally invalid RST, so bar A's
 smoke test could not have caught any of them; only feeding the output to
 a real `sphinx-build` did):
+
 1. `.. deprecated:: <reason>` — the directive's own argument grammar
    (`sphinx.domains.changeset.VersionChange`, `optional_arguments = 1`,
    `final_argument_whitespace = True`) silently splits a multi-word
    single-line argument into a bogus "version" (first word) plus a
    truncated inline explanation, garbling any deprecation reason longer
    than one word. Fixed by moving the reason to the directive's
-   *body* (an indented paragraph) with a fixed, explicitly-non-data
+   _body_ (an indented paragraph) with a fixed, explicitly-non-data
    `N/A` placeholder standing in for the version slot the directive
    requires but this projector has no real data for.
 2. A cross-linked method signature's `.. list-table::` cell wrapped the
-   *entire* signature — including an embedded `:ref:` role — in a
-   `` `` ``-delimited literal span; docutils does not parse inline markup
+   _entire_ signature — including an embedded `:ref:` role — in a
+   ` ` ``-delimited literal span; docutils does not parse inline markup
    inside a literal span, so the role rendered as dead literal text
    instead of a working hyperlink. Fixed by leaving the signature cell
    unwrapped (matching how the Fields table's type cell already worked).
@@ -695,8 +723,9 @@ All three are fixed in the committed `sphinx-reference.ts`, re-verified
 against a fresh `sphinx-build -W` (warnings-as-errors) run after each
 fix, and covered by dedicated assertions in `sphinx-reference.test.ts`.
 The scratch Sphinx project used for the visual check (minimal `conf.py`
-+ the dedicated fixture's five generated `.rst` pages) was not committed,
-per the instruction not to persist bar-C-shaped tooling into the repo.
+
+- the dedicated fixture's five generated `.rst` pages) was not committed,
+  per the instruction not to persist bar-C-shaped tooling into the repo.
 
 **MkDocs vs. Material for MkDocs target-identity ambiguity, resolved
 (2026-08-13).** The ranked list below treats "MkDocs" (#2) and "Material
@@ -707,6 +736,7 @@ set (admonitions, content tabs) as what it targets, not vanilla MkDocs,
 despite the file/function names saying plain "MkDocs". Project owner's
 call: support both, as genuinely separate targets, rather than picking
 one. Resolved by:
+
 - Adding `mkdocs-vanilla-reference.ts` (`toMkdocsVanillaReference`) as a
   new, independent projector for plain MkDocs — CommonMark plus only
   what MkDocs enables by default (`toc`, `tables`, `fenced_code_blocks`,
@@ -715,7 +745,7 @@ one. Resolved by:
   not importing from `mkdocs-reference.ts`), matching the convention
   `sphinx-reference.ts` already established for keeping doc-projector
   targets decoupled from each other.
-- Renaming the existing `mkdocs-reference.ts` file's *identity* (not its
+- Renaming the existing `mkdocs-reference.ts` file's _identity_ (not its
   filename/export name, to avoid a breaking rename) to "Material for
   MkDocs" in every doc/comment that describes it, and closing the
   feature-surface gap the ambiguity had left implicit: a real
@@ -759,13 +789,14 @@ built as a new target, and `mkdocs-reference.ts` (Material for MkDocs)
 extended with the feature surface above — see the resolution note
 immediately above for the full breakdown. Both now clear the same bars
 `sphinx-reference.ts` cleared first:
+
 - **(A) Structural smoke test** — both clear via `registry.test.ts`'s
   generic loop plus their own dedicated structural assertions (frontmatter
   well-formedness, trailing-newline discipline, and — specific to the
   vanilla target — assertions that no `!!!`/`=== "`/`*[...]:` Material
   syntax leaks in anywhere across its whole fixture's output).
 - **(B) Dedicated fixture + reviewed output** — `mkdocs-vanilla-
-  reference.test.ts` has its own blog/CMS-flavored fixture (`Post`/
+reference.test.ts` has its own blog/CMS-flavored fixture (`Post`/
   `Author`/`Status`/`CommentEvent`/`Moderator`, distinct from Sphinx's
   GitHub-flavored one and Material's e-commerce-flavored one below) and
   `mkdocs-reference.test.ts` has its own e-commerce-flavored fixture
@@ -790,6 +821,7 @@ cross-ecosystem/ecosystem-native doc-site frameworks (Docusaurus,
 Starlight, MkDocs, Material for MkDocs, Sphinx) are done.
 
 Site-level generators to target, by language ecosystem:
+
 - JS/TS — Docusaurus, VitePress, Starlight
 - Python — Sphinx (autodoc), MkDocs (mkdocstrings)
 - Rust — mdBook
@@ -798,12 +830,12 @@ Site-level generators to target, by language ecosystem:
   generator), GitBook (hosted docs-as-product platform)
 
 **Explicitly out of scope: API-reference extractors.** The project
-owner has scoped this initiative to *documentation site generators* —
+owner has scoped this initiative to _documentation site generators_ —
 tools that consume a tree of hand-authored (or otherwise pre-generated)
 content pages and build/render them into a doc site, the way
 Docusaurus/Starlight/MkDocs/Sphinx/VitePress/GitBook/mdBook/Material for
-MkDocs/Zensical all do — and explicitly excluded *API-reference
-extractors*: tools whose core job is parsing source code and inline doc
+MkDocs/Zensical all do — and explicitly excluded _API-reference
+extractors_: tools whose core job is parsing source code and inline doc
 comments (docstrings, `///`, `/** */`, XML doc comments, etc.) directly
 into reference docs, with no real concept of ingesting a separate
 hand-authored page tree. TypeDoc was the first confirmed example
@@ -867,7 +899,7 @@ numbering.
    2026-08-13; the pre-existing `mkdocs-reference.ts` this "built" tag
    originally pointed to turned out to already be Material-flavored, not
    this target — see the resolution note above) — ~3.87M PyPI
-   downloads/week (pypistats.org). *Coin flip vs. #3*: Material for
+   downloads/week (pypistats.org). _Coin flip vs. #3_: Material for
    MkDocs' own weekly figure (~3.76M) is close enough that the relative
    order between these two is not a confident call from this signal
    alone.
@@ -891,8 +923,8 @@ numbering.
    elsewhere here. **Placement is low-confidence** given how different
    the signal type is from its neighbors.
 6. **VitePress** (JS) — ~768k npm downloads/week.
-7. **Starlight** (JS — **built**) — ~708k npm downloads/week. *Coin
-   flip vs. #6*: close enough to VitePress's figure that the relative
+7. **Starlight** (JS — **built**) — ~708k npm downloads/week. _Coin
+   flip vs. #6_: close enough to VitePress's figure that the relative
    order between these two is near a toss-up on this signal alone.
 8. **DocFX** (C#/.NET) — ~5.8M all-time NuGet downloads (nuget.org
    package page and the NuGet search API agree on this figure); scoped
@@ -977,7 +1009,7 @@ actual repo state rather than assumed: `docusaurus-reference.ts`/
 `starlight-reference.ts` type-check and are covered by
 `registry.test.ts`'s generic "universal projector" loop, which asserts
 non-empty output for a shared synthetic `sample`/`multi`
-`TypeRefDocument` fixture used identically across *every* projector in
+`TypeRefDocument` fixture used identically across _every_ projector in
 the registry (not a fixture specific to any one doc target) — plus one
 hand-written illustrative example per target in
 `docs/reference/type-ir/doc-projectors.md` (prose documentation, not an
@@ -1014,7 +1046,7 @@ would need to schedule.
 - **(B) Dedicated fixture + reviewed/snapshotted output per target.**
   Adds a fixture representative of that target's real use (not the
   generic synthetic sample every projector currently shares) and a
-  snapshot or reviewed-output test asserting the *shape* of that
+  snapshot or reviewed-output test asserting the _shape_ of that
   target's output stays stable and was at least once looked at by a
   human — closer to how `TypeDoc`'s own test suite pairs fixtures with
   snapshot output. Catches regressions and gives one human-verified
@@ -1026,7 +1058,7 @@ would need to schedule.
   step — `docusaurus build`, `mkdocs build --strict`, `sphinx-build`,
   `cargo doc`, `javadoc`, etc. — and the step must succeed. This is the
   same shape of verification this roadmap's "Testing & Quality"
-  section already proposes for the *code-level* general-purpose-
+  section already proposes for the _code-level_ general-purpose-
   language projectors (`go build`, `cargo build` against generated
   code, see "Battle testing" above) — applying it to doc projectors
   would extend an already-chosen pattern rather than introduce a new
@@ -1039,7 +1071,7 @@ would need to schedule.
   accepting the output, a human (or an automated visual-regression
   step, e.g. screenshot-diffing the rendered site the way some
   TypeDoc/Docusaurus-adjacent projects use Percy/Chromatic-style
-  tooling) confirms the *rendered result* actually looks right —
+  tooling) confirms the _rendered result_ actually looks right —
   cross-links resolve, hover cards populate, admonitions render
   styled, nothing is visually broken. Highest-cost bar by a wide
   margin: needs a working rendered instance of each target site
@@ -1068,6 +1100,7 @@ stackable onto whichever bar is chosen — not bars on their own:
   undecided here.
 
 What's planned / open:
+
 - Everything — no projector currently emits native doc comments from
   `meta` bag content; this is a net-new emission concern across all
   general-purpose-language projectors (see "Output: General-Purpose
@@ -1084,6 +1117,7 @@ What's planned / open:
   implementation starts.
 
 Acceptance criteria for green:
+
 - Doc comment emission implemented for every general-purpose-language
   projector in 1.0 scope — **DONE (2026-07-22)**, all 25 projectors
   emitting code-level doc comments.
@@ -1095,7 +1129,7 @@ Acceptance criteria for green:
   cross-links, `<TypeRef>` hover component, fields tables, union
   variants), `starlight-reference.ts` (`<Aside>`/`<LinkCard>`/`<Tabs>`/
   `<Code>`, TypeScript + JSON Schema signature tabs), `mkdocs-
-  reference.ts` — now explicitly the **Material for MkDocs** target
+reference.ts` — now explicitly the **Material for MkDocs** target
   (MkDocs-Material admonitions, abbreviation-based hover tooltips,
   icon-labeled content tabs for both the TypeScript/JSON-Schema
   signature and multi-example sections, Material grid-cards for a
@@ -1123,6 +1157,7 @@ adversarial test suites for enum-detection heuristics, a routing
 benchmark harness (`packages/http-api-projector/src/route.bench.ts`)
 with measured results documented in `docs/design/routing-benchmarks.md`,
 and battle-test suites added 2026-07-22:
+
 - Round-trip fidelity tests (22 tests) — JSON Schema and OpenAPI schemas
   survive ingestion → projection → re-ingestion.
 - Cross-projector smoke tests (171 tests across 41 projectors, 4 fixture
@@ -1131,6 +1166,7 @@ and battle-test suites added 2026-07-22:
   struct-only union handling and metadata passthrough gaps.
 
 What's planned / open:
+
 - Fuzz testing and property-based testing beyond the JSON-inference
   modules — extending the same approach to ingesters/projectors
   generally.
@@ -1160,6 +1196,7 @@ What's planned / open:
 coverage, but none has been exercised against real-world corpora at
 scale. This is a distinct, larger category of open work, not yet
 started:
+
 - Round-trip testing against real schemas: ingest → project → ingest,
   verifying the second ingest is equivalent to the first, rather than
   the current practice of hand-written fixtures per module.
@@ -1179,6 +1216,7 @@ started:
   uses it.
 
 Acceptance criteria for green:
+
 - CI pipeline running typecheck + test on every push/PR — **DONE
   (2026-07-22)**, GitHub Actions Nix-based pipeline (commit `bb38011`).
 - At least the general-purpose-language emit targets have flake-provided
@@ -1209,6 +1247,7 @@ The `api()`/`op()` tree and its projectors — a separate, composable
 layer built on top of type-ir.
 
 What exists:
+
 - Core tree model (`packages/api-tree`) — `api`, `op`, `Node`, `Meta`,
   `mergeMeta`, tags lattice, extraction from TypeScript source
   (`extract.ts`), build orchestration (`build.ts`), and a
@@ -1246,6 +1285,7 @@ What exists:
   (Clerk, Auth0, Supabase, Firebase, Cognito) not yet built.
 
 What's planned / open (per `TODO.md`):
+
 - MCP Tier 1 and Tier 2 (logging, streaming/progress notifications)
   complete; sampling also done. MCP roots/subscriptions still open.
 - `stream`/`page` kind propagation (2026-07-24 session): corrected a
@@ -1330,6 +1370,7 @@ What's planned / open (per `TODO.md`):
   constants; `createFetch` still requires an explicit opt-in today.
 
 Acceptance criteria for green:
+
 - HTTP, MCP, CLI, GraphQL, and JSON-RPC projectors demonstrated
   end-to-end against a real example app (as `examples/library-api`
   already does for HTTP).
@@ -1358,6 +1399,7 @@ Acceptance criteria for green:
 **Status: NOT GREEN**
 
 What exists:
+
 - A Bun-based monorepo (`package.json` workspaces: `api-tree`,
   `type-ir`, `http-api-projector`, `mcp-api-projector`,
   `cli-api-projector`, `graphql-api-projector`, `auth-oidc`,
@@ -1376,6 +1418,7 @@ What exists:
 - All packages currently at `0.1.0-alpha.0` — none published to npm yet.
 
 What's planned / open:
+
 - npm publishing — no package has been published; versioning strategy
   for the jump to 1.0 across eight interdependent workspace packages is
   undecided.
@@ -1407,6 +1450,7 @@ What's planned / open:
   comparison has been written up yet.
 
 Acceptance criteria for green:
+
 - Every package publishable and published to npm at a coordinated 1.0
   version.
 - Flake covers the toolchains needed to validate generated output in

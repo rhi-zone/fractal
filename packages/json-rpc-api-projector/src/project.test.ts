@@ -1,29 +1,29 @@
 // packages/json-rpc-api-projector/src/project.test.ts — JSON-RPC method projection tests
 
-import { describe, expect, it } from "bun:test"
-import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { projectMethods, toMethods } from "./project.ts"
+import { describe, expect, it } from "bun:test";
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
+import { projectMethods, toMethods } from "./project.ts";
 // Side-effect import: this test suite's own "deployment" augmentation
 // (`LeafMeta extends JsonRpcLeafMeta`, `BranchMeta extends JsonRpcBranchMeta`)
 // — see that file's own doc comment. Needed for `meta.jsonrpc.segment`
 // below (a real, spec-endorsed branch-position override) to type-check.
-import "./deployment-meta.test-support.ts"
+import "./deployment-meta.test-support.ts";
 
 describe("naming: dot-separated method names from tree position", () => {
   it("root leaf -> bare name", () => {
-    const tree = api_({ ping: op((_: unknown) => "pong") })
-    const methods = toMethods(tree)
-    expect(methods.map((m) => m.name)).toEqual(["ping"])
-  })
+    const tree = api_({ ping: op((_: unknown) => "pong") });
+    const methods = toMethods(tree);
+    expect(methods.map((m) => m.name)).toEqual(["ping"]);
+  });
 
   it("nested children -> dot-joined name", () => {
     const tree = api_({
       users: api_({ list: op((_: unknown) => []), get: op((_: unknown) => ({})) }),
       books: api_({ get: op((_: unknown) => ({})) }),
-    })
-    const methods = toMethods(tree)
-    expect(methods.map((m) => m.name).sort()).toEqual(["books.get", "users.get", "users.list"])
-  })
+    });
+    const methods = toMethods(tree);
+    expect(methods.map((m) => m.name).sort()).toEqual(["books.get", "users.get", "users.list"]);
+  });
 
   it("fallback contributes its own name as a literal dot-segment", () => {
     const tree = api_({
@@ -36,27 +36,30 @@ describe("naming: dot-separated method names from tree position", () => {
           },
         },
       ),
-    })
-    const methods = toMethods(tree)
-    expect(methods[0]!.name).toBe("books.bookId.get")
-  })
+    });
+    const methods = toMethods(tree);
+    expect(methods[0]!.name).toBe("books.bookId.get");
+  });
 
   it("meta.jsonrpc.name overrides the full derived name", () => {
     const tree = api_({
       users: api_({ list: op((_: unknown) => [], { jsonrpc: { name: "listUsers" } }) }),
-    })
-    const methods = toMethods(tree)
-    expect(methods[0]!.name).toBe("listUsers")
-  })
+    });
+    const methods = toMethods(tree);
+    expect(methods[0]!.name).toBe("listUsers");
+  });
 
   it("meta.jsonrpc.segment overrides a branch node's own prefix contribution", () => {
     const tree = api_({
-      usersNode: api_({ list: op((_: unknown) => []) }, { meta: { jsonrpc: { segment: "users" } } }),
-    })
-    const methods = toMethods(tree)
-    expect(methods[0]!.name).toBe("users.list")
-  })
-})
+      usersNode: api_(
+        { list: op((_: unknown) => []) },
+        { meta: { jsonrpc: { segment: "users" } } },
+      ),
+    });
+    const methods = toMethods(tree);
+    expect(methods[0]!.name).toBe("users.list");
+  });
+});
 
 // ============================================================================
 // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
@@ -71,37 +74,40 @@ describe("naming: dot-separated method names from tree position", () => {
 describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
   it("projectMethods visits the leaf, keyed with no extra segment beyond the fallback's own name", () => {
     const tree = api_({
-      books: api_({}, {
-        fallback: {
-          name: "bookId",
-          subtree: op((input: { bookId: string }) => ({ id: input.bookId }), {
-            tags: { readOnly: true },
-          }),
+      books: api_(
+        {},
+        {
+          fallback: {
+            name: "bookId",
+            subtree: op((input: { bookId: string }) => ({ id: input.bookId }), {
+              tags: { readOnly: true },
+            }),
+          },
         },
-      }),
-    })
-    const { methods, handlers } = projectMethods(tree)
-    expect(methods).toHaveLength(1)
-    expect(methods[0]!.name).toBe("books.bookId")
-    expect(methods[0]!.readOnly).toBe(true)
-    expect(handlers.has("books.bookId")).toBe(true)
-  })
-})
+      ),
+    });
+    const { methods, handlers } = projectMethods(tree);
+    expect(methods).toHaveLength(1);
+    expect(methods[0]!.name).toBe("books.bookId");
+    expect(methods[0]!.readOnly).toBe(true);
+    expect(handlers.has("books.bookId")).toBe(true);
+  });
+});
 
 describe("tags -> flat method metadata (no ancestor inheritance)", () => {
   it("readOnly/destructive/idempotent surface as top-level three-valued fields", () => {
     const tree = api_({
       list: op((_: unknown) => [], { tags: { readOnly: true } }),
       remove: op((_: unknown) => null, { tags: { destructive: true, idempotent: true } }),
-    })
-    const methods = toMethods(tree)
-    const list = methods.find((m) => m.name === "list")!
-    const remove = methods.find((m) => m.name === "remove")!
-    expect(list.readOnly).toBe(true)
-    expect(list.destructive).toBeUndefined()
-    expect(remove.destructive).toBe(true)
-    expect(remove.idempotent).toBe(true)
-  })
+    });
+    const methods = toMethods(tree);
+    const list = methods.find((m) => m.name === "list")!;
+    const remove = methods.find((m) => m.name === "remove")!;
+    expect(list.readOnly).toBe(true);
+    expect(list.destructive).toBeUndefined();
+    expect(remove.destructive).toBe(true);
+    expect(remove.idempotent).toBe(true);
+  });
 
   it("a node-level tag does not flow to leaf children with no own tags", () => {
     // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
@@ -110,114 +116,122 @@ describe("tags -> flat method metadata (no ancestor inheritance)", () => {
     // a stronger, compile-time version of "no ancestor inheritance." Built
     // via object spread over a real api_() result instead, the same shape
     // a hand-built or legacy-computed tree could still produce.
-    const catalog = api_({ list: op((_: unknown) => []) })
+    const catalog = api_({ list: op((_: unknown) => []) });
     const tree = api_({
       catalog: { ...catalog, meta: { tags: { readOnly: true } } },
-    })
-    const methods = toMethods(tree)
-    expect(methods[0]!.readOnly).toBeUndefined()
-  })
+    });
+    const methods = toMethods(tree);
+    expect(methods[0]!.readOnly).toBeUndefined();
+  });
 
   it("meta.tags.deprecated -> deprecated: true", () => {
-    const tree = api_({ old: op((_: unknown) => null, { tags: { deprecated: true } }) })
-    expect(toMethods(tree)[0]!.deprecated).toBe(true)
-  })
+    const tree = api_({ old: op((_: unknown) => null, { tags: { deprecated: true } }) });
+    expect(toMethods(tree)[0]!.deprecated).toBe(true);
+  });
 
   it("meta.tags.streaming -> streaming: true, surfaced as a top-level field", () => {
     const tree = api_({
       watch: op(
         async function* (_: unknown) {
-          yield "x"
+          yield "x";
         },
         { tags: { streaming: true } },
       ),
-    })
-    expect(toMethods(tree)[0]!.streaming).toBe(true)
-  })
+    });
+    expect(toMethods(tree)[0]!.streaming).toBe(true);
+  });
 
   it("no tags -> all metadata fields omitted", () => {
-    const tree = api_({ plain: op((_: unknown) => null) })
-    const method = toMethods(tree)[0]!
-    expect(method.readOnly).toBeUndefined()
-    expect(method.destructive).toBeUndefined()
-    expect(method.idempotent).toBeUndefined()
-    expect(method.deprecated).toBeUndefined()
-    expect(method.streaming).toBeUndefined()
-  })
-})
+    const tree = api_({ plain: op((_: unknown) => null) });
+    const method = toMethods(tree)[0]!;
+    expect(method.readOnly).toBeUndefined();
+    expect(method.destructive).toBeUndefined();
+    expect(method.idempotent).toBeUndefined();
+    expect(method.deprecated).toBeUndefined();
+    expect(method.streaming).toBeUndefined();
+  });
+});
 
 describe("schemas: paramsSchema/resultSchema/description from a derived SchemaMap", () => {
   it("no schema entry -> paramsSchema degrades to the JSON Schema minimum, resultSchema omitted", () => {
-    const tree = api_({ ping: op((_: unknown) => "pong") })
-    const method = toMethods(tree)[0]!
-    expect(method.paramsSchema).toEqual({ type: "object" })
-    expect(method.resultSchema).toBeUndefined()
-  })
+    const tree = api_({ ping: op((_: unknown) => "pong") });
+    const method = toMethods(tree)[0]!;
+    expect(method.paramsSchema).toEqual({ type: "object" });
+    expect(method.resultSchema).toBeUndefined();
+  });
 
   it("a matching schema entry supplies paramsSchema/resultSchema/description", () => {
-    const tree = api_({ getBalance: op((_: unknown) => 0) })
+    const tree = api_({ getBalance: op((_: unknown) => 0) });
     const methods = toMethods(tree, {
       schemas: {
         getBalance: {
-          paramsSchema: { type: "object", properties: { accountId: { type: "string" } }, required: ["accountId"] },
+          paramsSchema: {
+            type: "object",
+            properties: { accountId: { type: "string" } },
+            required: ["accountId"],
+          },
           resultSchema: { type: "number" },
           description: "Fetches an account's balance",
         },
       },
-    })
+    });
     expect(methods[0]!.paramsSchema).toEqual({
       type: "object",
       properties: { accountId: { type: "string" } },
       required: ["accountId"],
-    })
-    expect(methods[0]!.resultSchema).toEqual({ type: "number" })
-    expect(methods[0]!.description).toBe("Fetches an account's balance")
-  })
+    });
+    expect(methods[0]!.resultSchema).toEqual({ type: "number" });
+    expect(methods[0]!.description).toBe("Fetches an account's balance");
+  });
 
   it("description falls back to meta.description, then the leaf key", () => {
-    const withMetaDescription = api_({ ping: op((_: unknown) => "pong", { description: "Health check" }) })
-    expect(toMethods(withMetaDescription)[0]!.description).toBe("Health check")
+    const withMetaDescription = api_({
+      ping: op((_: unknown) => "pong", { description: "Health check" }),
+    });
+    expect(toMethods(withMetaDescription)[0]!.description).toBe("Health check");
 
-    const bare = api_({ ping: op((_: unknown) => "pong") })
-    expect(toMethods(bare)[0]!.description).toBe("ping")
-  })
-})
+    const bare = api_({ ping: op((_: unknown) => "pong") });
+    expect(toMethods(bare)[0]!.description).toBe("ping");
+  });
+});
 
 describe("errorSchema: the standard JSON-RPC envelope, optionally narrowed", () => {
   it("default -> unconstrained data", () => {
-    const tree = api_({ deposit: op((_: unknown) => null) })
+    const tree = api_({ deposit: op((_: unknown) => null) });
     expect(toMethods(tree)[0]!.errorSchema).toEqual({
       type: "object",
       properties: { code: { type: "integer" }, message: { type: "string" }, data: {} },
       required: ["code", "message"],
-    })
-  })
+    });
+  });
 
   it("meta.jsonrpc.errorDataSchema narrows the envelope's data field", () => {
     const tree = api_({
       deposit: op((_: unknown) => null, { jsonrpc: { errorDataSchema: { type: "string" } } }),
-    })
-    expect(toMethods(tree)[0]!.errorSchema.properties).toMatchObject({ data: { type: "string" } })
-  })
-})
+    });
+    expect(toMethods(tree)[0]!.errorSchema.properties).toMatchObject({ data: { type: "string" } });
+  });
+});
 
 describe("projectMethods: dispatch table mirrors the descriptor array", () => {
   it("one handler entry per method, keyed by the same derived name", () => {
-    const handler = (_: unknown) => "pong"
-    const tree = api_({ ping: op(handler) })
-    const { methods, handlers } = projectMethods(tree)
-    expect(methods).toHaveLength(1)
-    expect(handlers.size).toBe(1)
-    expect(handlers.get("ping")?.handler).toBe(handler)
-  })
+    const handler = (_: unknown) => "pong";
+    const tree = api_({ ping: op(handler) });
+    const { methods, handlers } = projectMethods(tree);
+    expect(methods).toHaveLength(1);
+    expect(handlers.size).toBe(1);
+    expect(handlers.get("ping")?.handler).toBe(handler);
+  });
 
   it("meta.jsonrpc.sourceMap is threaded onto the dispatch entry", () => {
     const tree = api_({
       whoami: op((_: unknown) => "someone", {
         jsonrpc: { sourceMap: { token: { store: "caller", key: "authToken" } } },
       }),
-    })
-    const { handlers } = projectMethods(tree)
-    expect(handlers.get("whoami")?.sourceMap).toEqual({ token: { store: "caller", key: "authToken" } })
-  })
-})
+    });
+    const { handlers } = projectMethods(tree);
+    expect(handlers.get("whoami")?.sourceMap).toEqual({
+      token: { store: "caller", key: "authToken" },
+    });
+  });
+});

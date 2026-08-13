@@ -3,16 +3,7 @@
 // `segments(req)`. Path consumption is proven by the nested `/users/:id/posts`
 // route, reached purely by advancing the Request URL.
 
-import {
-  choice,
-  json,
-  methods,
-  path,
-  rest,
-  segments,
-  text,
-  type Handler,
-} from "./std.ts";
+import { choice, json, methods, path, rest, segments, text, type Handler } from "./std.ts";
 
 // In-memory data so responses are observable.
 const users = [
@@ -39,9 +30,7 @@ const userItem: Handler = (req) => {
   return methods({
     GET: () => {
       const user = users.find((u) => u.id === id);
-      return user
-        ? json(user)
-        : json({ error: "no such user" }, { status: 404 });
+      return user ? json(user) : json({ error: "no such user" }, { status: 404 });
     },
   })(rest(req)); // advance past the id so methods sees an empty path
 };

@@ -1,4 +1,4 @@
-import { t, type TypeRef } from "@rhi-zone/fractal-type-ir"
+import { t, type TypeRef } from "@rhi-zone/fractal-type-ir";
 // Side-effect import: registers type-ir's extension kinds (incl. "bytes")
 // into the shared `TypeKinds` interface via declaration merging. Required
 // here because `wasm-bindgen.ts` below references `TypeShape`'s "bytes"
@@ -6,9 +6,9 @@ import { t, type TypeRef } from "@rhi-zone/fractal-type-ir"
 // program doesn't otherwise reach `kinds/bytes.ts` through any import
 // edge — type-ir's own `wasm-bindgen.test.ts` establishes the same
 // convention for the same reason (see `@rhi-zone/fractal-type-ir/kinds/common`).
-import "@rhi-zone/fractal-type-ir/kinds/common"
-import { toWasmBindgen, toWasmBindgenType } from "@rhi-zone/fractal-type-ir/rust-wasm-bindgen"
-import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts"
+import "@rhi-zone/fractal-type-ir/kinds/common";
+import { toWasmBindgen, toWasmBindgenType } from "@rhi-zone/fractal-type-ir/rust-wasm-bindgen";
+import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts";
 
 // Rust codegen targeting wasm-bindgen for ffi-ir's boundary layer —
 // module/function/resource/ownership-discipline shapes — layered ON TOP of
@@ -43,18 +43,18 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 function indent(block: string, prefix = "    "): string {
   return block
     .split("\n")
     .map((line) => (line.length === 0 ? line : `${prefix}${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
+  return kind === target || ancestors(kind).includes(target);
 }
 
 /**
@@ -80,8 +80,8 @@ function isA(kind: string, target: string): boolean {
  * on arbitrary nested fields.
  */
 function requireSupportedOwnership(ref: TypeRef, where: string): void {
-  const discipline = ref.meta.ownership as { readonly kind: string } | undefined
-  if (discipline === undefined) return
+  const discipline = ref.meta.ownership as { readonly kind: string } | undefined;
+  if (discipline === undefined) return;
   if (discipline.kind === "opaque-handle" || discipline.kind === "resource") {
     throw new Error(
       `toWasmBindgenFfi: unsupported ownership discipline "${discipline.kind}" for wasm-bindgen/JS target at ${where} — ` +
@@ -91,7 +91,7 @@ function requireSupportedOwnership(ref: TypeRef, where: string): void {
         '. Per docs/design/ffi-ir-architecture-options.md Fork C "discipline-per-target: decided", ' +
         'JS/wasm-bindgen implements only "copy" and "refcount" — project this value to a target that ' +
         "natively supports this discipline instead (C for opaque-handle+free-fn, WIT for resource+own/borrow).",
-    )
+    );
   }
 }
 
@@ -109,17 +109,24 @@ function syntheticFunctionRef(
   returnType: TypeRef,
   meta: Readonly<Record<string, unknown>>,
 ): TypeRef {
-  for (const p of params) requireSupportedOwnership(p.type, `parameter "${p.name}"`)
-  requireSupportedOwnership(returnType, "return type")
-  return t({ kind: "function", params: params.map((p) => ({ name: p.name, type: p.type })), returnType }, meta) as TypeRef
+  for (const p of params) requireSupportedOwnership(p.type, `parameter "${p.name}"`);
+  requireSupportedOwnership(returnType, "return type");
+  return t(
+    { kind: "function", params: params.map((p) => ({ name: p.name, type: p.type })), returnType },
+    meta,
+  ) as TypeRef;
 }
 
 /** Free function -> delegates entirely to `toWasmBindgen` (imported from
  * type-ir's unmodified `wasm-bindgen.ts`) via a reconstructed type-ir
  * `function` TypeRef (see `syntheticFunctionRef`). */
-function buildFunction(name: string, shape: FfiShape & { kind: "function" }, meta: Readonly<Record<string, unknown>>): string {
-  const ref = syntheticFunctionRef(shape.params, shape.returnType, meta)
-  return toWasmBindgen(ref, name)
+function buildFunction(
+  name: string,
+  shape: FfiShape & { kind: "function" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const ref = syntheticFunctionRef(shape.params, shape.returnType, meta);
+  return toWasmBindgen(ref, name);
 }
 
 /**
@@ -145,14 +152,18 @@ function buildFunction(name: string, shape: FfiShape & { kind: "function" }, met
  * here as a judgment call, same as `buildRefcountResource`'s Arc-vs-
  * Arc<Mutex<_>> call below.
  */
-function buildMethod(name: string, shape: FfiShape & { kind: "method" }, meta: Readonly<Record<string, unknown>>): string {
-  const ref = syntheticFunctionRef(shape.params, shape.returnType, meta)
-  const rendered = toWasmBindgen(ref, name)
+function buildMethod(
+  name: string,
+  shape: FfiShape & { kind: "method" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const ref = syntheticFunctionRef(shape.params, shape.returnType, meta);
+  const rendered = toWasmBindgen(ref, name);
   const withReceiver = rendered.replace(
     /pub fn (\w+)\(/,
     shape.params.length === 0 ? "pub fn $1(&self" : "pub fn $1(&self, ",
-  )
-  return withReceiver
+  );
+  return withReceiver;
 }
 
 /**
@@ -169,8 +180,12 @@ function buildMethod(name: string, shape: FfiShape & { kind: "method" }, meta: R
  * `getter_with_clone` attribute is emitted since it only matters for
  * non-Copy fields and there are no fields.
  */
-function buildCopyResource(name: string, shape: FfiShape & { kind: "resource" }, meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? [`/// ${meta.description}`] : []
+function buildCopyResource(
+  name: string,
+  shape: FfiShape & { kind: "resource" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const description = typeof meta.description === "string" ? [`/// ${meta.description}`] : [];
   const structLines = [
     ...description,
     "// Fields are implementation-internal — ffi-ir's `resource` kind models",
@@ -180,10 +195,17 @@ function buildCopyResource(name: string, shape: FfiShape & { kind: "resource" },
     "#[derive(Clone)]",
     "#[wasm_bindgen]",
     `pub struct ${name} {}`,
-  ]
-  const methods = Object.entries(shape.methods).map(([methodName, methodRef]) => buildResourceMethod(methodName, methodRef))
-  const implBlock = [`#[wasm_bindgen]`, `impl ${name} {`, ...methods.map((m) => indent(m)), "}"].join("\n")
-  return [structLines.join("\n"), implBlock].join("\n\n")
+  ];
+  const methods = Object.entries(shape.methods).map(([methodName, methodRef]) =>
+    buildResourceMethod(methodName, methodRef),
+  );
+  const implBlock = [
+    `#[wasm_bindgen]`,
+    `impl ${name} {`,
+    ...methods.map((m) => indent(m)),
+    "}",
+  ].join("\n");
+  return [structLines.join("\n"), implBlock].join("\n\n");
 }
 
 /**
@@ -230,16 +252,20 @@ function buildCopyResource(name: string, shape: FfiShape & { kind: "resource" },
  * `Arc<Mutex<NameData>>` (and thread `.lock()` calls through the generated
  * method bodies) by hand.
  */
-function buildRefcountResource(name: string, shape: FfiShape & { kind: "resource" }, meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? [`/// ${meta.description}`] : []
-  const dataName = `${name}Data`
+function buildRefcountResource(
+  name: string,
+  shape: FfiShape & { kind: "resource" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const description = typeof meta.description === "string" ? [`/// ${meta.description}`] : [];
+  const dataName = `${name}Data`;
   const dataStruct = [
     "// Fields are implementation-internal — ffi-ir's `resource` kind models",
     "// only the boundary's method surface, not private storage (see the",
     "// FfiKinds.resource doc comment in @rhi-zone/fractal-ffi-ir). Fill in",
     "// the actual fields this resource wraps.",
     `struct ${dataName} {}`,
-  ].join("\n")
+  ].join("\n");
   const structLines = [
     ...description,
     "// Shared ownership via Arc — wasm-bindgen already generates a `free()`",
@@ -253,7 +279,7 @@ function buildRefcountResource(name: string, shape: FfiShape & { kind: "resource
     `pub struct ${name} {`,
     `    inner: std::sync::Arc<${dataName}>,`,
     "}",
-  ]
+  ];
   const shareMethod = [
     "/// Returns a new handle sharing ownership of the same underlying value",
     "/// (increments the refcount — the explicit share path for this",
@@ -263,35 +289,51 @@ function buildRefcountResource(name: string, shape: FfiShape & { kind: "resource
     "pub fn share(&self) -> Self {",
     `    Self { inner: std::sync::Arc::clone(&self.inner) }`,
     "}",
-  ].join("\n")
-  const methods = Object.entries(shape.methods).map(([methodName, methodRef]) => buildResourceMethod(methodName, methodRef))
-  const implBlock = [`#[wasm_bindgen]`, `impl ${name} {`, indent(shareMethod), ...methods.map((m) => indent(m)), "}"].join(
-    "\n",
-  )
-  return [dataStruct, structLines.join("\n"), implBlock].join("\n\n")
+  ].join("\n");
+  const methods = Object.entries(shape.methods).map(([methodName, methodRef]) =>
+    buildResourceMethod(methodName, methodRef),
+  );
+  const implBlock = [
+    `#[wasm_bindgen]`,
+    `impl ${name} {`,
+    indent(shareMethod),
+    ...methods.map((m) => indent(m)),
+    "}",
+  ].join("\n");
+  return [dataStruct, structLines.join("\n"), implBlock].join("\n\n");
 }
 
 function buildResourceMethod(methodName: string, methodRef: FfiRef): string {
-  const kind = methodRef.shape.kind
+  const kind = methodRef.shape.kind;
   if (kind !== "method" && kind !== "function") {
-    throw new Error(`toWasmBindgenFfi: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`)
+    throw new Error(
+      `toWasmBindgenFfi: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`,
+    );
   }
-  const shape = methodRef.shape as FfiShape & { kind: "method"; params: readonly FfiParam[]; returnType: TypeRef }
-  return buildMethod(methodName, { ...shape, kind: "method" }, methodRef.meta)
+  const shape = methodRef.shape as FfiShape & {
+    kind: "method";
+    params: readonly FfiParam[];
+    returnType: TypeRef;
+  };
+  return buildMethod(methodName, { ...shape, kind: "method" }, methodRef.meta);
 }
 
 /** Resource dispatch by ownership discipline. `meta.ownership` on the
  * resource's own `FfiRef` (not a reference to it) names which discipline
  * this declaration itself is emitted under — `"copy"` is the default when
  * unset, matching `wasm-bindgen.ts`'s existing copy-by-default behavior. */
-function buildResource(name: string, shape: FfiShape & { kind: "resource" }, meta: Readonly<Record<string, unknown>>): string {
-  const discipline = (meta.ownership as { readonly kind: string } | undefined)?.kind ?? "copy"
-  if (discipline === "copy") return buildCopyResource(name, shape, meta)
-  if (discipline === "refcount") return buildRefcountResource(name, shape, meta)
+function buildResource(
+  name: string,
+  shape: FfiShape & { kind: "resource" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const discipline = (meta.ownership as { readonly kind: string } | undefined)?.kind ?? "copy";
+  if (discipline === "copy") return buildCopyResource(name, shape, meta);
+  if (discipline === "refcount") return buildRefcountResource(name, shape, meta);
   throw new Error(
     `toWasmBindgenFfi: unsupported ownership discipline "${discipline}" for wasm-bindgen/JS target on resource "${name}" — ` +
       'JS/wasm-bindgen implements only "copy" and "refcount" for resource declarations (see the file-level doc comment)',
-  )
+  );
 }
 
 /** Module -> groups its functions/resources into a `pub mod name { ... }` —
@@ -300,10 +342,20 @@ function buildResource(name: string, shape: FfiShape & { kind: "resource" }, met
  * block (confirmed by the guide's own multi-file examples nesting exports
  * under plain Rust modules), so this is the direct, unsurprising mapping. */
 function buildModule(name: string, shape: FfiShape & { kind: "module" }): string {
-  const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) => toWasmBindgenFfi(fnRef, fnName))
-  const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) => toWasmBindgenFfi(resRef, resName))
-  const body = [...resourceDecls, ...functionDecls].join("\n\n")
-  return [`pub mod ${toSnakeCase(name)} {`, "    use wasm_bindgen::prelude::*;", "", indent(body), "}"].join("\n")
+  const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) =>
+    toWasmBindgenFfi(fnRef, fnName),
+  );
+  const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) =>
+    toWasmBindgenFfi(resRef, resName),
+  );
+  const body = [...resourceDecls, ...functionDecls].join("\n\n");
+  return [
+    `pub mod ${toSnakeCase(name)} {`,
+    "    use wasm_bindgen::prelude::*;",
+    "",
+    indent(body),
+    "}",
+  ].join("\n");
 }
 
 /**
@@ -317,33 +369,35 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }): string
  * and `buildResource`.
  */
 export function toWasmBindgenFfi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (name === undefined) {
     throw new Error(
       `toWasmBindgenFfi: "${kind}" requires a name — wasm-bindgen exports are named JS bindings/modules, not anonymous inline declarations`,
-    )
+    );
   }
 
   if (kind === "function") {
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta)
+    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta);
   }
   if (kind === "method") {
-    return buildMethod(name, ref.shape as FfiShape & { kind: "method" }, ref.meta)
+    return buildMethod(name, ref.shape as FfiShape & { kind: "method" }, ref.meta);
   }
   if (kind === "resource") {
-    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta)
+    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta);
   }
   if (kind === "module") {
-    return buildModule(name, ref.shape as FfiShape & { kind: "module" })
+    return buildModule(name, ref.shape as FfiShape & { kind: "module" });
   }
   if (isA(kind, "function")) {
     // A consumer-registered kind whose nearest ancestor is "function" (e.g.
     // ffi-ir's own registerParent-extension mechanism) falls back to the
     // free-function path, mirroring index.ts's method->function ancestry.
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta)
+    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta);
   }
-  throw new Error(`toWasmBindgenFfi: unhandled ffi-ir kind "${kind}" (no handler and no known ancestor)`)
+  throw new Error(
+    `toWasmBindgenFfi: unhandled ffi-ir kind "${kind}" (no handler and no known ancestor)`,
+  );
 }
 
-export { toWasmBindgenType }
+export { toWasmBindgenType };

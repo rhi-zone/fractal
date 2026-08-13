@@ -28,7 +28,7 @@
 // four names correspond to (`identityProfile`/`jsonProfile`/`queryProfile`/
 // `argvProfile`, compile.ts) is exactly one of these four in practice (no
 // other profile is constructed anywhere in this codebase).
-export type WireProfileName = "identity" | "json" | "query" | "argv"
+export type WireProfileName = "identity" | "json" | "query" | "argv";
 
 /**
  * A single leaf VALUE's wire shape under `P` — the type-level counterpart of
@@ -79,7 +79,7 @@ type WireOfLeaf<T, P extends WireProfileName> = T extends Date
           : "true" | "false"
       : T extends string
         ? string
-        : T
+        : T;
 
 /**
  * `WireOf<T, P>` — `T`'s wire representation under wire profile `P`,
@@ -147,4 +147,4 @@ export type WireOf<T, P extends WireProfileName> = T extends null | undefined
       ? readonly WireOf<E, P>[]
       : T extends object
         ? { readonly [K in keyof T]?: WireOf<T[K], P> }
-        : WireOfLeaf<T, P>
+        : WireOfLeaf<T, P>;

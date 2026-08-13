@@ -16,16 +16,16 @@
 // Left open — pick a direction only if/when a concrete codegen use case
 // needs it; documented as a next step, not implemented speculatively.
 
-import type { ClientExtension, FetchImpl } from "../extension.ts"
+import type { ClientExtension, FetchImpl } from "../extension.ts";
 
 export type InterceptorsOptions = {
   /** Runs before the request is sent; return the request to send (transformed or as-is). */
-  readonly onRequest?: (req: Request) => Request | Promise<Request>
+  readonly onRequest?: (req: Request) => Request | Promise<Request>;
   /** Runs after a response is received; return the response to hand back (transformed or as-is). */
-  readonly onResponse?: (res: Response, req: Request) => Response | Promise<Response>
+  readonly onResponse?: (res: Response, req: Request) => Response | Promise<Response>;
   /** Runs when `inner` throws (network error, abort, etc.). The original error is always rethrown afterward. */
-  readonly onError?: (err: unknown, req: Request) => void
-}
+  readonly onError?: (err: unknown, req: Request) => void;
+};
 
 /**
  * Pre-request / post-response / on-error hook extension.
@@ -40,16 +40,18 @@ export type InterceptorsOptions = {
  * })
  */
 export function interceptors(options: InterceptorsOptions = {}): ClientExtension {
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    const finalReq = options.onRequest !== undefined ? await options.onRequest(req) : req
-    try {
-      const res = await inner(finalReq)
-      return options.onResponse !== undefined ? await options.onResponse(res, finalReq) : res
-    } catch (err) {
-      options.onError?.(err, finalReq)
-      throw err
-    }
-  }
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      const finalReq = options.onRequest !== undefined ? await options.onRequest(req) : req;
+      try {
+        const res = await inner(finalReq);
+        return options.onResponse !== undefined ? await options.onResponse(res, finalReq) : res;
+      } catch (err) {
+        options.onError?.(err, finalReq);
+        throw err;
+      }
+    };
 
-  return { name: "interceptors", wrapFetch }
+  return { name: "interceptors", wrapFetch };
 }

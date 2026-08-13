@@ -5,13 +5,13 @@
 // src/content/docs/api/ (Starlight's content-collection convention, per
 // src/content.config.ts).
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
-import { toOpenApi } from "@rhi-zone/fractal-http-api-projector/openapi"
-import { toStarlightRouteReference } from "@rhi-zone/fractal-http-api-projector/http-route-reference"
-import { api } from "./src/fixture-tree.ts"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { toOpenApi } from "@rhi-zone/fractal-http-api-projector/openapi";
+import { toStarlightRouteReference } from "@rhi-zone/fractal-http-api-projector/http-route-reference";
+import { api } from "./src/fixture-tree.ts";
 
-const outDir = join(import.meta.dirname, "src", "content", "docs", "api")
+const outDir = join(import.meta.dirname, "src", "content", "docs", "api");
 
 async function main(): Promise<void> {
   const doc = await toOpenApi(api, {
@@ -38,7 +38,11 @@ async function main(): Promise<void> {
         },
       },
       "books/:bookId": {
-        inputSchema: { type: "object", properties: { bookId: { type: "string" } }, required: ["bookId"] },
+        inputSchema: {
+          type: "object",
+          properties: { bookId: { type: "string" } },
+          required: ["bookId"],
+        },
         outputSchema: {
           type: "object",
           properties: {
@@ -50,16 +54,16 @@ async function main(): Promise<void> {
         },
       },
     },
-  })
+  });
 
-  const pages = toStarlightRouteReference(doc)
+  const pages = toStarlightRouteReference(doc);
 
-  rmSync(outDir, { recursive: true, force: true })
-  mkdirSync(outDir, { recursive: true })
+  rmSync(outDir, { recursive: true, force: true });
+  mkdirSync(outDir, { recursive: true });
   for (const [filename, content] of pages) {
-    writeFileSync(join(outDir, filename), content, "utf8")
-    console.log(`wrote src/content/docs/api/${filename}`)
+    writeFileSync(join(outDir, filename), content, "utf8");
+    console.log(`wrote src/content/docs/api/${filename}`);
   }
 }
 
-await main()
+await main();

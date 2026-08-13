@@ -34,22 +34,22 @@ and the utilities `derive.ts`/`compile.ts` that transform or compile
 
 The recurring shape: one language, several projector modules, one per
 validation/serialization library that language's ecosystem actually uses.
-This is the pattern worth internalizing — a projector targets a *library*,
+This is the pattern worth internalizing — a projector targets a _library_,
 not just a language.
 
-| Language | Variants | Count | Reference |
-|---|---|---|---|
-| TypeScript | native, Zod, Valibot, TypeBox, io-ts, Yup, Superstruct, Runtypes, ArkType, Effect Schema, JSDoc | 11 | [typescript.md](../reference/type-ir/typescript.md) |
-| Python | dataclasses, Pydantic, attrs, msgspec, cattrs | 5 | [python.md](../reference/type-ir/python.md) |
-| C++ | nlohmann/json, RapidJSON, simdjson, Boost.JSON, Glaze | 5 | [cpp.md](../reference/type-ir/cpp.md) |
-| Go | encoding/json, easyjson, jsoniter, sonic | 4 | [go.md](../reference/type-ir/go.md) |
-| Java | Jackson, Gson, Moshi, JSON-B | 4 | [java.md](../reference/type-ir/java.md) |
-| Kotlin | kotlinx.serialization, Jackson, Gson | 3 | [kotlin.md](../reference/type-ir/kotlin.md) |
-| Swift | Codable, SwiftyJSON, ObjectMapper | 3 | [swift.md](../reference/type-ir/swift.md) |
-| C# | System.Text.Json, Newtonsoft, ServiceStack | 3 | [csharp.md](../reference/type-ir/csharp.md) |
-| Dart | json_serializable, Freezed, built_value | 3 | [dart.md](../reference/type-ir/dart.md) |
-| Ruby | Sorbet, dry-types, RBS | 3 | [ruby.md](../reference/type-ir/ruby.md) |
-| PHP | native, Symfony, JMS | 3 | [php.md](../reference/type-ir/php.md) |
+| Language   | Variants                                                                                        | Count | Reference                                           |
+| ---------- | ----------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------- |
+| TypeScript | native, Zod, Valibot, TypeBox, io-ts, Yup, Superstruct, Runtypes, ArkType, Effect Schema, JSDoc | 11    | [typescript.md](../reference/type-ir/typescript.md) |
+| Python     | dataclasses, Pydantic, attrs, msgspec, cattrs                                                   | 5     | [python.md](../reference/type-ir/python.md)         |
+| C++        | nlohmann/json, RapidJSON, simdjson, Boost.JSON, Glaze                                           | 5     | [cpp.md](../reference/type-ir/cpp.md)               |
+| Go         | encoding/json, easyjson, jsoniter, sonic                                                        | 4     | [go.md](../reference/type-ir/go.md)                 |
+| Java       | Jackson, Gson, Moshi, JSON-B                                                                    | 4     | [java.md](../reference/type-ir/java.md)             |
+| Kotlin     | kotlinx.serialization, Jackson, Gson                                                            | 3     | [kotlin.md](../reference/type-ir/kotlin.md)         |
+| Swift      | Codable, SwiftyJSON, ObjectMapper                                                               | 3     | [swift.md](../reference/type-ir/swift.md)           |
+| C#         | System.Text.Json, Newtonsoft, ServiceStack                                                      | 3     | [csharp.md](../reference/type-ir/csharp.md)         |
+| Dart       | json_serializable, Freezed, built_value                                                         | 3     | [dart.md](../reference/type-ir/dart.md)             |
+| Ruby       | Sorbet, dry-types, RBS                                                                          | 3     | [ruby.md](../reference/type-ir/ruby.md)             |
+| PHP        | native, Symfony, JMS                                                                            | 3     | [php.md](../reference/type-ir/php.md)               |
 
 Subtotal: 47 projectors across 11 languages.
 
@@ -58,14 +58,14 @@ Subtotal: 47 projectors across 11 languages.
 One projector module because one library dominates or the ecosystem has a
 single obvious wire-format convention:
 
-| Language | Target | File |
-|---|---|---|
-| Rust | serde | `rust-serde.ts` |
-| Haskell | aeson | `haskell-aeson.ts` |
-| Elm | `elm/json` decoders/encoders | `elm-json.ts` |
-| Flow | Flow's own type syntax | `flow-native.ts` |
-| Objective-C | Foundation (`NSCoding`-style) | `objc-foundation.ts` |
-| Crystal | `JSON::Serializable` | `crystal-json-serializable.ts` |
+| Language    | Target                        | File                           |
+| ----------- | ----------------------------- | ------------------------------ |
+| Rust        | serde                         | `rust-serde.ts`                |
+| Haskell     | aeson                         | `haskell-aeson.ts`             |
+| Elm         | `elm/json` decoders/encoders  | `elm-json.ts`                  |
+| Flow        | Flow's own type syntax        | `flow-native.ts`               |
+| Objective-C | Foundation (`NSCoding`-style) | `objc-foundation.ts`           |
+| Crystal     | `JSON::Serializable`          | `crystal-json-serializable.ts` |
 
 Subtotal: 6 projectors. See [other-languages.md](../reference/type-ir/other-languages.md).
 
@@ -75,18 +75,18 @@ These don't emit source code — they emit a structured document (JSON Schema,
 an OpenAPI document object, a SQL DDL string, a `.proto` file) meant to be
 consumed by other tooling, not compiled.
 
-| Family | Variants | Count |
-|---|---|---|
-| JSON Schema | draft 2020-12, draft-07, draft-04 | 3 |
-| OpenAPI | 3.0, 2.0 | 2 |
-| JSON Type Definition (JTD) | — | 1 |
-| Standard Schema | — | 1 |
-| Protobuf | — | 1 |
-| Cap'n Proto | — | 1 |
-| FlatBuffers | — | 1 |
-| SQL DDL | generic + MSSQL variant | 2 |
-| GraphQL SDL | — | 1 |
-| JSON-RPC | — | 1 |
+| Family                     | Variants                          | Count |
+| -------------------------- | --------------------------------- | ----- |
+| JSON Schema                | draft 2020-12, draft-07, draft-04 | 3     |
+| OpenAPI                    | 3.0, 2.0                          | 2     |
+| JSON Type Definition (JTD) | —                                 | 1     |
+| Standard Schema            | —                                 | 1     |
+| Protobuf                   | —                                 | 1     |
+| Cap'n Proto                | —                                 | 1     |
+| FlatBuffers                | —                                 | 1     |
+| SQL DDL                    | generic + MSSQL variant           | 2     |
+| GraphQL SDL                | —                                 | 1     |
+| JSON-RPC                   | —                                 | 1     |
 
 Subtotal: 14 projectors. See [schema-formats.md](../reference/type-ir/schema-formats.md)
 and [wire-formats.md](../reference/type-ir/wire-formats.md).
@@ -96,11 +96,11 @@ and [wire-formats.md](../reference/type-ir/wire-formats.md).
 These consume a whole `TypeRefDocument` and emit human-readable reference
 pages (one page per named type), not code or a machine-readable schema:
 
-| Target | File |
-|---|---|
+| Target     | File                      |
+| ---------- | ------------------------- |
 | Docusaurus | `docusaurus-reference.ts` |
-| Starlight | `starlight-reference.ts` |
-| MkDocs | `mkdocs-reference.ts` |
+| Starlight  | `starlight-reference.ts`  |
+| MkDocs     | `mkdocs-reference.ts`     |
 
 Subtotal: 3 projectors. See [doc-projectors.md](../reference/type-ir/doc-projectors.md).
 
@@ -118,12 +118,12 @@ A few concrete examples, read from the module comments themselves:
   `typescript-typebox.ts`) all validate TypeScript objects at runtime, but
   for different reasons. Zod is the ecosystem default — broad library
   interop, one schema object per type. Valibot's projector builds pipelines
-  of standalone validation *actions* (`v.pipe(v.string(), v.email())`)
+  of standalone validation _actions_ (`v.pipe(v.string(), v.email())`)
   rather than method chains, because Valibot's own design optimizes for
   tree-shaking — unused actions don't ship. TypeBox's projector emits
   builder calls (`Type.Object({...})`) whose runtime representation is
   itself JSON-Schema-shaped, which is the whole point of the library:
-  the schema *is* a JSON Schema document, so it can be handed directly to a
+  the schema _is_ a JSON Schema document, so it can be handed directly to a
   JSON Schema-consuming tool without a separate export step.
 - **msgspec vs. attrs vs. Pydantic** (`python-msgspec.ts`, `python-attrs.ts`,
   `python-pydantic.ts`) target three different points on Python's
@@ -176,23 +176,25 @@ render entry point, so a new one follows the same skeleton every existing
 projector does:
 
 ```ts
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const handlers: Record<string, Converter> = {
   boolean: () => "bool",
   string: () => "String",
   // ...one entry per kind this target needs to special-case
-}
+};
 
 export function toNewTarget(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? /* fallback for unhandled kinds */ "" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined
+    ? /* fallback for unhandled kinds */ ""
+    : converter(ref.shape, ref.meta);
 }
 ```
 
-Only kinds the target needs to render *differently* from their parent need a
+Only kinds the target needs to render _differently_ from their parent need a
 handler — everything else falls back through `ancestors()`. Sibling
 projectors for the same language (e.g. `python-attrs.ts` and
 `python-msgspec.ts`) are the fastest way to see how much of that table is

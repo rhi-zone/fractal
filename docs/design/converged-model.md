@@ -103,22 +103,24 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
 0 fail; typecheck clean.
 
 **[BUILT] `@rhi-zone/fractal-api-tree` (`packages/api-tree`):**
+
 - `node.ts` — types: `Meta` (open bag, `tags?` sub-bag), `Op<I,O>` (`fn` +
   `meta`), `ParamNode` (`_tag:"param"`, `name`, `subtree`), `ChildEntry = Node |
-  ParamNode`, `Node` (`ops`, `children`, `meta`). Constructors: `op(fn, meta?)`,
+ParamNode`, `Node` (`ops`, `children`, `meta`). Constructors: `op(fn, meta?)`,
   `param(name, subtree)`, `node({ops?,children?,meta?})`, `service(instance,
-  opts?)`. Runtime: `dispatch(node, segments, input, slugs?)` walker (accumulates
+opts?)`. Runtime: `dispatch(node, segments, input, slugs?)` walker (accumulates
   param slugs provenance-blind into op input).
 - `tags.ts` — `Tags` type (open three-valued dict: `readOnly?/idempotent?/
-  destructive?/openWorld?/streaming?/[custom:string]?: boolean|undefined`).
+destructive?/openWorld?/streaming?/[custom:string]?: boolean|undefined`).
   `resolveTags(tags): ResolvedTags` applies the implication lattice (`readOnly ⇒
-  idempotent`; `readOnly ∧ destructive → conflict`). `effectiveTags(path)` merges
+idempotent`; `readOnly ∧ destructive → conflict`). `effectiveTags(path)` merges
   root→op closest-wins; `undefined` defers upward (unknown ≠ false).
 - `index.ts` — base primitives kept: `compose`/`pipe`; `Result<T,E>` + `ok/err/
-  isOk/isErr/map/bind/match`; derived combinators `composeK`/`collect`. Old
+isOk/isErr/map/bind/match`; derived combinators `composeK`/`collect`. Old
   D-tree/Schema routing retired.
 
 **[BUILT] `@rhi-zone/fractal-http-api-projector` (`packages/http-api-projector`):**
+
 - `project.ts` — `buildRoutes(node)`: path purely from tree walk (static key →
   `/{seg}`, ParamNode → `/{name}`, segment inferral strips leading verb word +
   kebab-cases). `meta.http.segment` overrides a node/op's contribution;
@@ -140,6 +142,7 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
   and from Request/Response — the one non-passthrough adapter).
 
 **[BUILT] `@rhi-zone/fractal-mcp-api-projector` (`packages/mcp-api-projector`):**
+
 - `project.ts` — `toTools(node, opts?)`: walks Node tree, emits `McpTool[]` (one
   per op). Name: underscore-joined prefix from tree walk (`meta.mcp.name` full
   override; `meta.mcp.segment` per-node contribution). Annotation hints
@@ -147,19 +150,20 @@ see `package.json` comment.) 130 tests pass across the 5 active workspaces,
   SAME `meta.tags` as HTTP; three-valued semantics: unknown tag → hint OMITTED
   (unknown ≠ false). `meta.mcp.annotations` overrides individual hints.
   Description: `meta.mcp.description > meta.description > derived.description >
-  op key`. `inputSchema` from supplied `SchemaMap` (codegen) or MCP spec minimum
+op key`. `inputSchema` from supplied `SchemaMap` (codegen) or MCP spec minimum
   `{type:"object"}`.
 
 **[BUILT] `@rhi-zone/fractal-codegen` (`packages/codegen`, as built this session — later merged into `@rhi-zone/fractal-type-ir`/`packages/type-ir`, 2026-07-18):**
+
 - `extract.ts` — TS compiler API (read-only). `schemaFromType`: primitives
   (string/number/boolean), arrays, optional fields (strips `|undefined`), nested
   objects; punts unions/generics/exotic to `{type:"object",$comment:"TODO(codegen):
-  …"}`. `schemaFromFunctionNode`: derives schema from op's first parameter type.
+…"}`. `schemaFromFunctionNode`: derives schema from op's first parameter type.
   `extractJsDoc`: reads leading JSDoc text, climbs parent chain to declaration.
 - `tree.ts` — `extractToolSchemas(entryFile): SchemaMap`: walks exported `node()`
   calls at AST level (runtime type erases op input shapes), mirrors toTools'
   underscore-joined name construction. Supports `node({ops,children})`, `op(fn,
-  meta)`, `param("name", node({…}))` children. NOTE: `meta.mcp.name` /
+meta)`, `param("name", node({…}))` children. NOTE: `meta.mcp.name` /
   `meta.mcp.segment` overrides not yet mirrored here (TODO in source).
 
 **[BUILT] End-to-end proof (`examples/library-api`):**
@@ -184,7 +188,7 @@ base kept.
   suite.
 
 - **[BUILT]** ~~Tree EDGES for standalone functions~~ — done: `param(name,
-  subtree)` for parameterized edges; `children` record for static edges.
+subtree)` for parameterized edges; `children` record for static edges.
 
 - **[BUILT]** ~~Codegen specifics for lowering types+JSDoc → runtime data~~ —
   done: `extractToolSchemas` + `schemaFromType` via TS compiler API.
@@ -197,7 +201,7 @@ base kept.
   wrong key lookups if those overrides are used.
 
 - **[OPEN]** Codegen punts unions, generics, and exotic types to `{type:
-  "object"}`. Any op with a non-obvious input shape gets the MCP spec minimum.
+"object"}`. Any op with a non-obvious input shape gets the MCP spec minimum.
 
 - **[OPEN]** JSDoc description extraction is minimal (leading comment only; no
   `@param` / `@returns` / tag parsing).

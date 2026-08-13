@@ -8,16 +8,16 @@ This page is a summary index.
 
 All 8 packages listed below are built and passing tests. `@rhi-zone/fractal` is an umbrella facade over the others, added 2026-08-07 — it holds no code of its own, only re-exports; see [`docs/design/decisions.md`](../design/decisions.md) § "Umbrella package `@rhi-zone/fractal`" for why the five protocol projectors stay five packages behind it. `@rhi-zone/fractal-codegen` was merged into `@rhi-zone/fractal-type-ir` 2026-07-18, then its extractor/tree-walker/CLI (`extract.ts`/`tree.ts`/`cli.ts`/`build.ts`) moved on to `@rhi-zone/fractal-api-tree` the same day — they walk `api()`/`op()` authoring source, an api-tree concern, not type-ir's. `compile.ts` (`TypeRef` → validator code) stayed in type-ir as one of its 20+ projectors. `@rhi-zone/fractal-openapi-api-projector` and `@rhi-zone/fractal-client-api-projector` were both merged into `@rhi-zone/fractal-http-api-projector` the same day — OpenAPI only ever describes HTTP APIs and the runtime client only ever builds HTTP requests, so both are HTTP concerns, not separate projection packages; `createFetch` now auto-serves the generated OpenAPI document at `/openapi.json`.
 
-| Package | Status | Description |
-|---------|--------|-------------|
-| `@rhi-zone/fractal` | Built & green | Umbrella facade — package root re-exports the function core, one subpath per protocol projection (`/http`, `/cli`, `/json-rpc`, `/graphql`, `/mcp`). Core + HTTP + CLI + JSON-RPC are hard dependencies; GraphQL and MCP are optional peers, so neither protocol's runtime (`graphql`, `@modelcontextprotocol/sdk`) is loaded by a consumer that doesn't import its subpath |
-| `@rhi-zone/fractal-api-tree` | Built & green | Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in `./node`; Tags lattice in `./tags`; build-time extractor + source-level tree walker in `./extract`/`./tree`; entry-file autodetection in `./discover`; `fractal-api-tree` build/watch/check CLI |
-| `@rhi-zone/fractal-http-api-projector` | Built & green | WHATWG renderer for the function-core tree — direct tree-walk `makeRouter`, `autoMethodLayer`, `corsLayer`, `createFetch`, `serveBun`/`serveNode`; OpenAPI 3.1 projection (`toOpenApi`/`toOpenApiFromRoute`) from routes + tags + codegen schemas, auto-served at `/openapi.json` by `createFetch`; runtime HTTP client (`createClient`/`createClientFromRoute`) whose verb/path derivation walks the same `HttpRoute` tree the router dispatches against |
-| `@rhi-zone/fractal-type-ir` | Built & green | Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.), plus AOT validator codegen (`compile.ts`) |
-| `@rhi-zone/fractal-mcp-api-projector` | Built & green | MCP tool projection for the function-core tree — `toTools`, annotation hints derived from `meta.tags` |
-| `@rhi-zone/fractal-cli-api-projector` | Built & green | CLI projection for the function-core tree — subcommand dispatch, tag-driven confirm, codegen args |
-| `@rhi-zone/fractal-graphql-api-projector` | Built & green | GraphQL projection for the function-core tree — `projectGraphQL`/`toSDL`/`toSchema`, resolver map dispatching onto tree handlers, server/client/codegen wiring |
-| `@rhi-zone/fractal-json-rpc-api-projector` | Built & green | JSON-RPC 2.0 method projection for the function-core tree — dot-joined method names, HTTP POST + WebSocket transports, batch requests per §6, streaming via Notifications, typed client |
+| Package                                    | Status        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@rhi-zone/fractal`                        | Built & green | Umbrella facade — package root re-exports the function core, one subpath per protocol projection (`/http`, `/cli`, `/json-rpc`, `/graphql`, `/mcp`). Core + HTTP + CLI + JSON-RPC are hard dependencies; GraphQL and MCP are optional peers, so neither protocol's runtime (`graphql`, `@modelcontextprotocol/sdk`) is loaded by a consumer that doesn't import its subpath                                                                               |
+| `@rhi-zone/fractal-api-tree`               | Built & green | Function-core model — function category (Fn/compose/pipe) + Result + Kleisli/applicative combinators (composeK/collect); Node/Op/Meta model in `./node`; Tags lattice in `./tags`; build-time extractor + source-level tree walker in `./extract`/`./tree`; entry-file autodetection in `./discover`; `fractal-api-tree` build/watch/check CLI                                                                                                            |
+| `@rhi-zone/fractal-http-api-projector`     | Built & green | WHATWG renderer for the function-core tree — direct tree-walk `makeRouter`, `autoMethodLayer`, `corsLayer`, `createFetch`, `serveBun`/`serveNode`; OpenAPI 3.1 projection (`toOpenApi`/`toOpenApiFromRoute`) from routes + tags + codegen schemas, auto-served at `/openapi.json` by `createFetch`; runtime HTTP client (`createClient`/`createClientFromRoute`) whose verb/path derivation walks the same `HttpRoute` tree the router dispatches against |
+| `@rhi-zone/fractal-type-ir`                | Built & green | Type IR — subtyping hierarchy + open metadata bag for projections (JSON Schema, OpenAPI, SQL DDL, etc.), plus AOT validator codegen (`compile.ts`)                                                                                                                                                                                                                                                                                                        |
+| `@rhi-zone/fractal-mcp-api-projector`      | Built & green | MCP tool projection for the function-core tree — `toTools`, annotation hints derived from `meta.tags`                                                                                                                                                                                                                                                                                                                                                     |
+| `@rhi-zone/fractal-cli-api-projector`      | Built & green | CLI projection for the function-core tree — subcommand dispatch, tag-driven confirm, codegen args                                                                                                                                                                                                                                                                                                                                                         |
+| `@rhi-zone/fractal-graphql-api-projector`  | Built & green | GraphQL projection for the function-core tree — `projectGraphQL`/`toSDL`/`toSchema`, resolver map dispatching onto tree handlers, server/client/codegen wiring                                                                                                                                                                                                                                                                                            |
+| `@rhi-zone/fractal-json-rpc-api-projector` | Built & green | JSON-RPC 2.0 method projection for the function-core tree — dot-joined method names, HTTP POST + WebSocket transports, batch requests per §6, streaming via Notifications, typed client                                                                                                                                                                                                                                                                   |
 
 ## Core: `@rhi-zone/fractal-api-tree`
 
@@ -25,25 +25,25 @@ The composition unit is a plain tree, not a combinator chain:
 
 ```ts
 type Node<H extends Handler = Handler> = {
-  readonly handler?: H                                    // present on a leaf
-  readonly children?: Readonly<Record<string, Node>>       // present on a branch
-  readonly fallback?: { readonly name: string; readonly subtree: Node } // wildcard capture
-  readonly meta: Meta                                      // open metadata bag (tags + projection namespaces)
-}
+  readonly handler?: H; // present on a leaf
+  readonly children?: Readonly<Record<string, Node>>; // present on a branch
+  readonly fallback?: { readonly name: string; readonly subtree: Node }; // wildcard capture
+  readonly meta: Meta; // open metadata bag (tags + projection namespaces)
+};
 ```
 
 A node with `handler` is a leaf; a node with `children` is a branch; both is valid. `fallback` lets keyed dispatch capture an unmatched segment as a named param and continue into a subtree.
 
-| Export | Description |
-|---|---|
-| `op(fn, ...metas)` | Build a leaf node from a handler, merging metadata bundles via `mergeMeta` |
-| `api(children, opts?)` | Build a branch node from a `{ key: Node }` map |
-| `mergeMeta(...)` | Recursive metadata merge (objects deep-merge, arrays concat, later wins) |
-| `isNode` / `isLeaf` | Discriminators — `isLeaf` is true when `handler` is present |
-| `compose` / `pipe` | Plain function composition / left-to-right value threading |
-| `ok` / `err` / `isOk` / `isErr` / `map` / `bind` / `match` | `Result<T, E>` — the fallible-value type and its combinators |
-| `composeK` | Kleisli composition over `Result` |
-| `collect` | Applicative record combinator — runs a record of `Result`-producers, short-circuits on first error |
+| Export                                                     | Description                                                                                        |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `op(fn, ...metas)`                                         | Build a leaf node from a handler, merging metadata bundles via `mergeMeta`                         |
+| `api(children, opts?)`                                     | Build a branch node from a `{ key: Node }` map                                                     |
+| `mergeMeta(...)`                                           | Recursive metadata merge (objects deep-merge, arrays concat, later wins)                           |
+| `isNode` / `isLeaf`                                        | Discriminators — `isLeaf` is true when `handler` is present                                        |
+| `compose` / `pipe`                                         | Plain function composition / left-to-right value threading                                         |
+| `ok` / `err` / `isOk` / `isErr` / `map` / `bind` / `match` | `Result<T, E>` — the fallible-value type and its combinators                                       |
+| `composeK`                                                 | Kleisli composition over `Result`                                                                  |
+| `collect`                                                  | Applicative record combinator — runs a record of `Result`-producers, short-circuits on first error |
 
 The `Node`/`Meta` model lives in `./node.ts` (re-exported from the package root); the tags lattice lives in `./tags.ts`.
 
@@ -51,29 +51,29 @@ Dev tooling — build-time extraction over authored `api()`/`op()` source —
 lives on separate subpaths, kept off the package root so runtime consumers
 of the base model don't pull in the TypeScript compiler:
 
-| Export | Description |
-|---|---|
-| `createExtractorProgram` / `schemaFromType` / `schemaFromFunctionNode` / `schemaFromReturnType` | (`./extract`) Build a TS compiler program and derive a `JsonSchema` from a type/function/return-type node. Obvious cases only; exotic types punt to `{ type: "object" }` with a self-documenting `$comment` |
-| `typeRefFromType` / `typeRefFromFunctionNode` / `typeRefFromReturnType` | (`./extract`) Same, but produce a `TypeRef` instead of raw JSON Schema |
-| `extractJsDoc` | (`./extract`) Pull JSDoc description text off a node |
-| `extractToolSchemas` / `extractRouteTypeRefs` / `extractToolTypeRefs` | (`./tree`) Walk a `Node` tree AT THE SOURCE LEVEL, keying schemas/type-refs by the same underscore-joined name used by MCP/OpenAPI |
-| `fractal-api-tree` CLI | `build`/`watch`/`check` subcommands over the applyValidation module (`./cli.ts`), orchestrating a call-site scan (`./apply-validation-build.ts`) into `@rhi-zone/fractal-type-ir`'s wire-profile engine (`compileWireEntryFragment`/`compileConstraintsFn`) |
-| `findEntryFiles` / `hasTreeExport` | (`./discover`, `./tree`) Autodetect a deployment's `api()`/`op()` tree entry files by directory scan + export-shape detection, with `include`/`exclude` overrides — replaces a hand-maintained per-consumer entry-file list |
+| Export                                                                                          | Description                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createExtractorProgram` / `schemaFromType` / `schemaFromFunctionNode` / `schemaFromReturnType` | (`./extract`) Build a TS compiler program and derive a `JsonSchema` from a type/function/return-type node. Obvious cases only; exotic types punt to `{ type: "object" }` with a self-documenting `$comment`                                                 |
+| `typeRefFromType` / `typeRefFromFunctionNode` / `typeRefFromReturnType`                         | (`./extract`) Same, but produce a `TypeRef` instead of raw JSON Schema                                                                                                                                                                                      |
+| `extractJsDoc`                                                                                  | (`./extract`) Pull JSDoc description text off a node                                                                                                                                                                                                        |
+| `extractToolSchemas` / `extractRouteTypeRefs` / `extractToolTypeRefs`                           | (`./tree`) Walk a `Node` tree AT THE SOURCE LEVEL, keying schemas/type-refs by the same underscore-joined name used by MCP/OpenAPI                                                                                                                          |
+| `fractal-api-tree` CLI                                                                          | `build`/`watch`/`check` subcommands over the applyValidation module (`./cli.ts`), orchestrating a call-site scan (`./apply-validation-build.ts`) into `@rhi-zone/fractal-type-ir`'s wire-profile engine (`compileWireEntryFragment`/`compileConstraintsFn`) |
+| `findEntryFiles` / `hasTreeExport`                                                              | (`./discover`, `./tree`) Autodetect a deployment's `api()`/`op()` tree entry files by directory scan + export-shape detection, with `include`/`exclude` overrides — replaces a hand-maintained per-consumer entry-file list                                 |
 
 ## HTTP kit: `@rhi-zone/fractal-http-api-projector`
 
 A WHATWG-request/response renderer for the same `Node` tree — no separate combinator vocabulary, just a tree-walk projector plus DX sugar.
 
-| Export | Description |
-|---|---|
+| Export                                                                      | Description                                                                                                     |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `http.get` / `.post` / `.put` / `.patch` / `.delete` / `.head` / `.options` | Verb-helper metadata bundles — pin the HTTP verb and imply behavioral tags (e.g. `http.get` → `readOnly: true`) |
-| `crud(handlers)` | Convention constructor for the 5-op REST-resource shape, wiring `http.*` bundles for you |
-| `httpProjection(tree, opts?)` | One-call `Node => HttpRoute` with the standard rewriter pipeline pre-composed |
-| `mapRoute` | Shared tree-recursion visitor for route rewriters |
-| `fusePipeline` / `skipEmptyInput` | Optional pipeline-optimization rewriters |
-| `toRouter` / `radixRouter` / `compiledCharRouter` / `mapCharRouter` | Compile an `HttpRoute` tree into a dispatchable router (radix / char-trie variants) |
-| `withALS` | Wrap a handler to run inside `AsyncLocalStorage`-scoped context |
-| `toOpenApi(node, opts?)` / `toOpenApiFromRoute(route, opts?)` | Project a `Node` tree (or an already-projected `HttpRoute`) to an OpenAPI 3.1 document — see below |
+| `crud(handlers)`                                                            | Convention constructor for the 5-op REST-resource shape, wiring `http.*` bundles for you                        |
+| `httpProjection(tree, opts?)`                                               | One-call `Node => HttpRoute` with the standard rewriter pipeline pre-composed                                   |
+| `mapRoute`                                                                  | Shared tree-recursion visitor for route rewriters                                                               |
+| `fusePipeline` / `skipEmptyInput`                                           | Optional pipeline-optimization rewriters                                                                        |
+| `toRouter` / `radixRouter` / `compiledCharRouter` / `mapCharRouter`         | Compile an `HttpRoute` tree into a dispatchable router (radix / char-trie variants)                             |
+| `withALS`                                                                   | Wrap a handler to run inside `AsyncLocalStorage`-scoped context                                                 |
+| `toOpenApi(node, opts?)` / `toOpenApiFromRoute(route, opts?)`               | Project a `Node` tree (or an already-projected `HttpRoute`) to an OpenAPI 3.1 document — see below              |
 
 `validate`/schema wiring flows through `HttpProjectionOptions.transforms` and `createApplyValidation`, accepting a `StandardSchemaV1`. When the schema carries the `jsonSchema` trait, it flows into the emitted OpenAPI `requestBody`.
 
@@ -91,13 +91,13 @@ OpenAPI only ever describes HTTP APIs, so this projection lives in `@rhi-zone/fr
 
 A subtyping hierarchy + open metadata bag used as the common target for schema projections (JSON Schema, OpenAPI, SQL DDL, etc.), plus an AOT validator codegen projector (`compile.ts`) that `@rhi-zone/fractal-api-tree`'s CLI hands extracted `TypeRef`s to. The build-time extractor and tree walker themselves (formerly here, merged in from the former `@rhi-zone/fractal-codegen`) moved to `@rhi-zone/fractal-api-tree`'s `./extract`/`./tree` subpaths (2026-07-18) — they walk `api()`/`op()` AUTHORING source, which is api-tree's concern, not type-ir's.
 
-| Export | Description |
-|---|---|
-| `types.*` / `t(shape, meta?)` | Constructors for each `TypeShape` kind (`boolean`, `string`, `object`, `array`, `union`, `enum`, `ref`, …) and the `TypeRef` wrapper (`shape` + open `meta` bag) |
-| `ancestors(kind)` / `resolve(kind, handlers)` | Walk/resolve a kind's parent chain (e.g. `int32` → `integer` → `number`) |
-| `registerParent(kind, parent)` | Extend the built-in parent lattice with a custom kind |
-| `partial` / `required` / `pick` / `omit` / `extend` / `nullable` / `withMeta` / `deepPartial` / `deepRequired` | Structural transforms over object `TypeRef`s |
-| `buildSchema` / `compileValidator` | Compile a `TypeRef` into a runtime validator |
+| Export                                                                                                         | Description                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.*` / `t(shape, meta?)`                                                                                  | Constructors for each `TypeShape` kind (`boolean`, `string`, `object`, `array`, `union`, `enum`, `ref`, …) and the `TypeRef` wrapper (`shape` + open `meta` bag) |
+| `ancestors(kind)` / `resolve(kind, handlers)`                                                                  | Walk/resolve a kind's parent chain (e.g. `int32` → `integer` → `number`)                                                                                         |
+| `registerParent(kind, parent)`                                                                                 | Extend the built-in parent lattice with a custom kind                                                                                                            |
+| `partial` / `required` / `pick` / `omit` / `extend` / `nullable` / `withMeta` / `deepPartial` / `deepRequired` | Structural transforms over object `TypeRef`s                                                                                                                     |
+| `buildSchema` / `compileValidator`                                                                             | Compile a `TypeRef` into a runtime validator                                                                                                                     |
 
 ## MCP projection: `@rhi-zone/fractal-mcp-api-projector`
 
@@ -109,10 +109,10 @@ Walks a `Node` tree and projects each leaf into an MCP tool descriptor, deriving
 
 ## CLI projection: `@rhi-zone/fractal-cli-api-projector`
 
-| Export | Description |
-|---|---|
-| `runCli(tree, opts?)` | Entry point — dispatches a CLI invocation against a `Node` tree as nested subcommands |
-| `walkCliCommands(tree)` | Enumerate the tree as a flat list of `CliCommandEntry` (for help text/completion) |
+| Export                  | Description                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `runCli(tree, opts?)`   | Entry point — dispatches a CLI invocation against a `Node` tree as nested subcommands |
+| `walkCliCommands(tree)` | Enumerate the tree as a flat list of `CliCommandEntry` (for help text/completion)     |
 
 Tag-driven behavior mirrors the other projections: `destructive`/non-`readOnly` ops get an interactive confirm prompt; codegen'd schemas drive argument parsing.
 

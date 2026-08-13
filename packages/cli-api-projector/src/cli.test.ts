@@ -6,26 +6,26 @@
 // runCli throws CliError on error/abort rather than calling process.exit(),
 // so the bun test runner stays alive across all tests.
 
-import { describe, it, expect, beforeEach } from "bun:test"
-import { runCli, CliError, walkCliCommands } from "./cli.ts"
-import { api, clearStore } from "../../../examples/library-api/src/tree.ts"
+import { describe, it, expect, beforeEach } from "bun:test";
+import { runCli, CliError, walkCliCommands } from "./cli.ts";
+import { api, clearStore } from "../../../examples/library-api/src/tree.ts";
 
 // ============================================================================
 // Mock IO
 // ============================================================================
 
 type MockIO = {
-  out: string[]
-  err: string[]
-  confirmAnswer: boolean
-  confirmCalled: boolean
-  confirmPrompts: string[]
+  out: string[];
+  err: string[];
+  confirmAnswer: boolean;
+  confirmCalled: boolean;
+  confirmPrompts: string[];
   io: {
-    stdout: { write(s: string): void }
-    stderr: { write(s: string): void }
-    confirm(prompt: string): Promise<boolean>
-  }
-}
+    stdout: { write(s: string): void };
+    stderr: { write(s: string): void };
+    confirm(prompt: string): Promise<boolean>;
+  };
+};
 
 function makeMockIO(confirmAnswer = true): MockIO {
   const mock: MockIO = {
@@ -35,16 +35,24 @@ function makeMockIO(confirmAnswer = true): MockIO {
     confirmCalled: false,
     confirmPrompts: [],
     io: {
-      stdout: { write: (s: string) => { mock.out.push(s) } },
-      stderr: { write: (s: string) => { mock.err.push(s) } },
+      stdout: {
+        write: (s: string) => {
+          mock.out.push(s);
+        },
+      },
+      stderr: {
+        write: (s: string) => {
+          mock.err.push(s);
+        },
+      },
       confirm: async (prompt: string) => {
-        mock.confirmCalled = true
-        mock.confirmPrompts.push(prompt)
-        return mock.confirmAnswer
+        mock.confirmCalled = true;
+        mock.confirmPrompts.push(prompt);
+        return mock.confirmAnswer;
       },
     },
-  }
-  return mock
+  };
+  return mock;
 }
 
 // ============================================================================
@@ -56,13 +64,13 @@ async function run(
   argv: string[],
   confirmAnswer = true,
 ): Promise<{ stdout: string; stderr: string; mock: MockIO }> {
-  const mock = makeMockIO(confirmAnswer)
-  await runCli(api, argv, mock.io)
+  const mock = makeMockIO(confirmAnswer);
+  await runCli(api, argv, mock.io);
   return {
     stdout: mock.out.join(""),
     stderr: mock.err.join(""),
     mock,
-  }
+  };
 }
 
 // ============================================================================
@@ -71,172 +79,214 @@ async function run(
 
 describe("CLI projection — library-api fixture", () => {
   beforeEach(() => {
-    clearStore()
-  })
+    clearStore();
+  });
 
   // 1. Subcommand path resolves from tree position
   it("books list — resolves to BooksService.list op", async () => {
-    const { stdout } = await run(["books", "list"])
-    const result = JSON.parse(stdout)
-    expect(Array.isArray(result)).toBe(true)
-  })
+    const { stdout } = await run(["books", "list"]);
+    const result = JSON.parse(stdout);
+    expect(Array.isArray(result)).toBe(true);
+  });
 
   it("catalog search — resolves to catalog node's search op", async () => {
-    const { stdout } = await run(["catalog", "search"])
-    const result = JSON.parse(stdout)
-    expect(Array.isArray(result)).toBe(true)
-  })
+    const { stdout } = await run(["catalog", "search"]);
+    const result = JSON.parse(stdout);
+    expect(Array.isArray(result)).toBe(true);
+  });
 
   it("unknown command — throws CliError", async () => {
-    const mock = makeMockIO()
-    await expect(runCli(api, ["nonexistent", "op"], mock.io)).rejects.toBeInstanceOf(CliError)
-  })
+    const mock = makeMockIO();
+    await expect(runCli(api, ["nonexistent", "op"], mock.io)).rejects.toBeInstanceOf(CliError);
+  });
 
   // 2. readOnly op runs WITHOUT calling io.confirm
   it("books list (readOnly) — does NOT call confirm", async () => {
-    const mock = makeMockIO(false)
-    await runCli(api, ["books", "list"], mock.io)
-    expect(mock.confirmCalled).toBe(false)
-  })
+    const mock = makeMockIO(false);
+    await runCli(api, ["books", "list"], mock.io);
+    expect(mock.confirmCalled).toBe(false);
+  });
 
   it("catalog search (readOnly on the leaf) — does NOT call confirm", async () => {
-    const mock = makeMockIO(false)
-    await runCli(api, ["catalog", "search"], mock.io)
-    expect(mock.confirmCalled).toBe(false)
-  })
+    const mock = makeMockIO(false);
+    await runCli(api, ["catalog", "search"], mock.io);
+    expect(mock.confirmCalled).toBe(false);
+  });
 
   // 3. destructive op DOES call io.confirm; --yes skips it
   it("books <id> remove (destructive) — calls confirm when no --yes", async () => {
     // First add a book
-    const addMock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"], addMock.io)
-    const book = JSON.parse(addMock.out.join("")) as { id: string }
+    const addMock = makeMockIO(true);
+    await runCli(
+      api,
+      ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"],
+      addMock.io,
+    );
+    const book = JSON.parse(addMock.out.join("")) as { id: string };
 
-    const removeMock = makeMockIO(true)  // confirm returns true
-    await runCli(api, ["books", book.id, "remove"], removeMock.io)
-    expect(removeMock.confirmCalled).toBe(true)
-  })
+    const removeMock = makeMockIO(true); // confirm returns true
+    await runCli(api, ["books", book.id, "remove"], removeMock.io);
+    expect(removeMock.confirmCalled).toBe(true);
+  });
 
   it("books <id> remove (destructive) with --yes — skips confirm, succeeds", async () => {
     // Add a book first
-    const addMock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"], addMock.io)
-    const book = JSON.parse(addMock.out.join("")) as { id: string }
+    const addMock = makeMockIO(true);
+    await runCli(
+      api,
+      ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"],
+      addMock.io,
+    );
+    const book = JSON.parse(addMock.out.join("")) as { id: string };
 
-    const removeMock = makeMockIO(false)  // confirm would return false, but should not be called
-    await runCli(api, ["books", book.id, "remove", "--yes"], removeMock.io)
-    expect(removeMock.confirmCalled).toBe(false)
-    const result = JSON.parse(removeMock.out.join("")) as { deleted: boolean }
-    expect(result.deleted).toBe(true)
-  })
+    const removeMock = makeMockIO(false); // confirm would return false, but should not be called
+    await runCli(api, ["books", book.id, "remove", "--yes"], removeMock.io);
+    expect(removeMock.confirmCalled).toBe(false);
+    const result = JSON.parse(removeMock.out.join("")) as { deleted: boolean };
+    expect(result.deleted).toBe(true);
+  });
 
   it("books <id> remove (destructive) confirm declined — throws CliError", async () => {
     // Add a book
-    const addMock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"], addMock.io)
-    const book = JSON.parse(addMock.out.join("")) as { id: string }
+    const addMock = makeMockIO(true);
+    await runCli(
+      api,
+      ["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"],
+      addMock.io,
+    );
+    const book = JSON.parse(addMock.out.join("")) as { id: string };
 
-    const removeMock = makeMockIO(false)  // confirm returns false → abort
-    await expect(
-      runCli(api, ["books", book.id, "remove"], removeMock.io)
-    ).rejects.toBeInstanceOf(CliError)
-    expect(removeMock.confirmCalled).toBe(true)
-    expect(removeMock.err.join("")).toContain("Aborted")
-  })
+    const removeMock = makeMockIO(false); // confirm returns false → abort
+    await expect(runCli(api, ["books", book.id, "remove"], removeMock.io)).rejects.toBeInstanceOf(
+      CliError,
+    );
+    expect(removeMock.confirmCalled).toBe(true);
+    expect(removeMock.err.join("")).toContain("Aborted");
+  });
 
   // 4. fallback slug value threads into op input (round-trip)
   it("books <id> read — slug bookId threads into op input", async () => {
     // Add a book to get a known ID
-    const addMock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--title", "Foundation", "--author", "Asimov", "--genre", "Sci-Fi"], addMock.io)
-    const added = JSON.parse(addMock.out.join("")) as { id: string; title: string }
+    const addMock = makeMockIO(true);
+    await runCli(
+      api,
+      ["books", "add", "--title", "Foundation", "--author", "Asimov", "--genre", "Sci-Fi"],
+      addMock.io,
+    );
+    const added = JSON.parse(addMock.out.join("")) as { id: string; title: string };
 
     // Fetch it via the fallback slug path: books <id> read (agnostic name)
-    const readMock = makeMockIO(true)
-    await runCli(api, ["books", added.id, "read"], readMock.io)
-    const fetched = JSON.parse(readMock.out.join("")) as { id: string; title: string }
+    const readMock = makeMockIO(true);
+    await runCli(api, ["books", added.id, "read"], readMock.io);
+    const fetched = JSON.parse(readMock.out.join("")) as { id: string; title: string };
 
-    expect(fetched.id).toBe(added.id)
-    expect(fetched.title).toBe("Foundation")
-  })
+    expect(fetched.id).toBe(added.id);
+    expect(fetched.title).toBe("Foundation");
+  });
 
   // 5. Input fields parse from --flags
   it("books add — parses --title --author --genre flags into op input", async () => {
-    const { stdout } = await run(["books", "add", "--title", "Neuromancer", "--author", "Gibson", "--genre", "Cyberpunk"])
-    const book = JSON.parse(stdout) as { id: string; title: string; author: string; genre: string }
-    expect(book.title).toBe("Neuromancer")
-    expect(book.author).toBe("Gibson")
-    expect(book.genre).toBe("Cyberpunk")
-    expect(typeof book.id).toBe("string")
-  })
+    const { stdout } = await run([
+      "books",
+      "add",
+      "--title",
+      "Neuromancer",
+      "--author",
+      "Gibson",
+      "--genre",
+      "Cyberpunk",
+    ]);
+    const book = JSON.parse(stdout) as { id: string; title: string; author: string; genre: string };
+    expect(book.title).toBe("Neuromancer");
+    expect(book.author).toBe("Gibson");
+    expect(book.genre).toBe("Cyberpunk");
+    expect(typeof book.id).toBe("string");
+  });
 
   it("catalog search --q filters results", async () => {
     // Add two books
-    await run(["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"])
-    await run(["books", "add", "--title", "Foundation", "--author", "Asimov", "--genre", "Sci-Fi"])
+    await run(["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"]);
+    await run(["books", "add", "--title", "Foundation", "--author", "Asimov", "--genre", "Sci-Fi"]);
 
-    const { stdout } = await run(["catalog", "search", "--q", "dune"])
-    const results = JSON.parse(stdout) as { title: string }[]
-    expect(results.length).toBe(1)
-    expect(results[0]?.title).toBe("Dune")
-  })
+    const { stdout } = await run(["catalog", "search", "--q", "dune"]);
+    const results = JSON.parse(stdout) as { title: string }[];
+    expect(results.length).toBe(1);
+    expect(results[0]?.title).toBe("Dune");
+  });
 
   // 6. Result is written to io.stdout
   it("result is written to io.stdout as JSON", async () => {
-    const mock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--title", "Test Book", "--author", "Tester", "--genre", "Fiction"], mock.io)
-    expect(mock.out.length).toBeGreaterThan(0)
-    const out = mock.out.join("")
-    const parsed = JSON.parse(out) as unknown
-    expect(parsed).toBeTruthy()
-  })
+    const mock = makeMockIO(true);
+    await runCli(
+      api,
+      ["books", "add", "--title", "Test Book", "--author", "Tester", "--genre", "Fiction"],
+      mock.io,
+    );
+    expect(mock.out.length).toBeGreaterThan(0);
+    const out = mock.out.join("");
+    const parsed = JSON.parse(out) as unknown;
+    expect(parsed).toBeTruthy();
+  });
 
   // 7. --help produces usage text
   it("--help produces usage text at root", async () => {
-    const mock = makeMockIO(true)
-    await runCli(api, ["--help"], mock.io)
-    const out = mock.out.join("")
-    expect(out).toContain("Usage:")
-    expect(out).toContain("--help")
-  })
+    const mock = makeMockIO(true);
+    await runCli(api, ["--help"], mock.io);
+    const out = mock.out.join("");
+    expect(out).toContain("Usage:");
+    expect(out).toContain("--help");
+  });
 
   it("books --help lists subcommands", async () => {
-    const mock = makeMockIO(true)
-    await runCli(api, ["books", "--help"], mock.io)
-    const out = mock.out.join("")
-    expect(out).toContain("Usage:")
-  })
+    const mock = makeMockIO(true);
+    await runCli(api, ["books", "--help"], mock.io);
+    const out = mock.out.join("");
+    expect(out).toContain("Usage:");
+  });
 
   it("books add --help shows add op usage", async () => {
-    const mock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--help"], mock.io)
-    const out = mock.out.join("")
-    expect(out).toContain("Usage:")
-  })
+    const mock = makeMockIO(true);
+    await runCli(api, ["books", "add", "--help"], mock.io);
+    const out = mock.out.join("");
+    expect(out).toContain("Usage:");
+  });
 
   // Extra: books replace (idempotent, not destructive) — no confirm
   it("books <id> replace (idempotent, not destructive) — no confirm, result written", async () => {
-    const addMock = makeMockIO(true)
-    await runCli(api, ["books", "add", "--title", "Old Title", "--author", "Auth", "--genre", "Genre"], addMock.io)
-    const book = JSON.parse(addMock.out.join("")) as { id: string }
+    const addMock = makeMockIO(true);
+    await runCli(
+      api,
+      ["books", "add", "--title", "Old Title", "--author", "Auth", "--genre", "Genre"],
+      addMock.io,
+    );
+    const book = JSON.parse(addMock.out.join("")) as { id: string };
 
-    const replaceMock = makeMockIO(false)  // would say no if asked
-    await runCli(api, ["books", book.id, "replace", "--title", "New Title"], replaceMock.io)
-    expect(replaceMock.confirmCalled).toBe(false)
-    const updated = JSON.parse(replaceMock.out.join("")) as { title: string }
-    expect(updated.title).toBe("New Title")
-  })
+    const replaceMock = makeMockIO(false); // would say no if asked
+    await runCli(api, ["books", book.id, "replace", "--title", "New Title"], replaceMock.io);
+    expect(replaceMock.confirmCalled).toBe(false);
+    const updated = JSON.parse(replaceMock.out.join("")) as { title: string };
+    expect(updated.title).toBe("New Title");
+  });
 
   // catalog genres
   it("catalog genres — returns genres array", async () => {
-    await run(["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"])
-    await run(["books", "add", "--title", "Neuromancer", "--author", "Gibson", "--genre", "Cyberpunk"])
-    const { stdout } = await run(["catalog", "genres"])
-    const genres = JSON.parse(stdout) as string[]
-    expect(genres).toContain("Sci-Fi")
-    expect(genres).toContain("Cyberpunk")
-  })
-})
+    await run(["books", "add", "--title", "Dune", "--author", "Herbert", "--genre", "Sci-Fi"]);
+    await run([
+      "books",
+      "add",
+      "--title",
+      "Neuromancer",
+      "--author",
+      "Gibson",
+      "--genre",
+      "Cyberpunk",
+    ]);
+    const { stdout } = await run(["catalog", "genres"]);
+    const genres = JSON.parse(stdout) as string[];
+    expect(genres).toContain("Sci-Fi");
+    expect(genres).toContain("Cyberpunk");
+  });
+});
 
 // ============================================================================
 // meta.tags.deprecated → surfaced in CLI help text
@@ -244,40 +294,40 @@ describe("CLI projection — library-api fixture", () => {
 
 describe("meta.tags.deprecated surfaces in CLI help text", () => {
   it("parent listing marks a deprecated leaf command with [DEPRECATED]", async () => {
-    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const tree = api_({
       old: op((_: unknown) => "result", { tags: { deprecated: true } }),
       fresh: op((_: unknown) => "result", {}),
-    })
-    const mock = makeMockIO(true)
-    await runCli(tree, ["--help"], mock.io)
-    const out = mock.out.join("")
-    expect(out).toContain("[DEPRECATED] old")
-    expect(out).not.toContain("[DEPRECATED] fresh")
-  })
+    });
+    const mock = makeMockIO(true);
+    await runCli(tree, ["--help"], mock.io);
+    const out = mock.out.join("");
+    expect(out).toContain("[DEPRECATED] old");
+    expect(out).not.toContain("[DEPRECATED] fresh");
+  });
 
   it("leaf --help shows a deprecation notice", async () => {
-    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const tree = api_({
       old: op((_: unknown) => "result", { tags: { deprecated: true } }),
-    })
-    const mock = makeMockIO(true)
-    await runCli(tree, ["old", "--help"], mock.io)
-    const out = mock.out.join("")
-    expect(out).toContain("[DEPRECATED]")
-  })
+    });
+    const mock = makeMockIO(true);
+    await runCli(tree, ["old", "--help"], mock.io);
+    const out = mock.out.join("");
+    expect(out).toContain("[DEPRECATED]");
+  });
 
   it("no deprecated tag → no [DEPRECATED] marker in help", async () => {
-    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const tree = api_({
       fresh: op((_: unknown) => "result", {}),
-    })
-    const mock = makeMockIO(true)
-    await runCli(tree, ["--help"], mock.io)
-    const out = mock.out.join("")
-    expect(out).not.toContain("[DEPRECATED]")
-  })
-})
+    });
+    const mock = makeMockIO(true);
+    await runCli(tree, ["--help"], mock.io);
+    const out = mock.out.join("");
+    expect(out).not.toContain("[DEPRECATED]");
+  });
+});
 
 // ============================================================================
 // fallback.subtree as a bare op() leaf (not wrapped in api({...})) — the
@@ -293,35 +343,41 @@ describe("meta.tags.deprecated surfaces in CLI help text", () => {
 
 describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
   it("walkCliCommands lists the leaf, keyed by the fallback's own name with no extra path segment", async () => {
-    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const tree = api_({
-      widgets: api_({}, {
-        fallback: {
-          name: "widgetId",
-          subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+      widgets: api_(
+        {},
+        {
+          fallback: {
+            name: "widgetId",
+            subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+          },
         },
-      }),
-    })
-    const commands = walkCliCommands(tree)
-    expect(commands).toHaveLength(1)
-    expect(commands[0]!.path).toEqual(["widgets"])
-    expect(commands[0]!.leafName).toBe("widgetId")
-    expect(commands[0]!.slugs).toEqual(["widgetId"])
-  })
+      ),
+    });
+    const commands = walkCliCommands(tree);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]!.path).toEqual(["widgets"]);
+    expect(commands[0]!.leafName).toBe("widgetId");
+    expect(commands[0]!.slugs).toEqual(["widgetId"]);
+  });
 
   it("runCli dispatches the terminal fallback segment (`widgets <id>`, no further subcommand) directly to the leaf", async () => {
-    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node")
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const tree = api_({
-      widgets: api_({}, {
-        fallback: {
-          name: "widgetId",
-          subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+      widgets: api_(
+        {},
+        {
+          fallback: {
+            name: "widgetId",
+            subtree: op((input: { widgetId: string }) => ({ id: input.widgetId, kind: "widget" })),
+          },
         },
-      }),
-    })
-    const mock = makeMockIO()
-    await runCli(tree, ["widgets", "w-1"], mock.io)
-    const result = JSON.parse(mock.out.join("")) as { id: string; kind: string }
-    expect(result).toEqual({ id: "w-1", kind: "widget" })
-  })
-})
+      ),
+    });
+    const mock = makeMockIO();
+    await runCli(tree, ["widgets", "w-1"], mock.io);
+    const result = JSON.parse(mock.out.join("")) as { id: string; kind: string };
+    expect(result).toEqual({ id: "w-1", kind: "widget" });
+  });
+});

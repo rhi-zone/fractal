@@ -1,5 +1,5 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
-import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Ruby `ffi` gem projector — the consumer side of `rust-c-abi.ts`: where rust-c-abi.ts
 // emits the Rust source implementing a plain C ABI, this file emits the
@@ -78,7 +78,7 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 function pascalCase(name: string): string {
@@ -87,15 +87,15 @@ function pascalCase(name: string): string {
     .split(" ")
     .filter((word) => word.length > 0)
     .map((word) => word[0]!.toUpperCase() + word.slice(1))
-    .join("")
+    .join("");
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`# ${meta.description}`] : []
+  return typeof meta.description === "string" ? [`# ${meta.description}`] : [];
 }
 
 /**
@@ -110,24 +110,24 @@ function docComment(meta: Readonly<Record<string, unknown>>): string[] {
  * implement.
  */
 function toBaseRubyFfiType(ref: TypeRef): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   switch (kind) {
     case "boolean":
-      return ":bool"
+      return ":bool";
     case "number":
-      return ":double"
+      return ":double";
     case "integer":
-      return ":int64"
+      return ":int64";
     case "string":
-      return ":string"
+      return ":string";
     case "void":
     case "null":
-      return ":void"
+      return ":void";
     default:
       throw new Error(
         `toRubyFfiType: type-ir kind "${kind}" has no minimal ffi-gem type-symbol mapping — only boolean/number/integer/string/void/null are implemented ` +
           "(structural shapes would need a synthesized FFI::Struct subclass, out of scope for this minimal mapping)",
-      )
+      );
   }
 }
 
@@ -140,15 +140,15 @@ function toBaseRubyFfiType(ref: TypeRef): string {
  * all) falls through to `toBaseRubyFfiType`'s primitive mapping.
  */
 export function toRubyFfiType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline !== undefined && discipline.kind !== "copy") return ":pointer"
-  return toBaseRubyFfiType(ref)
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline !== undefined && discipline.kind !== "copy") return ":pointer";
+  return toBaseRubyFfiType(ref);
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly { readonly name: string; readonly type: TypeRef }[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly { readonly name: string; readonly type: TypeRef }[];
+  readonly returnType: TypeRef;
+};
 
 /** One `attach_function :name, [:type, ...], :returntype` declaration.
  * `handleParam`, when given, is prepended as the receiver parameter — a
@@ -160,16 +160,21 @@ type FfiFunctionLike = {
  * `rust-c-abi.ts`'s `todo!()` (this file emits only the binding declaration, not
  * an implementation, since the C-ABI side already carries the implementation
  * this loader calls into). */
-function buildAttachFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike, handleParam?: string): string {
-  const symbol = toSnakeCase(fnName)
-  const paramTypes: string[] = []
-  if (handleParam !== undefined) paramTypes.push(":pointer")
-  for (const p of shape.params) paramTypes.push(toRubyFfiType(p.type))
+function buildAttachFunction(
+  fnName: string,
+  ref: FfiRef,
+  shape: FfiFunctionLike,
+  handleParam?: string,
+): string {
+  const symbol = toSnakeCase(fnName);
+  const paramTypes: string[] = [];
+  if (handleParam !== undefined) paramTypes.push(":pointer");
+  for (const p of shape.params) paramTypes.push(toRubyFfiType(p.type));
 
-  const returnType = toRubyFfiType(shape.returnType)
-  const lines: string[] = [...docComment(ref.meta)]
-  lines.push(`attach_function ${quote(symbol)}, [${paramTypes.join(", ")}], ${returnType}`)
-  return lines.join("\n")
+  const returnType = toRubyFfiType(shape.returnType);
+  const lines: string[] = [...docComment(ref.meta)];
+  lines.push(`attach_function ${quote(symbol)}, [${paramTypes.join(", ")}], ${returnType}`);
+  return lines.join("\n");
 }
 
 /**
@@ -179,18 +184,21 @@ function buildAttachFunction(fnName: string, ref: FfiRef, shape: FfiFunctionLike
  * resource handle needs no struct wrapper; every method and the free
  * function simply take/return `:pointer` for this resource's positions.
  */
-function buildResource(name: string, shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> }): string {
-  const resourceSnake = toSnakeCase(name)
-  const decls: string[] = []
+function buildResource(
+  name: string,
+  shape: FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> },
+): string {
+  const resourceSnake = toSnakeCase(name);
+  const decls: string[] = [];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
-    const methodShape = methodRef.shape as FfiShape & { kind: "method" }
-    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`
-    decls.push(buildAttachFunction(fnName, methodRef, methodShape, name))
+    const methodShape = methodRef.shape as FfiShape & { kind: "method" };
+    const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`;
+    decls.push(buildAttachFunction(fnName, methodRef, methodShape, name));
   }
 
-  decls.push(`attach_function ${quote(`${resourceSnake}_free`)}, [:pointer], :void`)
-  return decls.join("\n")
+  decls.push(`attach_function ${quote(`${resourceSnake}_free`)}, [:pointer], :void`);
+  return decls.join("\n");
 }
 
 /**
@@ -205,35 +213,38 @@ function buildResource(name: string, shape: FfiShape & { kind: "resource"; metho
  * deployment-specific information no ffi-ir shape carries).
  */
 function libPathOf(meta: Readonly<Record<string, unknown>>, where: string): string {
-  const libPath = meta.libPath
+  const libPath = meta.libPath;
   if (typeof libPath !== "string") {
     throw new Error(
       `toRubyFfi: "${where}" is missing required meta.libPath (the shared library name/path ffi_lib loads, e.g. "./libfoo.so" ` +
         'or "foo") — there is no derivable default, so this must be supplied explicitly on the module FfiRef\'s meta bag',
-    )
+    );
   }
-  return libPath
+  return libPath;
 }
 
 function buildModule(name: string, ref: FfiRef, shape: FfiShape & { kind: "module" }): string {
-  const rubyName = pascalCase(name)
-  const libPath = libPathOf(ref.meta, `module "${name}"`)
+  const rubyName = pascalCase(name);
+  const libPath = libPathOf(ref.meta, `module "${name}"`);
 
-  const body: string[] = [`extend FFI::Library`, `ffi_lib ${quote(libPath)}`, ""]
+  const body: string[] = [`extend FFI::Library`, `ffi_lib ${quote(libPath)}`, ""];
   const decls: string[] = [
     ...Object.entries(shape.functions).map(([fnName, fnRef]) => {
-      const fnShape = fnRef.shape as FfiShape & { kind: "function" }
-      return buildAttachFunction(fnName, fnRef, fnShape)
+      const fnShape = fnRef.shape as FfiShape & { kind: "function" };
+      return buildAttachFunction(fnName, fnRef, fnShape);
     }),
     ...Object.entries(shape.resources).map(([resName, resRef]) => {
-      const resShape = resRef.shape as FfiShape & { kind: "resource"; methods: Readonly<Record<string, FfiRef>> }
-      return buildResource(resName, resShape)
+      const resShape = resRef.shape as FfiShape & {
+        kind: "resource";
+        methods: Readonly<Record<string, FfiRef>>;
+      };
+      return buildResource(resName, resShape);
     }),
-  ]
-  body.push(...decls)
+  ];
+  body.push(...decls);
 
-  const indented = body.map((line) => (line.length === 0 ? "" : `  ${line}`))
-  return [...docComment(ref.meta), `module ${rubyName}`, ...indented, "end"].join("\n")
+  const indented = body.map((line) => (line.length === 0 ? "" : `  ${line}`));
+  return [...docComment(ref.meta), `module ${rubyName}`, ...indented, "end"].join("\n");
 }
 
 /**
@@ -268,42 +279,54 @@ function buildModule(name: string, ref: FfiRef, shape: FfiShape & { kind: "modul
  * discipline maps onto something the `ffi` gem can genuinely express.
  */
 export function toRubyFfi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toRubyFfi: "function" requires a name — an attach_function binding is always a named declaration, not an anonymous inline type')
+      throw new Error(
+        'toRubyFfi: "function" requires a name — an attach_function binding is always a named declaration, not an anonymous inline type',
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    return buildAttachFunction(name, ref, shape)
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    return buildAttachFunction(name, ref, shape);
   }
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toRubyFfi: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error(
+        "toRubyFfi: \"method\" requires a name — the method's own key in its resource's methods map",
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "method" }
-    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`
-    return buildAttachFunction(fnName, ref, shape, shape.receiver)
+    const shape = ref.shape as FfiShape & { kind: "method" };
+    const fnName = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`;
+    return buildAttachFunction(fnName, ref, shape, shape.receiver);
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiShape & { kind: "resource"; name: string; methods: Readonly<Record<string, FfiRef>> }
-    return buildResource(shape.name, shape)
+    const shape = ref.shape as FfiShape & {
+      kind: "resource";
+      name: string;
+      methods: Readonly<Record<string, FfiRef>>;
+    };
+    return buildResource(shape.name, shape);
   }
 
   if (kind === "module") {
     if (name === undefined) {
-      throw new Error('toRubyFfi: "module" requires a name — a Ruby module declaration is always named')
+      throw new Error(
+        'toRubyFfi: "module" requires a name — a Ruby module declaration is always named',
+      );
     }
     const shape = ref.shape as FfiShape & {
-      kind: "module"
-      name: string
-      functions: Readonly<Record<string, FfiRef>>
-      resources: Readonly<Record<string, FfiRef>>
-    }
-    return buildModule(name, ref, shape)
+      kind: "module";
+      name: string;
+      functions: Readonly<Record<string, FfiRef>>;
+      resources: Readonly<Record<string, FfiRef>>;
+    };
+    return buildModule(name, ref, shape);
   }
 
-  throw new Error(`toRubyFfi: unhandled ffi-ir kind "${kind}" — no ffi-gem mapping implemented for this backend`)
+  throw new Error(
+    `toRubyFfi: unhandled ffi-ir kind "${kind}" — no ffi-gem mapping implemented for this backend`,
+  );
 }

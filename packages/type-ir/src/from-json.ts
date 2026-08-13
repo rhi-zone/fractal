@@ -18,18 +18,32 @@
 // samples to find accumulation signal and is out of scope here — see the
 // design sketch for that follow-on work.
 
-import { t, types, type TypeRef } from "./index.ts"
-import { date, datetime, email, int8, int16, int32, int64, uint8, uint16, uint32, uint64, uuid, uri } from "./kinds/common.ts"
+import { t, types, type TypeRef } from "./index.ts";
+import {
+  date,
+  datetime,
+  email,
+  int8,
+  int16,
+  int32,
+  int64,
+  uint8,
+  uint16,
+  uint32,
+  uint64,
+  uuid,
+  uri,
+} from "./kinds/common.ts";
 
 export interface InferConfig {
   /** Minimum elements before inferring `array` (vs. `tuple`) for a non-empty array. Default: 3. */
-  arrayThreshold?: number
+  arrayThreshold?: number;
   /** Narrow whole numbers to the tightest fixed-width integer kind (uint8..int64). Default: true. */
-  narrowIntegerWidth?: boolean
+  narrowIntegerWidth?: boolean;
   /** Try ISO date/datetime, uuid, email, uri format detection on strings. Default: true. */
-  detectStringFormats?: boolean
+  detectStringFormats?: boolean;
   /** Detect nominal class identity on non-JSON runtime values (see `classIdentity`). Default: true. */
-  detectClassInstances?: boolean
+  detectClassInstances?: boolean;
   /**
    * Custom leaf heuristics, tried in order before the built-in inference at
    * every node (leaves and containers alike). The first heuristic to return
@@ -38,23 +52,23 @@ export interface InferConfig {
    * heuristic first to override a default; append one to extend without
    * touching default behavior.
    */
-  leafHeuristics?: LeafHeuristic[]
+  leafHeuristics?: LeafHeuristic[];
 }
 
 /** A single custom inference rule. Return `undefined` to defer to the next heuristic / the built-in default. */
-export type LeafHeuristic = (value: unknown) => TypeRef | undefined
+export type LeafHeuristic = (value: unknown) => TypeRef | undefined;
 
 interface ResolvedConfig {
-  readonly arrayThreshold: number
-  readonly narrowIntegerWidth: boolean
-  readonly detectStringFormats: boolean
-  readonly detectClassInstances: boolean
-  readonly leafHeuristics: readonly LeafHeuristic[]
+  readonly arrayThreshold: number;
+  readonly narrowIntegerWidth: boolean;
+  readonly detectStringFormats: boolean;
+  readonly detectClassInstances: boolean;
+  readonly leafHeuristics: readonly LeafHeuristic[];
 }
 
 function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
-  if (Object.keys(extra).length === 0) return ref
-  return { shape: ref.shape, meta: { ...ref.meta, ...extra } }
+  if (Object.keys(extra).length === 0) return ref;
+  return { shape: ref.shape, meta: { ...ref.meta, ...extra } };
 }
 
 // ---------------------------------------------------------------------------
@@ -63,21 +77,21 @@ function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
 // isn't one) are not, so each regex stays conservative.
 // ---------------------------------------------------------------------------
 
-const isoDateRe = /^\d{4}-\d{2}-\d{2}$/
-const isoDateTimeRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/
-const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const uriRe = /^[a-z][a-z0-9+.-]*:\/\//i
+const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+const isoDateTimeRe = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
+const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const uriRe = /^[a-z][a-z0-9+.-]*:\/\//i;
 
 function inferString(value: string, config: ResolvedConfig): TypeRef {
   if (config.detectStringFormats) {
-    if (isoDateRe.test(value)) return date()
-    if (isoDateTimeRe.test(value)) return datetime()
-    if (uuidRe.test(value)) return uuid()
-    if (emailRe.test(value)) return email()
-    if (uriRe.test(value)) return uri()
+    if (isoDateRe.test(value)) return date();
+    if (isoDateTimeRe.test(value)) return datetime();
+    if (uuidRe.test(value)) return uuid();
+    if (emailRe.test(value)) return email();
+    if (uriRe.test(value)) return uri();
   }
-  return t(types.string)
+  return t(types.string);
 }
 
 // Width narrowing: check from tightest to widest, prefer unsigned when the
@@ -93,42 +107,44 @@ const intWidths: readonly { min: number; max: number; ctor: () => TypeRef }[] = 
   { min: -32768, max: 32767, ctor: int16 },
   { min: 0, max: 4294967295, ctor: uint32 },
   { min: -2147483648, max: 2147483647, ctor: int32 },
-]
+];
 
 function inferNumber(value: number, config: ResolvedConfig): TypeRef {
-  if (!Number.isInteger(value)) return t(types.number)
+  if (!Number.isInteger(value)) return t(types.number);
   if (config.narrowIntegerWidth) {
     for (const { min, max, ctor } of intWidths) {
-      if (value >= min && value <= max) return ctor()
+      if (value >= min && value <= max) return ctor();
     }
     // Beyond 32-bit range but still a safe integer — pick unsigned if
     // non-negative, signed otherwise.
-    if (Number.isSafeInteger(value)) return value >= 0 ? uint64() : int64()
+    if (Number.isSafeInteger(value)) return value >= 0 ? uint64() : int64();
   }
-  return t(types.integer)
+  return t(types.integer);
 }
 
 // ---------------------------------------------------------------------------
 // Containers
 // ---------------------------------------------------------------------------
 
-function isObjectRef(ref: TypeRef): ref is TypeRef & { shape: { kind: "object"; fields: Readonly<Record<string, TypeRef>> } } {
-  return ref.shape.kind === "object"
+function isObjectRef(
+  ref: TypeRef,
+): ref is TypeRef & { shape: { kind: "object"; fields: Readonly<Record<string, TypeRef>> } } {
+  return ref.shape.kind === "object";
 }
 
 function shapeEqual(a: TypeRef, b: TypeRef): boolean {
-  return JSON.stringify(a.shape) === JSON.stringify(b.shape)
+  return JSON.stringify(a.shape) === JSON.stringify(b.shape);
 }
 
 // Unifies field values observed at the same key across several object
 // samples into one TypeRef: identical types collapse to that type, distinct
 // types become a union.
 function mergeTypeRefs(refs: readonly TypeRef[]): TypeRef {
-  const distinct: TypeRef[] = []
+  const distinct: TypeRef[] = [];
   for (const ref of refs) {
-    if (!distinct.some((seen) => shapeEqual(seen, ref))) distinct.push(ref)
+    if (!distinct.some((seen) => shapeEqual(seen, ref))) distinct.push(ref);
   }
-  return distinct.length === 1 ? distinct[0]! : t(types.union(distinct))
+  return distinct.length === 1 ? distinct[0]! : t(types.union(distinct));
 }
 
 // Merges several object shapes into one: a field present in every sample is
@@ -136,44 +152,50 @@ function mergeTypeRefs(refs: readonly TypeRef[]): TypeRef {
 // array of near-identical objects (e.g. 8 of 10 fields shared) collapse to
 // one record type with optional fields, rather than one tuple slot per
 // sample or a union of unrelated shapes.
-function mergeObjectShapes(refs: readonly (TypeRef & { shape: { kind: "object"; fields: Readonly<Record<string, TypeRef>> } })[]): TypeRef {
-  const fieldNames = new Set<string>()
+function mergeObjectShapes(
+  refs: readonly (TypeRef & {
+    shape: { kind: "object"; fields: Readonly<Record<string, TypeRef>> };
+  })[],
+): TypeRef {
+  const fieldNames = new Set<string>();
   for (const ref of refs) {
-    for (const name of Object.keys(ref.shape.fields)) fieldNames.add(name)
+    for (const name of Object.keys(ref.shape.fields)) fieldNames.add(name);
   }
 
-  const fields: Record<string, TypeRef> = {}
+  const fields: Record<string, TypeRef> = {};
   for (const name of fieldNames) {
-    const present = refs.filter((ref) => name in ref.shape.fields).map((ref) => ref.shape.fields[name]!)
-    const merged = mergeTypeRefs(present)
-    fields[name] = present.length < refs.length ? withMeta(merged, { optional: true }) : merged
+    const present = refs
+      .filter((ref) => name in ref.shape.fields)
+      .map((ref) => ref.shape.fields[name]!);
+    const merged = mergeTypeRefs(present);
+    fields[name] = present.length < refs.length ? withMeta(merged, { optional: true }) : merged;
   }
-  return t(types.object(fields))
+  return t(types.object(fields));
 }
 
 function inferArray(value: readonly unknown[], config: ResolvedConfig): TypeRef {
   // A single-inhabitant type (the empty tuple) carries zero information —
   // widen to the general container shape instead of inferring `[]`.
-  if (value.length === 0) return t(types.array(t(types.unknown)))
+  if (value.length === 0) return t(types.array(t(types.unknown)));
 
-  const elementRefs = value.map((v) => inferValue(v, config))
+  const elementRefs = value.map((v) => inferValue(v, config));
 
   // Arrays of objects merge structurally even when individual samples
   // differ (optional fields), rather than requiring exact equality like the
   // scalar/array/tuple case below.
   if (elementRefs.every(isObjectRef)) {
-    if (elementRefs.length < config.arrayThreshold) return t(types.tuple(elementRefs))
-    return t(types.array(mergeObjectShapes(elementRefs)))
+    if (elementRefs.length < config.arrayThreshold) return t(types.tuple(elementRefs));
+    return t(types.array(mergeObjectShapes(elementRefs)));
   }
 
-  const first = elementRefs[0]!
-  const homogeneous = elementRefs.every((ref) => shapeEqual(ref, first))
-  if (homogeneous && elementRefs.length >= config.arrayThreshold) return t(types.array(first))
+  const first = elementRefs[0]!;
+  const homogeneous = elementRefs.every((ref) => shapeEqual(ref, first));
+  if (homogeneous && elementRefs.length >= config.arrayThreshold) return t(types.array(first));
 
   // Heterogeneous, or homogeneous but below the sample threshold to be
   // confident it's array-shaped rather than a fixed-arity tuple that
   // happens to share types at each position.
-  return t(types.tuple(elementRefs))
+  return t(types.tuple(elementRefs));
 }
 
 /**
@@ -193,39 +215,37 @@ function inferArray(value: readonly unknown[], config: ResolvedConfig): TypeRef 
  * identity as the runtime reports it, not a guarantee.
  */
 function classIdentity(value: object): string | undefined {
-  const proto: unknown = Object.getPrototypeOf(value)
-  if (proto === null || proto === Object.prototype) return undefined
-  const ctor: unknown = (proto as { constructor?: unknown }).constructor
-  if (typeof ctor !== "function") return undefined
-  const name = ctor.name
-  if (name === "" || name === "Object") return undefined
-  return name
+  const proto: unknown = Object.getPrototypeOf(value);
+  if (proto === null || proto === Object.prototype) return undefined;
+  const ctor: unknown = (proto as { constructor?: unknown }).constructor;
+  if (typeof ctor !== "function") return undefined;
+  const name = ctor.name;
+  if (name === "" || name === "Object") return undefined;
+  return name;
 }
 
 function inferObject(value: Record<string, unknown>, config: ResolvedConfig): TypeRef {
-  const keys = Object.keys(value)
-  const className = config.detectClassInstances ? classIdentity(value) : undefined
+  const keys = Object.keys(value);
+  const className = config.detectClassInstances ? classIdentity(value) : undefined;
 
   // A class instance with no own enumerable data — `Date`, `Map`, `Set`, a
   // behaviour-only class. The structural reading is `object{}`, which says
   // nothing; the nominal `instance` kind says what it actually is. Strictly
   // more information, none lost.
   if (keys.length === 0) {
-    return className !== undefined
-      ? t(types.instance(className, ""))
-      : t(types.object({})) // single-inhabitant type (the empty record) — same reasoning as `[]`
+    return className !== undefined ? t(types.instance(className, "")) : t(types.object({})); // single-inhabitant type (the empty record) — same reasoning as `[]`
   }
 
-  const fields: Record<string, TypeRef> = {}
-  for (const key of keys) fields[key] = inferValue(value[key], config)
-  const ref = t(types.object(fields))
+  const fields: Record<string, TypeRef> = {};
+  for (const key of keys) fields[key] = inferValue(value[key], config);
+  const ref = t(types.object(fields));
 
   // A class instance that DOES carry data. `instance` is nominal-only by
   // design ("never structure" — see index.ts), so returning it here would
   // discard the fields we can actually see, which downstream projectors that
   // cannot express nominal identity must then render as an opaque placeholder.
   // Keep the structure and record the identity alongside it.
-  return className !== undefined ? t(types.object(fields), { className }) : ref
+  return className !== undefined ? t(types.object(fields), { className }) : ref;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,20 +254,20 @@ function inferObject(value: Record<string, unknown>, config: ResolvedConfig): Ty
 
 function inferValue(value: unknown, config: ResolvedConfig): TypeRef {
   for (const heuristic of config.leafHeuristics) {
-    const result = heuristic(value)
-    if (result !== undefined) return result
+    const result = heuristic(value);
+    if (result !== undefined) return result;
   }
 
-  if (value === null) return t(types.null)
+  if (value === null) return t(types.null);
   // Never infer literal types — true/false collapse to `boolean`, the
   // literal is zero information gain once the shape is already known.
-  if (typeof value === "boolean") return t(types.boolean)
-  if (typeof value === "number") return inferNumber(value, config)
-  if (typeof value === "string") return inferString(value, config)
-  if (Array.isArray(value)) return inferArray(value, config)
-  if (typeof value === "object") return inferObject(value as Record<string, unknown>, config)
+  if (typeof value === "boolean") return t(types.boolean);
+  if (typeof value === "number") return inferNumber(value, config);
+  if (typeof value === "string") return inferString(value, config);
+  if (Array.isArray(value)) return inferArray(value, config);
+  if (typeof value === "object") return inferObject(value as Record<string, unknown>, config);
   // undefined, bigint, symbol, function — not representable in JSON.
-  return t(types.unknown)
+  return t(types.unknown);
 }
 
 /**
@@ -267,6 +287,6 @@ export function inferValueShape(value: unknown, config?: InferConfig): TypeRef {
     detectStringFormats: config?.detectStringFormats ?? true,
     detectClassInstances: config?.detectClassInstances ?? true,
     leafHeuristics: config?.leafHeuristics ?? [],
-  }
-  return inferValue(value, resolved)
+  };
+  return inferValue(value, resolved);
 }

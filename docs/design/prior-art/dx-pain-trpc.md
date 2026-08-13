@@ -74,7 +74,7 @@ whether/how these should inform Fractal — just the raw pain.
   Evidence: [trpc/trpc issue #5935](https://github.com/trpc/trpc/issues/5935) ("Thrown
   TRPCError always returning a httpStatus code of 500"); [trpc/trpc discussion #6006](https://github.com/trpc/trpc/discussions/6006).
 
-- **No structured way to make error *shapes* (not just messages) inferable on the
+- **No structured way to make error _shapes_ (not just messages) inferable on the
   client**, e.g. discriminating "this mutation can fail with a validation error vs. a
   business-rule error" in a typed way.
   Evidence: [trpc/trpc issue #3438](https://github.com/trpc/trpc/issues/3438) ("feat:
@@ -237,7 +237,7 @@ whether/how these should inform Fractal — just the raw pain.
 ## Structural / architectural lock-in
 
 - **Whole-stack TypeScript is a hard requirement, not a soft preference.** tRPC's type
-  safety comes entirely from the client importing the server's router *type*; if the
+  safety comes entirely from the client importing the server's router _type_; if the
   backend isn't TypeScript (or isn't reachable from the frontend's build, e.g. separate
   repos/languages), tRPC provides no benefit over a plain REST call, and teams describe
   this as ruling it out for polyglot backends or any public/third-party-consumed API.

@@ -29,8 +29,8 @@
 // `render`), so this extension's helper text can reference `ClientError` by
 // name without redefining it.
 
-import type { ClientExtension, FetchImpl } from "../extension.ts"
-import { ClientError } from "../client-error.ts"
+import type { ClientExtension, FetchImpl } from "../extension.ts";
+import { ClientError } from "../client-error.ts";
 
 // ============================================================================
 // Runtime error classes
@@ -38,43 +38,43 @@ import { ClientError } from "../client-error.ts"
 
 export class BadRequestError extends ClientError {
   constructor(body: unknown) {
-    super(400, body)
-    this.name = "BadRequestError"
+    super(400, body);
+    this.name = "BadRequestError";
   }
 }
 
 export class AuthenticationError extends ClientError {
   constructor(body: unknown) {
-    super(401, body)
-    this.name = "AuthenticationError"
+    super(401, body);
+    this.name = "AuthenticationError";
   }
 }
 
 export class ForbiddenError extends ClientError {
   constructor(body: unknown) {
-    super(403, body)
-    this.name = "ForbiddenError"
+    super(403, body);
+    this.name = "ForbiddenError";
   }
 }
 
 export class NotFoundError extends ClientError {
   constructor(body: unknown) {
-    super(404, body)
-    this.name = "NotFoundError"
+    super(404, body);
+    this.name = "NotFoundError";
   }
 }
 
 export class ConflictError extends ClientError {
   constructor(body: unknown) {
-    super(409, body)
-    this.name = "ConflictError"
+    super(409, body);
+    this.name = "ConflictError";
   }
 }
 
 export class UnprocessableEntityError extends ClientError {
   constructor(body: unknown) {
-    super(422, body)
-    this.name = "UnprocessableEntityError"
+    super(422, body);
+    this.name = "UnprocessableEntityError";
   }
 }
 
@@ -87,26 +87,26 @@ export class UnprocessableEntityError extends ClientError {
  * or unparseable leaves its field `undefined` rather than guessing.
  */
 export class RateLimitError extends ClientError {
-  readonly retryAfterMs?: number | undefined
-  readonly limit?: number | undefined
-  readonly remaining?: number | undefined
-  readonly resetMs?: number | undefined
+  readonly retryAfterMs?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly remaining?: number | undefined;
+  readonly resetMs?: number | undefined;
 
   constructor(body: unknown, headers: Headers) {
-    super(429, body)
-    this.name = "RateLimitError"
-    this.retryAfterMs = parseRetryAfterMs(headers.get("Retry-After"))
-    this.limit = parseIntHeader(headers.get("X-RateLimit-Limit"))
-    this.remaining = parseIntHeader(headers.get("X-RateLimit-Remaining"))
-    this.resetMs = parseResetMs(headers.get("X-RateLimit-Reset"))
+    super(429, body);
+    this.name = "RateLimitError";
+    this.retryAfterMs = parseRetryAfterMs(headers.get("Retry-After"));
+    this.limit = parseIntHeader(headers.get("X-RateLimit-Limit"));
+    this.remaining = parseIntHeader(headers.get("X-RateLimit-Remaining"));
+    this.resetMs = parseResetMs(headers.get("X-RateLimit-Reset"));
   }
 }
 
 /** Catch-all for the 5xx range — `status` carries the exact code (500, 502, 503, ...). */
 export class InternalServerError extends ClientError {
   constructor(status: number, body: unknown) {
-    super(status, body)
-    this.name = "InternalServerError"
+    super(status, body);
+    this.name = "InternalServerError";
   }
 }
 
@@ -117,17 +117,17 @@ export class InternalServerError extends ClientError {
 
 /** `Retry-After`: either a delay in whole seconds, or an HTTP-date to wait until. */
 function parseRetryAfterMs(value: string | null): number | undefined {
-  if (value === null) return undefined
-  const seconds = Number(value)
-  if (!Number.isNaN(seconds)) return seconds * 1000
-  const dateMs = Date.parse(value)
-  return Number.isNaN(dateMs) ? undefined : Math.max(0, dateMs - Date.now())
+  if (value === null) return undefined;
+  const seconds = Number(value);
+  if (!Number.isNaN(seconds)) return seconds * 1000;
+  const dateMs = Date.parse(value);
+  return Number.isNaN(dateMs) ? undefined : Math.max(0, dateMs - Date.now());
 }
 
 function parseIntHeader(value: string | null): number | undefined {
-  if (value === null) return undefined
-  const n = Number(value)
-  return Number.isNaN(n) ? undefined : n
+  if (value === null) return undefined;
+  const n = Number(value);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 /**
@@ -139,36 +139,36 @@ function parseIntHeader(value: string | null): number | undefined {
  * as a delta from now.
  */
 function parseResetMs(value: string | null): number | undefined {
-  if (value === null) return undefined
-  const n = Number(value)
-  if (Number.isNaN(n)) return undefined
-  return n > 1e9 ? n * 1000 : Date.now() + n * 1000
+  if (value === null) return undefined;
+  const n = Number(value);
+  if (Number.isNaN(n)) return undefined;
+  return n > 1e9 ? n * 1000 : Date.now() + n * 1000;
 }
 
 function classifyError(status: number, body: unknown, headers: Headers): ClientError {
   switch (status) {
     case 400:
-      return new BadRequestError(body)
+      return new BadRequestError(body);
     case 401:
-      return new AuthenticationError(body)
+      return new AuthenticationError(body);
     case 403:
-      return new ForbiddenError(body)
+      return new ForbiddenError(body);
     case 404:
-      return new NotFoundError(body)
+      return new NotFoundError(body);
     case 409:
-      return new ConflictError(body)
+      return new ConflictError(body);
     case 422:
-      return new UnprocessableEntityError(body)
+      return new UnprocessableEntityError(body);
     case 429:
-      return new RateLimitError(body, headers)
+      return new RateLimitError(body, headers);
     default:
-      return status >= 500 ? new InternalServerError(status, body) : new ClientError(status, body)
+      return status >= 500 ? new InternalServerError(status, body) : new ClientError(status, body);
   }
 }
 
 async function parseErrorBody(res: Response): Promise<unknown> {
-  const ct = res.headers.get("Content-Type") ?? ""
-  return ct.includes("application/json") ? await res.json() : await res.text()
+  const ct = res.headers.get("Content-Type") ?? "";
+  return ct.includes("application/json") ? await res.json() : await res.text();
 }
 
 /**
@@ -180,12 +180,14 @@ async function parseErrorBody(res: Response): Promise<unknown> {
  * createClient(node, { baseUrl, extensions: [errors()] })
  */
 export function errors(): ClientExtension {
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    const res = await inner(req)
-    if (res.ok) return res
-    const body = await parseErrorBody(res)
-    throw classifyError(res.status, body, res.headers)
-  }
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      const res = await inner(req);
+      if (res.ok) return res;
+      const body = await parseErrorBody(res);
+      throw classifyError(res.status, body, res.headers);
+    };
 
   return {
     name: "errors",
@@ -194,7 +196,7 @@ export function errors(): ClientExtension {
       helpers: ERRORS_CODEGEN_HELPERS,
       wrap: (innerExpr) => `__withErrors(${innerExpr})`,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -326,4 +328,4 @@ function __withErrors(inner: typeof fetch): typeof fetch {
     const body = await __parseErrorBody(res)
     throw __classifyError(res.status, res.statusText, body, res.headers)
   }) as typeof fetch
-}`.trim()
+}`.trim();

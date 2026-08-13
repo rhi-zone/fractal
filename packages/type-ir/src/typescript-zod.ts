@@ -1,45 +1,52 @@
 // Zod validator code projector. Emits Zod schema source text, not runtime schemas.
 // Spec: https://zod.dev/ (Primitives, Strings, Numbers, Objects, Arrays, Tuples,
 // Records, Unions, Literals, Enums, Optional/Nullable, Descriptions, Defaults).
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA, quoteKey } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { isA, quoteKey } from "./codegen-helpers.ts";
 
 function regexLiteral(pattern: string): string {
-  return `/${pattern.replace(/\//g, "\\/")}/`
+  return `/${pattern.replace(/\//g, "\\/")}/`;
 }
 
 function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: string): string {
-  let result = expr
+  let result = expr;
 
-  const numberLike = isA(kind, "number")
-  const stringLike = isA(kind, "string")
-  const lengthConstrainable = stringLike || kind === "array"
+  const numberLike = isA(kind, "number");
+  const stringLike = isA(kind, "string");
+  const lengthConstrainable = stringLike || kind === "array";
 
-  if (typeof meta.minimum === "number" && numberLike) result += `.min(${meta.minimum})`
-  if (typeof meta.maximum === "number" && numberLike) result += `.max(${meta.maximum})`
+  if (typeof meta.minimum === "number" && numberLike) result += `.min(${meta.minimum})`;
+  if (typeof meta.maximum === "number" && numberLike) result += `.max(${meta.maximum})`;
   // https://zod.dev/?id=numbers — `.gt()`/`.lt()` are Zod's exclusive-bound
   // equivalents of `.min()`/`.max()` (inclusive).
-  if (typeof meta.exclusiveMinimum === "number" && numberLike) result += `.gt(${meta.exclusiveMinimum})`
-  if (typeof meta.exclusiveMaximum === "number" && numberLike) result += `.lt(${meta.exclusiveMaximum})`
-  if (typeof meta.minLength === "number" && lengthConstrainable) result += `.min(${meta.minLength})`
-  if (typeof meta.maxLength === "number" && lengthConstrainable) result += `.max(${meta.maxLength})`
-  if (typeof meta.pattern === "string" && stringLike) result += `.regex(${regexLiteral(meta.pattern)})`
-  if (typeof meta.multipleOf === "number" && numberLike) result += `.multipleOf(${meta.multipleOf})`
+  if (typeof meta.exclusiveMinimum === "number" && numberLike)
+    result += `.gt(${meta.exclusiveMinimum})`;
+  if (typeof meta.exclusiveMaximum === "number" && numberLike)
+    result += `.lt(${meta.exclusiveMaximum})`;
+  if (typeof meta.minLength === "number" && lengthConstrainable)
+    result += `.min(${meta.minLength})`;
+  if (typeof meta.maxLength === "number" && lengthConstrainable)
+    result += `.max(${meta.maxLength})`;
+  if (typeof meta.pattern === "string" && stringLike)
+    result += `.regex(${regexLiteral(meta.pattern)})`;
+  if (typeof meta.multipleOf === "number" && numberLike)
+    result += `.multipleOf(${meta.multipleOf})`;
 
-  if (meta.nullable === true) result += ".nullable()"
-  if (typeof meta.description === "string") result += `.describe(${JSON.stringify(meta.description)})`
-  if (meta.default !== undefined) result += `.default(${JSON.stringify(meta.default)})`
-  if (typeof meta.brand === "string") result += `.brand<${JSON.stringify(meta.brand)}>()`
+  if (meta.nullable === true) result += ".nullable()";
+  if (typeof meta.description === "string")
+    result += `.describe(${JSON.stringify(meta.description)})`;
+  if (meta.default !== undefined) result += `.default(${JSON.stringify(meta.default)})`;
+  if (typeof meta.brand === "string") result += `.brand<${JSON.stringify(meta.brand)}>()`;
 
-  return result
+  return result;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (expr: string): Converter =>
   () =>
-    expr
+    expr;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("z.boolean()"),
@@ -67,17 +74,17 @@ const handlers: Record<string, Converter> = {
   unknown: leaf("z.unknown()"),
   never: leaf("z.never()"),
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
+    const s = shape as TypeShape & { kind: "object" };
     const fields = Object.entries(s.fields).map(([name, field]) => {
-      const expr = toZod(field)
-      const optional = field.meta.optional === true ? ".optional()" : ""
+      const expr = toZod(field);
+      const optional = field.meta.optional === true ? ".optional()" : "";
       // https://zod.dev/api#readonly — `.readonly()` (any ZodType) marks the
       // parsed output type readonly (Object.freeze at parse time); chained
       // after `.optional()` like Zod's other field-level modifiers.
-      const readonly = field.meta.readonly === true ? ".readonly()" : ""
-      return `${quoteKey(name)}: ${expr}${optional}${readonly}`
-    })
-    return `z.object({ ${fields.join(", ")} })`
+      const readonly = field.meta.readonly === true ? ".readonly()" : "";
+      return `${quoteKey(name)}: ${expr}${optional}${readonly}`;
+    });
+    return `z.object({ ${fields.join(", ")} })`;
   },
   // https://zod.dev/?id=instanceof — `z.instanceof(Class)` checks the runtime
   // prototype chain rather than validating structurally, so it needs the
@@ -85,27 +92,27 @@ const handlers: Record<string, Converter> = {
   // assembles this emitted source into a module) is responsible for ensuring
   // `className` is imported from `source` alongside `zod`.
   instance: (shape) => {
-    const s = shape as TypeShape & { kind: "instance" }
-    return `z.instanceof(${s.className})`
+    const s = shape as TypeShape & { kind: "instance" };
+    return `z.instanceof(${s.className})`;
   },
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `z.array(${toZod(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `z.array(${toZod(s.element)})`;
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `z.tuple([${s.elements.map(toZod).join(", ")}])`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `z.tuple([${s.elements.map(toZod).join(", ")}])`;
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `z.record(${toZod(s.key)}, ${toZod(s.value)})`
+    const s = shape as TypeShape & { kind: "map" };
+    return `z.record(${toZod(s.key)}, ${toZod(s.value)})`;
   },
   // Zod validates materialized values, not an ongoing async sequence — no
   // AsyncIterable schema exists, so this degrades to `z.array()` of the
   // element type, same as every other data-only projector's stream fallback.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `z.array(${toZod(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `z.array(${toZod(s.element)})`;
   },
   // https://zod.dev/?id=discriminated-unions — z.discriminatedUnion(key, [...])
   // is Zod's native construct for object unions keyed on a shared literal
@@ -113,41 +120,41 @@ const handlers: Record<string, Converter> = {
   // variant. Driven by `meta.discriminator` (open metadata bag convention,
   // see CLAUDE.md); a plain union (no discriminator) keeps z.union().
   union: (shape, meta) => {
-    const s = shape as TypeShape & { kind: "union" }
-    const variants = s.variants.map(toZod)
+    const s = shape as TypeShape & { kind: "union" };
+    const variants = s.variants.map(toZod);
     if (typeof meta.discriminator === "string") {
-      return `z.discriminatedUnion(${JSON.stringify(meta.discriminator)}, [${variants.join(", ")}])`
+      return `z.discriminatedUnion(${JSON.stringify(meta.discriminator)}, [${variants.join(", ")}])`;
     }
-    return `z.union([${variants.join(", ")}])`
+    return `z.union([${variants.join(", ")}])`;
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    return `z.literal(${JSON.stringify(s.value)})`
+    const s = shape as TypeShape & { kind: "literal" };
+    return `z.literal(${JSON.stringify(s.value)})`;
   },
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return `z.enum([${s.members.map((m) => JSON.stringify(m)).join(", ")}])`
+    const s = shape as TypeShape & { kind: "enum" };
+    return `z.enum([${s.members.map((m) => JSON.stringify(m)).join(", ")}])`;
   },
   ref: (shape) => {
-    const s = shape as TypeShape & { kind: "ref" }
-    return s.target
+    const s = shape as TypeShape & { kind: "ref" };
+    return s.target;
   },
   // Zod's z.intersection() only takes two schemas (https://zod.dev/?id=intersections) —
   // 3+ members nest left-associatively: `z.intersection(z.intersection(a, b), c)`.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first, ...rest] = s.members
-    if (first === undefined) return "z.unknown()"
-    return rest.reduce((acc, member) => `z.intersection(${acc}, ${toZod(member)})`, toZod(first))
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first, ...rest] = s.members;
+    if (first === undefined) return "z.unknown()";
+    return rest.reduce((acc, member) => `z.intersection(${acc}, ${toZod(member)})`, toZod(first));
   },
   // https://zod.dev/?id=functions — `z.function()` validates arity/argument
   // and return types via `.args(...)`/`.returns(...)`. `thisType` has no Zod
   // equivalent (Zod validates call signatures, not the `this` binding) and is
   // dropped.
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const args = s.params.map((p) => toZod(p.type)).join(", ")
-    return `z.function().args(${args}).returns(${toZod(s.returnType)})`
+    const s = shape as TypeShape & { kind: "function" };
+    const args = s.params.map((p) => toZod(p.type)).join(", ");
+    return `z.function().args(${args}).returns(${toZod(s.returnType)})`;
   },
   // `method` has no explicit entry here — `registerParent("method", "function")`
   // means `resolve()` falls back to the `function` handler above, and Zod's
@@ -160,20 +167,22 @@ const handlers: Record<string, Converter> = {
   // the shape "an object with these callable members," which is what an
   // `interface` TypeRef actually asserts.
   interface: (shape) => {
-    const s = shape as TypeShape & { kind: "interface" }
-    const methods = Object.entries(s.methods).map(([name, method]) => `${quoteKey(name)}: ${toZod(method)}`)
-    return `z.object({ ${methods.join(", ")} })`
+    const s = shape as TypeShape & { kind: "interface" };
+    const methods = Object.entries(s.methods).map(
+      ([name, method]) => `${quoteKey(name)}: ${toZod(method)}`,
+    );
+    return `z.object({ ${methods.join(", ")} })`;
   },
-}
+};
 
 export function toZod(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const expr = converter === undefined ? "z.unknown()" : converter(ref.shape, ref.meta)
-  return withMeta(expr, ref.meta, ref.shape.kind)
+  const converter = resolve(ref.shape.kind, handlers);
+  const expr = converter === undefined ? "z.unknown()" : converter(ref.shape, ref.meta);
+  return withMeta(expr, ref.meta, ref.shape.kind);
 }
 
 export function toZodDeclaration(name: string, ref: TypeRef): string {
-  return `const ${name} = ${toZod(ref)};`
+  return `const ${name} = ${toZod(ref)};`;
 }
 
 /**
@@ -193,10 +202,12 @@ export function toZodDeclaration(name: string, ref: TypeRef): string {
  * recursive just to decide which need it.
  */
 export function toZodLazyDeclaration(name: string, ref: TypeRef): string {
-  return `const ${name}: z.ZodType<any> = z.lazy(() => (${toZod(ref)}));`
+  return `const ${name}: z.ZodType<any> = z.lazy(() => (${toZod(ref)}));`;
 }
 
 export function toZodDeclarations(registry: Record<string, TypeRef>): string {
-  const declarations = Object.entries(registry).map(([name, ref]) => toZodLazyDeclaration(name, ref))
-  return [`import { z } from "zod";`, "", ...declarations].join("\n")
+  const declarations = Object.entries(registry).map(([name, ref]) =>
+    toZodLazyDeclaration(name, ref),
+  );
+  return [`import { z } from "zod";`, "", ...declarations].join("\n");
 }

@@ -30,8 +30,8 @@ emitted them.
 The answer is not determined by the data. For any finite corpus, infinitely many
 descriptions are perfectly consistent with it — the corpus enumerated verbatim is one, "any
 value whatsoever" is another. Consistency is free. A theory of inference here is therefore
-not principally a theory of checking; it is a theory of *preference over consistent
-descriptions*.
+not principally a theory of checking; it is a theory of _preference over consistent
+descriptions_.
 
 The true type is not recoverable in either direction. From positive examples only, every
 proper subtype of the truth covering the observed values remains live, and every proper
@@ -67,7 +67,7 @@ circularity — if scope were a free variable determined jointly with the facts 
 credit would have no well-defined reference set.
 
 Correspondence is therefore not a separate entity. Asserting that occurrences at unrelated
-addresses are the same thing simply *is* stating a scope. One primitive, not two.
+addresses are the same thing simply _is_ stating a scope. One primitive, not two.
 
 Consequently there is no partition and no global class structure. Scopes may overlap, nest,
 or cross-cut arbitrarily.
@@ -131,7 +131,7 @@ against `top`** (§6.6), whose reference is external and given, and whose charge
 prevents a claim that merely reads off the observed sample from earning anything. That is
 non-circular and needs no external corpus.
 
-What it does *not* reach is the finer distributional shape within the restricted domain, and
+What it does _not_ reach is the finer distributional shape within the restricted domain, and
 no estimator computed from the same corpus can reach it either (§6.6). **That** is what the
 multi-model approach below is for: it is not an optimisation over the single-corpus method,
 it is the only way past a ceiling the single-corpus method provably has.
@@ -190,7 +190,7 @@ independently of, the tree-of-lattices structure in §7. Measured on a 300-recor
 corpus with `status` drawn from the e-commerce cluster and `priority` from the
 ticket-priority cluster in the same records: per-field routing identified both correctly and
 cost **2.05 bits/symbol**, against **3.17** for the best available single whole-record
-baseline and 3.38–5.84 for every other single candidate. Per-subtree selection beats *any*
+baseline and 3.38–5.84 for every other single candidate. Per-subtree selection beats _any_
 single whole-document choice, including the best one available in hindsight.
 
 **Limitations, all specific to what was and was not simulated:**
@@ -203,7 +203,7 @@ single whole-document choice, including the best one available in hindsight.
 - **Real per-field sample sizes are often below the n=10–20 threshold** these numbers show is
   needed for reliable routing.
 - **Only categorical/enum-shaped fields were modelled.** This class also contains sequential
-  and relational IDs and computed aggregates, and *neither was simulated at all* — the
+  and relational IDs and computed aggregates, and _neither was simulated at all_ — the
   confirmation does not extend to them.
 - **Only JS divergence and cross-entropy were tried.** No comparison against raw KL,
   chi-squared, or Wasserstein (which is the natural choice for ordinal fields like
@@ -211,8 +211,8 @@ single whole-document choice, including the best one available in hindsight.
 
 ### 4.3 The same diagnosis, reached independently, used to justify the opposite conclusion
 
-Baazizi, Colazzo, Ghelli & Sartiani (*Parametric Schema Inference for Massive JSON
-Datasets*, VLDB J. 28:497–521, 2019) construct an information measure for their own
+Baazizi, Colazzo, Ghelli & Sartiani (_Parametric Schema Inference for Massive JSON
+Datasets_, VLDB J. 28:497–521, 2019) construct an information measure for their own
 precision-versus-conciseness question and then decline to use it. Their footnote 10: with n
 keys, the space of shape-sets has size 2^(2ⁿ); a label-reduced type identifies exactly one
 point and so carries 2ⁿ bits; a kind-reduced type is compatible with many points and carries
@@ -233,16 +233,16 @@ with different confidence:
 
 - **On the uniform-prior clause — answered, with a scope limit.** §4.2 is exactly the
   non-uniform alternative they did not pursue: baselines derived empirically from external
-  real-world corpora and routed per domain, rather than any uniform or *a priori*
+  real-world corpora and routed per domain, rather than any uniform or _a priori_
   mathematical prior. The measured penalty for blending domains (1.11 bits/symbol, §4.2) is
   direct evidence that the uniform-ish single model they rejected really is the wrong
-  reference. **But the scope does not match theirs.** §4.2 was tested on *value*
-  distributions over a small alphabet; their footnote is about *shape* distributions over
+  reference. **But the scope does not match theirs.** §4.2 was tested on _value_
+  distributions over a small alphabet; their footnote is about _shape_ distributions over
   2ⁿ key-subsets. Applying the multi-model answer to their exact question is an untested
   extension, not a result. It is the right shape of answer; it is not yet an answer to their
   instance.
 - **On the usefulness clause — not answered by §4.2 at all**, and it would be a mistake to
-  claim otherwise. That clause says a *correct* information measure still may not model what
+  claim otherwise. That clause says a _correct_ information measure still may not model what
   an analyst needs, which is a claim about the objective's relevance, not its calibration.
   This framework's response is structural rather than statistical: bits measure evidence, and
   what an analyst needs is policy applied at synthesis (§8), with the `(credit, charge)` pair
@@ -294,7 +294,7 @@ attribution gap: -906.9 bits, on both A and B
 interaction N·log2(|U||A∧B|/(|A||B|)) = -906.9 bits    -- exact identity, both slots
 ```
 
-The gap *is* the mutual information between the two refinements. The identity is exact when
+The gap _is_ the mutual information between the two refinements. The identity is exact when
 the refinements are independent, which is the case where you did not need it. A chain admits
 a declared general-to-specific canon that fixes attribution; a **diamond does not**, because
 the lattice supplies no order between incomparable elements. And diamonds are the normal
@@ -316,7 +316,7 @@ Raw empirical mutual information is always non-negative and essentially always p
 finite samples. Simulated: under true independence (8×8 categoricals, 300 trials per cell),
 the fraction of candidates clearing a "credit > 0" bar was **100.0% at every sample size
 tested**. This is estimator bias — the Miller-Madow plug-in bias — and it appears with a
-*singleton* candidate class and no search at all.
+_singleton_ candidate class and no search at all.
 
 A within-model complexity term fixes that entirely. Prequential (Dirichlet-½ plug-in)
 scoring on the same nulls:
@@ -405,7 +405,7 @@ model. The pointer cost is 1 bit. The specification cost of that candidate is en
 `log₂N` undercharges it by whatever the difference is, and no amount of careful calibration
 of `log₂N` closes the gap, because it is measuring the wrong thing.
 
-Consequence for the price schedule (§9.2): the schedule prices the *registry* case. A
+Consequence for the price schedule (§9.2): the schedule prices the _registry_ case. A
 vocabulary extension that introduces a genuinely new model is not priced by the pointer cost
 of its family, and the escrow mechanism governs registry membership rather than
 specification cost. Whether these want to be two ledgers or one with a case split is not
@@ -528,7 +528,7 @@ and 2 (§11) — or comparing corpora of different sizes, which requires externa
 is needed. `net = (N − K)·log₂(D/K)` is evaluated **once**, at the single observed (N, K)
 pair: count total occurrences, count distinct values, done. Memorization (K ≈ N) and genuine
 restriction (K ≪ N) are both static facts about one snapshot, and the formula separates them
-without anything sequential. What that single evaluation *cannot* do without a declared `D`
+without anything sequential. What that single evaluation _cannot_ do without a declared `D`
 is say where the boundary sits, and §17.5 measures how much work that declaration is doing:
 the resulting ordering is robust to it (ρ = 0.989 across a 235-fold change in log₂D) and the
 `net > 0` verdict is not.
@@ -536,8 +536,8 @@ the resulting ordering is robust to it (ρ = 0.989 across a 235-fold change in l
 **This is the ceiling reachable from one corpus alone**, which resolves the circularity
 question of §15.3. The credit above is non-circular because its reference is `top` — external
 and given, not fitted to the data being scored. Circularity re-enters only if one tries to
-claim *additional* credit beyond domain restriction, by also fitting the distributional shape
-*within* the K values ("and moreover they are 80/15/5, not uniform among the three") using an
+claim _additional_ credit beyond domain restriction, by also fitting the distributional shape
+_within_ the K values ("and moreover they are 80/15/5, not uniform among the three") using an
 estimator built from the same corpus. **Empirical frequency, Bayes-mixture, prequential and
 KT estimators were all considered for this and all rejected** — not because they are wrong in
 general (§6.1 uses prequential correctly for a different purpose) but because every one of
@@ -547,7 +547,7 @@ fitting.
 
 So: **domain-restriction credit against `top` is the legitimate ceiling achievable within a
 single corpus.** Credit for the finer distributional shape requires genuinely external
-data — which is precisely what the multi-model routing of §4.2 supplies, by pulling in *other*
+data — which is precisely what the multi-model routing of §4.2 supplies, by pulling in _other_
 corpora. That is not a cleverer trick performed within one dataset; it is the recognition
 that no such trick exists.
 
@@ -614,7 +614,7 @@ small enum domain          150   100  0.667          128      2.624       -40.0 
 Any ratio rule returns one verdict for all three. §6.6 splits them.
 
 **Two honest notes about this repository's own rule.** First, its 1/3 cutoff is
-*conservative but safe*: `N/K ≥ 3` sits above the maximum required ratio (≈1.96 at D/K = 2),
+_conservative but safe_: `N/K ≥ 3` sits above the maximum required ratio (≈1.96 at D/K = 2),
 so it produces **no false positives** at any domain size — swept over D from 128 to 2⁶⁴ at
 K = 100, the rule and §6.6 agree everywhere it fires. Its errors are all false negatives, in
 the band `1.0 < N/K < 3`, which is wide precisely for the high-cardinality domains where
@@ -671,11 +671,11 @@ the exact formula: for npm `description` (N=1094, K=1030, ρ=0.9415) the require
 and +55.8 at 34.0. In `D/N` terms the condition is `log₂(D/N) > c·ρ/(1−ρ) + log₂ρ`.
 
 **Why — and this is structural, not a missing term.** The dictionary costs `≈ K·L` and each
-occurrence saves `L`, for `N·L` total. *Both sides scale with `L`*, so `L` cancels to first
+occurrence saves `L`, for `N·L` total. _Both sides scale with `L`_, so `L` cancels to first
 order and `net ≈ (N−K)·L − K·c`. The leading question is only whether occurrences outnumber
 dictionary entries. `D` survives solely in `K·log₂e`, a **fixed ~1.443 bits per entry that
-does not grow with `D`**. Compression is therefore bought by *any* repetition; it never
-required *concentrated* repetition. `K ≪ N` was always an informal reading of a formula that
+does not grow with `D`**. Compression is therefore bought by _any_ repetition; it never
+required _concentrated_ repetition. `K ≪ N` was always an informal reading of a formula that
 never encoded it.
 
 The formula is also blind to the shape of the counts, which the same reading assumed. Two
@@ -693,14 +693,14 @@ Identical credit, though only A has a genuinely repeated member.
 event that occurs costs unbounded bits. Nothing in `net` tests it, yet **the corpus carries
 direct evidence about it**: Good–Turing's missing-mass estimate `p̂ = n₁/N`, where `n₁` is the
 number of values seen exactly once. **The quantity that matters is `n₁/N` — singleton
-*mass*, the share of occurrences — not `n₁/K`, the share of members.** For `description`,
-those 997 singletons are 91.1% of *occurrences*. The fact being scored asserts 0; the corpus
+_mass_, the share of occurrences — not `n₁/K`, the share of members.** For `description`,
+those 997 singletons are 91.1% of _occurrences_. The fact being scored asserts 0; the corpus
 says 0.911.
 
 Keeping those two apart is not pedantry, it is the whole content of the criterion, and
 conflating them yields a rule that is wrong on both sides. Real vocabularies are skewed —
-§4.1(a)'s own Zipf material says so — so a genuine closed vocabulary routinely has *most of
-its members* appear once:
+§4.1(a)'s own Zipf material says so — so a genuine closed vocabulary routinely has _most of
+its members_ appear once:
 
 ```
 field                                     N        K     n₁    n₁/K     n₁/N   verdict
@@ -711,13 +711,13 @@ npm .description                       1094     1030    997     97%    91.1%   r
 ```
 
 By `n₁/K` the first two look like free text and are not. A field that is 999,950 copies of
-one value plus 50 one-off oddities has 98% of its *members* appearing exactly once and is
+one value plus 50 one-off oddities has 98% of its _members_ appearing exactly once and is
 obviously not free text; by mass it is 0.005% novel. `n₁/N` separates all three correctly.
 The enum-vs-free-text framing is itself the wrong dichotomy — none of these fields is
 "an enum" or "free text" as a kind. What the criterion measures is escape rate: how much
 occurrence mass sits outside any finite domain you could name.
 
-**Replacing the fact fixes the criterion.** Score a *domain-with-escape* fact instead: each
+**Replacing the fact fixes the criterion.** Score a _domain-with-escape_ fact instead: each
 occurrence pays `H(p)` for an escape flag, then `log₂K` if in `S` or `log₂D` if novel.
 
 ```
@@ -748,7 +748,7 @@ mixture: 50 specials + text        1085   950    900   82.9%   +5,940       −4
 Empirical verification against real corpora, including the calibration of `p̂` itself, is in
 §17.7. Two caveats travel with this. First, it is a **change of fact vocabulary, not a repair
 of the arithmetic** — `net` was always a correct statement about compression, and the
-closed-domain *fact* was the thing overclaiming. Second, `n₁/N` is a same-corpus estimator,
+closed-domain _fact_ was the thing overclaiming. Second, `n₁/N` is a same-corpus estimator,
 so it grazes §15.3's circularity bar; the defence is that it estimates a scalar from the
 frequency-of-frequencies rather than a predictive distribution over values, and that the
 closed-domain claim already asserted `p = 0` about the same data. That defence is arguable
@@ -780,7 +780,7 @@ of the data did.
 **Why it is invalidation and not bias.** Good–Turing's `n₁/N ≈ P(novel)` rests on a
 leave-one-out argument: hold out each observation and ask whether it is novel against the
 rest. Under exact duplication every held-out point still has its twin in the sample, so it is
-never novel and leave-one-out returns 0 *by construction*. Duplicate pairs are perfectly
+never novel and leave-one-out returns 0 _by construction_. Duplicate pairs are perfectly
 dependent, which violates the exchangeability the argument requires. Note also that raw `net`
 inverts identically here — **the `n₁` term buys nothing on this construction**; it is no
 worse than §6.6 and no better.
@@ -817,12 +817,12 @@ that does not occur in practice.
 
 **Impossibility, not an implementation gap.** Duplication leaves the normalised counts
 `{c_v/N}` and `K` unchanged, so the duplication-invariant statistics are exactly the
-functions of `({c_v/N}, K)` — they cannot use `N`. But the criterion *must* use `N`:
+functions of `({c_v/N}, K)` — they cannot use `N`. But the criterion _must_ use `N`:
 `K = 1030` at `N = 1094` is one-off free text, and `K = 1030` at `N = 10⁹` is a genuine
 closed 1030-value domain, and those need opposite verdicts. Therefore:
 
 > **No statistic of the value counts is both a valid missing-mass estimate and
-> duplication-invariant.** Missing mass is inherently a claim about how many *independent*
+> duplication-invariant.** Missing mass is inherently a claim about how many _independent_
 > draws were observed, and duplication corrupts exactly that.
 
 Stated at the level of the data: a corpus `B` = corpus `A` duplicated `r` times, and a
@@ -845,7 +845,7 @@ npm, n₁ = 0                            2          0.000                     10
 npm, n₁ > 0                           59          0.438                      48.0%
 ```
 
-Every `n₁ = 0` path scores exactly 100% coverage *by construction*. Criterion and ground
+Every `n₁ = 0` path scores exactly 100% coverage _by construction_. Criterion and ground
 truth are fooled by the same artefact, so their agreement on those paths is not evidence.
 Splitting by corpus:
 
@@ -910,7 +910,7 @@ depends on how repetitive the field already was — and a field that is already 
 repeated breaks immediately. Any criterion that uses `N` and is monotone increasing in `N`
 inherits this, `K/N` included. It changes the constant, not the failure.
 
-**Clarification: the "K/N rule" above already *was* a fixed, D-free threshold.** Substituting
+**Clarification: the "K/N rule" above already _was_ a fixed, D-free threshold.** Substituting
 `p = K/N` reduces `N(1−p) > K` to `N > 2K`, i.e. **`K/N < 0.5`** — a constant that fell out of
 the algebra rather than being chosen. At `r = 2` on the unique construction `K/N = 0.500`
 exactly, so `2M > 2M` is false and it **rejects**. "Breaks at `r = 3`" meant correct through
@@ -955,7 +955,7 @@ within 0.03 of the empirical optimum.
 parameter.** The model says a closed domain should show discovery tapering off, so `K/N = 0.5`
 (half of all occurrences still new) ought to be a decisive reject, not a boundary. The
 empirical sweep said `c = 0.5` is optimal. Both are right, because "genuine restriction" was
-defined here as *held-out coverage ≥ 50%* — a bar chosen arbitrarily and never justified.
+defined here as _held-out coverage ≥ 50%_ — a bar chosen arbitrarily and never justified.
 Move it and the optimal constant moves with it, near-linearly:
 
 ```
@@ -973,7 +973,7 @@ intuition. At the weak reading used earlier (coverage ≥ 50%, i.e. merely "more
 not already seen") a loose constant is correct. The two claims answer different questions and
 the constant `c` is silently encoding which one is being asked.
 
-**It is not a small-N effect.** The 0.2–0.5 band holds 21 real paths, *all* with coverage
+**It is not a small-N effect.** The 0.2–0.5 band holds 21 real paths, _all_ with coverage
 ≥ 50%, spanning `N` from 124 to 10,354 (median 303) — including `keywords[*]` at
 N = 10,354, K = 3,374. They are semver ranges (`devDependencies.*`), file paths
 (`main`, `types`, `module`, `exports.*`), version strings and npm usernames: vocabularies
@@ -1000,7 +1000,7 @@ cov cutoff   K/N@best   K/N@0.5   K/N@0.1   net@2^64   n₁ rule   1−n₁/N �
 ```
 
 `1 − n₁/N ≥ cutoff` is not a threshold rule — it uses Good–Turing's reliable-mass estimate
-*directly as a prediction of coverage* and compares it against whatever coverage the caller
+_directly as a prediction of coverage_ and compares it against whatever coverage the caller
 requires. It carries **no free constant**, needs no retuning, and is the only rule stable
 across the range. `net@2^64` degrades monotonically as the bar rises (83.6% → 29.5%): the
 D-dependent formula is worst exactly when a strong claim is wanted.
@@ -1015,7 +1015,7 @@ one that needs a constant tied to an undeclared requirement.** Neither is uncond
 better, and the choice between them is a choice about which failure is cheaper.
 
 **On what the machinery is for.** A one-line, D-free `K/N < 0.5` check scores
-98.4% on clean real data where the full D-dependent `net` scores 65.6%. For *this* decision
+98.4% on clean real data where the full D-dependent `net` scores 65.6%. For _this_ decision
 the credit/charge apparatus is not merely unnecessary, it is worse, and §17.3's finding that
 `D` dominates the verdict is the reason. Two things the constant genuinely cannot do, both
 already load-bearing elsewhere: it yields a boolean rather than bits, so it supports no
@@ -1025,7 +1025,7 @@ ranking (§17.5's ρ = 0.803 comes from the magnitude), and it is blind to sampl
 
 **Relation to §17.2 — same cause, strictly worse effect.** Both follow from the corpus not
 being an i.i.d. sample of the source. §17.2 showed `N` is inflated, which distorts credit
-*magnitudes* smoothly. This shows the sign of the criterion flips on a single duplicate. So
+_magnitudes_ smoothly. This shows the sign of the criterion flips on a single duplicate. So
 §17.2 is promoted: it is not an accepted limitation about precision, it is a **precondition**
 for §6.7 meaning anything. And it cannot be discharged from the values — deduplication
 requires either identical-record collapsing (which destroys genuine evidence when two
@@ -1048,7 +1048,7 @@ r      N       net          net_esc
 16  16000   +809,077       +809,077
 ```
 
-No choice of charge repairs this, because the charge cannot see `N`; and a charge that *did*
+No choice of charge repairs this, because the charge cannot see `N`; and a charge that _did_
 grow with `N` would penalise genuine evidence identically, since more real observations are
 indistinguishable from more duplication by construction (§6.8's impossibility above). So the
 corpus must be an independent sample **before** any of this machinery runs, and establishing
@@ -1090,7 +1090,7 @@ npm .types           0.231        79.4%   1.2      5.00    14.4
 
 `license` is the canonical **closed** vocabulary — SPDX identifiers, 96.5% held-out
 coverage — and the fit calls it maximally **open**, in the same bucket as `name`, which has
-0% coverage. Worse, `description` (6.8% coverage, genuinely open) fits as *more closed* than
+0% coverage. Worse, `description` (6.8% coverage, genuinely open) fits as _more closed_ than
 `license`. The two discriminations that matter are inverted.
 
 **The cause is identifiability, not tuning.** For `s > 1` the series `Σ i^-s` converges, so
@@ -1101,7 +1101,7 @@ with Zipfian usage and an open Zipfian vocabulary produce the same frequency spe
 which is precisely the distinction this approach was proposed to draw.
 
 **Under duplication it is the most fragile method tested.** Duplication makes every count
-exactly `r`, which is the *canonical signature* of uniform-over-`K` sampled deeply — so it
+exactly `r`, which is the _canonical signature_ of uniform-over-`K` sampled deeply — so it
 does not merely fool the test, it manufactures the evidence for the closed-enum hypothesis:
 
 ```
@@ -1133,7 +1133,7 @@ duplication-fragile option available, and it loses at every operating point. The
 takeaway is that `s` is real and identifiable while `V` is not.
 
 **The diagnosis above is the symptom; §6.10 gives the cause.** "The series converges for
-`s > 1`" describes *when* the fit visibly failed, but `V` is unidentifiable for **every** `s`,
+`s > 1`" describes _when_ the fit visibly failed, but `V` is unidentifiable for **every** `s`,
 and for a reason that has nothing to do with the Zipf family.
 
 ### 6.10 "Closed vs open" is not a well-posed binary; coverage is the estimable quantity
@@ -1156,7 +1156,7 @@ Good–Turing, or anything not yet invented — can beat chance on such a sample
 evidence is an actual tail observation, and the boundary is the product `εN`, the expected
 number of them (`εN ≪ 1` indistinguishable, `εN ≈ 1` → 82% ceiling, `εN > 5` separable).
 
-**Note what does *not* appear anywhere in that statement: whether the tail is finite.**
+**Note what does _not_ appear anywhere in that statement: whether the tail is finite.**
 Truncating a Zipf at `V` versus leaving it infinite only renormalises, so the two have
 identical conditional distributions given a draw landed in the head — this is exactly the
 `A` versus `B_ε` situation with `ε = 1 − H_K(s)/ζ(s)`. A closed vocabulary can be perfectly
@@ -1164,7 +1164,7 @@ Zipfian; English is finite and is the canonical example. So **"closed" is the si
 `ε = 0` on a continuum, not a category**, and a finite sample can only ever return an upper
 bound `ε ≲ c/N`. It is excludable, never confirmable.
 
-**`V` is unidentifiable precisely *because* coverage is insensitive to it.** Same
+**`V` is unidentifiable precisely _because_ coverage is insensitive to it.** Same
 license-like head, `K = 38`, `N = 1085`, appending a tail:
 
 ```
@@ -1186,7 +1186,7 @@ secondary. Fitting `V` was estimating a parameter that does not exist as an infe
 Fitting `s` was fine.
 
 **What remains, and it is a different problem.** Coverage at the observed sample size is
-fully well-posed and Good–Turing estimates it distribution-free. Coverage at a *larger*
+fully well-posed and Good–Turing estimates it distribution-free. Coverage at a _larger_
 sample size is not. Measured on 41 real fields with `N ≥ 400`, predicting from a quarter
 sample:
 
@@ -1211,7 +1211,7 @@ a fact about inference, and the second is a declared modelling choice.
 ### 6.11 Deduplication prototyped: mechanically cheap, and it relocates the problem
 
 §6.8 concluded that deduplication is a hard precondition. Built and tested it, avoiding key/ID
-identification (broken per §17.4) by detecting repeated *whole objects* by similarity.
+identification (broken per §17.4) by detecting repeated _whole objects_ by similarity.
 
 **Tier 1, exact hash of the enclosing object, does essentially all the work.** A scalar
 occurrence's dedup key is the identity of its immediately-enclosing object, so two occurrences
@@ -1232,7 +1232,7 @@ not near-repetition, is what real embedded-entity duplication looks like here.
 
 **Performance is linear and not a concern.** Exact hashing: 9 ms → 128 ms for N = 411 → 6576
 (16× data, 14× time). MinHash cost is dominated by signatures over distinct representatives,
-so per-record cost *falls* with duplication (2.31 → 0.16 ms/record). No pairwise scan; the
+so per-record cost _falls_ with duplication (2.31 → 0.16 ms/record). No pairwise scan; the
 only quadratic risk is inside an LSH bucket, capped at 200 members.
 
 **It does reduce the §6.8 contamination, but does not measurably improve the estimator.**
@@ -1373,10 +1373,10 @@ the decision actually needs.
 ### 7.5 What is uniform and what is not
 
 A single generic recursive procedure handling object, array and scalar nodes uniformly
-**does** hold for the decision-*application* step. This was confirmed by refactor: unifying
+**does** hold for the decision-_application_ step. This was confirmed by refactor: unifying
 three separate code paths into one produced byte-identical output.
 
-It **does not** hold for candidate *construction*, which stays irreducibly kind-specific:
+It **does not** hold for candidate _construction_, which stays irreducibly kind-specific:
 
 - objects sum their children's credit and charge,
 - arrays flatten into one synthetic child,
@@ -1395,7 +1395,7 @@ The correct composition is an **aggregate over sufficient statistics of the whol
 (counts), computed once and order-invariantly, as in §6.6's static (N, K) pair.
 
 This is not a rival to prequential so much as its order-free summary. Per §12.2's de Finetti
-result, an order-free predictor *is* the average of the prequential score over every possible
+result, an order-free predictor _is_ the average of the prequential score over every possible
 ordering — so the aggregate computation is the same underlying quantity, obtained properly
 instead of by committing to one arbitrary sequence and inheriting its bias. Prequential
 remains correct elsewhere in this document for a different purpose (§6.1, where the question
@@ -1414,8 +1414,8 @@ All configurability lives here.
 Description-length cost is **illegitimate** for scoring facts against data — it imports
 arbitrary encoding choices — but **legitimate** as a criterion for choosing among
 presentations of a result. That gives Occam's razor its proper home: minimizing the
-description length of the *output*, not of the corpus. This resolves a real gap: a composite
-can be strictly *less* credited than each of its constituents individually and still be the
+description length of the _output_, not of the corpus. This resolves a real gap: a composite
+can be strictly _less_ credited than each of its constituents individually and still be the
 preferred presentation, because it only earns credit for agreement among parts. Credit
 ranking alone does not determine presentation.
 
@@ -1428,7 +1428,7 @@ commits to one answer, and nobody is handed a menu unless they ask for one. An a
 a single schema by default and reaches for the knob only when the default disappoints.
 
 That answer is only as good as the default, and **this document does not specify one.** §7.3
-makes the knob a caller-supplied predicate, which is *more* freedom than the K/L choice they
+makes the knob a caller-supplied predicate, which is _more_ freedom than the K/L choice they
 consider already excessive, and §15.2 still lists the default allocation scheme as an open
 decision. As written, a faithful implementation would require every caller to supply a
 policy — precisely the failure they name. Their objection is therefore best read not as a
@@ -1452,15 +1452,15 @@ c(D)=200   admitted {A,B,D}   phi(A)=629.6  phi(B)=1448.3  phi(D)=922.1
 c(D)=5000  admitted {A,B}     phi(A)=576.0  phi(B)=1576.0
 ```
 
-The game is unchanged; the attribution moves by 53.6 bits from a change to a *price*. Hence
+The game is unchanged; the attribution moves by 53.6 bits from a change to a _price_. Hence
 the conditioned invariant (test 7, §11): gross attribution is invariant under price changes
-**that do not change the admitted set**. Allocating over all *submitted* facts instead would
+**that do not change the admitted set**. Allocating over all _submitted_ facts instead would
 restore unconditional invariance but reopens manipulation — a party could shift others'
 credit by submitting a fact it knows will never be admitted.
 
 **And the cohort tag does not capture what moves the number.** Three corpora in which fact A
 has bit-identical evidence — same scope, same support, standalone credit 415.0 in all
-three — differing only in field *y*'s structure:
+three — differing only in field _y_'s structure:
 
 ```
                               |A∧B|   cohort tag   standalone v(A)   reported phi(A)
@@ -1470,8 +1470,8 @@ y nested inside x              1500      {A,B}          415.0             207.5
 ```
 
 A's reported credit ranges over **661 bits** while A's own evidence never changes, and the
-cohort tag is **identical in every case**. The tag records *which* facts are in the cohort;
-the number is moved by *how they interact*. Two reports bearing the same tag can assign
+cohort tag is **identical in every case**. The tag records _which_ facts are in the cohort;
+the number is moved by _how they interact_. Two reports bearing the same tag can assign
 different credit to identical evidence.
 
 The accurate statement is therefore stronger than "cohort-relative": **per-fact credit is a
@@ -1516,7 +1516,7 @@ The attacker's fact is admitted on 2 bits of evidence where the same fact inside
 1000-member family would need ~11, and every later family pays. Generalized, the scheme
 rewards fragmenting the vocabulary into singletons.
 
-But in MDL terms a singleton family genuinely *is* cheap — if you truly committed in advance
+But in MDL terms a singleton family genuinely _is_ cheap — if you truly committed in advance
 to one hypothesis, the low price is earned. The exploit is specifically **post-hoc family
 declaration**, which is exactly the "fix the class in advance" requirement reappearing.
 **With test 8 in force, the remaining cross-party reserve competition is a governance
@@ -1545,7 +1545,7 @@ recorded as one.
 
 Named, and a first-class declared object rather than an implementation detail — it is where
 the diamond's 906.9 bits actually land. Candidates: Shapley (symmetric, order-free; cost is
-linear in the size of a compact representation *if one exists*, with representation size and
+linear in the size of a compact representation _if one exists_, with representation size and
 treewidth the governing parameters — **not** overlap-graph density, since sparse graphs can
 have high treewidth); proportional; lexicographic-under-declared-canon.
 
@@ -1587,7 +1587,7 @@ mass over the vocabulary.
 
 > The code a fact induces **over the declared universe** is a sufficient statistic for the
 > gross ledger. Identity, equivalence, and comparison questions about gross credit reduce to
-> code identity. The net ledger is *not* a function of the code — it additionally conditions
+> code identity. The net ledger is _not_ a function of the code — it additionally conditions
 > on declared family membership.
 
 Two qualifications, both load-bearing:
@@ -1599,7 +1599,7 @@ Two qualifications, both load-bearing:
 - **"Over the declared universe" is not a hedge either.** A fact assigns its constrained
   distribution to the occurrences in its scope and leaves the background elsewhere, so the
   induced code embeds the scope, and different scopes give different codes and different
-  players. But two *derived* scopes that coincide on this corpus while differing in
+  players. But two _derived_ scopes that coincide on this corpus while differing in
   derivation rule induce the same corpus-level code and different universe-level codes.
   Stated over the corpus, P2′ re-merges them and reintroduces the §9.4 ill-definedness.
 
@@ -1667,7 +1667,7 @@ it bite.
    explicitly because it is the one that will actually bite: this system sums bits, and
    float addition is not associative.
 7. **Conditioned price invariance.** Gross attribution is invariant under price-schedule
-   changes *that do not change the admitted set*. The unconditioned form is false (§8.1).
+   changes _that do not change the admitted set_. The unconditioned form is false (§8.1).
 8. **Corpus-blindness of the schedule.** Scoring a corpus must not change any price. A
    schedule derived by inspecting the corpus is invalid.
 9. **Null-corpus vacuity, swept.** On null corpora, asserted facts ≈ 0 — **swept over
@@ -1676,7 +1676,7 @@ it bite.
    untouched (100.0% at K=1000 with cheap candidates). A green K=1 fixture would close the
    audit with the bug intact.
 10. **Decomposition fidelity.** Bottom-up per-node evaluation agrees with joint evaluation on
-    independent subtrees (§7.1), and is *expected to diverge* on correlated siblings by the
+    independent subtrees (§7.1), and is _expected to diverge_ on correlated siblings by the
     predicted `2 × H(discriminant)` (§7.2). Both halves are the test: agreement where the
     structure factors, and the predicted gap where it does not. A version that agrees
     everywhere is not detecting DUs.
@@ -1712,20 +1712,20 @@ Instances found, each initially presented as an elimination:
 
 1. Two-part description-length cost was "eliminated" — it had moved into the baseline.
 2. "Prequential needs no fixed class, no description language, no explicit prior" — the
-   order-free plug-in *is* a Bayes mixture. Permutation test: 200 random permutations of the
+   order-free plug-in _is_ a Bayes mixture. Permutation test: 200 random permutations of the
    same corpus, spread **exactly 0.0 bits**, min = median = max. The order-free predictors
    are priors; the prior-free ones (ML plug-in) are order-dependent and have worse-than-½ln n
    redundancy under misspecification, which is the regime this project always operates in.
-3. E-values as a universal unifier — merging under arbitrary dependence must be a *weighted
-   arithmetic average*, and the weights are literally a prior over the vocabulary. The
+3. E-values as a universal unifier — merging under arbitrary dependence must be a _weighted
+   arithmetic average_, and the weights are literally a prior over the vocabulary. The
    unifier resolved into one of the things it was meant to unify.
 4. Conditional-credit-given-accepted-set as the overlap fix — it is Krimp's mechanism, and
-   Krimp achieves it by *disjoint cover*, which contradicts §3's overlapping scopes.
+   Krimp achieves it by _disjoint cover_, which contradicts §3's overlapping scopes.
 5. FORSIED as unifying baseline and conditional credit — architecturally clean, but its
-   scoring is `SI = IC/DL`, a description-length denominator and a *ratio*, both of which §4
+   scoring is `SI = IC/DL`, a description-length denominator and a _ratio_, both of which §4
    removed on stated grounds.
 6. The re-scoping to a set function — removed the only mechanism against memorization (§6.5).
-7. "The charge now lives in the objective where it can't relocate further" — its *value*
+7. "The charge now lives in the objective where it can't relocate further" — its _value_
    became the free parameter, which is where it relocated.
 
 The methodological consequence: **the correct response to an apparent elimination is to look
@@ -1733,7 +1733,7 @@ for where the charge went, and the way to find out is to run the numbers.** Six 
 convergence claims, three refuted by simulation, none by inspection.
 
 The corollary — "therefore choose the accounting where the payment is most visible" — is
-*not* adopted as a principle. Visibility is not formalized and can conflict with
+_not_ adopted as a principle. Visibility is not formalized and can conflict with
 theorem-backed criteria: crude two-part codes are maximally visible and worse in redundancy
 than Bayes mixtures. It is an ergonomics criterion competing with a robustness criterion, and
 which should win is a live call, not a derived result.
@@ -1769,15 +1769,15 @@ properties are facts about the source, while the corresponding facts about the c
 facts about our collection procedure. Hence: if grouping is informationally real, represent
 it as data.
 
-**Constitution.** A composite fact is *constituted by* its constituents — a part-whole
-relation. It prevents double-counting: the composite's bits *are* its constituents' bits seen
+**Constitution.** A composite fact is _constituted by_ its constituents — a part-whole
+relation. It prevents double-counting: the composite's bits _are_ its constituents' bits seen
 together. It is **not** the sole fact-to-fact relation, which the superseded document
 claimed (§14); it handles structural part-whole overlap only, not two unrelated facts that
 happen to explain overlapping bits.
 
 **Discriminated unions require no new machinery.** A DU is a scope decision: one fact scoped
 to "occurrences where the tag is `a`" claiming shape A, another scoped to tag `b` claiming
-shape B. The correlation between tag and payload is the *reason* the facts earn credit, not a
+shape B. The correlation between tag and payload is the _reason_ the facts earn credit, not a
 relation stored in the structure. The distinction from a plain union is structural, not
 quantitative: whether the scope is **derivable from observed constituents** or only
 **extensionally enumerable**. The discriminant must be co-located within the same value;
@@ -1811,17 +1811,17 @@ all of them. The claim now has one supporting measurement and one non-replicatio
 accurate for what it covers. These are additional, and they are the reason that document is
 superseded rather than merely extended.
 
-| Retracted | Why |
-|---|---|
-| §4 "A fact's credit is computed from the fact alone" | Credit is a set function; per-fact numbers require an allocation convention (§5.1). The 906.9-bit diamond gap is exactly the interaction no single fact earns. |
-| §5 "Credit above zero is the only admission bar. Nothing is discarded." | Admission is net-total maximization and it discards (§6.2). The weak-but-true fact at −1.7 net is the intended behaviour, not a defect. |
-| §5 memorization argument (aggregates don't inherit credit, so ordering handles it) | The argument was about per-fact ranking; under the set function memorization attains the global maximum (§6.5). Handled by the charge instead. |
-| §6 "No other fact-to-fact relation is required" | Constitution covers part-whole overlap only. Refinement and crossing overlap are ordinary type refinement, not edge cases, and the framework needed the allocation scheme for them. |
-| §4 "No description language anywhere" | Correct for scoring facts against data; **wrong as an absolute**. Kraft makes declaring a code and declaring a distribution the same act, so the cost relocated into the baseline. It is also legitimate at synthesis time (§8). |
-| §9 output = facts, their credits, and constitution edges | The core emits the total and the graph; credits are synthesis artifacts (§5.1, §8.1). |
-| §12 "silence where the corpus is silent" as unqualified | Still true in spirit, and now sharpened: the net bar makes it operational rather than aspirational. |
+| Retracted                                                                          | Why                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §4 "A fact's credit is computed from the fact alone"                               | Credit is a set function; per-fact numbers require an allocation convention (§5.1). The 906.9-bit diamond gap is exactly the interaction no single fact earns.                                                                   |
+| §5 "Credit above zero is the only admission bar. Nothing is discarded."            | Admission is net-total maximization and it discards (§6.2). The weak-but-true fact at −1.7 net is the intended behaviour, not a defect.                                                                                          |
+| §5 memorization argument (aggregates don't inherit credit, so ordering handles it) | The argument was about per-fact ranking; under the set function memorization attains the global maximum (§6.5). Handled by the charge instead.                                                                                   |
+| §6 "No other fact-to-fact relation is required"                                    | Constitution covers part-whole overlap only. Refinement and crossing overlap are ordinary type refinement, not edge cases, and the framework needed the allocation scheme for them.                                              |
+| §4 "No description language anywhere"                                              | Correct for scoring facts against data; **wrong as an absolute**. Kraft makes declaring a code and declaring a distribution the same act, so the cost relocated into the baseline. It is also legitimate at synthesis time (§8). |
+| §9 output = facts, their credits, and constitution edges                           | The core emits the total and the graph; credits are synthesis artifacts (§5.1, §8.1).                                                                                                                                            |
+| §12 "silence where the corpus is silent" as unqualified                            | Still true in spirit, and now sharpened: the net bar makes it operational rather than aspirational.                                                                                                                              |
 
-An earlier revision of *this* document is also corrected: the charge was stated as
+An earlier revision of _this_ document is also corrected: the charge was stated as
 `log₂(#candidates)` without qualification, which is one case of a situational quantity rather
 than its definition (§6.3).
 
@@ -1831,7 +1831,7 @@ than its definition (§6.3).
 
 **Pricing a never-before-submitted fact type.** `log₂(#candidates in the class)` is
 well-defined for enumerable classes and undefined for a fact type nobody has invented yet.
-Escrow *localizes* this to reserve-sizing at version time; it does not answer it. Corpus work
+Escrow _localizes_ this to reserve-sizing at version time; it does not answer it. Corpus work
 cannot answer it either — you cannot calibrate the price of a hypothesis class that does not
 exist. This is the open-class problem in its fourth costume (unbounded NML regret →
 stratified priors → e-merging weights → reserve sizing), and it should be expected to remain
@@ -1911,7 +1911,7 @@ remain.
 ## 16. External prior art bearing directly on this framework
 
 `docs/design/prior-art/json-shape-inference.md` surveys five lines of work at
-implementation level. Two bear on the *theory* specifically and are recorded here.
+implementation level. Two bear on the _theory_ specifically and are recorded here.
 
 ### 16.1 XTRACT (Garofalakis, Gionis, Rastogi, Seshadri & Shim, SIGMOD 2000)
 
@@ -1925,8 +1925,8 @@ which is `charge + data cost`, i.e. §6.3's `L(model)` plus the coded corpus. Sp
 correspondences:
 
 - **Their DTD-encoding cost is n·⌈log(|Σ|+|M|)⌉** — symbols in the DTD times bits per symbol
-  over a declared alphabet plus metacharacters. That is §6.3's *pointer cost over a shared
-  registry*, with the registry being the alphabet, and §9.2's price schedule for a
+  over a declared alphabet plus metacharacters. That is §6.3's _pointer cost over a shared
+  registry_, with the registry being the alphabet, and §9.2's price schedule for a
   fixed-length code. Notably they declare this encoding without remarking that it is a
   choice — which is exactly what §14's retraction of "no description language anywhere" says
   is unavoidable: the cost does not disappear, it becomes a declared convention.
@@ -1949,7 +1949,7 @@ correspondences:
 
 Two divergences worth keeping. XTRACT commits to a single minimum-cost DTD, where the core
 here commits to nothing and leaves that to synthesis (§8). And XTRACT has no charge for
-*search* multiplicity: candidates are generated per-sequence and then selected, with no
+_search_ multiplicity: candidates are generated per-sequence and then selected, with no
 payment for how many were examined, which is the §6.1 vacuity gap. Their generalisation
 module is explicitly noted to over-generalise, with MDL relied on to filter — the exact
 configuration §6.1 shows is insufficient once candidates are cheap and numerous.
@@ -1977,12 +1977,12 @@ Seven real datasets against this document's zero. How much it lands:
 - **Against §7.3's interface: it lands, and is not yet answered.** See §8 and §15.2.
 
 Their footnote 10 independently derives §4's uniform-baseline diagnosis (§4.3). Their
-commutativity and associativity theorems for `Fuse` are order-invariance *proven* where
+commutativity and associativity theorems for `Fuse` are order-invariance _proven_ where
 §11's tests 1 and 2 only assert it as an obligation, and their `collapse` of array positions
 into one body type matches §7.5's array flattening including the acknowledged loss. These are
 genuine convergences, not gaps.
 
-### 16.3 Baazizi, Colazzo, Ghelli & Sartiani, *Counting Types* (DBPL 2017)
+### 16.3 Baazizi, Colazzo, Ghelli & Sartiani, _Counting Types_ (DBPL 2017)
 
 Their quantitative-types extension, and the closest existing thing to the statistics §6.6
 needs. Contains no MDL, entropy, description length, probability or threshold — zero hits for
@@ -1991,16 +1991,15 @@ all of them. It is a type system, not a scoring criterion.
 **It supplies N but not K.** Every type constructor is annotated with an absolute occurrence
 count: `{title: Str²⁰ᴷ, author: {…}²ᴷ}²⁰ᴷ`, where the count is how many items the
 corresponding path yields. That is exactly §6.6's N, collected per path, map-reduce-able,
-with a formal semantics. But nothing counts *distinct values* — `Num³` means three numbers,
-not three different ones. K lives in the *other* paper's enum extension (`StrEnum{s₁…s_j}`,
+with a formal semantics. But nothing counts _distinct values_ — `Num³` means three numbers,
+not three different ones. K lives in the _other_ paper's enum extension (`StrEnum{s₁…s_j}`,
 §16.2), and within this line of work the two are never combined.
 
 **Correction to an earlier revision of this document.** A previous version generalised that
 into a claim that the (N, K) pair has no prior art. **That was wrong**, and a broader search
 found it wrong quickly. Tracking row count and distinct count together is routine:
 
-- **Data profiling.** Abedjan, Golab & Naumann's survey (*Profiling relational data*, VLDB J.
-  2015) treats distinct-value count as a core single-column task alongside row counts, and
+- **Data profiling.** Abedjan, Golab & Naumann's survey (_Profiling relational data_, VLDB J. 2015) treats distinct-value count as a core single-column task alongside row counts, and
   the distinct-to-total **cardinality ratio** is the standard device for separating
   low-cardinality categorical columns from identifier-like ones.
 - **Query optimisation.** Number-of-distinct-values against row count is the basis of
@@ -2207,8 +2206,8 @@ log₂D = 64      pure restriction (M=K=1030):  net = 1,976
       M=10   net = 2,005      M=25   net = 2,870      M=50   net = 3,134      M=300  net = 2,133
 ```
 
-**The mixture wins**, peaking around M=50. An earlier argument in this session that it *could
-not* win — because its repetition margin `Σ_{v∈S}(count−1)` is a subset of `N−K` — was
+**The mixture wins**, peaking around M=50. An earlier argument in this session that it _could
+not_ win — because its repetition margin `Σ_{v∈S}(count−1)` is a subset of `N−K` — was
 wrong: the margin identity holds, but the mixture's charge scales with M rather than K, and
 that dominates. Recorded because the wrong version was asserted before it was run.
 
@@ -2216,7 +2215,7 @@ But it does not resolve the dilemma. Pure restriction still nets **+1,976**, so 
 mischaracterisation is still admitted; the mixture merely outranks it. And held out, the
 mixture's special set covers only **2.0–3.3%** of unseen occurrences at M=5…50 — the
 boilerplate is package-specific, not a stable vocabulary. The mixture is a better
-*compression* of this corpus and not a better *prediction* of the next one.
+_compression_ of this corpus and not a better _prediction_ of the next one.
 
 **What does discriminate: held-out coverage.** Fit the domain on half the corpus, measure how
 much of the other half it covers. Across **107 string-valued paths** with N ≥ 120 from npm +
@@ -2231,7 +2230,7 @@ npm .description                   1,976                6.2%
 npm .name / .dist.shasum / ._id   -1,578                0.0%
 ```
 
-- **Spearman ρ(net, held-out coverage) = 0.803** (n=107). Net is a *good ordering*.
+- **Spearman ρ(net, held-out coverage) = 0.803** (n=107). Net is a _good ordering_.
 - **As an admission bar it is not**: 81 of 107 paths clear `net > 0`, their coverage ranging
   2.0%–100%, and **12.3% of admitted paths have under 20% held-out coverage**.
 - The `K = N` boundary is exact: every one of those paths (`name`, `tarball`, `shasum`,
@@ -2263,8 +2262,8 @@ That is the same wall as §15.3's circularity, reached from a different directio
 
 ### 17.6 What this does and does not establish
 
-It does not refute the framework. Every failure above is a failure of a *specific* claim
-against a *specific* corpus, and three of the four point at things the document already flags
+It does not refute the framework. Every failure above is a failure of a _specific_ claim
+against a _specific_ corpus, and three of the four point at things the document already flags
 as declared choices or accepted limitations — they show those choices bite harder in practice
 than the document conveys. §17.4 is the exception: it identifies a representational gap that
 was not previously named.
@@ -2328,6 +2327,7 @@ may be extremely important, or totally irrelevant, depending on the role of the 
 record and on the need of the data analyst. The only way to measure the practical benefit
 would be by collecting and…" — the sentence is cut off at a column break in the source, so
 what they proposed collecting is not recoverable from the copy read here.
+
 - §7 numbers come from a prototyping pass — bottom-up versus brute-force agreement, the DU
   locality break, the three-policy composition check, and the refactor equivalence check.
   Same synthetic-data caveat applies.
@@ -2336,7 +2336,7 @@ what they proposed collecting is not recoverable from the copy read here.
   internal to the setup rather than generic: the clusters were separable by construction,
   accuracy was scored against oracle labels a deployment will not have, and two of the four
   value shapes in the class (IDs, computed aggregates) were not simulated at all. The one
-  result that should be read as strong is the *negative* one — close-cluster confusability
+  result that should be read as strong is the _negative_ one — close-cluster confusability
   plateauing at n=200 — because a failure found in a setup built to be favourable is more
   likely to survive contact with reality than a success found there.
 

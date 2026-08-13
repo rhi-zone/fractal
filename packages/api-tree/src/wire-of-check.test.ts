@@ -22,12 +22,12 @@
 // union would otherwise apply) — these tests are about the decoder-typing
 // check itself, not the exactness gap decision 3 separately investigates.
 
-import { describe, expect, it } from "bun:test"
-import { op } from "./node.ts"
+import { describe, expect, it } from "bun:test";
+import { op } from "./node.ts";
 
 describe("encodingMap function-form: decoder typing at op()", () => {
   it("a decoder matching WireOf<FieldType, ResolvedStore> => FieldType type-checks", () => {
-    const getPrice = (input: { cents: number }) => input
+    const getPrice = (input: { cents: number }) => input;
 
     // cents resolves to the explicit "query" store -> WireOf<number,"query">
     // is `string` (numericStringLeaf's own wire shape) -> the decoder's
@@ -39,13 +39,13 @@ describe("encodingMap function-form: decoder typing at op()", () => {
         sourceMap: { cents: { store: "query" } },
         encodingMap: { cents: (w: string): number => Number(w) },
       },
-    })
+    });
 
-    expect(true).toBe(true)
-  })
+    expect(true).toBe(true);
+  });
 
   it("a decoder with the wrong PARAMETER type is a compile error", () => {
-    const getPrice = (input: { cents: number }) => input
+    const getPrice = (input: { cents: number }) => input;
 
     // @ts-expect-error — cents resolves to the "query" store; its
     // WireOf<number,"query"> is `string`, not `number` — a decoder
@@ -56,13 +56,13 @@ describe("encodingMap function-form: decoder typing at op()", () => {
         sourceMap: { cents: { store: "query" } },
         encodingMap: { cents: (w: number): number => w },
       },
-    })
+    });
 
-    expect(true).toBe(true)
-  })
+    expect(true).toBe(true);
+  });
 
   it("a decoder with the wrong RETURN type is a compile error", () => {
-    const getPrice = (input: { cents: number }) => input
+    const getPrice = (input: { cents: number }) => input;
 
     // @ts-expect-error — a decoder must return the FIELD's own domain type
     // (`number`, cents' declared type on getPrice's input), not `string`.
@@ -72,13 +72,13 @@ describe("encodingMap function-form: decoder typing at op()", () => {
         sourceMap: { cents: { store: "query" } },
         encodingMap: { cents: (w: string): string => w },
       },
-    })
+    });
 
-    expect(true).toBe(true)
-  })
+    expect(true).toBe(true);
+  });
 
   it("a decoder for a JSON-body-sourced field accepts an already-typed value, not a string", () => {
-    const getPrice = (input: { cents: number }) => input
+    const getPrice = (input: { cents: number }) => input;
 
     // cents resolves to the explicit "body" store under HTTP ->
     // WireOf<number,"json"> is `number` itself (typed JSON, no coercion) —
@@ -89,26 +89,26 @@ describe("encodingMap function-form: decoder typing at op()", () => {
         sourceMap: { cents: { store: "body" } },
         encodingMap: { cents: (w: number): number => w * 2 },
       },
-    })
+    });
 
-    expect(true).toBe(true)
-  })
+    expect(true).toBe(true);
+  });
 
-  it("cli: a decoder matching WireOf<FieldType,\"argv\"> type-checks", () => {
-    const getPrice = (input: { cents: number }) => input
+  it('cli: a decoder matching WireOf<FieldType,"argv"> type-checks', () => {
+    const getPrice = (input: { cents: number }) => input;
 
     op(getPrice, {
       cli: {
         sourceMap: { cents: { store: "flag" } },
         encodingMap: { cents: (w: string): number => Number(w) },
       },
-    })
+    });
 
-    expect(true).toBe(true)
-  })
+    expect(true).toBe(true);
+  });
 
   it("the real exactness gap: no sourceMap + a non-GET method requires the decoder to accept EITHER wire shape", () => {
-    const getPrice = (input: { cents: number }) => input
+    const getPrice = (input: { cents: number }) => input;
 
     // No explicit sourceMap for `cents`, method POST (default store
     // "body" -> jsonProfile) — op() cannot see whether this leaf's final
@@ -126,7 +126,7 @@ describe("encodingMap function-form: decoder typing at op()", () => {
           cents: (w: string | number): number => (typeof w === "string" ? Number(w) : w),
         },
       },
-    })
+    });
 
     // @ts-expect-error — a decoder that only accepts `string` (assuming
     // this leaf will only ever be path/query-sourced) is unsound: op()
@@ -134,19 +134,19 @@ describe("encodingMap function-form: decoder typing at op()", () => {
     // real `number`, not a string.
     op(getPrice, {
       http: { method: "POST", encodingMap: { cents: (w: string): number => Number(w) } } as const,
-    })
+    });
 
-    expect(true).toBe(true)
-  })
+    expect(true).toBe(true);
+  });
 
   it("a string-form (base-profile-name) encodingMap entry is untouched by this check", () => {
-    const getPrice = (input: { cents: number }) => input
+    const getPrice = (input: { cents: number }) => input;
 
     // The STRING form (phase B) names a base profile, not a decoder
     // function — nothing for `MismatchedEncodingMapDecoders` to check here;
     // this must keep compiling unchanged.
-    op(getPrice, { http: { method: "GET", encodingMap: { cents: "identity" } } })
+    op(getPrice, { http: { method: "GET", encodingMap: { cents: "identity" } } });
 
-    expect(true).toBe(true)
-  })
-})
+    expect(true).toBe(true);
+  });
+});

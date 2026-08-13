@@ -126,9 +126,9 @@ protocol-aware form (recommended — run `build`/`check` against the entry file
 that has this call):
 
 ```ts
-import { applyValidation } from "./generated/apply-validation.ts"
+import { applyValidation } from "./generated/apply-validation.ts";
 
-export const validatedApi = applyValidation("books", apiTree, "http")
+export const validatedApi = applyValidation("books", apiTree, "http");
 ```
 
 `protocol` is one of `"http"` | `"cli"` | `"mcp"` | `"graphql"` | `"jsonrpc"` |
@@ -192,12 +192,16 @@ wires genuinely diverge (e.g. HTTP vs. CLI):
 ```ts
 // Shared across protocols that resolve to the SAME wire profile (mcp/graphql/
 // jsonrpc all uniformly typed JSON) — one key, one call, dispatched by several servers.
-const validatedApi = applyValidation("books", apiTree, "mcp")
+const validatedApi = applyValidation("books", apiTree, "mcp");
 
 // Per-protocol, via each preset's own rewriters option, when wires diverge:
-const fetch = createFetch(node, { rewriters: [(routes) => applyValidation("books-http", routes, "http")] })
-await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books-cli", t, "cli")] })
-const server = createMcpServer(node, { rewriters: [(t) => applyValidation("books-mcp", t, "mcp")] })
+const fetch = createFetch(node, {
+  rewriters: [(routes) => applyValidation("books-http", routes, "http")],
+});
+await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books-cli", t, "cli")] });
+const server = createMcpServer(node, {
+  rewriters: [(t) => applyValidation("books-mcp", t, "mcp")],
+});
 ```
 
 No preset has a dedicated validation option — `applyValidation`'s call site
@@ -225,7 +229,7 @@ op(getPrice, {
     // outright, bypassing this leaf's usual derived encoding for this field.
     encodingMap: { cents: "identity" },
   },
-})
+});
 ```
 
 Or, for a genuinely custom decode no built-in profile leaf handler can
@@ -242,7 +246,7 @@ op(getPrice, {
     // transform no built-in leaf handler does.
     encodingMap: { cents: (w: string): number => Math.round(Number(w) * 100) },
   },
-})
+});
 ```
 
 Both forms compose the same way `sourceMap` does — keyed, last-wins per

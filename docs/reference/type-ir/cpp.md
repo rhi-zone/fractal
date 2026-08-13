@@ -10,14 +10,19 @@ forward-declaration ordering.
 ## nlohmann/json
 
 ```ts
-import { toCpp } from "@rhi-zone/fractal-type-ir/cpp-nlohmann"
+import { toCpp } from "@rhi-zone/fractal-type-ir/cpp-nlohmann";
 
-toCpp(t(types.object({
-  id: t(types.string),
-  name: t(types.string),
-  email: t(types.string),
-  age: opt(t(types.integer)),
-})), "User")
+toCpp(
+  t(
+    types.object({
+      id: t(types.string),
+      name: t(types.string),
+      email: t(types.string),
+      age: opt(t(types.integer)),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```cpp
@@ -43,12 +48,17 @@ the fields. `unknown` degrades to `nlohmann::json` itself.
 ### RapidJSON
 
 ```ts
-import { toRapidjson } from "@rhi-zone/fractal-type-ir/cpp-rapidjson"
+import { toRapidjson } from "@rhi-zone/fractal-type-ir/cpp-rapidjson";
 
-toRapidjson(t(types.object({
-  street: t(types.string),
-  city: t(types.string),
-})), "Address")
+toRapidjson(
+  t(
+    types.object({
+      street: t(types.string),
+      city: t(types.string),
+    }),
+  ),
+  "Address",
+);
 ```
 
 RapidJSON has no ADL-based generic dispatch, so every conversion is spelled
@@ -81,9 +91,9 @@ because it owns its own allocator.
 ### simdjson
 
 ```ts
-import { toSimdjson } from "@rhi-zone/fractal-type-ir/cpp-simdjson"
+import { toSimdjson } from "@rhi-zone/fractal-type-ir/cpp-simdjson";
 
-toSimdjson(t(types.object({ id: t(types.string) })), "Item")
+toSimdjson(t(types.object({ id: t(types.string) })), "Item");
 ```
 
 simdjson's `dom` API is read-only by design — only `fromJson`, no `toJson`
@@ -107,12 +117,12 @@ struct Item {
 ### Boost.JSON
 
 ```ts
-import { toBoostJson } from "@rhi-zone/fractal-type-ir/cpp-boost-json"
+import { toBoostJson } from "@rhi-zone/fractal-type-ir/cpp-boost-json";
 
-toBoostJson(t(types.object({ id: t(types.string) })), "Item")
+toBoostJson(t(types.object({ id: t(types.string) })), "Item");
 ```
 
-Boost.JSON *does* have ADL-found generic conversion (`value_from`/`value_to`
+Boost.JSON _does_ have ADL-found generic conversion (`value_from`/`value_to`
 recurse through containers on their own), so the generated `tag_invoke`
 overloads only name the fields, closer to nlohmann's shape than RapidJSON's:
 
@@ -132,9 +142,9 @@ inline Item tag_invoke(const boost::json::value_to_tag<Item>&, const boost::json
 ### glaze
 
 ```ts
-import { toGlaze } from "@rhi-zone/fractal-type-ir/cpp-glaze"
+import { toGlaze } from "@rhi-zone/fractal-type-ir/cpp-glaze";
 
-toGlaze(t(types.object({ id: t(types.string) })), "Item")
+toGlaze(t(types.object({ id: t(types.string) })), "Item");
 ```
 
 glaze reads the struct's shape through a `glz::meta<T>` specialization —

@@ -30,8 +30,8 @@ exactly two members (`node.ts:43-53`):
 
 ```ts
 export interface Meta {
-  tags?: Tags
-  description?: string
+  tags?: Tags;
+  description?: string;
 }
 ```
 
@@ -80,11 +80,11 @@ protocol-specific:
 // packages/api-tree/src/node.ts
 
 export interface SharedMeta {
-  description?: string
+  description?: string;
 }
 
 export interface LeafMeta extends SharedMeta {
-  tags?: Tags
+  tags?: Tags;
 }
 
 export interface BranchMeta extends SharedMeta {}
@@ -132,24 +132,29 @@ other interface in this design. E.g. http-api-projector:
 // packages/http-api-projector/src/project.ts
 
 export interface HttpSharedMetaProperties {
-  moveTo?: string
+  moveTo?: string;
 }
 
 export interface HttpSharedMeta {
-  http?: HttpSharedMetaProperties
+  http?: HttpSharedMetaProperties;
 }
 
 export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
-  method?: string
-  verb?: string
-  response?: { status?: number; headers?: Record<string, string> }
-  paginated?: { style?: "cursor" | "offset"; inputCursorParam?: string; inputOffsetParam?: string; inputLimitParam?: string }
-  validate?: StandardSchemaV1
-  sourceMap?: SourceMap
+  method?: string;
+  verb?: string;
+  response?: { status?: number; headers?: Record<string, string> };
+  paginated?: {
+    style?: "cursor" | "offset";
+    inputCursorParam?: string;
+    inputOffsetParam?: string;
+    inputLimitParam?: string;
+  };
+  validate?: StandardSchemaV1;
+  sourceMap?: SourceMap;
 }
 
 export interface HttpLeafMeta {
-  http?: HttpLeafMetaProperties
+  http?: HttpLeafMetaProperties;
 }
 ```
 
@@ -211,13 +216,13 @@ core):
 ```ts
 // e.g. the sibling codebase's packages/fractal-support/src/meta.ts
 
-import "@rhi-zone/fractal-api-tree/node"
-import type { HttpLeafMeta, HttpSharedMeta } from "@rhi-zone/fractal-http-api-projector"
-import type { McpLeafMeta, McpBranchMeta } from "@rhi-zone/fractal-mcp-api-projector"
+import "@rhi-zone/fractal-api-tree/node";
+import type { HttpLeafMeta, HttpSharedMeta } from "@rhi-zone/fractal-http-api-projector";
+import type { McpLeafMeta, McpBranchMeta } from "@rhi-zone/fractal-mcp-api-projector";
 
 declare module "@rhi-zone/fractal-api-tree/node" {
   interface LeafMeta extends HttpLeafMeta, McpLeafMeta {
-    scopes: readonly string[]
+    scopes: readonly string[];
   }
   interface BranchMeta extends McpBranchMeta {}
   interface SharedMeta extends HttpSharedMeta {}
@@ -298,20 +303,20 @@ on inside the projector package, ready for a deployment to name in its own
 
 ### http-api-projector
 
-| Key | Exported on | Evidence |
-|---|---|---|
-| `http.moveTo` | `HttpSharedMeta` | `route.ts` §2b `applyMoveTo` (`route.ts:379-524`) relocates both single method-entries and whole subtrees — see §8 for the open question this still raises |
-| `http.method` | `HttpLeafMeta` | `applyMethods` rewriter, per method-entry (`project.ts:214-227`) |
-| `http.verb` | `HttpLeafMeta` | `verbFromTags` precedence step 1 (`tags.ts`) |
-| `http.response` | `HttpLeafMeta` | `applyResponse` rewriter, per method-entry |
-| `http.paginated` | `HttpLeafMeta` | `extensions/pagination.ts:253-256` reads `getHttpMeta(ctx.meta).paginated` off the matched (leaf) route |
-| `http.validate` | `HttpLeafMeta` | `validateOf`/`route.ts:170-177` resolves the last `validate` directive off a leaf/method-entry's meta into `sources.validate` |
-| `http.sourceMap` | `HttpLeafMeta` | `sourceMapOf` resolves `meta.http`'s `source` directives per leaf (`route.ts:145`); **not read at branch position anywhere** |
-| `openapi.security` | `HttpLeafMeta` — leaf-only now (§6 fixes the prior dual meaning) | field doc `openapi.ts:178-184`; per-operation read at `openapi.ts:461-467` |
-| `openapi.securitySchemes` | `HttpSharedMeta`/`HttpLeafMeta` (read at both — collected across the whole tree) | `collectSecuritySchemes` walks the whole tree, methods included (`openapi.ts:221-238`; merges every node's and every method entry's bag) |
-| `openapi.{operationId,summary,deprecated}` | `HttpLeafMeta` | per-operation fields, destructured per method-entry (`openapi.ts:461-467`) |
-| `openapi.description` | `HttpLeafMeta` | per-operation override, same destructure (`openapi.ts:464,482`) |
-| `openapi.tags` | `HttpLeafMeta` | per-operation override, same destructure (`openapi.ts:465,483`) |
+| Key                                        | Exported on                                                                      | Evidence                                                                                                                                                   |
+| ------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http.moveTo`                              | `HttpSharedMeta`                                                                 | `route.ts` §2b `applyMoveTo` (`route.ts:379-524`) relocates both single method-entries and whole subtrees — see §8 for the open question this still raises |
+| `http.method`                              | `HttpLeafMeta`                                                                   | `applyMethods` rewriter, per method-entry (`project.ts:214-227`)                                                                                           |
+| `http.verb`                                | `HttpLeafMeta`                                                                   | `verbFromTags` precedence step 1 (`tags.ts`)                                                                                                               |
+| `http.response`                            | `HttpLeafMeta`                                                                   | `applyResponse` rewriter, per method-entry                                                                                                                 |
+| `http.paginated`                           | `HttpLeafMeta`                                                                   | `extensions/pagination.ts:253-256` reads `getHttpMeta(ctx.meta).paginated` off the matched (leaf) route                                                    |
+| `http.validate`                            | `HttpLeafMeta`                                                                   | `validateOf`/`route.ts:170-177` resolves the last `validate` directive off a leaf/method-entry's meta into `sources.validate`                              |
+| `http.sourceMap`                           | `HttpLeafMeta`                                                                   | `sourceMapOf` resolves `meta.http`'s `source` directives per leaf (`route.ts:145`); **not read at branch position anywhere**                               |
+| `openapi.security`                         | `HttpLeafMeta` — leaf-only now (§6 fixes the prior dual meaning)                 | field doc `openapi.ts:178-184`; per-operation read at `openapi.ts:461-467`                                                                                 |
+| `openapi.securitySchemes`                  | `HttpSharedMeta`/`HttpLeafMeta` (read at both — collected across the whole tree) | `collectSecuritySchemes` walks the whole tree, methods included (`openapi.ts:221-238`; merges every node's and every method entry's bag)                   |
+| `openapi.{operationId,summary,deprecated}` | `HttpLeafMeta`                                                                   | per-operation fields, destructured per method-entry (`openapi.ts:461-467`)                                                                                 |
+| `openapi.description`                      | `HttpLeafMeta`                                                                   | per-operation override, same destructure (`openapi.ts:464,482`)                                                                                            |
+| `openapi.tags`                             | `HttpLeafMeta`                                                                   | per-operation override, same destructure (`openapi.ts:465,483`)                                                                                            |
 
 Dead `http` directive kinds (`segment`, `when`, `legacyPath`) and the
 `dispatch` marker are parsed by `getHttpMeta` (`project.ts:243-296`) but
@@ -327,44 +332,44 @@ future author read it as live surface.
 
 ### cli-api-projector
 
-| Key | Exported on | Evidence |
-|---|---|---|
-| `cli.hidden` | `CliSharedMeta` | `cli.ts:515` (leaf child), `cli.ts:531,537` (branch child, and the fallback subtree) |
-| `cli.{name,alias,paginated}` | `CliLeafMeta` | leaf-only display/behavior overrides (`cli.ts:517-520`, `CliMeta.paginated` doc `cli.ts:339-354`) |
-| `cli.sourceMap` | `CliLeafMeta` | `getCliMeta(target.leafMeta).sourceMap` (`cli.ts:1103`) — resolved against the matched LEAF's meta only |
+| Key                          | Exported on     | Evidence                                                                                                |
+| ---------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `cli.hidden`                 | `CliSharedMeta` | `cli.ts:515` (leaf child), `cli.ts:531,537` (branch child, and the fallback subtree)                    |
+| `cli.{name,alias,paginated}` | `CliLeafMeta`   | leaf-only display/behavior overrides (`cli.ts:517-520`, `CliMeta.paginated` doc `cli.ts:339-354`)       |
+| `cli.sourceMap`              | `CliLeafMeta`   | `getCliMeta(target.leafMeta).sourceMap` (`cli.ts:1103`) — resolved against the matched LEAF's meta only |
 
 ### mcp-api-projector
 
-| Key | Exported on | Evidence |
-|---|---|---|
-| `mcp.{name,title,annotations,as,uri,mimeType}` | `McpLeafMeta` | `getMcpMeta(child.meta)` in the three per-surface leaf walks (`project.ts` `projectTools`/`projectResources`/`projectPrompts`) |
-| `mcp.description` | `McpLeafMeta` | leaf-only override, ranked above `meta.description`: `project.ts:396-404,645-648,817-825` |
-| `mcp.sourceMap` | `McpLeafMeta` | `Dispatch.sourceMap` built per leaf handler (`project.ts:449,674,841`); **not read at branch position** |
-| `mcp.segment` | `McpBranchMeta` | wired: `project.ts:452-454,691,845` — a static child's own contribution to the name/URI prefix |
+| Key                                            | Exported on     | Evidence                                                                                                                       |
+| ---------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `mcp.{name,title,annotations,as,uri,mimeType}` | `McpLeafMeta`   | `getMcpMeta(child.meta)` in the three per-surface leaf walks (`project.ts` `projectTools`/`projectResources`/`projectPrompts`) |
+| `mcp.description`                              | `McpLeafMeta`   | leaf-only override, ranked above `meta.description`: `project.ts:396-404,645-648,817-825`                                      |
+| `mcp.sourceMap`                                | `McpLeafMeta`   | `Dispatch.sourceMap` built per leaf handler (`project.ts:449,674,841`); **not read at branch position**                        |
+| `mcp.segment`                                  | `McpBranchMeta` | wired: `project.ts:452-454,691,845` — a static child's own contribution to the name/URI prefix                                 |
 
 ### json-rpc-api-projector
 
-| Key | Exported on | Evidence |
-|---|---|---|
-| `jsonrpc.{name,errorDataSchema}` | `JsonRpcLeafMeta` | `JsonRpcMeta` fields, read per method during the tree walk (`project.ts:124-136`) |
-| `jsonrpc.description` | `JsonRpcLeafMeta` | leaf-only override, ranked above `meta.description` (`project.ts:208-213`) |
-| `jsonrpc.sourceMap` | `JsonRpcLeafMeta` | `Dispatch.sourceMap` per leaf (`project.ts:226`); **not read at branch position** |
-| `jsonrpc.segment` | `JsonRpcBranchMeta` | wired: `project.ts:229` — a static child's own contribution to the dot-joined prefix |
+| Key                              | Exported on         | Evidence                                                                             |
+| -------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
+| `jsonrpc.{name,errorDataSchema}` | `JsonRpcLeafMeta`   | `JsonRpcMeta` fields, read per method during the tree walk (`project.ts:124-136`)    |
+| `jsonrpc.description`            | `JsonRpcLeafMeta`   | leaf-only override, ranked above `meta.description` (`project.ts:208-213`)           |
+| `jsonrpc.sourceMap`              | `JsonRpcLeafMeta`   | `Dispatch.sourceMap` per leaf (`project.ts:226`); **not read at branch position**    |
+| `jsonrpc.segment`                | `JsonRpcBranchMeta` | wired: `project.ts:229` — a static child's own contribution to the dot-joined prefix |
 
 ### graphql-api-projector
 
-| Key | Exported on | Evidence |
-|---|---|---|
-| `graphql.{operation,name,deprecated}` | `GraphQLLeafMeta` | `deriveOperationType` (`project.ts`, precedence step 1), field-name override, deprecation override — all per-field (leaf) |
-| `graphql.deprecatedReason` | `GraphQLLeafMeta` | only meaningful alongside `deprecated`, same leaf scope (`directive-contract.md` §GraphQL) |
-| `graphql.description` | `GraphQLLeafMeta` | leaf-only override, ranked above `meta.description` (`project.ts:310-314`) |
-| `graphql.sourceMap` | `GraphQLLeafMeta` | `GraphQLMeta.sourceMap`, resolved per field's arg assembly; **not read at branch position** |
-| `graphql.namespace` | `GraphQLBranchMeta` | declared (`GraphQLMeta.namespace`, `project.ts:73-74`) but **currently unwired** — the leaf-centric Query walk explicitly doesn't visit branch nodes to read it (`project.ts:483-488`: "branch-level `meta.graphql.namespace` is a later-phase refinement") |
+| Key                                   | Exported on         | Evidence                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graphql.{operation,name,deprecated}` | `GraphQLLeafMeta`   | `deriveOperationType` (`project.ts`, precedence step 1), field-name override, deprecation override — all per-field (leaf)                                                                                                                                   |
+| `graphql.deprecatedReason`            | `GraphQLLeafMeta`   | only meaningful alongside `deprecated`, same leaf scope (`directive-contract.md` §GraphQL)                                                                                                                                                                  |
+| `graphql.description`                 | `GraphQLLeafMeta`   | leaf-only override, ranked above `meta.description` (`project.ts:310-314`)                                                                                                                                                                                  |
+| `graphql.sourceMap`                   | `GraphQLLeafMeta`   | `GraphQLMeta.sourceMap`, resolved per field's arg assembly; **not read at branch position**                                                                                                                                                                 |
+| `graphql.namespace`                   | `GraphQLBranchMeta` | declared (`GraphQLMeta.namespace`, `project.ts:73-74`) but **currently unwired** — the leaf-centric Query walk explicitly doesn't visit branch nodes to read it (`project.ts:483-488`: "branch-level `meta.graphql.namespace` is a later-phase refinement") |
 
 ### `description` itself (core `SharedMeta`, not a projector key)
 
-| Key | Read at | Evidence |
-|---|---|---|
+| Key           | Read at         | Evidence                                                                                                                                                    |
+| ------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `description` | leaf and branch | `cli.ts:487-492`'s `descriptionFrom` is called on the current node at `buildHelp` top (branch, `cli.ts:502`) AND on leaf/branch children (`cli.ts:516,532`) |
 
 ## 5. Consumer-facing effects
@@ -409,7 +414,7 @@ defect §9(5) rules out:
   `openapi.ts:461-467`.
 - Root position: read as the SPEC-LEVEL DEFAULT (`OpenApiDoc.security`),
   applied at `openapi.ts:414-416` (`const rootSecurity =
-  getOpenApiMeta(route.meta).security`).
+getOpenApiMeta(route.meta).security`).
 
 This spec keeps only the per-operation (leaf) meaning as `openapi.security`
 on `HttpLeafMeta`. The spec-level default moves out of `meta` entirely, into

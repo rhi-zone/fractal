@@ -24,9 +24,9 @@
 //   - Nothing needs to import THIS file. It carries no runtime value; being
 //     part of the compilation (tsconfig's `include`) is what applies it.
 
-import "@rhi-zone/fractal-api-tree/input"
-import type { HttpStores } from "@rhi-zone/fractal-http-api-projector"
-import type { McpStores } from "@rhi-zone/fractal-mcp-api-projector"
+import "@rhi-zone/fractal-api-tree/input";
+import type { HttpStores } from "@rhi-zone/fractal-http-api-projector";
+import type { McpStores } from "@rhi-zone/fractal-mcp-api-projector";
 
 declare module "@rhi-zone/fractal-api-tree/input" {
   interface StoreRegistry extends HttpStores, McpStores {}

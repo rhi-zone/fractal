@@ -9,14 +9,14 @@ path). Evidence cited below lives in this spike: `std.ts`, `meta.ts`,
 `client.ts`, `app.test.ts` (23 assertions), `client.test.ts` (14 + type-level),
 `scale/logs/table.md`.
 
-| Criterion | vs Hono | vs Elysia | Verdict |
-|---|---|---|---|
-| Elegance | One type, plain functions; no `Context`/`c`. | No chained `.get().post()` builder, no `t.Object` DSL. | **Win** |
-| HTTP-correctness | Auto-405+`Allow`, auto-HEAD, OPTIONS built into `methods`. | Same. | **Win/parity** |
-| Tighter / more general core | Core is one type alias; routing is URL-rewriting. | Far smaller surface. | **Win** |
-| Runtime-agnosticism | Pure WHATWG `Request`/`Response`; one `toFetch` adapter. | No Bun coupling. | **Win** |
-| Barrier to entry | It's just `fetch`. No framework vocabulary to learn. | No schema-builder to learn. | **Win** |
-| Type-safety (typed client at scale) | `hc` is O(N²), crashes stock tsc. Ours is linear, survives. | Eden treaty same blow-up. | **Win** |
+| Criterion                           | vs Hono                                                     | vs Elysia                                              | Verdict        |
+| ----------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ | -------------- |
+| Elegance                            | One type, plain functions; no `Context`/`c`.                | No chained `.get().post()` builder, no `t.Object` DSL. | **Win**        |
+| HTTP-correctness                    | Auto-405+`Allow`, auto-HEAD, OPTIONS built into `methods`.  | Same.                                                  | **Win/parity** |
+| Tighter / more general core         | Core is one type alias; routing is URL-rewriting.           | Far smaller surface.                                   | **Win**        |
+| Runtime-agnosticism                 | Pure WHATWG `Request`/`Response`; one `toFetch` adapter.    | No Bun coupling.                                       | **Win**        |
+| Barrier to entry                    | It's just `fetch`. No framework vocabulary to learn.        | No schema-builder to learn.                            | **Win**        |
+| Type-safety (typed client at scale) | `hc` is O(N²), crashes stock tsc. Ours is linear, survives. | Eden treaty same blow-up.                              | **Win**        |
 
 ## Concrete evidence
 
@@ -52,12 +52,12 @@ FLAT from `.meta`: a single mapped-type pass over each `path` record's keys (wit
 fold and never an N-way `UnionToIntersection`. Measured (`scale/logs/table.md`,
 reproduce with `cd scale && bun generate.ts && bun run.ts`):
 
-| N | std inst (tsgo) | std inst (stock tsc 6.0.3) | chained baseline A (tsgo) | baseline A (stock tsc) |
-|---|---|---|---|---|
-| 100 | 15,017 | 13,974 | 58,184 | — |
-| 300 | 37,619 | 36,576 | 215,120 | 201,019 (ok) |
-| 600 | 71,391 | 70,348 | 675,556 | **CRASH (stack overflow)** |
-| 900 | **105,219** | **104,176 (ok)** | **1,406,020** | **CRASH** |
+| N   | std inst (tsgo) | std inst (stock tsc 6.0.3) | chained baseline A (tsgo) | baseline A (stock tsc)     |
+| --- | --------------- | -------------------------- | ------------------------- | -------------------------- |
+| 100 | 15,017          | 13,974                     | 58,184                    | —                          |
+| 300 | 37,619          | 36,576                     | 215,120                   | 201,019 (ok)               |
+| 600 | 71,391          | 70,348                     | 675,556                   | **CRASH (stack overflow)** |
+| 900 | **105,219**     | **104,176 (ok)**           | **1,406,020**             | **CRASH**                  |
 
 std is **~linear** (≈117 instantiations/route; 9× routes → 7× cost) where the
 chained-builder baseline (`docs/design/scale.md` variant A — the Hono-`hc` /
@@ -89,14 +89,14 @@ the route definition); it's a wrapper you reach for only where you want it.
   at scale (the generator nests `param→methods` and the client keys them). Caveat:
   two alts that resolve to the SAME structural key (e.g. two handlers both at
   `/users`) merge their verb records by intersection — fine for distinct verbs,
-  but it cannot represent two *different bodies* for the same path+verb. That is
+  but it cannot represent two _different bodies_ for the same path+verb. That is
   a real-but-rare ambiguity, not a blocker.
 
 - **`param` stashes the consumed segment on a request header** (`x-param-<name>`,
   read via `paramValue`) so the inner handler can still read it AFTER `param`
   advanced the URL. This keeps "params are read off the Request" literally true
   (the Request stays the only side channel — no ctx object), but it is the one
-  spot that felt slightly forced: app.ts reads the id *before* `rest` and closes
+  spot that felt slightly forced: app.ts reads the id _before_ `rest` and closes
   over it, whereas a reusable `param` combinator must hand the value forward, and
   a header is the only standard carrier on a `Request`. It works and stays within
   the rules, but it's the least elegant seam.

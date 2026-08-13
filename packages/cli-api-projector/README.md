@@ -24,10 +24,10 @@ input schemas.
 ## Usage
 
 ```ts
-import { runCli } from "@rhi-zone/fractal-cli-api-projector"
-import { api } from "./tree.ts"
+import { runCli } from "@rhi-zone/fractal-cli-api-projector";
+import { api } from "./tree.ts";
 
-await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert"])
+await runCli(api, ["books", "add", "--title", "Dune", "--author", "Herbert"]);
 ```
 
 ## Install

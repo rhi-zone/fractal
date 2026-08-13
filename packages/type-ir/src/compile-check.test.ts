@@ -31,34 +31,34 @@
 // with the literal compiler error that proves them, rather than silently
 // special-cased away — see each `test.todo` call below for the exact defect
 // and which projector owns the fix.
-import { afterAll, describe, expect, test } from "bun:test"
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import type { TypeRef } from "./index.ts"
-import { fixtures } from "./test-fixtures.ts"
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { TypeRef } from "./index.ts";
+import { fixtures } from "./test-fixtures.ts";
 
-import { toGo } from "./go-encoding-json.ts"
-import { toEasyjson } from "./go-easyjson.ts"
-import { toRust } from "./rust-serde.ts"
-import { toSwift } from "./swift-codable.ts"
-import { toCpp } from "./cpp-nlohmann.ts"
-import { toCrystal } from "./crystal-json-serializable.ts"
-import { toHaskell } from "./haskell-aeson.ts"
-import { toCSharp } from "./csharp-systemtextjson.ts"
-import { toRuby } from "./ruby-sorbet.ts"
-import { toDry } from "./ruby-dry-types.ts"
-import { toPhp } from "./php-native.ts"
-import { toProtoMessage, renderProto } from "./protobuf.ts"
-import { toCapnpStruct, renderCapnp } from "./capnp.ts"
-import { toFlatBuffersTable } from "./flatbuffers.ts"
-import { toPython } from "./python-dataclass.ts"
-import { toPydantic } from "./python-pydantic.ts"
-import { toAttrs } from "./python-attrs.ts"
-import { toObjC } from "./objc-foundation.ts"
-import { toTypeDeclaration } from "./typescript-native.ts"
-import { toTypeBoxDeclaration } from "./typescript-typebox.ts"
-import { toFlow } from "./flow-native.ts"
+import { toGo } from "./go-encoding-json.ts";
+import { toEasyjson } from "./go-easyjson.ts";
+import { toRust } from "./rust-serde.ts";
+import { toSwift } from "./swift-codable.ts";
+import { toCpp } from "./cpp-nlohmann.ts";
+import { toCrystal } from "./crystal-json-serializable.ts";
+import { toHaskell } from "./haskell-aeson.ts";
+import { toCSharp } from "./csharp-systemtextjson.ts";
+import { toRuby } from "./ruby-sorbet.ts";
+import { toDry } from "./ruby-dry-types.ts";
+import { toPhp } from "./php-native.ts";
+import { toProtoMessage, renderProto } from "./protobuf.ts";
+import { toCapnpStruct, renderCapnp } from "./capnp.ts";
+import { toFlatBuffersTable } from "./flatbuffers.ts";
+import { toPython } from "./python-dataclass.ts";
+import { toPydantic } from "./python-pydantic.ts";
+import { toAttrs } from "./python-attrs.ts";
+import { toObjC } from "./objc-foundation.ts";
+import { toTypeDeclaration } from "./typescript-native.ts";
+import { toTypeBoxDeclaration } from "./typescript-typebox.ts";
+import { toFlow } from "./flow-native.ts";
 
 // ============================================================================
 // Shared helpers
@@ -73,40 +73,42 @@ import { toFlow } from "./flow-native.ts"
 function rootNameFor(fixtureName: string): string {
   switch (fixtureName) {
     case "Recursive Tree":
-      return "TreeNode"
+      return "TreeNode";
     case "E-commerce Order":
-      return "Order"
+      return "Order";
     case "Discriminated Union API Response":
-      return "ApiResponse"
+      return "ApiResponse";
     case "Kitchen Sink":
-      return "KitchenSink"
+      return "KitchenSink";
     default:
-      return "Root"
+      return "Root";
   }
 }
 
-type RunResult = { ok: boolean; output: string }
+type RunResult = { ok: boolean; output: string };
 
 function run(cmd: string[], cwd: string): RunResult {
-  const proc = Bun.spawnSync({ cmd, cwd, stdout: "pipe", stderr: "pipe" })
-  return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() }
+  const proc = Bun.spawnSync({ cmd, cwd, stdout: "pipe", stderr: "pipe" });
+  return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() };
 }
 
 function withTempDir<T>(fn: (dir: string) => T): T {
-  const dir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-"))
+  const dir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-"));
   try {
-    return fn(dir)
+    return fn(dir);
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
 function assertCompiles(result: RunResult): void {
-  expect(result.ok, result.output).toBe(true)
+  expect(result.ok, result.output).toBe(true);
 }
 
-const objectFixtures = fixtures.filter((f) => f.ref.shape.kind === "object")
-const structCompatibleFixtures = fixtures.filter((f) => f.ref.shape.kind === "object" || f.ref.shape.kind === "union")
+const objectFixtures = fixtures.filter((f) => f.ref.shape.kind === "object");
+const structCompatibleFixtures = fixtures.filter(
+  (f) => f.ref.shape.kind === "object" || f.ref.shape.kind === "union",
+);
 
 // ============================================================================
 // TypeScript — tsc --noEmit. Written inside packages/type-ir/ (not the OS
@@ -116,29 +118,41 @@ const structCompatibleFixtures = fixtures.filter((f) => f.ref.shape.kind === "ob
 // the command line).
 // ============================================================================
 
-const tscBin = join(import.meta.dir, "..", "node_modules", ".bin", "tsc")
+const tscBin = join(import.meta.dir, "..", "node_modules", ".bin", "tsc");
 
 function runTsc(files: string[]): RunResult {
   return run(
-    [tscBin, "--noEmit", "--ignoreConfig", "--strict", "--target", "es2022", "--module", "esnext", "--moduleResolution", "bundler", ...files],
+    [
+      tscBin,
+      "--noEmit",
+      "--ignoreConfig",
+      "--strict",
+      "--target",
+      "es2022",
+      "--module",
+      "esnext",
+      "--moduleResolution",
+      "bundler",
+      ...files,
+    ],
     import.meta.dir,
-  )
+  );
 }
 
 describe("typescript-native (tsc --noEmit)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
-      const dir = mkdtempSync(join(import.meta.dir, ".cc-ts-"))
+      const dir = mkdtempSync(join(import.meta.dir, ".cc-ts-"));
       try {
-        const file = join(dir, "native.ts")
-        writeFileSync(file, toTypeDeclaration(rootNameFor(name), ref))
-        assertCompiles(runTsc([file]))
+        const file = join(dir, "native.ts");
+        writeFileSync(file, toTypeDeclaration(rootNameFor(name), ref));
+        assertCompiles(runTsc([file]));
       } finally {
-        rmSync(dir, { recursive: true, force: true })
+        rmSync(dir, { recursive: true, force: true });
       }
-    })
+    });
   }
-})
+});
 
 describe("typescript-typebox (tsc --noEmit, real @sinclair/typebox import)", () => {
   // Fixed: unlike typescript-native.ts's `type X = {...}` (a static type
@@ -150,21 +164,24 @@ describe("typescript-typebox (tsc --noEmit, real @sinclair/typebox import)", () 
   // toTypeBoxDeclaration now detects a self-referential object and emits
   // TypeBox's own answer, `Type.Recursive(This => Type.Object({...}))`,
   // instead of a bare `ref` substitution.
-  const todo = new Set<string>([])
+  const todo = new Set<string>([]);
   for (const { name, ref } of fixtures) {
-    const runner = todo.has(name) ? test.todo : test
+    const runner = todo.has(name) ? test.todo : test;
     runner(name, () => {
-      const dir = mkdtempSync(join(import.meta.dir, ".cc-tb-"))
+      const dir = mkdtempSync(join(import.meta.dir, ".cc-tb-"));
       try {
-        const file = join(dir, "typebox.ts")
-        writeFileSync(file, `import { Type } from "@sinclair/typebox"\n${toTypeBoxDeclaration(rootNameFor(name), ref)}\n`)
-        assertCompiles(runTsc([file]))
+        const file = join(dir, "typebox.ts");
+        writeFileSync(
+          file,
+          `import { Type } from "@sinclair/typebox"\n${toTypeBoxDeclaration(rootNameFor(name), ref)}\n`,
+        );
+        assertCompiles(runTsc([file]));
       } finally {
-        rmSync(dir, { recursive: true, force: true })
+        rmSync(dir, { recursive: true, force: true });
       }
-    })
+    });
   }
-})
+});
 
 // ============================================================================
 // Flow — `flow check` needs a .flowconfig at the project root it's pointed
@@ -176,17 +193,17 @@ describe("flow-native (flow check)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        writeFileSync(join(dir, ".flowconfig"), "[ignore]\n[include]\n[libs]\n[options]\n")
-        writeFileSync(join(dir, "root.js"), toFlow(ref, rootNameFor(name)))
+        writeFileSync(join(dir, ".flowconfig"), "[ignore]\n[include]\n[libs]\n[options]\n");
+        writeFileSync(join(dir, "root.js"), toFlow(ref, rootNameFor(name)));
         try {
-          assertCompiles(run(["flow", "check", "."], dir))
+          assertCompiles(run(["flow", "check", "."], dir));
         } finally {
-          run(["flow", "stop"], dir)
+          run(["flow", "stop"], dir);
         }
-      })
-    })
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Go — encoding/json and easyjson both emit plain stdlib-shaped structs (the
@@ -199,28 +216,32 @@ describe("flow-native (flow check)", () => {
 // ============================================================================
 
 function goImportsFor(body: string): string {
-  const imports: string[] = []
-  if (/\btime\./.test(body)) imports.push('"time"')
-  if (/\bjson\./.test(body)) imports.push('"encoding/json"')
-  return imports.length === 0 ? "" : `import (\n${imports.map((i) => `\t${i}`).join("\n")}\n)\n`
+  const imports: string[] = [];
+  if (/\btime\./.test(body)) imports.push('"time"');
+  if (/\bjson\./.test(body)) imports.push('"encoding/json"');
+  return imports.length === 0 ? "" : `import (\n${imports.map((i) => `\t${i}`).join("\n")}\n)\n`;
 }
 
-function checkGo(fn: (ref: TypeRef, name: string) => string, fixtureName: string, ref: TypeRef): void {
+function checkGo(
+  fn: (ref: TypeRef, name: string) => string,
+  fixtureName: string,
+  ref: TypeRef,
+): void {
   withTempDir((dir) => {
-    const body = fn(ref, rootNameFor(fixtureName))
-    const file = join(dir, "main.go")
-    writeFileSync(file, `package main\n\n${goImportsFor(body)}\n${body}\n\nfunc main() {}\n`)
-    assertCompiles(run(["go", "build", "-o", join(dir, "out"), file], dir))
-  })
+    const body = fn(ref, rootNameFor(fixtureName));
+    const file = join(dir, "main.go");
+    writeFileSync(file, `package main\n\n${goImportsFor(body)}\n${body}\n\nfunc main() {}\n`);
+    assertCompiles(run(["go", "build", "-o", join(dir, "out"), file], dir));
+  });
 }
 
 describe("go-encoding-json (go build)", () => {
-  for (const { name, ref } of fixtures) test(name, () => checkGo(toGo, name, ref))
-})
+  for (const { name, ref } of fixtures) test(name, () => checkGo(toGo, name, ref));
+});
 
 describe("go-easyjson (go build)", () => {
-  for (const { name, ref } of fixtures) test(name, () => checkGo(toEasyjson, name, ref))
-})
+  for (const { name, ref } of fixtures) test(name, () => checkGo(toEasyjson, name, ref));
+});
 
 // ============================================================================
 // Rust — a real temp Cargo project against serde+serde_json (cargo resolves
@@ -241,13 +262,13 @@ describe("rust-serde (cargo build)", () => {
   // per-test timeout when repeated 4x from an empty target dir. Reusing the
   // project means only the first fixture pays that cost; the rest just
   // recompile the (small) lib crate itself.
-  const projectDir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-rust-"))
-  mkdirSync(join(projectDir, "src"))
+  const projectDir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-rust-"));
+  mkdirSync(join(projectDir, "src"));
   writeFileSync(
     join(projectDir, "Cargo.toml"),
     '[package]\nname = "compile-check"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nserde = { version = "1", features = ["derive"] }\nserde_json = "1"\n',
-  )
-  afterAll(() => rmSync(projectDir, { recursive: true, force: true }))
+  );
+  afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
 
   for (const { name, ref } of fixtures) {
     test(
@@ -256,13 +277,13 @@ describe("rust-serde (cargo build)", () => {
         writeFileSync(
           join(projectDir, "src", "lib.rs"),
           `#![allow(dead_code, non_snake_case)]\nuse serde::{Deserialize, Serialize};\nuse std::collections::HashMap;\n\n${toRust(ref, rootNameFor(name))}\n`,
-        )
-        assertCompiles(run(["cargo", "build"], projectDir))
+        );
+        assertCompiles(run(["cargo", "build"], projectDir));
       },
       30_000,
-    )
+    );
   }
-})
+});
 
 // ============================================================================
 // Swift — Codable/String/Int/Bool/arrays/dictionaries are all Swift-stdlib,
@@ -281,21 +302,21 @@ describe("swift-codable (swiftc -typecheck)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.swift")
-        writeFileSync(file, `${toSwift(ref, rootNameFor(name))}\n`)
-        const result = run(["swiftc", "-typecheck", file], dir)
+        const file = join(dir, "root.swift");
+        writeFileSync(file, `${toSwift(ref, rootNameFor(name))}\n`);
+        const result = run(["swiftc", "-typecheck", file], dir);
         if (!result.ok && /cannot find type '(Date|Data)' in scope/.test(result.output)) {
           // Known environment gap, not a projector bug: this fixture's
           // Codable output genuinely needs Foundation's Date/Data, which
           // isn't wired up in flake.nix (see comment above). Record as
           // todo instead of a hard failure.
-          return
+          return;
         }
-        assertCompiles(result)
-      })
-    })
+        assertCompiles(result);
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // C++ (nlohmann) — real g++ compile against the header-only library flake.nix
@@ -306,21 +327,34 @@ describe("swift-codable (swiftc -typecheck)", () => {
 // include path into the shell env automatically, so it's looked up once
 // via `nix eval` rather than hard-coding a store path that would drift
 // across nixpkgs revisions.
-const nlohmannOutPath = run(["nix", "eval", "--raw", "nixpkgs#nlohmann_json.outPath"], process.cwd())
-const nlohmannIncludeDir = nlohmannOutPath.ok ? `${nlohmannOutPath.output.trim()}/include` : undefined
+const nlohmannOutPath = run(
+  ["nix", "eval", "--raw", "nixpkgs#nlohmann_json.outPath"],
+  process.cwd(),
+);
+const nlohmannIncludeDir = nlohmannOutPath.ok
+  ? `${nlohmannOutPath.output.trim()}/include`
+  : undefined;
 
 describe("cpp-nlohmann (g++ -c -std=c++17)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.cpp")
-        writeFileSync(file, toCpp(ref, rootNameFor(name)))
-        const cmd = ["g++", "-c", "-std=c++17", ...(nlohmannIncludeDir ? [`-I${nlohmannIncludeDir}`] : []), file, "-o", join(dir, "root.o")]
-        assertCompiles(run(cmd, dir))
-      })
-    })
+        const file = join(dir, "root.cpp");
+        writeFileSync(file, toCpp(ref, rootNameFor(name)));
+        const cmd = [
+          "g++",
+          "-c",
+          "-std=c++17",
+          ...(nlohmannIncludeDir ? [`-I${nlohmannIncludeDir}`] : []),
+          file,
+          "-o",
+          join(dir, "root.o"),
+        ];
+        assertCompiles(run(cmd, dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Crystal — JSON::Serializable is stdlib, needs `require "json"` (which,
@@ -331,13 +365,13 @@ describe("crystal-json-serializable (crystal build --no-codegen)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.cr")
-        writeFileSync(file, `require "json"\n\n${toCrystal(ref, rootNameFor(name))}\n`)
-        assertCompiles(run(["crystal", "build", "--no-codegen", file], dir))
-      })
-    })
+        const file = join(dir, "root.cr");
+        writeFileSync(file, `require "json"\n\n${toCrystal(ref, rootNameFor(name))}\n`);
+        assertCompiles(run(["crystal", "build", "--no-codegen", file], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Haskell (Aeson) — ghc -fno-code against a real `ghcWithPackages [aeson,
@@ -362,19 +396,22 @@ import qualified Data.Text as T
 import Data.Time (UTCTime)
 import Data.Word (Word16, Word32, Word64, Word8)
 import GHC.Generics (Generic)
-`
+`;
 
 describe("haskell-aeson (ghc -fno-code)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "Main.hs")
-        writeFileSync(file, `${haskellPreamble}\n${toHaskell(ref, rootNameFor(name))}\n\nmain :: IO ()\nmain = return ()\n`)
-        assertCompiles(run(["ghc", "-fno-code", file], dir))
-      })
-    })
+        const file = join(dir, "Main.hs");
+        writeFileSync(
+          file,
+          `${haskellPreamble}\n${toHaskell(ref, rootNameFor(name))}\n\nmain :: IO ()\nmain = return ()\n`,
+        );
+        assertCompiles(run(["ghc", "-fno-code", file], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // C# (System.Text.Json) — ships in the .NET runtime itself, no NuGet
@@ -388,13 +425,13 @@ describe("csharp-systemtextjson (dotnet build)", () => {
         writeFileSync(
           join(dir, "compile-check.csproj"),
           '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Library</OutputType><Nullable>disable</Nullable></PropertyGroup></Project>\n',
-        )
-        writeFileSync(join(dir, "Root.cs"), toCSharp(ref, rootNameFor(name)))
-        assertCompiles(run(["dotnet", "build", "-v", "quiet"], dir))
-      })
-    })
+        );
+        writeFileSync(join(dir, "Root.cs"), toCSharp(ref, rootNameFor(name)));
+        assertCompiles(run(["dotnet", "build", "-v", "quiet"], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Ruby — `ruby -c` is a syntax-only check (it parses but never executes, so
@@ -407,25 +444,25 @@ describe("ruby-sorbet (ruby -c)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.rb")
-        writeFileSync(file, toRuby(ref, rootNameFor(name)))
-        assertCompiles(run(["ruby", "-c", file], dir))
-      })
-    })
+        const file = join(dir, "root.rb");
+        writeFileSync(file, toRuby(ref, rootNameFor(name)));
+        assertCompiles(run(["ruby", "-c", file], dir));
+      });
+    });
   }
-})
+});
 
 describe("ruby-dry-types (ruby -c)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.rb")
-        writeFileSync(file, toDry(ref, rootNameFor(name)))
-        assertCompiles(run(["ruby", "-c", file], dir))
-      })
-    })
+        const file = join(dir, "root.rb");
+        writeFileSync(file, toDry(ref, rootNameFor(name)));
+        assertCompiles(run(["ruby", "-c", file], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // PHP — `php -l` is likewise a syntax-only lint (no autoloading), a real
@@ -436,13 +473,13 @@ describe("php-native (php -l)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.php")
-        writeFileSync(file, `<?php\n\n${toPhp(ref, rootNameFor(name))}\n`)
-        assertCompiles(run(["php", "-l", file], dir))
-      })
-    })
+        const file = join(dir, "root.php");
+        writeFileSync(file, `<?php\n\n${toPhp(ref, rootNameFor(name))}\n`);
+        assertCompiles(run(["php", "-l", file], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Protocol Buffers — protoc ships its own well-known types
@@ -455,7 +492,7 @@ describe("protobuf (protoc)", () => {
   for (const { name, ref } of structCompatibleFixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const message = renderProto([toProtoMessage(rootNameFor(name), ref)])
+        const message = renderProto([toProtoMessage(rootNameFor(name), ref)]);
         const wellKnownImports = [
           ["google.protobuf.Timestamp", "google/protobuf/timestamp.proto"],
           ["google.protobuf.Duration", "google/protobuf/duration.proto"],
@@ -465,14 +502,22 @@ describe("protobuf (protoc)", () => {
           ["google.protobuf.NullValue", "google/protobuf/struct.proto"],
         ]
           .filter(([type]) => message.includes(type!))
-          .map(([, path]) => `import "${path}";`)
-        const full = message.replace('syntax = "proto3";\n', `syntax = "proto3";\n${wellKnownImports.join("\n")}\n`)
-        writeFileSync(join(dir, "root.proto"), full)
-        assertCompiles(run(["protoc", `--proto_path=${dir}`, "--descriptor_set_out=/dev/null", "root.proto"], dir))
-      })
-    })
+          .map(([, path]) => `import "${path}";`);
+        const full = message.replace(
+          'syntax = "proto3";\n',
+          `syntax = "proto3";\n${wellKnownImports.join("\n")}\n`,
+        );
+        writeFileSync(join(dir, "root.proto"), full);
+        assertCompiles(
+          run(
+            ["protoc", `--proto_path=${dir}`, "--descriptor_set_out=/dev/null", "root.proto"],
+            dir,
+          ),
+        );
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Cap'n Proto — every .capnp file needs a unique 64-bit `@0x...` file ID
@@ -484,13 +529,16 @@ describe("capnp (capnp compile)", () => {
   for (const { name, ref } of structCompatibleFixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.capnp")
-        writeFileSync(file, renderCapnp([toCapnpStruct(rootNameFor(name), ref)], "0xdbb9ad1f14bf0b36"))
-        assertCompiles(run(["capnp", "compile", "-o-", file], dir))
-      })
-    })
+        const file = join(dir, "root.capnp");
+        writeFileSync(
+          file,
+          renderCapnp([toCapnpStruct(rootNameFor(name), ref)], "0xdbb9ad1f14bf0b36"),
+        );
+        assertCompiles(run(["capnp", "compile", "-o-", file], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // FlatBuffers — object-root fixtures only (toFlatBuffersTable, like SQL's
@@ -503,13 +551,13 @@ describe("flatbuffers (flatc --cpp)", () => {
   for (const { name, ref } of objectFixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const file = join(dir, "root.fbs")
-        writeFileSync(file, toFlatBuffersTable(rootNameFor(name), ref))
-        assertCompiles(run(["flatc", "--cpp", "-o", dir, file], dir))
-      })
-    })
+        const file = join(dir, "root.fbs");
+        writeFileSync(file, toFlatBuffersTable(rootNameFor(name), ref));
+        assertCompiles(run(["flatc", "--cpp", "-o", dir, file], dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Python — dataclasses is stdlib; pydantic/attrs are real libraries
@@ -518,21 +566,27 @@ describe("flatbuffers (flatc --cpp)", () => {
 // syntax-only check, catching real misuse of either library's API.
 // ============================================================================
 
-function checkPython(fn: (ref: TypeRef, name: string) => string, fixtureName: string, ref: TypeRef): RunResult {
+function checkPython(
+  fn: (ref: TypeRef, name: string) => string,
+  fixtureName: string,
+  ref: TypeRef,
+): RunResult {
   return withTempDir((dir) => {
-    const file = join(dir, "root.py")
-    writeFileSync(file, fn(ref, rootNameFor(fixtureName)))
-    return run(["python3", file], dir)
-  })
+    const file = join(dir, "root.py");
+    writeFileSync(file, fn(ref, rootNameFor(fixtureName)));
+    return run(["python3", file], dir);
+  });
 }
 
 describe("python-dataclass (python3, stdlib only)", () => {
-  for (const { name, ref } of fixtures) test(name, () => assertCompiles(checkPython(toPython, name, ref)))
-})
+  for (const { name, ref } of fixtures)
+    test(name, () => assertCompiles(checkPython(toPython, name, ref)));
+});
 
 describe("python-pydantic (python3, real pydantic import)", () => {
-  for (const { name, ref } of fixtures) test(name, () => assertCompiles(checkPython(toPydantic, name, ref)))
-})
+  for (const { name, ref } of fixtures)
+    test(name, () => assertCompiles(checkPython(toPydantic, name, ref)));
+});
 
 describe("python-attrs (python3, real attrs import)", () => {
   // A mandatory field that appears after a defaulted one in source order
@@ -542,9 +596,9 @@ describe("python-attrs (python3, real attrs import)", () => {
   // by python-attrs.ts forcing such trailing mandatory fields to
   // `attrs.field(kw_only=True)`.
   for (const { name, ref } of fixtures) {
-    test(name, () => assertCompiles(checkPython(toAttrs, name, ref)))
+    test(name, () => assertCompiles(checkPython(toAttrs, name, ref)));
   }
-})
+});
 
 // ============================================================================
 // Objective-C (Foundation via GNUstep) — flake.nix's plain gcc has no
@@ -562,7 +616,7 @@ describe("python-attrs (python3, real attrs import)", () => {
 const gnustepObjcFlags = run(["gnustep-config", "--objc-flags"], process.cwd())
   .output.trim()
   .split(/\s+/)
-  .filter(Boolean)
+  .filter(Boolean);
 
 describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
   // Objective-C generics require object pointer types as type arguments —
@@ -575,16 +629,16 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
   for (const { name, ref } of fixtures) {
     test(name, () => {
       withTempDir((dir) => {
-        const { header, implementation } = toObjC(ref, rootNameFor(name))
-        const strippedImpl = implementation.replace(/^#import ".*"\n\n/, "")
-        const file = join(dir, "root.m")
-        writeFileSync(file, `#import <Foundation/Foundation.h>\n\n${header}\n${strippedImpl}\n`)
-        const cmd = ["clang", "-c", file, "-o", join(dir, "root.o"), ...gnustepObjcFlags]
-        assertCompiles(run(cmd, dir))
-      })
-    })
+        const { header, implementation } = toObjC(ref, rootNameFor(name));
+        const strippedImpl = implementation.replace(/^#import ".*"\n\n/, "");
+        const file = join(dir, "root.m");
+        writeFileSync(file, `#import <Foundation/Foundation.h>\n\n${header}\n${strippedImpl}\n`);
+        const cmd = ["clang", "-c", file, "-o", join(dir, "root.o"), ...gnustepObjcFlags];
+        assertCompiles(run(cmd, dir));
+      });
+    });
   }
-})
+});
 
 // ============================================================================
 // Explicitly out of scope (see the module comment for why):
@@ -618,9 +672,9 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 // checked with plain `elixirc` while the Jason-dependent line is checked
 // separately.
 // ============================================================================
-describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {})
-describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {})
-describe.skip("csharp-newtonsoft — needs the Newtonsoft.Json NuGet package, not vendored", () => {})
-describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {})
-describe.skip("elm-json — needs Elm's own package registry, not vendored", () => {})
-describe.skip("elixir-jason — needs the Jason hex package, not vendored (elixirc has no syntax-only mode)", () => {})
+describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
+describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {});
+describe.skip("csharp-newtonsoft — needs the Newtonsoft.Json NuGet package, not vendored", () => {});
+describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {});
+describe.skip("elm-json — needs Elm's own package registry, not vendored", () => {});
+describe.skip("elixir-jason — needs the Jason hex package, not vendored (elixirc has no syntax-only mode)", () => {});

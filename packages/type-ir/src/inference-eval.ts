@@ -24,13 +24,25 @@
 // (which constant fired). That's what makes it useful for tuning the
 // thresholds in from-json-corpus.ts: change a threshold, rerun, compare.
 
-import { ancestors, t, types, type TypeRef } from "./index.ts"
-import { fromJsonCorpus, type CorpusInferConfig, type ClusteringMethod } from "./from-json-corpus.ts"
-import { uint8 } from "./kinds/common.ts"
-import { ecommerceOrder, apiResponse, kitchenSink, treeNode, opt } from "./test-fixtures.ts"
-import { mean, stddev, bootstrapCI, mulberry32, pairedBootstrapTest, type Rng, type ConfidenceInterval } from "./stats.ts"
+import { ancestors, t, types, type TypeRef } from "./index.ts";
+import {
+  fromJsonCorpus,
+  type CorpusInferConfig,
+  type ClusteringMethod,
+} from "./from-json-corpus.ts";
+import { uint8 } from "./kinds/common.ts";
+import { ecommerceOrder, apiResponse, kitchenSink, treeNode, opt } from "./test-fixtures.ts";
+import {
+  mean,
+  stddev,
+  bootstrapCI,
+  mulberry32,
+  pairedBootstrapTest,
+  type Rng,
+  type ConfidenceInterval,
+} from "./stats.ts";
 
-export type { Rng }
+export type { Rng };
 
 // ---------------------------------------------------------------------------
 // Seeded RNG — deterministic so eval runs (and their test assertions) are
@@ -38,63 +50,77 @@ export type { Rng }
 // ---------------------------------------------------------------------------
 
 function hashSeed(seed: string): number {
-  let h = 1779033703 ^ seed.length
+  let h = 1779033703 ^ seed.length;
   for (let i = 0; i < seed.length; i++) {
-    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353)
-    h = (h << 13) | (h >>> 19)
+    h = Math.imul(h ^ seed.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
   }
-  return h >>> 0
+  return h >>> 0;
 }
 
 function rngFromSeed(seed: number | string | undefined): Rng {
-  if (seed === undefined) return mulberry32(0xc0ffee)
-  return mulberry32(typeof seed === "string" ? hashSeed(seed) : seed >>> 0)
+  if (seed === undefined) return mulberry32(0xc0ffee);
+  return mulberry32(typeof seed === "string" ? hashSeed(seed) : seed >>> 0);
 }
 
 function randInt(rng: Rng, min: number, max: number): number {
   // Inclusive [min, max].
-  return Math.floor(rng() * (max - min + 1)) + min
+  return Math.floor(rng() * (max - min + 1)) + min;
 }
 
 function pick<T>(rng: Rng, items: readonly T[]): T {
-  return items[randInt(rng, 0, items.length - 1)]!
+  return items[randInt(rng, 0, items.length - 1)]!;
 }
 
 const WORDS = [
-  "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
-  "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa",
-]
+  "alpha",
+  "bravo",
+  "charlie",
+  "delta",
+  "echo",
+  "foxtrot",
+  "golf",
+  "hotel",
+  "india",
+  "juliet",
+  "kilo",
+  "lima",
+  "mike",
+  "november",
+  "oscar",
+  "papa",
+];
 
 function randomWord(rng: Rng): string {
-  return pick(rng, WORDS) + randInt(rng, 0, 999)
+  return pick(rng, WORDS) + randInt(rng, 0, 999);
 }
 
 function randomHex(rng: Rng, length: number): string {
-  let out = ""
-  for (let i = 0; i < length; i++) out += Math.floor(rng() * 16).toString(16)
-  return out
+  let out = "";
+  for (let i = 0; i < length; i++) out += Math.floor(rng() * 16).toString(16);
+  return out;
 }
 
 function randomUuid(rng: Rng): string {
-  return `${randomHex(rng, 8)}-${randomHex(rng, 4)}-4${randomHex(rng, 3)}-8${randomHex(rng, 3)}-${randomHex(rng, 12)}`
+  return `${randomHex(rng, 8)}-${randomHex(rng, 4)}-4${randomHex(rng, 3)}-8${randomHex(rng, 3)}-${randomHex(rng, 12)}`;
 }
 
 function randomDate(rng: Rng): string {
-  const year = randInt(rng, 2000, 2030)
-  const month = String(randInt(rng, 1, 12)).padStart(2, "0")
-  const day = String(randInt(rng, 1, 28)).padStart(2, "0")
-  return `${year}-${month}-${day}`
+  const year = randInt(rng, 2000, 2030);
+  const month = String(randInt(rng, 1, 12)).padStart(2, "0");
+  const day = String(randInt(rng, 1, 28)).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function randomDateTime(rng: Rng): string {
-  const h = String(randInt(rng, 0, 23)).padStart(2, "0")
-  const m = String(randInt(rng, 0, 59)).padStart(2, "0")
-  const s = String(randInt(rng, 0, 59)).padStart(2, "0")
-  return `${randomDate(rng)}T${h}:${m}:${s}Z`
+  const h = String(randInt(rng, 0, 23)).padStart(2, "0");
+  const m = String(randInt(rng, 0, 59)).padStart(2, "0");
+  const s = String(randInt(rng, 0, 59)).padStart(2, "0");
+  return `${randomDate(rng)}T${h}:${m}:${s}Z`;
 }
 
 function clamp(x: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, x))
+  return Math.max(lo, Math.min(hi, x));
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +141,7 @@ function clamp(x: number, lo: number, hi: number): number {
 // ---------------------------------------------------------------------------
 
 export interface ZipfianPresenceProfile {
-  readonly kind: "zipfian-presence"
+  readonly kind: "zipfian-presence";
   /**
    * Zipf exponent `s` in `weight(rank) = 1 / rank^s`, where `rank` is a
    * field's 1-based position among its object's optional fields (in
@@ -129,11 +155,11 @@ export interface ZipfianPresenceProfile {
    * sampling — a rare enum value may not reach saturation (be observed at
    * all) until N is much larger than under uniform picks.
    */
-  readonly exponent?: number
+  readonly exponent?: number;
 }
 
 export interface AdversarialBoundaryProfile {
-  readonly kind: "adversarial-boundary"
+  readonly kind: "adversarial-boundary";
   /**
    * Signed offset applied to each targeted threshold's exact cutover before
    * constructing the corpus (e.g. `-0.02` lands just BELOW the cutover,
@@ -170,11 +196,11 @@ export interface AdversarialBoundaryProfile {
    *    (e.g. `[1, 1]`) — at larger map sizes the achieved ratio scales up
    *    roughly proportionally to entries-per-sample instead.
    */
-  readonly epsilon?: number
+  readonly epsilon?: number;
 }
 
 export interface HighCardinalityIdProfile {
-  readonly kind: "high-cardinality-id"
+  readonly kind: "high-cardinality-id";
   /**
    * Fraction of samples that get a freshly-minted (never-before-seen) value
    * at each plain `string`/`integer`-kind leaf position — near 1 means
@@ -191,13 +217,13 @@ export interface HighCardinalityIdProfile {
    * under this profile still has real enums to (correctly) detect alongside
    * the high-cardinality fields that must (correctly) be rejected.
    */
-  readonly cardinalityRatio?: number
+  readonly cardinalityRatio?: number;
   /** ID value style: "uuid" (random hex UUID) or "sequential" (zero-padded counter / incrementing integer). Default "uuid". */
-  readonly style?: "uuid" | "sequential"
+  readonly style?: "uuid" | "sequential";
 }
 
 export interface DirtyOutlierProfile {
-  readonly kind: "dirty-outlier"
+  readonly kind: "dirty-outlier";
   /**
    * Fraction of samples steered to the first-declared variant of a
    * 2-variant `union` position (the "clean"/dominant variant); the
@@ -220,7 +246,7 @@ export interface DirtyOutlierProfile {
    * `walkAndDetectDirty`'s own restriction — unions of any other arity fall
    * through to uniform picking, same as `uniformSampler`.
    */
-  readonly dominantRatio?: number
+  readonly dominantRatio?: number;
 }
 
 /** See the individual profile interfaces for what each varies and why. `{ kind: "uniform" }` (or omitting `profile` entirely) keeps Phase 1's original flat/uniform behavior. */
@@ -229,7 +255,7 @@ export type GeneratorProfile =
   | ZipfianPresenceProfile
   | AdversarialBoundaryProfile
   | HighCardinalityIdProfile
-  | DirtyOutlierProfile
+  | DirtyOutlierProfile;
 
 /** Distribution hooks `generateValue` consults instead of sampling flat/uniform directly. Every method has a pass-through default (`uniformSampler`) so a profile only needs to override what it actually varies. */
 interface ProfileSampler {
@@ -243,9 +269,15 @@ interface ProfileSampler {
     base: number,
     sampleIndex: number,
     totalSamples: number,
-  ): number
+  ): number;
   /** Choose one member of an `enum`-shaped leaf's declared members. */
-  pickEnumMember<T>(ref: TypeRef, members: readonly T[], rng: Rng, sampleIndex: number, totalSamples: number): T
+  pickEnumMember<T>(
+    ref: TypeRef,
+    members: readonly T[],
+    rng: Rng,
+    sampleIndex: number,
+    totalSamples: number,
+  ): T;
   /** Override plain scalar-leaf generation for a given shape `kind`. Return `undefined` to fall through to the default `generateLeaf` behavior. */
   overrideLeaf(
     ref: TypeRef,
@@ -253,11 +285,23 @@ interface ProfileSampler {
     rng: Rng,
     sampleIndex: number,
     totalSamples: number,
-  ): { readonly value: unknown } | undefined
+  ): { readonly value: unknown } | undefined;
   /** Choose a map entry's key, given the default-generated candidate key. */
-  mapKey(ref: TypeRef, defaultKey: string, rng: Rng, sampleIndex: number, totalSamples: number): string
+  mapKey(
+    ref: TypeRef,
+    defaultKey: string,
+    rng: Rng,
+    sampleIndex: number,
+    totalSamples: number,
+  ): string;
   /** Choose one variant of a `union`-shaped position's declared variants. */
-  pickUnionVariant<T extends TypeRef>(ref: TypeRef, variants: readonly T[], rng: Rng, sampleIndex: number, totalSamples: number): T
+  pickUnionVariant<T extends TypeRef>(
+    ref: TypeRef,
+    variants: readonly T[],
+    rng: Rng,
+    sampleIndex: number,
+    totalSamples: number,
+  ): T;
 }
 
 const uniformSampler: ProfileSampler = {
@@ -266,122 +310,144 @@ const uniformSampler: ProfileSampler = {
   overrideLeaf: () => undefined,
   mapKey: (_ref, defaultKey) => defaultKey,
   pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
-}
+};
 
 function zipfWeights(count: number, exponent: number): number[] {
-  return Array.from({ length: count }, (_, i) => 1 / Math.pow(i + 1, exponent))
+  return Array.from({ length: count }, (_, i) => 1 / Math.pow(i + 1, exponent));
 }
 
 function weightedPick<T>(rng: Rng, items: readonly T[], weights: readonly number[]): T {
-  const total = weights.reduce((a, b) => a + b, 0)
-  let r = rng() * total
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
   for (let i = 0; i < items.length; i++) {
-    r -= weights[i]!
-    if (r <= 0) return items[i]!
+    r -= weights[i]!;
+    if (r <= 0) return items[i]!;
   }
-  return items[items.length - 1]!
+  return items[items.length - 1]!;
 }
 
 function makeZipfianSampler(exponent: number): ProfileSampler {
   return {
     presenceProbability: (_objRef, _fieldName, rank) => clamp(1 / Math.pow(rank, exponent), 0, 1),
-    pickEnumMember: (_ref, members, rng) => weightedPick(rng, members, zipfWeights(members.length, exponent)),
+    pickEnumMember: (_ref, members, rng) =>
+      weightedPick(rng, members, zipfWeights(members.length, exponent)),
     overrideLeaf: () => undefined,
     mapKey: (_ref, defaultKey) => defaultKey,
     pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
-  }
+  };
 }
 
 function makeAdversarialSampler(epsilon: number): ProfileSampler {
-  const enumCycles = new WeakMap<TypeRef, readonly unknown[]>()
-  const objectOmitSets = new WeakMap<TypeRef, ReadonlySet<string>>()
-  const mapGrowthState = new WeakMap<TypeRef, { seenKeys: string[] }>()
+  const enumCycles = new WeakMap<TypeRef, readonly unknown[]>();
+  const objectOmitSets = new WeakMap<TypeRef, ReadonlySet<string>>();
+  const mapGrowthState = new WeakMap<TypeRef, { seenKeys: string[] }>();
 
   return {
-    presenceProbability: (objRef, fieldName, _rank, optionalFieldNames, totalFieldCount, _base, sampleIndex, totalSamples) => {
-      let omit = objectOmitSets.get(objRef)
+    presenceProbability: (
+      objRef,
+      fieldName,
+      _rank,
+      optionalFieldNames,
+      totalFieldCount,
+      _base,
+      sampleIndex,
+      totalSamples,
+    ) => {
+      let omit = objectOmitSets.get(objRef);
       if (omit === undefined) {
-        const target = clamp(0.1 + epsilon, 0, 1)
-        const omitCount = clamp(Math.round(target * totalFieldCount), 0, optionalFieldNames.length)
-        omit = new Set(optionalFieldNames.slice(0, omitCount))
-        objectOmitSets.set(objRef, omit)
+        const target = clamp(0.1 + epsilon, 0, 1);
+        const omitCount = clamp(Math.round(target * totalFieldCount), 0, optionalFieldNames.length);
+        omit = new Set(optionalFieldNames.slice(0, omitCount));
+        objectOmitSets.set(objRef, omit);
       }
-      if (!omit.has(fieldName)) return 1 // only the boundary-defining fields carry presence variation
-      const inClusterB = sampleIndex >= Math.floor(totalSamples / 2)
-      return inClusterB ? 0 : 1
+      if (!omit.has(fieldName)) return 1; // only the boundary-defining fields carry presence variation
+      const inClusterB = sampleIndex >= Math.floor(totalSamples / 2);
+      return inClusterB ? 0 : 1;
     },
     pickEnumMember: (ref, members, _rng, sampleIndex, totalSamples) => {
-      let cycle = enumCycles.get(ref) as readonly (typeof members)[number][] | undefined
+      let cycle = enumCycles.get(ref) as readonly (typeof members)[number][] | undefined;
       if (cycle === undefined) {
-        const target = clamp(1 / 3 + epsilon, 0, 1)
-        const k = clamp(Math.round(totalSamples * target), 1, members.length)
-        cycle = members.slice(0, k)
-        enumCycles.set(ref, cycle)
+        const target = clamp(1 / 3 + epsilon, 0, 1);
+        const k = clamp(Math.round(totalSamples * target), 1, members.length);
+        cycle = members.slice(0, k);
+        enumCycles.set(ref, cycle);
       }
-      return cycle[sampleIndex % cycle.length]!
+      return cycle[sampleIndex % cycle.length]!;
     },
     overrideLeaf: () => undefined,
     mapKey: (ref, defaultKey, rng, _sampleIndex, _totalSamples) => {
-      let st = mapGrowthState.get(ref)
+      let st = mapGrowthState.get(ref);
       if (st === undefined) {
-        st = { seenKeys: [] }
-        mapGrowthState.set(ref, st)
+        st = { seenKeys: [] };
+        mapGrowthState.set(ref, st);
       }
-      const target = clamp(0.5 + epsilon, 0, 1)
+      const target = clamp(0.5 + epsilon, 0, 1);
       if (st.seenKeys.length === 0 || rng() < target) {
-        st.seenKeys.push(defaultKey)
-        return defaultKey
+        st.seenKeys.push(defaultKey);
+        return defaultKey;
       }
-      return pick(rng, st.seenKeys)
+      return pick(rng, st.seenKeys);
     },
     pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
-  }
+  };
 }
 
-function makeHighCardinalitySampler(cardinalityRatio: number, style: "uuid" | "sequential"): ProfileSampler {
-  const state = new WeakMap<TypeRef, { seen: unknown[]; counter: number }>()
+function makeHighCardinalitySampler(
+  cardinalityRatio: number,
+  style: "uuid" | "sequential",
+): ProfileSampler {
+  const state = new WeakMap<TypeRef, { seen: unknown[]; counter: number }>();
 
   return {
     presenceProbability: (_objRef, _fieldName, _rank, _names, _totalFieldCount, base) => base,
     pickEnumMember: (_ref, members, rng) => pick(rng, members),
     overrideLeaf: (ref, kind, rng) => {
-      if (kind !== "string" && kind !== "integer") return undefined
-      let st = state.get(ref)
+      if (kind !== "string" && kind !== "integer") return undefined;
+      let st = state.get(ref);
       if (st === undefined) {
-        st = { seen: [], counter: 0 }
-        state.set(ref, st)
+        st = { seen: [], counter: 0 };
+        state.set(ref, st);
       }
       if (st.seen.length === 0 || rng() < cardinalityRatio) {
-        const value = kind === "integer"
-          ? (style === "sequential" ? st.counter++ : randInt(rng, 0, 10_000_000))
-          : (style === "sequential" ? `id-${String(st.counter++).padStart(6, "0")}` : randomUuid(rng))
-        st.seen.push(value)
-        return { value }
+        const value =
+          kind === "integer"
+            ? style === "sequential"
+              ? st.counter++
+              : randInt(rng, 0, 10_000_000)
+            : style === "sequential"
+              ? `id-${String(st.counter++).padStart(6, "0")}`
+              : randomUuid(rng);
+        st.seen.push(value);
+        return { value };
       }
-      return { value: pick(rng, st.seen) }
+      return { value: pick(rng, st.seen) };
     },
     mapKey: (_ref, defaultKey) => defaultKey,
     pickUnionVariant: (_ref, variants, rng) => pick(rng, variants),
-  }
+  };
 }
 
 function makeDirtyOutlierSampler(dominantRatio: number): ProfileSampler {
   return {
     ...uniformSampler,
     pickUnionVariant: (_ref, variants, rng) => {
-      if (variants.length !== 2) return pick(rng, variants) // only the 2-variant case is what `walkAndDetectDirty` looks for
-      return rng() < dominantRatio ? variants[0]! : variants[1]!
+      if (variants.length !== 2) return pick(rng, variants); // only the 2-variant case is what `walkAndDetectDirty` looks for
+      return rng() < dominantRatio ? variants[0]! : variants[1]!;
     },
-  }
+  };
 }
 
 function resolveProfile(profile: GeneratorProfile | undefined): ProfileSampler {
-  if (profile === undefined || profile.kind === "uniform") return uniformSampler
+  if (profile === undefined || profile.kind === "uniform") return uniformSampler;
   switch (profile.kind) {
-    case "zipfian-presence": return makeZipfianSampler(profile.exponent ?? 1.2)
-    case "adversarial-boundary": return makeAdversarialSampler(profile.epsilon ?? 0)
-    case "high-cardinality-id": return makeHighCardinalitySampler(profile.cardinalityRatio ?? 0.98, profile.style ?? "uuid")
-    case "dirty-outlier": return makeDirtyOutlierSampler(profile.dominantRatio ?? 0.95)
+    case "zipfian-presence":
+      return makeZipfianSampler(profile.exponent ?? 1.2);
+    case "adversarial-boundary":
+      return makeAdversarialSampler(profile.epsilon ?? 0);
+    case "high-cardinality-id":
+      return makeHighCardinalitySampler(profile.cardinalityRatio ?? 0.98, profile.style ?? "uuid");
+    case "dirty-outlier":
+      return makeDirtyOutlierSampler(profile.dominantRatio ?? 0.95);
   }
 }
 
@@ -391,22 +457,22 @@ function resolveProfile(profile: GeneratorProfile | undefined): ProfileSampler {
 
 export interface GenerateOptions {
   /** Deterministic seed. Same seed + same schema + same n -> same corpus. */
-  readonly seed?: number | string
+  readonly seed?: number | string;
   /** Probability an optional field is present. Default 0.75. */
-  readonly optionalPresenceRate?: number
+  readonly optionalPresenceRate?: number;
   /** Probability a nullable value is generated as `null`. Default 0.15. */
-  readonly nullableNullRate?: number
+  readonly nullableNullRate?: number;
   /** Inclusive [min, max] length for `array`-kind values. Default [0, 5]. */
-  readonly arrayLengthRange?: readonly [number, number]
+  readonly arrayLengthRange?: readonly [number, number];
   /** Inclusive [min, max] key count for `map`-kind values. Default [0, 4]. */
-  readonly mapSizeRange?: readonly [number, number]
+  readonly mapSizeRange?: readonly [number, number];
   /**
    * Named definitions `ref`-kind nodes resolve against — mirrors
    * `TypeRefDocument.defs` (see index.ts) for schemas built with recursive
    * `ref`s (e.g. test-fixtures.ts's `treeNode`), which carry no defs of
    * their own.
    */
-  readonly defs?: Readonly<Record<string, TypeRef>>
+  readonly defs?: Readonly<Record<string, TypeRef>>;
   /**
    * Recursion depth at which array-valued positions are forced to length 0,
    * guaranteeing termination for self-referential schemas (a recursive
@@ -414,25 +480,25 @@ export interface GenerateOptions {
    * empty at depth cuts every such cycle without needing to know the
    * referent's shape ahead of time). Default 6.
    */
-  readonly maxDepth?: number
+  readonly maxDepth?: number;
   /**
    * The presence/value-frequency distribution `generateValue` samples from,
    * in place of the flat/uniform defaults above. See `GeneratorProfile`.
    * Default: `{ kind: "uniform" }` (Phase 1's original behavior — every eval
    * result before this option existed was implicitly generated under it).
    */
-  readonly profile?: GeneratorProfile
+  readonly profile?: GeneratorProfile;
 }
 
 interface ResolvedGenOptions {
-  readonly rng: Rng
-  readonly optionalPresenceRate: number
-  readonly nullableNullRate: number
-  readonly arrayLengthRange: readonly [number, number]
-  readonly mapSizeRange: readonly [number, number]
-  readonly defs: Readonly<Record<string, TypeRef>>
-  readonly maxDepth: number
-  readonly profile: ProfileSampler
+  readonly rng: Rng;
+  readonly optionalPresenceRate: number;
+  readonly nullableNullRate: number;
+  readonly arrayLengthRange: readonly [number, number];
+  readonly mapSizeRange: readonly [number, number];
+  readonly defs: Readonly<Record<string, TypeRef>>;
+  readonly maxDepth: number;
+  readonly profile: ProfileSampler;
 }
 
 function resolveGenOptions(options: GenerateOptions | undefined): ResolvedGenOptions {
@@ -445,7 +511,7 @@ function resolveGenOptions(options: GenerateOptions | undefined): ResolvedGenOpt
     defs: options?.defs ?? {},
     maxDepth: options?.maxDepth ?? 6,
     profile: resolveProfile(options?.profile),
-  }
+  };
 }
 
 const intRanges: Readonly<Record<string, readonly [number, number]>> = {
@@ -457,31 +523,45 @@ const intRanges: Readonly<Record<string, readonly [number, number]>> = {
   int32: [-2147483648, 2147483647],
   uint64: [0, Number.MAX_SAFE_INTEGER],
   int64: [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-}
+};
 
 function generateLeaf(kind: string, opts: ResolvedGenOptions): unknown {
   switch (kind) {
-    case "boolean": return opts.rng() < 0.5
-    case "number": return Math.round(opts.rng() * 10000) / 100
-    case "integer": return randInt(opts.rng, -1000, 1000)
-    case "string": return randomWord(opts.rng)
-    case "uuid": return randomUuid(opts.rng)
-    case "uri": return `https://example.com/${randomWord(opts.rng)}`
-    case "email": return `${randomWord(opts.rng)}@example.com`
-    case "date": return randomDate(opts.rng)
-    case "datetime": return randomDateTime(opts.rng)
-    case "time": return `${String(randInt(opts.rng, 0, 23)).padStart(2, "0")}:00:00`
-    case "bytes": return randomHex(opts.rng, 16)
-    case "null": return null
-    case "void": return null
-    case "unknown": return pick(opts.rng, [randomWord(opts.rng), randInt(opts.rng, 0, 1000), true, null])
+    case "boolean":
+      return opts.rng() < 0.5;
+    case "number":
+      return Math.round(opts.rng() * 10000) / 100;
+    case "integer":
+      return randInt(opts.rng, -1000, 1000);
+    case "string":
+      return randomWord(opts.rng);
+    case "uuid":
+      return randomUuid(opts.rng);
+    case "uri":
+      return `https://example.com/${randomWord(opts.rng)}`;
+    case "email":
+      return `${randomWord(opts.rng)}@example.com`;
+    case "date":
+      return randomDate(opts.rng);
+    case "datetime":
+      return randomDateTime(opts.rng);
+    case "time":
+      return `${String(randInt(opts.rng, 0, 23)).padStart(2, "0")}:00:00`;
+    case "bytes":
+      return randomHex(opts.rng, 16);
+    case "null":
+      return null;
+    case "void":
+      return null;
+    case "unknown":
+      return pick(opts.rng, [randomWord(opts.rng), randInt(opts.rng, 0, 1000), true, null]);
     default: {
-      const range = intRanges[kind]
-      if (range !== undefined) return randInt(opts.rng, range[0], range[1])
+      const range = intRanges[kind];
+      if (range !== undefined) return randInt(opts.rng, range[0], range[1]);
       // Nominal/callable kinds (instance/function/method/interface/never) have
       // no JSON-representable inhabitant — degrade to null rather than throw,
       // same "honest degrade" convention projectors use elsewhere.
-      return null
+      return null;
     }
   }
 }
@@ -493,77 +573,100 @@ function generateValue(
   sampleIndex: number,
   totalSamples: number,
 ): unknown {
-  if (ref.meta.nullable === true && opts.rng() < opts.nullableNullRate) return null
+  if (ref.meta.nullable === true && opts.rng() < opts.nullableNullRate) return null;
 
-  const { shape } = ref
-  const forceEmptyContainers = depth >= opts.maxDepth
+  const { shape } = ref;
+  const forceEmptyContainers = depth >= opts.maxDepth;
 
   switch (shape.kind) {
     case "object": {
-      const fields = (shape as { fields: Readonly<Record<string, TypeRef>> }).fields
-      const entries = Object.entries(fields)
-      const optionalFieldNames = entries.filter(([, r]) => r.meta.optional === true).map(([name]) => name)
-      const totalFieldCount = entries.length
-      const out: Record<string, unknown> = {}
-      let rank = 0
+      const fields = (shape as { fields: Readonly<Record<string, TypeRef>> }).fields;
+      const entries = Object.entries(fields);
+      const optionalFieldNames = entries
+        .filter(([, r]) => r.meta.optional === true)
+        .map(([name]) => name);
+      const totalFieldCount = entries.length;
+      const out: Record<string, unknown> = {};
+      let rank = 0;
       for (const [name, fieldRef] of entries) {
         if (fieldRef.meta.optional === true) {
-          rank++
+          rank++;
           const p = opts.profile.presenceProbability(
-            ref, name, rank, optionalFieldNames, totalFieldCount, opts.optionalPresenceRate, sampleIndex, totalSamples,
-          )
-          if (opts.rng() >= p) continue
+            ref,
+            name,
+            rank,
+            optionalFieldNames,
+            totalFieldCount,
+            opts.optionalPresenceRate,
+            sampleIndex,
+            totalSamples,
+          );
+          if (opts.rng() >= p) continue;
         }
-        out[name] = generateValue(fieldRef, opts, depth + 1, sampleIndex, totalSamples)
+        out[name] = generateValue(fieldRef, opts, depth + 1, sampleIndex, totalSamples);
       }
-      return out
+      return out;
     }
     case "array": {
-      const element = (shape as { element: TypeRef }).element
-      const [lo, hi] = opts.arrayLengthRange
-      const len = forceEmptyContainers ? 0 : randInt(opts.rng, lo, hi)
-      return Array.from({ length: len }, () => generateValue(element, opts, depth + 1, sampleIndex, totalSamples))
+      const element = (shape as { element: TypeRef }).element;
+      const [lo, hi] = opts.arrayLengthRange;
+      const len = forceEmptyContainers ? 0 : randInt(opts.rng, lo, hi);
+      return Array.from({ length: len }, () =>
+        generateValue(element, opts, depth + 1, sampleIndex, totalSamples),
+      );
     }
     case "tuple": {
-      const elements = (shape as { elements: readonly TypeRef[] }).elements
-      return elements.map((el) => generateValue(el, opts, depth + 1, sampleIndex, totalSamples))
+      const elements = (shape as { elements: readonly TypeRef[] }).elements;
+      return elements.map((el) => generateValue(el, opts, depth + 1, sampleIndex, totalSamples));
     }
     case "map": {
-      const value = (shape as { value: TypeRef }).value
-      const [lo, hi] = opts.mapSizeRange
-      const size = forceEmptyContainers ? 0 : randInt(opts.rng, lo, hi)
-      const out: Record<string, unknown> = {}
+      const value = (shape as { value: TypeRef }).value;
+      const [lo, hi] = opts.mapSizeRange;
+      const size = forceEmptyContainers ? 0 : randInt(opts.rng, lo, hi);
+      const out: Record<string, unknown> = {};
       for (let i = 0; i < size; i++) {
-        const defaultKey = `${randomWord(opts.rng)}_${i}`
-        const key = opts.profile.mapKey(ref, defaultKey, opts.rng, sampleIndex, totalSamples)
-        out[key] = generateValue(value, opts, depth + 1, sampleIndex, totalSamples)
+        const defaultKey = `${randomWord(opts.rng)}_${i}`;
+        const key = opts.profile.mapKey(ref, defaultKey, opts.rng, sampleIndex, totalSamples);
+        out[key] = generateValue(value, opts, depth + 1, sampleIndex, totalSamples);
       }
-      return out
+      return out;
     }
     case "union": {
-      const variants = (shape as { variants: readonly TypeRef[] }).variants
-      if (variants.length === 0) return null
-      const chosen = opts.profile.pickUnionVariant(ref, variants, opts.rng, sampleIndex, totalSamples)
-      return generateValue(chosen, opts, depth + 1, sampleIndex, totalSamples)
+      const variants = (shape as { variants: readonly TypeRef[] }).variants;
+      if (variants.length === 0) return null;
+      const chosen = opts.profile.pickUnionVariant(
+        ref,
+        variants,
+        opts.rng,
+        sampleIndex,
+        totalSamples,
+      );
+      return generateValue(chosen, opts, depth + 1, sampleIndex, totalSamples);
     }
     case "literal": {
-      return (shape as { value: string | number | boolean | null }).value
+      return (shape as { value: string | number | boolean | null }).value;
     }
     case "enum": {
-      const members = (shape as { members: readonly string[] }).members
-      if (members.length === 0) return ""
-      return opts.profile.pickEnumMember(ref, members, opts.rng, sampleIndex, totalSamples)
+      const members = (shape as { members: readonly string[] }).members;
+      if (members.length === 0) return "";
+      return opts.profile.pickEnumMember(ref, members, opts.rng, sampleIndex, totalSamples);
     }
     case "ref": {
-      const target = (shape as { target: string }).target
-      const resolved = opts.defs[target]
-      if (resolved === undefined) return null // unresolvable ref — no defs given, degrade to null
-      return generateValue(resolved, opts, depth + 1, sampleIndex, totalSamples)
+      const target = (shape as { target: string }).target;
+      const resolved = opts.defs[target];
+      if (resolved === undefined) return null; // unresolvable ref — no defs given, degrade to null
+      return generateValue(resolved, opts, depth + 1, sampleIndex, totalSamples);
     }
     default: {
-      const override = opts.profile.overrideLeaf(ref, shape.kind, opts.rng, sampleIndex, totalSamples)
-      if (override !== undefined) return override.value
-      return generateLeaf(shape.kind, opts)
+      const override = opts.profile.overrideLeaf(
+        ref,
+        shape.kind,
+        opts.rng,
+        sampleIndex,
+        totalSamples,
+      );
+      if (override !== undefined) return override.value;
+      return generateLeaf(shape.kind, opts);
     }
   }
 }
@@ -573,8 +676,8 @@ function generateValue(
  * of `fromJsonCorpus`. Deterministic given the same `options.seed`.
  */
 export function generateCorpus(schema: TypeRef, n: number, options?: GenerateOptions): unknown[] {
-  const opts = resolveGenOptions(options)
-  return Array.from({ length: n }, (_, i) => generateValue(schema, opts, 0, i, n))
+  const opts = resolveGenOptions(options);
+  return Array.from({ length: n }, (_, i) => generateValue(schema, opts, 0, i, n));
 }
 
 // ---------------------------------------------------------------------------
@@ -591,85 +694,85 @@ export function generateCorpus(schema: TypeRef, n: number, options?: GenerateOpt
 
 interface SchemaIndex {
   /** Every path visited (containers and leaves alike), excluding the root. */
-  readonly paths: ReadonlySet<string>
+  readonly paths: ReadonlySet<string>;
   /** path -> the TypeRef shape kind observed there (last writer wins for union-merged paths). */
-  readonly kindAt: ReadonlyMap<string, string>
-  readonly enumPaths: ReadonlySet<string>
-  readonly unionPaths: ReadonlySet<string>
-  readonly mapPaths: ReadonlySet<string>
+  readonly kindAt: ReadonlyMap<string, string>;
+  readonly enumPaths: ReadonlySet<string>;
+  readonly unionPaths: ReadonlySet<string>;
+  readonly mapPaths: ReadonlySet<string>;
   /** union path -> number of variants (for union-fidelity variant-count comparison). */
-  readonly variantCounts: ReadonlyMap<string, number>
+  readonly variantCounts: ReadonlyMap<string, number>;
   /** enum path -> the declared member set (for member-set-fidelity comparison). */
-  readonly enumMembersAt: ReadonlyMap<string, ReadonlySet<string>>
+  readonly enumMembersAt: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
 function indexSchema(root: TypeRef): SchemaIndex {
-  const paths = new Set<string>()
-  const kindAt = new Map<string, string>()
-  const enumPaths = new Set<string>()
-  const unionPaths = new Set<string>()
-  const mapPaths = new Set<string>()
-  const variantCounts = new Map<string, number>()
-  const enumMembersAt = new Map<string, ReadonlySet<string>>()
+  const paths = new Set<string>();
+  const kindAt = new Map<string, string>();
+  const enumPaths = new Set<string>();
+  const unionPaths = new Set<string>();
+  const mapPaths = new Set<string>();
+  const variantCounts = new Map<string, number>();
+  const enumMembersAt = new Map<string, ReadonlySet<string>>();
 
   function visit(ref: TypeRef, path: string, seen: ReadonlySet<TypeRef>): void {
-    if (seen.has(ref)) return // guard against `ref`-free structural cycles (shouldn't occur, but stay safe)
-    const nextSeen = new Set(seen)
-    nextSeen.add(ref)
+    if (seen.has(ref)) return; // guard against `ref`-free structural cycles (shouldn't occur, but stay safe)
+    const nextSeen = new Set(seen);
+    nextSeen.add(ref);
 
-    const { shape } = ref
+    const { shape } = ref;
     if (path !== "") {
-      paths.add(path)
-      kindAt.set(path, shape.kind)
+      paths.add(path);
+      kindAt.set(path, shape.kind);
     }
     if (shape.kind === "enum") {
-      enumPaths.add(path)
-      const members = (shape as { members: readonly string[] }).members
-      enumMembersAt.set(path, new Set(members))
+      enumPaths.add(path);
+      const members = (shape as { members: readonly string[] }).members;
+      enumMembersAt.set(path, new Set(members));
     }
-    if (shape.kind === "map") mapPaths.add(path)
+    if (shape.kind === "map") mapPaths.add(path);
 
     if (shape.kind === "object") {
-      const fields = (shape as { fields: Readonly<Record<string, TypeRef>> }).fields
+      const fields = (shape as { fields: Readonly<Record<string, TypeRef>> }).fields;
       for (const [name, fieldRef] of Object.entries(fields)) {
-        visit(fieldRef, path === "" ? name : `${path}.${name}`, nextSeen)
+        visit(fieldRef, path === "" ? name : `${path}.${name}`, nextSeen);
       }
-      return
+      return;
     }
     if (shape.kind === "array") {
-      visit((shape as { element: TypeRef }).element, `${path}[]`, nextSeen)
-      return
+      visit((shape as { element: TypeRef }).element, `${path}[]`, nextSeen);
+      return;
     }
     if (shape.kind === "tuple") {
-      const elements = (shape as { elements: readonly TypeRef[] }).elements
-      elements.forEach((el, i) => visit(el, `${path}[${i}]`, nextSeen))
-      return
+      const elements = (shape as { elements: readonly TypeRef[] }).elements;
+      elements.forEach((el, i) => visit(el, `${path}[${i}]`, nextSeen));
+      return;
     }
     if (shape.kind === "map") {
-      visit((shape as { value: TypeRef }).value, `${path}{}`, nextSeen)
-      return
+      visit((shape as { value: TypeRef }).value, `${path}{}`, nextSeen);
+      return;
     }
     if (shape.kind === "union") {
-      unionPaths.add(path)
-      const variants = (shape as { variants: readonly TypeRef[] }).variants
-      variantCounts.set(path, variants.length)
-      for (const v of variants) visit(v, path, nextSeen)
-      return
+      unionPaths.add(path);
+      const variants = (shape as { variants: readonly TypeRef[] }).variants;
+      variantCounts.set(path, variants.length);
+      for (const v of variants) visit(v, path, nextSeen);
+      return;
     }
     // Leaves (scalars, literal, ref, instance/function/method/interface/
     // stream/page/never/unknown/void) — no children indexed.
   }
 
-  visit(root, "", new Set())
-  return { paths, kindAt, enumPaths, unionPaths, mapPaths, variantCounts, enumMembersAt }
+  visit(root, "", new Set());
+  return { paths, kindAt, enumPaths, unionPaths, mapPaths, variantCounts, enumMembersAt };
 }
 
 /** The nearest ancestor kind with no parent of its own — groups width/format
  * refinements (uint8, int32, uuid, datetime, …) under their structural
  * family (number, string, …) for a looser "close enough" comparison. */
 function rootKind(kind: string): string {
-  const chain = ancestors(kind)
-  return chain.length > 0 ? chain[chain.length - 1]! : kind
+  const chain = ancestors(kind);
+  return chain.length > 0 ? chain[chain.length - 1]! : kind;
 }
 
 // ---------------------------------------------------------------------------
@@ -677,39 +780,43 @@ function rootKind(kind: string): string {
 // ---------------------------------------------------------------------------
 
 export interface PrecisionRecallF1 {
-  readonly precision: number
-  readonly recall: number
-  readonly f1: number
+  readonly precision: number;
+  readonly recall: number;
+  readonly f1: number;
 }
 
 function prf1(matched: number, actual: number, predicted: number): PrecisionRecallF1 {
-  if (actual === 0 && predicted === 0) return { precision: 1, recall: 1, f1: 1 }
-  const precision = predicted === 0 ? 0 : matched / predicted
-  const recall = actual === 0 ? 0 : matched / actual
-  const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall)
-  return { precision, recall, f1 }
+  if (actual === 0 && predicted === 0) return { precision: 1, recall: 1, f1: 1 };
+  const precision = predicted === 0 ? 0 : matched / predicted;
+  const recall = actual === 0 ? 0 : matched / actual;
+  const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
+  return { precision, recall, f1 };
 }
 
 function setPrf1(actual: ReadonlySet<string>, predicted: ReadonlySet<string>): PrecisionRecallF1 {
-  let matched = 0
-  for (const p of actual) if (predicted.has(p)) matched++
-  return prf1(matched, actual.size, predicted.size)
+  let matched = 0;
+  for (const p of actual) if (predicted.has(p)) matched++;
+  return prf1(matched, actual.size, predicted.size);
 }
 
 export interface FieldComparison {
-  readonly path: string
-  readonly originalKind: string
-  readonly inferredKind?: string
-  readonly status: "exact" | "family" | "mismatch" | "missing" | "extra"
+  readonly path: string;
+  readonly originalKind: string;
+  readonly inferredKind?: string;
+  readonly status: "exact" | "family" | "mismatch" | "missing" | "extra";
 }
 
 export interface ScoreReport {
   /** Did we find all the fields/positions the original schema declared? */
-  readonly fieldCoverage: PrecisionRecallF1
+  readonly fieldCoverage: PrecisionRecallF1;
   /** Among positions found in both, how often did the inferred kind match. */
-  readonly typeAccuracy: { readonly exactRate: number; readonly familyRate: number; readonly comparedCount: number }
+  readonly typeAccuracy: {
+    readonly exactRate: number;
+    readonly familyRate: number;
+    readonly comparedCount: number;
+  };
   /** Did we find the enum-shaped positions (vs. leaving them as plain string/integer). Shape only — says nothing about whether the recovered member set is right; see `enumMemberFidelity`. */
-  readonly enumDetection: PrecisionRecallF1
+  readonly enumDetection: PrecisionRecallF1;
   /**
    * Among positions BOTH schemas agree are enum-shaped, how well did the
    * inferred member set match the true one. Precision: inferred members
@@ -726,14 +833,14 @@ export interface ScoreReport {
    * from `overallF1` whenever there's nothing to compare, exactly like the
    * other conditionally-included axes below.
    */
-  readonly enumMemberFidelity: PrecisionRecallF1 & { readonly comparedPositions: number }
+  readonly enumMemberFidelity: PrecisionRecallF1 & { readonly comparedPositions: number };
   /** Did we find the dict-shaped positions (vs. leaving them as fixed-field record). */
-  readonly dictDetection: PrecisionRecallF1
+  readonly dictDetection: PrecisionRecallF1;
   /** Did we find the union-shaped positions (incl. discriminated unions), and how close were variant counts. */
-  readonly unionFidelity: PrecisionRecallF1 & { readonly avgVariantCountDiff: number | null }
+  readonly unionFidelity: PrecisionRecallF1 & { readonly avgVariantCountDiff: number | null };
   /** Single-number rollup — unweighted mean of the axes above that apply (an axis with nothing to find in the original is excluded, not scored as a free win). */
-  readonly overallF1: number
-  readonly fields: readonly FieldComparison[]
+  readonly overallF1: number;
+  readonly fields: readonly FieldComparison[];
 }
 
 /**
@@ -741,37 +848,42 @@ export interface ScoreReport {
  * generated corpus) supposed to recover. See module doc for the axes.
  */
 export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreReport {
-  const origIdx = indexSchema(original)
-  const infIdx = indexSchema(inferred)
+  const origIdx = indexSchema(original);
+  const infIdx = indexSchema(inferred);
 
-  const fieldCoverage = setPrf1(origIdx.paths, infIdx.paths)
+  const fieldCoverage = setPrf1(origIdx.paths, infIdx.paths);
 
-  const fields: FieldComparison[] = []
-  let exact = 0
-  let family = 0
-  let compared = 0
+  const fields: FieldComparison[] = [];
+  let exact = 0;
+  let family = 0;
+  let compared = 0;
   for (const path of origIdx.paths) {
-    const originalKind = origIdx.kindAt.get(path)!
-    const inferredKind = infIdx.kindAt.get(path)
+    const originalKind = origIdx.kindAt.get(path)!;
+    const inferredKind = infIdx.kindAt.get(path);
     if (inferredKind === undefined) {
-      fields.push({ path, originalKind, status: "missing" })
-      continue
+      fields.push({ path, originalKind, status: "missing" });
+      continue;
     }
-    compared++
+    compared++;
     if (originalKind === inferredKind) {
-      exact++
-      family++
-      fields.push({ path, originalKind, inferredKind, status: "exact" })
+      exact++;
+      family++;
+      fields.push({ path, originalKind, inferredKind, status: "exact" });
     } else if (rootKind(originalKind) === rootKind(inferredKind)) {
-      family++
-      fields.push({ path, originalKind, inferredKind, status: "family" })
+      family++;
+      fields.push({ path, originalKind, inferredKind, status: "family" });
     } else {
-      fields.push({ path, originalKind, inferredKind, status: "mismatch" })
+      fields.push({ path, originalKind, inferredKind, status: "mismatch" });
     }
   }
   for (const path of infIdx.paths) {
     if (!origIdx.paths.has(path)) {
-      fields.push({ path, originalKind: "(none)", inferredKind: infIdx.kindAt.get(path)!, status: "extra" })
+      fields.push({
+        path,
+        originalKind: "(none)",
+        inferredKind: infIdx.kindAt.get(path)!,
+        status: "extra",
+      });
     }
   }
 
@@ -779,45 +891,49 @@ export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreRepor
     exactRate: compared === 0 ? 1 : exact / compared,
     familyRate: compared === 0 ? 1 : family / compared,
     comparedCount: compared,
-  }
+  };
 
-  const enumDetection = setPrf1(origIdx.enumPaths, infIdx.enumPaths)
+  const enumDetection = setPrf1(origIdx.enumPaths, infIdx.enumPaths);
 
-  let memberMatched = 0
-  let memberActual = 0
-  let memberPredicted = 0
-  let comparedPositions = 0
+  let memberMatched = 0;
+  let memberActual = 0;
+  let memberPredicted = 0;
+  let comparedPositions = 0;
   for (const path of origIdx.enumPaths) {
-    if (!infIdx.enumPaths.has(path)) continue // shape not recovered here — enumDetection already penalizes this
-    const origMembers = origIdx.enumMembersAt.get(path)!
-    const infMembers = infIdx.enumMembersAt.get(path)!
-    comparedPositions++
-    memberActual += origMembers.size
-    memberPredicted += infMembers.size
-    for (const m of origMembers) if (infMembers.has(m)) memberMatched++
+    if (!infIdx.enumPaths.has(path)) continue; // shape not recovered here — enumDetection already penalizes this
+    const origMembers = origIdx.enumMembersAt.get(path)!;
+    const infMembers = infIdx.enumMembersAt.get(path)!;
+    comparedPositions++;
+    memberActual += origMembers.size;
+    memberPredicted += infMembers.size;
+    for (const m of origMembers) if (infMembers.has(m)) memberMatched++;
   }
-  const enumMemberFidelity = { ...prf1(memberMatched, memberActual, memberPredicted), comparedPositions }
+  const enumMemberFidelity = {
+    ...prf1(memberMatched, memberActual, memberPredicted),
+    comparedPositions,
+  };
 
-  const dictDetection = setPrf1(origIdx.mapPaths, infIdx.mapPaths)
-  const unionPrf1 = setPrf1(origIdx.unionPaths, infIdx.unionPaths)
+  const dictDetection = setPrf1(origIdx.mapPaths, infIdx.mapPaths);
+  const unionPrf1 = setPrf1(origIdx.unionPaths, infIdx.unionPaths);
 
-  const variantDiffs: number[] = []
+  const variantDiffs: number[] = [];
   for (const path of origIdx.unionPaths) {
-    const infCount = infIdx.variantCounts.get(path)
-    if (infCount !== undefined) variantDiffs.push(Math.abs(origIdx.variantCounts.get(path)! - infCount))
+    const infCount = infIdx.variantCounts.get(path);
+    if (infCount !== undefined)
+      variantDiffs.push(Math.abs(origIdx.variantCounts.get(path)! - infCount));
   }
   const unionFidelity = {
     ...unionPrf1,
     avgVariantCountDiff: variantDiffs.length === 0 ? null : mean(variantDiffs),
-  }
+  };
 
   // Roll up only the axes that had something to find in the original —
   // an empty axis (e.g. no enums in this schema) doesn't get free credit.
-  const axisScores: number[] = [fieldCoverage.f1, typeAccuracy.familyRate]
-  if (origIdx.enumPaths.size > 0) axisScores.push(enumDetection.f1)
-  if (comparedPositions > 0) axisScores.push(enumMemberFidelity.f1)
-  if (origIdx.mapPaths.size > 0) axisScores.push(dictDetection.f1)
-  if (origIdx.unionPaths.size > 0) axisScores.push(unionFidelity.f1)
+  const axisScores: number[] = [fieldCoverage.f1, typeAccuracy.familyRate];
+  if (origIdx.enumPaths.size > 0) axisScores.push(enumDetection.f1);
+  if (comparedPositions > 0) axisScores.push(enumMemberFidelity.f1);
+  if (origIdx.mapPaths.size > 0) axisScores.push(dictDetection.f1);
+  if (origIdx.unionPaths.size > 0) axisScores.push(unionFidelity.f1);
 
   return {
     fieldCoverage,
@@ -828,7 +944,7 @@ export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreRepor
     unionFidelity,
     overallF1: mean(axisScores),
     fields,
-  }
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -836,59 +952,62 @@ export function scoreInference(original: TypeRef, inferred: TypeRef): ScoreRepor
 // ---------------------------------------------------------------------------
 
 export interface EvalCase {
-  readonly name: string
-  readonly schema: TypeRef
+  readonly name: string;
+  readonly schema: TypeRef;
   /** Passed through to `fromJsonCorpus` when inferring from this case's generated corpus. */
-  readonly config?: CorpusInferConfig
+  readonly config?: CorpusInferConfig;
   /** Passed through to `generateCorpus` (minus `seed`, which the runner derives per case/size for reproducibility). */
-  readonly generateOptions?: Omit<GenerateOptions, "seed">
+  readonly generateOptions?: Omit<GenerateOptions, "seed">;
 }
 
 export interface EvalCaseResult {
-  readonly name: string
-  readonly n: number
-  readonly score: ScoreReport
+  readonly name: string;
+  readonly n: number;
+  readonly score: ScoreReport;
 }
 
 export interface SizeAverage {
-  readonly n: number
-  readonly avgOverallF1: number
-  readonly avgFieldCoverageF1: number
-  readonly avgTypeAccuracyFamilyRate: number
-  readonly avgEnumDetectionF1: number
-  readonly avgEnumMemberFidelityF1: number
-  readonly avgDictDetectionF1: number
-  readonly avgUnionFidelityF1: number
+  readonly n: number;
+  readonly avgOverallF1: number;
+  readonly avgFieldCoverageF1: number;
+  readonly avgTypeAccuracyFamilyRate: number;
+  readonly avgEnumDetectionF1: number;
+  readonly avgEnumMemberFidelityF1: number;
+  readonly avgDictDetectionF1: number;
+  readonly avgUnionFidelityF1: number;
 }
 
 export interface EvalSummary {
-  readonly sizes: readonly number[]
-  readonly results: readonly EvalCaseResult[]
-  readonly bySize: readonly SizeAverage[]
+  readonly sizes: readonly number[];
+  readonly results: readonly EvalCaseResult[];
+  readonly bySize: readonly SizeAverage[];
 }
 
-const defaultSizes = [5, 10, 50, 100, 500] as const
+const defaultSizes = [5, 10, 50, 100, 500] as const;
 
 /**
  * Run a labeled set of schemas through generate -> infer -> score at each
  * of `sizes`, and summarize how quality trends with corpus size N.
  */
-export function runEvaluation(cases: readonly EvalCase[], sizes: readonly number[] = defaultSizes): EvalSummary {
-  const results: EvalCaseResult[] = []
+export function runEvaluation(
+  cases: readonly EvalCase[],
+  sizes: readonly number[] = defaultSizes,
+): EvalSummary {
+  const results: EvalCaseResult[] = [];
   for (const evalCase of cases) {
     for (const n of sizes) {
       const corpus = generateCorpus(evalCase.schema, n, {
         ...evalCase.generateOptions,
         seed: `${evalCase.name}:${n}`,
-      })
-      const inferred = fromJsonCorpus(corpus, evalCase.config)
-      const score = scoreInference(evalCase.schema, inferred)
-      results.push({ name: evalCase.name, n, score })
+      });
+      const inferred = fromJsonCorpus(corpus, evalCase.config);
+      const score = scoreInference(evalCase.schema, inferred);
+      results.push({ name: evalCase.name, n, score });
     }
   }
 
   const bySize: SizeAverage[] = sizes.map((n) => {
-    const atSize = results.filter((r) => r.n === n)
+    const atSize = results.filter((r) => r.n === n);
     return {
       n,
       avgOverallF1: mean(atSize.map((r) => r.score.overallF1)),
@@ -898,10 +1017,10 @@ export function runEvaluation(cases: readonly EvalCase[], sizes: readonly number
       avgEnumMemberFidelityF1: mean(atSize.map((r) => r.score.enumMemberFidelity.f1)),
       avgDictDetectionF1: mean(atSize.map((r) => r.score.dictDetection.f1)),
       avgUnionFidelityF1: mean(atSize.map((r) => r.score.unionFidelity.f1)),
-    }
-  })
+    };
+  });
 
-  return { sizes, results, bySize }
+  return { sizes, results, bySize };
 }
 
 // ---------------------------------------------------------------------------
@@ -922,7 +1041,7 @@ export type EvalAxis =
   | "enumDetectionF1"
   | "enumMemberFidelityF1"
   | "dictDetectionF1"
-  | "unionFidelityF1"
+  | "unionFidelityF1";
 
 const evalAxes: readonly EvalAxis[] = [
   "overallF1",
@@ -932,17 +1051,24 @@ const evalAxes: readonly EvalAxis[] = [
   "enumMemberFidelityF1",
   "dictDetectionF1",
   "unionFidelityF1",
-]
+];
 
 function axisValue(score: ScoreReport, axis: EvalAxis): number {
   switch (axis) {
-    case "overallF1": return score.overallF1
-    case "fieldCoverageF1": return score.fieldCoverage.f1
-    case "typeAccuracyFamilyRate": return score.typeAccuracy.familyRate
-    case "enumDetectionF1": return score.enumDetection.f1
-    case "enumMemberFidelityF1": return score.enumMemberFidelity.f1
-    case "dictDetectionF1": return score.dictDetection.f1
-    case "unionFidelityF1": return score.unionFidelity.f1
+    case "overallF1":
+      return score.overallF1;
+    case "fieldCoverageF1":
+      return score.fieldCoverage.f1;
+    case "typeAccuracyFamilyRate":
+      return score.typeAccuracy.familyRate;
+    case "enumDetectionF1":
+      return score.enumDetection.f1;
+    case "enumMemberFidelityF1":
+      return score.enumMemberFidelity.f1;
+    case "dictDetectionF1":
+      return score.dictDetection.f1;
+    case "unionFidelityF1":
+      return score.unionFidelity.f1;
   }
 }
 
@@ -956,37 +1082,37 @@ function axisValue(score: ScoreReport, axis: EvalAxis): number {
  * same generated corpus).
  */
 export function axisValues(result: CaseSizeTrialResult, axis: EvalAxis): number[] {
-  return result.trials.map((score) => axisValue(score, axis))
+  return result.trials.map((score) => axisValue(score, axis));
 }
 
 export interface AxisStats {
-  readonly mean: number
-  readonly stddev: number
+  readonly mean: number;
+  readonly stddev: number;
   /** 95% (or `options.ciLevel`) percentile bootstrap confidence interval on the mean. */
-  readonly ci: ConfidenceInterval
+  readonly ci: ConfidenceInterval;
 }
 
 export interface CaseSizeTrialResult {
-  readonly name: string
-  readonly n: number
-  readonly trialCount: number
+  readonly name: string;
+  readonly n: number;
+  readonly trialCount: number;
   /** Per-axis distribution summary — mean/stddev/CI. Keyed by `EvalAxis`. */
-  readonly stats: Readonly<Record<EvalAxis, AxisStats>>
+  readonly stats: Readonly<Record<EvalAxis, AxisStats>>;
   /** The raw per-trial score reports, in trial order — use with `axisValues` for paired comparisons. */
-  readonly trials: readonly ScoreReport[]
+  readonly trials: readonly ScoreReport[];
 }
 
 export interface EvalTrialsSummary {
-  readonly sizes: readonly number[]
-  readonly trialCount: number
-  readonly results: readonly CaseSizeTrialResult[]
+  readonly sizes: readonly number[];
+  readonly trialCount: number;
+  readonly results: readonly CaseSizeTrialResult[];
 }
 
 export interface RunEvaluationTrialsOptions {
   /** Bootstrap confidence level. Default 0.95. */
-  readonly ciLevel?: number
+  readonly ciLevel?: number;
   /** Bootstrap resample count per CI. Default 2000. */
-  readonly resamples?: number
+  readonly resamples?: number;
 }
 
 /**
@@ -1007,41 +1133,45 @@ export function runEvaluationTrials(
   trialCount: number,
   options?: RunEvaluationTrialsOptions,
 ): EvalTrialsSummary {
-  const ciLevel = options?.ciLevel ?? 0.95
-  const resamples = options?.resamples ?? 2000
+  const ciLevel = options?.ciLevel ?? 0.95;
+  const resamples = options?.resamples ?? 2000;
 
-  const results: CaseSizeTrialResult[] = []
+  const results: CaseSizeTrialResult[] = [];
   for (const evalCase of cases) {
     for (const n of sizes) {
-      const trials: ScoreReport[] = []
+      const trials: ScoreReport[] = [];
       for (let trial = 0; trial < trialCount; trial++) {
         const corpus = generateCorpus(evalCase.schema, n, {
           ...evalCase.generateOptions,
           seed: `${evalCase.name}:${n}:${trial}`,
-        })
-        const inferred = fromJsonCorpus(corpus, evalCase.config)
-        trials.push(scoreInference(evalCase.schema, inferred))
+        });
+        const inferred = fromJsonCorpus(corpus, evalCase.config);
+        trials.push(scoreInference(evalCase.schema, inferred));
       }
 
       // A dedicated bootstrap-resampling RNG stream, seeded off the case/n
       // pair (not off any individual trial's seed) so resampling is
       // reproducible without colluding with corpus-generation randomness.
-      const bootstrapRng = rngFromSeed(`${evalCase.name}:${n}:bootstrap`)
+      const bootstrapRng = rngFromSeed(`${evalCase.name}:${n}:bootstrap`);
       const stats = Object.fromEntries(
         evalAxes.map((axis) => {
-          const values = trials.map((score) => axisValue(score, axis))
+          const values = trials.map((score) => axisValue(score, axis));
           return [
             axis,
-            { mean: mean(values), stddev: stddev(values), ci: bootstrapCI(values, bootstrapRng, { level: ciLevel, resamples }) },
-          ]
+            {
+              mean: mean(values),
+              stddev: stddev(values),
+              ci: bootstrapCI(values, bootstrapRng, { level: ciLevel, resamples }),
+            },
+          ];
         }),
-      ) as Record<EvalAxis, AxisStats>
+      ) as Record<EvalAxis, AxisStats>;
 
-      results.push({ name: evalCase.name, n, trialCount, stats, trials })
+      results.push({ name: evalCase.name, n, trialCount, stats, trials });
     }
   }
 
-  return { sizes, trialCount, results }
+  return { sizes, trialCount, results };
 }
 
 // ---------------------------------------------------------------------------
@@ -1059,7 +1189,7 @@ const statusEnumSchema = t(
     // 4 distinct values repeated across many samples — deep in "enum" territory.
     status: t(types.enum(["pending", "active", "done", "archived"])),
   }),
-)
+);
 
 // NOTE on shape: `tryDetectDU` (from-json-corpus.ts) only fires from
 // `walkAndDetectDU`'s `array` branch — it looks for a field whose value is
@@ -1077,14 +1207,26 @@ const discriminatedUnionSchema = t(
         t(
           types.union([
             t(types.object({ kind: t(types.literal("circle")), radius: t(types.number) })),
-            t(types.object({ kind: t(types.literal("rect")), width: t(types.number), height: t(types.number) })),
-            t(types.object({ kind: t(types.literal("triangle")), base: t(types.number), height: t(types.number) })),
+            t(
+              types.object({
+                kind: t(types.literal("rect")),
+                width: t(types.number),
+                height: t(types.number),
+              }),
+            ),
+            t(
+              types.object({
+                kind: t(types.literal("triangle")),
+                base: t(types.number),
+                height: t(types.number),
+              }),
+            ),
           ]),
         ),
       ),
     ),
   }),
-)
+);
 
 const dictSchema = t(
   types.object({
@@ -1094,7 +1236,7 @@ const dictSchema = t(
     scores: t(types.map(t(types.string), t(types.integer))),
     label: t(types.string),
   }),
-)
+);
 
 // A 2-variant scalar union, paired with the `dirty-outlier` profile (see
 // its doc) to land the skewed corpus shape `walkAndDetectDirty`
@@ -1128,7 +1270,7 @@ const dirtyOutlierSchema = t(
     id: t(types.integer),
     count: t(types.union([uint8(), t(types.string)])),
   }),
-)
+);
 
 /** The default labeled test set `inference-eval.test.ts` runs against. */
 export const defaultLabeledCases: readonly EvalCase[] = [
@@ -1161,7 +1303,7 @@ export const defaultLabeledCases: readonly EvalCase[] = [
     // `dominantRatio` 0.95) — see `dirtyOutlierSchema`'s doc.
     generateOptions: { profile: { kind: "dirty-outlier" } },
   },
-]
+];
 
 // ---------------------------------------------------------------------------
 // Ablation runner (Phase 3 of the JSON-inference evaluation rigor plan) —
@@ -1210,7 +1352,7 @@ export type AblationSignalKey =
   | "detectDicts"
   | "detectCfdDiscriminants"
   | "splitDissimilarObjects"
-  | "detectDirtyData"
+  | "detectDirtyData";
 
 const ablationSignals: readonly AblationSignalKey[] = [
   "detectEnums",
@@ -1219,7 +1361,7 @@ const ablationSignals: readonly AblationSignalKey[] = [
   "detectCfdDiscriminants",
   "splitDissimilarObjects",
   "detectDirtyData",
-]
+];
 
 /**
  * Which `ScoreReport` precision/recall axis a signal's effect shows up on.
@@ -1234,74 +1376,87 @@ const ablationSignals: readonly AblationSignalKey[] = [
  */
 function signalAxis(score: ScoreReport, signal: AblationSignalKey): PrecisionRecallF1 {
   switch (signal) {
-    case "detectEnums": return score.enumDetection
-    case "detectDicts": return score.dictDetection
+    case "detectEnums":
+      return score.enumDetection;
+    case "detectDicts":
+      return score.dictDetection;
     case "detectDiscriminatedUnions":
     case "splitDissimilarObjects":
     case "detectCfdDiscriminants":
     case "detectDirtyData":
-      return score.unionFidelity
+      return score.unionFidelity;
   }
 }
 
 /** Does `schema`'s ground truth contain the shape `signal` is meant to detect — the automatic positive/negative-control classifier described above. */
 function hasShapeForSignal(schema: TypeRef, signal: AblationSignalKey): boolean {
-  const idx = indexSchema(schema)
+  const idx = indexSchema(schema);
   switch (signal) {
-    case "detectEnums": return idx.enumPaths.size > 0
-    case "detectDicts": return idx.mapPaths.size > 0
+    case "detectEnums":
+      return idx.enumPaths.size > 0;
+    case "detectDicts":
+      return idx.mapPaths.size > 0;
     case "detectDiscriminatedUnions":
     case "splitDissimilarObjects":
     case "detectCfdDiscriminants":
     case "detectDirtyData":
-      return idx.unionPaths.size > 0
+      return idx.unionPaths.size > 0;
   }
 }
 
 /** One ON-vs-OFF comparison, paired-bootstrap tested (same seeds on both sides — only the signal's toggle differs). */
 export interface AblationDelta {
-  readonly onMean: number
-  readonly offMean: number
+  readonly onMean: number;
+  readonly offMean: number;
   /** onMean - offMean. Positive means turning the signal ON helped (recall axis) or hurt (precision axis, where "helped" would be a smaller drop). */
-  readonly meanDiff: number
-  readonly pValue: number
-  readonly significant: boolean
-  readonly sampleCount: number
+  readonly meanDiff: number;
+  readonly pValue: number;
+  readonly significant: boolean;
+  readonly sampleCount: number;
 }
 
 /** Reported when no case in the supplied set can serve as a control for a signal (positive: none has the shape; negative: every case has the shape). */
 export interface AblationNotMeasurable {
-  readonly measurable: false
-  readonly reason: string
+  readonly measurable: false;
+  readonly reason: string;
 }
 
 export interface SignalAblationReport {
-  readonly signal: AblationSignalKey
+  readonly signal: AblationSignalKey;
   /** `ScoreReport` axis this signal's effect was measured on (see `signalAxis`). */
-  readonly axis: "enumDetection" | "dictDetection" | "unionFidelity"
+  readonly axis: "enumDetection" | "dictDetection" | "unionFidelity";
   /** Recall-based: does the signal ON find more of what's really there, on cases whose ground truth has the shape. */
-  readonly discriminativePower: AblationDelta | AblationNotMeasurable
+  readonly discriminativePower: AblationDelta | AblationNotMeasurable;
   /** Precision-based: does the signal ON introduce false positives, on cases whose ground truth does NOT have the shape. */
-  readonly overfitRate: AblationDelta | AblationNotMeasurable
-  readonly positiveCaseNames: readonly string[]
-  readonly negativeCaseNames: readonly string[]
+  readonly overfitRate: AblationDelta | AblationNotMeasurable;
+  readonly positiveCaseNames: readonly string[];
+  readonly negativeCaseNames: readonly string[];
 }
 
 export interface AblationRunnerOptions {
-  readonly ciLevel?: number
-  readonly resamples?: number
-  readonly bootstrapSeed?: number | string
+  readonly ciLevel?: number;
+  readonly resamples?: number;
+  readonly bootstrapSeed?: number | string;
 }
 
-function withSignalToggle(cases: readonly EvalCase[], signal: AblationSignalKey, on: boolean): EvalCase[] {
-  return cases.map((c) => ({ ...c, config: { ...c.config, [signal]: on } }))
+function withSignalToggle(
+  cases: readonly EvalCase[],
+  signal: AblationSignalKey,
+  on: boolean,
+): EvalCase[] {
+  return cases.map((c) => ({ ...c, config: { ...c.config, [signal]: on } }));
 }
 
 /** Pools every trial's `part` (precision/recall) value for `signal`'s axis across every (case, n) in `summary`, in a stable order — the shape `pairedBootstrapTest` needs when the ON and OFF summaries were run over the same cases/sizes/trialCount (so index i on each side shares a seed). */
-function pooledPart(summary: EvalTrialsSummary, signal: AblationSignalKey, part: "precision" | "recall"): number[] {
-  const out: number[] = []
-  for (const r of summary.results) for (const score of r.trials) out.push(signalAxis(score, signal)[part])
-  return out
+function pooledPart(
+  summary: EvalTrialsSummary,
+  signal: AblationSignalKey,
+  part: "precision" | "recall",
+): number[] {
+  const out: number[] = [];
+  for (const r of summary.results)
+    for (const score of r.trials) out.push(signalAxis(score, signal)[part]);
+  return out;
 }
 
 /**
@@ -1319,18 +1474,18 @@ export function ablationRunner(
   trialCount: number,
   opts?: AblationRunnerOptions,
 ): readonly SignalAblationReport[] {
-  const bootstrapRng = rngFromSeed(opts?.bootstrapSeed ?? "ablation")
+  const bootstrapRng = rngFromSeed(opts?.bootstrapSeed ?? "ablation");
   const trialOpts: RunEvaluationTrialsOptions = {
     ...(opts?.ciLevel !== undefined ? { ciLevel: opts.ciLevel } : {}),
     ...(opts?.resamples !== undefined ? { resamples: opts.resamples } : {}),
-  }
+  };
   const pairedOpts = {
     ...(opts?.ciLevel !== undefined ? { level: opts.ciLevel } : {}),
     ...(opts?.resamples !== undefined ? { resamples: opts.resamples } : {}),
-  }
+  };
 
   function delta(onVals: readonly number[], offVals: readonly number[]): AblationDelta {
-    const test = pairedBootstrapTest(onVals, offVals, bootstrapRng, pairedOpts)
+    const test = pairedBootstrapTest(onVals, offVals, bootstrapRng, pairedOpts);
     return {
       onMean: mean(onVals),
       offMean: mean(offVals),
@@ -1338,36 +1493,67 @@ export function ablationRunner(
       pValue: test.pValue,
       significant: test.significant,
       sampleCount: onVals.length,
-    }
+    };
   }
 
   return ablationSignals.map((signal) => {
-    const axisName = signal === "detectEnums" ? "enumDetection" : signal === "detectDicts" ? "dictDetection" : "unionFidelity"
-    const positiveCases = cases.filter((c) => hasShapeForSignal(c.schema, signal))
-    const negativeCases = cases.filter((c) => !hasShapeForSignal(c.schema, signal))
+    const axisName =
+      signal === "detectEnums"
+        ? "enumDetection"
+        : signal === "detectDicts"
+          ? "dictDetection"
+          : "unionFidelity";
+    const positiveCases = cases.filter((c) => hasShapeForSignal(c.schema, signal));
+    const negativeCases = cases.filter((c) => !hasShapeForSignal(c.schema, signal));
 
-    let discriminativePower: AblationDelta | AblationNotMeasurable
+    let discriminativePower: AblationDelta | AblationNotMeasurable;
     if (positiveCases.length === 0) {
       discriminativePower = {
         measurable: false,
         reason: `no case in the supplied set has ground truth containing the shape ${signal} detects — discriminative power (recall) is not measurable without a positive-control case`,
-      }
+      };
     } else {
-      const on = runEvaluationTrials(withSignalToggle(positiveCases, signal, true), sizes, trialCount, trialOpts)
-      const off = runEvaluationTrials(withSignalToggle(positiveCases, signal, false), sizes, trialCount, trialOpts)
-      discriminativePower = delta(pooledPart(on, signal, "recall"), pooledPart(off, signal, "recall"))
+      const on = runEvaluationTrials(
+        withSignalToggle(positiveCases, signal, true),
+        sizes,
+        trialCount,
+        trialOpts,
+      );
+      const off = runEvaluationTrials(
+        withSignalToggle(positiveCases, signal, false),
+        sizes,
+        trialCount,
+        trialOpts,
+      );
+      discriminativePower = delta(
+        pooledPart(on, signal, "recall"),
+        pooledPart(off, signal, "recall"),
+      );
     }
 
-    let overfitRate: AblationDelta | AblationNotMeasurable
+    let overfitRate: AblationDelta | AblationNotMeasurable;
     if (negativeCases.length === 0) {
       overfitRate = {
         measurable: false,
         reason: `every case in the supplied set has ground truth containing the shape ${signal} detects — overfit rate (precision on true negatives) is not measurable without a negative-control case`,
-      }
+      };
     } else {
-      const on = runEvaluationTrials(withSignalToggle(negativeCases, signal, true), sizes, trialCount, trialOpts)
-      const off = runEvaluationTrials(withSignalToggle(negativeCases, signal, false), sizes, trialCount, trialOpts)
-      overfitRate = delta(pooledPart(on, signal, "precision"), pooledPart(off, signal, "precision"))
+      const on = runEvaluationTrials(
+        withSignalToggle(negativeCases, signal, true),
+        sizes,
+        trialCount,
+        trialOpts,
+      );
+      const off = runEvaluationTrials(
+        withSignalToggle(negativeCases, signal, false),
+        sizes,
+        trialCount,
+        trialOpts,
+      );
+      overfitRate = delta(
+        pooledPart(on, signal, "precision"),
+        pooledPart(off, signal, "precision"),
+      );
     }
 
     return {
@@ -1377,8 +1563,8 @@ export function ablationRunner(
       overfitRate,
       positiveCaseNames: positiveCases.map((c) => c.name),
       negativeCaseNames: negativeCases.map((c) => c.name),
-    }
-  })
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1403,10 +1589,16 @@ export function ablationRunner(
 
 const clusteringDisjointSchema = t(
   types.union([
-    t(types.object({ userId: t(types.integer), userName: t(types.string), userEmail: t(types.string) })),
+    t(
+      types.object({
+        userId: t(types.integer),
+        userName: t(types.string),
+        userEmail: t(types.string),
+      }),
+    ),
     t(types.object({ orderId: t(types.integer), total: t(types.number), items: t(types.integer) })),
   ]),
-)
+);
 
 const clusteringChainingRiskSchema = t(
   types.union([
@@ -1414,14 +1606,14 @@ const clusteringChainingRiskSchema = t(
     t(types.object({ shared1: t(types.string), shared2: t(types.string) })),
     t(types.object({ shared2: t(types.string), q: t(types.integer) })),
   ]),
-)
+);
 
 const clusteringApiVariantsSchema = t(
   types.union([
     t(types.object({ id: t(types.integer), name: t(types.string) })),
     t(types.object({ id: t(types.integer), name: t(types.string), extra: t(types.boolean) })),
   ]),
-)
+);
 
 // A single population (NOT a union — no unionPaths in ground truth at all)
 // with six sparsely-present optional fields. Real records routinely look
@@ -1444,32 +1636,44 @@ const clusteringSparseSingleTypeSchema = t(
     o5: opt(t(types.string)),
     o6: opt(t(types.string)),
   }),
-)
+);
 
 /** Default cases for `clusteringMethodSweep` — see module comment above. */
 export const clusteringSensitiveCases: readonly EvalCase[] = [
   { name: "disjoint", schema: clusteringDisjointSchema },
-  { name: "chaining-risk", schema: clusteringChainingRiskSchema, config: { objectSplitThreshold: 0.8 } },
+  {
+    name: "chaining-risk",
+    schema: clusteringChainingRiskSchema,
+    config: { objectSplitThreshold: 0.8 },
+  },
   { name: "api-variants", schema: clusteringApiVariantsSchema },
-  { name: "sparse-single-type", schema: clusteringSparseSingleTypeSchema, generateOptions: { optionalPresenceRate: 0.3 } },
-]
+  {
+    name: "sparse-single-type",
+    schema: clusteringSparseSingleTypeSchema,
+    generateOptions: { optionalPresenceRate: 0.3 },
+  },
+];
 
-const clusteringMethods: readonly ClusteringMethod[] = ["single-linkage", "complete-linkage", "key-signature"]
+const clusteringMethods: readonly ClusteringMethod[] = [
+  "single-linkage",
+  "complete-linkage",
+  "key-signature",
+];
 
 export interface ClusteringMethodSweepResult {
-  readonly profile: string
-  readonly method: ClusteringMethod
-  readonly mean: number
-  readonly ci: ConfidenceInterval
-  readonly sampleCount: number
+  readonly profile: string;
+  readonly method: ClusteringMethod;
+  readonly mean: number;
+  readonly ci: ConfidenceInterval;
+  readonly sampleCount: number;
 }
 
 export interface ClusteringMethodSweepSummary {
-  readonly results: readonly ClusteringMethodSweepResult[]
+  readonly results: readonly ClusteringMethodSweepResult[];
   /** Which conclusion the data supports — computed, not presupposed. See module comment. */
-  readonly conclusion: string
+  readonly conclusion: string;
   /** method that strictly dominated (CI low > every other method's CI high) on every profile, if any. */
-  readonly crownedDefault: ClusteringMethod | undefined
+  readonly crownedDefault: ClusteringMethod | undefined;
 }
 
 /**
@@ -1489,8 +1693,8 @@ export function clusteringMethodSweep(
   cases: readonly EvalCase[] = clusteringSensitiveCases,
   opts?: RunEvaluationTrialsOptions,
 ): ClusteringMethodSweepSummary {
-  const bootstrapRng = rngFromSeed("clustering-sweep")
-  const results: ClusteringMethodSweepResult[] = []
+  const bootstrapRng = rngFromSeed("clustering-sweep");
+  const results: ClusteringMethodSweepResult[] = [];
 
   for (const profile of profiles) {
     for (const method of clusteringMethods) {
@@ -1498,38 +1702,48 @@ export function clusteringMethodSweep(
         ...c,
         config: { ...c.config, clusteringMethod: method },
         generateOptions: { ...c.generateOptions, profile },
-      }))
-      const summary = runEvaluationTrials(configured, sizes, trialCount, opts)
-      const pooled: number[] = []
-      for (const r of summary.results) for (const score of r.trials) pooled.push(score.unionFidelity.f1)
+      }));
+      const summary = runEvaluationTrials(configured, sizes, trialCount, opts);
+      const pooled: number[] = [];
+      for (const r of summary.results)
+        for (const score of r.trials) pooled.push(score.unionFidelity.f1);
       const ci = bootstrapCI(pooled, bootstrapRng, {
         ...(opts?.ciLevel !== undefined ? { level: opts.ciLevel } : {}),
         ...(opts?.resamples !== undefined ? { resamples: opts.resamples } : {}),
-      })
-      results.push({ profile: profile.kind, method, mean: mean(pooled), ci, sampleCount: pooled.length })
+      });
+      results.push({
+        profile: profile.kind,
+        method,
+        mean: mean(pooled),
+        ci,
+        sampleCount: pooled.length,
+      });
     }
   }
 
-  const profileNames = [...new Set(results.map((r) => r.profile))]
-  const dominantPerProfile = new Map<string, ClusteringMethod | undefined>()
+  const profileNames = [...new Set(results.map((r) => r.profile))];
+  const dominantPerProfile = new Map<string, ClusteringMethod | undefined>();
   for (const p of profileNames) {
-    const rows = results.filter((r) => r.profile === p)
-    const dominant = rows.find((row) => rows.every((o) => o.method === row.method || row.ci.low > o.ci.high))
-    dominantPerProfile.set(p, dominant?.method)
+    const rows = results.filter((r) => r.profile === p);
+    const dominant = rows.find((row) =>
+      rows.every((o) => o.method === row.method || row.ci.low > o.ci.high),
+    );
+    dominantPerProfile.set(p, dominant?.method);
   }
 
-  const perProfileDominants = profileNames.map((p) => dominantPerProfile.get(p))
+  const perProfileDominants = profileNames.map((p) => dominantPerProfile.get(p));
   const crownedDefault =
-    perProfileDominants.length > 0 && perProfileDominants.every((d) => d !== undefined && d === perProfileDominants[0])
+    perProfileDominants.length > 0 &&
+    perProfileDominants.every((d) => d !== undefined && d === perProfileDominants[0])
       ? perProfileDominants[0]
-      : undefined
+      : undefined;
 
   const conclusion =
     crownedDefault !== undefined
       ? `crowned default: ${crownedDefault} — its confidence interval sits strictly above both other methods' on every profile in the sweep (${profileNames.join(", ")})`
-      : `no universal default, expose as configuration — no single method's confidence interval sits strictly above the other two on every profile (per-profile: ${
-          profileNames.map((p) => `${p}=${dominantPerProfile.get(p) ?? "none dominant"}`).join(", ")
-        })`
+      : `no universal default, expose as configuration — no single method's confidence interval sits strictly above the other two on every profile (per-profile: ${profileNames
+          .map((p) => `${p}=${dominantPerProfile.get(p) ?? "none dominant"}`)
+          .join(", ")})`;
 
-  return { results, conclusion, crownedDefault }
+  return { results, conclusion, crownedDefault };
 }

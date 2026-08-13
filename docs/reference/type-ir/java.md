@@ -11,15 +11,20 @@ vocabulary differs between variants.
 ## Jackson
 
 ```ts
-import { toJava } from "@rhi-zone/fractal-type-ir/java-jackson"
+import { toJava } from "@rhi-zone/fractal-type-ir/java-jackson";
 
-toJava(t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  isActive: t(types.boolean),
-  tags: t(types.array(t(types.string))),
-})), "User")
+toJava(
+  t(
+    types.object({
+      id: t(types.integer),
+      name: t(types.string),
+      email: t(types.string),
+      isActive: t(types.boolean),
+      tags: t(types.array(t(types.string))),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```java
@@ -36,7 +41,7 @@ public record User(int id, String name, String email, @JsonProperty("isActive") 
 ### Gson
 
 ```ts
-import { toGson } from "@rhi-zone/fractal-type-ir/java-gson"
+import { toGson } from "@rhi-zone/fractal-type-ir/java-gson";
 ```
 
 `@SerializedName("wire-name")` in place of Jackson's `@JsonProperty`:
@@ -50,7 +55,7 @@ public record User(int id, String name, String email, @SerializedName("isActive"
 ### Moshi
 
 ```ts
-import { toMoshi } from "@rhi-zone/fractal-type-ir/java-moshi"
+import { toMoshi } from "@rhi-zone/fractal-type-ir/java-moshi";
 ```
 
 `@Json(name = "wire-name")` on the field, plus a class-level
@@ -67,7 +72,7 @@ public record User(int id, String name, String email, @Json(name = "isActive") b
 ### JSON-B
 
 ```ts
-import { toJsonb } from "@rhi-zone/fractal-type-ir/java-jsonb"
+import { toJsonb } from "@rhi-zone/fractal-type-ir/java-jsonb";
 ```
 
 `@JsonbProperty("wire-name")` (from `jakarta.json.bind.annotation`) in place

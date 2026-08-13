@@ -20,7 +20,7 @@ per-record results afterward," building N complete per-record trees. **That is n
 code does**, and the correction matters because it removes most of the motivation for the
 rewrite.
 
-`collectEvidence` → `buildEvidenceNode` (`from-json-corpus.ts:253`) takes *all* values at a
+`collectEvidence` → `buildEvidenceNode` (`from-json-corpus.ts:253`) takes _all_ values at a
 position at once and folds them into a single `EvidenceNode` — counts, distinct-value sets,
 per-field sub-evidence, per-index and index-agnostic array buckets. There is one accumulator
 per tree position, not one tree per record. The architecture is already:
@@ -55,12 +55,12 @@ cannot work that way:
 - **Entity identity** is inherently cross-record — §6.11 of `inference-theory.md` shows it
   needs comparison against all other candidate entities, and is undecidable from values
   alone regardless.
-- **Tuple-vs-array** is the one case that *is* decidable per-position without cross-record
+- **Tuple-vs-array** is the one case that _is_ decidable per-position without cross-record
   evidence, and even it depends on the length distribution across records.
 
 The existing design handles this correctly and should be preserved: phase 1 collects
 evidence **under every candidate grouping simultaneously** — `array.element` (index-agnostic)
-*and* `array.perIndex` (index-sensitive), plus `object.keySets` and `array.elementObjects`
+_and_ `array.perIndex` (index-sensitive), plus `object.keySets` and `array.elementObjects`
 for clustering — and defers the choice to phase 2. Gathering under all groupings and
 selecting later is strictly more capable than committing during the walk.
 
@@ -70,35 +70,38 @@ So grouping is a **pluggable decision that consumes accumulated evidence**, not 
 
 ```ts
 export interface StageContext {
-  readonly corpusSize: number
-  readonly strategy: ResolvedStrategy
+  readonly corpusSize: number;
+  readonly strategy: ResolvedStrategy;
 }
 
 /** A stage that decides which occurrences constitute one position. */
 export interface Grouping {
-  readonly name: string
-  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
+  readonly name: string;
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef;
 }
 
 /** A stage that decides what type an already-grouped position emits. */
 export interface Generalization {
-  readonly name: string
-  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef
+  readonly name: string;
+  apply(ref: TypeRef, node: EvidenceNode, ctx: StageContext): TypeRef;
 }
 
 /** One entry in the pipeline, tagged with which kind of judgment it makes. */
 export type Stage =
   | { readonly kind: "grouping"; readonly step: Grouping }
-  | { readonly kind: "generalization"; readonly step: Generalization }
+  | { readonly kind: "generalization"; readonly step: Generalization };
 
 /** Lift a per-position decision into a whole-tree stage, supplying the traversal. */
 export function perPosition(
-  fn: (ref: TypeRef, node: EvidenceNode,
-       ctx: StageContext & { path: readonly (string | number)[] }) => TypeRef,
-): (ref: TypeRef, node: EvidenceNode, ctx: StageContext) => TypeRef
+  fn: (
+    ref: TypeRef,
+    node: EvidenceNode,
+    ctx: StageContext & { path: readonly (string | number)[] },
+  ) => TypeRef,
+): (ref: TypeRef, node: EvidenceNode, ctx: StageContext) => TypeRef;
 
-export function defaultStages(resolved: ResolvedStrategy): Stage[]
-export function resolvedStrategy(s?: ResolveStrategy, cfg?: CorpusInferConfig): ResolvedStrategy
+export function defaultStages(resolved: ResolvedStrategy): Stage[];
+export function resolvedStrategy(s?: ResolveStrategy, cfg?: CorpusInferConfig): ResolvedStrategy;
 ```
 
 `EvidenceNode` gained one field, `singletons` (Good–Turing's n₁), computed in phase 1. That
@@ -124,7 +127,7 @@ resolve(node, ctx):
 
 Phase 1 is untouched. Phase 2 becomes a thin driver over two named interfaces instead of a
 17-field strategy bag. The existing `ResolveStrategy` becomes the constructor argument of
-the *default* implementations, so every current caller keeps working unchanged.
+the _default_ implementations, so every current caller keeps working unchanged.
 
 ## 5. Defaults — settled vs. provisional
 
@@ -133,17 +136,17 @@ all candidate groupings; deferring the grouping choice; `inferValueShape`'s leaf
 
 **Default grouping — reasonable, some parts provisional:**
 
-| decision | default | status |
-|---|---|---|
-| array grouping | `element` unless lengths are near-constant and per-index types disagree | provisional — `inference-theory.md` §13 gives the criterion, §17.1 shows it did not replicate on this repo's corpora |
-| object partition | `defaultDetectDU` → `defaultDetectDict` → `defaultDetectCfd` → `defaultSplitObjects`, each a swappable `Group` | settled as behaviour; `clusteringMethod` remains an open call (no method dominates) |
-| entity key | `undefined` — every occurrence is its own observation | **provisional and known-wrong for API payloads.** §17.2 measured 50 PRs embedding one repo. §6.11 shows the correct key is not derivable; it must be declared. |
+| decision         | default                                                                                                        | status                                                                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| array grouping   | `element` unless lengths are near-constant and per-index types disagree                                        | provisional — `inference-theory.md` §13 gives the criterion, §17.1 shows it did not replicate on this repo's corpora                                           |
+| object partition | `defaultDetectDU` → `defaultDetectDict` → `defaultDetectCfd` → `defaultSplitObjects`, each a swappable `Group` | settled as behaviour; `clusteringMethod` remains an open call (no method dominates)                                                                            |
+| entity key       | `undefined` — every occurrence is its own observation                                                          | **provisional and known-wrong for API payloads.** §17.2 measured 50 PRs embedding one repo. §6.11 shows the correct key is not derivable; it must be declared. |
 
 **Default generalization — SHIPPED, and it is the session's finding rather than the old
 heuristic.** The decision **returns a type**: `ResolveStrategy.generalize: Generalize`, where
 
 ```ts
-type Generalize = (ctx: PositionContext) => TypeRef | undefined
+type Generalize = (ctx: PositionContext) => TypeRef | undefined;
 ```
 
 `undefined` means "no opinion" — the merged type stands and traversal continues into
@@ -158,13 +161,13 @@ type is strictly more general, and lets a caller construct what the built-ins ne
 ```ts
 // a branded scalar rather than an enum
 const branded: Generalize = (c) =>
-  c.path.at(-1) === "status" ? t(types.string, { format: "x-status-code" }) : undefined
+  c.path.at(-1) === "status" ? t(types.string, { format: "x-status-code" }) : undefined;
 // a union structure with no built-in equivalent
 const nullable: Generalize = (c) =>
-  t(types.union([t(types.enum(nonNullMembers(c))), t(types.null)]))
+  t(types.union([t(types.enum(nonNullMembers(c))), t(types.null)]));
 // commit a whole subtree, skipping its children
 const collapse: Generalize = (c) =>
-  c.path.join(".") === "user" ? t(types.map(t(types.string), t(types.unknown))) : undefined
+  c.path.join(".") === "user" ? t(types.map(t(types.string), t(types.unknown))) : undefined;
 ```
 
 `defaultGeneralize` is the built-in, and `defaultEnumPredicate` remains exported so a caller
@@ -189,7 +192,7 @@ The conjunction is the point. Neither term is sound alone:
   gracefully instead of inverting.
 
 **This is the concrete answer to whether the unresolved entity-key question blocks the
-coverage default: it blocks the coverage term *alone*, not the conjunction.** Verified on the
+coverage default: it blocks the coverage term _alone_, not the conjunction.** Verified on the
 duplication construction — 1000 all-distinct values copied `r` times, which every rule should
 reject:
 
@@ -222,11 +225,11 @@ already shown wrong was never the goal. Four test groups changed:
 - **`K <= range/2` integer clustering is gone.** It rejected `1,2,3,4` each seen 2–3 times,
   which is a bounded set by any reading, and had no empirical support.
 - **CFD-discriminant tests now set their precondition explicitly.** They exist to exercise the
-  fallback for discriminants the enum pass *declines* to type; they previously reached that
+  fallback for discriminants the enum pass _declines_ to type; they previously reached that
   state by accident, via the string/integer asymmetry above. Under the new default the same
   corpus types `tag` as an enum and `tryDetectDU` recovers a 4-variant union with a real
   discriminator — strictly better, and now pinned by its own test.
-- **A superseded eval finding.** The harness had recorded that zipfian skew *improved*
+- **A superseded eval finding.** The harness had recorded that zipfian skew _improved_
   enum-detection F1 at small N, and a second test recorded that this "gain" was an illusion
   hiding silently-dropped rare members. The coverage rule closes that gap at the source: rare
   members are exactly the singletons the Good–Turing term measures, so skew now reduces
@@ -252,10 +255,10 @@ Same treatment as `Generalize`, applied to the four grouping passes:
 
 ```ts
 interface GroupingContext extends PositionContext {
-  readonly samples: readonly Record<string, unknown>[]   // raw objects here
-  readonly corpusSize: number
+  readonly samples: readonly Record<string, unknown>[]; // raw objects here
+  readonly corpusSize: number;
 }
-type Group = (ctx: GroupingContext) => TypeRef | undefined
+type Group = (ctx: GroupingContext) => TypeRef | undefined;
 ```
 
 Four named instantiation points — `duGrouping`, `dictGrouping`, `cfdGrouping`,
@@ -290,8 +293,8 @@ the design intended. `PositionEvidence` was dropped — `EvidenceNode` plus `sin
 carries everything it listed, and a parallel type would have been redundant.
 
 **The pipeline does not split into two clean phases.** `walkAndDetectDU` only fires on
-positions whose discriminant is already typed as enum/literal, so the enum *generalization*
-must precede the DU *grouping*. Grouping by a discriminant requires knowing the discriminant
+positions whose discriminant is already typed as enum/literal, so the enum _generalization_
+must precede the DU _grouping_. Grouping by a discriminant requires knowing the discriminant
 is low-arity, which is itself a generalization decision. The pipeline is therefore an ordered
 list of tagged stages rather than a grouping phase followed by a generalization phase, and a
 test pins that reversing the order changes the result.

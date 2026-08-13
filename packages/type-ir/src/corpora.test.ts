@@ -20,58 +20,58 @@
 // offline, deterministic, and immune to upstream drift — but they mirror
 // the real schemas' structure closely enough to exercise the same
 // ingester/projector paths.
-import { describe, expect, test } from "bun:test"
-import type { TypeRef } from "./index.ts"
-import { fromJsonSchema, type JsonSchema } from "./from-json-schema.ts"
-import { fromOpenApi30, type OpenApiSchema } from "./from-openapi.ts"
-import { fromProtoText } from "./from-protobuf.ts"
+import { describe, expect, test } from "bun:test";
+import type { TypeRef } from "./index.ts";
+import { fromJsonSchema, type JsonSchema } from "./from-json-schema.ts";
+import { fromOpenApi30, type OpenApiSchema } from "./from-openapi.ts";
+import { fromProtoText } from "./from-protobuf.ts";
 
-import { toZodDeclaration } from "./typescript-zod.ts"
-import { toPydantic } from "./python-pydantic.ts"
-import { toPython } from "./python-dataclass.ts"
-import { toAttrs } from "./python-attrs.ts"
-import { toGo } from "./go-encoding-json.ts"
-import { toRust } from "./rust-serde.ts"
-import { toJavaDeclaration } from "./java-jackson.ts"
-import { toGsonDeclaration } from "./java-gson.ts"
-import { toMoshi } from "./java-moshi.ts"
-import { toCSharp } from "./csharp-systemtextjson.ts"
-import { toCSharpNewtonsoft } from "./csharp-newtonsoft.ts"
-import { toSwift } from "./swift-codable.ts"
-import { toKotlin } from "./kotlin-kotlinx.ts"
-import { toDart } from "./dart-json-serializable.ts"
-import { toFreezed } from "./dart-freezed.ts"
-import { toObjC } from "./objc-foundation.ts"
-import { toCpp } from "./cpp-nlohmann.ts"
-import { toCrystal } from "./crystal-json-serializable.ts"
-import { toHaskell } from "./haskell-aeson.ts"
-import { toElm } from "./elm-json.ts"
-import { toFlow } from "./flow-native.ts"
-import { toPhp } from "./php-native.ts"
-import { toRuby } from "./ruby-sorbet.ts"
-import { toTypeDeclaration } from "./typescript-native.ts"
-import { toArkTypeDeclaration } from "./typescript-arktype.ts"
-import { toEffectSchemaDeclaration } from "./typescript-effect-schema.ts"
-import { toIoTsDeclaration } from "./typescript-io-ts.ts"
-import { toRuntypesDeclaration } from "./typescript-runtypes.ts"
-import { toSuperstructDeclaration } from "./typescript-superstruct.ts"
-import { toTypeBoxDeclaration } from "./typescript-typebox.ts"
-import { toValibotDeclaration } from "./typescript-valibot.ts"
-import { toYupDeclaration } from "./typescript-yup.ts"
-import { toJsonSchema } from "./json-schema.ts"
-import { toJsonSchema04 } from "./json-schema-04.ts"
-import { toJsonSchema07 } from "./json-schema-07.ts"
-import { toOpenApi30 } from "./openapi30.ts"
-import { toOpenApi20 } from "./openapi20.ts"
-import { toGraphQLType } from "./graphql.ts"
-import { toProtoMessage, renderProto } from "./protobuf.ts"
-import { toCapnpStruct, renderCapnp } from "./capnp.ts"
-import { toFlatBuffersTable, toFlatBuffersDeclarations } from "./flatbuffers.ts"
-import { toCreateTable } from "./sql.ts"
-import { toMssqlCreateTableFromRef } from "./sql-mssql.ts"
-import { toJtd } from "./jtd.ts"
-import { toStandardSchema } from "./standard-schema.ts"
-import { compileValidator } from "./compile.ts"
+import { toZodDeclaration } from "./typescript-zod.ts";
+import { toPydantic } from "./python-pydantic.ts";
+import { toPython } from "./python-dataclass.ts";
+import { toAttrs } from "./python-attrs.ts";
+import { toGo } from "./go-encoding-json.ts";
+import { toRust } from "./rust-serde.ts";
+import { toJavaDeclaration } from "./java-jackson.ts";
+import { toGsonDeclaration } from "./java-gson.ts";
+import { toMoshi } from "./java-moshi.ts";
+import { toCSharp } from "./csharp-systemtextjson.ts";
+import { toCSharpNewtonsoft } from "./csharp-newtonsoft.ts";
+import { toSwift } from "./swift-codable.ts";
+import { toKotlin } from "./kotlin-kotlinx.ts";
+import { toDart } from "./dart-json-serializable.ts";
+import { toFreezed } from "./dart-freezed.ts";
+import { toObjC } from "./objc-foundation.ts";
+import { toCpp } from "./cpp-nlohmann.ts";
+import { toCrystal } from "./crystal-json-serializable.ts";
+import { toHaskell } from "./haskell-aeson.ts";
+import { toElm } from "./elm-json.ts";
+import { toFlow } from "./flow-native.ts";
+import { toPhp } from "./php-native.ts";
+import { toRuby } from "./ruby-sorbet.ts";
+import { toTypeDeclaration } from "./typescript-native.ts";
+import { toArkTypeDeclaration } from "./typescript-arktype.ts";
+import { toEffectSchemaDeclaration } from "./typescript-effect-schema.ts";
+import { toIoTsDeclaration } from "./typescript-io-ts.ts";
+import { toRuntypesDeclaration } from "./typescript-runtypes.ts";
+import { toSuperstructDeclaration } from "./typescript-superstruct.ts";
+import { toTypeBoxDeclaration } from "./typescript-typebox.ts";
+import { toValibotDeclaration } from "./typescript-valibot.ts";
+import { toYupDeclaration } from "./typescript-yup.ts";
+import { toJsonSchema } from "./json-schema.ts";
+import { toJsonSchema04 } from "./json-schema-04.ts";
+import { toJsonSchema07 } from "./json-schema-07.ts";
+import { toOpenApi30 } from "./openapi30.ts";
+import { toOpenApi20 } from "./openapi20.ts";
+import { toGraphQLType } from "./graphql.ts";
+import { toProtoMessage, renderProto } from "./protobuf.ts";
+import { toCapnpStruct, renderCapnp } from "./capnp.ts";
+import { toFlatBuffersTable, toFlatBuffersDeclarations } from "./flatbuffers.ts";
+import { toCreateTable } from "./sql.ts";
+import { toMssqlCreateTableFromRef } from "./sql-mssql.ts";
+import { toJtd } from "./jtd.ts";
+import { toStandardSchema } from "./standard-schema.ts";
+import { compileValidator } from "./compile.ts";
 
 // ============================================================================
 // Projector matrix — same normalization + membership as cross-projector.test.ts
@@ -124,9 +124,9 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   {
     name: "standard-schema",
     fn: (ref) => {
-      const schema = toStandardSchema(ref)
-      if (schema["~standard"].version !== 1) throw new Error("unexpected standard-schema version")
-      return `standard-schema:${schema["~standard"].vendor}`
+      const schema = toStandardSchema(ref);
+      if (schema["~standard"].version !== 1) throw new Error("unexpected standard-schema version");
+      return `standard-schema:${schema["~standard"].vendor}`;
     },
   },
   { name: "compile (AOT validator)", fn: (ref, name) => compileValidator(ref) + name },
@@ -141,7 +141,7 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
   },
   { name: "sql", fn: (ref, name) => toCreateTable(name, ref) },
   { name: "sql-mssql", fn: (ref, name) => toMssqlCreateTableFromRef(name, ref) },
-]
+];
 
 // Struct-only projectors that need an `object`/`tuple` root and have no
 // union/enum/map synthesis path today. Populated per-corpus below as actual
@@ -156,14 +156,14 @@ function projectAll(
 ): void {
   describe(describeName, () => {
     for (const { name, fn } of projectors) {
-      const runner = todoProjectors.has(name) ? test.todo : test
+      const runner = todoProjectors.has(name) ? test.todo : test;
       runner(`-> ${name}`, () => {
-        const result = fn(ref, rootName)
-        expect(typeof result).toBe("string")
-        expect(result.length).toBeGreaterThan(0)
-      })
+        const result = fn(ref, rootName);
+        expect(typeof result).toBe("string");
+        expect(result.length).toBeGreaterThan(0);
+      });
     }
-  })
+  });
 }
 
 // ============================================================================
@@ -196,18 +196,29 @@ const packageJsonSchema: JsonSchema = {
     },
     contributors: {
       type: "array",
-      items: { anyOf: [{ type: "string" }, { type: "object", properties: { name: { type: "string" } }, required: ["name"] }] },
+      items: {
+        anyOf: [
+          { type: "string" },
+          { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
+        ],
+      },
     },
     files: { type: "array", items: { type: "string" } },
     main: { type: "string" },
-    bin: { anyOf: [{ type: "string" }, { type: "object", additionalProperties: { type: "string" } }] },
+    bin: {
+      anyOf: [{ type: "string" }, { type: "object", additionalProperties: { type: "string" } }],
+    },
     type: { enum: ["commonjs", "module"] },
     repository: {
       anyOf: [
         { type: "string" },
         {
           type: "object",
-          properties: { type: { type: "string" }, url: { type: "string" }, directory: { type: "string" } },
+          properties: {
+            type: { type: "string" },
+            url: { type: "string" },
+            directory: { type: "string" },
+          },
           required: ["type", "url"],
         },
       ],
@@ -222,10 +233,15 @@ const packageJsonSchema: JsonSchema = {
     cpu: { type: "array", items: { type: "string" } },
     private: { type: "boolean" },
     publishConfig: { type: "object", additionalProperties: { type: "string" } },
-    workspaces: { anyOf: [{ type: "array", items: { type: "string" } }, { type: "object", properties: { packages: { type: "array", items: { type: "string" } } } }] },
+    workspaces: {
+      anyOf: [
+        { type: "array", items: { type: "string" } },
+        { type: "object", properties: { packages: { type: "array", items: { type: "string" } } } },
+      ],
+    },
   },
   required: ["name", "version"],
-}
+};
 
 const tsconfigSchema: JsonSchema = {
   type: "object",
@@ -256,7 +272,10 @@ const tsconfigSchema: JsonSchema = {
         outDir: { type: "string" },
         rootDir: { type: "string" },
         baseUrl: { type: "string" },
-        paths: { type: "object", additionalProperties: { type: "array", items: { type: "string" } } },
+        paths: {
+          type: "object",
+          additionalProperties: { type: "array", items: { type: "string" } },
+        },
         types: { type: "array", items: { type: "string" } },
         jsx: { enum: ["preserve", "react", "react-jsx", "react-native"] },
         incremental: { type: "boolean" },
@@ -264,28 +283,34 @@ const tsconfigSchema: JsonSchema = {
       },
     },
   },
-}
+};
 
 // GeoJSON (RFC 7946) — a discriminated union over `type`, several geometry
 // kinds plus Feature/FeatureCollection wrapping the geometry union
 // recursively (arrays-of-arrays-of-numbers for coordinates at every depth).
-const position: JsonSchema = { type: "array", items: { type: "number" }, minItems: 2 }
+const position: JsonSchema = { type: "array", items: { type: "number" }, minItems: 2 };
 const point: JsonSchema = {
   type: "object",
   properties: { type: { const: "Point" }, coordinates: position },
   required: ["type", "coordinates"],
-}
+};
 const lineString: JsonSchema = {
   type: "object",
   properties: { type: { const: "LineString" }, coordinates: { type: "array", items: position } },
   required: ["type", "coordinates"],
-}
+};
 const polygon: JsonSchema = {
   type: "object",
-  properties: { type: { const: "Polygon" }, coordinates: { type: "array", items: { type: "array", items: position } } },
+  properties: {
+    type: { const: "Polygon" },
+    coordinates: { type: "array", items: { type: "array", items: position } },
+  },
   required: ["type", "coordinates"],
-}
-const geometry: JsonSchema = { oneOf: [point, lineString, polygon], discriminator: { propertyName: "type" } }
+};
+const geometry: JsonSchema = {
+  oneOf: [point, lineString, polygon],
+  discriminator: { propertyName: "type" },
+};
 const feature: JsonSchema = {
   type: "object",
   properties: {
@@ -295,39 +320,39 @@ const feature: JsonSchema = {
     id: { anyOf: [{ type: "string" }, { type: "number" }] },
   },
   required: ["type", "geometry", "properties"],
-}
+};
 const featureCollection: JsonSchema = {
   type: "object",
   properties: { type: { const: "FeatureCollection" }, features: { type: "array", items: feature } },
   required: ["type", "features"],
-}
+};
 const geoJsonSchema: JsonSchema = {
   oneOf: [point, lineString, polygon, feature, featureCollection],
   discriminator: { propertyName: "type" },
-}
+};
 
 describe("corpus: JSON Schema (SchemaStore-shaped)", () => {
-  const packageJsonRef = fromJsonSchema(packageJsonSchema)
-  const tsconfigRef = fromJsonSchema(tsconfigSchema)
-  const geoJsonRef = fromJsonSchema(geoJsonSchema)
+  const packageJsonRef = fromJsonSchema(packageJsonSchema);
+  const tsconfigRef = fromJsonSchema(tsconfigSchema);
+  const geoJsonRef = fromJsonSchema(geoJsonSchema);
 
   test("package.json schema ingests to an object TypeRef", () => {
-    expect(packageJsonRef.shape.kind).toBe("object")
-  })
+    expect(packageJsonRef.shape.kind).toBe("object");
+  });
   test("tsconfig.json schema ingests to an object TypeRef with a nested compilerOptions object", () => {
-    expect(tsconfigRef.shape.kind).toBe("object")
-    const fields = (tsconfigRef.shape as { fields: Record<string, TypeRef> }).fields
-    expect(fields.compilerOptions?.shape.kind).toBe("object")
-  })
+    expect(tsconfigRef.shape.kind).toBe("object");
+    const fields = (tsconfigRef.shape as { fields: Record<string, TypeRef> }).fields;
+    expect(fields.compilerOptions?.shape.kind).toBe("object");
+  });
   test("GeoJSON schema ingests to a discriminated union TypeRef", () => {
-    expect(geoJsonRef.shape.kind).toBe("union")
-    expect(geoJsonRef.meta.discriminator).toBe("type")
-  })
+    expect(geoJsonRef.shape.kind).toBe("union");
+    expect(geoJsonRef.meta.discriminator).toBe("type");
+  });
 
-  projectAll("package.json -> projectors", packageJsonRef, "PackageJson")
-  projectAll("tsconfig.json -> projectors", tsconfigRef, "TsConfig")
-  projectAll("GeoJSON (discriminated union) -> projectors", geoJsonRef, "GeoJson")
-})
+  projectAll("package.json -> projectors", packageJsonRef, "PackageJson");
+  projectAll("tsconfig.json -> projectors", tsconfigRef, "TsConfig");
+  projectAll("GeoJSON (discriminated union) -> projectors", geoJsonRef, "GeoJson");
+});
 
 // ============================================================================
 // Corpus B — OpenAPI 3.0 components.schemas, Petstore-shaped. fromOpenApi30
@@ -350,11 +375,14 @@ const petSchema: OpenApiSchema = {
     },
     tags: {
       type: "array",
-      items: { type: "object", properties: { id: { type: "integer", format: "int64" }, name: { type: "string" } } },
+      items: {
+        type: "object",
+        properties: { id: { type: "integer", format: "int64" }, name: { type: "string" } },
+      },
     },
   },
   required: ["id", "name"],
-}
+};
 
 const newPetSchema: OpenApiSchema = {
   type: "object",
@@ -363,7 +391,7 @@ const newPetSchema: OpenApiSchema = {
     tag: { type: "string" },
   },
   required: ["name"],
-}
+};
 
 const apiErrorSchema: OpenApiSchema = {
   type: "object",
@@ -373,12 +401,12 @@ const apiErrorSchema: OpenApiSchema = {
     details: { type: "array", items: { type: "string" }, nullable: true },
   },
   required: ["code", "message"],
-}
+};
 
 const petOrErrorSchema: OpenApiSchema = {
   oneOf: [petSchema, apiErrorSchema],
   discriminator: { propertyName: "status" },
-}
+};
 
 const petsPageSchema: OpenApiSchema = {
   type: "object",
@@ -388,27 +416,27 @@ const petsPageSchema: OpenApiSchema = {
     totalCount: { type: "integer", format: "int32" },
   },
   required: ["items"],
-}
+};
 
 describe("corpus: OpenAPI 3.0 (Petstore-shaped components.schemas)", () => {
-  const petRef = fromOpenApi30(petSchema)
-  const newPetRef = fromOpenApi30(newPetSchema)
-  const apiErrorRef = fromOpenApi30(apiErrorSchema)
-  const petOrErrorRef = fromOpenApi30(petOrErrorSchema)
-  const petsPageRef = fromOpenApi30(petsPageSchema)
+  const petRef = fromOpenApi30(petSchema);
+  const newPetRef = fromOpenApi30(newPetSchema);
+  const apiErrorRef = fromOpenApi30(apiErrorSchema);
+  const petOrErrorRef = fromOpenApi30(petOrErrorSchema);
+  const petsPageRef = fromOpenApi30(petsPageSchema);
 
   test("Pet ingests to an object TypeRef with a nested enum field", () => {
-    expect(petRef.shape.kind).toBe("object")
-    const fields = (petRef.shape as { fields: Record<string, TypeRef> }).fields
-    expect(fields.status?.shape.kind).toBe("enum")
-  })
+    expect(petRef.shape.kind).toBe("object");
+    const fields = (petRef.shape as { fields: Record<string, TypeRef> }).fields;
+    expect(fields.status?.shape.kind).toBe("enum");
+  });
 
-  projectAll("Pet -> projectors", petRef, "Pet")
-  projectAll("NewPet -> projectors", newPetRef, "NewPet")
-  projectAll("ApiError -> projectors", apiErrorRef, "ApiError")
-  projectAll("PetOrError (oneOf + discriminator) -> projectors", petOrErrorRef, "PetOrError")
-  projectAll("PetsPage (nested array-of-objects) -> projectors", petsPageRef, "PetsPage")
-})
+  projectAll("Pet -> projectors", petRef, "Pet");
+  projectAll("NewPet -> projectors", newPetRef, "NewPet");
+  projectAll("ApiError -> projectors", apiErrorRef, "ApiError");
+  projectAll("PetOrError (oneOf + discriminator) -> projectors", petOrErrorRef, "PetOrError");
+  projectAll("PetsPage (nested array-of-objects) -> projectors", petsPageRef, "PetsPage");
+});
 
 // ============================================================================
 // Corpus C — Protocol Buffers, googleapis-styled: nested messages, an enum,
@@ -461,36 +489,36 @@ enum Status {
   STATUS_DELIVERED = 3;
   STATUS_CANCELLED = 4;
 }
-`
+`;
 
 describe("corpus: Protocol Buffers (googleapis-styled service schema)", () => {
-  const doc = fromProtoText(orderProto)
+  const doc = fromProtoText(orderProto);
 
   test("every top-level and nested message/enum lands in defs", () => {
     expect(Object.keys(doc.defs).sort()).toEqual(
       ["CreditCard", "Order", "Order.Address", "OrderItem", "Status"].sort(),
-    )
-  })
+    );
+  });
 
   test("Order.createdAt (well-known Timestamp) ingests as datetime", () => {
-    const fields = (doc.defs.Order!.shape as { fields: Record<string, TypeRef> }).fields
-    expect(fields.createdAt?.shape.kind).toBe("datetime")
-  })
+    const fields = (doc.defs.Order!.shape as { fields: Record<string, TypeRef> }).fields;
+    expect(fields.createdAt?.shape.kind).toBe("datetime");
+  });
 
   test("Order.metadata (map<string,string>) ingests as a map TypeRef", () => {
-    const fields = (doc.defs.Order!.shape as { fields: Record<string, TypeRef> }).fields
-    expect(fields.metadata?.shape.kind).toBe("map")
-  })
+    const fields = (doc.defs.Order!.shape as { fields: Record<string, TypeRef> }).fields;
+    expect(fields.metadata?.shape.kind).toBe("map");
+  });
 
   test("Order.payment (oneof) ingests as a union TypeRef", () => {
-    const fields = (doc.defs.Order!.shape as { fields: Record<string, TypeRef> }).fields
-    expect(fields.payment?.shape.kind).toBe("union")
-  })
+    const fields = (doc.defs.Order!.shape as { fields: Record<string, TypeRef> }).fields;
+    expect(fields.payment?.shape.kind).toBe("union");
+  });
 
   // Every message def (object-kind) goes through the full projector matrix.
   for (const [name, ref] of Object.entries(doc.defs)) {
     if (ref.shape.kind === "object") {
-      projectAll(`${name} (message) -> projectors`, ref, name)
+      projectAll(`${name} (message) -> projectors`, ref, name);
     }
   }
 
@@ -502,15 +530,15 @@ describe("corpus: Protocol Buffers (googleapis-styled service schema)", () => {
   // enum root are run, to confirm the ingester's enum output composes with
   // them same as a hand-written enum fixture would.
   describe("Status (enum) -> projectors accepting a bare enum root", () => {
-    const enumCompatible = projectors.filter((p) =>
-      !["sql", "sql-mssql", "capnp", "flatbuffers", "protobuf"].includes(p.name),
-    )
+    const enumCompatible = projectors.filter(
+      (p) => !["sql", "sql-mssql", "capnp", "flatbuffers", "protobuf"].includes(p.name),
+    );
     for (const { name, fn } of enumCompatible) {
       test(`-> ${name}`, () => {
-        const result = fn(doc.defs.Status!, "Status")
-        expect(typeof result).toBe("string")
-        expect(result.length).toBeGreaterThan(0)
-      })
+        const result = fn(doc.defs.Status!, "Status");
+        expect(typeof result).toBe("string");
+        expect(result.length).toBeGreaterThan(0);
+      });
     }
-  })
-})
+  });
+});

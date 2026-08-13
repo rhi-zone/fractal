@@ -115,39 +115,41 @@
 //
 // ============================================================================
 
-import * as crypto from "node:crypto"
-import * as fs from "node:fs"
-import { createRequire } from "node:module"
-import * as path from "node:path"
-import ts from "typescript"
+import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import { createRequire } from "node:module";
+import * as path from "node:path";
+import ts from "typescript";
 
-const require = createRequire(import.meta.url)
+const require = createRequire(import.meta.url);
 
 /** sha256 of a string, hex-encoded — the one hash primitive this module uses
  * throughout (entry/dependency file content, output content). */
 function sha256(content: string): string {
-  return crypto.createHash("sha256").update(content).digest("hex")
+  return crypto.createHash("sha256").update(content).digest("hex");
 }
 
 /** Hash a file's current on-disk content, or `undefined` if it can't be read
  * (removed, permissions, …) — treated as "definitely stale" by every caller. */
 function hashFile(filePath: string): string | undefined {
   try {
-    return sha256(fs.readFileSync(filePath, "utf8"))
+    return sha256(fs.readFileSync(filePath, "utf8"));
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
 /** `{ size, mtimeMs }` for `filePath`, or `undefined` if it can't be stat'd
  * (removed, permissions, …) — the cheap signal `checkCache`'s fast path
  * compares against the recorded value before ever reading a file's content. */
-function statFile(filePath: string): { readonly size: number; readonly mtimeMs: number } | undefined {
+function statFile(
+  filePath: string,
+): { readonly size: number; readonly mtimeMs: number } | undefined {
   try {
-    const stat = fs.statSync(filePath)
-    return { size: stat.size, mtimeMs: stat.mtimeMs }
+    const stat = fs.statSync(filePath);
+    return { size: stat.size, mtimeMs: stat.mtimeMs };
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
@@ -166,25 +168,25 @@ function statFile(filePath: string): { readonly size: number; readonly mtimeMs: 
  */
 function resolvePackageVersion(pkgName: string): string {
   try {
-    const entry = require.resolve(pkgName)
-    let dir = path.dirname(entry)
+    const entry = require.resolve(pkgName);
+    let dir = path.dirname(entry);
     for (;;) {
-      const pkgJsonPath = path.join(dir, "package.json")
+      const pkgJsonPath = path.join(dir, "package.json");
       if (fs.existsSync(pkgJsonPath)) {
         const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
-          name?: string
-          version?: string
-        }
-        if (pkg.name === pkgName) return pkg.version ?? "0.0.0"
+          name?: string;
+          version?: string;
+        };
+        if (pkg.name === pkgName) return pkg.version ?? "0.0.0";
       }
-      const parent = path.dirname(dir)
-      if (parent === dir) break
-      dir = parent
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
     }
   } catch {
     // fall through
   }
-  return "unknown"
+  return "unknown";
 }
 
 /** True for one of TypeScript's own bundled ambient lib files
@@ -198,7 +200,7 @@ function resolvePackageVersion(pkgName: string): string {
  * looser correctness bar: false negatives here just mean "track one file
  * that turns out not to matter", never wrong output). */
 export function isTsBuiltinLibFile(fileName: string): boolean {
-  return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName)
+  return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName);
 }
 
 // ============================================================================
@@ -216,14 +218,15 @@ export function isTsBuiltinLibFile(fileName: string): boolean {
  * grep-ability, or pooled in one `.cache/` directory kept out of the
  * generated-output tree entirely. */
 export type CacheLocationOptions = {
-  readonly cacheFile?: string
-  readonly cacheDir?: string
-}
+  readonly cacheFile?: string;
+  readonly cacheDir?: string;
+};
 
 function resolveCacheFile(outFile: string, opts?: CacheLocationOptions): string {
-  if (opts?.cacheFile !== undefined) return opts.cacheFile
-  if (opts?.cacheDir !== undefined) return path.join(opts.cacheDir, `${path.basename(outFile)}.cache.json`)
-  return `${outFile}.cache.json`
+  if (opts?.cacheFile !== undefined) return opts.cacheFile;
+  if (opts?.cacheDir !== undefined)
+    return path.join(opts.cacheDir, `${path.basename(outFile)}.cache.json`);
+  return `${outFile}.cache.json`;
 }
 
 // ============================================================================
@@ -235,10 +238,10 @@ function resolveCacheFile(outFile: string, opts?: CacheLocationOptions): string 
  * before ever reading the file's content — see the warm-check-cost doc block
  * above. */
 type TrackedFileEntry = {
-  readonly hash: string
-  readonly size: number
-  readonly mtimeMs: number
-}
+  readonly hash: string;
+  readonly size: number;
+  readonly mtimeMs: number;
+};
 
 // ============================================================================
 // v3 — IR-keyed cache (leaf-level Tier 2), see
@@ -252,15 +255,15 @@ type TrackedFileEntry = {
 // ============================================================================
 
 type CacheFileShape = {
-  readonly version: 3
-  readonly tsVersion: string
-  readonly typeIrVersion: string
-  readonly entryFile: string
+  readonly version: 3;
+  readonly tsVersion: string;
+  readonly typeIrVersion: string;
+  readonly entryFile: string;
   /** Absolute file path -> recorded state, as of the last successful build —
    * the entry file itself is included under its own path, so an edit to the
    * entry file is caught the same way as an edit to anything it transitively
    * imports. Tier 1 only — see the module doc above. */
-  readonly files: Record<string, TrackedFileEntry>
+  readonly files: Record<string, TrackedFileEntry>;
   /** Tier 2: one fingerprint per leaf (keyed however the caller's own
    * extraction keys leaves — a route path for the validator artifact, an MCP
    * tool name for the schema artifact), a sha256 of that leaf's canonicalized
@@ -268,12 +271,12 @@ type CacheFileShape = {
    * caller that never engages Tier 2 (e.g. cli.ts's single-shot build/watch/
    * check, which still writes valid v3 metadata but gets no leaf-level
    * carry-forward — Tier 1 alone still works unchanged for it). */
-  readonly leafFingerprints: Record<string, string>
+  readonly leafFingerprints: Record<string, string>;
   /** Rollup over `leafFingerprints`, sorted by leaf key (see
    * `computeBundleFingerprint`) — lets a Tier-2 caller decide "does this
    * bundle's output need rewriting at all" in one comparison instead of
    * walking every leaf. */
-  readonly bundleFingerprint: string
+  readonly bundleFingerprint: string;
   /** Fingerprint of the SET of shared/recursive def names in scope for this
    * entry's compile (structural sharing, `shouldShare` — see
    * from-typescript.ts's `finalizeSharedDefs`), sorted. A leaf's own
@@ -285,41 +288,41 @@ type CacheFileShape = {
    * for a caller with no sharing/defs concept (the schema artifact, which has
    * no `ref`/`defs` machinery at all).
    */
-  readonly defNamesFingerprint: string
+  readonly defNamesFingerprint: string;
   /** Per-leaf carried-forward artifact — opaque to this module (a caller-
    * defined JSON value: a compiled validator fragment + its type-import, or a
    * derived JSON-Schema value). Reused verbatim by a Tier-2 caller for any
    * leaf whose CURRENT fingerprint (+ `defNamesFingerprint`, for callers that
    * use it) still matches what's recorded here — never interpreted or
    * validated by cache.ts itself, only stored/returned. */
-  readonly leafArtifacts: Record<string, unknown>
+  readonly leafArtifacts: Record<string, unknown>;
   /** sha256 of the exact bytes written to `outFile` on the last successful
    * build — lets `checkCache` also catch the case where nothing in the
    * INPUT closure changed but `outFile` itself was hand-edited (or clobbered
    * by something else) after the fact; a cache "hit" is a claim about the
    * output too, not just the inputs. */
-  readonly outputHash: string
-}
+  readonly outputHash: string;
+};
 
 /** `CacheFileShape`, exported read-only for Tier-2 callers that need the
  * carry-forward fields (`leafFingerprints`/`leafArtifacts`/
  * `defNamesFingerprint`) — see `readCarryForwardState`. */
-export type CacheFileShapeV3 = CacheFileShape
+export type CacheFileShapeV3 = CacheFileShape;
 
 export type CacheCheckResult =
   | { readonly hit: true }
-  | { readonly hit: false; readonly reason: string }
+  | { readonly hit: false; readonly reason: string };
 
 /** Parse `cacheFile`'s JSON, or `undefined` if missing/unreadable —
  * shared by `checkCache` (Tier 1) and `readCarryForwardState` (Tier 2), so
  * the two never drift on how a cache file is located/parsed. */
 function readMeta(outFile: string, opts?: CacheLocationOptions): CacheFileShape | undefined {
-  const cacheFile = resolveCacheFile(outFile, opts)
-  if (!fs.existsSync(cacheFile)) return undefined
+  const cacheFile = resolveCacheFile(outFile, opts);
+  if (!fs.existsSync(cacheFile)) return undefined;
   try {
-    return JSON.parse(fs.readFileSync(cacheFile, "utf8")) as CacheFileShape
+    return JSON.parse(fs.readFileSync(cacheFile, "utf8")) as CacheFileShape;
   } catch {
-    return undefined
+    return undefined;
   }
 }
 
@@ -343,7 +346,7 @@ function toolchainMatches(meta: CacheFileShape, entryFile: string): boolean {
     meta.entryFile === path.resolve(entryFile) &&
     meta.tsVersion === ts.version &&
     meta.typeIrVersion === resolvePackageVersion("@rhi-zone/fractal-type-ir")
-  )
+  );
 }
 
 /**
@@ -361,22 +364,33 @@ function toolchainMatches(meta: CacheFileShape, entryFile: string): boolean {
  * `readCarryForwardState` separately (see that function's doc comment for
  * why it's decoupled from this check's hit/miss outcome).
  */
-export function checkCache(entryFile: string, outFile: string, opts?: CacheLocationOptions): CacheCheckResult {
-  if (!fs.existsSync(outFile)) return { hit: false, reason: "output missing" }
-  const meta = readMeta(outFile, opts)
+export function checkCache(
+  entryFile: string,
+  outFile: string,
+  opts?: CacheLocationOptions,
+): CacheCheckResult {
+  if (!fs.existsSync(outFile)) return { hit: false, reason: "output missing" };
+  const meta = readMeta(outFile, opts);
   if (meta === undefined) {
-    return { hit: false, reason: fs.existsSync(resolveCacheFile(outFile, opts)) ? "cache metadata unreadable" : "no cache metadata" }
+    return {
+      hit: false,
+      reason: fs.existsSync(resolveCacheFile(outFile, opts))
+        ? "cache metadata unreadable"
+        : "no cache metadata",
+    };
   }
-  if (meta.version !== 3) return { hit: false, reason: "cache format version changed" }
-  if (meta.entryFile !== path.resolve(entryFile)) return { hit: false, reason: "entry file path changed" }
-  if (meta.tsVersion !== ts.version) return { hit: false, reason: "typescript version changed" }
+  if (meta.version !== 3) return { hit: false, reason: "cache format version changed" };
+  if (meta.entryFile !== path.resolve(entryFile))
+    return { hit: false, reason: "entry file path changed" };
+  if (meta.tsVersion !== ts.version) return { hit: false, reason: "typescript version changed" };
 
-  const typeIrVersion = resolvePackageVersion("@rhi-zone/fractal-type-ir")
-  if (meta.typeIrVersion !== typeIrVersion) return { hit: false, reason: "fractal-type-ir version changed" }
+  const typeIrVersion = resolvePackageVersion("@rhi-zone/fractal-type-ir");
+  if (meta.typeIrVersion !== typeIrVersion)
+    return { hit: false, reason: "fractal-type-ir version changed" };
 
-  const outputHash = hashFile(outFile)
+  const outputHash = hashFile(outFile);
   if (outputHash !== meta.outputHash) {
-    return { hit: false, reason: "output file changed outside codegen" }
+    return { hit: false, reason: "output file changed outside codegen" };
   }
 
   // Tiered re-validation — see the warm-check-cost doc block above. Fast
@@ -387,15 +401,15 @@ export function checkCache(entryFile: string, outFile: string, opts?: CacheLocat
   // mtimes without changing bytes) still resolves to a hit rather than a
   // false miss.
   for (const [file, recorded] of Object.entries(meta.files)) {
-    const stat = statFile(file)
-    if (stat === undefined) return { hit: false, reason: `tracked file missing: ${file}` }
-    if (stat.size === recorded.size && stat.mtimeMs === recorded.mtimeMs) continue
-    const current = hashFile(file)
-    if (current === undefined) return { hit: false, reason: `tracked file missing: ${file}` }
-    if (current !== recorded.hash) return { hit: false, reason: `tracked file changed: ${file}` }
+    const stat = statFile(file);
+    if (stat === undefined) return { hit: false, reason: `tracked file missing: ${file}` };
+    if (stat.size === recorded.size && stat.mtimeMs === recorded.mtimeMs) continue;
+    const current = hashFile(file);
+    if (current === undefined) return { hit: false, reason: `tracked file missing: ${file}` };
+    if (current !== recorded.hash) return { hit: false, reason: `tracked file changed: ${file}` };
   }
 
-  return { hit: true }
+  return { hit: true };
 }
 
 /**
@@ -437,31 +451,33 @@ export function writeCacheMetadata(
   opts?: CacheLocationOptions,
   reachable?: ReadonlySet<string>,
   leafData?: {
-    readonly leafFingerprints: Readonly<Record<string, string>>
-    readonly leafArtifacts: Readonly<Record<string, unknown>>
-    readonly defNamesFingerprint?: string
+    readonly leafFingerprints: Readonly<Record<string, string>>;
+    readonly leafArtifacts: Readonly<Record<string, unknown>>;
+    readonly defNamesFingerprint?: string;
   },
 ): void {
-  const files: Record<string, TrackedFileEntry> = {}
+  const files: Record<string, TrackedFileEntry> = {};
   const sourceFiles =
     reachable === undefined
       ? program.getSourceFiles()
-      : program.getSourceFiles().filter((sourceFile) => reachable.has(path.resolve(sourceFile.fileName)))
+      : program
+          .getSourceFiles()
+          .filter((sourceFile) => reachable.has(path.resolve(sourceFile.fileName)));
   for (const sourceFile of sourceFiles) {
-    if (isTsBuiltinLibFile(sourceFile.fileName)) continue
+    if (isTsBuiltinLibFile(sourceFile.fileName)) continue;
     // `size`/`mtimeMs` come from a fresh `fs.statSync`, not the Program's
     // already-parsed text — the Program doesn't carry filesystem metadata,
     // only content. This stat is paid once per file, only on an actual
     // build (never on the warm `checkCache` path), so it doesn't reintroduce
     // the cost this cache exists to avoid.
-    const stat = statFile(sourceFile.fileName)
+    const stat = statFile(sourceFile.fileName);
     files[sourceFile.fileName] = {
       hash: sha256(sourceFile.getFullText()),
       size: stat?.size ?? -1,
       mtimeMs: stat?.mtimeMs ?? -1,
-    }
+    };
   }
-  const leafFingerprints = leafData?.leafFingerprints ?? {}
+  const leafFingerprints = leafData?.leafFingerprints ?? {};
   const meta: CacheFileShape = {
     version: 3,
     tsVersion: ts.version,
@@ -473,10 +489,10 @@ export function writeCacheMetadata(
     defNamesFingerprint: leafData?.defNamesFingerprint ?? "",
     leafArtifacts: leafData?.leafArtifacts ?? {},
     outputHash: sha256(writtenContent),
-  }
-  const cacheFile = resolveCacheFile(outFile, opts)
-  fs.mkdirSync(path.dirname(cacheFile), { recursive: true })
-  fs.writeFileSync(cacheFile, JSON.stringify(meta))
+  };
+  const cacheFile = resolveCacheFile(outFile, opts);
+  fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+  fs.writeFileSync(cacheFile, JSON.stringify(meta));
 }
 
 // ============================================================================
@@ -499,18 +515,18 @@ export function writeCacheMetadata(
  * `decl.getSourceFile().fileName` — always absolute, by construction of
  * `ts.Program`), so no separate "is this even a path" guard is needed. */
 function canonicalizeForFingerprint(value: unknown, rootDir: string): unknown {
-  if (Array.isArray(value)) return value.map((item) => canonicalizeForFingerprint(item, rootDir))
+  if (Array.isArray(value)) return value.map((item) => canonicalizeForFingerprint(item, rootDir));
   if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {}
+    const out: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
       out[key] =
         key === "declarationFile" && typeof v === "string"
           ? path.relative(rootDir, v).split(path.sep).join("/")
-          : canonicalizeForFingerprint(v, rootDir)
+          : canonicalizeForFingerprint(v, rootDir);
     }
-    return out
+    return out;
   }
-  return value
+  return value;
 }
 
 /**
@@ -533,24 +549,28 @@ function canonicalizeForFingerprint(value: unknown, rootDir: string): unknown {
  * encounter-order counter).
  */
 export function computeLeafFingerprint(entryFile: string, leaf: unknown): string {
-  const rootDir = path.dirname(path.resolve(entryFile))
-  return sha256(JSON.stringify(canonicalizeForFingerprint(leaf, rootDir)))
+  const rootDir = path.dirname(path.resolve(entryFile));
+  return sha256(JSON.stringify(canonicalizeForFingerprint(leaf, rootDir)));
 }
 
 /** Rollup over every leaf's fingerprint, sorted by leaf key (not encounter
  * order) so the rollup itself doesn't depend on extraction visiting leaves in
  * a stable order — see docs/design/ir-keyed-cache-spec.md §3. */
-export function computeBundleFingerprint(leafFingerprints: Readonly<Record<string, string>>): string {
-  const sorted = Object.keys(leafFingerprints).sort()
-  return sha256(sorted.map((key) => leafFingerprints[key]).join(""))
+export function computeBundleFingerprint(
+  leafFingerprints: Readonly<Record<string, string>>,
+): string {
+  const sorted = Object.keys(leafFingerprints).sort();
+  return sha256(sorted.map((key) => leafFingerprints[key]).join(""));
 }
 
 /** Fingerprint of a SET of def names (structural sharing's shared/recursive
  * names in scope for one entry's compile), sorted — see `CacheFileShape`'s
  * `defNamesFingerprint` doc comment for why this, not the defs' own bodies,
  * is what a leaf's carry-forward safety depends on. */
-export function computeDefNamesFingerprint(defNames: ReadonlySet<string> | readonly string[]): string {
-  return sha256([...defNames].sort().join(","))
+export function computeDefNamesFingerprint(
+  defNames: ReadonlySet<string> | readonly string[],
+): string {
+  return sha256([...defNames].sort().join(","));
 }
 
 /**
@@ -576,13 +596,13 @@ export function readCarryForwardState(
   outFile: string,
   opts?: CacheLocationOptions,
 ): Pick<CacheFileShape, "leafFingerprints" | "leafArtifacts" | "defNamesFingerprint"> | undefined {
-  const meta = readMeta(outFile, opts)
-  if (meta === undefined || !toolchainMatches(meta, entryFile)) return undefined
+  const meta = readMeta(outFile, opts);
+  if (meta === undefined || !toolchainMatches(meta, entryFile)) return undefined;
   return {
     leafFingerprints: meta.leafFingerprints,
     leafArtifacts: meta.leafArtifacts,
     defNamesFingerprint: meta.defNamesFingerprint,
-  }
+  };
 }
 
 // ============================================================================
@@ -591,7 +611,7 @@ export function readCarryForwardState(
 
 export type CachedBuildOutcome<T> =
   | { readonly status: "hit" }
-  | { readonly status: "built"; readonly result: T; readonly program: ts.Program }
+  | { readonly status: "built"; readonly result: T; readonly program: ts.Program };
 
 /**
  * Run `build(program)` only when the cache misses (or `options.force` is
@@ -625,18 +645,18 @@ export function withCache<T extends string>(
   outFile: string,
   build: (program: ts.Program) => T,
   options: {
-    readonly program?: ts.Program
-    readonly force?: boolean
-    readonly createProgram: (entryFile: string) => ts.Program
-    readonly reachable?: ReadonlySet<string>
+    readonly program?: ts.Program;
+    readonly force?: boolean;
+    readonly createProgram: (entryFile: string) => ts.Program;
+    readonly reachable?: ReadonlySet<string>;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<T> {
   if (!options.force) {
-    const check = checkCache(entryFile, outFile, options)
-    if (check.hit) return { status: "hit" }
+    const check = checkCache(entryFile, outFile, options);
+    if (check.hit) return { status: "hit" };
   }
-  const program = options.program ?? options.createProgram(entryFile)
-  const result = build(program)
-  writeCacheMetadata(entryFile, outFile, program, result, options, options.reachable)
-  return { status: "built", result, program }
+  const program = options.program ?? options.createProgram(entryFile);
+  const result = build(program);
+  writeCacheMetadata(entryFile, outFile, program, result, options, options.reachable);
+  return { status: "built", result, program };
 }

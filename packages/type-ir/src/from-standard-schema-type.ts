@@ -37,9 +37,9 @@
 // `from-typescript.ts` is a general-purpose TS ingester — Standard Schema is
 // one ecosystem convention layered on it, not part of its core.
 
-import ts from "typescript"
-import { t, types, type TypeRef } from "./index.ts"
-import { typeRefFromType, type SharingRegistry } from "./from-typescript.ts"
+import ts from "typescript";
+import { t, types, type TypeRef } from "./index.ts";
+import { typeRefFromType, type SharingRegistry } from "./from-typescript.ts";
 
 export interface StandardSchemaTypeOptions {
   /**
@@ -47,29 +47,38 @@ export interface StandardSchemaTypeOptions {
    * parsed/validated type — what a consumer receives. `"input"` is what the
    * schema accepts, which differs whenever the schema transforms.
    */
-  readonly direction?: "input" | "output"
+  readonly direction?: "input" | "output";
   /** Forwarded to `typeRefFromType` for structural sharing across extractions. */
-  readonly registry?: SharingRegistry
+  readonly registry?: SharingRegistry;
 }
 
 /** Strip `undefined` out of a union — `~standard.types` is declared optional. */
 function withoutUndefined(type: ts.Type): ts.Type {
-  if (!type.isUnion()) return type
-  const rest = type.types.filter((x) => (x.flags & ts.TypeFlags.Undefined) === 0)
-  return rest.length === 1 ? rest[0]! : (rest[0] ?? type)
+  if (!type.isUnion()) return type;
+  const rest = type.types.filter((x) => (x.flags & ts.TypeFlags.Undefined) === 0);
+  return rest.length === 1 ? rest[0]! : (rest[0] ?? type);
 }
 
-function propertyType(type: ts.Type, name: string, checker: ts.TypeChecker, loc: ts.Node): ts.Type | undefined {
-  const symbol = checker.getPropertyOfType(type, name)
-  if (symbol === undefined) return undefined
-  return checker.getTypeOfSymbolAtLocation(symbol, loc)
+function propertyType(
+  type: ts.Type,
+  name: string,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+): ts.Type | undefined {
+  const symbol = checker.getPropertyOfType(type, name);
+  if (symbol === undefined) return undefined;
+  return checker.getTypeOfSymbolAtLocation(symbol, loc);
 }
 
 /** `~standard.vendor`, when the vendor declared it as a string LITERAL type. */
-function vendorOf(standardType: ts.Type, checker: ts.TypeChecker, loc: ts.Node): string | undefined {
-  const vendor = propertyType(standardType, "vendor", checker, loc)
-  if (vendor === undefined || !vendor.isStringLiteral()) return undefined
-  return vendor.value
+function vendorOf(
+  standardType: ts.Type,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+): string | undefined {
+  const vendor = propertyType(standardType, "vendor", checker, loc);
+  if (vendor === undefined || !vendor.isStringLiteral()) return undefined;
+  return vendor.value;
 }
 
 /**
@@ -88,27 +97,31 @@ export function fromStandardSchemaType(
   loc: ts.Node,
   options?: StandardSchemaTypeOptions,
 ): TypeRef {
-  const standard = propertyType(schemaType, "~standard", checker, loc)
+  const standard = propertyType(schemaType, "~standard", checker, loc);
   if (standard === undefined) {
-    return t(types.unknown, { $comment: "not a Standard Schema: no `~standard` property" })
+    return t(types.unknown, { $comment: "not a Standard Schema: no `~standard` property" });
   }
 
-  const vendor = vendorOf(standard, checker, loc)
+  const vendor = vendorOf(standard, checker, loc);
   const withVendor = (ref: TypeRef): TypeRef =>
-    vendor === undefined ? ref : { shape: ref.shape, meta: { ...ref.meta, vendor } }
+    vendor === undefined ? ref : { shape: ref.shape, meta: { ...ref.meta, vendor } };
 
-  const typesProp = propertyType(standard, "types", checker, loc)
+  const typesProp = propertyType(standard, "types", checker, loc);
   if (typesProp === undefined) {
     return withVendor(
-      t(types.unknown, { $comment: "Standard Schema without `~standard.types`: no inferable type" }),
-    )
+      t(types.unknown, {
+        $comment: "Standard Schema without `~standard.types`: no inferable type",
+      }),
+    );
   }
 
-  const direction = options?.direction ?? "output"
-  const resolved = propertyType(withoutUndefined(typesProp), direction, checker, loc)
+  const direction = options?.direction ?? "output";
+  const resolved = propertyType(withoutUndefined(typesProp), direction, checker, loc);
   if (resolved === undefined) {
-    return withVendor(t(types.unknown, { $comment: `\`~standard.types.${direction}\` is not declared` }))
+    return withVendor(
+      t(types.unknown, { $comment: `\`~standard.types.${direction}\` is not declared` }),
+    );
   }
 
-  return withVendor(typeRefFromType(resolved, checker, loc, new Set(), options?.registry))
+  return withVendor(typeRefFromType(resolved, checker, loc, new Set(), options?.registry));
 }

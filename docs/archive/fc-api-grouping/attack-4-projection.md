@@ -1,11 +1,11 @@
 # Attack 4 — HTTP/CLI projection forces a forbidden second source of truth
 
-*Red-team of `design.md` §0, §3.3, §4.4. Posture: broken by default; prove it.
+_Red-team of `design.md` §0, §3.3, §4.4. Posture: broken by default; prove it.
 Target claim (§0, §3.3): "carrier + ops is the protocol-agnostic truth. HTTP/CLI are
 computed FROM a carrier, downstream, never authored per-surface"; the mapping is
 **verb-kind → method** (`make`→POST, `op`→PATCH, `read`→GET), "no per-op HTTP
 annotation is ever needed, and nothing HTTP-shaped can flow back." Guardrail #1/#3
-forbid a surface-shaped second source of truth.*
+forbid a surface-shaped second source of truth._
 
 The design's own §4.4 concedes this is the soft spot but treats it as "coarse, likely
 survives only the demo." That undersells it. The taxonomy is not merely coarse — it is
@@ -18,15 +18,15 @@ the **wrong shape**, and two of its failures are unfixable by a bigger override 
 The projector's only inputs are (role, TS types, JSDoc). Role carries
 `log2(3) ≈ 1.58` bits. The HTTP endpoint it must emit is a joint choice over at least:
 
-| free variable | values | in role? | in types? |
-|---|---|---|---|
-| method | GET/POST/PUT/PATCH/DELETE | partial | no |
-| idempotency (retry-safety) | yes/no | **no** | **no** |
-| success status | 200/201/202/204 | partial | no |
-| path shape / nesting order | flat / nested-N | no | **no** |
-| body transport | query / json / multipart | no | partial |
-| cacheability (ETag/max-age) | volatile / cacheable | no | no |
-| auth scope | open-ended | no (2 buckets max) | no |
+| free variable               | values                    | in role?           | in types? |
+| --------------------------- | ------------------------- | ------------------ | --------- |
+| method                      | GET/POST/PUT/PATCH/DELETE | partial            | no        |
+| idempotency (retry-safety)  | yes/no                    | **no**             | **no**    |
+| success status              | 200/201/202/204           | partial            | no        |
+| path shape / nesting order  | flat / nested-N           | no                 | **no**    |
+| body transport              | query / json / multipart  | no                 | partial   |
+| cacheability (ETag/max-age) | volatile / cacheable      | no                 | no        |
+| auth scope                  | open-ended                | no (2 buckets max) | no        |
 
 Several rows are provably absent from BOTH role and types. Since the output entropy
 exceeds the input entropy, the missing bits must be supplied from outside the carrier —
@@ -77,8 +77,8 @@ which guts "HTTP is computed from a carrier."
 Two endomaps:
 
 ```ts
-User.op("replace",   (u, full: User) => full);          // idempotent → PUT
-User.op("increment", (u) => ({ ...u, n: u.n + 1 }));    // non-idempotent → POST/PATCH
+User.op("replace", (u, full: User) => full); // idempotent → PUT
+User.op("increment", (u) => ({ ...u, n: u.n + 1 })); // non-idempotent → POST/PATCH
 ```
 
 Both are `(t: User, …) => User` — **byte-identical types**, identical role (`op`), so
@@ -86,7 +86,7 @@ both project to PATCH. But one is idempotent (safe to retry, PUT) and one is not
 Idempotency is `f(f(x)) === f(x)` — a property of the **function body**, invisible to the
 signature and absent from {make, op, read}. Same story for `make`: server-assigns-id
 `register(data) => User` is POST; client-supplies-key `upsert(id, data) => User` is an
-idempotent PUT. (The arg-shape *partially* rescues this one — "id present ⇒ PUT" is
+idempotent PUT. (The arg-shape _partially_ rescues this one — "id present ⇒ PUT" is
 type-derivable — but not the `op` case above, and not idempotent-POST-with-Idempotency-Key.)
 The `law` hook cannot save it: reading a runtime closure to decide a method is undecidable,
 and adding an idempotency predicate per op just IS the per-op annotation, relabeled.
@@ -107,7 +107,7 @@ bits with no carrier home. Auth alone is unavoidable and by itself forces per-ro
 
 Search/GraphQL with a 4KB filter body: role says GET, transport says POST (URL length
 limits; structured filters don't serialize to query strings). Steelman: "non-scalar args
-⇒ body ⇒ POST" is type-derivable, so the projector *can* pick POST from arg shape. But
+⇒ body ⇒ POST" is type-derivable, so the projector _can_ pick POST from arg shape. But
 then it has silently discarded the read's **safety/caching** semantics — the role said
 "cacheable, safe," transport POST defeats HTTP caching. This exposes the root disease:
 HTTP has **two orthogonal axes** — (a) safety/idempotency semantics, (b) transport shape
@@ -136,7 +136,7 @@ survives only by amputating the requirement.
   type — leakage in the wrong direction.
 - **Bulk**: `assignMany(pairs) => Assignment[]` roles as make/POST, but 207 Multi-Status /
   partial-success semantics aren't in the role.
-- **Content negotiation / field selection / upload**: mostly *generic* projector features
+- **Content negotiation / field selection / upload**: mostly _generic_ projector features
   (Accept, `?fields=`, multipart-from-`Stream`-arg) — these are the design's genuinely
   strong cases; don't overclaim them as breaks.
 
@@ -147,7 +147,7 @@ survives only by amputating the requirement.
 **Yes — and that is the tell.** The same carrier drives CLI cleanly:
 `fractal transfer create --from --to --amount`, `make/op/read` → subcommand groups, args
 → flags, `Result` → exit code, `--output json|table` → the generic content-negotiation
-feature. CLI works *better* than HTTP for a precise reason: **CLI's semantic space is
+feature. CLI works _better_ than HTTP for a precise reason: **CLI's semantic space is
 low-dimensional.** A subcommand is name + flags + stdout + exit code. It has no
 idempotency axis, no method, no caching, no resource-identity/path, no status taxonomy, no
 per-route scope. The three roles are more than enough to cover it (arguably CLI needs zero
@@ -176,13 +176,13 @@ role-as-default skeleton survives, but only after the claim is retracted and reb
 
 ### Minimal fix (two parts, both required)
 
-1. **Redefine "no second source of truth" precisely.** It must mean *"no re-declaration of
-   DOMAIN facts (types, ops, invariants) per surface"* — NOT *"zero surface config."* Then
+1. **Redefine "no second source of truth" precisely.** It must mean _"no re-declaration of
+   DOMAIN facts (types, ops, invariants) per surface"_ — NOT _"zero surface config."_ Then
    permit a projection table that is (a) **purely additive** (only HTTP-only bits absent
    from the domain: method override, path template, status, scope, idempotency flag,
    cache policy), (b) **keyed to existing op names** (cannot invent or rename ops), and
-   (c) **non-contradicting** (cannot change what the op *does*). Such a table is
-   *decoration*, not duplication: it cannot drift from or contradict the carrier, and
+   (c) **non-contradicting** (cannot change what the op _does_). Such a table is
+   _decoration_, not duplication: it cannot drift from or contradict the carrier, and
    "nothing flows back into the op" is still literally true (the op never imports HTTP).
    Role stays the default for the 80%; the table supplies the 20% of bits role provably
    lacks. This is the honest version of §3.3.
@@ -192,7 +192,7 @@ role-as-default skeleton survives, but only after the claim is retracted and reb
    sources and correct defaults, OR explicitly scope persistence OUT of the core and state
    that HTTP-CRUD is assembled by a persistence layer, not projected from the pure carrier
    — and drop the implication that the core alone yields a REST API. Without this, the
-   default for `GET /users/:id` is POST, and no override table makes a *default* correct.
+   default for `GET /users/:id` is POST, and no override table makes a _default_ correct.
 
 The design should also either add a `subscribe`/stream role or explicitly declare
 streaming out of scope; and either mandate flat routing as a stated constraint or admit

@@ -1,4 +1,13 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["core.ts", "http.ts", "client.ts", "openapi.ts", "serve.ts", "sample.ts", "negatives.ts", "run.ts"]
+  "include": [
+    "core.ts",
+    "http.ts",
+    "client.ts",
+    "openapi.ts",
+    "serve.ts",
+    "sample.ts",
+    "negatives.ts",
+    "run.ts"
+  ]
 }

@@ -25,9 +25,7 @@ import type {
 // ============================================================================
 
 export type Equals<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-    ? true
-    : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
 // `AssertExact<A, B>` resolves to the literal `true` only when A and B are
 // identical; otherwise to a descriptive error object (so the failure site names
@@ -128,10 +126,7 @@ export type Walk<M, Pfx extends string, P> =
             : {};
 
 // Walk a tuple of choice alts → a UNION of their flat maps.
-type WalkAlts<Alts, Pfx extends string, P> = Alts extends readonly [
-  infer Head,
-  ...infer Tail,
-]
+type WalkAlts<Alts, Pfx extends string, P> = Alts extends readonly [infer Head, ...infer Tail]
   ? Walk<Head, Pfx, P> | WalkAlts<Tail, Pfx, P>
   : never;
 
@@ -140,9 +135,7 @@ type WalkAlts<Alts, Pfx extends string, P> = Alts extends readonly [
 // the union of all keys, then for each key pick its value from whichever member
 // has it. This is linear in total entries, not quadratic.
 type UnionToObj<U> = {
-  [K in U extends unknown ? keyof U : never]: U extends Record<K, infer V>
-    ? V
-    : never;
+  [K in U extends unknown ? keyof U : never]: U extends Record<K, infer V> ? V : never;
 };
 
 // Public entry: derive the flat route map from a handler tree type. `App` is
@@ -193,15 +186,10 @@ type WalkUnion<M, Pfx extends string, P> =
             ? WalkUnionAlts<Alts, Pfx, P>
             : never;
 
-type WalkUnionAlts<Alts, Pfx extends string, P> = Alts extends readonly [
-  infer Head,
-  ...infer Tail,
-]
+type WalkUnionAlts<Alts, Pfx extends string, P> = Alts extends readonly [infer Head, ...infer Tail]
   ? WalkUnion<Head, Pfx, P> | WalkUnionAlts<Tail, Pfx, P>
   : never;
 
 /** The LINEAR derivation: a union of route entries, ready for one AssertExact
  *  against the generated union. */
-export type RouteUnion<App> = App extends { meta: infer M }
-  ? WalkUnion<M, "", EmptyParams>
-  : never;
+export type RouteUnion<App> = App extends { meta: infer M } ? WalkUnion<M, "", EmptyParams> : never;

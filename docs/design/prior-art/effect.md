@@ -17,14 +17,14 @@ concrete implementation, narrowing `R`.
 
 ## Layer Composition
 
-`Layer<ROut, E, RIn>` separates *what a layer produces* from *what it needs* and *how it
-can fail*. Composition operators:
+`Layer<ROut, E, RIn>` separates _what a layer produces_ from _what it needs_ and _how it
+can fail_. Composition operators:
 
-| Operator | Semantics |
-|----------|-----------|
-| `Layer.merge(a, b)` | Concurrent construction; output is `ROut_a \| ROut_b`, input is `RIn_a \| RIn_b`. |
+| Operator                              | Semantics                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `Layer.merge(a, b)`                   | Concurrent construction; output is `ROut_a \| ROut_b`, input is `RIn_a \| RIn_b`.                          |
 | `Layer.provide(downstream, upstream)` | Sequential wiring; upstream's `ROut` satisfies part of downstream's `RIn`. Result's `RIn` is the leftover. |
-| `Layer.effect` / `Layer.scoped` | Lift an Effect (optionally with finalization) into a Layer producing a single service. |
+| `Layer.effect` / `Layer.scoped`       | Lift an Effect (optionally with finalization) into a Layer producing a single service.                     |
 
 Union-type deduplication handles diamond dependencies: if two layers both require `Config`,
 the union `Config | Logger | Config` collapses to `Config | Logger`, and the runtime
@@ -63,6 +63,7 @@ treatment as any other service: declare a tag, implement a layer, provide it.
 ## HTTP Routing and Multi-Transport (@effect/platform, @effect/rpc)
 
 **HttpApi / HttpApiGroup / HttpApiBuilder** — declarative HTTP:
+
 - `HttpApi` declares endpoint groups, each carrying typed request/response schemas and
   middleware sets.
 - `HttpApiBuilder.serve()` produces an `HttpApp` (Effect from request to response) whose
@@ -71,6 +72,7 @@ treatment as any other service: declare a tag, implement a layer, provide it.
   declared endpoint has a handler layer.
 
 **@effect/rpc** — transport-agnostic RPC:
+
 - `Rpc.make` defines a procedure via `Schema` for payload, success, and error.
 - `RpcGroup` collects procedures into a named group.
 - Server handlers are built per-transport: `layerProtocolHttp`, `layerProtocolWebsocket`,

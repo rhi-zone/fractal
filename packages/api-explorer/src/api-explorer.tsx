@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react"
-import { useApiExplorerFetch } from "./fetch-context.tsx"
-import { interpolatePath, pathParamNames } from "./path-template.ts"
+import { useMemo, useState } from "react";
+import { useApiExplorerFetch } from "./fetch-context.tsx";
+import { interpolatePath, pathParamNames } from "./path-template.ts";
 
 // ============================================================================
 // <ApiExplorer/> — a minimal, functional "make one real request against this
@@ -23,25 +23,25 @@ import { interpolatePath, pathParamNames } from "./path-template.ts"
  * `OpenApiSchema` (http-api-projector's openapi.ts) — this component doesn't
  * depend on that package, so the type is restated structurally rather than
  * imported. */
-export type JsonSchemaLike = Record<string, unknown>
+export type JsonSchemaLike = Record<string, unknown>;
 
 export type ApiExplorerProps = {
   /** HTTP method, e.g. "GET", "POST". */
-  readonly method: string
+  readonly method: string;
   /** Route path template, `{param}` segments included, e.g. "/books/{id}". */
-  readonly path: string
+  readonly path: string;
   /** Base URL path/verb params resolve against; defaults to same-origin
    * (empty string — the path is used as-is, matching how `toDropInFetch`'s
    * own default `baseUrl` of `http://localhost` behaves for relative
    * input). */
-  readonly baseUrl?: string
-  readonly operationId?: string
-  readonly summary?: string
+  readonly baseUrl?: string;
+  readonly operationId?: string;
+  readonly summary?: string;
   /** Request body JSON Schema — omitted/undefined for a route with no body
    * (GET, DELETE with no input, ...). */
-  readonly requestSchema?: JsonSchemaLike
-  readonly responseSchema?: JsonSchemaLike
-}
+  readonly requestSchema?: JsonSchemaLike;
+  readonly responseSchema?: JsonSchemaLike;
+};
 
 /** One placeholder value per top-level schema property, keyed by its JSON
  * Schema `type` — enough to give a reader a valid starting shape to edit,
@@ -49,35 +49,35 @@ export type ApiExplorerProps = {
  * handling elsewhere in this codebase for the richer, authored-example
  * case this deliberately doesn't duplicate). */
 function placeholderFor(schema: JsonSchemaLike | undefined): unknown {
-  const type = schema?.type
+  const type = schema?.type;
   switch (type) {
     case "string":
-      return ""
+      return "";
     case "number":
     case "integer":
-      return 0
+      return 0;
     case "boolean":
-      return false
+      return false;
     case "array":
-      return []
+      return [];
     case "object":
-      return {}
+      return {};
     default:
-      return null
+      return null;
   }
 }
 
 function scaffoldFromSchema(schema: JsonSchemaLike | undefined): unknown {
-  if (schema === undefined) return undefined
-  const properties = schema.properties
+  if (schema === undefined) return undefined;
+  const properties = schema.properties;
   if (schema.type !== "object" || typeof properties !== "object" || properties === null) {
-    return placeholderFor(schema)
+    return placeholderFor(schema);
   }
-  const out: Record<string, unknown> = {}
+  const out: Record<string, unknown> = {};
   for (const [key, propSchema] of Object.entries(properties as Record<string, unknown>)) {
-    out[key] = placeholderFor(propSchema as JsonSchemaLike)
+    out[key] = placeholderFor(propSchema as JsonSchemaLike);
   }
-  return out
+  return out;
 }
 
 type RequestOutcome =
@@ -85,48 +85,48 @@ type RequestOutcome =
   | { readonly status: "loading" }
   | { readonly status: "error"; readonly message: string }
   | {
-      readonly status: "done"
-      readonly httpStatus: number
-      readonly statusText: string
-      readonly bodyText: string
-      readonly contentType: string | null
-    }
+      readonly status: "done";
+      readonly httpStatus: number;
+      readonly statusText: string;
+      readonly bodyText: string;
+      readonly contentType: string | null;
+    };
 
-const hasBody = (method: string): boolean => !["GET", "HEAD"].includes(method.toUpperCase())
+const hasBody = (method: string): boolean => !["GET", "HEAD"].includes(method.toUpperCase());
 
 export function ApiExplorer(props: ApiExplorerProps): React.ReactElement {
-  const fetchImpl = useApiExplorerFetch()
-  const params = useMemo(() => pathParamNames(props.path), [props.path])
-  const [paramValues, setParamValues] = useState<Record<string, string>>({})
+  const fetchImpl = useApiExplorerFetch();
+  const params = useMemo(() => pathParamNames(props.path), [props.path]);
+  const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [bodyText, setBodyText] = useState<string>(() =>
     hasBody(props.method) && props.requestSchema !== undefined
       ? JSON.stringify(scaffoldFromSchema(props.requestSchema), null, 2)
       : "",
-  )
-  const [outcome, setOutcome] = useState<RequestOutcome>({ status: "idle" })
+  );
+  const [outcome, setOutcome] = useState<RequestOutcome>({ status: "idle" });
 
-  const resolvedPath = interpolatePath(props.path, paramValues)
-  const url = `${props.baseUrl ?? ""}${resolvedPath}`
+  const resolvedPath = interpolatePath(props.path, paramValues);
+  const url = `${props.baseUrl ?? ""}${resolvedPath}`;
 
   async function send(): Promise<void> {
-    setOutcome({ status: "loading" })
+    setOutcome({ status: "loading" });
     try {
-      const init: RequestInit = { method: props.method }
+      const init: RequestInit = { method: props.method };
       if (hasBody(props.method) && bodyText.trim().length > 0) {
-        init.headers = { "content-type": "application/json" }
-        init.body = bodyText
+        init.headers = { "content-type": "application/json" };
+        init.body = bodyText;
       }
-      const res = await fetchImpl(url, init)
-      const text = await res.text()
+      const res = await fetchImpl(url, init);
+      const text = await res.text();
       setOutcome({
         status: "done",
         httpStatus: res.status,
         statusText: res.statusText,
         bodyText: text,
         contentType: res.headers.get("content-type"),
-      })
+      });
     } catch (err) {
-      setOutcome({ status: "error", message: err instanceof Error ? err.message : String(err) })
+      setOutcome({ status: "error", message: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -145,7 +145,9 @@ export function ApiExplorer(props: ApiExplorerProps): React.ReactElement {
               <input
                 type="text"
                 value={paramValues[name] ?? ""}
-                onChange={(e) => { setParamValues((prev) => ({ ...prev, [name]: e.target.value })) }}
+                onChange={(e) => {
+                  setParamValues((prev) => ({ ...prev, [name]: e.target.value }));
+                }}
                 placeholder={name}
               />
             </label>
@@ -178,5 +180,5 @@ export function ApiExplorer(props: ApiExplorerProps): React.ReactElement {
         </div>
       )}
     </div>
-  )
+  );
 }

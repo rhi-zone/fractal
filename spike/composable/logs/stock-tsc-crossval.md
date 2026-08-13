@@ -3,15 +3,15 @@
 Per-file isolated typecheck (`bunx tsc -p {include:[D-N]} --extendedDiagnostics`),
 source resolved via tsconfig.base.json paths.
 
-| variant | N | result | instantiations | memory | check |
-|---|---|---|---|---|---|
-| D (composable) | 600 | **ok** | 77,771  | 102,185K | 0.40s |
-| D (composable) | 900 | **ok** | 114,557 | 117,276K | 0.49s |
+| variant        | N   | result | instantiations | memory   | check |
+| -------------- | --- | ------ | -------------- | -------- | ----- |
+| D (composable) | 600 | **ok** | 77,771         | 102,185K | 0.40s |
+| D (composable) | 900 | **ok** | 114,557        | 117,276K | 0.49s |
 
 Compare to the old CHAINED router (spike/scale variant A) on the SAME stock tsc:
 
-| variant | N | result |
-|---|---|---|
+| variant     | N   | result                                                           |
+| ----------- | --- | ---------------------------------------------------------------- |
 | A (chained) | 600 | **CRASH: RangeError: Maximum call stack size exceeded** (binder) |
 | A (chained) | 900 | **CRASH: RangeError: Maximum call stack size exceeded** (binder) |
 

@@ -33,7 +33,7 @@ application is an **HTTP framework**, which serves two roles at once:
   is actually general, not HTTP-shaped underneath.
 - **Product** — the HTTP framework is meant to win on its own merits.
 
-Twin, non-negotiable goals: **best-in-class DX / mental model** *and*
+Twin, non-negotiable goals: **best-in-class DX / mental model** _and_
 **best-in-class runtime performance**. The architecture below is chosen so these
 do not trade off — the runtime is plain functions (fast, no interpreter), and the
 type story is inferred (no per-route type-level accumulation, which is the Hono
@@ -51,7 +51,8 @@ type Fn<A, B> = (a: A) => B;
 const compose =
   <A, B>(f: Fn<A, B>) =>
   <C>(g: Fn<B, C>): Fn<A, C> =>
-  (a) => g(f(a));
+  (a) =>
+    g(f(a));
 ```
 
 **Kleisli composition** (thread a `Result` / short-circuit on error) and
@@ -63,11 +64,12 @@ parallel) are **derived combinators built on top** — never the base.
 const composeK =
   <A, B, E>(f: Fn<A, Result<B, E>>) =>
   <C>(g: Fn<B, Result<C, E>>): Fn<A, Result<C, E>> =>
-  (a) => bind(f(a), g);
+  (a) =>
+    bind(f(a), g);
 ```
 
-**Rationale.** Kleisli is strictly *less* general than `.`: `f >=> g = \a -> f a >>= g`
-is derived from composition plus bind and *requires* a monad. Making Kleisli the
+**Rationale.** Kleisli is strictly _less_ general than `.`: `f >=> g = \a -> f a >>= g`
+is derived from composition plus bind and _requires_ a monad. Making Kleisli the
 base forfeits composing plain (non-monadic) functions — which is most of what a
 transformation library does. The general arrow is the floor; the error-threading
 and parallel-collection arrows are conveniences sitting on it.
@@ -92,7 +94,7 @@ the core abstraction.
 
 **"Encode" is not special.** Output serialization (`T => Response`) is just another
 one-directional function, sitting in output position. An invertible codec reusable
-in *both* positions is **optional sugar** — `iso(f, g)` is simply two independent
+in _both_ positions is **optional sugar** — `iso(f, g)` is simply two independent
 arrows bundled — never the core abstraction.
 
 **Inputs are typed, not "raw."** Wire values carry their native types: path / query
@@ -114,12 +116,14 @@ function markDone(options: {
   done: boolean;
   notify: boolean;
   user: User; // a capability — see Producers; the function can't tell it apart
-}): Result<Todo, NotFound> { /* ... */ }
+}): Result<Todo, NotFound> {
+  /* ... */
+}
 ```
 
 - `options` is a **flat** named record of typed **domain** values — `{ id, from, user }`,
   not `{ body, params, query }`.
-- It is **provenance-free and protocol-blind**: the function never learns *where* a
+- It is **provenance-free and protocol-blind**: the function never learns _where_ a
   value came from (path / query / cookie / auth header / server-produced). No
   `body`/`source` wrappers, no `Request`, no transport in the signature.
 - This is the in-process API. It is **directly callable** from tests, queues, other
@@ -139,9 +143,9 @@ coerces a typed value from the protocol input.
 
 ```ts
 // In the http package — protocol-specific, NOT in the generic core.
-const id: Producer<string>      = pathParam("id");
+const id: Producer<string> = pathParam("id");
 const notify: Producer<boolean> = query("notify", asBoolean);
-const user: Producer<User>      = authBearer(verifyToken); // server-side
+const user: Producer<User> = authBearer(verifyToken); // server-side
 ```
 
 - Producers are **protocol-specific** and live in the **protocol package** (http),
@@ -194,18 +198,17 @@ special-case in every projection (the accretion that
 The handler returns `Result<T, E>`, where `T` is a **typed construct**, each with
 its own encoder `T => Response`:
 
-| `T` | Encoder target |
-|---|---|
-| a record | JSON |
-| `Stream<X>` | SSE / chunked |
-| `Bytes` | binary |
-| `Redirect` | 3xx + `Location` |
-| ... | each construct has one encoder |
+| `T`         | Encoder target                 |
+| ----------- | ------------------------------ |
+| a record    | JSON                           |
+| `Stream<X>` | SSE / chunked                  |
+| `Bytes`     | binary                         |
+| `Redirect`  | 3xx + `Location`               |
+| ...         | each construct has one encoder |
 
 ```ts
 // Final stage: Result<T, E> => Response
-const finish = (r: Result<T, E>): Response =>
-  match(r, { ok: encodeOk, err: encodeErr });
+const finish = (r: Result<T, E>): Response => match(r, { ok: encodeOk, err: encodeErr });
 ```
 
 - **No raw `Response` escape hatch** inside the handler. The handler speaks typed
@@ -217,7 +220,7 @@ const finish = (r: Result<T, E>): Response =>
 
 **Rationale.** A raw `Response` in the leaf is opaque to every projection — the
 client and OpenAPI can't see its type. Typed constructs keep the response shape
-*inferable*, which is what makes the generated client's return type real instead of
+_inferable_, which is what makes the generated client's return type real instead of
 `unknown` (an honest gap in the old model, per `roadmap.md` §4).
 
 ---
@@ -239,7 +242,7 @@ The structure **is** the inferred types. There is no parallel reified descriptio
  * @param id   @format uuid
  * @param notify whether to send a notification
  */
-function markDone(options: { id: string; done: boolean; notify: boolean }): Result<Todo, NotFound>
+function markDone(options: { id: string; done: boolean; notify: boolean }): Result<Todo, NotFound>;
 // → types give the shape; JSDoc gives `format: uuid` + descriptions.
 ```
 
@@ -264,7 +267,7 @@ All projections are generated at **build time** from `types + JSDoc + structure`
 
 - **Validators** — runtime input validation derived from the inferred types +
   constraint tags.
-- **OpenAPI document** — generated *from the types*, as an **output** projection
+- **OpenAPI document** — generated _from the types_, as an **output** projection
   (not, as in the old model, an intermediate the codegen reads back).
 - **Typed client** — mirrors the function signature **exactly**:
   `client.markDone({ id, done, notify })` reads like calling the function in-process.
@@ -296,12 +299,12 @@ The tree carries three things:
 3. **Capability / grouping** — "this subtree needs a `user`."
 
 It is **explicit** (not ops scattered across files, not pure decorator magic) and
-**hierarchical** (its *shape* determines the path / subcommand structure).
+**hierarchical** (its _shape_ determines the path / subcommand structure).
 
 **Rationale.** A single explicit tree is the one place shared prefixes and splits are
 visible, and the one structure every protocol projects from. It is protocol-neutral
 because the same hierarchy is meaningful as an HTTP path, a CLI subcommand chain, an
-MCP tool namespace, or an in-process call path — only the *rendering* differs.
+MCP tool namespace, or an in-process call path — only the _rendering_ differs.
 
 ### Authoring syntax — RESOLVED (Candidate D)
 
@@ -317,14 +320,24 @@ clean under tsc 6.0.3 `--strict --exactOptionalPropertyTypes`.
 ```ts
 app(
   path({
-    classes: param("id",
-      group("user", () => currentUser,
+    classes: param(
+      "id",
+      group(
+        "user",
+        () => currentUser,
         methods({
-          GET:  route({ query: { from: str() },
-                  handler: ({ id, from, user }) => ok({ id, from, userId: user.id }) }),
-          POST: route({ query: { from: str() }, body: obj<{ title: string }>(),
-                  handler: ({ id, from, body, user }) => ok({ id, from, title: body.title }) }),
-        }))),
+          GET: route({
+            query: { from: str() },
+            handler: ({ id, from, user }) => ok({ id, from, userId: user.id }),
+          }),
+          POST: route({
+            query: { from: str() },
+            body: obj<{ title: string }>(),
+            handler: ({ id, from, body, user }) => ok({ id, from, title: body.title }),
+          }),
+        }),
+      ),
+    ),
     health: methods({ GET: route({ handler: () => ok("up") }) }),
   }),
 );
@@ -358,22 +371,22 @@ typed function of [The operation](#the-operation-handler--a-pure-typed-function)
 These compiled clean under tsc 6.0.3 `--strict --exactOptionalPropertyTypes`:
 
 ```ts
-interface Node<C> { readonly __c?: C; readonly kind: string; }
+interface Node<C> {
+  readonly __c?: C;
+  readonly kind: string;
+}
 
-function path<C>(routes: Record<string, Node<NoInfer<C>>>): Node<C>
+function path<C>(routes: Record<string, Node<NoInfer<C>>>): Node<C>;
 
-function param<C, N extends string>(
-  name: N,
-  child: Node<NoInfer<C> & Record<N, string>>,
-): Node<C>
+function param<C, N extends string>(name: N, child: Node<NoInfer<C> & Record<N, string>>): Node<C>;
 
 function group<C, N extends string, V>(
   key: N,
   produce: (req: Request) => V,
   child: Node<NoInfer<C> & Record<N, V>>,
-): Node<C>
+): Node<C>;
 
-function methods<C>(table: Partial<Record<Method, Node<NoInfer<C>>>>): Node<C>
+function methods<C>(table: Partial<Record<Method, Node<NoInfer<C>>>>): Node<C>;
 
 function route<C, Q extends Record<string, Schema<unknown>> = {}, B = never>(def: {
   query?: Q;
@@ -381,9 +394,9 @@ function route<C, Q extends Record<string, Schema<unknown>> = {}, B = never>(def
   handler: (
     opts: Flatten<NoInfer<C> & QueryFields<Q> & ([B] extends [never] ? {} : { body: B })>,
   ) => Result<unknown, unknown>;
-}): Node<C>
+}): Node<C>;
 
-declare function app(root: Node<{}>): void;  // the root anchor
+declare function app(root: Node<{}>): void; // the root anchor
 ```
 
 #### Implementation note — WHY it works (load-bearing)
@@ -397,7 +410,7 @@ call would collapse `C` to `unknown`. Two things fix this and make context flow
 **top-down** instead:
 
 1. **`NoInfer<C>` on every child / table / handler context position.** This blocks
-   the compiler from *inferring* `C` bottom-up from a child node. With the only
+   the compiler from _inferring_ `C` bottom-up from a child node. With the only
    bottom-up inference site closed, the **contextual return type** of each call
    becomes the sole source of `C`.
 2. **A single root anchor `app(root: Node<{}>)`.** This seeds `C = {}` at the
@@ -439,10 +452,10 @@ A protocol's concrete addressing is a **projection of (abstract tree + per-proto
 binding)**:
 
 - **Path / subcommand structure + path-params** ← the abstract tree's hierarchy +
-  parameterized levels. This is a **structural** projection: the tree's shape *is*
+  parameterized levels. This is a **structural** projection: the tree's shape _is_
   the path.
 - **Non-path field placement (query / header / cookie / body) + verb** ← the
-  **per-protocol binding**: a convention *policy* (defaults, e.g. GET→query,
+  **per-protocol binding**: a convention _policy_ (defaults, e.g. GET→query,
   POST→body, capability→auth header/cookie, path-param by tree position) plus
   **explicit overrides**.
 
@@ -470,8 +483,8 @@ addressing.
 All three **desugar to the same explicit abstract tree** — none is a parallel
 registry.
 
-1. **Floor / primitive — the explicit abstract tree, hand-authored.** Plus *direct
-   protocol-specific tree authoring* (producers carry location explicitly) for full
+1. **Floor / primitive — the explicit abstract tree, hand-authored.** Plus _direct
+   protocol-specific tree authoring_ (producers carry location explicitly) for full
    HTTP control. This is the generality floor: anything the higher levels can express
    bottoms out here.
 2. **Default (the internal consumer / dogfood target's path) — codegen from
@@ -500,7 +513,7 @@ each added their own node; here, sugar is sugar and the floor is fixed.
   OpenAPI, typed client).
 
 **Rationale.** The core stays general by construction: if HTTP concepts can't be
-imported into it, they can't leak in. The http package being *just functions* (not a
+imported into it, they can't leak in. The http package being _just functions_ (not a
 framework object) is what keeps producers composable and individually testable.
 
 ---
@@ -519,7 +532,7 @@ new model removes):
 - The `Omit<Q, K>`-discharge trick, `CtxOf`, `MethodsIO`.
 - The runtime `.meta` sidecar: `Reflected`, `withMeta`, and the `*Meta` shapes
   (`MethodsMeta` / `PathMeta` / `ParamMeta` / `ProvideMeta` / `ChoiceMeta`).
-- `toOpenApi`-from-`.meta` as the OpenAPI *source* (OpenAPI returns as an *output*
+- `toOpenApi`-from-`.meta` as the OpenAPI _source_ (OpenAPI returns as an _output_
   projection generated from types).
 - The drift guard: `RouteUnion` / `RouteEntry` / `AssertExact` / `drift.ts` — there is
   no second truth to guard once types are the only source.
@@ -529,9 +542,9 @@ new model removes):
 - The **WHATWG Request/Response adapter** — `packages/http-api-projector/src/adapter.ts`
   (`serveBun` / `serveNode` / `serveDeno` / `serveFastlyCompute` / `toCloudflareWorker` /
   `toVercelEdge` / `toAwsLambdaHandler`). Runtime-agnostic, model-independent.
-- **`toFetch`'s correctness *behaviour*** — 404 / 405 + `Allow` (verb union across
-  matching routes) / auto-HEAD-from-GET / OPTIONS 204+`Allow`. The *logic* is
-  salvageable; it must be recomputed from the new routing tree (which now *is* the
+- **`toFetch`'s correctness _behaviour_** — 404 / 405 + `Allow` (verb union across
+  matching routes) / auto-HEAD-from-GET / OPTIONS 204+`Allow`. The _logic_ is
+  salvageable; it must be recomputed from the new routing tree (which now _is_ the
   authored structure) instead of walking `.meta`.
 - The **response builders** `json` / `text` / `binary` / `sse` / `status` /
   `notFound` — these become the per-construct **encoders**.
@@ -557,21 +570,21 @@ tensions #1/#2 below. The unresolved tensions are:
 1. **How does build-time codegen recover provenance?** Provenance (wire-provided vs
    server-produced) is declared to be projection-only metadata. But projection is the
    compiler-API walk, and a producer is a plain function — its provenance is not in
-   the *type* of the value it yields. So the walk must recover provenance *structurally*:
+   the _type_ of the value it yields. So the walk must recover provenance _structurally_:
    from which producer combinator was used at the leaf, or from a tag on the producer
    (`{ closure, metadata }`). This is the one place the "mostly pure inference, tag only
    where needed" principle bites — the producer location/provenance almost certainly
-   *is* a value that needs a tag. The spike should settle whether the routing tree (a
+   _is_ a value that needs a tag. The spike should settle whether the routing tree (a
    runtime value) records per-field location, or whether the compiler-API walk reads it
    off the producer's declared type. (This intersects the next point.)
 
 2. **The routing tree is runtime data; the type meta is not — keep them cleanly
-   split.** The tree *must* exist at runtime to dispatch requests (segment names,
-   param levels, capability grouping, leaf functions). But per-leaf *types and
-   constraints* are explicitly **not** runtime data (inferred + JSDoc, read at build).
+   split.** The tree _must_ exist at runtime to dispatch requests (segment names,
+   param levels, capability grouping, leaf functions). But per-leaf _types and
+   constraints_ are explicitly **not** runtime data (inferred + JSDoc, read at build).
    Implementers must not let schemas creep back onto the runtime tree — that would
    reintroduce the `.meta` second-truth this model retires. The tree carries
-   *structure + functions*; the compiler API carries *types + constraints*. The seam
+   _structure + functions_; the compiler API carries _types + constraints_. The seam
    between "what the runtime tree records" and "what the compiler-API walk reads" needs
    to be drawn precisely in the spike (and is entangled with provenance, point 1).
 
@@ -581,9 +594,9 @@ tensions #1/#2 below. The unresolved tensions are:
    the "client mirrors the signature exactly" promise needs a concrete answer for
    non-record `T`.
 
-4. **OpenAPI: output vs intermediate.** This doc relocates OpenAPI from *intermediate*
-   (old: `.meta` → OpenAPI → codegen reads it back) to *output* (new: types → OpenAPI,
+4. **OpenAPI: output vs intermediate.** This doc relocates OpenAPI from _intermediate_
+   (old: `.meta` → OpenAPI → codegen reads it back) to _output_ (new: types → OpenAPI,
    and types → client directly, in parallel). Confirm during the rewrite that nothing
-   in the codegen pipeline still treats the OpenAPI doc as the client's *input* — the
+   in the codegen pipeline still treats the OpenAPI doc as the client's _input_ — the
    client should be generated from types, not from the doc, or the relocation is
    incomplete.

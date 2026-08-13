@@ -14,29 +14,29 @@
 // exported `api` value's api() call and derives input schemas for inline
 // ops, including the `books` subtree below (also authored via api()).
 
-import { api as api_, fallback, op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
-import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
-import { applyValidation } from "./generated/apply-validation.ts"
+import { api as api_, fallback, op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
+import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx";
+import { applyValidation } from "./generated/apply-validation.ts";
 
 // ============================================================================
 // Domain types + in-memory store
 // ============================================================================
 
 export type Book = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
-let _seq = 0
-const store = new Map<string, Book>()
+let _seq = 0;
+const store = new Map<string, Book>();
 
 /** Reset store and ID sequence between tests. */
 export function clearStore(): void {
-  store.clear()
-  _seq = 0
+  store.clear();
+  _seq = 0;
 }
 
 // ============================================================================
@@ -68,38 +68,38 @@ export function clearStore(): void {
 /** Get a single book by its ID. GET /books/{bookId} (co-located, no extra segment). */
 const readBook = op(
   (input: { bookId: string }) => {
-    const book = store.get(input.bookId)
-    if (book === undefined) throw new Error(`Not Found: ${input.bookId}`)
-    return book
+    const book = store.get(input.bookId);
+    if (book === undefined) throw new Error(`Not Found: ${input.bookId}`);
+    return book;
   },
   http.get,
   http.moveTo(".."),
-)
+);
 
 /** Replace book metadata wholesale. Idempotent. PUT /books/{bookId}. */
 const replaceBook = op(
   (input: { bookId: string; title?: string; author?: string; genre?: string }) => {
-    const existing = store.get(input.bookId)
-    if (existing === undefined) throw new Error(`Not Found: ${input.bookId}`)
+    const existing = store.get(input.bookId);
+    if (existing === undefined) throw new Error(`Not Found: ${input.bookId}`);
     const updated: Book = {
       id: existing.id,
       title: input.title !== undefined ? input.title : existing.title,
       author: input.author !== undefined ? input.author : existing.author,
       genre: input.genre !== undefined ? input.genre : existing.genre,
-    }
-    store.set(input.bookId, updated)
-    return updated
+    };
+    store.set(input.bookId, updated);
+    return updated;
   },
   http.put,
   http.moveTo(".."),
-)
+);
 
 /** Permanently delete a book. Destructive and irreversible. DELETE /books/{bookId}. */
 const removeBook = op(
   (input: { bookId: string }) => ({ deleted: store.delete(input.bookId) }),
   http.delete,
   http.moveTo(".."),
-)
+);
 
 /**
  * Checkout action subtree — nested directly under the fallback (no
@@ -115,41 +115,36 @@ const removeBook = op(
  * PUT /books/{bookId}/checkout/reserve
  */
 const checkoutNode = api_({
-    start: op(
-      (input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }),
-      http.post,
-    ),
-    reserve: op(
-      (input: { bookId: string; patronId: string }) => ({
-        reservationId: `res-${input.bookId}-${input.patronId}`,
-        patronId: input.patronId,
-      }),
-      http.put,
-    ),
-  })
+  start: op((input: { bookId: string }) => ({ sessionId: `checkout-${input.bookId}` }), http.post),
+  reserve: op(
+    (input: { bookId: string; patronId: string }) => ({
+      reservationId: `res-${input.bookId}-${input.patronId}`,
+      patronId: input.patronId,
+    }),
+    http.put,
+  ),
+});
 
 // ============================================================================
 // Books — list/add ops, plus the per-book fallback subtree
 // ============================================================================
 
 /** List all books in the library. GET /books/list */
-const listBooks = op(
-  (_: unknown): Book[] => [...store.values()],
-  http.get,
-  { description: "List all books in the library." },
-)
+const listBooks = op((_: unknown): Book[] => [...store.values()], http.get, {
+  description: "List all books in the library.",
+});
 
 /** Add a new book to the collection. POST /books/add */
 const addBook = op(
   (input: { title: string; author: string; genre: string }): Book => {
-    const id = `book-${++_seq}`
-    const book: Book = { id, ...input }
-    store.set(id, book)
-    return book
+    const id = `book-${++_seq}`;
+    const book: Book = { id, ...input };
+    store.set(id, book);
+    return book;
   },
   http.post,
   { description: "Add a new book to the collection." },
-)
+);
 
 /**
  * Books subtree: `list`/`add` are static children; the per-book fallback
@@ -167,17 +162,20 @@ const addBook = op(
  * `dispatch` handling is deleted, not given a typed home) even before this
  * split, so it's dropped here rather than carried forward as dead meta.
  */
-const booksNode = api_({
+const booksNode = api_(
+  {
     list: listBooks,
     add: addBook,
-  }, {
+  },
+  {
     fallback: fallback("bookId", {
       read: readBook,
       replace: replaceBook,
       remove: removeBook,
       checkout: checkoutNode,
     }),
-  })
+  },
+);
 
 // ============================================================================
 // API root
@@ -196,30 +194,30 @@ const booksNode = api_({
 // ============================================================================
 
 export const api = api_({
-    books: booksNode,
+  books: booksNode,
 
-    // Each leaf carries its OWN readOnly tag — tags do not inherit from the
-    // node (removed; see docs/design/router-model.md — "Tags").
-    catalog: api_({
-        /** Search the library catalog by title or author keyword. */
-        search: op((input: { q?: string }) => {
-          const q = input.q !== undefined ? input.q.toLowerCase() : undefined
-          return [...store.values()].filter(
-            (b) =>
-              q === undefined ||
-              b.title.toLowerCase().includes(q) ||
-              b.author.toLowerCase().includes(q),
-          )
-        }, http.get),
+  // Each leaf carries its OWN readOnly tag — tags do not inherit from the
+  // node (removed; see docs/design/router-model.md — "Tags").
+  catalog: api_({
+    /** Search the library catalog by title or author keyword. */
+    search: op((input: { q?: string }) => {
+      const q = input.q !== undefined ? input.q.toLowerCase() : undefined;
+      return [...store.values()].filter(
+        (b) =>
+          q === undefined ||
+          b.title.toLowerCase().includes(q) ||
+          b.author.toLowerCase().includes(q),
+      );
+    }, http.get),
 
-        /** List all genres in the catalog, optionally filtered to those starting with a prefix. */
-        genres: op((input: { prefix?: string }) => {
-          const all = [...new Set([...store.values()].map((b) => b.genre))]
-          const { prefix } = input
-          return prefix !== undefined ? all.filter((g) => g.startsWith(prefix)) : all
-        }, http.get),
-      }),
-  })
+    /** List all genres in the catalog, optionally filtered to those starting with a prefix. */
+    genres: op((input: { prefix?: string }) => {
+      const all = [...new Set([...store.values()].map((b) => b.genre))];
+      const { prefix } = input;
+      return prefix !== undefined ? all.filter((g) => g.startsWith(prefix)) : all;
+    }, http.get),
+  }),
+});
 
 // ============================================================================
 // Validator wiring — `applyValidation("books", api, "http")`
@@ -263,7 +261,7 @@ export const api = api_({
 // protocol were added.
 // ============================================================================
 
-export const validatedApi = applyValidation("books", api, "http")
+export const validatedApi = applyValidation("books", api, "http");
 
 // ============================================================================
 // HttpRoute projection — the pre-composed pipeline (naiveTransform +
@@ -276,4 +274,4 @@ export const validatedApi = applyValidation("books", api, "http")
 // project it.
 // ============================================================================
 
-export const httpRoutes = httpProjection(validatedApi)
+export const httpRoutes = httpProjection(validatedApi);

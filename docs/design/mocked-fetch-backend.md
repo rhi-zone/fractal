@@ -10,7 +10,7 @@
 
 A new backend that compiles an `http-api-projector` API definition — the
 same `api()`/`op()` tree every other HTTP backend (`createFetch`, `serveBun`,
-`serveNode`, ...) consumes — to a *mocked* `fetch` function, instead of
+`serveNode`, ...) consumes — to a _mocked_ `fetch` function, instead of
 running an actual server. Two separate motivating use cases were named, kept
 separate below because they have different requirements and one of them has
 a real open dependency the other doesn't.
@@ -34,7 +34,7 @@ either alone, remain on the table.
 Worth surfacing before scoping further, because it changes what "compiles to
 a mocked fetch" actually requires building: `http-api-projector` already has
 `createFetch(tree)`, which returns a `fetch`-shaped function that runs the
-*real* tree — real handlers, real validation, real routing — entirely
+_real_ tree — real handlers, real validation, real routing — entirely
 in-process, with no listening socket and no real network I/O (see the
 package README's usage example: `const fetch = createFetch(tree)`). So
 "mocked fetch" could mean two different things, and the idea as described
@@ -47,7 +47,7 @@ doesn't disambiguate which:
   little beyond what already exists, maybe packaged/documented differently
   for the playground/docgen use cases below.
 - **(b) Fabricated response data, no real handler execution at all.** The
-  Postman-mock-server sense: given the tree's declared *shapes* (schemas,
+  Postman-mock-server sense: given the tree's declared _shapes_ (schemas,
   status codes, response types) but not necessarily any real handler
   implementation, synthesize plausible sample data and serve that. This is
   useful specifically when demoing or documenting an API whose real handler
@@ -87,7 +87,7 @@ there).
 
 The idea's second use case is a live, interactive component embedded inside
 generated docs (Docusaurus/Starlight/mkdocs/etc. output) — the project owner
-was explicit that this only makes sense as a docgen feature *if* the
+was explicit that this only makes sense as a docgen feature _if_ the
 relevant doc generator can actually embed a live JS component; otherwise
 this use case doesn't apply to docgen at all and use case 1 (a standalone
 playground) is the only place it lands.
@@ -97,7 +97,7 @@ playground) is the only place it lands.
 Read `docs/reference/type-ir/doc-projectors.md` in full. **[VERIFIED-LOCAL,
 this session]** All three existing site-level doc projectors
 (`toDocusaurusReference`, `toStarlightReference`, `toMkdocsReference`)
-produce a `Map<filename, string>` of static Markdown/MDX *text* — there is
+produce a `Map<filename, string>` of static Markdown/MDX _text_ — there is
 no live-component runtime shipped by any of them today, and no existing
 fractal doc projector embeds or executes any interactive JS. This much is
 directly confirmed by reading the doc, not inferred.
@@ -170,7 +170,7 @@ it is technically possible to drop a raw custom-element tag
 have a site-wide `extra_javascript` bundle register and hydrate it as a Web
 Component. That route exists, but it is not really "MkDocs support" in the
 sense the other two targets have it — raw-HTML-tag-plus-external-script
-works on essentially *any* HTML output, MkDocs-generated or not, and is not
+works on essentially _any_ HTML output, MkDocs-generated or not, and is not
 a documented MkDocs feature for this purpose. It's also structurally
 different from what `mkdocs-reference.ts` emits today or from what
 Docusaurus/Starlight's import-a-component idiom provides: there is no
@@ -203,7 +203,7 @@ registering `TypeRef` as a global MDX component — see the file's own
 tag such as `<MockedFetchPlayground operation="..." tree={...} />` inside
 `renderPage`'s output, with a new MDX-comment note (matching the existing
 `<TypeRef>` note's pattern) telling the consuming site it must register a
-`MockedFetchPlayground` component. No new *projector* machinery is needed —
+`MockedFetchPlayground` component. No new _projector_ machinery is needed —
 the "emit a bare JSX component tag referencing something the site provides"
 hook already exists and is exercised today. What's genuinely new: (a)
 deciding how the operation's tree/schema data reaches the component (as a
@@ -242,7 +242,7 @@ edited elsewhere).
 
 A separate, narrower question than (a)/(b) above, but one the playground use
 case (use case 1) depends on directly: the project owner's bar for "already
-done" was whether `createFetch`'s returned function has the *exact* global
+done" was whether `createFetch`'s returned function has the _exact_ global
 `fetch` call signature — `(input: RequestInfo | URL, init?: RequestInit) =>
 Promise<Response>` — so a playground/doc-embed UI typed against `typeof
 fetch` could swap it in with zero adaptation.
@@ -280,10 +280,10 @@ real in-process execution — no fabricated data, same as `createFetch`
 itself; only the outer call signature changes. Usage:
 
 ```ts
-import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset"
+import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset";
 
-const fetch = toDropInFetch(createFetch(tree))
-const res = await fetch("/books/list") // string + no Request construction, like real fetch
+const fetch = toDropInFetch(createFetch(tree));
+const res = await fetch("/books/list"); // string + no Request construction, like real fetch
 ```
 
 Covered by new tests in `packages/http-api-projector/src/preset.test.ts`
@@ -336,7 +336,7 @@ bare component reference, the consuming site wires the runtime" shape
 
 **Resolved: how the fetch implementation itself reaches the component.**
 This doc's earlier "what embedding would concretely require" section flagged
-prop-serialization as a genuinely open item — a JS *function* value (the
+prop-serialization as a genuinely open item — a JS _function_ value (the
 fetch implementation) cannot survive MDX-prop JSON serialization the way
 `operation`/schema data can. Resolution: `packages/api-explorer/src/
 fetch-context.tsx` exports `ApiExplorerFetchProvider`, a React context
@@ -433,7 +433,7 @@ needed no such pin.
   using MDXComponents" — verified by fetching that page directly before
   writing the swizzle, not assumed) and a real
   `toDropInFetch(createFetch(api))` wired site-wide via `src/theme/
-  Root.tsx` — confirmed present in the built HTML's SSR output
+Root.tsx` — confirmed present in the built HTML's SSR output
   (`api-explorer` class markup in `build/docs/api/*/index.html`).
 - `astro build` (Astro 5.18.2 + Starlight 0.37.0): succeeds, produces a
   real `dist/` directory with real HTML — confirmed `astro-island`
@@ -446,11 +446,11 @@ fresh real build after each fix — same discipline as the Sphinx pass):**
 
 1. **`createFetch`/`toOpenApiFromRoute` broke ANY browser bundling, not just
    callers using `sourceFile` extraction** (`packages/http-api-projector/
-   src/openapi.ts`, `buildDoc`'s two `await import("@rhi-zone/
-   fractal-api-tree/tree")` call sites). `preset.ts`'s `createFetch`
+src/openapi.ts`, `buildDoc`'s two `await import("@rhi-zone/
+fractal-api-tree/tree")` call sites). `preset.ts`'s `createFetch`
    statically imports `toOpenApiFromRoute` from `openapi.ts` — needed for
    the `/openapi.json` mount feature — and `openapi.ts`'s `buildDoc` has a
-   *dynamic* `import()` of `@rhi-zone/fractal-api-tree/tree`, gated by a
+   _dynamic_ `import()` of `@rhi-zone/fractal-api-tree/tree`, gated by a
    runtime check (`opts.sourceFile !== undefined`) that's false for every
    `createFetch`/Root.tsx caller in this fixture. That runtime guard does
    NOT stop a bundler (Rspack, which Docusaurus's `@docusaurus/faster`
@@ -461,7 +461,7 @@ fresh real build after each fix — same discipline as the Sphinx pass):**
    `typescript` package plus Node's `node:fs`/`node:path` (real
    filesystem-based TS-compiler extraction — inherently Node-only).
    Result: `docusaurus build` failed outright with `Reading from
-   "node:path" is not handled by plugins (Unhandled scheme)` for EVERY
+"node:path" is not handled by plugins (Unhandled scheme)` for EVERY
    page, confirmed via bisection (isolated to `Root.tsx`'s import of
    `@rhi-zone/fractal-http-api-projector/preset`, reproduced with a minimal
    `createFetch`/`toDropInFetch` call and no other site code). Fixed with a
@@ -483,7 +483,7 @@ fresh real build after each fix — same discipline as the Sphinx pass):**
    `tree.js` chunk Vite still produces (the whole `typescript` package
    bundled in, even with `node:path` stubbed out) — it had no effect,
    because `@vite-ignore` only suppresses Vite's static-analysis warning
-   for a *computed* (variable) import specifier; it doesn't skip
+   for a _computed_ (variable) import specifier; it doesn't skip
    bundling a literal string specifier the way `webpackIgnore` does for
    Rspack. That comment was removed again (misleading to leave a magic
    comment in that verifiably does nothing here). **Net: the Astro build
@@ -497,15 +497,15 @@ fresh real build after each fix — same discipline as the Sphinx pass):**
 2. **MDX curly-brace injection in a raw (non-code-span) heading**
    (`packages/http-api-projector/src/http-route-reference.ts`,
    `renderDocusaurusPage`'s `# ${title}` line). The fixture's `GET
-   /books/{bookId}` route has no `operation.summary`, so `frontmatterTitle`
+/books/{bookId}` route has no `operation.summary`, so `frontmatterTitle`
    falls back to `${method} ${path}` — literally `GET /books/{bookId}` —
    emitted as a RAW (unescaped, non-backtick-wrapped) `# GET /books/{bookId}`
    Markdown heading line. MDX parses an unescaped `{...}` anywhere in flow
    content as a JS expression, not literal text (unlike a backtick code
    span, which stays literal per CommonMark — the file's other `` `${method}
-   ${path}` `` request-line text was already backtick-wrapped and unaffected).
+${path}` `` request-line text was already backtick-wrapped and unaffected).
    Docusaurus's real SSG step crashed with `ReferenceError: bookId is not
-   defined` — MDX evaluated the bare identifier `bookId`. Fixed with a new
+defined` — MDX evaluated the bare identifier `bookId`. Fixed with a new
    `mdxEscapeText()` helper (backslash-escapes `{`/`}`) applied to the H1
    title line, and — since `operation.description` (`bodyLines`, shared by
    both the Docusaurus and Starlight renderers) is inserted as a RAW MDX
@@ -518,7 +518,7 @@ fresh real build after each fix — same discipline as the Sphinx pass):**
    YAML doesn't give `{`/`}` any special meaning in a quoted scalar), so
    only the Docusaurus renderer needed the title-line fix; the
    `operation.description` fix applies to both. Re-verified: `docusaurus
-   build` succeeds with the fixture's `{bookId}`-titled page after this fix.
+build` succeeds with the fixture's `{bookId}`-titled page after this fix.
 
 **One design assumption in this doc's own "Resolved: use case 2" section
 above turned out wrong, verified (not guessed) against real Astro islands
@@ -532,7 +532,7 @@ no enclosing Provider JSX): Astro's islands architecture only hydrates a
 component into its own independent React root when it carries an explicit
 `client:*` directive, and a component with no directive nested inside
 another's JSX tree is bundled into THAT ancestor's island instead — but a
-Provider mounted from a *separate* layout/Head-override file is never an
+Provider mounted from a _separate_ layout/Head-override file is never an
 ancestor in ApiExplorer's own render tree, so it's a disconnected React
 root and context cannot cross that boundary, no matter what directive the
 Provider itself carries. `examples/doc-site-verification/starlight/src/

@@ -21,11 +21,17 @@
 // first well-factored version of that pipeline, since generalized so CLI and
 // MCP projectors can share it). Re-exported below for backward compat.
 
-export type { Store, Stores, ParamSource, SourceMap, EncodingMap } from "@rhi-zone/fractal-api-tree"
-export { assemble } from "@rhi-zone/fractal-api-tree"
+export type {
+  Store,
+  Stores,
+  ParamSource,
+  SourceMap,
+  EncodingMap,
+} from "@rhi-zone/fractal-api-tree";
+export { assemble } from "@rhi-zone/fractal-api-tree";
 
-import type { ServiceStores, Store, Stores } from "@rhi-zone/fractal-api-tree"
-import type { StandardSchemaV1 } from "@standard-schema/spec"
+import type { ServiceStores, Store, Stores } from "@rhi-zone/fractal-api-tree";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 /**
  * HTTP's own store-name fragment: an INERT, plain interface naming the stores
@@ -59,13 +65,13 @@ import type { StandardSchemaV1 } from "@standard-schema/spec"
  */
 export interface HttpStores {
   /** Route-slug params captured from the URL path — plain object, always strings. */
-  path?: Record<string, string>
+  path?: Record<string, string>;
   /** URL query params. Proxy-backed over `URLSearchParams` (see `httpStores`) — still `Store`-shaped from a read site's perspective. */
-  query?: Store
+  query?: Store;
   /** Request headers. Proxy-backed over `Headers` (see `httpStores`) — still `Store`-shaped from a read site's perspective. */
-  header?: Store
+  header?: Store;
   /** The parsed request body (see `parseRequestBody`); an empty object when there was nothing to parse. */
-  body?: Store
+  body?: Store;
 }
 
 /**
@@ -84,7 +90,7 @@ export interface HttpStores {
  * builds, so a per-request bag genuinely has every required service store in
  * hand by the time a handler/middleware reads it, same as `path`/`query`/etc.
  */
-export type HttpStoreBag = Stores & HttpStores
+export type HttpStoreBag = Stores & HttpStores;
 
 // ============================================================================
 // HttpStoreRegistry — the store names `http.source()` (verbs.ts) accepts
@@ -113,15 +119,15 @@ export type HttpStoreBag = Stores & HttpStores
  * stores compile" property this type exists to enforce.
  */
 export interface HttpStoreRegistry {
-  path: true
-  query: true
-  header: true
-  body: true
-  caller: true
+  path: true;
+  query: true;
+  header: true;
+  body: true;
+  caller: true;
 }
 
 /** A registered HTTP store name — the key set of `HttpStoreRegistry`, open via merging. */
-export type HttpStore = keyof HttpStoreRegistry
+export type HttpStore = keyof HttpStoreRegistry;
 
 /**
  * The store names this package itself builds, as a RUNTIME value — the
@@ -136,7 +142,13 @@ export type HttpStore = keyof HttpStoreRegistry
  * through `checkRouteSourceCoverage`'s `knownStores` option. No runtime value
  * can enumerate an open interface's merged members.
  */
-export const BUILTIN_HTTP_STORE_NAMES = ["path", "query", "header", "body", "caller"] as const satisfies readonly HttpStore[]
+export const BUILTIN_HTTP_STORE_NAMES = [
+  "path",
+  "query",
+  "header",
+  "body",
+  "caller",
+] as const satisfies readonly HttpStore[];
 
 // ============================================================================
 // Body parsing — Content-Type-driven request body decode
@@ -160,17 +172,17 @@ export const BUILTIN_HTTP_STORE_NAMES = ["path", "query", "header", "body", "cal
  * value silently winning.
  */
 function formDataToObject(fd: FormData): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+  const out: Record<string, unknown> = {};
   for (const [key, value] of fd.entries()) {
     if (key in out) {
-      const existing = out[key]
-      if (Array.isArray(existing)) existing.push(value)
-      else out[key] = [existing, value]
+      const existing = out[key];
+      if (Array.isArray(existing)) existing.push(value);
+      else out[key] = [existing, value];
     } else {
-      out[key] = value
+      out[key] = value;
     }
   }
-  return out
+  return out;
 }
 
 /**
@@ -185,20 +197,20 @@ function formDataToObject(fd: FormData): Record<string, unknown> {
  * own empty-object fallback.
  */
 export async function parseRequestBody(req: Request): Promise<unknown> {
-  const ct = req.headers.get("Content-Type") ?? ""
+  const ct = req.headers.get("Content-Type") ?? "";
   if (ct.includes("application/json")) {
-    return await req.json()
+    return await req.json();
   }
   if (ct.includes("multipart/form-data") || ct.includes("application/x-www-form-urlencoded")) {
-    return formDataToObject(await req.formData())
+    return formDataToObject(await req.formData());
   }
   if (ct.includes("text/plain")) {
-    return { _text: await req.text() }
+    return { _text: await req.text() };
   }
   if (ct.includes("application/octet-stream")) {
-    return { _binary: await req.arrayBuffer() }
+    return { _binary: await req.arrayBuffer() };
   }
-  return undefined
+  return undefined;
 }
 
 // ============================================================================
@@ -215,8 +227,8 @@ export async function parseRequestBody(req: Request): Promise<unknown> {
  * returns `undefined` for them rather than coercing to a string.
  */
 const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
-  get: (target, prop) => (typeof prop === "string" ? target.get(prop) ?? undefined : undefined),
-}
+  get: (target, prop) => (typeof prop === "string" ? (target.get(prop) ?? undefined) : undefined),
+};
 
 /**
  * Build the standard HTTP stores from a request, route slugs, and a pre-parsed
@@ -275,28 +287,32 @@ export function httpStores(
   parsedBody: unknown,
   serviceStores: ServiceStores = {} as ServiceStores,
 ): HttpStoreBag {
-  const caller: Record<string, unknown> = {}
+  const caller: Record<string, unknown> = {};
   for (const [key, value] of req.headers.entries()) {
-    caller[key] = value
+    caller[key] = value;
   }
   return {
     ...serviceStores,
     path: slugs,
-    body: (typeof parsedBody === "object" && parsedBody !== null)
-      ? (parsedBody as Record<string, unknown>)
-      : {},
+    body:
+      typeof parsedBody === "object" && parsedBody !== null
+        ? (parsedBody as Record<string, unknown>)
+        : {},
     caller,
     get query(): Record<string, unknown> {
-      const proxy = new Proxy(new URL(req.url).searchParams, mapLikeHandler) as unknown as Record<string, unknown>
-      Object.defineProperty(this, "query", { value: proxy, configurable: false })
-      return proxy
+      const proxy = new Proxy(new URL(req.url).searchParams, mapLikeHandler) as unknown as Record<
+        string,
+        unknown
+      >;
+      Object.defineProperty(this, "query", { value: proxy, configurable: false });
+      return proxy;
     },
     get header(): Record<string, unknown> {
-      const proxy = new Proxy(req.headers, mapLikeHandler) as unknown as Record<string, unknown>
-      Object.defineProperty(this, "header", { value: proxy, configurable: false })
-      return proxy
+      const proxy = new Proxy(req.headers, mapLikeHandler) as unknown as Record<string, unknown>;
+      Object.defineProperty(this, "header", { value: proxy, configurable: false });
+      return proxy;
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -312,9 +328,9 @@ export function primaryStoreForMethod(method: string): string {
     case "GET":
     case "HEAD":
     case "DELETE":
-      return "query"
+      return "query";
     default:
-      return "body"
+      return "body";
   }
 }
 
@@ -339,12 +355,12 @@ export function primaryStoreForMethod(method: string): string {
 // dispatch). All three read a schema; only this one calls a Standard
 // Schema's own `~standard.validate` at request time.
 
-export type { StandardSchemaV1 } from "@standard-schema/spec"
+export type { StandardSchemaV1 } from "@standard-schema/spec";
 
 /** Outcome of running a Standard Schema validator — mirrors `StandardSchemaV1.Result` but discriminated on `ok` rather than `issues` presence, for a plain if/else at call sites. */
 export type StandardSchemaOutcome<T = unknown> =
   | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly issues: readonly StandardSchemaV1.Issue[] }
+  | { readonly ok: false; readonly issues: readonly StandardSchemaV1.Issue[] };
 
 /**
  * Run a Standard Schema validator against `value`. `~standard.validate` may
@@ -357,10 +373,9 @@ export async function runStandardSchema<T = unknown>(
   schema: StandardSchemaV1<unknown, T>,
   value: unknown,
 ): Promise<StandardSchemaOutcome<T>> {
-  const result = await schema["~standard"].validate(value)
+  const result = await schema["~standard"].validate(value);
   if (result.issues !== undefined && result.issues.length > 0) {
-    return { ok: false, issues: result.issues }
+    return { ok: false, issues: result.issues };
   }
-  return { ok: true, value: (result as { value: T }).value }
+  return { ok: true, value: (result as { value: T }).value };
 }
-

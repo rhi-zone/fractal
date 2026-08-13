@@ -30,9 +30,9 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import "./wire-apply-validation-meta.fixture.ts"
-import { api, op } from "../node.ts"
-import { applyValidation } from "./apply-validation-stub.fixture.ts"
+import "./wire-apply-validation-meta.fixture.ts";
+import { api, op } from "../node.ts";
+import { applyValidation } from "./apply-validation-stub.fixture.ts";
 
 /** Parses a plain-decimal dollar-amount numeric string (`"12.34"`) -> `1234`
  * (integer cents). Deliberately nontrivial: this runs on a value that has
@@ -44,27 +44,27 @@ import { applyValidation } from "./apply-validation-stub.fixture.ts"
  * that becomes a `"decode"` `ValidationError`, distinct from an
  * `"encoding"` one. */
 function decodeCents(wire: unknown): number {
-  if (typeof wire !== "string") throw new Error(`expected a numeric string, got ${typeof wire}`)
-  const match = /^-?\d+(?:\.(\d+))?$/.exec(wire)
-  if (!match) throw new Error(`not a plain decimal amount: ${JSON.stringify(wire)}`)
-  const fractionalDigits = match[1] ?? ""
+  if (typeof wire !== "string") throw new Error(`expected a numeric string, got ${typeof wire}`);
+  const match = /^-?\d+(?:\.(\d+))?$/.exec(wire);
+  if (!match) throw new Error(`not a plain decimal amount: ${JSON.stringify(wire)}`);
+  const fractionalDigits = match[1] ?? "";
   if (fractionalDigits.length > 2) {
-    throw new Error(`expected at most 2 decimal places (cents), got ${JSON.stringify(wire)}`)
+    throw new Error(`expected at most 2 decimal places (cents), got ${JSON.stringify(wire)}`);
   }
-  return Math.round(Number(wire) * 100)
+  return Math.round(Number(wire) * 100);
 }
 
 const httpTree = api({
   price: op((input: { cents: number }) => ({ cents: input.cents }), {
     http: { method: "GET", encodingMap: { cents: decodeCents } },
   }),
-})
+});
 
 const cliTree = api({
   price: op((input: { cents: number }) => ({ cents: input.cents }), {
     cli: { encodingMap: { cents: decodeCents } },
   }),
-})
+});
 
 /** Same tree, HTTP hooks `cents` but CLI does NOT — the multi-protocol case
  * (a leaf shared across two protocols with only one protocol's namespace
@@ -73,7 +73,7 @@ const mixedTree = api({
   price: op((input: { cents: number }) => ({ cents: input.cents }), {
     http: { method: "GET", encodingMap: { cents: decodeCents } },
   }),
-})
+});
 
 /** A leaf with a STRING-form `encodingMap` override only (no function) —
  * fingerprint/cache-invalidation tests diff this against `httpTree` above to
@@ -82,10 +82,10 @@ const httpTreeNoHook = api({
   price: op((input: { cents: number }) => ({ cents: input.cents }), {
     http: { method: "GET" },
   }),
-})
+});
 
-export const http = applyValidation("wire-hooks-http", httpTree, "http")
-export const cli = applyValidation("wire-hooks-cli", cliTree, "cli")
-export const mixedHttp = applyValidation("wire-hooks-mixed-http", mixedTree, "http")
-export const mixedCli = applyValidation("wire-hooks-mixed-cli", mixedTree, "cli")
-export const noHook = applyValidation("wire-hooks-none", httpTreeNoHook, "http")
+export const http = applyValidation("wire-hooks-http", httpTree, "http");
+export const cli = applyValidation("wire-hooks-cli", cliTree, "cli");
+export const mixedHttp = applyValidation("wire-hooks-mixed-http", mixedTree, "http");
+export const mixedCli = applyValidation("wire-hooks-mixed-cli", mixedTree, "cli");
+export const noHook = applyValidation("wire-hooks-none", httpTreeNoHook, "http");

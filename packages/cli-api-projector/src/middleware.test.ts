@@ -7,74 +7,88 @@
 // not a convention), ALS-based caller context threads through to the
 // handler, and composition order (first entry = outermost wrapper).
 
-import { AsyncLocalStorage } from "node:async_hooks"
-import { describe, expect, it } from "bun:test"
-import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { runCli } from "./cli.ts"
-import type { CliMiddleware } from "./cli.ts"
+import { AsyncLocalStorage } from "node:async_hooks";
+import { describe, expect, it } from "bun:test";
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
+import { runCli } from "./cli.ts";
+import type { CliMiddleware } from "./cli.ts";
 
 function makeIO() {
-  const out: string[] = []
-  const err: string[] = []
+  const out: string[] = [];
+  const err: string[] = [];
   return {
     out,
     err,
     io: {
-      stdout: { write: (s: string) => { out.push(s) } },
-      stderr: { write: (s: string) => { err.push(s) } },
+      stdout: {
+        write: (s: string) => {
+          out.push(s);
+        },
+      },
+      stderr: {
+        write: (s: string) => {
+          err.push(s);
+        },
+      },
       confirm: async () => true,
     },
-  }
+  };
 }
 
 describe("CliOpts.middleware", () => {
   it("with no middleware configured, the handler is called directly", async () => {
-    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
-    const { out, io } = makeIO()
-    await runCli(tree, ["echo", "--x", "1"], io)
-    expect(JSON.parse(out.join(""))).toEqual({ got: "1" })
-  })
+    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) });
+    const { out, io } = makeIO();
+    await runCli(tree, ["echo", "--x", "1"], io);
+    expect(JSON.parse(out.join(""))).toEqual({ got: "1" });
+  });
 
   it("middleware can read from stores — flag, path, and env", async () => {
     const tree = api_({
-      users: api_({}, {
-        fallback: {
-          name: "userId",
-          subtree: api_({
-            profile: op((input: { userId: string; x: string }) => ({ id: input.userId, got: input.x }), {}),
-          }),
+      users: api_(
+        {},
+        {
+          fallback: {
+            name: "userId",
+            subtree: api_({
+              profile: op(
+                (input: { userId: string; x: string }) => ({ id: input.userId, got: input.x }),
+                {},
+              ),
+            }),
+          },
         },
-      }),
-    })
-    let seenFlagX: unknown
-    let seenPathUserId: unknown
-    let seenEnvHome: unknown
+      ),
+    });
+    let seenFlagX: unknown;
+    let seenPathUserId: unknown;
+    let seenEnvHome: unknown;
     const readStores: CliMiddleware = (next) => (input, stores) => {
-      seenFlagX = stores.flag?.x
-      seenPathUserId = stores.path?.userId
-      seenEnvHome = stores.env?.HOME
-      return next(input, stores)
-    }
-    const { out, io } = makeIO()
-    await runCli(tree, ["users", "u1", "profile", "--x", "1"], io, { middleware: [readStores] })
-    expect(JSON.parse(out.join(""))).toEqual({ id: "u1", got: "1" })
-    expect(seenFlagX).toBe("1")
-    expect(seenPathUserId).toBe("u1")
-    expect(seenEnvHome).toBe(process.env.HOME)
-  })
+      seenFlagX = stores.flag?.x;
+      seenPathUserId = stores.path?.userId;
+      seenEnvHome = stores.env?.HOME;
+      return next(input, stores);
+    };
+    const { out, io } = makeIO();
+    await runCli(tree, ["users", "u1", "profile", "--x", "1"], io, { middleware: [readStores] });
+    expect(JSON.parse(out.join(""))).toEqual({ id: "u1", got: "1" });
+    expect(seenFlagX).toBe("1");
+    expect(seenPathUserId).toBe("u1");
+    expect(seenEnvHome).toBe(process.env.HOME);
+  });
 
   it("middleware wraps the handler call — can transform input before and output after", async () => {
-    const tree = api_({ echo: op((input: { x: string }) => ({ got: Number(input.x) }), {}) })
+    const tree = api_({ echo: op((input: { x: string }) => ({ got: Number(input.x) }), {}) });
     const doubleInput: CliMiddleware = (next) => (input, stores) =>
-      next({ ...input, x: String(Number(input.x) * 2) }, stores)
+      next({ ...input, x: String(Number(input.x) * 2) }, stores);
     const wrapOutput: CliMiddleware = (next) => async (input, stores) => {
-      const result = await next(input, stores)
-      return { wrapped: result }
-    }
-    const { out, io } = makeIO()
-    await runCli(tree, ["echo", "--x", "5"], io, { middleware: [wrapOutput, doubleInput] })
-    expect(JSON.parse(out.join(""))).toEqual({ wrapped: { got: 10 } })
-  })
+      const result = await next(input, stores);
+      return { wrapped: result };
+    };
+    const { out, io } = makeIO();
+    await runCli(tree, ["echo", "--x", "5"], io, { middleware: [wrapOutput, doubleInput] });
+    expect(JSON.parse(out.join(""))).toEqual({ wrapped: { got: 10 } });
+  });
 
   it("the handler does not receive stores — only the assembled input", async () => {
     // A handler declared with a single `input` parameter has no way to reach
@@ -83,64 +97,64 @@ describe("CliOpts.middleware", () => {
     // that leaks `stores` through to the handler.
     const tree = api_({
       whatArgs: op((input: unknown) => ({ argCount: Object.keys(input as object).length }), {}),
-    })
-    const passStores: CliMiddleware = (next) => (input, stores) => next(input, stores)
-    const { out, io } = makeIO()
-    await runCli(tree, ["whatArgs", "--x", "1"], io, { middleware: [passStores] })
-    expect(JSON.parse(out.join(""))).toEqual({ argCount: 1 })
-  })
+    });
+    const passStores: CliMiddleware = (next) => (input, stores) => next(input, stores);
+    const { out, io } = makeIO();
+    await runCli(tree, ["whatArgs", "--x", "1"], io, { middleware: [passStores] });
+    expect(JSON.parse(out.join(""))).toEqual({ argCount: 1 });
+  });
 
   it("middleware sets up an AsyncLocalStorage caller-context the handler can read", async () => {
-    const als = new AsyncLocalStorage<{ requestedBy: string }>()
+    const als = new AsyncLocalStorage<{ requestedBy: string }>();
     const tree = api_({
       whoami: op((_: unknown) => ({ requestedBy: als.getStore()?.requestedBy ?? "none" }), {}),
-    })
+    });
     const withAls: CliMiddleware = (next) => (input, stores) =>
-      als.run({ requestedBy: String(stores.flag?.user ?? "unknown") }, () => next(input, stores))
-    const { out, io } = makeIO()
-    await runCli(tree, ["whoami", "--user", "alice"], io, { middleware: [withAls] })
-    expect(JSON.parse(out.join(""))).toEqual({ requestedBy: "alice" })
-  })
+      als.run({ requestedBy: String(stores.flag?.user ?? "unknown") }, () => next(input, stores));
+    const { out, io } = makeIO();
+    await runCli(tree, ["whoami", "--user", "alice"], io, { middleware: [withAls] });
+    expect(JSON.parse(out.join(""))).toEqual({ requestedBy: "alice" });
+  });
 
   it("middleware can read the caller store — populated from OS-level identity (process.env.USER)", async () => {
-    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
-    let seenCallerUser: unknown
+    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) });
+    let seenCallerUser: unknown;
     const readCaller: CliMiddleware = (next) => (input, stores) => {
-      seenCallerUser = stores.caller?.user
-      return next(input, stores)
-    }
-    const { out, io } = makeIO()
-    await runCli(tree, ["echo", "--x", "1"], io, { middleware: [readCaller] })
-    expect(JSON.parse(out.join(""))).toEqual({ got: "1" })
-    expect(seenCallerUser).toBe(process.env.USER ?? process.env.USERNAME)
-  })
+      seenCallerUser = stores.caller?.user;
+      return next(input, stores);
+    };
+    const { out, io } = makeIO();
+    await runCli(tree, ["echo", "--x", "1"], io, { middleware: [readCaller] });
+    expect(JSON.parse(out.join(""))).toEqual({ got: "1" });
+    expect(seenCallerUser).toBe(process.env.USER ?? process.env.USERNAME);
+  });
 
   it("the handler's assembled input does not include caller fields unless explicitly sourceMapped", async () => {
-    const tree = api_({ echo: op((input: { x: string }) => input, {}) })
-    const { out, io } = makeIO()
-    await runCli(tree, ["echo", "--x", "1"], io)
-    const result = JSON.parse(out.join(""))
-    expect(result).toEqual({ x: "1" })
-    expect(result.user).toBeUndefined()
-  })
+    const tree = api_({ echo: op((input: { x: string }) => input, {}) });
+    const { out, io } = makeIO();
+    await runCli(tree, ["echo", "--x", "1"], io);
+    const result = JSON.parse(out.join(""));
+    expect(result).toEqual({ x: "1" });
+    expect(result.user).toBeUndefined();
+  });
 
   it("composes multiple middleware — first entry is outermost (sees the call first and last)", async () => {
-    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) })
-    const order: string[] = []
+    const tree = api_({ echo: op((input: { x: string }) => ({ got: input.x }), {}) });
+    const order: string[] = [];
     const outer: CliMiddleware = (next) => async (input, stores) => {
-      order.push("outer:before")
-      const result = await next(input, stores)
-      order.push("outer:after")
-      return result
-    }
+      order.push("outer:before");
+      const result = await next(input, stores);
+      order.push("outer:after");
+      return result;
+    };
     const inner: CliMiddleware = (next) => async (input, stores) => {
-      order.push("inner:before")
-      const result = await next(input, stores)
-      order.push("inner:after")
-      return result
-    }
-    const { io } = makeIO()
-    await runCli(tree, ["echo", "--x", "1"], io, { middleware: [outer, inner] })
-    expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"])
-  })
-})
+      order.push("inner:before");
+      const result = await next(input, stores);
+      order.push("inner:after");
+      return result;
+    };
+    const { io } = makeIO();
+    await runCli(tree, ["echo", "--x", "1"], io, { middleware: [outer, inner] });
+    expect(order).toEqual(["outer:before", "inner:before", "inner:after", "outer:after"]);
+  });
+});

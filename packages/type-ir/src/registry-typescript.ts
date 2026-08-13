@@ -21,15 +21,15 @@
 // recovers the right `run` signature — the differing input shape is expressed
 // in the type system rather than by making callers remember which module a
 // given id came from.
-import ts from "typescript"
+import ts from "typescript";
 
-import type { TypeRef, TypeRefDocument } from "./index.ts"
-import { typeRefDocument } from "./index.ts"
-import type { Registry, RegistryEntry } from "./registry-core.ts"
-import { defineRegistry, lookup } from "./registry-core.ts"
-import type { Importer } from "./registry.ts"
-import { createExtractorProgram, typeRefFromType } from "./from-typescript.ts"
-import { fromStandardSchemaType } from "./from-standard-schema-type.ts"
+import type { TypeRef, TypeRefDocument } from "./index.ts";
+import { typeRefDocument } from "./index.ts";
+import type { Registry, RegistryEntry } from "./registry-core.ts";
+import { defineRegistry, lookup } from "./registry-core.ts";
+import type { Importer } from "./registry.ts";
+import { createExtractorProgram, typeRefFromType } from "./from-typescript.ts";
+import { fromStandardSchemaType } from "./from-standard-schema-type.ts";
 
 /** Everything a checker-backed importer needs. `program` is optional only as
  * a convenience — omitting it builds a single-entry program over `file`,
@@ -37,29 +37,29 @@ import { fromStandardSchemaType } from "./from-standard-schema-type.ts"
  * caller should build one program and reuse it across many symbols. */
 export interface TypeScriptInput {
   /** Absolute path to the file declaring the symbol. */
-  readonly file: string
+  readonly file: string;
   /** Name of the exported type alias, interface, class, or const to extract. */
-  readonly symbol: string
+  readonly symbol: string;
   /** Pre-built program. Built via `createExtractorProgram(file)` if omitted. */
-  readonly program?: ts.Program
+  readonly program?: ts.Program;
 }
 
 export interface TypeScriptImporter extends RegistryEntry {
-  readonly subpath: string
-  readonly extensions: readonly string[]
-  readonly input: "typescript"
-  run(input: TypeScriptInput): TypeRefDocument
+  readonly subpath: string;
+  readonly extensions: readonly string[];
+  readonly input: "typescript";
+  run(input: TypeScriptInput): TypeRefDocument;
 }
 
 /** An importer from either half of the registry. Narrow on `input` to call it:
  * `"typescript"` takes a `TypeScriptInput`, everything else takes source
  * text. */
-export type AnyImporter = Importer | TypeScriptImporter
+export type AnyImporter = Importer | TypeScriptImporter;
 
 interface Resolved {
-  readonly checker: ts.TypeChecker
-  readonly symbol: ts.Symbol
-  readonly declaration: ts.Declaration
+  readonly checker: ts.TypeChecker;
+  readonly symbol: ts.Symbol;
+  readonly declaration: ts.Declaration;
 }
 
 /** Locate `symbol` among `file`'s module exports. Exports are used rather
@@ -67,31 +67,36 @@ interface Resolved {
  * stay invisible — extracting a type the module does not expose would produce
  * a schema no consumer could ever reference. */
 function resolveSymbol({ file, symbol, program }: TypeScriptInput): Resolved {
-  const prog = program ?? createExtractorProgram(file)
-  const checker = prog.getTypeChecker()
-  const sourceFile = prog.getSourceFile(file)
-  if (sourceFile === undefined) throw new Error(`file not found in program: ${file}`)
-  const moduleSymbol = checker.getSymbolAtLocation(sourceFile)
-  if (moduleSymbol === undefined) throw new Error(`${file} is not a module (no exports)`)
-  const found = checker.getExportsOfModule(moduleSymbol).find((s) => s.getName() === symbol)
-  if (found === undefined) throw new Error(`${file} does not export ${symbol}`)
-  const declaration = found.declarations?.[0]
-  if (declaration === undefined) throw new Error(`${symbol} has no declaration`)
-  return { checker, symbol: found, declaration }
+  const prog = program ?? createExtractorProgram(file);
+  const checker = prog.getTypeChecker();
+  const sourceFile = prog.getSourceFile(file);
+  if (sourceFile === undefined) throw new Error(`file not found in program: ${file}`);
+  const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+  if (moduleSymbol === undefined) throw new Error(`${file} is not a module (no exports)`);
+  const found = checker.getExportsOfModule(moduleSymbol).find((s) => s.getName() === symbol);
+  if (found === undefined) throw new Error(`${file} does not export ${symbol}`);
+  const declaration = found.declarations?.[0];
+  if (declaration === undefined) throw new Error(`${symbol} has no declaration`);
+  return { checker, symbol: found, declaration };
 }
 
 /** The declared type of a type alias / interface / class, or the value type
  * of a const. `getDeclaredTypeOfSymbol` returns the intrinsic `any`-like
  * placeholder for value symbols, so the symbol's flags pick the accessor. */
 function typeOfSymbol({ checker, symbol, declaration }: Resolved): ts.Type {
-  const isTypeSymbol = (symbol.flags & (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface | ts.SymbolFlags.Class)) !== 0
-  return isTypeSymbol ? checker.getDeclaredTypeOfSymbol(symbol) : checker.getTypeOfSymbolAtLocation(symbol, declaration)
+  const isTypeSymbol =
+    (symbol.flags &
+      (ts.SymbolFlags.TypeAlias | ts.SymbolFlags.Interface | ts.SymbolFlags.Class)) !==
+    0;
+  return isTypeSymbol
+    ? checker.getDeclaredTypeOfSymbol(symbol)
+    : checker.getTypeOfSymbolAtLocation(symbol, declaration);
 }
 
 /** Extract a `TypeRef` for one exported TypeScript symbol. */
 export function importTypeScript(input: TypeScriptInput): TypeRef {
-  const resolved = resolveSymbol(input)
-  return typeRefFromType(typeOfSymbol(resolved), resolved.checker, resolved.declaration)
+  const resolved = resolveSymbol(input);
+  return typeRefFromType(typeOfSymbol(resolved), resolved.checker, resolved.declaration);
 }
 
 /** Extract a `TypeRef` from an exported Standard Schema value by reading its
@@ -100,8 +105,8 @@ export function importTypeScript(input: TypeScriptInput): TypeRef {
  * execution — the checker resolves the declared output type directly, so
  * optionality and literal unions survive intact. */
 export function importStandardSchemaType(input: TypeScriptInput): TypeRef {
-  const resolved = resolveSymbol(input)
-  return fromStandardSchemaType(typeOfSymbol(resolved), resolved.checker, resolved.declaration)
+  const resolved = resolveSymbol(input);
+  return fromStandardSchemaType(typeOfSymbol(resolved), resolved.checker, resolved.declaration);
 }
 
 const typescriptImporterList: readonly TypeScriptImporter[] = [
@@ -119,16 +124,17 @@ const typescriptImporterList: readonly TypeScriptImporter[] = [
     input: "typescript",
     run: (input) => typeRefDocument(importStandardSchemaType(input)),
   },
-]
+];
 
 /** Mergeable into `importerRegistry` from `./registry`. */
-export const typescriptImporterRegistry: Registry<TypeScriptImporter> = defineRegistry(typescriptImporterList)
+export const typescriptImporterRegistry: Registry<TypeScriptImporter> =
+  defineRegistry(typescriptImporterList);
 
 /** Every checker-backed importer id, in registration order. */
-export const typescriptImporterIds: readonly string[] = typescriptImporterRegistry.ids
+export const typescriptImporterIds: readonly string[] = typescriptImporterRegistry.ids;
 
 export function getTypeScriptImporter(id: string): TypeScriptImporter {
-  return lookup(typescriptImporterRegistry, "TypeScript input format", id)
+  return lookup(typescriptImporterRegistry, "TypeScript input format", id);
 }
 
 /** Run any importer from a (possibly merged) registry through one call.
@@ -144,15 +150,15 @@ export function ingestFrom(
   id: string,
   input: string | TypeScriptInput,
 ): TypeRefDocument {
-  const importer = lookup(registry, "input format", id)
+  const importer = lookup(registry, "input format", id);
   if (importer.input === "typescript") {
     if (typeof input === "string") {
-      throw new Error(`input format ${id} needs a file and symbol, not source text`)
+      throw new Error(`input format ${id} needs a file and symbol, not source text`);
     }
-    return importer.run(input)
+    return importer.run(input);
   }
   if (typeof input !== "string") {
-    throw new Error(`input format ${id} needs source text, not a file and symbol`)
+    throw new Error(`input format ${id} needs source text, not a file and symbol`);
   }
-  return importer.run(input)
+  return importer.run(input);
 }

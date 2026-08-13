@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA, quote } from "./codegen-helpers.ts";
 
 // RBS (https://github.com/ruby/rbs, bundled with Ruby 3+) — Ruby's own type
 // signature-file format. Unlike ruby-sorbet.ts's Sorbet mode (inline `sig`
@@ -47,12 +47,12 @@ import { capitalize, isA, quote } from "./codegen-helpers.ts"
 // ruby-sorbet.ts's RBS mode — RBS's own type-expression grammar doesn't
 // change based on which projector emits it.
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // ============================================================================
 // RBS type-expression grammar — identical to ruby-sorbet.ts's `rbsHandlers`/
@@ -78,52 +78,56 @@ const handlers: Record<string, Converter> = {
   object: () => "Hash[Symbol, untyped]",
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape) => `Array[${toRbsType((shape as TypeShape & { kind: "array" }).element)}]`,
-  tuple: (shape) => `[${(shape as TypeShape & { kind: "tuple" }).elements.map(toRbsType).join(", ")}]`,
+  tuple: (shape) =>
+    `[${(shape as TypeShape & { kind: "tuple" }).elements.map(toRbsType).join(", ")}]`,
   stream: (shape) => `Enumerator[${toRbsType((shape as TypeShape & { kind: "stream" }).element)}]`,
   page: (shape) => `Array[${toRbsType((shape as TypeShape & { kind: "page" }).element)}]`,
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Hash[${toRbsType(s.key)}, ${toRbsType(s.value)}]`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Hash[${toRbsType(s.key)}, ${toRbsType(s.value)}]`;
   },
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
+    const s = shape as TypeShape & { kind: "union" };
     if (s.variants.length === 2) {
-      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null")
+      const nullIndex = s.variants.findIndex((v) => v.shape.kind === "null");
       if (nullIndex !== -1) {
-        const other = s.variants[nullIndex === 0 ? 1 : 0]!
-        return `${toRbsType(other)}?`
+        const other = s.variants[nullIndex === 0 ? 1 : 0]!;
+        return `${toRbsType(other)}?`;
       }
     }
-    return s.variants.map(toRbsType).join(" | ")
+    return s.variants.map(toRbsType).join(" | ");
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "nil"
-    if (typeof s.value === "string") return quote(s.value)
-    return String(s.value)
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "nil";
+    if (typeof s.value === "string") return quote(s.value);
+    return String(s.value);
   },
   enum: (shape, meta) =>
-    typeof meta.enumName === "string" ? meta.enumName : (shape as TypeShape & { kind: "enum" }).members.map(quote).join(" | "),
+    typeof meta.enumName === "string"
+      ? meta.enumName
+      : (shape as TypeShape & { kind: "enum" }).members.map(quote).join(" | "),
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
-  intersection: (shape) => (shape as TypeShape & { kind: "intersection" }).members.map(toRbsType).join(" & "),
+  intersection: (shape) =>
+    (shape as TypeShape & { kind: "intersection" }).members.map(toRbsType).join(" & "),
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p) => `${toRbsType(p.type)} ${p.name}`)
-    return `^(${params.join(", ")}) -> ${toRbsType(s.returnType)}`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p) => `${toRbsType(p.type)} ${p.name}`);
+    return `^(${params.join(", ")}) -> ${toRbsType(s.returnType)}`;
   },
   interface: leaf("untyped"),
-}
+};
 
 function coreRbsType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  return converter === undefined ? "untyped" : converter(ref.shape, ref.meta)
+  const converter = resolve(ref.shape.kind, handlers);
+  return converter === undefined ? "untyped" : converter(ref.shape, ref.meta);
 }
 
 /** An RBS type expression for `ref` — suitable for an `attr_reader`,
  * `initialize` parameter, or `type` alias body. */
 export function toRbsType(ref: TypeRef): string {
-  const core = coreRbsType(ref)
-  return ref.meta.nullable === true ? `${core}?` : core
+  const core = coreRbsType(ref);
+  return ref.meta.nullable === true ? `${core}?` : core;
 }
 
 // ============================================================================
@@ -132,8 +136,8 @@ export function toRbsType(ref: TypeRef): string {
 // ============================================================================
 
 interface Ctx {
-  declarations: string[]
-  declaredNames: Set<string>
+  declarations: string[];
+  declaredNames: Set<string>;
 }
 
 /**
@@ -152,31 +156,37 @@ function classField(
   fieldRef: TypeRef,
   ctx: Ctx,
 ): { attrLine: string; initParam: string } {
-  let core: string
+  let core: string;
   if (isA(fieldRef.shape.kind, "object")) {
-    const nestedName = `${className}${capitalize(fieldName)}`
-    core = emitClass(nestedName, fieldRef, ctx)
+    const nestedName = `${className}${capitalize(fieldName)}`;
+    core = emitClass(nestedName, fieldRef, ctx);
   } else if (fieldRef.shape.kind === "enum") {
-    const nestedName = `${className}${capitalize(fieldName)}`
-    core = emitEnumAlias(nestedName, fieldRef, ctx)
-  } else if (fieldRef.shape.kind === "array" && isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")) {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    const nestedName = `${className}${capitalize(fieldName)}`
-    core = `Array[${emitClass(nestedName, element, ctx)}]`
-  } else if (fieldRef.shape.kind === "array" && (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum") {
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    const nestedName = `${className}${capitalize(fieldName)}`
-    core = `Array[${emitEnumAlias(nestedName, element, ctx)}]`
+    const nestedName = `${className}${capitalize(fieldName)}`;
+    core = emitEnumAlias(nestedName, fieldRef, ctx);
+  } else if (
+    fieldRef.shape.kind === "array" &&
+    isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
+  ) {
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    const nestedName = `${className}${capitalize(fieldName)}`;
+    core = `Array[${emitClass(nestedName, element, ctx)}]`;
+  } else if (
+    fieldRef.shape.kind === "array" &&
+    (fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind === "enum"
+  ) {
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    const nestedName = `${className}${capitalize(fieldName)}`;
+    core = `Array[${emitEnumAlias(nestedName, element, ctx)}]`;
   } else {
-    core = coreRbsType(fieldRef)
+    core = coreRbsType(fieldRef);
   }
 
-  const optional = fieldRef.meta.optional === true
-  const nullable = fieldRef.meta.nullable === true
-  const type = nullable ? `${core}?` : core
-  const attrLine = `  attr_reader ${fieldName}: ${type}`
-  const initParam = `${optional ? "?" : ""}${fieldName}: ${type}`
-  return { attrLine, initParam }
+  const optional = fieldRef.meta.optional === true;
+  const nullable = fieldRef.meta.nullable === true;
+  const type = nullable ? `${core}?` : core;
+  const attrLine = `  attr_reader ${fieldName}: ${type}`;
+  const initParam = `${optional ? "?" : ""}${fieldName}: ${type}`;
+  return { attrLine, initParam };
 }
 
 /**
@@ -186,29 +196,31 @@ function classField(
  * syntax exists in RBS itself, see the file-header comment).
  */
 export function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
 
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const attrLines: string[] = []
-  const initParams: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const attrLines: string[] = [];
+  const initParams: string[] = [];
 
   for (const [fieldName, fieldRef] of Object.entries(shape.fields)) {
-    const { attrLine, initParam } = classField(name, fieldName, fieldRef, ctx)
-    attrLines.push(attrLine)
-    initParams.push(initParam)
+    const { attrLine, initParam } = classField(name, fieldName, fieldRef, ctx);
+    attrLines.push(attrLine);
+    initParams.push(initParam);
   }
 
-  const lines: string[] = []
-  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`)
-  if (ref.meta.deprecated === true) lines.push(`# @deprecated`)
-  lines.push(`class ${name}`)
-  lines.push(`  def initialize: (${initParams.length > 0 ? `${initParams.join(", ")}` : ""}) -> void`)
-  lines.push(...attrLines)
-  lines.push("end")
+  const lines: string[] = [];
+  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`);
+  if (ref.meta.deprecated === true) lines.push(`# @deprecated`);
+  lines.push(`class ${name}`);
+  lines.push(
+    `  def initialize: (${initParams.length > 0 ? `${initParams.join(", ")}` : ""}) -> void`,
+  );
+  lines.push(...attrLines);
+  lines.push("end");
 
-  ctx.declarations.push(lines.join("\n"))
-  return name
+  ctx.declarations.push(lines.join("\n"));
+  return name;
 }
 
 /**
@@ -217,22 +229,22 @@ export function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
  * (https://github.com/ruby/rbs/blob/master/docs/syntax.md#type-syntax).
  */
 export function emitEnumAlias(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
 
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const members = shape.members.map(quote).join(" | ")
-  const lines: string[] = []
-  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`)
-  lines.push(`type ${name} = ${members}`)
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const members = shape.members.map(quote).join(" | ");
+  const lines: string[] = [];
+  if (typeof ref.meta.description === "string") lines.push(`# ${ref.meta.description}`);
+  lines.push(`type ${name} = ${members}`);
 
-  ctx.declarations.push(lines.join("\n"))
-  return name
+  ctx.declarations.push(lines.join("\n"));
+  return name;
 }
 
 const discriminatorComment = (propertyName: string): string =>
   `  # discriminated by ${quote(propertyName)} — RBS has no native discriminated-union support;` +
-  ` dispatch on this field with a Ruby-level \`case\`/pattern match at the call site`
+  ` dispatch on this field with a Ruby-level \`case\`/pattern match at the call site`;
 
 /**
  * Top-level entry point: render `ref` as the full contents of a `.rbs`
@@ -243,18 +255,20 @@ const discriminatorComment = (propertyName: string): string =>
  * over the RBS type-expression grammar above.
  */
 export function toRbsFile(ref: TypeRef, name = "Root"): string {
-  const ctx: Ctx = { declarations: [], declaredNames: new Set() }
+  const ctx: Ctx = { declarations: [], declaredNames: new Set() };
 
   if (ref.shape.kind === "object") {
-    emitClass(name, ref, ctx)
+    emitClass(name, ref, ctx);
   } else if (ref.shape.kind === "enum") {
-    emitEnumAlias(name, ref, ctx)
+    emitEnumAlias(name, ref, ctx);
   } else {
-    const expr = toRbsType(ref)
+    const expr = toRbsType(ref);
     const comment =
-      ref.shape.kind === "union" && typeof ref.meta.discriminator === "string" ? discriminatorComment(ref.meta.discriminator) : ""
-    ctx.declarations.push(`type ${name} = ${expr}${comment}`)
+      ref.shape.kind === "union" && typeof ref.meta.discriminator === "string"
+        ? discriminatorComment(ref.meta.discriminator)
+        : "";
+    ctx.declarations.push(`type ${name} = ${expr}${comment}`);
   }
 
-  return `${ctx.declarations.join("\n\n")}\n`
+  return `${ctx.declarations.join("\n\n")}\n`;
 }

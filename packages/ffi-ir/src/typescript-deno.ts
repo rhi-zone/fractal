@@ -1,4 +1,4 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 // Side-effect import: registers type-ir's fixed-width int/float kinds and
 // "bytes" into the shared `TypeKinds` interface via declaration merging.
 // Required here because this file's own `denoFfiType` switches on the
@@ -8,8 +8,8 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir"
 // reach those kind-registration modules through any import edge —
 // wasm-bindgen.ts in this same package establishes the identical convention
 // for the identical reason.
-import "@rhi-zone/fractal-type-ir/kinds/common"
-import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts"
+import "@rhi-zone/fractal-type-ir/kinds/common";
+import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // ffi-ir -> Deno FFI consumer projector: NOT a producer (unlike rust-c-abi.ts,
 // which emits Rust `extern "C"` source implementing a C-ABI library) — this
@@ -108,21 +108,21 @@ function toSnakeCase(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .toLowerCase()
+    .toLowerCase();
 }
 
 function toCamelCase(name: string): string {
-  const snake = toSnakeCase(name)
-  return snake.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase())
+  const snake = toSnakeCase(name);
+  return snake.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
 }
 
 function toPascalCase(name: string): string {
-  const camel = toCamelCase(name)
-  return camel.length === 0 ? camel : camel[0]!.toUpperCase() + camel.slice(1)
+  const camel = toCamelCase(name);
+  return camel.length === 0 ? camel : camel[0]!.toUpperCase() + camel.slice(1);
 }
 
 function quote(value: string): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 /** Deno's own documented FFI pointer representation ("as of Deno 1.31 the
@@ -130,7 +130,7 @@ function quote(value: string): string {
  * object or `null`") — spelled out as this literal union rather than a
  * `Deno.PointerValue` reference, since that name was not confirmed on the
  * fetched docs page. Emitted once per generated file as a local alias. */
-const POINTER_TYPE_ALIAS = "type Pointer = {} | null"
+const POINTER_TYPE_ALIAS = "type Pointer = {} | null";
 
 const PRIMITIVE_DENO_TYPES: Readonly<Record<string, string>> = {
   boolean: "u8",
@@ -147,21 +147,22 @@ const PRIMITIVE_DENO_TYPES: Readonly<Record<string, string>> = {
   float32: "f32",
   float64: "f64",
   bytes: "buffer",
-}
+};
 
 /** Deno FFI type -> the TS type a wrapper function's parameter/return
  * position should carry, per the verified Deno/C/Rust type table (see file
  * header). */
 function tsTypeFor(denoType: string): string {
-  if (denoType === "i64" || denoType === "u64" || denoType === "usize" || denoType === "isize") return "bigint"
-  if (denoType === "void") return "void"
-  if (denoType === "buffer") return "Uint8Array | null"
-  if (denoType === "pointer") return "Pointer"
-  return "number" // i8/u8/i16/u16/i32/u32/f32/f64
+  if (denoType === "i64" || denoType === "u64" || denoType === "usize" || denoType === "isize")
+    return "bigint";
+  if (denoType === "void") return "void";
+  if (denoType === "buffer") return "Uint8Array | null";
+  if (denoType === "pointer") return "Pointer";
+  return "number"; // i8/u8/i16/u16/i32/u32/f32/f64
 }
 
 function isVoidType(ref: TypeRef): boolean {
-  return ref.shape.kind === "void" || ref.shape.kind === "null"
+  return ref.shape.kind === "void" || ref.shape.kind === "null";
 }
 
 /**
@@ -179,60 +180,64 @@ function isVoidType(ref: TypeRef): boolean {
  *     implement the C-ABI layout computation it requires; see file header).
  */
 export function denoFfiType(ref: TypeRef): string {
-  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined
-  if (discipline !== undefined && discipline.kind !== "copy") return "pointer"
+  const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
+  if (discipline !== undefined && discipline.kind !== "copy") return "pointer";
 
-  const kind = ref.shape.kind
-  if (isVoidType(ref)) return "void"
-  if (kind in PRIMITIVE_DENO_TYPES) return PRIMITIVE_DENO_TYPES[kind]!
+  const kind = ref.shape.kind;
+  if (isVoidType(ref)) return "void";
+  if (kind in PRIMITIVE_DENO_TYPES) return PRIMITIVE_DENO_TYPES[kind]!;
 
   if (kind === "string") {
     throw new Error(
       'denoFfiType: "string" has no native Deno FFI type and no established fractal C-ABI string convention to encode against ' +
         "(null-terminated pointer vs. pointer+length, and byte ownership, are all undecided — see this file's header) — " +
         "throwing rather than guessing an encoding",
-    )
+    );
   }
 
   throw new Error(
     `denoFfiType: shape kind "${kind}" has no mapping in this minimal projector's primitive/bytes/pointer subset — ` +
-      'Deno FFI can represent a by-value struct natively via `{ struct: [...] }`, but computing the required C-ABI ' +
+      "Deno FFI can represent a by-value struct natively via `{ struct: [...] }`, but computing the required C-ABI " +
       "byte layout (field order, alignment, padding) is out of scope here; a full type-ir -> Deno-struct-layout " +
       "projector is separate, not-yet-done work",
-  )
+  );
 }
 
 function libPathOf(meta: Readonly<Record<string, unknown>>, where: string): string {
-  const libPath = meta.libPath
+  const libPath = meta.libPath;
   if (typeof libPath !== "string") {
     throw new Error(
       `toDenoFfi: "${where}" is missing required meta.libPath (the path/URL Deno.dlopen's first argument names, e.g. ` +
         '"./libexample.so") — there is no derivable default, so this must be supplied on the FfiRef\'s own meta bag ' +
         "(the same open-metadata-bag convention gleam.ts's meta.jsModule already established for its own target-specific, " +
         "schema-absent requirement)",
-    )
+    );
   }
-  return libPath
+  return libPath;
 }
 
-type SymbolEntry = { readonly key: string; readonly parameters: readonly string[]; readonly result: string }
+type SymbolEntry = {
+  readonly key: string;
+  readonly parameters: readonly string[];
+  readonly result: string;
+};
 
 type Wrapper = {
-  readonly exportName: string
-  readonly symbolKey: string
-  readonly params: readonly { readonly name: string; readonly denoType: string }[]
-  readonly resultDenoType: string
-  readonly docLines: readonly string[]
-}
+  readonly exportName: string;
+  readonly symbolKey: string;
+  readonly params: readonly { readonly name: string; readonly denoType: string }[];
+  readonly resultDenoType: string;
+  readonly docLines: readonly string[];
+};
 
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
-  return typeof meta.description === "string" ? [`/** ${meta.description} */`] : []
+  return typeof meta.description === "string" ? [`/** ${meta.description} */`] : [];
 }
 
 type FfiFunctionLike = {
-  readonly params: readonly FfiParam[]
-  readonly returnType: TypeRef
-}
+  readonly params: readonly FfiParam[];
+  readonly returnType: TypeRef;
+};
 
 /** Builds the symbol-table entry and wrapper-function description for one
  * `function`/`method` shape. `selfParam`, when given (a method's receiver
@@ -248,33 +253,40 @@ function buildCallable(
   shape: FfiFunctionLike,
   selfParam?: string,
 ): { symbol: SymbolEntry; wrapper: Wrapper } {
-  const params: { name: string; denoType: string }[] = []
-  if (selfParam !== undefined) params.push({ name: "handle", denoType: "pointer" })
+  const params: { name: string; denoType: string }[] = [];
+  if (selfParam !== undefined) params.push({ name: "handle", denoType: "pointer" });
   for (const p of shape.params) {
-    params.push({ name: toCamelCase(p.name), denoType: denoFfiType(p.type) })
+    params.push({ name: toCamelCase(p.name), denoType: denoFfiType(p.type) });
   }
-  const resultDenoType = isVoidType(shape.returnType) ? "void" : denoFfiType(shape.returnType)
+  const resultDenoType = isVoidType(shape.returnType) ? "void" : denoFfiType(shape.returnType);
 
   return {
     symbol: { key: symbolKey, parameters: params.map((p) => p.denoType), result: resultDenoType },
     wrapper: { exportName, symbolKey, params, resultDenoType, docLines: docComment(ref.meta) },
-  }
+  };
 }
 
 function renderSymbolsObject(symbols: readonly SymbolEntry[]): string {
   const lines = symbols.map(
-    (s) => `    ${quote(s.key)}: { parameters: [${s.parameters.map(quote).join(", ")}], result: ${quote(s.result)} },`,
-  )
-  return ["{", ...lines, "}"].join("\n")
+    (s) =>
+      `    ${quote(s.key)}: { parameters: [${s.parameters.map(quote).join(", ")}], result: ${quote(s.result)} },`,
+  );
+  return ["{", ...lines, "}"].join("\n");
 }
 
 function renderWrapper(libVar: string, w: Wrapper): string {
-  const params = w.params.map((p) => `${p.name}: ${tsTypeFor(p.denoType)}`).join(", ")
-  const args = w.params.map((p) => p.name).join(", ")
-  const returnTs = tsTypeFor(w.resultDenoType)
-  const call = `${libVar}.symbols.${w.symbolKey}` // symbol keys are always snake_case identifiers (from toSnakeCase), valid as plain property access
-  const body = w.resultDenoType === "void" ? `  ${call}(${args})` : `  return ${call}(${args}) as ${returnTs}`
-  return [...w.docLines, `export function ${w.exportName}(${params}): ${returnTs} {`, body, "}"].join("\n")
+  const params = w.params.map((p) => `${p.name}: ${tsTypeFor(p.denoType)}`).join(", ");
+  const args = w.params.map((p) => p.name).join(", ");
+  const returnTs = tsTypeFor(w.resultDenoType);
+  const call = `${libVar}.symbols.${w.symbolKey}`; // symbol keys are always snake_case identifiers (from toSnakeCase), valid as plain property access
+  const body =
+    w.resultDenoType === "void" ? `  ${call}(${args})` : `  return ${call}(${args}) as ${returnTs}`;
+  return [
+    ...w.docLines,
+    `export function ${w.exportName}(${params}): ${returnTs} {`,
+    body,
+    "}",
+  ].join("\n");
 }
 
 /** The paired free-function wrapper for a resource — synthesized
@@ -286,8 +298,8 @@ function renderWrapper(libVar: string, w: Wrapper): string {
  * `"pointer"` at this raw layer, so the free wrapper's own signature does
  * not vary by discipline either. */
 function buildFreeWrapper(resourceName: string): { symbol: SymbolEntry; wrapper: Wrapper } {
-  const resourceSnake = toSnakeCase(resourceName)
-  const symbolKey = `${resourceSnake}_free`
+  const resourceSnake = toSnakeCase(resourceName);
+  const symbolKey = `${resourceSnake}_free`;
   return {
     symbol: { key: symbolKey, parameters: ["pointer"], result: "void" },
     wrapper: {
@@ -295,9 +307,11 @@ function buildFreeWrapper(resourceName: string): { symbol: SymbolEntry; wrapper:
       symbolKey,
       params: [{ name: "handle", denoType: "pointer" }],
       resultDenoType: "void",
-      docLines: [`/** Releases a ${resourceName} handle — pairs with rust-c-abi.ts's synthesized \`${symbolKey}\` export. */`],
+      docLines: [
+        `/** Releases a ${resourceName} handle — pairs with rust-c-abi.ts's synthesized \`${symbolKey}\` export. */`,
+      ],
     },
-  }
+  };
 }
 
 function buildResourceGroup(
@@ -305,36 +319,41 @@ function buildResourceGroup(
   ref: FfiRef,
   shape: FfiKinds["resource"],
 ): { symbols: SymbolEntry[]; wrappers: Wrapper[] } {
-  const resourceSnake = toSnakeCase(name)
-  const symbols: SymbolEntry[] = []
-  const wrappers: Wrapper[] = []
+  const resourceSnake = toSnakeCase(name);
+  const symbols: SymbolEntry[] = [];
+  const wrappers: Wrapper[] = [];
 
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
     if (methodRef.shape.kind !== "method" && methodRef.shape.kind !== "function") {
       throw new Error(
         `toDenoFfi: resource "${name}"'s method "${methodName}" has shape kind "${methodRef.shape.kind}", not "method"/"function"`,
-      )
+      );
     }
-    const methodShape = methodRef.shape as FfiFunctionLike
-    const symbolKey = `${resourceSnake}_${toSnakeCase(methodName)}`
-    const exportName = `${toCamelCase(name)}${toPascalCase(methodName)}`
-    const { symbol, wrapper } = buildCallable(symbolKey, exportName, methodRef, methodShape, name)
-    symbols.push(symbol)
-    wrappers.push(wrapper)
+    const methodShape = methodRef.shape as FfiFunctionLike;
+    const symbolKey = `${resourceSnake}_${toSnakeCase(methodName)}`;
+    const exportName = `${toCamelCase(name)}${toPascalCase(methodName)}`;
+    const { symbol, wrapper } = buildCallable(symbolKey, exportName, methodRef, methodShape, name);
+    symbols.push(symbol);
+    wrappers.push(wrapper);
   }
 
-  const free = buildFreeWrapper(name)
-  symbols.push(free.symbol)
-  wrappers.push(free.wrapper)
+  const free = buildFreeWrapper(name);
+  symbols.push(free.symbol);
+  wrappers.push(free.wrapper);
 
-  void ref // resource-level meta (e.g. description) is not currently surfaced per-group; kept for signature symmetry with sibling builders
-  return { symbols, wrappers }
+  void ref; // resource-level meta (e.g. description) is not currently surfaced per-group; kept for signature symmetry with sibling builders
+  return { symbols, wrappers };
 }
 
-function renderModuleOrGroup(libVar: string, libPath: string, symbols: readonly SymbolEntry[], wrappers: readonly Wrapper[]): string {
-  const lib = `const ${libVar} = Deno.dlopen(${quote(libPath)}, ${renderSymbolsObject(symbols)})`
-  const wrapperCode = wrappers.map((w) => renderWrapper(libVar, w))
-  return [POINTER_TYPE_ALIAS, "", lib, "", ...wrapperCode].join("\n")
+function renderModuleOrGroup(
+  libVar: string,
+  libPath: string,
+  symbols: readonly SymbolEntry[],
+  wrappers: readonly Wrapper[],
+): string {
+  const lib = `const ${libVar} = Deno.dlopen(${quote(libPath)}, ${renderSymbolsObject(symbols)})`;
+  const wrapperCode = wrappers.map((w) => renderWrapper(libVar, w));
+  return [POINTER_TYPE_ALIAS, "", lib, "", ...wrapperCode].join("\n");
 }
 
 /**
@@ -370,64 +389,83 @@ function renderModuleOrGroup(libVar: string, libPath: string, symbols: readonly 
  * (see `libPathOf`).
  */
 export function toDenoFfi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (kind === "module") {
-    const shape = ref.shape as FfiKinds["module"]
-    const libPath = libPathOf(ref.meta, shape.name)
-    const symbols: SymbolEntry[] = []
-    const wrappers: Wrapper[] = []
+    const shape = ref.shape as FfiKinds["module"];
+    const libPath = libPathOf(ref.meta, shape.name);
+    const symbols: SymbolEntry[] = [];
+    const wrappers: Wrapper[] = [];
 
     for (const [fnName, fnRef] of Object.entries(shape.functions)) {
       if (fnRef.shape.kind !== "function" && fnRef.shape.kind !== "method") {
-        throw new Error(`toDenoFfi: module "${shape.name}"'s function "${fnName}" has shape kind "${fnRef.shape.kind}", not "function"/"method"`)
+        throw new Error(
+          `toDenoFfi: module "${shape.name}"'s function "${fnName}" has shape kind "${fnRef.shape.kind}", not "function"/"method"`,
+        );
       }
-      const fnShape = fnRef.shape as FfiFunctionLike
-      const { symbol, wrapper } = buildCallable(toSnakeCase(fnName), toCamelCase(fnName), fnRef, fnShape)
-      symbols.push(symbol)
-      wrappers.push(wrapper)
+      const fnShape = fnRef.shape as FfiFunctionLike;
+      const { symbol, wrapper } = buildCallable(
+        toSnakeCase(fnName),
+        toCamelCase(fnName),
+        fnRef,
+        fnShape,
+      );
+      symbols.push(symbol);
+      wrappers.push(wrapper);
     }
 
     for (const [resName, resRef] of Object.entries(shape.resources)) {
       if (resRef.shape.kind !== "resource") {
-        throw new Error(`toDenoFfi: module "${shape.name}"'s resource "${resName}" has shape kind "${resRef.shape.kind}", not "resource"`)
+        throw new Error(
+          `toDenoFfi: module "${shape.name}"'s resource "${resName}" has shape kind "${resRef.shape.kind}", not "resource"`,
+        );
       }
-      const { symbols: resSymbols, wrappers: resWrappers } = buildResourceGroup(resName, resRef, resRef.shape as FfiKinds["resource"])
-      symbols.push(...resSymbols)
-      wrappers.push(...resWrappers)
+      const { symbols: resSymbols, wrappers: resWrappers } = buildResourceGroup(
+        resName,
+        resRef,
+        resRef.shape as FfiKinds["resource"],
+      );
+      symbols.push(...resSymbols);
+      wrappers.push(...resWrappers);
     }
 
-    return renderModuleOrGroup("lib", libPath, symbols, wrappers)
+    return renderModuleOrGroup("lib", libPath, symbols, wrappers);
   }
 
   if (kind === "function") {
     if (name === undefined) {
-      throw new Error('toDenoFfi: "function" requires a name — a Deno FFI symbol is a named entry, not an anonymous inline type')
+      throw new Error(
+        'toDenoFfi: "function" requires a name — a Deno FFI symbol is a named entry, not an anonymous inline type',
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "function" }
-    const libPath = libPathOf(ref.meta, name)
-    const { symbol, wrapper } = buildCallable(toSnakeCase(name), toCamelCase(name), ref, shape)
-    return renderModuleOrGroup("lib", libPath, [symbol], [wrapper])
+    const shape = ref.shape as FfiShape & { kind: "function" };
+    const libPath = libPathOf(ref.meta, name);
+    const { symbol, wrapper } = buildCallable(toSnakeCase(name), toCamelCase(name), ref, shape);
+    return renderModuleOrGroup("lib", libPath, [symbol], [wrapper]);
   }
 
   if (kind === "method") {
     if (name === undefined) {
-      throw new Error('toDenoFfi: "method" requires a name — the method\'s own key in its resource\'s methods map')
+      throw new Error(
+        "toDenoFfi: \"method\" requires a name — the method's own key in its resource's methods map",
+      );
     }
-    const shape = ref.shape as FfiShape & { kind: "method" }
-    const libPath = libPathOf(ref.meta, name)
-    const symbolKey = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`
-    const exportName = `${toCamelCase(shape.receiver)}${toPascalCase(name)}`
-    const { symbol, wrapper } = buildCallable(symbolKey, exportName, ref, shape, shape.receiver)
-    return renderModuleOrGroup("lib", libPath, [symbol], [wrapper])
+    const shape = ref.shape as FfiShape & { kind: "method" };
+    const libPath = libPathOf(ref.meta, name);
+    const symbolKey = `${toSnakeCase(shape.receiver)}_${toSnakeCase(name)}`;
+    const exportName = `${toCamelCase(shape.receiver)}${toPascalCase(name)}`;
+    const { symbol, wrapper } = buildCallable(symbolKey, exportName, ref, shape, shape.receiver);
+    return renderModuleOrGroup("lib", libPath, [symbol], [wrapper]);
   }
 
   if (kind === "resource") {
-    const shape = ref.shape as FfiKinds["resource"]
-    const libPath = libPathOf(ref.meta, shape.name)
-    const { symbols, wrappers } = buildResourceGroup(shape.name, ref, shape)
-    return renderModuleOrGroup("lib", libPath, symbols, wrappers)
+    const shape = ref.shape as FfiKinds["resource"];
+    const libPath = libPathOf(ref.meta, shape.name);
+    const { symbols, wrappers } = buildResourceGroup(shape.name, ref, shape);
+    return renderModuleOrGroup("lib", libPath, symbols, wrappers);
   }
 
-  throw new Error(`toDenoFfi: unhandled ffi-ir kind "${kind}" — no Deno FFI mapping implemented for this backend`)
+  throw new Error(
+    `toDenoFfi: unhandled ffi-ir kind "${kind}" — no Deno FFI mapping implemented for this backend`,
+  );
 }

@@ -25,43 +25,43 @@
 // codegen path always uses the default 5xx/network-error predicate; pass a
 // custom `retryOn` only when you don't also need codegen support for it.
 
-import type { ClientExtension, FetchImpl } from "../extension.ts"
+import type { ClientExtension, FetchImpl } from "../extension.ts";
 
 export type RetryOptions = {
   /** Maximum number of retry attempts after the initial try. Default 3. */
-  readonly maxRetries?: number
+  readonly maxRetries?: number;
   /** Base delay in milliseconds before the first retry; doubles each attempt. Default 100. */
-  readonly baseDelayMs?: number
+  readonly baseDelayMs?: number;
   /** Randomize each delay (full jitter: `delay * (0.5 + random())`). Default true. */
-  readonly jitter?: boolean
+  readonly jitter?: boolean;
   /**
    * Custom retry predicate, given the response (if the fetch succeeded) and
    * the thrown error (if it didn't). Runtime-only — ignored by codegen (see
    * module doc). Defaults to: retry on 5xx responses and on any thrown error
    * other than a user-initiated `AbortError`.
    */
-  readonly retryOn?: (res: Response | undefined, err: unknown) => boolean
-}
+  readonly retryOn?: (res: Response | undefined, err: unknown) => boolean;
+};
 
-const DEFAULT_MAX_RETRIES = 3
-const DEFAULT_BASE_DELAY_MS = 100
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_BASE_DELAY_MS = 100;
 
 function isUserAbort(err: unknown): boolean {
-  return err instanceof Error && err.name === "AbortError"
+  return err instanceof Error && err.name === "AbortError";
 }
 
 function defaultShouldRetry(res: Response | undefined, err: unknown): boolean {
-  if (err !== undefined) return !isUserAbort(err)
-  return res !== undefined && res.status >= 500 && res.status <= 599
+  if (err !== undefined) return !isUserAbort(err);
+  return res !== undefined && res.status >= 500 && res.status <= 599;
 }
 
 function backoffDelay(attempt: number, baseDelayMs: number, jitter: boolean): number {
-  const delayMs = baseDelayMs * 2 ** attempt
-  return jitter ? delayMs * (0.5 + Math.random()) : delayMs
+  const delayMs = baseDelayMs * 2 ** attempt;
+  return jitter ? delayMs * (0.5 + Math.random()) : delayMs;
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -73,33 +73,36 @@ function sleep(ms: number): Promise<void> {
  * createClient(node, { baseUrl, extensions: [retry({ maxRetries: 3 })] })
  */
 export function retry(options: RetryOptions = {}): ClientExtension {
-  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
-  const baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
-  const jitter = options.jitter ?? true
-  const shouldRetry = options.retryOn ?? defaultShouldRetry
+  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
+  const jitter = options.jitter ?? true;
+  const shouldRetry = options.retryOn ?? defaultShouldRetry;
 
-  const wrapFetch = (inner: FetchImpl): FetchImpl => async (req: Request): Promise<Response> => {
-    for (let attempt = 0; ; attempt++) {
-      let res: Response | undefined
-      let err: unknown
-      try {
-        res = await inner(req.clone())
-      } catch (e) {
-        err = e
+  const wrapFetch =
+    (inner: FetchImpl): FetchImpl =>
+    async (req: Request): Promise<Response> => {
+      for (let attempt = 0; ; attempt++) {
+        let res: Response | undefined;
+        let err: unknown;
+        try {
+          res = await inner(req.clone());
+        } catch (e) {
+          err = e;
+        }
+
+        const exhausted = attempt >= maxRetries;
+        const retryable =
+          err !== undefined ? !isUserAbort(err) && shouldRetry(res, err) : shouldRetry(res, err);
+
+        if (exhausted || !retryable) {
+          if (err !== undefined) throw err;
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          return res!;
+        }
+
+        await sleep(backoffDelay(attempt, baseDelayMs, jitter));
       }
-
-      const exhausted = attempt >= maxRetries
-      const retryable = err !== undefined ? !isUserAbort(err) && shouldRetry(res, err) : shouldRetry(res, err)
-
-      if (exhausted || !retryable) {
-        if (err !== undefined) throw err
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return res!
-      }
-
-      await sleep(backoffDelay(attempt, baseDelayMs, jitter))
-    }
-  }
+    };
 
   return {
     name: "retry",
@@ -109,7 +112,7 @@ export function retry(options: RetryOptions = {}): ClientExtension {
       wrap: (innerExpr) =>
         `__withRetry(${innerExpr}, ${JSON.stringify({ maxRetries, baseDelayMs, jitter })})`,
     },
-  }
+  };
 }
 
 // ============================================================================
@@ -150,4 +153,4 @@ function __withRetry(inner: typeof fetch, options: __RetryOptions): typeof fetch
       await new Promise((resolve) => setTimeout(resolve, __retryBackoffDelay(attempt, options.baseDelayMs, options.jitter)))
     }
   }) as typeof fetch
-}`.trim()
+}`.trim();

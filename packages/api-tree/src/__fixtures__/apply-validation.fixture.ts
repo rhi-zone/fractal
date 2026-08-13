@@ -17,33 +17,36 @@
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
-import { api, op } from "../node.ts"
-import { applyValidation as validate } from "./apply-validation-stub.fixture.ts"
-import { fakeProjection } from "./apply-validation-route.fixture.ts"
+import { api, op } from "../node.ts";
+import { applyValidation as validate } from "./apply-validation-stub.fixture.ts";
+import { fakeProjection } from "./apply-validation-route.fixture.ts";
 
 export const booksTree = api({
   /** List every book in the catalog. */
   list: op((_input: { limit?: number }) => ({ books: [] as string[] })),
-  byId: api({}, {
-    fallback: {
-      name: "bookId",
-      subtree: op((input: { bookId: string }) => ({ bookId: input.bookId })),
+  byId: api(
+    {},
+    {
+      fallback: {
+        name: "bookId",
+        subtree: op((input: { bookId: string }) => ({ bookId: input.bookId })),
+      },
     },
-  }),
-})
+  ),
+});
 
 const widgetsTree = api({
   create: op((_input: { name: string; count: number }) => ({ id: "w1" })),
-})
+});
 
-export const books = validate("books", booksTree)
+export const books = validate("books", booksTree);
 
-export const widgets = validate("widgets", fakeProjection(widgetsTree))
+export const widgets = validate("widgets", fakeProjection(widgetsTree));
 
 // Decoy — the name the real mechanism usually goes by, on an unrelated local
 // function whose type carries no brand. Must never be treated as a call site
 // (if it were, key "decoy" would appear in the generated module).
 function applyValidation<T>(_key: string, tree: T): T {
-  return tree
+  return tree;
 }
-export const decoyed = applyValidation("decoy", booksTree)
+export const decoyed = applyValidation("decoy", booksTree);

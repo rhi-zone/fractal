@@ -39,14 +39,14 @@
 // different mechanism appropriate to Astro's per-directive island model
 // instead of Docusaurus's single-React-tree app shell.
 
-import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset"
-import { api } from "./fixture-tree.ts"
+import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { api } from "./fixture-tree.ts";
 
-const dropInFetch = toDropInFetch(createFetch(api))
+const dropInFetch = toDropInFetch(createFetch(api));
 
 // Cast needed: `window.fetch`'s ambient type is the full `typeof fetch`
 // (may carry extra members like `preconnect` depending on lib set), while
 // `dropInFetch` is `DropInFetch` — the literal call signature only. See
 // fetch-context.tsx's own doc comment for why this package deliberately
 // types against the call signature, not `typeof fetch`.
-window.fetch = dropInFetch as typeof fetch
+window.fetch = dropInFetch as typeof fetch;

@@ -18,7 +18,7 @@
 
 /** The one thing every registry entry must have. */
 export interface RegistryEntry {
-  readonly id: string
+  readonly id: string;
 }
 
 /** An immutable, ordered, id-keyed collection of entries.
@@ -28,9 +28,9 @@ export interface RegistryEntry {
  * aliases, so it is strictly larger whenever aliases exist and is what
  * `lookup` consults. */
 export interface Registry<E extends RegistryEntry> {
-  readonly entries: readonly E[]
-  readonly ids: readonly string[]
-  readonly byId: ReadonlyMap<string, E>
+  readonly entries: readonly E[];
+  readonly ids: readonly string[];
+  readonly byId: ReadonlyMap<string, E>;
 }
 
 /** Build a registry from entries plus optional alias -> canonical-id mappings.
@@ -44,18 +44,18 @@ export function defineRegistry<E extends RegistryEntry>(
   entries: readonly E[],
   aliases: Readonly<Record<string, string>> = {},
 ): Registry<E> {
-  const byId = new Map<string, E>()
+  const byId = new Map<string, E>();
   for (const entry of entries) {
-    if (byId.has(entry.id)) throw new Error(`duplicate registry id: ${entry.id}`)
-    byId.set(entry.id, entry)
+    if (byId.has(entry.id)) throw new Error(`duplicate registry id: ${entry.id}`);
+    byId.set(entry.id, entry);
   }
   for (const [alias, target] of Object.entries(aliases)) {
-    if (byId.has(alias)) throw new Error(`alias ${alias} collides with an existing id`)
-    const entry = byId.get(target)
-    if (entry === undefined) throw new Error(`alias ${alias} targets unknown id ${target}`)
-    byId.set(alias, entry)
+    if (byId.has(alias)) throw new Error(`alias ${alias} collides with an existing id`);
+    const entry = byId.get(target);
+    if (entry === undefined) throw new Error(`alias ${alias} targets unknown id ${target}`);
+    byId.set(alias, entry);
   }
-  return { entries, ids: entries.map((e) => e.id), byId }
+  return { entries, ids: entries.map((e) => e.id), byId };
 }
 
 /** Combine registries into one, preserving order and rejecting collisions.
@@ -66,32 +66,38 @@ export function defineRegistry<E extends RegistryEntry>(
  * capability ships as its own registry in its own module, and a caller that
  * wants it merges it in and afterwards uses one lookup, one id space, and one
  * error path for everything. */
-export function mergeRegistries<E extends RegistryEntry>(...registries: readonly Registry<E>[]): Registry<E> {
-  const entries: E[] = []
-  const byId = new Map<string, E>()
+export function mergeRegistries<E extends RegistryEntry>(
+  ...registries: readonly Registry<E>[]
+): Registry<E> {
+  const entries: E[] = [];
+  const byId = new Map<string, E>();
   for (const registry of registries) {
     for (const [id, entry] of registry.byId) {
-      const existing = byId.get(id)
+      const existing = byId.get(id);
       if (existing !== undefined && existing !== entry) {
-        throw new Error(`conflicting registry id when merging: ${id}`)
+        throw new Error(`conflicting registry id when merging: ${id}`);
       }
-      byId.set(id, entry)
+      byId.set(id, entry);
     }
-    entries.push(...registry.entries)
+    entries.push(...registry.entries);
   }
-  return { entries, ids: entries.map((e) => e.id), byId }
+  return { entries, ids: entries.map((e) => e.id), byId };
 }
 
 /** Resolve `id` (canonical or alias), or throw naming what kind of thing was
  * being looked up — `kind` is woven into the message because "unknown foo" is
  * useless to someone who mistyped an output format. */
-export function lookup<E extends RegistryEntry>(registry: Registry<E>, kind: string, id: string): E {
-  const entry = registry.byId.get(id)
-  if (entry === undefined) throw new Error(`unknown ${kind}: ${id}`)
-  return entry
+export function lookup<E extends RegistryEntry>(
+  registry: Registry<E>,
+  kind: string,
+  id: string,
+): E {
+  const entry = registry.byId.get(id);
+  if (entry === undefined) throw new Error(`unknown ${kind}: ${id}`);
+  return entry;
 }
 
 /** Whether `id` resolves, without throwing. */
 export function has<E extends RegistryEntry>(registry: Registry<E>, id: string): boolean {
-  return registry.byId.has(id)
+  return registry.byId.has(id);
 }

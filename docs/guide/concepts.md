@@ -9,7 +9,7 @@ A guide for newcomers grounded in the as-built code.
 The atom of fractal is a plain function.
 
 ```ts
-type Handler<I = any, O = any> = (input: I) => O | Promise<O>
+type Handler<I = any, O = any> = (input: I) => O | Promise<O>;
 ```
 
 An operation is a `T => U`. Composition (`compose`, `pipe`) and the `Result<T, E>`
@@ -31,11 +31,11 @@ Every node is a value of type `Node` (from `packages/api-tree/src/node.ts`):
 
 ```ts
 type Node<H extends Handler = Handler> = {
-  readonly handler?: H            // present on leaf nodes
-  readonly children?: Readonly<Record<string, Node>>
-  readonly fallback?: { readonly name: string; readonly subtree: Node }
-  readonly meta: Meta
-}
+  readonly handler?: H; // present on leaf nodes
+  readonly children?: Readonly<Record<string, Node>>;
+  readonly fallback?: { readonly name: string; readonly subtree: Node };
+  readonly meta: Meta;
+};
 ```
 
 - **Leaf node** — `handler` is present (a callable). May have no `children`.
@@ -143,13 +143,13 @@ behavior across all projections from one authoring site.
 ```ts
 // packages/api-tree/src/tags.ts
 type Tags = {
-  readOnly?: boolean | undefined
-  idempotent?: boolean | undefined
-  destructive?: boolean | undefined
-  openWorld?: boolean | undefined
-  streaming?: boolean | undefined
-  [custom: string]: boolean | undefined
-}
+  readOnly?: boolean | undefined;
+  idempotent?: boolean | undefined;
+  destructive?: boolean | undefined;
+  openWorld?: boolean | undefined;
+  streaming?: boolean | undefined;
+  [custom: string]: boolean | undefined;
+};
 ```
 
 Tags are **three-valued**: `true` (explicitly asserted), `false` (explicitly negated),
@@ -177,11 +177,11 @@ tag down as its own pass over the tree.
 
 ### How projections read tags
 
-| Projection | Tag use |
-|---|---|
-| HTTP (`verbFromTags`) | derives HTTP verb via the lattice |
-| MCP (`toTools`) | derives `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` |
-| CLI (`runCli`) | drives confirmation prompt on destructive ops |
+| Projection            | Tag use                                                                      |
+| --------------------- | ---------------------------------------------------------------------------- |
+| HTTP (`verbFromTags`) | derives HTTP verb via the lattice                                            |
+| MCP (`toTools`)       | derives `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` |
+| CLI (`runCli`)        | drives confirmation prompt on destructive ops                                |
 
 The same `meta.tags` bag drives all of these — read directly off each node, with no
 inheritance step. One authoring site, consistent semantics everywhere.
@@ -228,7 +228,7 @@ position from agnostic meaning and breaks non-HTTP projections.
 
 ```ts
 // packages/api-tree/src/node.ts
-type Meta = { tags?: Tags; readonly [key: string]: unknown }
+type Meta = { tags?: Tags; readonly [key: string]: unknown };
 ```
 
 Projection namespaces are per-key sub-bags (`meta.http`, `meta.mcp`, etc.). The bag is
@@ -243,6 +243,7 @@ multi-contribution `op()`/`api()` call — uses one primitive: `mergeMeta(...met
 (in `packages/api-tree/src/node.ts`).
 
 `mergeMeta` is a deep merge with precedence:
+
 - Later bags win per key; `undefined` defers (does not override a previously-set value).
 - Sub-bags that are plain objects (like `tags` or `http`) are merged recursively — not
   spread-replaced. Spreading would silently drop keys from the losing sub-bag. Arrays
@@ -295,23 +296,23 @@ leading JSDoc text. The resulting `SchemaMap` is passed to `toTools` as `opts.sc
 
 ## Quick reference
 
-| Symbol | Package | What it is |
-|---|---|---|
-| `Node` | `@rhi-zone/fractal-api-tree/node` | The one tree node type |
-| `Handler<I,O>` | `@rhi-zone/fractal-api-tree/node` | A plain callable: `(input: I) => O \| Promise<O>` |
-| `Meta` | `@rhi-zone/fractal-api-tree/node` | Open metadata bag |
-| `op(fn, ...contributions)` | `@rhi-zone/fractal-api-tree` | Construct a leaf node |
-| `api(children, opts?)` | `@rhi-zone/fractal-api-tree` | Construct a branch node (children + optional meta/fallback) |
-| `mergeMeta(...metas)` | `@rhi-zone/fractal-api-tree/node` | Deep-merge meta bags, later wins |
-| `Tags` | `@rhi-zone/fractal-api-tree/tags` | Three-valued behavioral tag dict |
-| `resolveTags(tags)` | `@rhi-zone/fractal-api-tree/tags` | Apply the implication lattice |
-| `mapNodes(tree, fn)` | `@rhi-zone/fractal-api-tree/tags` | Pre-order tree-transform primitive (replaces removed tag inheritance) |
-| `extractToolSchemas(entryFile)` | `@rhi-zone/fractal-api-tree/tree` | AST-level JSON Schema + JSDoc extraction |
-| `naiveTransform(node)` | `@rhi-zone/fractal-http-api-projector/route` | `Node => HttpRoute` mechanical baseline |
-| `httpProjection(node, opts?)` | `@rhi-zone/fractal-http-api-projector/dx` | One-call `Node => HttpRoute` with standard rewriters |
-| `crud(handlers)` | `@rhi-zone/fractal-http-api-projector/dx` | Convention constructor for the 5-op REST resource |
-| `verbFromTags(meta)` | `@rhi-zone/fractal-http-api-projector/tags` | Derive HTTP verb from the tag lattice |
-| `makeRouterFromRoute(route)` | `@rhi-zone/fractal-http-api-projector/route` | Zero-build-cost `HttpRoute` dispatcher |
-| `createFetch(node, opts?)` | `@rhi-zone/fractal-http-api-projector/preset` | OOTB HTTP handler (WHATWG `Request→Response`) |
-| `toTools(node, opts?)` | `@rhi-zone/fractal-mcp-api-projector/project` | Enumerate tree → flat `McpTool[]` |
-| `runCli(node, opts?)` | `@rhi-zone/fractal-cli-api-projector/cli` | Dispatch the tree as a CLI |
+| Symbol                          | Package                                       | What it is                                                            |
+| ------------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| `Node`                          | `@rhi-zone/fractal-api-tree/node`             | The one tree node type                                                |
+| `Handler<I,O>`                  | `@rhi-zone/fractal-api-tree/node`             | A plain callable: `(input: I) => O \| Promise<O>`                     |
+| `Meta`                          | `@rhi-zone/fractal-api-tree/node`             | Open metadata bag                                                     |
+| `op(fn, ...contributions)`      | `@rhi-zone/fractal-api-tree`                  | Construct a leaf node                                                 |
+| `api(children, opts?)`          | `@rhi-zone/fractal-api-tree`                  | Construct a branch node (children + optional meta/fallback)           |
+| `mergeMeta(...metas)`           | `@rhi-zone/fractal-api-tree/node`             | Deep-merge meta bags, later wins                                      |
+| `Tags`                          | `@rhi-zone/fractal-api-tree/tags`             | Three-valued behavioral tag dict                                      |
+| `resolveTags(tags)`             | `@rhi-zone/fractal-api-tree/tags`             | Apply the implication lattice                                         |
+| `mapNodes(tree, fn)`            | `@rhi-zone/fractal-api-tree/tags`             | Pre-order tree-transform primitive (replaces removed tag inheritance) |
+| `extractToolSchemas(entryFile)` | `@rhi-zone/fractal-api-tree/tree`             | AST-level JSON Schema + JSDoc extraction                              |
+| `naiveTransform(node)`          | `@rhi-zone/fractal-http-api-projector/route`  | `Node => HttpRoute` mechanical baseline                               |
+| `httpProjection(node, opts?)`   | `@rhi-zone/fractal-http-api-projector/dx`     | One-call `Node => HttpRoute` with standard rewriters                  |
+| `crud(handlers)`                | `@rhi-zone/fractal-http-api-projector/dx`     | Convention constructor for the 5-op REST resource                     |
+| `verbFromTags(meta)`            | `@rhi-zone/fractal-http-api-projector/tags`   | Derive HTTP verb from the tag lattice                                 |
+| `makeRouterFromRoute(route)`    | `@rhi-zone/fractal-http-api-projector/route`  | Zero-build-cost `HttpRoute` dispatcher                                |
+| `createFetch(node, opts?)`      | `@rhi-zone/fractal-http-api-projector/preset` | OOTB HTTP handler (WHATWG `Request→Response`)                         |
+| `toTools(node, opts?)`          | `@rhi-zone/fractal-mcp-api-projector/project` | Enumerate tree → flat `McpTool[]`                                     |
+| `runCli(node, opts?)`           | `@rhi-zone/fractal-cli-api-projector/cli`     | Dispatch the tree as a CLI                                            |

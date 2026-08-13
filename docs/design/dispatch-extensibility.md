@@ -24,7 +24,7 @@ interface DispatchKinds {
   // batteries and app code augment this
 }
 
-type DispatchMarker = DispatchKinds[keyof DispatchKinds]
+type DispatchMarker = DispatchKinds[keyof DispatchKinds];
 ```
 
 Each key maps to the dispatch data shape for that kind. The derived union `DispatchMarker`
@@ -44,7 +44,7 @@ types at the site where they're used.
 ### Projector takes a dictionary of matchers + the tree
 
 ```ts
-httpProjection({ method: m, header: h, date: d }, tree)
+httpProjection({ method: m, header: h, date: d }, tree);
 ```
 
 Dictionary keys are the kind names. Collision is impossible by construction — a dictionary
@@ -64,7 +64,7 @@ type Matcher = (
   request: Request,
   children: Record<string, Node>,
   dispatchData: any,
-) => string | undefined
+) => string | undefined;
 ```
 
 Given the request, the children, and the dispatch config data from the node, returns the child
@@ -89,14 +89,14 @@ Core provides a visitor/walker so individual transforms don't each reinvent recu
 ```ts
 // Pre-order: fn sees the node before its children are walked
 function mapNodes(tree: Node, fn: (node: Node) => Node): Node {
-  const mapped = fn(tree)
-  if (!mapped.children) return mapped
+  const mapped = fn(tree);
+  if (!mapped.children) return mapped;
   return {
     ...mapped,
     children: Object.fromEntries(
-      Object.entries(mapped.children).map(([k, v]) => [k, mapNodes(v, fn)])
+      Object.entries(mapped.children).map(([k, v]) => [k, mapNodes(v, fn)]),
     ),
-  }
+  };
 }
 ```
 
@@ -119,24 +119,25 @@ Dispatch supports both compiled and runtime resolution — more flexible than co
 // --- Battery (separate package) ---
 // Exports a plain function. No type augmentation. No side effects.
 export const dateMatcher: Matcher = (req, children, data) => {
-  const pin = req.headers.get(data.name)
+  const pin = req.headers.get(data.name);
   const sorted = Object.entries(children)
     .map(([key, child]) => ({ key, when: child.meta?.http?.when ?? key }))
-    .sort((a, b) => a.when.localeCompare(b.when))
-  let best: string | undefined
+    .sort((a, b) => a.when.localeCompare(b.when));
+  let best: string | undefined;
   for (const { key, when } of sorted) {
-    if (when <= pin) best = key; else break
+    if (when <= pin) best = key;
+    else break;
   }
-  return best
-}
+  return best;
+};
 
 // --- Application code (next to the tree) ---
-import { dateMatcher } from "fractal-date-versioning"
+import { dateMatcher } from "fractal-date-versioning";
 
 // Declaration merging HERE — developer declares what kinds their tree uses
 declare module "@rhi-zone/fractal-http-api-projector" {
   interface DispatchKinds {
-    date: { kind: "date"; name: string }
+    date: { kind: "date"; name: string };
   }
 }
 
@@ -144,16 +145,19 @@ const api = node({
   meta: { http: { dispatch: { kind: "date", name: "X-Api-Version" } } },
   children: {
     original: op(readV1, { tags: { readOnly: true }, http: { when: "2024-01-01" } }),
-    revised:  op(readV2, { tags: { readOnly: true }, http: { when: "2024-06-01" } }),
+    revised: op(readV2, { tags: { readOnly: true }, http: { when: "2024-06-01" } }),
   },
-})
+});
 
 // --- Projector wiring ---
-const fetch = httpProjection({
-  method: methodMatcher,
-  header: headerMatcher,
-  date: dateMatcher,
-}, api)
+const fetch = httpProjection(
+  {
+    method: methodMatcher,
+    header: headerMatcher,
+    date: dateMatcher,
+  },
+  api,
+);
 // TypeScript checks: tree's dispatch kinds ⊆ dictionary keys
 ```
 

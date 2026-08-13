@@ -31,8 +31,8 @@
 //     plus a comment documenting the `RuntimeTypeAdapterFactory`
 //     registration the caller's `GsonBuilder` setup needs, since no
 //     annotation on the type itself can express it.
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, isA, kotlinDocComment, quote, resolveOptions } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { capitalize, isA, kotlinDocComment, quote, resolveOptions } from "./codegen-helpers.ts";
 
 export interface KotlinGsonOptions {
   /** Also emit `@Expose` alongside `@SerializedName` on each field/enum
@@ -40,10 +40,10 @@ export interface KotlinGsonOptions {
    * caller's `Gson` instance is built with
    * `excludeFieldsWithoutExposeAnnotation()`; a harmless no-op otherwise.
    * Default `true`. */
-  expose?: boolean
+  expose?: boolean;
 }
 
-const defaultOptions: Required<KotlinGsonOptions> = { expose: true }
+const defaultOptions: Required<KotlinGsonOptions> = { expose: true };
 
 // Kotlin enum entries conventionally read SCREAMING_SNAKE_CASE
 // (https://kotlinlang.org/docs/coding-conventions.html#property-names) —
@@ -53,19 +53,19 @@ function toEnumEntryName(member: string): string {
   const snake = member
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/[^A-Za-z0-9]+/g, "_")
-    .toUpperCase()
-  const cleaned = snake.replace(/^_+|_+$/g, "")
-  if (cleaned.length === 0) return "UNKNOWN"
+    .toUpperCase();
+  const cleaned = snake.replace(/^_+|_+$/g, "");
+  if (cleaned.length === 0) return "UNKNOWN";
   // A Kotlin identifier can't start with a digit.
-  return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned
+  return /^[0-9]/.test(cleaned) ? `_${cleaned}` : cleaned;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Kotlin built-in types: https://kotlinlang.org/docs/basic-types.html. Named
 // (object/enum/union) kinds have no anonymous Kotlin equivalent — a data
@@ -104,7 +104,8 @@ const handlers: Record<string, Converter> = {
   void: leaf("Unit"),
   unknown: leaf("Any"),
   never: leaf("Nothing"),
-  object: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "Map<String, Any?>"),
+  object: (_shape, meta) =>
+    typeof meta.typeName === "string" ? meta.typeName : "Map<String, Any?>",
   // A class instance carries only nominal identity (className/source), never
   // fields (see type-ir's TypeKinds.instance doc comment) — the caller
   // (whatever assembles this emitted source into a Kotlin file) is
@@ -125,26 +126,26 @@ const handlers: Record<string, Converter> = {
   // per-position typing, same tradeoff kotlin-kotlinx.ts's peers take
   // elsewhere).
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
+    const s = shape as TypeShape & { kind: "tuple" };
     if (s.elements.length === 2) {
-      return `Pair<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}>`
+      return `Pair<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}>`;
     }
     if (s.elements.length === 3) {
-      return `Triple<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}, ${toKotlinType(s.elements[2]!)}>`
+      return `Triple<${toKotlinType(s.elements[0]!)}, ${toKotlinType(s.elements[1]!)}, ${toKotlinType(s.elements[2]!)}>`;
     }
-    return "List<Any?>"
+    return "List<Any?>";
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Map<${toKotlinType(s.key)}, ${toKotlinType(s.value)}>`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Map<${toKotlinType(s.key)}, ${toKotlinType(s.value)}>`;
   },
   union: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "Any"),
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (s.value === null) return "Nothing?"
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "Boolean"
-    return Number.isInteger(s.value) ? "Int" : "Double"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (s.value === null) return "Nothing?";
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "Boolean";
+    return Number.isInteger(s.value) ? "Int" : "Double";
   },
   enum: (_shape, meta) => (typeof meta.typeName === "string" ? meta.typeName : "Any"),
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
@@ -152,16 +153,16 @@ const handlers: Record<string, Converter> = {
   // lossy: falls back to the first member's type, dropping the rest (same
   // convention kotlin-kotlinx.ts uses for its own missing intersection).
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "Any" : toKotlinType(first)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "Any" : toKotlinType(first);
   },
   // https://kotlinlang.org/docs/lambdas.html#function-types — `(A, B) -> R`.
   function: (shape) => {
-    const s = shape as TypeShape & { kind: "function" }
-    const params = s.params.map((p) => toKotlinType(p.type)).join(", ")
-    const receiver = s.thisType === undefined ? "" : `${toKotlinType(s.thisType)}.`
-    return `${receiver}(${params}) -> ${toKotlinType(s.returnType)}`
+    const s = shape as TypeShape & { kind: "function" };
+    const params = s.params.map((p) => toKotlinType(p.type)).join(", ");
+    const receiver = s.thisType === undefined ? "" : `${toKotlinType(s.thisType)}.`;
+    return `${receiver}(${params}) -> ${toKotlinType(s.returnType)}`;
   },
   // `method` has no explicit entry — `registerParent("method", "function")`
   // falls back to the `function` handler above for the bare-type-expression
@@ -170,20 +171,20 @@ const handlers: Record<string, Converter> = {
   // A service surface has no Kotlin field-position construct of its own —
   // degrades to `Any`, same as `object`'s honest-degrade fallback above.
   interface: leaf("Any"),
-}
+};
 
 /** Inline type expression — used for field types, list/map element types,
  * etc. Named (object/enum/union) kinds without `meta.typeName` degrade
  * honestly rather than fabricating a declaration site; see the `handlers`
  * doc comment above for the exact per-kind fallback. */
 export function toKotlinType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const type = converter === undefined ? "Any" : converter(ref.shape, ref.meta)
-  const nullable = ref.meta.nullable === true || ref.meta.optional === true
-  return nullable && !type.endsWith("?") ? `${type}?` : type
+  const converter = resolve(ref.shape.kind, handlers);
+  const type = converter === undefined ? "Any" : converter(ref.shape, ref.meta);
+  const nullable = ref.meta.nullable === true || ref.meta.optional === true;
+  return nullable && !type.endsWith("?") ? `${type}?` : type;
 }
 
-type FieldResult = { type: string; nested: string[] }
+type FieldResult = { type: string; nested: string[] };
 
 /**
  * A field's Kotlin type plus any nested declarations it needed to synthesize.
@@ -192,37 +193,41 @@ type FieldResult = { type: string; nested: string[] }
  * is synthesized here, named by capitalizing the field name, and returned
  * alongside the field's type reference to that name.
  */
-function declareField(fieldName: string, fieldRef: TypeRef, options: Required<KotlinGsonOptions>): FieldResult {
-  const nested: string[] = []
-  let type: string
+function declareField(
+  fieldName: string,
+  fieldRef: TypeRef,
+  options: Required<KotlinGsonOptions>,
+): FieldResult {
+  const nested: string[] = [];
+  let type: string;
 
   if (isA(fieldRef.shape.kind, "object")) {
-    const nestedName = capitalize(fieldName)
-    nested.push(toKotlinGson(fieldRef, nestedName, options))
-    type = nestedName
+    const nestedName = capitalize(fieldName);
+    nested.push(toKotlinGson(fieldRef, nestedName, options));
+    type = nestedName;
   } else if (
     fieldRef.shape.kind === "array" &&
     isA((fieldRef.shape as TypeShape & { kind: "array" }).element.shape.kind, "object")
   ) {
-    const nestedName = capitalize(fieldName)
-    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element
-    nested.push(toKotlinGson(element, nestedName, options))
-    type = `List<${nestedName}>`
+    const nestedName = capitalize(fieldName);
+    const element = (fieldRef.shape as TypeShape & { kind: "array" }).element;
+    nested.push(toKotlinGson(element, nestedName, options));
+    type = `List<${nestedName}>`;
   } else if (fieldRef.shape.kind === "enum") {
-    const nestedName = capitalize(fieldName)
-    nested.push(toKotlinGson(fieldRef, nestedName, options))
-    type = nestedName
+    const nestedName = capitalize(fieldName);
+    nested.push(toKotlinGson(fieldRef, nestedName, options));
+    type = nestedName;
   } else if (fieldRef.shape.kind === "union") {
-    const nestedName = capitalize(fieldName)
-    nested.push(toKotlinGson(fieldRef, nestedName, options))
-    type = nestedName
+    const nestedName = capitalize(fieldName);
+    nested.push(toKotlinGson(fieldRef, nestedName, options));
+    type = nestedName;
   } else {
-    type = toKotlinType(fieldRef)
+    type = toKotlinType(fieldRef);
   }
 
-  const nullable = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-  if (nullable && !type.endsWith("?")) type += "?"
-  return { type, nested }
+  const nullable = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+  if (nullable && !type.endsWith("?")) type += "?";
+  return { type, nested };
 }
 
 // https://kotlinlang.org/docs/data-classes.html + Gson's `@SerializedName`/
@@ -233,23 +238,23 @@ function declareField(fieldName: string, fieldRef: TypeRef, options: Required<Ko
 // class itself needs no `@Serializable` marker — Gson reads Kotlin
 // properties reflectively.
 function toDataClass(name: string, ref: TypeRef, options: Required<KotlinGsonOptions>): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const nestedDecls: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const nestedDecls: string[] = [];
   const params = Object.entries(shape.fields).map(([fieldName, fieldRef]) => {
-    const { type, nested } = declareField(fieldName, fieldRef, options)
-    nestedDecls.push(...nested)
-    const readonly = fieldRef.meta.readonly === true
-    const optional = fieldRef.meta.optional === true
-    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ")
-    const keyword = readonly ? "val" : "var"
-    const suffix = optional ? " = null" : ""
-    const exposeAnnotation = options.expose ? " @Expose" : ""
-    return `${fieldDoc}    @SerializedName(${quote(fieldName)})${exposeAnnotation} ${keyword} ${fieldName}: ${type}${suffix}`
-  })
+    const { type, nested } = declareField(fieldName, fieldRef, options);
+    nestedDecls.push(...nested);
+    const readonly = fieldRef.meta.readonly === true;
+    const optional = fieldRef.meta.optional === true;
+    const fieldDoc = kotlinDocComment(fieldRef.meta, "    ");
+    const keyword = readonly ? "val" : "var";
+    const suffix = optional ? " = null" : "";
+    const exposeAnnotation = options.expose ? " @Expose" : "";
+    return `${fieldDoc}    @SerializedName(${quote(fieldName)})${exposeAnnotation} ${keyword} ${fieldName}: ${type}${suffix}`;
+  });
 
-  const lines = [kotlinDocComment(ref.meta, ""), `data class ${name}(`, params.join(",\n"), ")"]
-  const decl = lines.filter((l) => l !== "").join("\n")
-  return [decl, ...nestedDecls].join("\n\n")
+  const lines = [kotlinDocComment(ref.meta, ""), `data class ${name}(`, params.join(",\n"), ")"];
+  const decl = lines.filter((l) => l !== "").join("\n");
+  return [decl, ...nestedDecls].join("\n\n");
 }
 
 // https://kotlinlang.org/docs/enum-classes.html + Gson's `@SerializedName`
@@ -259,13 +264,14 @@ function toDataClass(name: string, ref: TypeRef, options: Required<KotlinGsonOpt
 // constant name) — preserves the exact wire string regardless of how
 // `toEnumEntryName` reshapes the Kotlin identifier.
 function toEnumClass(name: string, ref: TypeRef, options: Required<KotlinGsonOptions>): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const exposeAnnotation = options.expose ? " @Expose" : ""
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const exposeAnnotation = options.expose ? " @Expose" : "";
   const entries = shape.members.map(
-    (member) => `    @SerializedName(${quote(member)})${exposeAnnotation} ${toEnumEntryName(member)}`,
-  )
-  const lines = [kotlinDocComment(ref.meta, ""), `enum class ${name} {`, entries.join(",\n"), "}"]
-  return lines.filter((l) => l !== "").join("\n")
+    (member) =>
+      `    @SerializedName(${quote(member)})${exposeAnnotation} ${toEnumEntryName(member)}`,
+  );
+  const lines = [kotlinDocComment(ref.meta, ""), `enum class ${name} {`, entries.join(",\n"), "}"];
+  return lines.filter((l) => l !== "").join("\n");
 }
 
 /** True when every union variant is (or descends from) `object` and they all
@@ -276,11 +282,11 @@ function toEnumClass(name: string, ref: TypeRef, options: Required<KotlinGsonOpt
  * a `RuntimeTypeAdapterFactory` registered against the caller's
  * `GsonBuilder` is what actually dispatches on it at runtime. */
 function discriminantValue(variant: TypeRef, discriminator: string): string | undefined {
-  if (!isA(variant.shape.kind, "object")) return undefined
-  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator]
-  if (field === undefined || field.shape.kind !== "literal") return undefined
-  const value = (field.shape as TypeShape & { kind: "literal" }).value
-  return typeof value === "string" ? value : undefined
+  if (!isA(variant.shape.kind, "object")) return undefined;
+  const field = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator];
+  if (field === undefined || field.shape.kind !== "literal") return undefined;
+  const value = (field.shape as TypeShape & { kind: "literal" }).value;
+  return typeof value === "string" ? value : undefined;
 }
 
 // https://kotlinlang.org/docs/sealed-classes.html — Gson has no
@@ -293,26 +299,29 @@ function discriminantValue(variant: TypeRef, discriminator: string): string | un
 // `renderSealedInterface` uses for the identical gap, one target language
 // over.
 function toSealedClass(name: string, ref: TypeRef, options: Required<KotlinGsonOptions>): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
-  const nestedDecls: string[] = []
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator =
+    typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
+  const nestedDecls: string[] = [];
 
   const variantDecls = shape.variants.map((variant, i) => {
-    const tag = discriminator === undefined ? undefined : discriminantValue(variant, discriminator)
-    const variantName = tag !== undefined ? capitalize(tag) : `Variant${i + 1}`
+    const tag = discriminator === undefined ? undefined : discriminantValue(variant, discriminator);
+    const variantName = tag !== undefined ? capitalize(tag) : `Variant${i + 1}`;
 
     if (isA(variant.shape.kind, "object")) {
       // The discriminant field itself is structural noise once it's encoded
       // as the sealed subclass's own type identity — drop it from the
       // generated data class's fields, same as kotlin-kotlinx.ts's
       // `toSealedClass`.
-      const objShape = variant.shape as TypeShape & { kind: "object" }
+      const objShape = variant.shape as TypeShape & { kind: "object" };
       const fields =
         tag === undefined
           ? objShape.fields
-          : Object.fromEntries(Object.entries(objShape.fields).filter(([fieldName]) => fieldName !== discriminator))
-      const variantRef = { shape: { ...objShape, fields }, meta: variant.meta }
-      const classDecl = toDataClass(variantName, variantRef, options)
+          : Object.fromEntries(
+              Object.entries(objShape.fields).filter(([fieldName]) => fieldName !== discriminator),
+            );
+      const variantRef = { shape: { ...objShape, fields }, meta: variant.meta };
+      const classDecl = toDataClass(variantName, variantRef, options);
       // `toDataClass` always emits "data class ..." as its first line (once
       // any KDoc comment precedes it) — splice `: Name()` onto the
       // constructor's closing paren so the variant extends the sealed
@@ -320,40 +329,50 @@ function toSealedClass(name: string, ref: TypeRef, options: Required<KotlinGsonO
       // with a bare ")" line, so this only ever matches that line, never a
       // nested declaration's closing paren (those are joined in afterwards,
       // with a blank-line separator, by `toDataClass`'s own return).
-      const [ownDecl, ...rest] = classDecl.split("\n\n")
-      return [`${ownDecl!.replace(/\)$/, `) : ${name}()`)}`, ...rest].join("\n\n")
+      const [ownDecl, ...rest] = classDecl.split("\n\n");
+      return [`${ownDecl!.replace(/\)$/, `) : ${name}()`)}`, ...rest].join("\n\n");
     }
 
     // A non-object variant (e.g. a bare string/number in the union) has no
     // fields to lift into a data class — wrap it as a single-value carrier,
     // the idiomatic Kotlin pattern for a sealed subtype over a scalar.
-    const { type, nested } = declareField(`${variantName}Value`, variant, options)
-    nestedDecls.push(...nested)
-    return `data class ${variantName}(val value: ${type}) : ${name}()`
-  })
+    const { type, nested } = declareField(`${variantName}Value`, variant, options);
+    nestedDecls.push(...nested);
+    return `data class ${variantName}(val value: ${type}) : ${name}()`;
+  });
 
   const names = variantDecls.map((_, i) => {
-    const tag = discriminator === undefined ? undefined : discriminantValue(shape.variants[i]!, discriminator)
-    return tag !== undefined ? capitalize(tag) : `Variant${i + 1}`
-  })
+    const tag =
+      discriminator === undefined
+        ? undefined
+        : discriminantValue(shape.variants[i]!, discriminator);
+    return tag !== undefined ? capitalize(tag) : `Variant${i + 1}`;
+  });
 
-  const commentLines = ["// Gson has no annotation-based polymorphism support. Register a"]
-  commentLines.push("// RuntimeTypeAdapterFactory (com.google.gson.gson-extras) against your")
-  commentLines.push("// GsonBuilder to (de)serialize this hierarchy, e.g.:")
-  commentLines.push("//")
+  const commentLines = ["// Gson has no annotation-based polymorphism support. Register a"];
+  commentLines.push("// RuntimeTypeAdapterFactory (com.google.gson.gson-extras) against your");
+  commentLines.push("// GsonBuilder to (de)serialize this hierarchy, e.g.:");
+  commentLines.push("//");
   if (discriminator !== undefined) {
-    commentLines.push(`//   RuntimeTypeAdapterFactory<${name}> typeFactory = RuntimeTypeAdapterFactory`)
-    commentLines.push(`//       .of(${name}::class.java, ${quote(discriminator)})`)
+    commentLines.push(
+      `//   RuntimeTypeAdapterFactory<${name}> typeFactory = RuntimeTypeAdapterFactory`,
+    );
+    commentLines.push(`//       .of(${name}::class.java, ${quote(discriminator)})`);
   } else {
-    commentLines.push(`//   RuntimeTypeAdapterFactory<${name}> typeFactory = RuntimeTypeAdapterFactory`)
-    commentLines.push(`//       .of(${name}::class.java)`)
+    commentLines.push(
+      `//   RuntimeTypeAdapterFactory<${name}> typeFactory = RuntimeTypeAdapterFactory`,
+    );
+    commentLines.push(`//       .of(${name}::class.java)`);
   }
-  for (const n of names) commentLines.push(`//       .registerSubtype(${n}::class.java, ${quote(n)})`)
-  commentLines.push("//   val gson = GsonBuilder().registerTypeAdapterFactory(typeFactory).create()")
+  for (const n of names)
+    commentLines.push(`//       .registerSubtype(${n}::class.java, ${quote(n)})`);
+  commentLines.push(
+    "//   val gson = GsonBuilder().registerTypeAdapterFactory(typeFactory).create()",
+  );
 
-  const header = [kotlinDocComment(ref.meta, ""), commentLines.join("\n"), `sealed class ${name}`]
-  const decl = header.filter((l) => l !== "").join("\n")
-  return [decl, ...variantDecls, ...nestedDecls].join("\n\n")
+  const header = [kotlinDocComment(ref.meta, ""), commentLines.join("\n"), `sealed class ${name}`];
+  const decl = header.filter((l) => l !== "").join("\n");
+  return [decl, ...variantDecls, ...nestedDecls].join("\n\n");
 }
 
 /**
@@ -367,19 +386,22 @@ function toSealedClass(name: string, ref: TypeRef, options: Required<KotlinGsonO
  * identifier.
  */
 export function toKotlinGson(ref: TypeRef, name?: string, options?: KotlinGsonOptions): string {
-  const resolved = resolveOptions(defaultOptions, options)
+  const resolved = resolveOptions(defaultOptions, options);
   if (ref.shape.kind === "object" || ref.shape.kind === "union" || ref.shape.kind === "enum") {
-    const declName = name ?? "Anonymous"
-    if (ref.shape.kind === "object") return toDataClass(declName, ref, resolved)
-    if (ref.shape.kind === "enum") return toEnumClass(declName, ref, resolved)
-    return toSealedClass(declName, ref, resolved)
+    const declName = name ?? "Anonymous";
+    if (ref.shape.kind === "object") return toDataClass(declName, ref, resolved);
+    if (ref.shape.kind === "enum") return toEnumClass(declName, ref, resolved);
+    return toSealedClass(declName, ref, resolved);
   }
-  if (name === undefined) return toKotlinType(ref)
-  return `typealias ${name} = ${toKotlinType(ref)}`
+  if (name === undefined) return toKotlinType(ref);
+  return `typealias ${name} = ${toKotlinType(ref)}`;
 }
 
-export function toKotlinGsonDeclarations(registry: Record<string, TypeRef>, options?: KotlinGsonOptions): string {
+export function toKotlinGsonDeclarations(
+  registry: Record<string, TypeRef>,
+  options?: KotlinGsonOptions,
+): string {
   return Object.entries(registry)
     .map(([name, ref]) => toKotlinGson(ref, name, options))
-    .join("\n\n")
+    .join("\n\n");
 }

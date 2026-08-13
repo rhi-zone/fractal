@@ -9,48 +9,56 @@
 // `.default()`. A default only has meaning as part of a Struct field's property signature
 // (`S.optionalWith(field, { default: () => value })`), so `meta.default` is applied at the
 // `object` field site, not as a generic chained call in `withMeta`.
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA, quoteKey } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { isA, quoteKey } from "./codegen-helpers.ts";
 
 function regexLiteral(pattern: string): string {
-  return `/${pattern.replace(/\//g, "\\/")}/`
+  return `/${pattern.replace(/\//g, "\\/")}/`;
 }
 
 function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: string): string {
-  let result = expr
+  let result = expr;
 
-  const numberLike = isA(kind, "number")
-  const stringLike = isA(kind, "string")
-  const lengthConstrainable = stringLike || kind === "array"
+  const numberLike = isA(kind, "number");
+  const stringLike = isA(kind, "string");
+  const lengthConstrainable = stringLike || kind === "array";
 
-  const refinements: string[] = []
+  const refinements: string[] = [];
   // https://effect.website/docs/schema/filters/ — S.greaterThan/S.lessThan are the
   // strict (exclusive) counterparts of greaterThanOrEqualTo/lessThanOrEqualTo.
-  if (typeof meta.exclusiveMinimum === "number" && numberLike) refinements.push(`S.greaterThan(${meta.exclusiveMinimum})`)
-  else if (typeof meta.minimum === "number" && numberLike) refinements.push(`S.greaterThanOrEqualTo(${meta.minimum})`)
-  if (typeof meta.exclusiveMaximum === "number" && numberLike) refinements.push(`S.lessThan(${meta.exclusiveMaximum})`)
-  else if (typeof meta.maximum === "number" && numberLike) refinements.push(`S.lessThanOrEqualTo(${meta.maximum})`)
-  if (typeof meta.minLength === "number" && lengthConstrainable) refinements.push(`S.minLength(${meta.minLength})`)
-  if (typeof meta.maxLength === "number" && lengthConstrainable) refinements.push(`S.maxLength(${meta.maxLength})`)
-  if (typeof meta.pattern === "string" && stringLike) refinements.push(`S.pattern(${regexLiteral(meta.pattern)})`)
-  if (typeof meta.multipleOf === "number" && numberLike) refinements.push(`S.multipleOf(${meta.multipleOf})`)
+  if (typeof meta.exclusiveMinimum === "number" && numberLike)
+    refinements.push(`S.greaterThan(${meta.exclusiveMinimum})`);
+  else if (typeof meta.minimum === "number" && numberLike)
+    refinements.push(`S.greaterThanOrEqualTo(${meta.minimum})`);
+  if (typeof meta.exclusiveMaximum === "number" && numberLike)
+    refinements.push(`S.lessThan(${meta.exclusiveMaximum})`);
+  else if (typeof meta.maximum === "number" && numberLike)
+    refinements.push(`S.lessThanOrEqualTo(${meta.maximum})`);
+  if (typeof meta.minLength === "number" && lengthConstrainable)
+    refinements.push(`S.minLength(${meta.minLength})`);
+  if (typeof meta.maxLength === "number" && lengthConstrainable)
+    refinements.push(`S.maxLength(${meta.maxLength})`);
+  if (typeof meta.pattern === "string" && stringLike)
+    refinements.push(`S.pattern(${regexLiteral(meta.pattern)})`);
+  if (typeof meta.multipleOf === "number" && numberLike)
+    refinements.push(`S.multipleOf(${meta.multipleOf})`);
 
-  if (refinements.length > 0) result = `${result}.pipe(${refinements.join(", ")})`
+  if (refinements.length > 0) result = `${result}.pipe(${refinements.join(", ")})`;
 
-  if (meta.nullable === true) result = `S.NullOr(${result})`
+  if (meta.nullable === true) result = `S.NullOr(${result})`;
   if (typeof meta.description === "string") {
-    result += `.annotations({ description: ${JSON.stringify(meta.description)} })`
+    result += `.annotations({ description: ${JSON.stringify(meta.description)} })`;
   }
 
-  return result
+  return result;
 }
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string
+type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>) => string;
 
 const leaf =
   (expr: string): Converter =>
   () =>
-    expr
+    expr;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("S.Boolean"),
@@ -74,18 +82,18 @@ const handlers: Record<string, Converter> = {
   unknown: leaf("S.Unknown"),
   never: leaf("S.Never"),
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
+    const s = shape as TypeShape & { kind: "object" };
     const fields = Object.entries(s.fields).map(([name, field]) => {
-      const expr = toEffectSchema(field)
+      const expr = toEffectSchema(field);
       if (field.meta.optional === true) {
         if (field.meta.default !== undefined) {
-          return `${quoteKey(name)}: S.optionalWith(${expr}, { default: () => ${JSON.stringify(field.meta.default)} } as const)`
+          return `${quoteKey(name)}: S.optionalWith(${expr}, { default: () => ${JSON.stringify(field.meta.default)} } as const)`;
         }
-        return `${quoteKey(name)}: S.optional(${expr})`
+        return `${quoteKey(name)}: S.optional(${expr})`;
       }
-      return `${quoteKey(name)}: ${expr}`
-    })
-    return `S.Struct({ ${fields.join(", ")} })`
+      return `${quoteKey(name)}: ${expr}`;
+    });
+    return `S.Struct({ ${fields.join(", ")} })`;
   },
   // A class instance carries only nominal identity (className/source), never fields
   // (see type-ir's TypeKinds.instance doc comment) — Effect Schema has no construct
@@ -93,39 +101,39 @@ const handlers: Record<string, Converter> = {
   // emitting an S.Struct with no fields.
   instance: leaf("S.Unknown"),
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `S.Array(${toEffectSchema(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `S.Array(${toEffectSchema(s.element)})`;
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `S.Tuple(${s.elements.map(toEffectSchema).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `S.Tuple(${s.elements.map(toEffectSchema).join(", ")})`;
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `S.Record({ key: ${toEffectSchema(s.key)}, value: ${toEffectSchema(s.value)} })`
+    const s = shape as TypeShape & { kind: "map" };
+    return `S.Record({ key: ${toEffectSchema(s.key)}, value: ${toEffectSchema(s.value)} })`;
   },
   // Effect Schema validates materialized values, not an ongoing async
   // sequence — degrades to `S.Array()` of the element type, same fallback
   // the other data-only projectors use for `stream`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `S.Array(${toEffectSchema(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `S.Array(${toEffectSchema(s.element)})`;
   },
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
-    return `S.Union(${s.variants.map(toEffectSchema).join(", ")})`
+    const s = shape as TypeShape & { kind: "union" };
+    return `S.Union(${s.variants.map(toEffectSchema).join(", ")})`;
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    return `S.Literal(${JSON.stringify(s.value)})`
+    const s = shape as TypeShape & { kind: "literal" };
+    return `S.Literal(${JSON.stringify(s.value)})`;
   },
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return `S.Union(${s.members.map((m) => `S.Literal(${JSON.stringify(m)})`).join(", ")})`
+    const s = shape as TypeShape & { kind: "enum" };
+    return `S.Union(${s.members.map((m) => `S.Literal(${JSON.stringify(m)})`).join(", ")})`;
   },
   ref: (shape) => {
-    const s = shape as TypeShape & { kind: "ref" }
-    return s.target
+    const s = shape as TypeShape & { kind: "ref" };
+    return s.target;
   },
   // Effect Schema has no general schema-level intersection combinator — only
   // `S.extend(a, b)` (https://effect.website/docs/schema/basic-usage/#extending-schemas),
@@ -135,30 +143,35 @@ const handlers: Record<string, Converter> = {
   // not an object, S.extend can't merge it — lossy fallback: the first member's
   // schema, dropping the rest.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first, ...rest] = s.members
-    if (first === undefined) return "S.Unknown"
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first, ...rest] = s.members;
+    if (first === undefined) return "S.Unknown";
     if (s.members.every((member) => isA(member.shape.kind, "object"))) {
-      return rest.reduce((acc, member) => `S.extend(${acc}, ${toEffectSchema(member)})`, toEffectSchema(first))
+      return rest.reduce(
+        (acc, member) => `S.extend(${acc}, ${toEffectSchema(member)})`,
+        toEffectSchema(first),
+      );
     }
-    return toEffectSchema(first)
+    return toEffectSchema(first);
   },
   // Effect Schema has no callable-type schema — degrades to S.Unknown, same
   // as `instance` above.
   function: leaf("S.Unknown"),
-}
+};
 
 export function toEffectSchema(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const expr = converter === undefined ? "S.Unknown" : converter(ref.shape, ref.meta)
-  return withMeta(expr, ref.meta, ref.shape.kind)
+  const converter = resolve(ref.shape.kind, handlers);
+  const expr = converter === undefined ? "S.Unknown" : converter(ref.shape, ref.meta);
+  return withMeta(expr, ref.meta, ref.shape.kind);
 }
 
 export function toEffectSchemaDeclaration(name: string, ref: TypeRef): string {
-  return `const ${name} = ${toEffectSchema(ref)};`
+  return `const ${name} = ${toEffectSchema(ref)};`;
 }
 
 export function toEffectSchemaDeclarations(registry: Record<string, TypeRef>): string {
-  const declarations = Object.entries(registry).map(([name, ref]) => toEffectSchemaDeclaration(name, ref))
-  return [`import * as S from "@effect/schema/Schema";`, "", ...declarations].join("\n")
+  const declarations = Object.entries(registry).map(([name, ref]) =>
+    toEffectSchemaDeclaration(name, ref),
+  );
+  return [`import * as S from "@effect/schema/Schema";`, "", ...declarations].join("\n");
 }

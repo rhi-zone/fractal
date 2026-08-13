@@ -1,4 +1,4 @@
-import type { TypeRef } from "@rhi-zone/fractal-type-ir"
+import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 
 // FFI-IR — boundary-crossing vocabulary for modules/interfaces, function and
 // method signatures, and opaque resource handles, layered ON TOP of type-ir
@@ -83,7 +83,7 @@ export type OwnershipDiscipline =
   | { readonly kind: "copy" }
   | { readonly kind: "opaque-handle"; readonly freeFn?: string }
   | { readonly kind: "refcount" }
-  | { readonly kind: "resource"; readonly mode: "own" | "borrow" }
+  | { readonly kind: "resource"; readonly mode: "own" | "borrow" };
 
 /** Convenience constructors for `OwnershipDiscipline` values — mirrors
  * type-ir's `types` object of shape constructors. */
@@ -93,7 +93,7 @@ export const ownership = {
     freeFn === undefined ? { kind: "opaque-handle" } : { kind: "opaque-handle", freeFn },
   refcount: (): OwnershipDiscipline => ({ kind: "refcount" }),
   resource: (mode: "own" | "borrow"): OwnershipDiscipline => ({ kind: "resource", mode }),
-}
+};
 
 // `meta.ownership` is the recognized convention key on a type-ir `TypeRef`'s
 // existing open metadata bag (the same bag `meta.optional`/`meta.nullable`/
@@ -111,7 +111,7 @@ export const ownership = {
 // (`resourceRef` below) follow, not a hard-enforced contract (same
 // "convention, not contract" precedent type-ir's own metadata bag uses).
 export function withOwnership(ref: TypeRef, discipline: OwnershipDiscipline): TypeRef {
-  return { shape: ref.shape, meta: { ...ref.meta, ownership: discipline } }
+  return { shape: ref.shape, meta: { ...ref.meta, ownership: discipline } };
 }
 
 /** A type-ir `ref` TypeRef pointing at a resource name, with resource
@@ -119,7 +119,10 @@ export function withOwnership(ref: TypeRef, discipline: OwnershipDiscipline): Ty
  * constructor so callers don't have to hand-assemble the `{ kind: "ref" }`
  * shape themselves. */
 export function resourceRef(resourceName: string, mode: "own" | "borrow"): TypeRef {
-  return { shape: { kind: "ref", target: resourceName }, meta: { ownership: ownership.resource(mode) } }
+  return {
+    shape: { kind: "ref", target: resourceName },
+    meta: { ownership: ownership.resource(mode) },
+  };
 }
 
 // ============================================================================
@@ -134,9 +137,9 @@ export function resourceRef(resourceName: string, mode: "own" | "borrow"): TypeR
  * rather than re-deriving it). Ownership discipline, when applicable, is
  * metadata on `type` itself (`type.meta.ownership`) — see `withOwnership`. */
 export type FfiParam = {
-  readonly name: string
-  readonly type: TypeRef
-}
+  readonly name: string;
+  readonly type: TypeRef;
+};
 
 // Core boundary kinds only, mirroring type-ir's own index.ts comment: this
 // interface is the minimal vocabulary; extension modules can augment it via
@@ -160,10 +163,10 @@ export interface FfiKinds {
   // `meta.callingConvention`) the same way `meta.ownership` was added to
   // type-ir's bag, without a schema change here.
   function: {
-    readonly kind: "function"
-    readonly params: readonly FfiParam[]
-    readonly returnType: TypeRef
-  }
+    readonly kind: "function";
+    readonly params: readonly FfiParam[];
+    readonly returnType: TypeRef;
+  };
   // A callable belonging to a resource's own method surface — same shape as
   // `function` plus `receiver`, naming the `FfiResource` (by its key in the
   // enclosing `FfiModule.resources` map) this method operates on. Kept
@@ -172,11 +175,11 @@ export interface FfiKinds {
   // means a projector without an explicit `method` handler automatically
   // falls back to its `function` handler.
   method: {
-    readonly kind: "method"
-    readonly params: readonly FfiParam[]
-    readonly returnType: TypeRef
-    readonly receiver: string
-  }
+    readonly kind: "method";
+    readonly params: readonly FfiParam[];
+    readonly returnType: TypeRef;
+    readonly receiver: string;
+  };
   // An opaque/owned handle to an entity that exists at the FFI boundary —
   // informed by, but deliberately narrower than, WIT's `resource` (WIT's
   // own `own<T>`/`borrow<T>` qualifiers are NOT reproduced here as a type
@@ -187,10 +190,10 @@ export interface FfiKinds {
   // `methods` map, mirroring WIT's own constraint that resources "cannot be
   // plain data structures."
   resource: {
-    readonly kind: "resource"
-    readonly name: string
-    readonly methods: Readonly<Record<string, FfiRef>>
-  }
+    readonly kind: "resource";
+    readonly name: string;
+    readonly methods: Readonly<Record<string, FfiRef>>;
+  };
   // The "modules are not really types" construct from Fork A — groups the
   // functions and resources exported at one FFI boundary. Roughly analogous
   // to WIT's `interface` (named collection of types+functions), narrower:
@@ -200,25 +203,25 @@ export interface FfiKinds {
   // the Component Model specifically, not something this document's forks
   // adopted as fractal's own vocabulary.
   module: {
-    readonly kind: "module"
-    readonly name: string
-    readonly functions: Readonly<Record<string, FfiRef>>
-    readonly resources: Readonly<Record<string, FfiRef>>
-  }
+    readonly kind: "module";
+    readonly name: string;
+    readonly functions: Readonly<Record<string, FfiRef>>;
+    readonly resources: Readonly<Record<string, FfiRef>>;
+  };
 }
 
-export type FfiShape = FfiKinds[keyof FfiKinds]
+export type FfiShape = FfiKinds[keyof FfiKinds];
 
 export type FfiRef = {
-  readonly shape: FfiShape
+  readonly shape: FfiShape;
   // Open metadata bag, same "conventions over contracts" precedent as
   // type-ir's TypeRef.meta — e.g. a future calling-convention key (see the
   // `function` kind's doc comment above), `meta.description` for doc
   // comments, `meta.deprecated`, etc. No calling-convention key is defined
   // yet; this field exists so one can be added without a schema change,
   // per Fork D's still-open async question.
-  readonly meta: Readonly<Record<string, unknown>>
-}
+  readonly meta: Readonly<Record<string, unknown>>;
+};
 
 const parents: Record<string, string | null> = {
   function: null,
@@ -228,7 +231,7 @@ const parents: Record<string, string | null> = {
   method: "function",
   resource: null,
   module: null,
-}
+};
 
 /** Register an ancestor relationship for an ffi-ir kind added by an
  * extension module — mirrors type-ir's `registerParent`. Deliberately a
@@ -236,35 +239,35 @@ const parents: Record<string, string | null> = {
  * ffi-ir's boundary kinds and type-ir's data-shape kinds are different
  * namespaces that happen to share a mechanism, not one shared lattice. */
 export function registerParent(kind: string, parent: string | null): void {
-  parents[kind] = parent
+  parents[kind] = parent;
 }
 
 /** Ancestor chain for an ffi-ir kind, walking `parents` to the root —
  * mirrors type-ir's `ancestors`. */
 export function ancestors(kind: string): string[] {
-  const chain: string[] = []
-  let current = parents[kind] ?? undefined
+  const chain: string[] = [];
+  let current = parents[kind] ?? undefined;
   while (current !== undefined) {
-    chain.push(current)
-    current = parents[current] ?? undefined
+    chain.push(current);
+    current = parents[current] ?? undefined;
   }
-  return chain
+  return chain;
 }
 
 /** Look up a handler for `kind`, falling back through `ancestors(kind)` when
  * no exact match exists — mirrors type-ir's `resolve`. */
 export function resolve<T>(kind: string, handlers: Record<string, T>): T | undefined {
-  if (kind in handlers) return handlers[kind]
+  if (kind in handlers) return handlers[kind];
   for (const ancestor of ancestors(kind)) {
-    if (ancestor in handlers) return handlers[ancestor]
+    if (ancestor in handlers) return handlers[ancestor];
   }
-  return undefined
+  return undefined;
 }
 
 /** Wrap an `FfiShape` with a metadata bag into an `FfiRef` — mirrors
  * type-ir's `t()`. */
 export function f(shape: FfiShape, meta?: Record<string, unknown>): FfiRef {
-  return { shape, meta: meta ?? {} }
+  return { shape, meta: meta ?? {} };
 }
 
 // ============================================================================
@@ -276,10 +279,11 @@ export const boundary = {
     ({ kind: "function", params, returnType }) as const,
   method: (params: readonly FfiParam[], returnType: TypeRef, receiver: string) =>
     ({ kind: "method", params, returnType, receiver }) as const,
-  resource: (name: string, methods: Record<string, FfiRef>) => ({ kind: "resource", name, methods }) as const,
+  resource: (name: string, methods: Record<string, FfiRef>) =>
+    ({ kind: "resource", name, methods }) as const,
   module: (name: string, functions: Record<string, FfiRef>, resources: Record<string, FfiRef>) =>
     ({ kind: "module", name, functions, resources }) as const,
-}
+};
 
 // ============================================================================
 // Provenance metadata — lineage of which ingestor/tool produced an FfiRef.
@@ -300,8 +304,8 @@ export const boundary = {
  * itself already follows.
  */
 export type Provenance = {
-  readonly source: string
-} & Readonly<Record<string, unknown>>
+  readonly source: string;
+} & Readonly<Record<string, unknown>>;
 
 // `meta.provenance` is the recognized convention key on an `FfiRef`'s open
 // metadata bag (the same bag `meta.ownership` lives in on a type-ir
@@ -315,5 +319,5 @@ export type Provenance = {
 // e.g. when a single module is assembled by hand from pieces stamped by
 // different ingestors.
 export function withProvenance(ref: FfiRef, provenance: Provenance): FfiRef {
-  return { shape: ref.shape, meta: { ...ref.meta, provenance } }
+  return { shape: ref.shape, meta: { ...ref.meta, provenance } };
 }

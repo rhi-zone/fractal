@@ -7,7 +7,7 @@ so far — from the function-core tree's `HttpRoute`.
 
 Where `@rhi-zone/fractal-http-api-projector` is fractal's own working HTTP
 framework/runtime (a compiled matcher your process serves directly), this
-package generates source code for frameworks *other than* fractal's own:
+package generates source code for frameworks _other than_ fractal's own:
 a real `express.Router()` or Fastify plugin your existing (or new) app
 mounts like any hand-written router. It's an **eject** tool, not a runtime
 dependency — the generated file is written once, has no drift-detection or
@@ -31,12 +31,12 @@ design doc's priority list): Express first, then Fastify. Remaining targets
 ## Usage
 
 ```ts
-import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
-import { generateExpressRouterFromNode } from "@rhi-zone/fractal-http-framework-projector"
-import { api } from "./tree.ts"
+import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree";
+import { generateExpressRouterFromNode } from "@rhi-zone/fractal-http-framework-projector";
+import { api } from "./tree.ts";
 
-const schemas = extractToolSchemas("./tree.ts")
-const source = generateExpressRouterFromNode(api, schemas, { routerName: "Books" })
+const schemas = extractToolSchemas("./tree.ts");
+const source = generateExpressRouterFromNode(api, schemas, { routerName: "Books" });
 // write `source` to disk, e.g. src/books.router.ts
 ```
 
@@ -47,14 +47,14 @@ wired into your `api()`/`op()` tree can be passed straight in:
 
 ```ts
 // src/books.router.ts (generated, then committed)
-import { createBooksRouter } from "./books.router.ts"
-import { listBooks, createBook, getBook } from "./tree.ts"
+import { createBooksRouter } from "./books.router.ts";
+import { listBooks, createBook, getBook } from "./tree.ts";
 
 const router = createBooksRouter({
   books: { list: listBooks, create: createBook, bookId: { get: getBook } },
-})
+});
 
-app.use(router) // mount into an existing Express app
+app.use(router); // mount into an existing Express app
 ```
 
 Fastify follows the same shape, but the generated factory returns a
@@ -63,23 +63,25 @@ object, a registered plugin function is the idiomatic mountable unit) instead
 of an Express `Router` instance:
 
 ```ts
-import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree"
-import { generateFastifyRoutesFromNode } from "@rhi-zone/fractal-http-framework-projector"
-import { api } from "./tree.ts"
+import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree";
+import { generateFastifyRoutesFromNode } from "@rhi-zone/fractal-http-framework-projector";
+import { api } from "./tree.ts";
 
-const schemas = extractToolSchemas("./tree.ts")
-const source = generateFastifyRoutesFromNode(api, schemas, { routerName: "Books" })
+const schemas = extractToolSchemas("./tree.ts");
+const source = generateFastifyRoutesFromNode(api, schemas, { routerName: "Books" });
 // write `source` to disk, e.g. src/books.routes.ts
 ```
 
 ```ts
 // src/books.routes.ts (generated, then committed)
-import { createBooksRoutes } from "./books.routes.ts"
-import { listBooks, createBook, getBook } from "./tree.ts"
+import { createBooksRoutes } from "./books.routes.ts";
+import { listBooks, createBook, getBook } from "./tree.ts";
 
-app.register(createBooksRoutes({
-  books: { list: listBooks, create: createBook, bookId: { get: getBook } },
-}))
+app.register(
+  createBooksRoutes({
+    books: { list: listBooks, create: createBook, bookId: { get: getBook } },
+  }),
+);
 ```
 
 ## Known simplifications (v1)

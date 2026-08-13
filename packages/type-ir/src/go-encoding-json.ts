@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts";
 
 // packages/type-ir/src/go-encoding-json.ts — @rhi-zone/fractal-type-ir/go-encoding-json
 //
@@ -13,12 +13,12 @@ import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts"
 // just flattened to package level (Go has no C-style nested-type-declaration
 // idiom) rather than kept lexically nested.
 
-type Converter = () => string
+type Converter = () => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Every leaf/primitive kind this projector knows how to render directly —
 // dispatched via `resolve` so extension kinds (kinds/wire-numerics.ts,
@@ -64,7 +64,7 @@ const primitiveHandlers: Record<string, Converter> = {
   void: leaf("struct{}"),
   never: leaf("struct{}"),
   unknown: leaf("interface{}"),
-}
+};
 
 // Kinds whose Go rendering is already a nil-able reference type (slice, map,
 // interface, func value) — encoding/json's `omitempty` already omits a nil
@@ -83,12 +83,12 @@ const referenceKinds = new Set([
   "function",
   "method",
   "interface",
-])
+]);
 
-const hoistingKinds = new Set(["object", "enum", "union", "interface", "tuple"])
+const hoistingKinds = new Set(["object", "enum", "union", "interface", "tuple"]);
 
 interface Ctx {
-  decls: string[]
+  decls: string[];
 }
 
 /** Sanitize an arbitrary field/type/enum-member name into an exported Go
@@ -96,59 +96,60 @@ interface Ctx {
  * prefix a leading digit (Go identifiers can't start with one). */
 
 function uniqueLabel(base: string, used: Set<string>): string {
-  let label = goFieldIdent(base)
-  let i = 2
+  let label = goFieldIdent(base);
+  let i = 2;
   while (used.has(label)) {
-    label = `${goFieldIdent(base)}${i}`
-    i++
+    label = `${goFieldIdent(base)}${i}`;
+    i++;
   }
-  used.add(label)
-  return label
+  used.add(label);
+  return label;
 }
 
 function fieldLine(name: string, jsonName: string, goFieldType: string, optional: boolean): string {
-  const jsonTag = optional ? `${jsonName},omitempty` : jsonName
-  return `\t${goFieldIdent(name)} ${goFieldType} \`json:${quote(jsonTag)}\``
+  const jsonTag = optional ? `${jsonName},omitempty` : jsonName;
+  return `\t${goFieldIdent(name)} ${goFieldType} \`json:${quote(jsonTag)}\``;
 }
 
 function objectDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const name = goFieldIdent(hint)
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const name = goFieldIdent(hint);
   const fields = Object.entries(shape.fields).map(([fieldName, fieldRef]) => {
-    const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true
-    const baseType = goType(fieldRef, `${name}${goFieldIdent(fieldName)}`, ctx)
-    const goFieldType = optional && !referenceKinds.has(fieldRef.shape.kind) ? `*${baseType}` : baseType
-    return fieldLine(fieldName, fieldName, goFieldType, optional)
-  })
-  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
-  return name
+    const optional = fieldRef.meta.optional === true || fieldRef.meta.nullable === true;
+    const baseType = goType(fieldRef, `${name}${goFieldIdent(fieldName)}`, ctx);
+    const goFieldType =
+      optional && !referenceKinds.has(fieldRef.shape.kind) ? `*${baseType}` : baseType;
+    return fieldLine(fieldName, fieldName, goFieldType, optional);
+  });
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`);
+  return name;
 }
 
 function tupleDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "tuple" }
-  const name = goFieldIdent(hint)
+  const shape = ref.shape as TypeShape & { kind: "tuple" };
+  const name = goFieldIdent(hint);
   const fields = shape.elements.map((element, i) => {
-    const fieldType = goType(element, `${name}F${i}`, ctx)
-    return fieldLine(`F${i}`, String(i), fieldType, false)
-  })
-  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`)
-  return name
+    const fieldType = goType(element, `${name}F${i}`, ctx);
+    return fieldLine(`F${i}`, String(i), fieldType, false);
+  });
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} struct {\n${fields.join("\n")}\n}`);
+  return name;
 }
 
 // String-backed const block (rather than an iota int) — enum members here
 // are semantic strings that must round-trip through JSON exactly, so the
 // value itself (not an arbitrary ordinal) is what encoding/json needs to see.
 function enumDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const name = goFieldIdent(hint)
-  const used = new Set<string>()
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const name = goFieldIdent(hint);
+  const used = new Set<string>();
   const constLines = shape.members.map((member) => {
-    const memberName = uniqueLabel(`${name}${goFieldIdent(member)}`, used)
-    return `\t${memberName} ${name} = ${quote(member)}`
-  })
-  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} string`)
-  ctx.decls.push(`const (\n${constLines.join("\n")}\n)`)
-  return name
+    const memberName = uniqueLabel(`${name}${goFieldIdent(member)}`, used);
+    return `\t${memberName} ${name} = ${quote(member)}`;
+  });
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} string`);
+  ctx.decls.push(`const (\n${constLines.join("\n")}\n)`);
+  return name;
 }
 
 // Go has no tagged-union/sum-type construct: the idiomatic encoding is a
@@ -160,27 +161,27 @@ function enumDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
 // map[K]V, …) is wrapped in a locally-defined named type first, since Go
 // cannot attach a method to an unnamed/builtin type expression directly.
 function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const name = goFieldIdent(hint)
-  const markerMethod = `is${name}`
-  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} interface {\n\t${markerMethod}()\n}`)
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const name = goFieldIdent(hint);
+  const markerMethod = `is${name}`;
+  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} interface {\n\t${markerMethod}()\n}`);
 
-  const used = new Set<string>()
+  const used = new Set<string>();
   for (const variant of shape.variants) {
-    const label = uniqueLabel(variant.shape.kind, used)
-    const variantHint = `${name}${label}`
-    const rendered = goType(variant, variantHint, ctx)
+    const label = uniqueLabel(variant.shape.kind, used);
+    const variantHint = `${name}${label}`;
+    const rendered = goType(variant, variantHint, ctx);
     if (hoistingKinds.has(variant.shape.kind)) {
       // `rendered` is already the freshly-declared named type from goType above.
-      ctx.decls.push(`func (${rendered}) ${markerMethod}() {}`)
+      ctx.decls.push(`func (${rendered}) ${markerMethod}() {}`);
     } else {
-      const wrapperName = goFieldIdent(variantHint)
-      ctx.decls.push(`type ${wrapperName} ${rendered}`)
-      ctx.decls.push(`func (${wrapperName}) ${markerMethod}() {}`)
+      const wrapperName = goFieldIdent(variantHint);
+      ctx.decls.push(`type ${wrapperName} ${rendered}`);
+      ctx.decls.push(`func (${wrapperName}) ${markerMethod}() {}`);
     }
   }
 
-  return name
+  return name;
 }
 
 // A `interface` TypeRef (service method surface — see index.ts's
@@ -188,27 +189,31 @@ function unionDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
 // construct directly — unlike `union` above, no marker-method trick is
 // needed here since this already IS Go's real interface type.
 function interfaceDecl(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const shape = ref.shape as TypeShape & { kind: "interface" }
-  const name = goFieldIdent(hint)
+  const shape = ref.shape as TypeShape & { kind: "interface" };
+  const name = goFieldIdent(hint);
   const methods = Object.entries(shape.methods).map(([methodName, methodRef]) => {
     const m = methodRef.shape as TypeShape & {
-      kind: "method" | "function"
-      params: readonly { name: string; type: TypeRef }[]
-      returnType: TypeRef
-    }
+      kind: "method" | "function";
+      params: readonly { name: string; type: TypeRef }[];
+      returnType: TypeRef;
+    };
     const paramTypes = m.params.map((p, i) =>
       goType(p.type, `${name}${goFieldIdent(methodName)}Param${i}`, ctx),
-    )
-    const isVoid = m.returnType.shape.kind === "void"
-    const returnType = isVoid ? "" : ` ${goType(m.returnType, `${name}${goFieldIdent(methodName)}Result`, ctx)}`
-    return `\t${goFieldIdent(methodName)}(${paramTypes.join(", ")})${returnType}`
-  })
-  ctx.decls.push(`${goDocComment(name, ref.meta)}type ${name} interface {\n${methods.join("\n")}\n}`)
-  return name
+    );
+    const isVoid = m.returnType.shape.kind === "void";
+    const returnType = isVoid
+      ? ""
+      : ` ${goType(m.returnType, `${name}${goFieldIdent(methodName)}Result`, ctx)}`;
+    return `\t${goFieldIdent(methodName)}(${paramTypes.join(", ")})${returnType}`;
+  });
+  ctx.decls.push(
+    `${goDocComment(name, ref.meta)}type ${name} interface {\n${methods.join("\n")}\n}`,
+  );
+  return name;
 }
 
 function goType(ref: TypeRef, hint: string, ctx: Ctx): string {
-  const shape = ref.shape
+  const shape = ref.shape;
   switch (shape.kind) {
     case "instance":
       // A class instance carries only nominal identity (className/source),
@@ -216,64 +221,64 @@ function goType(ref: TypeRef, hint: string, ctx: Ctx): string {
       // rendered as a bare reference to that name, same as typescript.ts's
       // `instance` handler; the caller assembling this source is responsible
       // for the type actually existing/being imported.
-      return (shape as TypeShape & { kind: "instance" }).className
+      return (shape as TypeShape & { kind: "instance" }).className;
     case "ref":
-      return goFieldIdent((shape as TypeShape & { kind: "ref" }).target)
+      return goFieldIdent((shape as TypeShape & { kind: "ref" }).target);
     case "literal": {
-      const s = shape as TypeShape & { kind: "literal" }
-      if (s.value === null) return "interface{}"
-      if (typeof s.value === "string") return "string"
-      if (typeof s.value === "boolean") return "bool"
-      return Number.isInteger(s.value) ? "int" : "float64"
+      const s = shape as TypeShape & { kind: "literal" };
+      if (s.value === null) return "interface{}";
+      if (typeof s.value === "string") return "string";
+      if (typeof s.value === "boolean") return "bool";
+      return Number.isInteger(s.value) ? "int" : "float64";
     }
     case "array": {
-      const s = shape as TypeShape & { kind: "array" }
-      return `[]${goType(s.element, hint, ctx)}`
+      const s = shape as TypeShape & { kind: "array" };
+      return `[]${goType(s.element, hint, ctx)}`;
     }
     // No native Go streaming value type — degrades to a slice of the element
     // type, the same honest-degrade convention protobuf.ts/capnp.ts use for
     // `stream` in field position.
     case "stream": {
-      const s = shape as TypeShape & { kind: "stream" }
-      return `[]${goType(s.element, hint, ctx)}`
+      const s = shape as TypeShape & { kind: "stream" };
+      return `[]${goType(s.element, hint, ctx)}`;
     }
     // No native Go pagination construct — degrades to a slice of the page's
     // element type, same convention as `stream` above.
     case "page": {
-      const s = shape as TypeShape & { kind: "page" }
-      return `[]${goType(s.element, hint, ctx)}`
+      const s = shape as TypeShape & { kind: "page" };
+      return `[]${goType(s.element, hint, ctx)}`;
     }
     case "map": {
-      const s = shape as TypeShape & { kind: "map" }
-      return `map[${goType(s.key, `${hint}Key`, ctx)}]${goType(s.value, `${hint}Value`, ctx)}`
+      const s = shape as TypeShape & { kind: "map" };
+      return `map[${goType(s.key, `${hint}Key`, ctx)}]${goType(s.value, `${hint}Value`, ctx)}`;
     }
     case "tuple":
-      return tupleDecl(ref, hint, ctx)
+      return tupleDecl(ref, hint, ctx);
     case "object":
-      return objectDecl(ref, hint, ctx)
+      return objectDecl(ref, hint, ctx);
     case "enum":
-      return enumDecl(ref, hint, ctx)
+      return enumDecl(ref, hint, ctx);
     case "union":
-      return unionDecl(ref, hint, ctx)
+      return unionDecl(ref, hint, ctx);
     case "interface":
-      return interfaceDecl(ref, hint, ctx)
+      return interfaceDecl(ref, hint, ctx);
     case "function":
     case "method": {
       const s = shape as TypeShape & {
-        kind: "function" | "method"
-        params: readonly { name: string; type: TypeRef }[]
-        returnType: TypeRef
-      }
+        kind: "function" | "method";
+        params: readonly { name: string; type: TypeRef }[];
+        returnType: TypeRef;
+      };
       // Go func *types* carry no `this`/receiver slot (a bound method's
       // receiver is part of its declaration, not its type) — thisType, if
       // present, has no representation here and is dropped.
-      const paramTypes = s.params.map((p, i) => goType(p.type, `${hint}Param${i}`, ctx))
-      const returnType = goType(s.returnType, `${hint}Result`, ctx)
-      return `func(${paramTypes.join(", ")}) ${returnType}`
+      const paramTypes = s.params.map((p, i) => goType(p.type, `${hint}Param${i}`, ctx));
+      const returnType = goType(s.returnType, `${hint}Result`, ctx);
+      return `func(${paramTypes.join(", ")}) ${returnType}`;
     }
     default: {
-      const converter = resolve(shape.kind, primitiveHandlers)
-      return converter === undefined ? "interface{}" : converter()
+      const converter = resolve(shape.kind, primitiveHandlers);
+      return converter === undefined ? "interface{}" : converter();
     }
   }
 }
@@ -289,11 +294,11 @@ function goType(ref: TypeRef, hint: string, ctx: Ctx): string {
  * job in typescript.ts.
  */
 export function toGo(ref: TypeRef, name = "Root"): string {
-  const ctx: Ctx = { decls: [] }
-  const rootName = goFieldIdent(name)
-  const topType = goType(ref, name, ctx)
+  const ctx: Ctx = { decls: [] };
+  const rootName = goFieldIdent(name);
+  const topType = goType(ref, name, ctx);
   if (topType !== rootName) {
-    ctx.decls.push(`type ${rootName} = ${topType}`)
+    ctx.decls.push(`type ${rootName} = ${topType}`);
   }
-  return ctx.decls.join("\n\n")
+  return ctx.decls.join("\n\n");
 }

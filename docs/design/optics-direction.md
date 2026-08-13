@@ -24,13 +24,13 @@ Three concrete smells:
 
 A combinator's true effect is a tuple, one component per space:
 
-| Space | Question |
-|---|---|
-| **Type** | Its function on the phantom I/O/E/Caps params |
-| **State** | Its transition on a request-in-flight |
-| **Representation** | The inert node it emits — must stay walkable data, since projection depends on it |
-| **Projection** | What each interpreter (HTTP server, typed client, OpenAPI, test harness) renders — a vector with one component per surface |
-| **Mental model** | What the author believes they are doing |
+| Space              | Question                                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| **Type**           | Its function on the phantom I/O/E/Caps params                                                                              |
+| **State**          | Its transition on a request-in-flight                                                                                      |
+| **Representation** | The inert node it emits — must stay walkable data, since projection depends on it                                          |
+| **Projection**     | What each interpreter (HTTP server, typed client, OpenAPI, test harness) renders — a vector with one component per surface |
+| **Mental model**   | What the author believes they are doing                                                                                    |
 
 A combinator is **coherent** if and only if all five components are images of one intended meaning. `methods` is incoherent: it means "verb dispatch" to HTTP, "always POST" to a worker, and "per-verb fan-out" to OpenAPI — one promise, three disagreeing images.
 
@@ -50,12 +50,12 @@ Response-shaping (status/headers) is **not** a fourth category. It is attributio
 
 ## Candidate minimal basis (4 primitives, down from 6)
 
-| Primitive | Category | Notes |
-|---|---|---|
-| `leaf` | COMPUTE | Stream is the general case; unary = stream-of-one |
-| `seq` | COMPUTE | The unique type-changer; the Kleisli arrow |
-| `dispatch` | NAVIGATE | Match-and-bind a named request facet to a subtree — subsumes `branch`/`param`/`query` as facet-descriptor configurations; open-capture vs closed-enum. Facets are structural (path segment, query key, header key, operation name); verb is explicitly excluded — it is HTTP-binding rendering, not a tree-level dispatch facet (supersedes the earlier "dispatch on facet verb" framing). `methods` is therefore not a facet configuration; it dissolves entirely. |
-| `annotate` | ATTRIBUTE | Open metadata/effect/binding channel: capabilities gated, schema inert, HTTP-binding inert |
+| Primitive  | Category  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leaf`     | COMPUTE   | Stream is the general case; unary = stream-of-one                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `seq`      | COMPUTE   | The unique type-changer; the Kleisli arrow                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `dispatch` | NAVIGATE  | Match-and-bind a named request facet to a subtree — subsumes `branch`/`param`/`query` as facet-descriptor configurations; open-capture vs closed-enum. Facets are structural (path segment, query key, header key, operation name); verb is explicitly excluded — it is HTTP-binding rendering, not a tree-level dispatch facet (supersedes the earlier "dispatch on facet verb" framing). `methods` is therefore not a facet configuration; it dissolves entirely. |
+| `annotate` | ATTRIBUTE | Open metadata/effect/binding channel: capabilities gated, schema inert, HTTP-binding inert                                                                                                                                                                                                                                                                                                                                                                          |
 
 The floor is bounded by **reflectability**: primitives must stay inert, walkable data so projections derive from them. The only sanctioned opaque code is the leaf handler.
 
@@ -132,24 +132,24 @@ Surface sugar (`branch({ … })`) is fine **provided** it desugars to the one na
 - **Transport-agnostic handlers** — easy.
 - **Protocol-neutral description** — the tension. Pure neutrality forbids saying "this is a GET" and collapses HTTP to all-POST; embedding `method` pollutes the tree for stdio/worker.
 
-Resolution: `method` is **not** a primitive, and neither is verb-dispatch. The earlier framing in this record — "the primitive is dispatch-on-a-named-abstract-facet; the tree says `dispatch on facet 'verb'`; the HTTP binding maps `facet 'verb' ← req.method`" — relocates *where* the verb is read from but leaves the verb vocabulary (GET/PUT/POST/DELETE/HEAD/OPTIONS) sitting in the dispatch keys. Branching on `{ GET: …, POST: … }` is still HTTP-specific. That framing is superseded (supersedes the earlier "dispatch on facet verb" framing).
+Resolution: `method` is **not** a primitive, and neither is verb-dispatch. The earlier framing in this record — "the primitive is dispatch-on-a-named-abstract-facet; the tree says `dispatch on facet 'verb'`; the HTTP binding maps `facet 'verb' ← req.method`" — relocates _where_ the verb is read from but leaves the verb vocabulary (GET/PUT/POST/DELETE/HEAD/OPTIONS) sitting in the dispatch keys. Branching on `{ GET: …, POST: … }` is still HTTP-specific. That framing is superseded (supersedes the earlier "dispatch on facet verb" framing).
 
 **Corrected resolution:** dispatch on operation **names**; the HTTP verb is binding-side rendering, never a tree key. The GET/PUT/POST/DELETE/HEAD/OPTIONS enumeration is irreducibly HTTP-specific and must not appear as dispatch keys in the agnostic tree.
 
-The agnostic tree has **named operations** — e.g. `todos: { list, create, remove }`. A name is meaningful on every protocol: CLI subcommand, MCP tool, RPC method, GraphQL field, in-process call. What looks like fundamental "branch by method" in REST (GET /todos = list vs POST /todos = create at one path) is actually two distinct named operations that the HTTP binding *collapses* onto one path, disambiguated by verb. Verb-branching is an HTTP **rendering** of name-branching, produced by the binding — not a primitive in the tree. This is precisely why the `methods` node was accretion: it smuggled a binding-level rendering into the IR.
+The agnostic tree has **named operations** — e.g. `todos: { list, create, remove }`. A name is meaningful on every protocol: CLI subcommand, MCP tool, RPC method, GraphQL field, in-process call. What looks like fundamental "branch by method" in REST (GET /todos = list vs POST /todos = create at one path) is actually two distinct named operations that the HTTP binding _collapses_ onto one path, disambiguated by verb. Verb-branching is an HTTP **rendering** of name-branching, produced by the binding — not a primitive in the tree. This is precisely why the `methods` node was accretion: it smuggled a binding-level rendering into the IR.
 
 The verb enumeration lives in exactly one place: the HTTP binding's name→verb mapping table. It appears in no other projection. GraphQL independently corroborates the generalisation: query/mutation/subscription is the same read/write/stream distinction at a coarser grain; HTTP verbs are a finer read/write taxonomy. Both are renderings of named operations, neither is primitive.
 
 Projection table — same named tree, every surface:
 
-| Surface | list | create |
-|---|---|---|
-| HTTP | GET /todos | POST /todos |
-| Typed client | `client.todos.list()` | `client.todos.create(x)` |
-| CLI | `app todos list` | `app todos create --title` |
-| MCP | tool `todos_list` | tool `todos_create` |
-| GraphQL | query | mutation |
-| Worker/stdio | call by name | call by name |
+| Surface      | list                  | create                     |
+| ------------ | --------------------- | -------------------------- |
+| HTTP         | GET /todos            | POST /todos                |
+| Typed client | `client.todos.list()` | `client.todos.create(x)`   |
+| CLI          | `app todos list`      | `app todos create --title` |
+| MCP          | tool `todos_list`     | tool `todos_create`        |
+| GraphQL      | query                 | mutation                   |
+| Worker/stdio | call by name          | call by name               |
 
 The verb vocabulary appears only in the HTTP column. Consequently, **`methods` dissolves completely** — there is no verb-dispatch node and no `method()` primitive. The tree needs only name-dispatch (branch over keys) plus `leaf`; the HTTP binding performs verb assignment (via an explicit `op-name → (verb, path)` table) and same-path collapsing. A semantic tag on an operation is optional metadata the binding may use as a default table entry (see "Verb assignment" below).
 
@@ -169,14 +169,14 @@ Multiple operations at the same endpoint is the **normal case**, not an edge cas
 
 **Worked example.** Agnostic tree: `branch({ list, create, get, replace, patch, remove })`. HTTP binding table:
 
-| Op name | Verb   | Path          |
-|---------|--------|---------------|
-| list    | GET    | /todos        |
-| create  | POST   | /todos        |
-| get     | GET    | /todos/{id}   |
-| replace | PUT    | /todos/{id}   |
-| patch   | PATCH  | /todos/{id}   |
-| remove  | DELETE | /todos/{id}   |
+| Op name | Verb   | Path        |
+| ------- | ------ | ----------- |
+| list    | GET    | /todos      |
+| create  | POST   | /todos      |
+| get     | GET    | /todos/{id} |
+| replace | PUT    | /todos/{id} |
+| patch   | PATCH  | /todos/{id} |
+| remove  | DELETE | /todos/{id} |
 
 Two ops share `/todos` (GET + POST); four share `/todos/{id}` (GET / PUT / PATCH / DELETE). Everything falls out of the table:
 
@@ -185,7 +185,7 @@ Two ops share `/todos` (GET + POST); four share `/todos/{id}` (GET / PUT / PATCH
 - **CLIENT** — looks up an op-name's `(verb, path)` to form the request.
 - **CLI / MCP / GraphQL** — ignore the verb column, use the names.
 
-**Optional default sugar (not the mechanism).** Because filling every table row explicitly is verbose for conventional REST, two forms of *overridable default* can supply entries — but these are never the mechanism, and the explicit table always wins:
+**Optional default sugar (not the mechanism).** Because filling every table row explicitly is verbose for conventional REST, two forms of _overridable default_ can supply entries — but these are never the mechanism, and the explicit table always wins:
 
 1. **Naming convention** (server-less style): `list_* → GET`, `create_* → POST`, `remove_* → DELETE`, etc.
 2. **Protocol-neutral semantic tag** on the operation: `read | create | replace | update | remove | stream` (with optional `idempotent` / `safe` modifiers). The tag describes effect, not HTTP. Each binding maps it independently: HTTP `read → GET`, `create → POST`, `remove → DELETE`; GraphQL `read → query`, `stream → subscription`, else `mutation`; worker/MCP ignore it.

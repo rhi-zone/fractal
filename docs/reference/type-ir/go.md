@@ -14,15 +14,20 @@ unions render differently.
 ## encoding/json
 
 ```ts
-import { toGo } from "@rhi-zone/fractal-type-ir/go-encoding-json"
+import { toGo } from "@rhi-zone/fractal-type-ir/go-encoding-json";
 
-toGo(t(types.object({
-  id: t(types.integer),
-  name: t(types.string),
-  email: t(types.string),
-  isActive: t(types.boolean),
-  tags: t(types.array(t(types.string))),
-})), "User")
+toGo(
+  t(
+    types.object({
+      id: t(types.integer),
+      name: t(types.string),
+      email: t(types.string),
+      isActive: t(types.boolean),
+      tags: t(types.array(t(types.string))),
+    }),
+  ),
+  "User",
+);
 ```
 
 ```go
@@ -38,7 +43,7 @@ type User struct {
 ### easyjson
 
 ```ts
-import { toEasyjson } from "@rhi-zone/fractal-type-ir/go-easyjson"
+import { toEasyjson } from "@rhi-zone/fractal-type-ir/go-easyjson";
 ```
 
 Struct fields and tags are identical to `encoding/json`; every hoisted
@@ -75,7 +80,7 @@ type ApiResponse json.RawMessage
 ### jsoniter
 
 ```ts
-import { toJsoniter } from "@rhi-zone/fractal-type-ir/go-jsoniter"
+import { toJsoniter } from "@rhi-zone/fractal-type-ir/go-jsoniter";
 ```
 
 [jsoniter](https://github.com/json-iterator/go) reads the exact same
@@ -95,7 +100,7 @@ type User struct {
 ### sonic
 
 ```ts
-import { toSonic } from "@rhi-zone/fractal-type-ir/go-sonic"
+import { toSonic } from "@rhi-zone/fractal-type-ir/go-sonic";
 ```
 
 [sonic](https://github.com/bytedance/sonic) also reads standard `json:"..."`

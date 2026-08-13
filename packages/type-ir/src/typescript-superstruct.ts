@@ -3,56 +3,57 @@
 // Superstruct has no native string-format validators (uuid, time, duration, base64) — those
 // fall back to `s.string()` with a trailing comment naming the intended format. `s.date()` IS
 // native, so datetime/date (domain type `Date` — see kinds/date-time.ts) use it directly.
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { isA, quoteKey } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { isA, quoteKey } from "./codegen-helpers.ts";
 
 function regexLiteral(pattern: string): string {
-  return `/${pattern.replace(/\//g, "\\/")}/`
+  return `/${pattern.replace(/\//g, "\\/")}/`;
 }
 
 function withMeta(expr: string, meta: Readonly<Record<string, unknown>>, kind: string): string {
-  let result = expr
+  let result = expr;
 
-  const numberLike = isA(kind, "number")
-  const stringLike = isA(kind, "string")
-  const sizeConstrainable = stringLike || kind === "array"
+  const numberLike = isA(kind, "number");
+  const stringLike = isA(kind, "string");
+  const sizeConstrainable = stringLike || kind === "array";
 
-  const hasMinLength = typeof meta.minLength === "number" && sizeConstrainable
-  const hasMaxLength = typeof meta.maxLength === "number" && sizeConstrainable
+  const hasMinLength = typeof meta.minLength === "number" && sizeConstrainable;
+  const hasMaxLength = typeof meta.maxLength === "number" && sizeConstrainable;
   if (hasMinLength && hasMaxLength) {
-    result = `s.size(${result}, ${meta.minLength}, ${meta.maxLength})`
+    result = `s.size(${result}, ${meta.minLength}, ${meta.maxLength})`;
   } else if (hasMinLength) {
-    result = `s.size(${result}, ${meta.minLength}, Infinity)`
+    result = `s.size(${result}, ${meta.minLength}, Infinity)`;
   } else if (hasMaxLength) {
-    result = `s.size(${result}, 0, ${meta.maxLength})`
+    result = `s.size(${result}, 0, ${meta.maxLength})`;
   }
 
   if (typeof meta.pattern === "string" && stringLike) {
-    result = `s.pattern(${result}, ${regexLiteral(meta.pattern)})`
+    result = `s.pattern(${result}, ${regexLiteral(meta.pattern)})`;
   }
 
-  if (typeof meta.minimum === "number" && numberLike) result = `s.min(${result}, ${meta.minimum})`
-  if (typeof meta.maximum === "number" && numberLike) result = `s.max(${result}, ${meta.maximum})`
+  if (typeof meta.minimum === "number" && numberLike) result = `s.min(${result}, ${meta.minimum})`;
+  if (typeof meta.maximum === "number" && numberLike) result = `s.max(${result}, ${meta.maximum})`;
 
   if (typeof meta.multipleOf === "number" && numberLike) {
-    result = `s.refine(${result}, "multipleOf", (value) => value % ${meta.multipleOf} === 0)`
+    result = `s.refine(${result}, "multipleOf", (value) => value % ${meta.multipleOf} === 0)`;
   }
 
-  if (meta.nullable === true) result = `s.nullable(${result})`
+  if (meta.nullable === true) result = `s.nullable(${result})`;
 
-  if (typeof meta.description === "string") result += ` /* ${meta.description} */`
+  if (typeof meta.description === "string") result += ` /* ${meta.description} */`;
 
-  if (meta.default !== undefined) result = `s.defaulted(${result}, ${JSON.stringify(meta.default)})`
+  if (meta.default !== undefined)
+    result = `s.defaulted(${result}, ${JSON.stringify(meta.default)})`;
 
-  return result
+  return result;
 }
 
-type Converter = (shape: TypeShape) => string
+type Converter = (shape: TypeShape) => string;
 
 const leaf =
   (expr: string): Converter =>
   () =>
-    expr
+    expr;
 
 const handlers: Record<string, Converter> = {
   boolean: leaf("s.boolean()"),
@@ -80,72 +81,74 @@ const handlers: Record<string, Converter> = {
   unknown: leaf("s.unknown()"),
   never: leaf("s.never()"),
   object: (shape) => {
-    const s = shape as TypeShape & { kind: "object" }
+    const s = shape as TypeShape & { kind: "object" };
     const fields = Object.entries(s.fields).map(([name, field]) => {
-      const expr = toSuperstruct(field)
-      const wrapped = field.meta.optional === true ? `s.optional(${expr})` : expr
-      return `${quoteKey(name)}: ${wrapped}`
-    })
-    return `s.object({ ${fields.join(", ")} })`
+      const expr = toSuperstruct(field);
+      const wrapped = field.meta.optional === true ? `s.optional(${expr})` : expr;
+      return `${quoteKey(name)}: ${wrapped}`;
+    });
+    return `s.object({ ${fields.join(", ")} })`;
   },
   array: (shape) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `s.array(${toSuperstruct(s.element)})`
+    const s = shape as TypeShape & { kind: "array" };
+    return `s.array(${toSuperstruct(s.element)})`;
   },
   tuple: (shape) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `s.tuple([${s.elements.map(toSuperstruct).join(", ")}])`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `s.tuple([${s.elements.map(toSuperstruct).join(", ")}])`;
   },
   map: (shape) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `s.record(s.string(), ${toSuperstruct(s.value)})`
+    const s = shape as TypeShape & { kind: "map" };
+    return `s.record(s.string(), ${toSuperstruct(s.value)})`;
   },
   // Superstruct validates materialized values, not an ongoing async
   // sequence — degrades to `s.array()` of the element type, same fallback
   // the other data-only projectors use for `stream`.
   stream: (shape) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `s.array(${toSuperstruct(s.element)})`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `s.array(${toSuperstruct(s.element)})`;
   },
   union: (shape) => {
-    const s = shape as TypeShape & { kind: "union" }
-    return `s.union([${s.variants.map(toSuperstruct).join(", ")}])`
+    const s = shape as TypeShape & { kind: "union" };
+    return `s.union([${s.variants.map(toSuperstruct).join(", ")}])`;
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    return `s.literal(${JSON.stringify(s.value)})`
+    const s = shape as TypeShape & { kind: "literal" };
+    return `s.literal(${JSON.stringify(s.value)})`;
   },
   enum: (shape) => {
-    const s = shape as TypeShape & { kind: "enum" }
-    return `s.enums([${s.members.map((m) => JSON.stringify(m)).join(", ")}])`
+    const s = shape as TypeShape & { kind: "enum" };
+    return `s.enums([${s.members.map((m) => JSON.stringify(m)).join(", ")}])`;
   },
   ref: (shape) => {
-    const s = shape as TypeShape & { kind: "ref" }
-    return s.target
+    const s = shape as TypeShape & { kind: "ref" };
+    return s.target;
   },
   // Superstruct has a native `s.intersection([...])` combinator (validates that a
   // value matches all of the given structs) — https://docs.superstructjs.org/api-reference/types,
   // same shape as `s.union([...])` above.
   intersection: (shape) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    return `s.intersection([${s.members.map(toSuperstruct).join(", ")}])`
+    const s = shape as TypeShape & { kind: "intersection" };
+    return `s.intersection([${s.members.map(toSuperstruct).join(", ")}])`;
   },
   // Superstruct has no callable-value validator — degrades to s.unknown(),
   // same fallback as an unrecognized kind.
   function: leaf("s.unknown()"),
-}
+};
 
 export function toSuperstruct(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  const expr = converter === undefined ? "s.unknown()" : converter(ref.shape)
-  return withMeta(expr, ref.meta, ref.shape.kind)
+  const converter = resolve(ref.shape.kind, handlers);
+  const expr = converter === undefined ? "s.unknown()" : converter(ref.shape);
+  return withMeta(expr, ref.meta, ref.shape.kind);
 }
 
 export function toSuperstructDeclaration(name: string, ref: TypeRef): string {
-  return `const ${name} = ${toSuperstruct(ref)};`
+  return `const ${name} = ${toSuperstruct(ref)};`;
 }
 
 export function toSuperstructDeclarations(registry: Record<string, TypeRef>): string {
-  const declarations = Object.entries(registry).map(([name, ref]) => toSuperstructDeclaration(name, ref))
-  return [`import * as s from "superstruct";`, "", ...declarations].join("\n")
+  const declarations = Object.entries(registry).map(([name, ref]) =>
+    toSuperstructDeclaration(name, ref),
+  );
+  return [`import * as s from "superstruct";`, "", ...declarations].join("\n");
 }

@@ -17,7 +17,7 @@ OWN procedure, each producing an arbitrary or wrong home.
 
 These disagree. Either every op returns the algebraic `Result<T,E>` (then §3.1's "does `f`
 return `T`" never matches literally — every return type is `Result<…>`, and the dispatch
-must peer *through* the wrapper at the success channel), or ops return bare `T`/`U` and
+must peer _through_ the wrapper at the success channel), or ops return bare `T`/`U` and
 `Result` is a framework-imposed wrapper (then §0 is loose wording). Whichever is true,
 §3.1's dispatch is **defined over the success-channel type**, and the success channel is a
 free authorial choice orthogonal to invariant-ownership. Every attack below exploits that
@@ -45,10 +45,10 @@ Walk the procedure (§3.1, first-match-wins, top to bottom):
 
 The §3.2 read-set test — the design's actual sound idea — is **never reached.** §3.1's
 prose says "The only judgment call is step 1 vs step 4… resolved by 3.2." §3.2 is scoped to
-disambiguate *which type's invariant when reifying*; it is not a gate on step 1. And §3.2's
+disambiguate _which type's invariant when reifying_; it is not a gate on step 1. And §3.2's
 own tie-break makes it worse, not better: **"producers win over mutators (step 1 before step
-2)."** So even if a dev notices `charge` also mutates Card, the tie-break *actively
-instructs* them to file under the produced type. The rule doesn't merely permit the wrong
+2)."** So even if a dev notices `charge` also mutates Card, the tie-break _actively
+instructs_ them to file under the produced type. The rule doesn't merely permit the wrong
 home; it **prescribes** it.
 
 Now apply §3.2's read-set test manually (what SHOULD have happened): "write the predicate
@@ -56,7 +56,7 @@ that's false if buggy — whose fields does it read?" → `card.balance >= 0` an
 `newBalance == oldBalance - amount` → reads **Card**. Receipt's fields don't appear in any
 breaking predicate. Correct home = **Card** (endomap). The two halves of the design's own
 rule (§3.1 return-type dispatch vs §3.2 read-set) name **different carriers**, and the
-design provides **no reconciliation** for that — 3.2 only fires *inside* step 4.
+design provides **no reconciliation** for that — 3.2 only fires _inside_ step 4.
 
 Downstream blast radius (§3.3): `make → POST`, so `charge` projects to `POST /receipts`.
 "Charge a card" becomes "create a receipt." The resource, the method's target, and the
@@ -69,31 +69,32 @@ mental model are all wrong — and no per-op annotation is allowed to fix it (§
 ### Fatal or fixable?
 
 **FIXABLE at the misfiling level — by inverting the procedure's order.** The defect is
-precedence: §3.1 runs return-type matching *first* and subordinates the sound read-set
+precedence: §3.1 runs return-type matching _first_ and subordinates the sound read-set
 criterion to it. Minimal concrete fix:
 
 > **Reorder: run §3.2's read-set test FIRST to fix the carrier; use return-type/verb only to
 > pick the verb once the carrier is fixed.**
+>
 > 1. Compute the breaking-predicate read-set → identifies the invariant-bearing subject(s)
 >    (one subject, or a reified relation if ≥2 with no superset).
-> 2. Only *then* choose the verb: a newly introduced value with its own **non-trivial**
+> 2. Only _then_ choose the verb: a newly introduced value with its own **non-trivial**
 >    invariant that the args are consumed into → `make`; carrier→carrier → `op`;
 >    carrier→non-carrier-no-invariant → `read`.
-> Add a gate to `make`: **the returned type's invariant must be non-trivial.** A type whose
-> invariant is empty/trivial (Receipt, Event, LogEntry) cannot be a `make` target; it is an
-> output projection, and the op files under whatever subject the read-set actually names.
+>    Add a gate to `make`: **the returned type's invariant must be non-trivial.** A type whose
+>    invariant is empty/trivial (Receipt, Event, LogEntry) cannot be a `make` target; it is an
+>    output projection, and the op files under whatever subject the read-set actually names.
 
 Under the fix: `charge` read-set = {Card.balance} → carrier **Card**; Receipt has trivial
 invariant → not a make target → it's an output. Files under **Card** as `op`. Correct;
 projects to `PATCH /cards/:id` (or a chosen sub-route). Fixable.
 
 **Residual FATAL-adjacent caveat (see Op 2).** The fix assumes the op can be seen as
-`Card → Card` with Receipt as a side output. In a *pure immutable* core the op can't mutate
+`Card → Card` with Receipt as a side output. In a _pure immutable_ core the op can't mutate
 Card, so it must physically **return the new Card somewhere**. If it returns only Receipt,
 the updated Card is lost — the op is incomplete. The honest signature is
 `charge(card, amount): [Card, Receipt]` — a multi-output op, which the rule cannot home
 (Op 2). So carrier-grouping + purity + "record of an action" ops are in genuine tension; the
-reorder fixes *classification* but only by declaring one of the two real outputs a
+reorder fixes _classification_ but only by declaring one of the two real outputs a
 "projection," which is a stipulation, not a derivation.
 
 ---
@@ -105,23 +106,25 @@ settle(invoice: Invoice, payment: Payment): [Invoice, Payment]
 ```
 
 Invariants genuinely maintained, all three at once:
+
 - relational: `invoice.paidAmount === payment.appliedAmount` (reads the pair)
 - Invoice's own: `invoice.status === "paid"` (reads Invoice)
 - Payment's own: `payment.status === "applied"` (reads Payment)
 
 Walk §3.1:
+
 1. Step 1: returns `[Invoice, Payment]` — a tuple, not a single carrier `T`. No match.
 2. Step 2: endomap `T => T`? Input is `(Invoice, Payment)`, output is `[Invoice, Payment]`.
    Not a single-`T` endomap. No match.
 3. Step 3: read? Returns carriers, introduces invariants. No.
 4. Step 4: touches ≥2 subjects, no single owner → **reify `Settlement`, GOTO 1 with
    `T := Settlement`.** But the op returns `[Invoice, Payment]`, **not** a `Settlement`.
-   To satisfy the reified home the dev must *rewrite the signature* to
+   To satisfy the reified home the dev must _rewrite the signature_ to
    `settle(...): Settlement`. The rule **changes the op's return type to fit the home** — the
    inverse of "the return type determines the home." Circular.
 
 And even after reifying: the op is now filed under `Settlement`, so **Invoice's own
-point-invariant** (`status === "paid"`) is maintained by an op that lives on a *foreign*
+point-invariant** (`status === "paid"`) is maintained by an op that lives on a _foreign_
 carrier. §0 defines a carrier as "the invariant-bearing type it is responsible for keeping
 true." After settle, Invoice's paid-status invariant is kept true by `Settlement.settle`,
 which Invoice does not own. The "exactly one carrier per op" constraint is preserved on
@@ -131,8 +134,8 @@ paper (op files under Settlement) while the "one responsible owner per invariant
 ### Fatal or fixable?
 
 **FATAL for the responsibility claim; not fixable without abandoning "one op → one carrier
-owns all its invariants."** You can *file* it (reify Settlement) but you cannot make the
-filing *true*: two independent carriers' point-invariants ride on a foreign op. The only
+owns all its invariants."** You can _file_ it (reify Settlement) but you cannot make the
+filing _true_: two independent carriers' point-invariants ride on a foreign op. The only
 "fixes" abandon the core promise — either allow an op to be co-owned by ≥2 carriers
 (breaks "exactly one"), or forbid multi-invariant ops (forbids a legendarily common real
 op: two-sided settlement/booking). The tuple-return sub-case is additionally fatal to the
@@ -157,13 +160,14 @@ design does NOT cover:
 
 **D — the `Result` wrapper case (per §0, the DEFAULT signature).** With
 `Result<Account, InsufficientFunds>`:
+
 - Step 1 literal: returns `Result<Account,E>`, not `Account`. No `carrier<Result<…>>`
-  exists. Does it match? Only if the dispatch unwraps to the success type. If it does *not*
+  exists. Does it match? Only if the dispatch unwraps to the success type. If it does _not_
   unwrap: step 1 fails, step 2 fails (`Account => Result<Account>` is not `Account =>
-  Account`), **step 3 matches** — `Account => U` where `U = Result<Account,E>` is "not a
+Account`), **step 3 matches** — `Account => U` where `U = Result<Account,E>` is "not a
   carrier" — so `withdraw` files as a **`read`**, projecting to `GET`. A balance-mutating op
   classified as a query. Catastrophic and silent.
-- If the dispatch *does* unwrap `Result<T,E>` to `T`: fine for `T`, but now the **error
+- If the dispatch _does_ unwrap `Result<T,E>` to `T`: fine for `T`, but now the **error
   type `E` carries routing-relevant information the rule ignores** — and worse, an op like
   `charge: Result<Receipt, Declined>` unwraps to `Receipt` and lands back in Op 1's break.
 
@@ -189,13 +193,13 @@ multi-output half inherits Op 2's verdict.
 ```
 
 Both return `Order` and mutate `order.total`. In the positional form the first arg IS the
-maintained subject → endomap → `op` → `PATCH`. In the bag form the input is an *object
-containing* order, so `order` reads as an "ingredient" (§3.1 step 1's language: "incoming
+maintained subject → endomap → `op` → `PATCH`. In the bag form the input is an _object
+containing_ order, so `order` reads as an "ingredient" (§3.1 step 1's language: "incoming
 args are ingredients, not the maintained subject") → producer → `make` → `POST`. **Same
 semantic op, opposite HTTP method, decided by calling convention.**
 
 The §3.2 read-set test partly rescues this: the breaking predicate `order.total` correct ==
-Σ(line items) − discount reads **Order** either way, so the *carrier* is stable = Order.
+Σ(line items) − discount reads **Order** either way, so the _carrier_ is stable = Order.
 **But read-set fixes only the carrier, never the verb.** §3.3's entire HTTP story hangs on
 the verb (`make→POST`, `op→PATCH`, `read→GET`). So even when §3.2 nails the home, the
 `make`/`op` distinction — which is what actually reaches the wire — remains undetermined and
@@ -216,12 +220,12 @@ confirming that return-type-directed dispatch (§3.1's headline) is the wrong pr
 
 ## Verdict summary
 
-| Op | Break | Fatal? |
-|----|-------|--------|
-| 1 `charge`→Receipt | §3.1 step-1 + §3.2 "producers win" tie-break prescribe the WRONG home (inert record beats true invariant carrier); read-set backstop unreachable | **Fixable** — invert order (read-set first) + non-trivial-invariant gate on `make`. Residual purity/multi-output tension is fatal-adjacent. |
-| 2 `settle`→[I,P] | Multi-output has no step; two carriers' own invariants genuinely ride one op; reify only files, doesn't make the responsibility claim true | **Fatal** for "one op owns all its invariants" + tuple return unclassifiable |
-| 3 `withdraw` (D=`Result`) | §0's universal `Result` return makes dispatch operate on the wrapper; without an unwrap rule, mutation → `read`/`GET` | Fixable (add normalization) except multi-output part |
-| 4 `applyDiscount` bag | verb (make/op → POST/PATCH) flips on arg shape; read-set fixes carrier but not verb | **Fixable** — derive verb from read-set+delta |
+| Op                        | Break                                                                                                                                            | Fatal?                                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 `charge`→Receipt        | §3.1 step-1 + §3.2 "producers win" tie-break prescribe the WRONG home (inert record beats true invariant carrier); read-set backstop unreachable | **Fixable** — invert order (read-set first) + non-trivial-invariant gate on `make`. Residual purity/multi-output tension is fatal-adjacent. |
+| 2 `settle`→[I,P]          | Multi-output has no step; two carriers' own invariants genuinely ride one op; reify only files, doesn't make the responsibility claim true       | **Fatal** for "one op owns all its invariants" + tuple return unclassifiable                                                                |
+| 3 `withdraw` (D=`Result`) | §0's universal `Result` return makes dispatch operate on the wrapper; without an unwrap rule, mutation → `read`/`GET`                            | Fixable (add normalization) except multi-output part                                                                                        |
+| 4 `applyDiscount` bag     | verb (make/op → POST/PATCH) flips on arg shape; read-set fixes carrier but not verb                                                              | **Fixable** — derive verb from read-set+delta                                                                                               |
 
 **Through-line (the real thesis under attack):** the design's headline is "route by the
 return type / verb the author picked" (§3.1) with the read-set test (§3.2) demoted to a

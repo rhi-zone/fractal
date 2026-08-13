@@ -22,14 +22,14 @@
 // `$comment` that names the unhandled case — self-documenting rather than
 // silently lossy.
 
-import path from "node:path"
-import ts from "typescript"
-import { email, uri, uuid } from "./kinds/common.ts"
-import { nodeCount, t, types, type TypeRef, type TypeShape } from "./index.ts"
+import path from "node:path";
+import ts from "typescript";
+import { email, uri, uuid } from "./kinds/common.ts";
+import { nodeCount, t, types, type TypeRef, type TypeShape } from "./index.ts";
 
 /** The TypeRef punt: `unknown` tagged with the unhandled case. */
 const puntRef = (reason: string): TypeRef =>
-  t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` })
+  t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` });
 
 // ============================================================================
 // Call budget — a defensive circuit breaker `typeRefFromType`'s `seen`-based
@@ -67,11 +67,11 @@ const puntRef = (reason: string): TypeRef =>
 
 /** Mutable call-budget for one top-level `typeRefFromType` descent — see the
  * module doc above. */
-type Budget = { calls: number }
+type Budget = { calls: number };
 
 /** Calls per top-level extraction before `typeRefFromType` punts instead of
  * recursing further — see the module doc above for how this was calibrated. */
-const MAX_TYPE_REF_CALLS = 1000
+const MAX_TYPE_REF_CALLS = 1000;
 
 // ============================================================================
 // Structural sharing — an opt-in `SharingRegistry` threaded through
@@ -106,7 +106,7 @@ const NON_SHAREABLE_SYMBOL_NAMES = new Set([
   "Set",
   "ReadonlySet",
   "Record",
-])
+]);
 
 /** The name a `ts.Type` would be shared under, if it has one worth sharing:
  * a real alias (`type X = …`) or interface/class symbol name — not an
@@ -118,13 +118,15 @@ const NON_SHAREABLE_SYMBOL_NAMES = new Set([
  * in-line that sharing them isn't worth a `defs` indirection in this v1. */
 function shareableTypeName(type: ts.Type): string | undefined {
   if (type.aliasSymbol) {
-    return NON_SHAREABLE_SYMBOL_NAMES.has(type.aliasSymbol.name) ? undefined : type.aliasSymbol.name
+    return NON_SHAREABLE_SYMBOL_NAMES.has(type.aliasSymbol.name)
+      ? undefined
+      : type.aliasSymbol.name;
   }
-  if (!(type.flags & ts.TypeFlags.Object)) return undefined
-  const symbol = type.symbol
-  const name = symbol?.name
-  if (!name || name === "__type" || NON_SHAREABLE_SYMBOL_NAMES.has(name)) return undefined
-  return name
+  if (!(type.flags & ts.TypeFlags.Object)) return undefined;
+  const symbol = type.symbol;
+  const name = symbol?.name;
+  if (!name || name === "__type" || NON_SHAREABLE_SYMBOL_NAMES.has(name)) return undefined;
+  return name;
 }
 
 /** Mutable bookkeeping shared across one whole extraction pass (e.g. every
@@ -136,57 +138,69 @@ function shareableTypeName(type: ts.Type): string | undefined {
  * pass to decide, per `defs` entry, whether to keep it shared or inline it
  * back everywhere it's referenced. */
 export interface SharingRegistry {
-  readonly names: Map<ts.Type, string>
-  readonly usedNames: Set<string>
-  readonly useCounts: Map<string, number>
-  readonly defs: Map<string, TypeRef>
-  readonly recursive: Set<string>
+  readonly names: Map<ts.Type, string>;
+  readonly usedNames: Set<string>;
+  readonly useCounts: Map<string, number>;
+  readonly defs: Map<string, TypeRef>;
+  readonly recursive: Set<string>;
 }
 
 export function createSharingRegistry(): SharingRegistry {
-  return { names: new Map(), usedNames: new Set(), useCounts: new Map(), defs: new Map(), recursive: new Set() }
+  return {
+    names: new Map(),
+    usedNames: new Set(),
+    useCounts: new Map(),
+    defs: new Map(),
+    recursive: new Set(),
+  };
 }
 
 function uniqueRegistryName(registry: SharingRegistry, base: string): string {
   if (!registry.usedNames.has(base)) {
-    registry.usedNames.add(base)
-    return base
+    registry.usedNames.add(base);
+    return base;
   }
-  let i = 2
-  while (registry.usedNames.has(`${base}_${i}`)) i++
-  const name = `${base}_${i}`
-  registry.usedNames.add(name)
-  return name
+  let i = 2;
+  while (registry.usedNames.has(`${base}_${i}`)) i++;
+  const name = `${base}_${i}`;
+  registry.usedNames.add(name);
+  return name;
 }
 
 function bumpUseCount(registry: SharingRegistry, name: string): void {
-  registry.useCounts.set(name, (registry.useCounts.get(name) ?? 0) + 1)
+  registry.useCounts.set(name, (registry.useCounts.get(name) ?? 0) + 1);
 }
 
 /** The predicate a caller supplies to decide whether a REUSED (not
  * self-recursive — those always share, unconditionally) named type is worth
  * extracting to `defs` rather than inlining at every use site. */
-export type ShouldShare = (info: { node: TypeRef; tree: TypeRef; useCount: number; typeName?: string }) => boolean
+export type ShouldShare = (info: {
+  node: TypeRef;
+  tree: TypeRef;
+  useCount: number;
+  typeName?: string;
+}) => boolean;
 
 /** Default heuristic: share when a type is both reused (appears more than
  * once) AND big enough that duplicating its structure at every use site would
  * actually cost something (`nodeCount > 5` — small types like `{ id: string
  * }` are cheap enough inlined that a `defs` indirection isn't worth it even
  * when reused). */
-export const defaultShouldShare: ShouldShare = (info) => info.useCount > 1 && nodeCount(info.node) > 5
+export const defaultShouldShare: ShouldShare = (info) =>
+  info.useCount > 1 && nodeCount(info.node) > 5;
 
 /** Duck-types `v` as a `TypeRef` — mirrors type-ir's own private `isTypeRef`
  * (not exported, so re-derived locally); every `TypeRef` carries `shape.kind`
  * + `meta`, which no other value nested inside a `TypeShape` does. */
 function isTypeRefLike(v: unknown): v is TypeRef {
-  if (typeof v !== "object" || v === null) return false
-  const shape = (v as { shape?: unknown }).shape
+  if (typeof v !== "object" || v === null) return false;
+  const shape = (v as { shape?: unknown }).shape;
   return (
     "meta" in v &&
     typeof shape === "object" &&
     shape !== null &&
     typeof (shape as { kind?: unknown }).kind === "string"
-  )
+  );
 }
 
 /** Rebuild a shape with every immediate TypeRef child replaced via `fn` —
@@ -196,29 +210,33 @@ function isTypeRefLike(v: unknown): v is TypeRef {
  * `finalizeSharedDefs` to rewrite `ref` nodes after deciding which shared
  * defs to keep vs. inline. */
 function mapTypeRefChildren(shape: TypeShape, fn: (ref: TypeRef) => TypeRef): TypeShape {
-  const out: Record<string, unknown> = {}
+  const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(shape)) {
     if (isTypeRefLike(value)) {
-      out[key] = fn(value)
+      out[key] = fn(value);
     } else if (Array.isArray(value)) {
       out[key] = value.map((item) => {
-        if (isTypeRefLike(item)) return fn(item)
-        if (typeof item === "object" && item !== null && isTypeRefLike((item as { type?: unknown }).type)) {
-          return { ...(item as object), type: fn((item as { type: TypeRef }).type) }
+        if (isTypeRefLike(item)) return fn(item);
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          isTypeRefLike((item as { type?: unknown }).type)
+        ) {
+          return { ...(item as object), type: fn((item as { type: TypeRef }).type) };
         }
-        return item
-      })
+        return item;
+      });
     } else if (typeof value === "object" && value !== null) {
-      const entries = Object.entries(value as Record<string, unknown>)
+      const entries = Object.entries(value as Record<string, unknown>);
       out[key] =
         entries.length > 0 && entries.every(([, v]) => isTypeRefLike(v))
           ? Object.fromEntries(entries.map(([k, v]) => [k, fn(v as TypeRef)]))
-          : value
+          : value;
     } else {
-      out[key] = value
+      out[key] = value;
     }
   }
-  return out as TypeShape
+  return out as TypeShape;
 }
 
 /** Rewrite every `ref` node in `ref`'s subtree via `replace` — `replace(target)`
@@ -230,15 +248,15 @@ function mapTypeRefChildren(shape: TypeShape, fn: (ref: TypeRef) => TypeRef): Ty
  * the one case where re-expanding could recurse forever. */
 function substituteRefs(ref: TypeRef, replace: (target: string) => TypeRef | undefined): TypeRef {
   if (ref.shape.kind === "ref") {
-    const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target
-    const replacement = replace(target)
-    if (replacement !== undefined) return substituteRefs(replacement, replace)
-    return ref
+    const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target;
+    const replacement = replace(target);
+    if (replacement !== undefined) return substituteRefs(replacement, replace);
+    return ref;
   }
   return t(
     mapTypeRefChildren(ref.shape, (child) => substituteRefs(child, replace)),
     ref.meta,
-  )
+  );
 }
 
 /**
@@ -267,25 +285,26 @@ export function finalizeSharedDefs(
   roots: Record<string, TypeRef>,
   shouldShare: ShouldShare = defaultShouldShare,
 ): { roots: Record<string, TypeRef>; defs: Record<string, TypeRef> } {
-  const kept = new Set<string>()
+  const kept = new Set<string>();
   for (const [name, body] of registry.defs) {
     if (registry.recursive.has(name)) {
-      kept.add(name)
-      continue
+      kept.add(name);
+      continue;
     }
-    const useCount = registry.useCounts.get(name) ?? 0
-    if (shouldShare({ node: body, tree: body, useCount, typeName: name })) kept.add(name)
+    const useCount = registry.useCounts.get(name) ?? 0;
+    if (shouldShare({ node: body, tree: body, useCount, typeName: name })) kept.add(name);
   }
 
-  const replace = (target: string): TypeRef | undefined => (kept.has(target) ? undefined : registry.defs.get(target))
+  const replace = (target: string): TypeRef | undefined =>
+    kept.has(target) ? undefined : registry.defs.get(target);
 
-  const defs: Record<string, TypeRef> = {}
-  for (const name of kept) defs[name] = substituteRefs(registry.defs.get(name)!, replace)
+  const defs: Record<string, TypeRef> = {};
+  for (const name of kept) defs[name] = substituteRefs(registry.defs.get(name)!, replace);
 
-  const finalRoots: Record<string, TypeRef> = {}
-  for (const [name, ref] of Object.entries(roots)) finalRoots[name] = substituteRefs(ref, replace)
+  const finalRoots: Record<string, TypeRef> = {};
+  for (const [name, ref] of Object.entries(roots)) finalRoots[name] = substituteRefs(ref, replace);
 
-  return { roots: finalRoots, defs }
+  return { roots: finalRoots, defs };
 }
 
 /**
@@ -305,14 +324,28 @@ function functionRefFromSignature(
 ): TypeRef {
   const params = sig.getParameters().map((param) => ({
     name: param.name,
-    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry, budget),
-  }))
-  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry, budget)
-  const thisParam = sig.thisParameter
+    type: typeRefFromType(
+      checker.getTypeOfSymbolAtLocation(param, loc),
+      checker,
+      loc,
+      seen,
+      registry,
+      budget,
+    ),
+  }));
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry, budget);
+  const thisParam = sig.thisParameter;
   const thisType = thisParam
-    ? typeRefFromType(checker.getTypeOfSymbolAtLocation(thisParam, loc), checker, loc, seen, registry, budget)
-    : undefined
-  return t(types.function(params, returnType, thisType))
+    ? typeRefFromType(
+        checker.getTypeOfSymbolAtLocation(thisParam, loc),
+        checker,
+        loc,
+        seen,
+        registry,
+        budget,
+      )
+    : undefined;
+  return t(types.function(params, returnType, thisType));
 }
 
 /**
@@ -334,8 +367,10 @@ function functionRefFromSignatures(
   registry: SharingRegistry | undefined,
   budget: Budget,
 ): TypeRef {
-  const refs = sigs.map((sig) => functionRefFromSignature(sig, checker, loc, seen, registry, budget))
-  return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
+  const refs = sigs.map((sig) =>
+    functionRefFromSignature(sig, checker, loc, seen, registry, budget),
+  );
+  return refs.length === 1 ? refs[0]! : t(types.intersection(refs));
 }
 
 /**
@@ -358,10 +393,17 @@ function methodRefFromSignature(
 ): TypeRef {
   const params = sig.getParameters().map((param) => ({
     name: param.name,
-    type: typeRefFromType(checker.getTypeOfSymbolAtLocation(param, loc), checker, loc, seen, registry, budget),
-  }))
-  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry, budget)
-  return t(types.method(params, returnType, thisType))
+    type: typeRefFromType(
+      checker.getTypeOfSymbolAtLocation(param, loc),
+      checker,
+      loc,
+      seen,
+      registry,
+      budget,
+    ),
+  }));
+  const returnType = typeRefFromType(sig.getReturnType(), checker, loc, seen, registry, budget);
+  return t(types.method(params, returnType, thisType));
 }
 
 /**
@@ -379,8 +421,10 @@ function methodRefFromSignatures(
   registry: SharingRegistry | undefined,
   budget: Budget,
 ): TypeRef {
-  const refs = sigs.map((sig) => methodRefFromSignature(sig, checker, loc, seen, thisType, registry, budget))
-  return refs.length === 1 ? refs[0]! : t(types.intersection(refs))
+  const refs = sigs.map((sig) =>
+    methodRefFromSignature(sig, checker, loc, seen, thisType, registry, budget),
+  );
+  return refs.length === 1 ? refs[0]! : t(types.intersection(refs));
 }
 
 /**
@@ -402,18 +446,26 @@ function methodsFromClassType(
   registry: SharingRegistry | undefined,
   budget: Budget,
 ): Record<string, TypeRef> {
-  const methods: Record<string, TypeRef> = {}
+  const methods: Record<string, TypeRef> = {};
   for (const prop of checker.getPropertiesOfType(type)) {
-    if (isPrivateOrProtected(prop)) continue
-    if (isSymbolKeyedProp(prop)) continue
-    const isMethodDecl = (prop.declarations ?? []).some(ts.isMethodDeclaration)
-    const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
-    const sigs = checker.getSignaturesOfType(propType, ts.SignatureKind.Call)
-    if (!isMethodDecl && sigs.length === 0) continue
-    if (sigs.length === 0) continue
-    methods[prop.name] = methodRefFromSignatures(sigs, checker, loc, seen, thisType, registry, budget)
+    if (isPrivateOrProtected(prop)) continue;
+    if (isSymbolKeyedProp(prop)) continue;
+    const isMethodDecl = (prop.declarations ?? []).some(ts.isMethodDeclaration);
+    const propType = checker.getTypeOfSymbolAtLocation(prop, loc);
+    const sigs = checker.getSignaturesOfType(propType, ts.SignatureKind.Call);
+    if (!isMethodDecl && sigs.length === 0) continue;
+    if (sigs.length === 0) continue;
+    methods[prop.name] = methodRefFromSignatures(
+      sigs,
+      checker,
+      loc,
+      seen,
+      thisType,
+      registry,
+      budget,
+    );
   }
-  return methods
+  return methods;
 }
 
 /**
@@ -449,23 +501,23 @@ function methodsFromClassType(
  * OTHER symbol-keyed property no intersection classification consumes.)
  */
 function isSymbolKeyedProp(prop: ts.Symbol): boolean {
-  return prop.escapedName.toString().startsWith("__@")
+  return prop.escapedName.toString().startsWith("__@");
 }
 
 /** True for symbols with at least one private/protected declaration. */
 function isPrivateOrProtected(prop: ts.Symbol): boolean {
   return (prop.declarations ?? []).some((decl) => {
-    const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind })
-    return (mods & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0
-  })
+    const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind });
+    return (mods & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0;
+  });
 }
 
 /** True for symbols with at least one `readonly`-modified declaration. */
 function isReadonly(prop: ts.Symbol): boolean {
   return (prop.declarations ?? []).some((decl) => {
-    const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind })
-    return (mods & ts.ModifierFlags.Readonly) !== 0
-  })
+    const mods = ts.getCombinedModifierFlags(decl as ts.Declaration & { kind: ts.SyntaxKind });
+    return (mods & ts.ModifierFlags.Readonly) !== 0;
+  });
 }
 
 /**
@@ -475,8 +527,8 @@ function isReadonly(prop: ts.Symbol): boolean {
  * accessor for a symbol's doc comment.
  */
 function propertyDescriptionOf(prop: ts.Symbol, checker: ts.TypeChecker): string | undefined {
-  const text = ts.displayPartsToString(prop.getDocumentationComment(checker)).trim()
-  return text.length > 0 ? text : undefined
+  const text = ts.displayPartsToString(prop.getDocumentationComment(checker)).trim();
+  return text.length > 0 ? text : undefined;
 }
 
 /**
@@ -485,22 +537,25 @@ function propertyDescriptionOf(prop: ts.Symbol, checker: ts.TypeChecker): string
  * `@default "x"` → `"x"`) so numeric/boolean defaults come through typed;
  * text that isn't valid JSON (`@default someValue`) is kept as a raw string.
  */
-function propertyDefaultOf(prop: ts.Symbol, checker: ts.TypeChecker): string | number | boolean | undefined {
+function propertyDefaultOf(
+  prop: ts.Symbol,
+  checker: ts.TypeChecker,
+): string | number | boolean | undefined {
   for (const tag of prop.getJsDocTags(checker)) {
-    if (tag.name !== "default") continue
-    const text = tag.text ? ts.displayPartsToString(tag.text).trim() : ""
-    if (text.length === 0) return undefined
+    if (tag.name !== "default") continue;
+    const text = tag.text ? ts.displayPartsToString(tag.text).trim() : "";
+    if (text.length === 0) return undefined;
     try {
-      const parsed: unknown = JSON.parse(text)
+      const parsed: unknown = JSON.parse(text);
       if (typeof parsed === "string" || typeof parsed === "number" || typeof parsed === "boolean") {
-        return parsed
+        return parsed;
       }
-      return text
+      return text;
     } catch {
-      return text
+      return text;
     }
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -521,19 +576,19 @@ const NUMERIC_REFINEMENT_TAGS = new Set([
   "exclusiveMinimum",
   "exclusiveMaximum",
   "multipleOf",
-])
-const STRING_REFINEMENT_TAGS = new Set(["pattern", "format"])
+]);
+const STRING_REFINEMENT_TAGS = new Set(["pattern", "format"]);
 
 /** Strip one layer of matching surrounding quotes (`"…"` or `'…'`), if present. */
 function unquote(text: string): string {
   if (text.length >= 2) {
-    const first = text[0]
-    const last = text[text.length - 1]
+    const first = text[0];
+    const last = text[text.length - 1];
     if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-      return text.slice(1, -1)
+      return text.slice(1, -1);
     }
   }
-  return text
+  return text;
 }
 
 /**
@@ -546,23 +601,26 @@ function unquote(text: string): string {
  * bag. Unrecognized tag names are ignored — this reads only the refinement
  * vocabulary `compile.ts` already validates, nothing broader.
  */
-function propertyRefinementMetaOf(prop: ts.Symbol, checker: ts.TypeChecker): Record<string, unknown> {
-  const meta: Record<string, unknown> = {}
+function propertyRefinementMetaOf(
+  prop: ts.Symbol,
+  checker: ts.TypeChecker,
+): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
   for (const tag of prop.getJsDocTags(checker)) {
-    const text = tag.text ? ts.displayPartsToString(tag.text).trim() : ""
-    if (text.length === 0) continue
+    const text = tag.text ? ts.displayPartsToString(tag.text).trim() : "";
+    if (text.length === 0) continue;
     if (NUMERIC_REFINEMENT_TAGS.has(tag.name)) {
-      const n = Number(text)
-      if (!Number.isNaN(n)) meta[tag.name] = n
+      const n = Number(text);
+      if (!Number.isNaN(n)) meta[tag.name] = n;
     } else if (STRING_REFINEMENT_TAGS.has(tag.name)) {
-      meta[tag.name] = unquote(text)
+      meta[tag.name] = unquote(text);
     }
   }
-  return meta
+  return meta;
 }
 
 /** Property names conventionally used to tag a branded/opaque type. */
-const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"]
+const BRAND_PROP_NAMES = ["__brand", "__tag", "_brand", "_tag"];
 
 /**
  * Brand names (matched case-insensitively — `"UUID"`/`"Uuid"`/`"uuid"` all
@@ -575,7 +633,7 @@ const BRAND_KIND_CTORS: Record<string, (meta?: Record<string, unknown>) => TypeR
   uuid,
   uri,
   email,
-}
+};
 
 /**
  * Promote a recognized brand to its IR kind, e.g. `string & { __brand: "uuid" }`
@@ -588,10 +646,10 @@ const BRAND_KIND_CTORS: Record<string, (meta?: Record<string, unknown>) => TypeR
  * fall through to the plain `meta.brand` behavior.
  */
 function promoteBrand(baseRef: TypeRef, brandValue: string): TypeRef | undefined {
-  if (baseRef.shape.kind !== "string") return undefined
-  const ctor = BRAND_KIND_CTORS[brandValue.toLowerCase()]
-  if (!ctor) return undefined
-  return ctor(baseRef.meta)
+  if (baseRef.shape.kind !== "string") return undefined;
+  const ctor = BRAND_KIND_CTORS[brandValue.toLowerCase()];
+  if (!ctor) return undefined;
+  return ctor(baseRef.meta);
 }
 
 /**
@@ -608,14 +666,17 @@ function promoteBrand(baseRef: TypeRef, brandValue: string): TypeRef | undefined
  * `"LocationIdBrand"`). Returns `undefined` if the property isn't a computed
  * property name, or its expression doesn't resolve to a named symbol.
  */
-function brandNameFromSymbolKeyedProp(prop: ts.Symbol, checker: ts.TypeChecker): string | undefined {
-  const decl = prop.declarations?.[0]
-  if (!decl) return undefined
-  const nameNode = (decl as ts.NamedDeclaration).name
-  if (!nameNode || !ts.isComputedPropertyName(nameNode)) return undefined
-  const sym = checker.getSymbolAtLocation(nameNode.expression)
-  if (!sym?.name) return undefined
-  return sym.name.endsWith("Brand") ? sym.name.slice(0, -"Brand".length) : sym.name
+function brandNameFromSymbolKeyedProp(
+  prop: ts.Symbol,
+  checker: ts.TypeChecker,
+): string | undefined {
+  const decl = prop.declarations?.[0];
+  if (!decl) return undefined;
+  const nameNode = (decl as ts.NamedDeclaration).name;
+  if (!nameNode || !ts.isComputedPropertyName(nameNode)) return undefined;
+  const sym = checker.getSymbolAtLocation(nameNode.expression);
+  if (!sym?.name) return undefined;
+  return sym.name.endsWith("Brand") ? sym.name.slice(0, -"Brand".length) : sym.name;
 }
 
 /**
@@ -625,12 +686,12 @@ function brandNameFromSymbolKeyedProp(prop: ts.Symbol, checker: ts.TypeChecker):
  * (mirrors the top-of-`typeRefFromType` literal handling).
  */
 function literalValueOf(type: ts.Type): string | number | boolean | undefined {
-  if (type.flags & ts.TypeFlags.StringLiteral) return (type as ts.LiteralType).value as string
-  if (type.flags & ts.TypeFlags.NumberLiteral) return (type as ts.LiteralType).value as number
+  if (type.flags & ts.TypeFlags.StringLiteral) return (type as ts.LiteralType).value as string;
+  if (type.flags & ts.TypeFlags.NumberLiteral) return (type as ts.LiteralType).value as number;
   if (type.flags & ts.TypeFlags.BooleanLiteral) {
-    return (type as ts.Type & { intrinsicName?: string }).intrinsicName === "true"
+    return (type as ts.Type & { intrinsicName?: string }).intrinsicName === "true";
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -650,13 +711,13 @@ function literalValueOf(type: ts.Type): string | number | boolean | undefined {
  * the symbol's own name (`"RefinementTag"`) as a bogus brand.
  */
 function isRefinementTagProp(prop: ts.Symbol, checker: ts.TypeChecker): boolean {
-  if (!prop.escapedName.toString().startsWith("__@")) return false
-  const decl = prop.declarations?.[0]
-  if (!decl) return false
-  const nameNode = (decl as ts.NamedDeclaration).name
-  if (!nameNode || !ts.isComputedPropertyName(nameNode)) return false
-  const sym = checker.getSymbolAtLocation(nameNode.expression)
-  return sym?.name === "RefinementTag"
+  if (!prop.escapedName.toString().startsWith("__@")) return false;
+  const decl = prop.declarations?.[0];
+  if (!decl) return false;
+  const nameNode = (decl as ts.NamedDeclaration).name;
+  if (!nameNode || !ts.isComputedPropertyName(nameNode)) return false;
+  const sym = checker.getSymbolAtLocation(nameNode.expression);
+  return sym?.name === "RefinementTag";
 }
 
 /** The meta keys a refinement tag's value-object properties are read from — see `kinds/refinements.ts`. */
@@ -670,7 +731,7 @@ const REFINEMENT_KEYS = [
   "exclusiveMinimum",
   "exclusiveMaximum",
   "multipleOf",
-] as const
+] as const;
 
 /**
  * Read a single intersection constituent's refinement contribution, if it's
@@ -691,19 +752,21 @@ function refinementMetaOfConstituent(
   checker: ts.TypeChecker,
   loc: ts.Node,
 ): Record<string, unknown> | undefined {
-  const tagProp = checker.getPropertiesOfType(constituent).find((p) => isRefinementTagProp(p, checker))
-  if (!tagProp) return undefined
-  const tagType = checker.getTypeOfSymbolAtLocation(tagProp, loc)
-  if ((tagType.flags & ts.TypeFlags.Object) === 0) return undefined
+  const tagProp = checker
+    .getPropertiesOfType(constituent)
+    .find((p) => isRefinementTagProp(p, checker));
+  if (!tagProp) return undefined;
+  const tagType = checker.getTypeOfSymbolAtLocation(tagProp, loc);
+  if ((tagType.flags & ts.TypeFlags.Object) === 0) return undefined;
 
-  const meta: Record<string, unknown> = {}
+  const meta: Record<string, unknown> = {};
   for (const key of REFINEMENT_KEYS) {
-    const prop = tagType.getProperty(key)
-    if (!prop) continue
-    const value = literalValueOf(checker.getTypeOfSymbolAtLocation(prop, loc))
-    if (value !== undefined) meta[key] = value
+    const prop = tagType.getProperty(key);
+    if (!prop) continue;
+    const value = literalValueOf(checker.getTypeOfSymbolAtLocation(prop, loc));
+    if (value !== undefined) meta[key] = value;
   }
-  return Object.keys(meta).length > 0 ? meta : undefined
+  return Object.keys(meta).length > 0 ? meta : undefined;
 }
 
 /**
@@ -715,7 +778,7 @@ function refinementMetaOfConstituent(
 type IntersectionConstituentKind =
   | { kind: "refinement"; meta: Record<string, unknown> }
   | { kind: "brand"; value: string }
-  | { kind: "base" }
+  | { kind: "base" };
 
 /**
  * Classify one constituent of an intersection as a refinement tag, a brand
@@ -738,28 +801,28 @@ function classifyIntersectionConstituent(
   checker: ts.TypeChecker,
   loc: ts.Node,
 ): IntersectionConstituentKind {
-  const refinementMeta = refinementMetaOfConstituent(constituent, checker, loc)
-  if (refinementMeta) return { kind: "refinement", meta: refinementMeta }
+  const refinementMeta = refinementMetaOfConstituent(constituent, checker, loc);
+  if (refinementMeta) return { kind: "refinement", meta: refinementMeta };
 
   if (constituent.flags & ts.TypeFlags.Object) {
     for (const prop of checker.getPropertiesOfType(constituent)) {
-      const isSymbolKeyed = prop.escapedName.toString().startsWith("__@")
-      const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name)
-      if (!isSymbolKeyed && !isNamedBrand) continue
-      if (isSymbolKeyed && isRefinementTagProp(prop, checker)) continue
+      const isSymbolKeyed = prop.escapedName.toString().startsWith("__@");
+      const isNamedBrand = BRAND_PROP_NAMES.includes(prop.name);
+      if (!isSymbolKeyed && !isNamedBrand) continue;
+      if (isSymbolKeyed && isRefinementTagProp(prop, checker)) continue;
 
-      const propType = checker.getTypeOfSymbolAtLocation(prop, loc)
+      const propType = checker.getTypeOfSymbolAtLocation(prop, loc);
       const brandValue =
         propType.flags & ts.TypeFlags.StringLiteral
           ? ((propType as ts.LiteralType).value as string)
           : isSymbolKeyed
             ? brandNameFromSymbolKeyedProp(prop, checker)
-            : undefined
-      if (brandValue !== undefined) return { kind: "brand", value: brandValue }
+            : undefined;
+      if (brandValue !== undefined) return { kind: "brand", value: brandValue };
     }
   }
 
-  return { kind: "base" }
+  return { kind: "base" };
 }
 
 /**
@@ -798,35 +861,36 @@ function typeRefFromBrandedIntersection(
   registry: SharingRegistry | undefined,
   budget: Budget,
 ): TypeRef | undefined {
-  const bases: ts.Type[] = []
-  const refinementMeta: Record<string, unknown> = {}
-  let brandValue: string | undefined
+  const bases: ts.Type[] = [];
+  const refinementMeta: Record<string, unknown> = {};
+  let brandValue: string | undefined;
 
   for (const constituent of type.types) {
-    const classified = classifyIntersectionConstituent(constituent, checker, loc)
+    const classified = classifyIntersectionConstituent(constituent, checker, loc);
     if (classified.kind === "refinement") {
-      Object.assign(refinementMeta, classified.meta)
+      Object.assign(refinementMeta, classified.meta);
     } else if (classified.kind === "brand" && brandValue === undefined) {
-      brandValue = classified.value
+      brandValue = classified.value;
     } else {
-      bases.push(constituent)
+      bases.push(constituent);
     }
   }
 
-  if (brandValue === undefined && Object.keys(refinementMeta).length === 0) return undefined
-  if (bases.length !== 1) return undefined
+  if (brandValue === undefined && Object.keys(refinementMeta).length === 0) return undefined;
+  if (bases.length !== 1) return undefined;
 
-  const nextSeen = new Set(seen).add(type)
-  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen, registry, budget)
+  const nextSeen = new Set(seen).add(type);
+  const baseRef = typeRefFromType(bases[0]!, checker, loc, nextSeen, registry, budget);
 
   const branded =
     brandValue !== undefined
-      ? (promoteBrand(baseRef, brandValue) ?? t(baseRef.shape, { ...baseRef.meta, brand: brandValue }))
-      : baseRef
+      ? (promoteBrand(baseRef, brandValue) ??
+        t(baseRef.shape, { ...baseRef.meta, brand: brandValue }))
+      : baseRef;
 
   return Object.keys(refinementMeta).length > 0
     ? t(branded.shape, { ...branded.meta, ...refinementMeta })
-    : branded
+    : branded;
 }
 
 /**
@@ -860,44 +924,44 @@ export function typeRefFromType(
   registry?: SharingRegistry,
   budget: Budget = { calls: 0 },
 ): TypeRef {
-  budget.calls++
+  budget.calls++;
   if (budget.calls > MAX_TYPE_REF_CALLS) {
     return puntRef(
       "extraction call budget exceeded — likely reached a generically self-referential " +
         "TS/DOM built-in library type (e.g. Response/ReadableStream/ReadableStreamReader) " +
         "whose mutually overloaded methods resolve to fresh, non-identical ts.Type " +
         "instances on every visit, so seen-based identity cycle detection never fires",
-    )
+    );
   }
   if (seen.has(type)) {
-    const registered = registry?.names.get(type)
-    const typeName = registered ?? type.aliasSymbol?.name ?? type.symbol?.name
+    const registered = registry?.names.get(type);
+    const typeName = registered ?? type.aliasSymbol?.name ?? type.symbol?.name;
     if (registry && typeName) {
-      registry.recursive.add(typeName)
-      bumpUseCount(registry, typeName)
+      registry.recursive.add(typeName);
+      bumpUseCount(registry, typeName);
     }
-    return typeName ? t(types.ref(typeName)) : puntRef("recursive type")
+    return typeName ? t(types.ref(typeName)) : puntRef("recursive type");
   }
 
   if (registry) {
-    const shareName = shareableTypeName(type)
+    const shareName = shareableTypeName(type);
     if (shareName) {
-      const existing = registry.names.get(type)
+      const existing = registry.names.get(type);
       if (existing !== undefined) {
-        bumpUseCount(registry, existing)
-        return t(types.ref(existing))
+        bumpUseCount(registry, existing);
+        return t(types.ref(existing));
       }
-      const assignedName = uniqueRegistryName(registry, shareName)
-      registry.names.set(type, assignedName)
-      bumpUseCount(registry, assignedName)
-      const nextSeen = new Set(seen).add(type)
-      const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry, budget)
-      registry.defs.set(assignedName, bodyRef)
-      return t(types.ref(assignedName))
+      const assignedName = uniqueRegistryName(registry, shareName);
+      registry.names.set(type, assignedName);
+      bumpUseCount(registry, assignedName);
+      const nextSeen = new Set(seen).add(type);
+      const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry, budget);
+      registry.defs.set(assignedName, bodyRef);
+      return t(types.ref(assignedName));
     }
   }
 
-  return typeRefFromTypeStructural(type, checker, loc, seen, registry, budget)
+  return typeRefFromTypeStructural(type, checker, loc, seen, registry, budget);
 }
 
 function typeRefFromTypeStructural(
@@ -908,30 +972,30 @@ function typeRefFromTypeStructural(
   registry: SharingRegistry | undefined,
   budget: Budget,
 ): TypeRef {
-  const flags = type.flags
+  const flags = type.flags;
 
   // ── Literals (checked before the widening StringLike/NumberLike/BooleanLike
   //    checks below, else `"active"` widens to plain `string`) ───────────────
   if (flags & ts.TypeFlags.StringLiteral) {
-    return t(types.literal((type as ts.LiteralType).value as string))
+    return t(types.literal((type as ts.LiteralType).value as string));
   }
   if (flags & ts.TypeFlags.NumberLiteral) {
-    return t(types.literal((type as ts.LiteralType).value as number))
+    return t(types.literal((type as ts.LiteralType).value as number));
   }
   if (flags & ts.TypeFlags.BooleanLiteral) {
-    const isTrue = (type as ts.Type & { intrinsicName?: string }).intrinsicName === "true"
-    return t(types.literal(isTrue))
+    const isTrue = (type as ts.Type & { intrinsicName?: string }).intrinsicName === "true";
+    return t(types.literal(isTrue));
   }
 
   // ── Primitives ────────────────────────────────────────────────────────────
-  if (flags & ts.TypeFlags.StringLike) return t(types.string)
-  if (flags & ts.TypeFlags.NumberLike) return t(types.number)
-  if (flags & ts.TypeFlags.BooleanLike) return t(types.boolean)
+  if (flags & ts.TypeFlags.StringLike) return t(types.string);
+  if (flags & ts.TypeFlags.NumberLike) return t(types.number);
+  if (flags & ts.TypeFlags.BooleanLike) return t(types.boolean);
   // `void` was never reachable before function-typed return positions existed
   // (object/param extraction never produces it) — a callable's `void` return
   // now flows through here via `functionRefFromSignature`.
-  if (flags & ts.TypeFlags.Void) return t(types.void)
-  if (flags & ts.TypeFlags.Null) return t(types.null)
+  if (flags & ts.TypeFlags.Void) return t(types.void);
+  if (flags & ts.TypeFlags.Null) return t(types.null);
 
   // ── Page<T>/CursorPage<T>/OffsetPage<T> (an api-tree pagination
   //    convention: a handler returning one of these shapes signals "this
@@ -956,30 +1020,42 @@ function typeRefFromTypeStructural(
       type.aliasSymbol.name === "OffsetPage" ||
       type.aliasSymbol.name === "Page")
   ) {
-    const nextSeen = new Set(seen).add(type)
-    const [elem] = type.aliasTypeArguments ?? []
-    const style = type.aliasSymbol.name === "OffsetPage" ? "offset" : "cursor"
+    const nextSeen = new Set(seen).add(type);
+    const [elem] = type.aliasTypeArguments ?? [];
+    const style = type.aliasSymbol.name === "OffsetPage" ? "offset" : "cursor";
     return t(
       types.page(
-        elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown page element"),
+        elem
+          ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget)
+          : puntRef("unknown page element"),
         style,
       ),
-    )
+    );
   }
 
   // ── Tuples (checked before isArrayType — tuples fail that check and would
   //    otherwise fall through to the object branch as `{"0":…,"1":…,"length":…}`) ──
   if (checker.isTupleType(type)) {
-    const nextSeen = new Set(seen).add(type)
-    const elements = checker.getTypeArguments(type as ts.TypeReference)
-    return t(types.tuple(elements.map((el) => typeRefFromType(el, checker, loc, nextSeen, registry, budget))))
+    const nextSeen = new Set(seen).add(type);
+    const elements = checker.getTypeArguments(type as ts.TypeReference);
+    return t(
+      types.tuple(
+        elements.map((el) => typeRefFromType(el, checker, loc, nextSeen, registry, budget)),
+      ),
+    );
   }
 
   // ── Arrays (T[] / Array<T>) ───────────────────────────────────────────────
   if (checker.isArrayType(type)) {
-    const nextSeen = new Set(seen).add(type)
-    const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-    return t(types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown array element")))
+    const nextSeen = new Set(seen).add(type);
+    const [elem] = checker.getTypeArguments(type as ts.TypeReference);
+    return t(
+      types.array(
+        elem
+          ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget)
+          : puntRef("unknown array element"),
+      ),
+    );
   }
 
   // ── Unions: TS enums + literal unions lower to enum/literal-union shapes;
@@ -990,31 +1066,40 @@ function typeRefFromTypeStructural(
   // literals), a hand-written literal union (`"a" | "b"`), or a genuine union
   // of non-literal types.)
   if (type.isUnion()) {
-    const members = type.types
+    const members = type.types;
 
     // `true | false` collapses to the intrinsic `boolean` type before this
     // point (TS's `getUnionType` singleton-izes it, so `flags & BooleanLike`
     // above already catches it) — this check is a defensive backstop in case
     // a differently-constructed union of the two boolean literals reaches here.
-    if (members.length === 2 && members.every((m) => (m.flags & ts.TypeFlags.BooleanLiteral) !== 0)) {
-      const names = new Set(members.map((m) => (m as ts.Type & { intrinsicName?: string }).intrinsicName))
-      if (names.has("true") && names.has("false")) return t(types.boolean)
+    if (
+      members.length === 2 &&
+      members.every((m) => (m.flags & ts.TypeFlags.BooleanLiteral) !== 0)
+    ) {
+      const names = new Set(
+        members.map((m) => (m as ts.Type & { intrinsicName?: string }).intrinsicName),
+      );
+      if (names.has("true") && names.has("false")) return t(types.boolean);
     }
 
-    const allStringLiteral = members.every((m) => (m.flags & ts.TypeFlags.StringLiteral) !== 0)
+    const allStringLiteral = members.every((m) => (m.flags & ts.TypeFlags.StringLiteral) !== 0);
     if (allStringLiteral) {
-      return t(types.enum(members.map((m) => (m as ts.LiteralType).value as string)))
+      return t(types.enum(members.map((m) => (m as ts.LiteralType).value as string)));
     }
 
     const isLiteralMember = (m: ts.Type): boolean =>
-      (m.flags & (ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral | ts.TypeFlags.BooleanLiteral)) !== 0
+      (m.flags &
+        (ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral | ts.TypeFlags.BooleanLiteral)) !==
+      0;
 
     // All-number-literal (numeric TS enums) and mixed-literal unions both
     // lower the same way: a union of `types.literal(...)` TypeRefs — the IR's
     // `enum` kind is `readonly string[]` only, so numeric/mixed cases use
     // `types.union` of literals instead.
     if (members.every(isLiteralMember)) {
-      return t(types.union(members.map((m) => typeRefFromType(m, checker, loc, seen, registry, budget))))
+      return t(
+        types.union(members.map((m) => typeRefFromType(m, checker, loc, seen, registry, budget))),
+      );
     }
 
     // ── Object-like unions: lower to `types.union([...variants])`, each
@@ -1035,39 +1120,43 @@ function typeRefFromTypeStructural(
       !checker.isArrayType(m) &&
       !checker.isTupleType(m) &&
       checker.getSignaturesOfType(m, ts.SignatureKind.Call).length === 0 &&
-      checker.getSignaturesOfType(m, ts.SignatureKind.Construct).length === 0
+      checker.getSignaturesOfType(m, ts.SignatureKind.Construct).length === 0;
 
     if (members.every(isObjectLikeMember)) {
-      const nextSeen = new Set(seen).add(type)
+      const nextSeen = new Set(seen).add(type);
 
-      const fieldNameSets = members.map((m) => new Set(checker.getPropertiesOfType(m).map((p) => p.name)))
-      const [firstNames] = fieldNameSets
+      const fieldNameSets = members.map(
+        (m) => new Set(checker.getPropertiesOfType(m).map((p) => p.name)),
+      );
+      const [firstNames] = fieldNameSets;
       const sharedNames = firstNames
         ? [...firstNames].filter((name) => fieldNameSets.every((names) => names.has(name)))
-        : []
+        : [];
 
-      let discriminator: string | undefined
+      let discriminator: string | undefined;
       for (const name of sharedNames) {
-        const seenValues = new Set<string | number | boolean>()
+        const seenValues = new Set<string | number | boolean>();
         const distinctLiteralOnEveryVariant = members.every((m) => {
-          const prop = m.getProperty(name)
-          if (!prop) return false
-          const value = literalValueOf(checker.getTypeOfSymbolAtLocation(prop, loc))
-          if (value === undefined || seenValues.has(value)) return false
-          seenValues.add(value)
-          return true
-        })
+          const prop = m.getProperty(name);
+          if (!prop) return false;
+          const value = literalValueOf(checker.getTypeOfSymbolAtLocation(prop, loc));
+          if (value === undefined || seenValues.has(value)) return false;
+          seenValues.add(value);
+          return true;
+        });
         if (distinctLiteralOnEveryVariant) {
-          discriminator = name
-          break
+          discriminator = name;
+          break;
         }
       }
 
-      const variants = members.map((m) => typeRefFromType(m, checker, loc, nextSeen, registry, budget))
-      return t(types.union(variants), discriminator ? { discriminator } : {})
+      const variants = members.map((m) =>
+        typeRefFromType(m, checker, loc, nextSeen, registry, budget),
+      );
+      return t(types.union(variants), discriminator ? { discriminator } : {});
     }
 
-    return puntRef(`union (${checker.typeToString(type)})`)
+    return puntRef(`union (${checker.typeToString(type)})`);
   }
 
   // ── Intersections: detect the branded/opaque and/or refinement-tag
@@ -1101,11 +1190,13 @@ function typeRefFromTypeStructural(
   // TypeScript's `&`, Zod's `z.intersection`, …) do, and the rest fall back to
   // their first member (lossy but safe — see each projector's handler).
   if (type.isIntersection()) {
-    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen, registry, budget)
-    if (branded) return branded
-    const nextSeen = new Set(seen).add(type)
-    const members = type.types.map((member) => typeRefFromType(member, checker, loc, nextSeen, registry, budget))
-    return t(types.intersection(members))
+    const branded = typeRefFromBrandedIntersection(type, checker, loc, seen, registry, budget);
+    if (branded) return branded;
+    const nextSeen = new Set(seen).add(type);
+    const members = type.types.map((member) =>
+      typeRefFromType(member, checker, loc, nextSeen, registry, budget),
+    );
+    return t(types.intersection(members));
   }
 
   // ── Object types: primitive/optional/array/nested fields ──────────────────
@@ -1114,20 +1205,20 @@ function typeRefFromTypeStructural(
     // fields) lower to `types.function` — a real type-position shape, not a
     // punt. Constructable types (`new (...) => T`) have no IR representation
     // yet and still punt.
-    const callSigs = checker.getSignaturesOfType(type, ts.SignatureKind.Call)
+    const callSigs = checker.getSignaturesOfType(type, ts.SignatureKind.Call);
     if (callSigs.length > 0) {
-      return functionRefFromSignatures(callSigs, checker, loc, seen, registry, budget)
+      return functionRefFromSignatures(callSigs, checker, loc, seen, registry, budget);
     }
     if (checker.getSignaturesOfType(type, ts.SignatureKind.Construct).length > 0) {
-      return puntRef(`constructable (${checker.typeToString(type)})`)
+      return puntRef(`constructable (${checker.typeToString(type)})`);
     }
 
-    const nextSeen = new Set(seen).add(type)
+    const nextSeen = new Set(seen).add(type);
 
     // Promise<T> in field position: unwrap to T, same as the return-type path.
     if (type.symbol?.name === "Promise") {
-      const [inner] = checker.getTypeArguments(type as ts.TypeReference)
-      if (inner) return typeRefFromType(inner, checker, loc, nextSeen, registry, budget)
+      const [inner] = checker.getTypeArguments(type as ts.TypeReference);
+      if (inner) return typeRefFromType(inner, checker, loc, nextSeen, registry, budget);
     }
 
     // AsyncIterable<T>/AsyncGenerator<T, TReturn, TNext>/AsyncIterableIterator<T>
@@ -1148,8 +1239,14 @@ function typeRefFromTypeStructural(
         type.symbol.name === "AsyncGenerator" ||
         type.symbol.name === "AsyncIterableIterator")
     ) {
-      const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-      return t(types.stream(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown stream element")))
+      const [elem] = checker.getTypeArguments(type as ts.TypeReference);
+      return t(
+        types.stream(
+          elem
+            ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget)
+            : puntRef("unknown stream element"),
+        ),
+      );
     }
 
     // Set<T>/ReadonlySet<T>: checked before the general object-type properties
@@ -1171,8 +1268,14 @@ function typeRefFromTypeStructural(
     // `types.array(T)` — a Set serializes the same way an Array does (an
     // ordered sequence of elements) and type-ir has no dedicated `set` kind.
     if (type.symbol && (type.symbol.name === "Set" || type.symbol.name === "ReadonlySet")) {
-      const [elem] = checker.getTypeArguments(type as ts.TypeReference)
-      return t(types.array(elem ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget) : puntRef("unknown set element")))
+      const [elem] = checker.getTypeArguments(type as ts.TypeReference);
+      return t(
+        types.array(
+          elem
+            ? typeRefFromType(elem, checker, loc, nextSeen, registry, budget)
+            : puntRef("unknown set element"),
+        ),
+      );
     }
 
     // Map<K, V>/ReadonlyMap<K, V>: same rationale as Set<T> immediately above
@@ -1185,13 +1288,17 @@ function typeRefFromTypeStructural(
     // plain index-signature types (`Record<K, V>`/`{ [k: string]: V }`)
     // immediately below.
     if (type.symbol && (type.symbol.name === "Map" || type.symbol.name === "ReadonlyMap")) {
-      const [key, value] = checker.getTypeArguments(type as ts.TypeReference)
+      const [key, value] = checker.getTypeArguments(type as ts.TypeReference);
       return t(
         types.map(
-          key ? typeRefFromType(key, checker, loc, nextSeen, registry, budget) : puntRef("unknown map key"),
-          value ? typeRefFromType(value, checker, loc, nextSeen, registry, budget) : puntRef("unknown map value"),
+          key
+            ? typeRefFromType(key, checker, loc, nextSeen, registry, budget)
+            : puntRef("unknown map key"),
+          value
+            ? typeRefFromType(value, checker, loc, nextSeen, registry, budget)
+            : puntRef("unknown map value"),
         ),
-      )
+      );
     }
 
     // File/Blob: the Web `File`/`Blob` binary-upload types — checked before
@@ -1222,19 +1329,23 @@ function typeRefFromTypeStructural(
     // field), not a punt-with-comment (this is a KNOWN, intentional case,
     // not an unhandled one).
     if (type.symbol && (type.symbol.name === "File" || type.symbol.name === "Blob")) {
-      return t(types.unknown, { $comment: "binary upload type (File/Blob) — not structurally validated" })
+      return t(types.unknown, {
+        $comment: "binary upload type (File/Blob) — not structurally validated",
+      });
     }
 
-    const properties = checker.getPropertiesOfType(type)
+    const properties = checker.getPropertiesOfType(type);
 
     // Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no
     // own properties — without this they'd lower to `types.object({})`.
-    const stringIndex = type.getStringIndexType()
-    const numberIndex = type.getNumberIndexType()
+    const stringIndex = type.getStringIndexType();
+    const numberIndex = type.getNumberIndexType();
     if (properties.length === 0 && (stringIndex || numberIndex)) {
-      const valueType = stringIndex ?? numberIndex!
-      const keyRef = stringIndex ? t(types.string) : t(types.number)
-      return t(types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen, registry, budget)))
+      const valueType = stringIndex ?? numberIndex!;
+      const keyRef = stringIndex ? t(types.string) : t(types.number);
+      return t(
+        types.map(keyRef, typeRefFromType(valueType, checker, loc, nextSeen, registry, budget)),
+      );
     }
 
     // Class instances: a symbol with a ts.ClassDeclaration among its
@@ -1243,9 +1354,9 @@ function typeRefFromTypeStructural(
     // identity survives extraction instead of the class being flattened into
     // a bag of public fields (which would discard its methods and misrepresent
     // it as plain data). No need to walk `properties` for this case.
-    const classDecl = type.symbol?.declarations?.find(ts.isClassDeclaration)
+    const classDecl = type.symbol?.declarations?.find(ts.isClassDeclaration);
     if (classDecl && type.symbol) {
-      const instanceRef = t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName))
+      const instanceRef = t(types.instance(type.symbol.name, classDecl.getSourceFile().fileName));
 
       // The class's method surface, if any, is its other half (see
       // TypeKinds.instance's doc comment in index.ts: "a class's fields are
@@ -1256,30 +1367,41 @@ function typeRefFromTypeStructural(
       // return shape, additive and non-breaking for every existing consumer
       // of this function. `instance` itself stays purely nominal; nothing
       // here adds fields to it.
-      const methods = methodsFromClassType(type, checker, loc, nextSeen, instanceRef, registry, budget)
+      const methods = methodsFromClassType(
+        type,
+        checker,
+        loc,
+        nextSeen,
+        instanceRef,
+        registry,
+        budget,
+      );
       if (Object.keys(methods).length > 0) {
-        return t(instanceRef.shape, { ...instanceRef.meta, interface: t(types.interface(methods)) })
+        return t(instanceRef.shape, {
+          ...instanceRef.meta,
+          interface: t(types.interface(methods)),
+        });
       }
-      return instanceRef
+      return instanceRef;
     }
 
-    const fields: Record<string, TypeRef> = {}
+    const fields: Record<string, TypeRef> = {};
 
     for (const prop of properties) {
       // Skip private/protected members — internal state isn't part of the
       // public data shape. (Classes themselves are handled above and never
       // reach this loop — this guards structural types that still carry
       // private/protected member symbols.)
-      if (isPrivateOrProtected(prop)) continue
+      if (isPrivateOrProtected(prop)) continue;
       // Skip symbol-keyed members (well-known Symbols, brand/refinement
       // tags not already consumed by `typeRefFromBrandedIntersection`) —
       // see `isSymbolKeyedProp`'s doc comment for why this is correct
       // (never JSON-representable) AND necessary (TS's own synthetic name
       // for these isn't valid to emit as a bare object-type field name).
-      if (isSymbolKeyedProp(prop)) continue
+      if (isSymbolKeyedProp(prop)) continue;
 
-      const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0
-      const readonly = isReadonly(prop)
+      const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
+      const readonly = isReadonly(prop);
       // Strip `| undefined` so `field?: string` lowers as a plain string.
       //
       // Regression (found migrating the sibling codebase's `triggers` slice, 2026-07-30;
@@ -1305,36 +1427,38 @@ function typeRefFromTypeStructural(
       // the recursive `typeRefFromType` call below, which lowers it to
       // `types.unknown` via the ordinary punt path (`from-typescript.ts`'s
       // own fallback for a type flags don't otherwise handle).
-      const rawPropType = checker.getTypeOfSymbolAtLocation(prop, loc)
+      const rawPropType = checker.getTypeOfSymbolAtLocation(prop, loc);
       const propType =
         (rawPropType.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) !== 0
           ? rawPropType
-          : rawPropType.getNonNullableType()
+          : rawPropType.getNonNullableType();
 
       // Method-shaped fields (call signature) lower to `types.function` —
       // e.g. `callback: (x: number) => void` — same as any other callable
       // type position (see the call-signature branch above).
-      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen, registry, budget)
+      const fieldRef = typeRefFromType(propType, checker, loc, nextSeen, registry, budget);
 
       // Per-field JSDoc: `/** … */` above a property → `meta.description`;
       // `@default` tag → `meta.default`. Both flow through the type-ir
       // json-schema projector's `withMeta` unchanged, surfacing in CLI
       // --help, OpenAPI specs, and MCP tool schemas.
-      const description = propertyDescriptionOf(prop, checker)
-      const defaultValue = propertyDefaultOf(prop, checker)
-      const refinementMeta = propertyRefinementMetaOf(prop, checker)
+      const description = propertyDescriptionOf(prop, checker);
+      const defaultValue = propertyDefaultOf(prop, checker);
+      const refinementMeta = propertyRefinementMetaOf(prop, checker);
 
-      const extraMeta: Record<string, unknown> = { ...refinementMeta }
-      if (optional) extraMeta.optional = true
-      if (readonly) extraMeta.readonly = true
-      if (description !== undefined) extraMeta.description = description
-      if (defaultValue !== undefined) extraMeta.default = defaultValue
+      const extraMeta: Record<string, unknown> = { ...refinementMeta };
+      if (optional) extraMeta.optional = true;
+      if (readonly) extraMeta.readonly = true;
+      if (description !== undefined) extraMeta.description = description;
+      if (defaultValue !== undefined) extraMeta.default = defaultValue;
 
       fields[prop.name] =
-        Object.keys(extraMeta).length > 0 ? t(fieldRef.shape, { ...fieldRef.meta, ...extraMeta }) : fieldRef
+        Object.keys(extraMeta).length > 0
+          ? t(fieldRef.shape, { ...fieldRef.meta, ...extraMeta })
+          : fieldRef;
     }
 
-    return t(types.object(fields))
+    return t(types.object(fields));
   }
 
   // ── Generic type parameters: extract the CONSTRAINT, not the unresolved
@@ -1355,19 +1479,19 @@ function typeRefFromTypeStructural(
   //    (e.g. involving a conditional type) punts gracefully via the same
   //    recursive call, same as any other unhandled type.
   if (type.isTypeParameter()) {
-    const constraint = type.getConstraint()
+    const constraint = type.getConstraint();
     if (constraint) {
-      const nextSeen = new Set(seen).add(type)
-      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen, registry, budget)
-      return t(constraintRef.shape, { ...constraintRef.meta, generic: true })
+      const nextSeen = new Set(seen).add(type);
+      const constraintRef = typeRefFromType(constraint, checker, loc, nextSeen, registry, budget);
+      return t(constraintRef.shape, { ...constraintRef.meta, generic: true });
     }
     return t(types.unknown, {
       $comment: `unconstrained generic type parameter (${checker.typeToString(type)}) — no bound to extract`,
-    })
+    });
   }
 
   // ── Everything else (unknown, any, branded, conditional types, …) ─────────
-  return puntRef(`unsupported (${checker.typeToString(type)})`)
+  return puntRef(`unsupported (${checker.typeToString(type)})`);
 }
 
 /** Reasonable defaults for a build-time (not editor/language-service)
@@ -1381,7 +1505,7 @@ const FALLBACK_COMPILER_OPTIONS: ts.CompilerOptions = {
   noEmit: true,
   skipLibCheck: true,
   strict: true,
-}
+};
 
 /**
  * Load the `CompilerOptions` a normal `tsc` invocation would use for
@@ -1403,16 +1527,16 @@ const FALLBACK_COMPILER_OPTIONS: ts.CompilerOptions = {
  * `tsconfig.build.json` is never what gets picked up in the first place.)
  */
 function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
-  const configPath = ts.findConfigFile(path.dirname(entryFile), ts.sys.fileExists)
-  if (!configPath) return FALLBACK_COMPILER_OPTIONS
+  const configPath = ts.findConfigFile(path.dirname(entryFile), ts.sys.fileExists);
+  if (!configPath) return FALLBACK_COMPILER_OPTIONS;
 
-  const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile)
-  if (error) return FALLBACK_COMPILER_OPTIONS
+  const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (error) return FALLBACK_COMPILER_OPTIONS;
 
-  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, path.dirname(configPath))
-  if (parsed.errors.length > 0) return FALLBACK_COMPILER_OPTIONS
+  const parsed = ts.parseJsonConfigFileContent(config, ts.sys, path.dirname(configPath));
+  if (parsed.errors.length > 0) return FALLBACK_COMPILER_OPTIONS;
 
-  return { ...parsed.options, noEmit: true, skipLibCheck: true }
+  return { ...parsed.options, noEmit: true, skipLibCheck: true };
 }
 
 /** Create a read-only Program over a single entry file, resolving modules
@@ -1435,10 +1559,11 @@ function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
  * RSS and repeatedly OOM-killed unrelated processes on the host before this
  * function grew multi-root support. See `build.ts`'s `buildValidatorModuleSource`
  * `program` parameter for the batch-reuse entry point. */
-export function createExtractorProgram(entryFile: string): ts.Program
-export function createExtractorProgram(entryFiles: readonly string[]): ts.Program
+export function createExtractorProgram(entryFile: string): ts.Program;
+export function createExtractorProgram(entryFiles: readonly string[]): ts.Program;
 export function createExtractorProgram(entryFile: string | readonly string[]): ts.Program {
-  const files = Array.isArray(entryFile) ? entryFile : [entryFile as string]
-  if (files.length === 0) throw new Error("createExtractorProgram: at least one entry file required")
-  return ts.createProgram(files as string[], loadCompilerOptionsForFile(files[0]!))
+  const files = Array.isArray(entryFile) ? entryFile : [entryFile as string];
+  if (files.length === 0)
+    throw new Error("createExtractorProgram: at least one entry file required");
+  return ts.createProgram(files as string[], loadCompilerOptionsForFile(files[0]!));
 }

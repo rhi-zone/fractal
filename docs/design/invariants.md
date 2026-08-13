@@ -105,6 +105,7 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 - **Core = plain functions + composition.** The base is `T => U` plus
   `(.) :: (a->b) -> (b->c) -> (a->c)`. Kleisli/applicative forms are DERIVED and
   strictly less general.
+
   > "the handler itself should be T => U, the transform should be arbitrary
   > T => U as well. and then: `(.) :: (a -> b) -> (b -> c) -> (a -> c)`..."
   > "i don't see how kleisli arrows aren't OBJECTIVELY strictly less general"
@@ -112,14 +113,16 @@ transform input, not skeleton structure). `*` marks wildcard segments.
   > into arbitrary other data"
 
 - **One-directional transforms; no view/review.**
+
   > "wait, why do we need `review`."
   > "view + review is overkill and poisons the architectural purity of composability"
   > "correction: it's just a fucking FUNCTION"
 
 - **Handler = a simple `f(options) => Result` over a strongly-typed named-params
   object; not a wire `body`.**
+
   > "the handler transformation function to be, well, a 'simple' function from T to U"
-  > "building up a typed 'context'/'options'/'parameters' object as *the* input to
+  > "building up a typed 'context'/'options'/'parameters' object as _the_ input to
   > an arbitrary api function"
   > "`body` is the wrong input for the options object. it should be a strongly typed
   > 'named params' style object"
@@ -128,11 +131,13 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 - **Handler is provenance-blind; HTTP source-markers and capabilities do not pass
   through to it.**
+
   > "and NEITHER of these should pass through to the api function"
   > "do caps not just... sit in the input shape and pass through untouched?"
 
 - **`Request => T` and `U => Response` are plain functions — optionally
   handwritten, otherwise projected; not declarative markers.**
+
   > "f(Request) => Response. values are FUCKING PROJECTED (Request => T; U => Response)"
   > "in manually authored HTTP trees, Request => T are OPTIONALLY handwritten as
   > REGULAR FUNCTIONS because OBVIOUSLY"
@@ -141,7 +146,8 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 - **Inputs are already typed; there is no "raw". Coercion is
   impossible-by-construction via the type system.**
-  > "strings *are* already typed"
+
+  > "strings _are_ already typed"
   > "input is not 'untyped', it is fully typed"
   > "a fucking string \"id\" is fucking fine"
   > "coercion is an implementation detail, and this should be impossible by
@@ -149,10 +155,11 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 - **Single source of truth = inferred TS types + JSDoc (constraints AND
   descriptions). No reified runtime meta / no schema-as-second-source.**
+
   > "who the fuck said reified tree"
   > "why not? types are readable by typescript api"
   > "the fuck? hello? jsdoc says hi?"
-  > "not to mention fucking *descriptions* are also readable from jsdoc..."
+  > "not to mention fucking _descriptions_ are also readable from jsdoc..."
   > "didn't we agree to use inferred types?"
 
   (An earlier `{closure, metadata}` idea was floated, then ABANDONED — do not
@@ -161,6 +168,7 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 - **Codegen "just works for whatever's obvious"; the user writes as much or as
   little as they want; output must be as good as handwritten, structurally and
   semantically.**
+
   > "the point of codegen is to just work for whatever's obvious"
   > "as good as a handwritten one structurally and semantically"
   > "codegen'd is more consistent = better"
@@ -172,6 +180,7 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 - **One explicit nested routing tree; combinators name the node kind via a record
   API (`path({ classes: ... })`); no `tree([])`, no opaque `leaf`, no scattered
   declarations.**
+
   > "when routing is just multiple unrelated declarations then the mental model of
   > how routing slices is fucking intractable"
   > "what the fuck is tree([]). why not path({ classes: })"
@@ -180,20 +189,24 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 - **No colon path-DSL, no bound-variable machinery; a plain string segment
   suffices.**
+
   > "how. the fuck. would bound variables even work. a fucking string \"id\" is
   > fucking fine"
 
 - **The IR is the abstract (protocol-agnostic) tree; the HTTP tree is a projection
   of it; the tree stays explicit but not protocol-specific.**
+
   > "the tree (if any) should still be explicit, no? just not a protocol specific one."
   > "keep in mind that decisions may not cut across a clean axis."
 
 - **`NoInfer<T>` + a root anchor is the inference mechanism.** The mechanism is
   accepted; the assistant's "bottom-up forces it" rationale was NOT accepted.
+
   > "says who, exactly?"
 
 - **POST = a method call / invocation. `new T()` / "create" is NOT a method
   call.** Reject `create → POST /collection` and arbitrary name→verb tables.
+
   > "i am FUCKING SAYING post is a METHOD CALL and `new T()` is NOT A FUCKING METHOD CALL"
   > "why the FUCK does create translate to POST /todos"
   > "POST is method call not fucking create... i'd probably prefer POST /the/:path/here/new"
@@ -206,13 +219,15 @@ transform input, not skeleton structure). `*` marks wildcard segments.
   [`converged-model.md`](./converged-model.md).
 
 - **verb / path / placement (query/body/header/cookie) are projected from binding
-  + convention; never authored as ceremony on the leaf. `InputSource`-style enums
-  are an HTTP-shape leak.**
+  - convention; never authored as ceremony on the leaf. `InputSource`-style enums
+    are an HTTP-shape leak.**
+
   > "f(Request) => Response. values are FUCKING PROJECTED"
   > "disturbingly http shaped"
 
 - **`methods({})` is an HTTP construct that must still exist for dispatch;
   bespoke verb/path = explicit overrides.**
+
   > "how the fuck is methods() not a fucking HTTP construct"
   > "where the FUCK did methods({}) go"
 
@@ -223,9 +238,11 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 - **API-first; clean interfaces; the HTTP router is both dogfood for the generic
   core AND a wanted product with SOTA DX + SOTA perf.**
+
   > "the interface(s) themselves should be clean."
 
 - **"data over code" is NOT a forcing principle here** (it was poisoning context).
+
   > "the data over code thing is kinda poisoning context"
 
 - **Tagged-union discriminant fields are named `kind`, not `type` and not
@@ -255,6 +272,7 @@ transform input, not skeleton structure). `*` marks wildcard segments.
 
 - **Reject `Result<T,E> | Response` escape hatch; want a canonical stream
   construct.**
+
   > "why not a canonical stream construct?"
 
 - **Rewrite salvaging infra; read existing code critically, not blessed.**

@@ -1,6 +1,6 @@
-import { t, type TypeRef } from "@rhi-zone/fractal-type-ir"
-import { toReScriptType } from "@rhi-zone/fractal-type-ir/rescript"
-import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts"
+import { t, type TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toReScriptType } from "@rhi-zone/fractal-type-ir/rescript";
+import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts";
 
 // ReScript codegen for ffi-ir's boundary layer — module/function/method/
 // resource/ownership-discipline shapes — targeting ReScript's `external`
@@ -82,12 +82,12 @@ function toPascalCase(name: string): string {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .split(/[^a-zA-Z0-9]+/)
-    .filter((w) => w.length > 0)
-  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("")
+    .filter((w) => w.length > 0);
+  return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("");
 }
 
 function decapitalize(name: string): string {
-  return name.length === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1)
+  return name.length === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1);
 }
 
 // ReScript reserved words that cannot be used as an `external`'s binding
@@ -98,11 +98,47 @@ function decapitalize(name: string): string {
 // cross-package reach-in" precedent `wasm-bindgen.ts` sets with its own local
 // `toSnakeCase`).
 const RESERVED = new Set([
-  "and", "as", "assert", "constraint", "else", "exception", "external", "false", "for", "fun",
-  "function", "functor", "if", "in", "include", "inherit", "initializer", "lazy", "let", "module",
-  "mutable", "new", "of", "open", "or", "private", "rec", "sig", "struct", "then", "to", "true",
-  "try", "type", "val", "virtual", "when", "while", "with", "switch",
-])
+  "and",
+  "as",
+  "assert",
+  "constraint",
+  "else",
+  "exception",
+  "external",
+  "false",
+  "for",
+  "fun",
+  "function",
+  "functor",
+  "if",
+  "in",
+  "include",
+  "inherit",
+  "initializer",
+  "lazy",
+  "let",
+  "module",
+  "mutable",
+  "new",
+  "of",
+  "open",
+  "or",
+  "private",
+  "rec",
+  "sig",
+  "struct",
+  "then",
+  "to",
+  "true",
+  "try",
+  "type",
+  "val",
+  "virtual",
+  "when",
+  "while",
+  "with",
+  "switch",
+]);
 
 /** A valid ReScript lowercase-leading identifier for `name`, used as the
  * left-hand binding identifier of an `external` declaration — the JS-side
@@ -111,33 +147,33 @@ const RESERVED = new Set([
  * calls it" (unlike a struct field label, no `@as`-style attribute is needed
  * here — the string literal already IS that mechanism). */
 function externalIdent(name: string): string {
-  const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_")
-  const lowered = /^[A-Z]/.test(cleaned) ? decapitalize(cleaned) : cleaned
-  const based = /^[a-z_]/.test(lowered) && lowered.length > 0 ? lowered : `_${lowered}`
-  return RESERVED.has(based) ? `${based}_` : based
+  const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_");
+  const lowered = /^[A-Z]/.test(cleaned) ? decapitalize(cleaned) : cleaned;
+  const based = /^[a-z_]/.test(lowered) && lowered.length > 0 ? lowered : `_${lowered}`;
+  return RESERVED.has(based) ? `${based}_` : based;
 }
 
 function indent(block: string, prefix = "  "): string {
   return block
     .split("\n")
     .map((line) => (line.length === 0 ? line : `${prefix}${line}`))
-    .join("\n")
+    .join("\n");
 }
 
 function isA(kind: string, target: string): boolean {
-  return kind === target || ancestors(kind).includes(target)
+  return kind === target || ancestors(kind).includes(target);
 }
 
 function docComment(meta: Readonly<Record<string, unknown>>): string {
-  const description = typeof meta.description === "string" ? meta.description : undefined
-  return description === undefined ? "" : `/** ${description} */\n`
+  const description = typeof meta.description === "string" ? meta.description : undefined;
+  return description === undefined ? "" : `/** ${description} */\n`;
 }
 
 function deprecatedAttr(meta: Readonly<Record<string, unknown>>): string {
-  const deprecated = meta.deprecated
-  if (deprecated === true) return "@deprecated\n"
-  if (typeof deprecated === "string") return `@deprecated(${JSON.stringify(deprecated)})\n`
-  return ""
+  const deprecated = meta.deprecated;
+  if (deprecated === true) return "@deprecated\n";
+  if (typeof deprecated === "string") return `@deprecated(${JSON.stringify(deprecated)})\n`;
+  return "";
 }
 
 /** Builds a synthetic type-ir `function` TypeRef from ffi-ir params/return
@@ -146,9 +182,13 @@ function deprecatedAttr(meta: Readonly<Record<string, unknown>>): string {
  * the actual signature rendering, including prepending the receiver as a
  * leading positional parameter for methods. Mirrors `wasm-bindgen.ts`'s
  * `syntheticFunctionRef`. */
-function syntheticFunctionRef(params: readonly FfiParam[], returnType: TypeRef, receiver?: string): TypeRef {
+function syntheticFunctionRef(
+  params: readonly FfiParam[],
+  returnType: TypeRef,
+  receiver?: string,
+): TypeRef {
   const thisType: TypeRef | undefined =
-    receiver === undefined ? undefined : { shape: { kind: "ref", target: receiver }, meta: {} }
+    receiver === undefined ? undefined : { shape: { kind: "ref", target: receiver }, meta: {} };
   return t(
     {
       kind: "function",
@@ -157,7 +197,7 @@ function syntheticFunctionRef(params: readonly FfiParam[], returnType: TypeRef, 
       ...(thisType === undefined ? {} : { thisType }),
     },
     {},
-  ) as TypeRef
+  ) as TypeRef;
 }
 
 /** Free function -> `@module`/`@val` external, per the file-level "naming
@@ -171,11 +211,11 @@ function buildFunction(
   meta: Readonly<Record<string, unknown>>,
   moduleName?: string,
 ): string {
-  const ref = syntheticFunctionRef(shape.params, shape.returnType)
-  const signature = toReScriptType(ref)
-  const ident = externalIdent(name)
-  const attr = moduleName === undefined ? "@val" : `@module(${JSON.stringify(moduleName)})`
-  return `${docComment(meta)}${deprecatedAttr(meta)}${attr}\nexternal ${ident}: ${signature} = ${JSON.stringify(name)}`
+  const ref = syntheticFunctionRef(shape.params, shape.returnType);
+  const signature = toReScriptType(ref);
+  const ident = externalIdent(name);
+  const attr = moduleName === undefined ? "@val" : `@module(${JSON.stringify(moduleName)})`;
+  return `${docComment(meta)}${deprecatedAttr(meta)}${attr}\nexternal ${ident}: ${signature} = ${JSON.stringify(name)}`;
 }
 
 /**
@@ -184,11 +224,15 @@ function buildFunction(
  * here by giving `syntheticFunctionRef` the receiver as `thisType`, which
  * type-ir's `rescript-native.ts` `function` handler already prepends.
  */
-function buildMethod(name: string, shape: FfiShape & { kind: "method" }, meta: Readonly<Record<string, unknown>>): string {
-  const ref = syntheticFunctionRef(shape.params, shape.returnType, shape.receiver)
-  const signature = toReScriptType(ref)
-  const ident = externalIdent(name)
-  return `${docComment(meta)}${deprecatedAttr(meta)}@send\nexternal ${ident}: ${signature} = ${JSON.stringify(name)}`
+function buildMethod(
+  name: string,
+  shape: FfiShape & { kind: "method" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const ref = syntheticFunctionRef(shape.params, shape.returnType, shape.receiver);
+  const signature = toReScriptType(ref);
+  const ident = externalIdent(name);
+  return `${docComment(meta)}${deprecatedAttr(meta)}@send\nexternal ${ident}: ${signature} = ${JSON.stringify(name)}`;
 }
 
 /**
@@ -221,30 +265,44 @@ function buildMethod(name: string, shape: FfiShape & { kind: "method" }, meta: R
  * the top level; this prefixing is a style choice to avoid that, not a
  * schema requirement.
  */
-function buildResource(name: string, shape: FfiShape & { kind: "resource" }, meta: Readonly<Record<string, unknown>>): string {
-  const typeName = toPascalCase(name)
-  const description = typeof meta.description === "string" ? [`/** ${meta.description} */`] : []
-  const typeDecl = [...description, `type ${typeName}`].join("\n")
+function buildResource(
+  name: string,
+  shape: FfiShape & { kind: "resource" },
+  meta: Readonly<Record<string, unknown>>,
+): string {
+  const typeName = toPascalCase(name);
+  const description = typeof meta.description === "string" ? [`/** ${meta.description} */`] : [];
+  const typeDecl = [...description, `type ${typeName}`].join("\n");
   const methodDecls = Object.entries(shape.methods).map(([methodName, methodRef]) => {
-    const kind = methodRef.shape.kind
+    const kind = methodRef.shape.kind;
     if (kind !== "method" && kind !== "function") {
-      throw new Error(`toReScriptFfi: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`)
+      throw new Error(
+        `toReScriptFfi: resource method "${methodName}" has unexpected kind "${kind}" (expected "method")`,
+      );
     }
-    const methodShape = methodRef.shape as FfiShape & { kind: "method"; params: readonly FfiParam[]; returnType: TypeRef }
-    const prefixedName = `${decapitalize(typeName)}${toPascalCase(methodName)}`
+    const methodShape = methodRef.shape as FfiShape & {
+      kind: "method";
+      params: readonly FfiParam[];
+      returnType: TypeRef;
+    };
+    const prefixedName = `${decapitalize(typeName)}${toPascalCase(methodName)}`;
     // Bind the receiver explicitly to this resource's own name (not
     // `methodShape.receiver`, which may be unset when built via
     // `boundary.method` without wiring `receiver` through the resource) —
     // `buildResource`'s caller already knows which resource this is.
-    return buildMethod(prefixedName, { ...methodShape, kind: "method", receiver: name }, methodRef.meta).replace(
+    return buildMethod(
+      prefixedName,
+      { ...methodShape, kind: "method", receiver: name },
+      methodRef.meta,
+    ).replace(
       // keep the JS-side name literal as the ORIGINAL unprefixed method name
       // (`"read"`, not `"bufferRead"`) — only the ReScript-side identifier
       // gets prefixed, the JS call target must stay exact.
       new RegExp(`= ${JSON.stringify(prefixedName)}$`),
       `= ${JSON.stringify(methodName)}`,
-    )
-  })
-  return [typeDecl, ...methodDecls].join("\n\n")
+    );
+  });
+  return [typeDecl, ...methodDecls].join("\n\n");
 }
 
 /** Module -> a ReScript `module Name = { ... }` block grouping the
@@ -260,16 +318,18 @@ function buildResource(name: string, shape: FfiShape & { kind: "resource" }, met
 function buildModule(name: string, shape: FfiShape & { kind: "module" }): string {
   const resourceDecls = Object.entries(shape.resources).map(([resName, resRef]) =>
     buildResource(resName, resRef.shape as FfiShape & { kind: "resource" }, resRef.meta),
-  )
+  );
   const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) => {
-    const fnShape = fnRef.shape
+    const fnShape = fnRef.shape;
     if (!isA(fnShape.kind, "function")) {
-      throw new Error(`toReScriptFfi: module function "${fnName}" has unexpected kind "${fnShape.kind}" (expected "function")`)
+      throw new Error(
+        `toReScriptFfi: module function "${fnName}" has unexpected kind "${fnShape.kind}" (expected "function")`,
+      );
     }
-    return buildFunction(fnName, fnShape as FfiShape & { kind: "function" }, fnRef.meta, name)
-  })
-  const body = [...resourceDecls, ...functionDecls].join("\n\n")
-  return [`module ${toPascalCase(name)} = {`, indent(body), `}`].join("\n")
+    return buildFunction(fnName, fnShape as FfiShape & { kind: "function" }, fnRef.meta, name);
+  });
+  const body = [...resourceDecls, ...functionDecls].join("\n\n");
+  return [`module ${toPascalCase(name)} = {`, indent(body), `}`].join("\n");
 }
 
 /**
@@ -281,30 +341,32 @@ function buildModule(name: string, shape: FfiShape & { kind: "module" }): string
  * concept of its own to gate against.
  */
 export function toReScriptFfi(ref: FfiRef, name?: string): string {
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
 
   if (name === undefined) {
     throw new Error(
       `toReScriptFfi: "${kind}" requires a name — ReScript externals/types/modules are named declarations, not anonymous inline expressions`,
-    )
+    );
   }
 
   if (kind === "function") {
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta)
+    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta);
   }
   if (kind === "method") {
-    return buildMethod(name, ref.shape as FfiShape & { kind: "method" }, ref.meta)
+    return buildMethod(name, ref.shape as FfiShape & { kind: "method" }, ref.meta);
   }
   if (kind === "resource") {
-    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta)
+    return buildResource(name, ref.shape as FfiShape & { kind: "resource" }, ref.meta);
   }
   if (kind === "module") {
-    return buildModule(name, ref.shape as FfiShape & { kind: "module" })
+    return buildModule(name, ref.shape as FfiShape & { kind: "module" });
   }
   if (isA(kind, "function")) {
-    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta)
+    return buildFunction(name, ref.shape as FfiShape & { kind: "function" }, ref.meta);
   }
-  throw new Error(`toReScriptFfi: unhandled ffi-ir kind "${kind}" (no handler and no known ancestor)`)
+  throw new Error(
+    `toReScriptFfi: unhandled ffi-ir kind "${kind}" (no handler and no known ancestor)`,
+  );
 }
 
-export { toReScriptType }
+export { toReScriptType };

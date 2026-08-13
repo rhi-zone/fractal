@@ -85,11 +85,11 @@ the route tree uses `HttpRoute` with explicit method dispatch:
 
 ```typescript
 type HttpRoute = {
-  methods?: Record<string, { handler: Handler; meta: Meta }>
-  children?: Record<string, HttpRoute>
-  fallback?: { name: string; subtree: HttpRoute }
-  meta: Meta
-}
+  methods?: Record<string, { handler: Handler; meta: Meta }>;
+  children?: Record<string, HttpRoute>;
+  fallback?: { name: string; subtree: HttpRoute };
+  meta: Meta;
+};
 ```
 
 Each projection can have its own output type. CLI would have its own, MCP its
@@ -159,6 +159,7 @@ pipeline" below, and `docs/guide/codegen-cli.md`).
 ## Dispatch is not an interceptable multi-stage pipeline
 
 > **Superseded, in two stages:**
+>
 > 1. **(2026-07)** an earlier revision of this design decomposed the
 >    request/response lifecycle into typed, interceptable stages
 >    (`reqTransforms`/`decode`/`inputTransforms`/`validate`/`handler`/
@@ -207,12 +208,14 @@ For **HTTP**, the integration point is `PresetOptions.rewriters`
 `createFetch`'s internal `Node => HttpRoute` projection (`applyValidation`
 has to run on the PROJECTED shape here because `createFetch` never exposes
 the intermediate `Node`):
+
 ```ts
-import { applyValidation } from "./generated/apply-validation.ts"
+import { applyValidation } from "./generated/apply-validation.ts";
 const fetch = createFetch(node, {
   rewriters: [(routes) => applyValidation("books", routes, "http")],
-})
+});
 ```
+
 A rejected leaf's `err(...)` Result lands on the exact same Result-unwrap path
 as any handler-returned `err` — a dedicated 400 with the structured errors,
 not the catch block's 500 (see 670e0dd/577659f's history: an earlier
@@ -226,10 +229,12 @@ For **MCP** (`createMcpServer`), **CLI** (`runCli`), and **GraphQL**
 `HttpRoute`), the equivalent hook is each preset's own `rewriters` option —
 a `Node => Node` pass, applied to the tree BEFORE that preset's own
 projection/dispatch-table walk:
+
 ```ts
-import { applyValidation } from "./generated/apply-validation.ts"
-await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books", t, "cli")] })
+import { applyValidation } from "./generated/apply-validation.ts";
+await runCli(node, argv, io, { rewriters: [(t) => applyValidation("books", t, "cli")] });
 ```
+
 A tree validated for MORE than one protocol that resolve to the SAME wire
 profile (mcp/graphql/jsonrpc, all uniformly typed JSON) can apply
 `applyValidation` ONCE with one shared `protocol` tag, before any
@@ -268,7 +273,7 @@ Positional children, options object for the rare stuff (meta, fallback):
 const app = api({
   users: crud({ list: listUsers, create: createUser, get: getUser }),
   products: api({ list: op(listProducts, http.get) }),
-})
+});
 ```
 
 `api()` is the primary constructor. `node()` stays as the low-level form.
@@ -279,12 +284,12 @@ Shorthand for common HTTP directives:
 
 ```typescript
 export const http = {
-  get:    { http: { directives: [{ kind: "method", value: "GET" }] } },
-  post:   { http: { directives: [{ kind: "method", value: "POST" }] } },
-  put:    { http: { directives: [{ kind: "method", value: "PUT" }] } },
-  patch:  { http: { directives: [{ kind: "method", value: "PATCH" }] } },
+  get: { http: { directives: [{ kind: "method", value: "GET" }] } },
+  post: { http: { directives: [{ kind: "method", value: "POST" }] } },
+  put: { http: { directives: [{ kind: "method", value: "PUT" }] } },
+  patch: { http: { directives: [{ kind: "method", value: "PATCH" }] } },
   delete: { http: { directives: [{ kind: "method", value: "DELETE" }] } },
-}
+};
 ```
 
 ### `crud(handlers)`
@@ -303,21 +308,29 @@ function crud(handlers: {
 ```
 
 Users can define their own `crud()` trivially — it's ~7 lines over `api()`
-+ `op()` + `http.*`.
+
+- `op()` + `http.*`.
 
 ### `HttpMethods` interface — extensible method union
 
 ```typescript
 interface HttpMethods {
-  GET: "GET"; POST: "POST"; PUT: "PUT"; PATCH: "PATCH"; DELETE: "DELETE"
+  GET: "GET";
+  POST: "POST";
+  PUT: "PUT";
+  PATCH: "PATCH";
+  DELETE: "DELETE";
 }
-type Method = keyof HttpMethods
+type Method = keyof HttpMethods;
 ```
 
 Users extend via declaration merging for custom methods (WebDAV, etc.):
 
 ```typescript
-interface HttpMethods { PROPFIND: "PROPFIND"; MKCOL: "MKCOL" }
+interface HttpMethods {
+  PROPFIND: "PROPFIND";
+  MKCOL: "MKCOL";
+}
 ```
 
 ### Pre-composed HTTP projection preset
@@ -325,14 +338,9 @@ interface HttpMethods { PROPFIND: "PROPFIND"; MKCOL: "MKCOL" }
 One-call projection with standard transforms applied:
 
 ```typescript
-const routes = httpProjection(apiTree)
+const routes = httpProjection(apiTree);
 // Equivalent to:
-const routes = pipe(
-  naiveTransform(apiTree),
-  applyMethods,
-  applyMoveTo,
-  applyResponse,
-)
+const routes = pipe(naiveTransform(apiTree), applyMethods, applyMoveTo, applyResponse);
 ```
 
 Configurable — user can swap individual transforms:
@@ -340,20 +348,20 @@ Configurable — user can swap individual transforms:
 ```typescript
 const routes = httpProjection(apiTree, {
   transforms: [applyMethods, myCustomPlacement, applyResponse],
-})
+});
 ```
 
 ## DX comparison summary
 
-| Scenario | Hono | Fractal |
-|----------|------|---------|
-| Single route | `app.get('/users', fn)` | `api({ users: op(fn, http.get) })` |
-| CRUD entity | 5× `app.verb(path, fn)` | `crud({ list, create, get, update, delete })` |
-| Using CRUD | imperative, path strings | `api({ users: crud({...}) })` — composes as data |
-| Audit logging | middleware sees raw request | handler wrapper sees typed input + meta |
-| JSON-RPC | rewrite everything | same tree, new projector |
-| CLI | can't | same tree, new projector |
-| Custom methods | not supported | declaration merging, free |
+| Scenario       | Hono                        | Fractal                                          |
+| -------------- | --------------------------- | ------------------------------------------------ |
+| Single route   | `app.get('/users', fn)`     | `api({ users: op(fn, http.get) })`               |
+| CRUD entity    | 5× `app.verb(path, fn)`     | `crud({ list, create, get, update, delete })`    |
+| Using CRUD     | imperative, path strings    | `api({ users: crud({...}) })` — composes as data |
+| Audit logging  | middleware sees raw request | handler wrapper sees typed input + meta          |
+| JSON-RPC       | rewrite everything          | same tree, new projector                         |
+| CLI            | can't                       | same tree, new projector                         |
+| Custom methods | not supported               | declaration merging, free                        |
 
 ## Build-time optimizations (2026-07-17)
 

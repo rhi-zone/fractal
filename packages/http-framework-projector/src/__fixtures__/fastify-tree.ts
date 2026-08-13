@@ -8,43 +8,58 @@
 // input/output types) must match `makeStore()` in fastify.test.ts exactly —
 // same duplication-for-a-reason express-tree.ts documents.
 
-import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
-import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
+import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
+import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
 
-export type Book = { readonly id: string; readonly title: string; readonly author: string }
+export type Book = { readonly id: string; readonly title: string; readonly author: string };
 
-const store = new Map<string, Book>()
-let seq = 0
+const store = new Map<string, Book>();
+let seq = 0;
 
 const listBooks = op((input: { readonly author?: string }): Book[] => {
-  const all = [...store.values()]
-  return input?.author !== undefined ? all.filter((b) => b.author === input.author) : all
-}, http.get)
+  const all = [...store.values()];
+  return input?.author !== undefined ? all.filter((b) => b.author === input.author) : all;
+}, http.get);
 
 const addBook = op((input: { readonly title: string; readonly author: string }): Book => {
-  const id = `book-${++seq}`
-  const book: Book = { id, ...input }
-  store.set(id, book)
-  return book
-}, http.post)
+  const id = `book-${++seq}`;
+  const book: Book = { id, ...input };
+  store.set(id, book);
+  return book;
+}, http.post);
 
-const readBook = op((input: { readonly bookId: string }): Book => {
-  const book = store.get(input.bookId)
-  if (book === undefined) throw new Error(`Not Found: ${input.bookId}`)
-  return book
-}, http.get, http.moveTo(".."))
+const readBook = op(
+  (input: { readonly bookId: string }): Book => {
+    const book = store.get(input.bookId);
+    if (book === undefined) throw new Error(`Not Found: ${input.bookId}`);
+    return book;
+  },
+  http.get,
+  http.moveTo(".."),
+);
 
-const replaceBook = op((input: { readonly bookId: string; readonly title: string; readonly author: string }): Book => {
-  const book: Book = { id: input.bookId, title: input.title, author: input.author }
-  store.set(input.bookId, book)
-  return book
-}, http.put, http.moveTo(".."))
+const replaceBook = op(
+  (input: { readonly bookId: string; readonly title: string; readonly author: string }): Book => {
+    const book: Book = { id: input.bookId, title: input.title, author: input.author };
+    store.set(input.bookId, book);
+    return book;
+  },
+  http.put,
+  http.moveTo(".."),
+);
 
-const removeBook = op((input: { readonly bookId: string }): { readonly deleted: boolean } => {
-  return { deleted: store.delete(input.bookId) }
-}, http.delete, http.moveTo(".."))
+const removeBook = op(
+  (input: { readonly bookId: string }): { readonly deleted: boolean } => {
+    return { deleted: store.delete(input.bookId) };
+  },
+  http.delete,
+  http.moveTo(".."),
+);
 
-const bookItemNode = api_({ read: readBook, replace: replaceBook, remove: removeBook })
-const booksNode = api_({ list: listBooks, add: addBook }, { fallback: { name: "bookId", subtree: bookItemNode } })
+const bookItemNode = api_({ read: readBook, replace: replaceBook, remove: removeBook });
+const booksNode = api_(
+  { list: listBooks, add: addBook },
+  { fallback: { name: "bookId", subtree: bookItemNode } },
+);
 
-export const api = api_({ books: booksNode })
+export const api = api_({ books: booksNode });

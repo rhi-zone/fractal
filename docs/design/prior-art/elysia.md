@@ -29,7 +29,7 @@ direct read, not a secondhand summary). Everything else below is secondhand
   Schema-compatible validator) produces both the runtime validator and the
   TypeScript type, via a type utility called `UnwrapRoute`.
   - TypeBox schemas: static type extracted via `TImport<Definitions,
-    '__elysia'>['static']`.
+'__elysia'>['static']`.
   - Standard Schema: extracted via `Schema['~standard']['types']['output']`.
   - Named model references: resolved recursively against a `Definitions`
     registry (Elysia's `.model()` store).
@@ -40,7 +40,7 @@ direct read, not a secondhand summary). Everything else below is secondhand
   `GetPathParameter` parse the route string, splitting on `:name` and
   `*wildcard` segments, marking `name?` as optional — so
   `/user/:id/posts/:postId?` types `params` as `{ id: string; postId?:
-  string }` purely from the string literal type of the path.
+string }` purely from the string literal type of the path.
 - Context has different shapes at different lifecycle stages:
   - `PreContext` (onRequest/onStart) — minimal, pre-validation.
   - `Context` (handlers, most hooks) — fully merged/validated types.
@@ -50,15 +50,15 @@ direct read, not a secondhand summary). Everything else below is secondhand
 - Four "singleton" type layers accumulate across plugin/`.use()` boundaries
   and merge via `Reconcile` / `MergeSchema` utilities:
 
-  | Layer | Method | Access | Available from |
-  |---|---|---|---|
-  | Decorator | `.decorate()` | spread into context | all hooks |
-  | Store | `.state()` | `c.store.x` | all hooks |
-  | Derive | `.derive()` | direct context prop | after `onTransform` |
-  | Resolve | `.resolve()` | direct context prop | after `beforeHandle` |
+  | Layer     | Method        | Access              | Available from       |
+  | --------- | ------------- | ------------------- | -------------------- |
+  | Decorator | `.decorate()` | spread into context | all hooks            |
+  | Store     | `.state()`    | `c.store.x`         | all hooks            |
+  | Derive    | `.derive()`   | direct context prop | after `onTransform`  |
+  | Resolve   | `.resolve()`  | direct context prop | after `beforeHandle` |
 
 - Because each `.derive()`/`.resolve()`/`.decorate()`/`.state()` call returns
-  a *new* Elysia instance typed with the widened context, type accumulation
+  a _new_ Elysia instance typed with the widened context, type accumulation
   is purely structural — no code generation, just chained generic inference.
 - Heavy use of newer TS features (const type parameters, template literal
   types) to keep inference fast/precise for route-path literal parsing.
@@ -117,7 +117,7 @@ Request handling is divided into four phases, each with hooks:
   schemas for params/query/body/response are walked and converted straight
   to OpenAPI schema objects — the same schema that drives runtime validation
   and TS type inference is the third leg of the stool (docs).
-- Newer "OpenAPI Type Gen" feature extends this to *unannotated* handlers:
+- Newer "OpenAPI Type Gen" feature extends this to _unannotated_ handlers:
   it infers OpenAPI schema from the handler's inferred TypeScript return
   type (e.g. a Drizzle query result) without requiring an explicit `t.*`
   schema. Explicit schemas still take priority; type-gen is the fallback.
@@ -130,7 +130,7 @@ Request handling is divided into four phases, each with hooks:
 Verified by reading `elysiajs/eden`'s `src/treaty2/index.ts` directly.
 
 - No code generation. The server exports its own type: `export type App =
-  typeof app`. The client calls `treaty<App>(url)`, and `App` is purely a
+typeof app`. The client calls `treaty<App>(url)`, and `App` is purely a
   generic type parameter — TypeScript inference reconstructs the whole
   route tree's argument/response types from it at the call site.
 - Runtime side is a **recursive ES `Proxy`** (`createProxy` in
@@ -145,7 +145,7 @@ Verified by reading `elysiajs/eden`'s `src/treaty2/index.ts` directly.
     property used internally, and short-circuiting `then/catch/finally` at
     the root so the proxy isn't mistaken for a thenable).
   - `apply(_, __, [body, options])` — invoked when the chain is finally
-    *called* as a function (e.g. `.get()`, `.post(body)`). At this point the
+    _called_ as a function (e.g. `.get()`, `.post(body)`). At this point the
     last path segment is popped off as the HTTP method, the rest joined
     with `/` as the URL path, query/body/headers are assembled from the
     call arguments, and an actual `fetch` (or user-supplied `fetcher`) is

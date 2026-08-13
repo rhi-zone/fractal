@@ -1,46 +1,44 @@
-import { describe, expect, test } from "bun:test"
-import { t, types } from "@rhi-zone/fractal-type-ir"
-import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts"
-import { toWit } from "./wit.ts"
+import { describe, expect, test } from "bun:test";
+import { t, types } from "@rhi-zone/fractal-type-ir";
+import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts";
+import { toWit } from "./wit.ts";
 
 describe("toWit — module with a simple copy-discipline function", () => {
   test("a module with one free function of copy-discipline primitive params/return", () => {
     const params = [
       { name: "path", type: withOwnership(t(types.string), ownership.copy()) },
       { name: "mode", type: withOwnership(t(types.string), ownership.copy()) },
-    ]
-    const returnType = withOwnership(t(types.boolean), ownership.copy())
-    const existsFn = f(boundary.function(params, returnType))
-    const fsModule = f(boundary.module("fs", { fileExists: existsFn }, {}))
+    ];
+    const returnType = withOwnership(t(types.boolean), ownership.copy());
+    const existsFn = f(boundary.function(params, returnType));
+    const fsModule = f(boundary.module("fs", { fileExists: existsFn }, {}));
 
-    const wit = toWit(fsModule)
+    const wit = toWit(fsModule);
 
     expect(wit).toBe(
-      [
-        "interface fs {",
-        "    file-exists: func(path: string, mode: string) -> bool;",
-        "}",
-      ].join("\n"),
-    )
-  })
+      ["interface fs {", "    file-exists: func(path: string, mode: string) -> bool;", "}"].join(
+        "\n",
+      ),
+    );
+  });
 
   test("a copy-discipline record (object) return type hoists a named `record` declaration", () => {
     const contentType = withOwnership(
       t(types.object({ bytes: t(types.array(t(types.integer))), length: t(types.integer) })),
       ownership.copy(),
-    )
-    const params = [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }]
-    const readFn = f(boundary.function(params, contentType))
-    const fsModule = f(boundary.module("fs", { readFile: readFn }, {}))
+    );
+    const params = [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }];
+    const readFn = f(boundary.function(params, contentType));
+    const fsModule = f(boundary.module("fs", { readFile: readFn }, {}));
 
-    const wit = toWit(fsModule)
+    const wit = toWit(fsModule);
 
-    expect(wit).toContain("record read-file-result {")
-    expect(wit).toContain("bytes: list<s64>,")
-    expect(wit).toContain("length: s64,")
-    expect(wit).toContain("read-file: func(path: string) -> read-file-result;")
-  })
-})
+    expect(wit).toContain("record read-file-result {");
+    expect(wit).toContain("bytes: list<s64>,");
+    expect(wit).toContain("length: s64,");
+    expect(wit).toContain("read-file: func(path: string) -> read-file-result;");
+  });
+});
 
 describe("toWit — resource with own/borrow-style methods", () => {
   function buildFileHandleModule(): FfiRef {
@@ -50,91 +48,96 @@ describe("toWit — resource with own/borrow-style methods", () => {
         withOwnership(t(types.array(t(types.integer))), ownership.copy()),
         "FileHandle",
       ),
-    )
-    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"))
-    const fileHandle = f(boundary.resource("FileHandle", { read: readMethod, close: closeMethod }))
+    );
+    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"));
+    const fileHandle = f(boundary.resource("FileHandle", { read: readMethod, close: closeMethod }));
 
-    const openParams = [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }]
-    const openReturn = withOwnership(resourceRef("FileHandle", "own"), ownership.resource("own"))
-    const openFn = f(boundary.function(openParams, openReturn))
+    const openParams = [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }];
+    const openReturn = withOwnership(resourceRef("FileHandle", "own"), ownership.resource("own"));
+    const openFn = f(boundary.function(openParams, openReturn));
 
-    return f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }))
+    return f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }));
   }
 
   test("a resource emits a nested `resource` block with implicit-receiver methods", () => {
-    const wit = toWit(buildFileHandleModule())
+    const wit = toWit(buildFileHandleModule());
 
-    expect(wit).toContain("resource file-handle {")
-    expect(wit).toContain("    read: func() -> list<s64>;")
-    expect(wit).toContain("    close: func();")
-  })
+    expect(wit).toContain("resource file-handle {");
+    expect(wit).toContain("    read: func() -> list<s64>;");
+    expect(wit).toContain("    close: func();");
+  });
 
   test("an owned resource return type renders as the bare resource name", () => {
-    const wit = toWit(buildFileHandleModule())
+    const wit = toWit(buildFileHandleModule());
 
-    expect(wit).toContain("open: func(path: string) -> file-handle;")
-  })
+    expect(wit).toContain("open: func(path: string) -> file-handle;");
+  });
 
   test("a borrowed resource parameter renders as borrow<name>", () => {
-    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"))
-    const fileHandle = f(boundary.resource("FileHandle", { close: closeMethod }))
+    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"));
+    const fileHandle = f(boundary.resource("FileHandle", { close: closeMethod }));
 
-    const releaseParams = [{ name: "handle", type: resourceRef("FileHandle", "borrow") }]
-    const releaseFn = f(boundary.function(releaseParams, t(types.void)))
-    const fsModule = f(boundary.module("fs", { release: releaseFn }, { FileHandle: fileHandle }))
+    const releaseParams = [{ name: "handle", type: resourceRef("FileHandle", "borrow") }];
+    const releaseFn = f(boundary.function(releaseParams, t(types.void)));
+    const fsModule = f(boundary.module("fs", { release: releaseFn }, { FileHandle: fileHandle }));
 
-    const wit = toWit(fsModule)
+    const wit = toWit(fsModule);
 
-    expect(wit).toContain("release: func(handle: borrow<file-handle>);")
-  })
+    expect(wit).toContain("release: func(handle: borrow<file-handle>);");
+  });
 
   test("a standalone resource (not wrapped in a module) also emits a `resource` block", () => {
-    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"))
-    const fileHandle = f(boundary.resource("FileHandle", { close: closeMethod }))
+    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"));
+    const fileHandle = f(boundary.resource("FileHandle", { close: closeMethod }));
 
-    const wit = toWit(fileHandle)
+    const wit = toWit(fileHandle);
 
-    expect(wit).toBe(["resource file-handle {", "    close: func();", "}"].join("\n"))
-  })
-})
+    expect(wit).toBe(["resource file-handle {", "    close: func();", "}"].join("\n"));
+  });
+});
 
 describe("toWit — unsupported ownership disciplines throw for this target", () => {
   test("opaque-handle ownership throws", () => {
-    const params = [{ name: "buffer", type: withOwnership(t(types.string), ownership.opaqueHandle("buffer_free")) }]
-    const fn = f(boundary.function(params, t(types.void)))
-    const module = f(boundary.module("m", { useBuffer: fn }, {}))
+    const params = [
+      {
+        name: "buffer",
+        type: withOwnership(t(types.string), ownership.opaqueHandle("buffer_free")),
+      },
+    ];
+    const fn = f(boundary.function(params, t(types.void)));
+    const module = f(boundary.module("m", { useBuffer: fn }, {}));
 
-    expect(() => toWit(module)).toThrow(/unsupported ownership discipline "opaque-handle"/)
-  })
+    expect(() => toWit(module)).toThrow(/unsupported ownership discipline "opaque-handle"/);
+  });
 
   test("refcount ownership throws", () => {
-    const params = [{ name: "handle", type: withOwnership(t(types.string), ownership.refcount()) }]
-    const fn = f(boundary.function(params, t(types.void)))
-    const module = f(boundary.module("m", { useHandle: fn }, {}))
+    const params = [{ name: "handle", type: withOwnership(t(types.string), ownership.refcount()) }];
+    const fn = f(boundary.function(params, t(types.void)));
+    const module = f(boundary.module("m", { useHandle: fn }, {}));
 
-    expect(() => toWit(module)).toThrow(/unsupported ownership discipline "refcount"/)
-  })
+    expect(() => toWit(module)).toThrow(/unsupported ownership discipline "refcount"/);
+  });
 
   test("opaque-handle on a return type throws, not just on params", () => {
-    const returnType = withOwnership(t(types.string), ownership.opaqueHandle())
-    const fn = f(boundary.function([], returnType))
-    const module = f(boundary.module("m", { getHandle: fn }, {}))
+    const returnType = withOwnership(t(types.string), ownership.opaqueHandle());
+    const fn = f(boundary.function([], returnType));
+    const module = f(boundary.module("m", { getHandle: fn }, {}));
 
-    expect(() => toWit(module)).toThrow(/unsupported ownership discipline "opaque-handle"/)
-  })
-})
+    expect(() => toWit(module)).toThrow(/unsupported ownership discipline "opaque-handle"/);
+  });
+});
 
 describe("toWit — error cases", () => {
   test("a standalone function/method requires a name", () => {
-    const fn = boundary.function([], t(types.void))
-    expect(() => toWit(f(fn))).toThrow(/requires a name/)
-  })
+    const fn = boundary.function([], t(types.void));
+    expect(() => toWit(f(fn))).toThrow(/requires a name/);
+  });
 
   test("resource ownership metadata on a non-ref TypeRef throws", () => {
-    const badType = withOwnership(t(types.string), ownership.resource("own"))
-    const fn = f(boundary.function([], badType))
-    const module = f(boundary.module("m", { bad: fn }, {}))
+    const badType = withOwnership(t(types.string), ownership.resource("own"));
+    const fn = f(boundary.function([], badType));
+    const module = f(boundary.module("m", { bad: fn }, {}));
 
-    expect(() => toWit(module)).toThrow(/requires a \{ kind: "ref" \} TypeRef/)
-  })
-})
+    expect(() => toWit(module)).toThrow(/requires a \{ kind: "ref" \} TypeRef/);
+  });
+});

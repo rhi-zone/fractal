@@ -5,40 +5,51 @@
 // through `authExtension` (@rhi-zone/fractal-api-tree/auth) wrapping a fake
 // fetch — the same composition a real fractal HTTP client uses.
 
-import { describe, expect, it } from "bun:test"
-import { authExtension } from "@rhi-zone/fractal-api-tree/auth"
-import { composeFetch } from "@rhi-zone/fractal-http-api-projector/extension"
-import { oidcClient, OidcTokenError } from "./client.ts"
-import type { FetchLike } from "./jwks.ts"
+import { describe, expect, it } from "bun:test";
+import { authExtension } from "@rhi-zone/fractal-api-tree/auth";
+import { composeFetch } from "@rhi-zone/fractal-http-api-projector/extension";
+import { oidcClient, OidcTokenError } from "./client.ts";
+import type { FetchLike } from "./jwks.ts";
 
-const TOKEN_ENDPOINT = "https://auth.example.com/oauth/token"
+const TOKEN_ENDPOINT = "https://auth.example.com/oauth/token";
 
-function tokenFetch(tokens: readonly { access_token: string; expires_in?: number }[]): { fetchImpl: FetchLike; calls: { count: number; bodies: string[] } } {
-  const calls = { count: 0, bodies: [] as string[] }
+function tokenFetch(tokens: readonly { access_token: string; expires_in?: number }[]): {
+  fetchImpl: FetchLike;
+  calls: { count: number; bodies: string[] };
+} {
+  const calls = { count: 0, bodies: [] as string[] };
   const fetchImpl: FetchLike = async (_input, init) => {
-    calls.bodies.push(String(init?.body ?? ""))
-    const token = tokens[calls.count] ?? tokens[tokens.length - 1]
-    calls.count += 1
-    return new Response(JSON.stringify(token), { status: 200, headers: { "content-type": "application/json" } })
-  }
-  return { fetchImpl, calls }
+    calls.bodies.push(String(init?.body ?? ""));
+    const token = tokens[calls.count] ?? tokens[tokens.length - 1];
+    calls.count += 1;
+    return new Response(JSON.stringify(token), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  return { fetchImpl, calls };
 }
 
 describe("oidcClient", () => {
   it("fetches a token on first getToken call, sending client_credentials grant params", async () => {
-    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1", expires_in: 300 }])
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "my-client", clientSecret: "secret", fetchImpl })
-    const token = await client.getToken()
-    expect(token).toBe("tok-1")
-    expect(calls.count).toBe(1)
-    const params = new URLSearchParams(calls.bodies[0])
-    expect(params.get("grant_type")).toBe("client_credentials")
-    expect(params.get("client_id")).toBe("my-client")
-    expect(params.get("client_secret")).toBe("secret")
-  })
+    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1", expires_in: 300 }]);
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "my-client",
+      clientSecret: "secret",
+      fetchImpl,
+    });
+    const token = await client.getToken();
+    expect(token).toBe("tok-1");
+    expect(calls.count).toBe(1);
+    const params = new URLSearchParams(calls.bodies[0]);
+    expect(params.get("grant_type")).toBe("client_credentials");
+    expect(params.get("client_id")).toBe("my-client");
+    expect(params.get("client_secret")).toBe("secret");
+  });
 
   it("includes scope and audience when configured", async () => {
-    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1" }])
+    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1" }]);
     const client = oidcClient({
       tokenEndpoint: TOKEN_ENDPOINT,
       clientId: "my-client",
@@ -46,39 +57,50 @@ describe("oidcClient", () => {
       scope: "read write",
       audience: "my-api",
       fetchImpl,
-    })
-    await client.getToken()
-    const params = new URLSearchParams(calls.bodies[0])
-    expect(params.get("scope")).toBe("read write")
-    expect(params.get("audience")).toBe("my-api")
-  })
+    });
+    await client.getToken();
+    const params = new URLSearchParams(calls.bodies[0]);
+    expect(params.get("scope")).toBe("read write");
+    expect(params.get("audience")).toBe("my-api");
+  });
 
   it("omits scope and audience from the request body when not configured", async () => {
-    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1" }])
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "my-client", clientSecret: "secret", fetchImpl })
-    await client.getToken()
-    const params = new URLSearchParams(calls.bodies[0])
-    expect(params.has("scope")).toBe(false)
-    expect(params.has("audience")).toBe(false)
-  })
+    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1" }]);
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "my-client",
+      clientSecret: "secret",
+      fetchImpl,
+    });
+    await client.getToken();
+    const params = new URLSearchParams(calls.bodies[0]);
+    expect(params.has("scope")).toBe(false);
+    expect(params.has("audience")).toBe(false);
+  });
 
   it("caches the token across calls until near expiry", async () => {
-    let nowMs = 0
-    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1", expires_in: 300 }])
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl, now: () => nowMs })
-    await client.getToken()
-    nowMs += 100_000 // well within the 300s expiry
-    const token = await client.getToken()
-    expect(token).toBe("tok-1")
-    expect(calls.count).toBe(1)
-  })
+    let nowMs = 0;
+    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1", expires_in: 300 }]);
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+      now: () => nowMs,
+    });
+    await client.getToken();
+    nowMs += 100_000; // well within the 300s expiry
+    const token = await client.getToken();
+    expect(token).toBe("tok-1");
+    expect(calls.count).toBe(1);
+  });
 
   it("refreshes once the token is within refreshSkewSec of expiry", async () => {
-    let nowMs = 0
+    let nowMs = 0;
     const { fetchImpl, calls } = tokenFetch([
       { access_token: "tok-1", expires_in: 60 },
       { access_token: "tok-2", expires_in: 60 },
-    ])
+    ]);
     const client = oidcClient({
       tokenEndpoint: TOKEN_ENDPOINT,
       clientId: "c",
@@ -86,146 +108,196 @@ describe("oidcClient", () => {
       refreshSkewSec: 10,
       fetchImpl,
       now: () => nowMs,
-    })
-    const first = await client.getToken()
-    expect(first).toBe("tok-1")
-    nowMs += 55_000 // within 10s of the 60s expiry
-    const second = await client.getToken()
-    expect(second).toBe("tok-2")
-    expect(calls.count).toBe(2)
-  })
+    });
+    const first = await client.getToken();
+    expect(first).toBe("tok-1");
+    nowMs += 55_000; // within 10s of the 60s expiry
+    const second = await client.getToken();
+    expect(second).toBe("tok-2");
+    expect(calls.count).toBe(2);
+  });
 
   it("dedupes concurrent getToken calls into one token request", async () => {
-    let resolveFetch: (() => void) | undefined
+    let resolveFetch: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
-      resolveFetch = resolve
-    })
-    let calls = 0
+      resolveFetch = resolve;
+    });
+    let calls = 0;
     const fetchImpl: FetchLike = async () => {
-      calls += 1
-      await gate
-      return new Response(JSON.stringify({ access_token: "tok-1", expires_in: 300 }), { status: 200 })
-    }
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl })
-    const pending = Promise.all([client.getToken(), client.getToken(), client.getToken()])
-    resolveFetch?.()
-    const [a, b, c] = await pending
-    expect(calls).toBe(1)
-    expect(a).toBe("tok-1")
-    expect(b).toBe("tok-1")
-    expect(c).toBe("tok-1")
-  })
+      calls += 1;
+      await gate;
+      return new Response(JSON.stringify({ access_token: "tok-1", expires_in: 300 }), {
+        status: 200,
+      });
+    };
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+    });
+    const pending = Promise.all([client.getToken(), client.getToken(), client.getToken()]);
+    resolveFetch?.();
+    const [a, b, c] = await pending;
+    expect(calls).toBe(1);
+    expect(a).toBe("tok-1");
+    expect(b).toBe("tok-1");
+    expect(c).toBe("tok-1");
+  });
 
   it("getToken resolves null when the token endpoint responds non-OK", async () => {
-    const fetchImpl: FetchLike = async () => new Response("nope", { status: 401 })
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl })
-    const token = await client.getToken()
-    expect(token).toBeNull()
-  })
+    const fetchImpl: FetchLike = async () => new Response("nope", { status: 401 });
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+    });
+    const token = await client.getToken();
+    expect(token).toBeNull();
+  });
 
-  it("getToken throws OidcTokenError (a distinct failure from \"unauthenticated\") when a 200 response has no access_token", async () => {
+  it('getToken throws OidcTokenError (a distinct failure from "unauthenticated") when a 200 response has no access_token', async () => {
     // A malformed/misconfigured provider response is not the same failure
     // mode as "no credentials" — it's surfaced as a thrown error rather
     // than swallowed into the null the !res.ok path returns, so a caller
     // can tell "we're unauthenticated" apart from "the provider is broken".
-    const fetchImpl: FetchLike = async () => new Response(JSON.stringify({ token_type: "Bearer" }), { status: 200 })
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl })
-    await expect(client.getToken()).rejects.toThrow(OidcTokenError)
-  })
+    const fetchImpl: FetchLike = async () =>
+      new Response(JSON.stringify({ token_type: "Bearer" }), { status: 200 });
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+    });
+    await expect(client.getToken()).rejects.toThrow(OidcTokenError);
+  });
 
   it("a failed getToken (thrown OidcTokenError) doesn't wedge the client — a later call retries", async () => {
-    let attempt = 0
+    let attempt = 0;
     const fetchImpl: FetchLike = async () => {
-      attempt += 1
-      if (attempt === 1) return new Response(JSON.stringify({}), { status: 200 })
-      return new Response(JSON.stringify({ access_token: "tok-1", expires_in: 300 }), { status: 200 })
-    }
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl })
-    await expect(client.getToken()).rejects.toThrow(OidcTokenError)
-    const token = await client.getToken()
-    expect(token).toBe("tok-1")
-    expect(attempt).toBe(2)
-  })
+      attempt += 1;
+      if (attempt === 1) return new Response(JSON.stringify({}), { status: 200 });
+      return new Response(JSON.stringify({ access_token: "tok-1", expires_in: 300 }), {
+        status: 200,
+      });
+    };
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+    });
+    await expect(client.getToken()).rejects.toThrow(OidcTokenError);
+    const token = await client.getToken();
+    expect(token).toBe("tok-1");
+    expect(attempt).toBe(2);
+  });
 
   it("defaults expires_in to 300s when the token endpoint omits it", async () => {
-    let nowMs = 0
-    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1" }])
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl, now: () => nowMs })
-    await client.getToken()
-    nowMs += 200_000 // well within the default 300s expiry (minus default 30s skew)
-    const token = await client.getToken()
-    expect(token).toBe("tok-1")
-    expect(calls.count).toBe(1)
-    nowMs += 100_000 // now past 300s - 30s skew from the original fetch
-    const refreshed = await client.getToken()
-    expect(refreshed).toBe("tok-1") // same fixture token, but a real second fetch happened
-    expect(calls.count).toBe(2)
-  })
+    let nowMs = 0;
+    const { fetchImpl, calls } = tokenFetch([{ access_token: "tok-1" }]);
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+      now: () => nowMs,
+    });
+    await client.getToken();
+    nowMs += 200_000; // well within the default 300s expiry (minus default 30s skew)
+    const token = await client.getToken();
+    expect(token).toBe("tok-1");
+    expect(calls.count).toBe(1);
+    nowMs += 100_000; // now past 300s - 30s skew from the original fetch
+    const refreshed = await client.getToken();
+    expect(refreshed).toBe("tok-1"); // same fixture token, but a real second fetch happened
+    expect(calls.count).toBe(2);
+  });
 
   it("onUnauthorized drops the cached token and fetches a fresh one", async () => {
     const { fetchImpl, calls } = tokenFetch([
       { access_token: "tok-1", expires_in: 300 },
       { access_token: "tok-2", expires_in: 300 },
-    ])
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl })
-    const first = await client.getToken()
-    expect(first).toBe("tok-1")
-    const refreshed = await client.onUnauthorized?.()
-    expect(refreshed).toBe(true)
-    expect(calls.count).toBe(2)
-    const token = await client.getToken()
-    expect(token).toBe("tok-2")
-  })
+    ]);
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+    });
+    const first = await client.getToken();
+    expect(first).toBe("tok-1");
+    const refreshed = await client.onUnauthorized?.();
+    expect(refreshed).toBe(true);
+    expect(calls.count).toBe(2);
+    const token = await client.getToken();
+    expect(token).toBe("tok-2");
+  });
 
   it("onUnauthorized returns false when re-fetching also fails", async () => {
-    const fetchImpl: FetchLike = async () => new Response("nope", { status: 500 })
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl })
-    const refreshed = await client.onUnauthorized?.()
-    expect(refreshed).toBe(false)
-  })
-})
+    const fetchImpl: FetchLike = async () => new Response("nope", { status: 500 });
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl,
+    });
+    const refreshed = await client.onUnauthorized?.();
+    expect(refreshed).toBe(false);
+  });
+});
 
 describe("oidcClient wired through authExtension end-to-end", () => {
   it("injects the token, and on 401 refreshes via onUnauthorized and retries once", async () => {
-    let issuedTokens = 0
+    let issuedTokens = 0;
     const tokenFetchImpl: FetchLike = async () => {
-      issuedTokens += 1
-      return new Response(JSON.stringify({ access_token: `tok-${issuedTokens}`, expires_in: 300 }), { status: 200 })
-    }
-    const client = oidcClient({ tokenEndpoint: TOKEN_ENDPOINT, clientId: "c", clientSecret: "s", fetchImpl: tokenFetchImpl })
+      issuedTokens += 1;
+      return new Response(
+        JSON.stringify({ access_token: `tok-${issuedTokens}`, expires_in: 300 }),
+        { status: 200 },
+      );
+    };
+    const client = oidcClient({
+      tokenEndpoint: TOKEN_ENDPOINT,
+      clientId: "c",
+      clientSecret: "s",
+      fetchImpl: tokenFetchImpl,
+    });
 
-    let apiCalls = 0
+    let apiCalls = 0;
     const apiBase = async (req: Request): Promise<Response> => {
-      apiCalls += 1
-      const auth = req.headers.get("Authorization")
+      apiCalls += 1;
+      const auth = req.headers.get("Authorization");
       // First API call uses tok-1 (issued once, pre-fetched below) and is
       // rejected; onUnauthorized fetches tok-2, and the retry succeeds.
-      if (auth === "Bearer tok-2") return new Response("ok", { status: 200 })
-      return new Response("unauthorized", { status: 401 })
-    }
-    const wrapped = composeFetch(apiBase, [authExtension(client)])
+      if (auth === "Bearer tok-2") return new Response("ok", { status: 200 });
+      return new Response("unauthorized", { status: 401 });
+    };
+    const wrapped = composeFetch(apiBase, [authExtension(client)]);
 
-    const res = await wrapped(new Request("http://localhost/whoami"))
-    expect(res.status).toBe(200)
-    expect(apiCalls).toBe(2)
-    expect(issuedTokens).toBe(2)
-  })
+    const res = await wrapped(new Request("http://localhost/whoami"));
+    expect(res.status).toBe(200);
+    expect(apiCalls).toBe(2);
+    expect(issuedTokens).toBe(2);
+  });
 
   it("does not retry when the API call succeeds on the first try", async () => {
     const client = oidcClient({
       tokenEndpoint: TOKEN_ENDPOINT,
       clientId: "c",
       clientSecret: "s",
-      fetchImpl: async () => new Response(JSON.stringify({ access_token: "tok-1", expires_in: 300 }), { status: 200 }),
-    })
-    let apiCalls = 0
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ access_token: "tok-1", expires_in: 300 }), { status: 200 }),
+    });
+    let apiCalls = 0;
     const apiBase = async (): Promise<Response> => {
-      apiCalls += 1
-      return new Response("ok", { status: 200 })
-    }
-    const wrapped = composeFetch(apiBase, [authExtension(client)])
-    const res = await wrapped(new Request("http://localhost/whoami"))
-    expect(res.status).toBe(200)
-    expect(apiCalls).toBe(1)
-  })
-})
+      apiCalls += 1;
+      return new Response("ok", { status: 200 });
+    };
+    const wrapped = composeFetch(apiBase, [authExtension(client)]);
+    const res = await wrapped(new Request("http://localhost/whoami"));
+    expect(res.status).toBe(200);
+    expect(apiCalls).toBe(1);
+  });
+});

@@ -19,16 +19,16 @@
 //
 // See docs/design/router-model.md §"Verb helpers are verb+implied-tags BUNDLES"
 
-import { resolveSourceMap } from "@rhi-zone/fractal-api-tree"
+import { resolveSourceMap } from "@rhi-zone/fractal-api-tree";
 import type {
   ResolvedSourceMap,
   SourceMapInput as ApiTreeSourceMapInput,
-} from "@rhi-zone/fractal-api-tree"
-import type { HttpLeafMeta, HttpLeafMetaProperties } from "./project.ts"
-import type { HttpStore } from "./decode.ts"
-import type { StandardSchemaV1 } from "@standard-schema/spec"
-import type { HttpHandlerMiddleware } from "./route.ts"
-import type { Fetch } from "./layers.ts"
+} from "@rhi-zone/fractal-api-tree";
+import type { HttpLeafMeta, HttpLeafMetaProperties } from "./project.ts";
+import type { HttpStore } from "./decode.ts";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
+import type { HttpHandlerMiddleware } from "./route.ts";
+import type { Fetch } from "./layers.ts";
 
 // ============================================================================
 // HttpMethods — extensible method union
@@ -47,17 +47,17 @@ import type { Fetch } from "./layers.ts"
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface HttpMethods {
-  GET: "GET"
-  POST: "POST"
-  PUT: "PUT"
-  PATCH: "PATCH"
-  DELETE: "DELETE"
-  HEAD: "HEAD"
-  OPTIONS: "OPTIONS"
+  GET: "GET";
+  POST: "POST";
+  PUT: "PUT";
+  PATCH: "PATCH";
+  DELETE: "DELETE";
+  HEAD: "HEAD";
+  OPTIONS: "OPTIONS";
 }
 
 /** A known HTTP method name — the key set of `HttpMethods`, open via merging. */
-export type Method = keyof HttpMethods
+export type Method = keyof HttpMethods;
 
 // ============================================================================
 // Verb-helper bundle type
@@ -88,9 +88,9 @@ export type Method = keyof HttpMethods
  * encoding.
  */
 export type VerbBundle<V extends string = string> = {
-  readonly http: { readonly verb: V; readonly method: V }
-  readonly tags: Record<string, boolean | undefined>
-}
+  readonly http: { readonly verb: V; readonly method: V };
+  readonly tags: Record<string, boolean | undefined>;
+};
 
 /**
  * `const V` (TS 5.0+) keeps `verb`'s literal type at the call site instead of
@@ -112,7 +112,7 @@ export function httpVerbBundle<const V extends string>(
   return {
     http: { verb, method: verb },
     tags,
-  }
+  };
 }
 
 // ============================================================================
@@ -124,43 +124,46 @@ export function httpVerbBundle<const V extends string>(
  * readOnly ⇒ idempotent (via lattice in resolveTags).
  * Lights up: MCP readOnlyHint, CLI no-confirm, HTTP GET.
  */
-const get: VerbBundle<"GET"> = httpVerbBundle("GET", { readOnly: true })
+const get: VerbBundle<"GET"> = httpVerbBundle("GET", { readOnly: true });
 
 /**
  * `http.post` — verb POST, no implied tags (plain mutation).
  * Conservative: unknown idempotency, unknown destructiveness.
  */
-const post: VerbBundle<"POST"> = httpVerbBundle("POST", {})
+const post: VerbBundle<"POST"> = httpVerbBundle("POST", {});
 
 /**
  * `http.put` — verb PUT + idempotent tag.
  * Lights up: MCP idempotentHint, gRPC idempotency, HTTP PUT.
  */
-const put: VerbBundle<"PUT"> = httpVerbBundle("PUT", { idempotent: true })
+const put: VerbBundle<"PUT"> = httpVerbBundle("PUT", { idempotent: true });
 
 /**
  * `http.patch` — verb PATCH, no implied tags (plain mutation).
  * Conservative: unknown idempotency.
  */
-const patch: VerbBundle<"PATCH"> = httpVerbBundle("PATCH", {})
+const patch: VerbBundle<"PATCH"> = httpVerbBundle("PATCH", {});
 
 /**
  * `http.delete` — verb DELETE + destructive and idempotent tags.
  * Lights up: MCP destructiveHint + idempotentHint, CLI confirm, HTTP DELETE.
  */
-const _delete: VerbBundle<"DELETE"> = httpVerbBundle("DELETE", { destructive: true, idempotent: true })
+const _delete: VerbBundle<"DELETE"> = httpVerbBundle("DELETE", {
+  destructive: true,
+  idempotent: true,
+});
 
 /**
  * `http.head` — verb HEAD + readOnly tag (semantically identical to GET).
  * Rarely needed directly — autoMethodLayer derives HEAD from GET automatically.
  */
-const head: VerbBundle<"HEAD"> = httpVerbBundle("HEAD", { readOnly: true })
+const head: VerbBundle<"HEAD"> = httpVerbBundle("HEAD", { readOnly: true });
 
 /**
  * `http.options` — verb OPTIONS + readOnly tag.
  * Rarely needed directly — autoMethodLayer handles OPTIONS automatically.
  */
-const options: VerbBundle<"OPTIONS"> = httpVerbBundle("OPTIONS", { readOnly: true })
+const options: VerbBundle<"OPTIONS"> = httpVerbBundle("OPTIONS", { readOnly: true });
 
 /**
  * `http.moveTo(path)` — DX helper for the flat `meta.http.moveTo` scalar key
@@ -182,7 +185,7 @@ const options: VerbBundle<"OPTIONS"> = httpVerbBundle("OPTIONS", { readOnly: tru
  * (see its doc comment).
  */
 export function moveTo<const P extends string>(path: P): { readonly http: { readonly moveTo: P } } {
-  return { http: { moveTo: path } }
+  return { http: { moveTo: path } };
 }
 
 /**
@@ -205,10 +208,10 @@ export function moveTo<const P extends string>(path: P): { readonly http: { read
  * Returns a plain contribution (no verb, no tags) so it composes with a verb
  * bundle via `mergeMeta`'s last-wins scalar merge, same as `moveTo()` above.
  */
-export function paginated(
-  options: NonNullable<HttpLeafMetaProperties["paginated"]> = {},
-): { readonly http: { readonly paginated: NonNullable<HttpLeafMetaProperties["paginated"]> } } {
-  return { http: { paginated: options } }
+export function paginated(options: NonNullable<HttpLeafMetaProperties["paginated"]> = {}): {
+  readonly http: { readonly paginated: NonNullable<HttpLeafMetaProperties["paginated"]> };
+} {
+  return { http: { paginated: options } };
 }
 
 // ============================================================================
@@ -241,7 +244,7 @@ export function paginated(
  * narrows the shared generic to `HttpStore`, preserving this package's
  * existing public `SourceMapInput` export shape.
  */
-export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>
+export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>;
 
 /**
  * `http.source(map)` — declares which HTTP store (query, body, path, header,
@@ -296,7 +299,7 @@ export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>
 export function source<const M extends SourceMapInput>(
   map: M,
 ): { readonly http: { readonly sourceMap: ResolvedSourceMap<M> } } {
-  return { http: { sourceMap: resolveSourceMap(map) } }
+  return { http: { sourceMap: resolveSourceMap(map) } };
 }
 
 // ============================================================================
@@ -335,8 +338,10 @@ export function source<const M extends SourceMapInput>(
  * })))
  * ```
  */
-export function validate(schema: StandardSchemaV1): { readonly http: { readonly validate: StandardSchemaV1 } } {
-  return { http: { validate: schema } }
+export function validate(schema: StandardSchemaV1): {
+  readonly http: { readonly validate: StandardSchemaV1 };
+} {
+  return { http: { validate: schema } };
 }
 
 // ============================================================================
@@ -381,10 +386,10 @@ export function validate(schema: StandardSchemaV1): { readonly http: { readonly 
  * // one-root-fractal-tree-2026-08-02.md §3.3/§7 names directly.
  * ```
  */
-export function middleware(
-  ...fns: readonly ((inner: Fetch) => Fetch)[]
-): { readonly http: { readonly middleware: readonly ((inner: Fetch) => Fetch)[] } } {
-  return { http: { middleware: fns } }
+export function middleware(...fns: readonly ((inner: Fetch) => Fetch)[]): {
+  readonly http: { readonly middleware: readonly ((inner: Fetch) => Fetch)[] };
+} {
+  return { http: { middleware: fns } };
 }
 
 /**
@@ -402,10 +407,10 @@ export function middleware(
  * })
  * ```
  */
-export function handlerMiddleware(
-  ...fns: readonly HttpHandlerMiddleware[]
-): { readonly http: { readonly handlerMiddleware: readonly HttpHandlerMiddleware[] } } {
-  return { http: { handlerMiddleware: fns } }
+export function handlerMiddleware(...fns: readonly HttpHandlerMiddleware[]): {
+  readonly http: { readonly handlerMiddleware: readonly HttpHandlerMiddleware[] };
+} {
+  return { http: { handlerMiddleware: fns } };
 }
 
 // ============================================================================
@@ -450,11 +455,11 @@ export const http = {
   validate,
   middleware,
   handlerMiddleware,
-// Every entry is either a verb bundle (a meta contribution VALUE) or a helper
-// that RETURNS one. The parameter is `never[]` rather than a union of the
-// helpers' actual parameter types because `source` is generic (`const M`) —
-// contravariance makes any single-argument function assignable to a
-// `never`-parameter signature, so this keeps checking the part that matters
-// (each entry produces leaf meta) without having to restate a generic
-// signature that would immediately go stale.
-} as const satisfies Record<string, VerbBundle | ((...args: never[]) => HttpLeafMeta)>
+  // Every entry is either a verb bundle (a meta contribution VALUE) or a helper
+  // that RETURNS one. The parameter is `never[]` rather than a union of the
+  // helpers' actual parameter types because `source` is generic (`const M`) —
+  // contravariance makes any single-argument function assignable to a
+  // `never`-parameter signature, so this keeps checking the part that matters
+  // (each entry produces leaf meta) without having to restate a generic
+  // signature that would immediately go stale.
+} as const satisfies Record<string, VerbBundle | ((...args: never[]) => HttpLeafMeta)>;

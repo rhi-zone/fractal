@@ -18,8 +18,8 @@
 // without an import of the augmented module in the SAME file, the block
 // SHADOWS `StoreRegistry` (declares a fresh one) instead of augmenting it.
 
-import "../input.ts"
-import type { HttpStores } from "@rhi-zone/fractal-http-api-projector"
+import "../input.ts";
+import type { HttpStores } from "@rhi-zone/fractal-http-api-projector";
 
 declare module "../input.ts" {
   interface StoreRegistry extends HttpStores {
@@ -36,7 +36,12 @@ declare module "../input.ts" {
      * checked against.
      */
     tabularSource: {
-      read(sourceId: string): Promise<{ readonly headers: readonly string[]; readonly rows: readonly (readonly unknown[])[] }>
-    }
+      read(
+        sourceId: string,
+      ): Promise<{
+        readonly headers: readonly string[];
+        readonly rows: readonly (readonly unknown[])[];
+      }>;
+    };
   }
 }

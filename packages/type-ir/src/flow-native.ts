@@ -1,5 +1,5 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { flowTsDocComment, quote } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import { flowTsDocComment, quote } from "./codegen-helpers.ts";
 
 // Flow (https://flow.org/) type-annotation projector — structurally very
 // close to typescript.ts (see that file for the shared derivation pattern:
@@ -31,19 +31,19 @@ import { flowTsDocComment, quote } from "./codegen-helpers.ts"
 //     `enum` syntax requires, so the safe, always-representable literal-union
 //     form is used consistently regardless of position.
 
-type Converter = (ref: TypeRef) => string
+type Converter = (ref: TypeRef) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Wraps `type` in Flow's prefix maybe-type (`?T`). `?` binds tighter than
 // `|`/`&`, so a type built from a top-level union/intersection needs explicit
 // parens to keep "nullable applies to the whole type" from silently becoming
 // "nullable applies to just the first member".
 function maybe(type: string): string {
-  return /[|&]/.test(type) ? `?(${type})` : `?${type}`
+  return /[|&]/.test(type) ? `?(${type})` : `?${type}`;
 }
 
 const handlers: Record<string, Converter> = {
@@ -68,14 +68,14 @@ const handlers: Record<string, Converter> = {
   unknown: leaf("mixed"),
   never: leaf("empty"),
   object: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "object" }
+    const s = ref.shape as TypeShape & { kind: "object" };
     const fields = Object.entries(s.fields).map(([name, field]) => {
-      const optional = field.meta.optional === true
-      const readonly = field.meta.readonly === true
-      return `${readonly ? "+" : ""}${name}${optional ? "?" : ""}: ${toFlowType(field)}`
-    })
-    const exact = ref.meta.exact !== false
-    return exact ? `{| ${fields.join(", ")} |}` : `{ ${fields.join(", ")} }`
+      const optional = field.meta.optional === true;
+      const readonly = field.meta.readonly === true;
+      return `${readonly ? "+" : ""}${name}${optional ? "?" : ""}: ${toFlowType(field)}`;
+    });
+    const exact = ref.meta.exact !== false;
+    return exact ? `{| ${fields.join(", ")} |}` : `{ ${fields.join(", ")} }`;
   },
   // A class instance carries only nominal identity (className/source), never
   // fields — same convention as typescript.ts's `instance` handler; see
@@ -84,89 +84,91 @@ const handlers: Record<string, Converter> = {
   // importing `className` from `source`.
   instance: (ref) => (ref.shape as TypeShape & { kind: "instance" }).className,
   array: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "array" }
-    const wrapper = ref.meta.readonly === true ? "$ReadOnlyArray" : "Array"
-    return `${wrapper}<${toFlowType(s.element)}>`
+    const s = ref.shape as TypeShape & { kind: "array" };
+    const wrapper = ref.meta.readonly === true ? "$ReadOnlyArray" : "Array";
+    return `${wrapper}<${toFlowType(s.element)}>`;
   },
   tuple: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "tuple" }
-    return `[${s.elements.map(toFlowType).join(", ")}]`
+    const s = ref.shape as TypeShape & { kind: "tuple" };
+    return `[${s.elements.map(toFlowType).join(", ")}]`;
   },
   // Flow's own lib-defs ship `AsyncIterable<T>` with the same shape as TS's
   // built-in — same degrade-to-native-generic choice typescript.ts makes.
   stream: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "stream" }
-    return `AsyncIterable<${toFlowType(s.element)}>`
+    const s = ref.shape as TypeShape & { kind: "stream" };
+    return `AsyncIterable<${toFlowType(s.element)}>`;
   },
   // Renders back to the same named alias the extractor matched against (see
   // typescript.ts's `page` handler) — the caller assembling this emitted
   // source is responsible for importing the name.
   page: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "page" }
-    return s.style === "offset" ? `OffsetPage<${toFlowType(s.element)}>` : `CursorPage<${toFlowType(s.element)}>`
+    const s = ref.shape as TypeShape & { kind: "page" };
+    return s.style === "offset"
+      ? `OffsetPage<${toFlowType(s.element)}>`
+      : `CursorPage<${toFlowType(s.element)}>`;
   },
   // Flow has no `Record<K, V>` utility type — an indexer property type is the
   // idiomatic spelling for both string- and non-string-keyed maps.
   map: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "map" }
-    return `{ [key: ${toFlowType(s.key)}]: ${toFlowType(s.value)} }`
+    const s = ref.shape as TypeShape & { kind: "map" };
+    return `{ [key: ${toFlowType(s.key)}]: ${toFlowType(s.value)} }`;
   },
   union: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "union" }
-    return s.variants.map(toFlowType).join(" | ")
+    const s = ref.shape as TypeShape & { kind: "union" };
+    return s.variants.map(toFlowType).join(" | ");
   },
   literal: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "literal" }
-    if (typeof s.value === "string") return quote(s.value)
-    return String(s.value)
+    const s = ref.shape as TypeShape & { kind: "literal" };
+    if (typeof s.value === "string") return quote(s.value);
+    return String(s.value);
   },
   // See file-header comment: rendered as a string-literal union, same as
   // typescript.ts, rather than Flow's native `enum` declaration.
   enum: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "enum" }
-    return s.members.map(quote).join(" | ")
+    const s = ref.shape as TypeShape & { kind: "enum" };
+    return s.members.map(quote).join(" | ");
   },
   ref: (ref) => (ref.shape as TypeShape & { kind: "ref" }).target,
   intersection: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "intersection" }
-    return s.members.map(toFlowType).join(" & ")
+    const s = ref.shape as TypeShape & { kind: "intersection" };
+    return s.members.map(toFlowType).join(" & ");
   },
   // Flow's function-type syntax (`(params) => ReturnType`) is identical to
   // TS's here, including the `this`-as-leading-pseudo-parameter convention.
   function: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "function" }
-    const thisParam = s.thisType === undefined ? [] : [`this: ${toFlowType(s.thisType)}`]
-    const params = [...thisParam, ...s.params.map((p) => `${p.name}: ${toFlowType(p.type)}`)]
-    return `(${params.join(", ")}) => ${toFlowType(s.returnType)}`
+    const s = ref.shape as TypeShape & { kind: "function" };
+    const thisParam = s.thisType === undefined ? [] : [`this: ${toFlowType(s.thisType)}`];
+    const params = [...thisParam, ...s.params.map((p) => `${p.name}: ${toFlowType(p.type)}`)];
+    return `(${params.join(", ")}) => ${toFlowType(s.returnType)}`;
   },
   // `method` has no explicit entry — falls back to the `function` handler
   // above (arrow-function syntax) via `registerParent("method", "function")`
   // in index.ts, same as typescript.ts. The `interface` handler below renders
   // each method with method-signature syntax instead.
   interface: (ref) => {
-    const s = ref.shape as TypeShape & { kind: "interface" }
+    const s = ref.shape as TypeShape & { kind: "interface" };
     const methods = Object.entries(s.methods).map(([name, methodRef]) => {
-      const m = methodRef.shape as TypeShape & { kind: "method" | "function" }
+      const m = methodRef.shape as TypeShape & { kind: "method" | "function" };
       if (m.params === undefined || m.returnType === undefined) {
-        return `${name}(): ${toFlowType(methodRef)}`
+        return `${name}(): ${toFlowType(methodRef)}`;
       }
-      const params = m.params.map((p) => `${p.name}: ${toFlowType(p.type)}`)
-      return `${name}(${params.join(", ")}): ${toFlowType(m.returnType)}`
-    })
-    return `{ ${methods.join("; ")} }`
+      const params = m.params.map((p) => `${p.name}: ${toFlowType(p.type)}`);
+      return `${name}(${params.join(", ")}): ${toFlowType(m.returnType)}`;
+    });
+    return `{ ${methods.join("; ")} }`;
   },
-}
+};
 
 /** Bare Flow type expression for `ref` — no declaration wrapper, no header.
  * Recursive helper used by every composite handler above and by `toFlow`
  * below. */
 export function toFlowType(ref: TypeRef): string {
-  const converter = resolve(ref.shape.kind, handlers)
-  let type = converter === undefined ? "mixed" : converter(ref)
+  const converter = resolve(ref.shape.kind, handlers);
+  let type = converter === undefined ? "mixed" : converter(ref);
   if (typeof ref.meta.brand === "string") {
-    type = `${type} & {| +__brand: ${quote(ref.meta.brand)} |}`
+    type = `${type} & {| +__brand: ${quote(ref.meta.brand)} |}`;
   }
-  return ref.meta.nullable === true ? maybe(type) : type
+  return ref.meta.nullable === true ? maybe(type) : type;
 }
 
 /**
@@ -177,7 +179,7 @@ export function toFlowType(ref: TypeRef): string {
  * declaration.
  */
 export function toFlow(ref: TypeRef, name?: string): string {
-  const type = toFlowType(ref)
-  if (name === undefined) return type
-  return `// @flow\n${flowTsDocComment(ref.meta)}export type ${name} = ${type};`
+  const type = toFlowType(ref);
+  if (name === undefined) return type;
+  return `// @flow\n${flowTsDocComment(ref.meta)}export type ${name} = ${type};`;
 }

@@ -1,5 +1,11 @@
-import { resolve, type TypeRef, type TypeShape } from "./index.ts"
-import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart, toSnakeCaseAcronymAware } from "./codegen-helpers.ts"
+import { resolve, type TypeRef, type TypeShape } from "./index.ts";
+import {
+  capitalize,
+  dartDeprecatedAnnotation,
+  dartDocComment,
+  quoteDart,
+  toSnakeCaseAcronymAware,
+} from "./codegen-helpers.ts";
 
 // freezed (https://pub.dev/packages/freezed) is Dart's code-generation
 // package for immutable data classes and Dart 3 sealed-class unions. Unlike
@@ -37,18 +43,18 @@ import { capitalize, dartDeprecatedAnnotation, dartDocComment, quoteDart, toSnak
 // code this projector does not need to reproduce.
 
 interface Ctx {
-  declarations: string[]
-  declaredNames: Set<string>
-  usesJsonKey: boolean
-  usesFreezed: boolean
+  declarations: string[];
+  declaredNames: Set<string>;
+  usesJsonKey: boolean;
+  usesFreezed: boolean;
 }
 
-type Converter = (shape: TypeShape, ctx: Ctx, hint: string) => string
+type Converter = (shape: TypeShape, ctx: Ctx, hint: string) => string;
 
 const leaf =
   (type: string): Converter =>
   () =>
-    type
+    type;
 
 // Dart style (https://dart.dev/effective-dart/style#identifiers): fields and
 // variables are lowerCamelCase. Converts snake_case/kebab-case/SCREAMING_SNAKE
@@ -56,22 +62,22 @@ const leaf =
 // alone apart from lowercasing its leading character.
 function toLowerCamel(name: string): string {
   if (/[_\-\s]/.test(name)) {
-    const parts = name.split(/[_\-\s]+/).filter((p) => p.length > 0)
+    const parts = name.split(/[_\-\s]+/).filter((p) => p.length > 0);
     return parts
       .map((part, i) => {
-        const lower = part.toLowerCase()
-        return i === 0 ? lower : capitalize(lower)
+        const lower = part.toLowerCase();
+        return i === 0 ? lower : capitalize(lower);
       })
-      .join("")
+      .join("");
   }
   if (name.length > 0 && name === name.toUpperCase() && name !== name.toLowerCase()) {
-    return name.toLowerCase()
+    return name.toLowerCase();
   }
-  return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1)
+  return name.length === 0 ? name : name[0]!.toLowerCase() + name.slice(1);
 }
 
 function isNullable(ref: TypeRef): boolean {
-  return ref.meta.optional === true || ref.meta.nullable === true
+  return ref.meta.optional === true || ref.meta.nullable === true;
 }
 
 // Scalar/collection type name — https://dart.dev/language/built-in-types.
@@ -101,54 +107,54 @@ const handlers: Record<string, Converter> = {
   never: leaf("Never"),
   instance: (shape) => (shape as TypeShape & { kind: "instance" }).className,
   array: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "array" }
-    return `List<${dartType(s.element, ctx, `${hint}Item`)}>`
+    const s = shape as TypeShape & { kind: "array" };
+    return `List<${dartType(s.element, ctx, `${hint}Item`)}>`;
   },
   stream: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "stream" }
-    return `Stream<${dartType(s.element, ctx, `${hint}Item`)}>`
+    const s = shape as TypeShape & { kind: "stream" };
+    return `Stream<${dartType(s.element, ctx, `${hint}Item`)}>`;
   },
   page: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "page" }
-    return `List<${dartType(s.element, ctx, `${hint}Item`)}>`
+    const s = shape as TypeShape & { kind: "page" };
+    return `List<${dartType(s.element, ctx, `${hint}Item`)}>`;
   },
   tuple: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "tuple" }
-    return `(${s.elements.map((element, i) => dartType(element, ctx, `${hint}${i}`)).join(", ")})`
+    const s = shape as TypeShape & { kind: "tuple" };
+    return `(${s.elements.map((element, i) => dartType(element, ctx, `${hint}${i}`)).join(", ")})`;
   },
   map: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "map" }
-    return `Map<${dartType(s.key, ctx, `${hint}Key`)}, ${dartType(s.value, ctx, `${hint}Value`)}>`
+    const s = shape as TypeShape & { kind: "map" };
+    return `Map<${dartType(s.key, ctx, `${hint}Key`)}, ${dartType(s.value, ctx, `${hint}Value`)}>`;
   },
   literal: (shape) => {
-    const s = shape as TypeShape & { kind: "literal" }
-    if (typeof s.value === "string") return "String"
-    if (typeof s.value === "boolean") return "bool"
-    if (s.value === null) return "Null"
-    return Number.isInteger(s.value) ? "int" : "double"
+    const s = shape as TypeShape & { kind: "literal" };
+    if (typeof s.value === "string") return "String";
+    if (typeof s.value === "boolean") return "bool";
+    if (s.value === null) return "Null";
+    return Number.isInteger(s.value) ? "int" : "double";
   },
   ref: (shape) => (shape as TypeShape & { kind: "ref" }).target,
   intersection: (shape, ctx, hint) => {
-    const s = shape as TypeShape & { kind: "intersection" }
-    const [first] = s.members
-    return first === undefined ? "dynamic" : dartType(first, ctx, hint)
+    const s = shape as TypeShape & { kind: "intersection" };
+    const [first] = s.members;
+    return first === undefined ? "dynamic" : dartType(first, ctx, hint);
   },
   function: leaf("Function"),
   interface: leaf("dynamic"),
-}
+};
 
 function dartTypeName(ref: TypeRef, ctx: Ctx, hint: string): string {
-  const kind = ref.shape.kind
-  if (kind === "object") return emitClass(hint, ref, ctx)
-  if (kind === "enum") return emitEnum(hint, ref, ctx)
-  if (kind === "union") return emitUnion(hint, ref, ctx)
-  const converter = resolve(kind, handlers)
-  return converter === undefined ? "dynamic" : converter(ref.shape, ctx, hint)
+  const kind = ref.shape.kind;
+  if (kind === "object") return emitClass(hint, ref, ctx);
+  if (kind === "enum") return emitEnum(hint, ref, ctx);
+  if (kind === "union") return emitUnion(hint, ref, ctx);
+  const converter = resolve(kind, handlers);
+  return converter === undefined ? "dynamic" : converter(ref.shape, ctx, hint);
 }
 
 function dartType(ref: TypeRef, ctx: Ctx, hint: string): string {
-  const base = dartTypeName(ref, ctx, hint)
-  return isNullable(ref) ? `${base}?` : base
+  const base = dartTypeName(ref, ctx, hint);
+  return isNullable(ref) ? `${base}?` : base;
 }
 
 /**
@@ -156,20 +162,26 @@ function dartType(ref: TypeRef, ctx: Ctx, hint: string): string {
  * `required Type name,`/`Type? name,`) for a single object field, indented to
  * sit inside a `const factory`'s `({ ... })` parameter list.
  */
-function fieldParam(fieldName: string, fieldRef: TypeRef, ctx: Ctx, hintBase: string, indent: string): string {
-  const dartName = toLowerCamel(fieldName)
-  const nullable = isNullable(fieldRef)
-  const fieldHint = `${hintBase}${capitalize(dartName)}`
-  const fieldType = dartType(fieldRef, ctx, fieldHint)
+function fieldParam(
+  fieldName: string,
+  fieldRef: TypeRef,
+  ctx: Ctx,
+  hintBase: string,
+  indent: string,
+): string {
+  const dartName = toLowerCamel(fieldName);
+  const nullable = isNullable(fieldRef);
+  const fieldHint = `${hintBase}${capitalize(dartName)}`;
+  const fieldType = dartType(fieldRef, ctx, fieldHint);
 
-  const lines: string[] = []
-  lines.push(dartDocComment(fieldRef.meta, indent))
+  const lines: string[] = [];
+  lines.push(dartDocComment(fieldRef.meta, indent));
   if (dartName !== fieldName) {
-    ctx.usesJsonKey = true
-    lines.push(`${indent}@JsonKey(name: ${quoteDart(fieldName)})\n`)
+    ctx.usesJsonKey = true;
+    lines.push(`${indent}@JsonKey(name: ${quoteDart(fieldName)})\n`);
   }
-  lines.push(`${indent}${nullable ? "" : "required "}${fieldType} ${dartName},\n`)
-  return lines.filter((l) => l.length > 0).join("")
+  lines.push(`${indent}${nullable ? "" : "required "}${fieldType} ${dartName},\n`);
+  return lines.filter((l) => l.length > 0).join("");
 }
 
 /**
@@ -179,11 +191,18 @@ function fieldParam(fieldName: string, fieldRef: TypeRef, ctx: Ctx, hintBase: st
  * carries it out-of-band; declaring it again as a parameter would conflict —
  * see the module doc comment).
  */
-function factoryParams(shape: TypeShape & { kind: "object" }, ctx: Ctx, hintBase: string, excludeField?: string): string {
-  const entries = Object.entries(shape.fields).filter(([fieldName]) => fieldName !== excludeField)
-  if (entries.length === 0) return "()"
-  const params = entries.map(([fieldName, fieldRef]) => fieldParam(fieldName, fieldRef, ctx, hintBase, "    ")).join("")
-  return `({\n${params}  })`
+function factoryParams(
+  shape: TypeShape & { kind: "object" },
+  ctx: Ctx,
+  hintBase: string,
+  excludeField?: string,
+): string {
+  const entries = Object.entries(shape.fields).filter(([fieldName]) => fieldName !== excludeField);
+  if (entries.length === 0) return "()";
+  const params = entries
+    .map(([fieldName, fieldRef]) => fieldParam(fieldName, fieldRef, ctx, hintBase, "    "))
+    .join("");
+  return `({\n${params}  })`;
 }
 
 /**
@@ -194,23 +213,23 @@ function factoryParams(shape: TypeShape & { kind: "object" }, ctx: Ctx, hintBase
  * constructor's parameter list.
  */
 function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
-  ctx.usesFreezed = true
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
+  ctx.usesFreezed = true;
 
-  const shape = ref.shape as TypeShape & { kind: "object" }
-  const params = factoryParams(shape, ctx, capitalize(name))
+  const shape = ref.shape as TypeShape & { kind: "object" };
+  const params = factoryParams(shape, ctx, capitalize(name));
 
-  const lines: string[] = []
-  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}@freezed`)
-  lines.push(`abstract class ${name} with _$${name} {`)
-  lines.push(`  const factory ${name}${params} = _${name};`)
-  lines.push("")
-  lines.push(`  factory ${name}.fromJson(Map<String, dynamic> json) => _$${name}FromJson(json);`)
-  lines.push("}")
+  const lines: string[] = [];
+  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}@freezed`);
+  lines.push(`abstract class ${name} with _$${name} {`);
+  lines.push(`  const factory ${name}${params} = _${name};`);
+  lines.push("");
+  lines.push(`  factory ${name}.fromJson(Map<String, dynamic> json) => _$${name}FromJson(json);`);
+  lines.push("}");
 
-  ctx.declarations.push(lines.join("\n"))
-  return name
+  ctx.declarations.push(lines.join("\n"));
+  return name;
 }
 
 // Dart enums (https://dart.dev/language/enums) with a `value` slot carrying
@@ -219,11 +238,13 @@ function emitClass(name: string, ref: TypeRef, ctx: Ctx): string {
 // (no `part`/build_runner involvement of its own), so freezed changes nothing
 // about how it's emitted.
 function emitEnum(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
 
-  const shape = ref.shape as TypeShape & { kind: "enum" }
-  const members = shape.members.map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`).join(",\n")
+  const shape = ref.shape as TypeShape & { kind: "enum" };
+  const members = shape.members
+    .map((member) => `  ${toLowerCamel(member)}(${quoteDart(member)})`)
+    .join(",\n");
 
   const decl = `${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}enum ${name} {
 ${members};
@@ -237,21 +258,26 @@ ${members};
       );
 
   String toJson() => value;
-}`
-  ctx.declarations.push(decl)
-  return name
+}`;
+  ctx.declarations.push(decl);
+  return name;
 }
 
-function variantName(baseName: string, variant: TypeRef, index: number, discriminator: string | undefined): string {
-  if (typeof variant.meta.typeName === "string") return capitalize(variant.meta.typeName)
+function variantName(
+  baseName: string,
+  variant: TypeRef,
+  index: number,
+  discriminator: string | undefined,
+): string {
+  if (typeof variant.meta.typeName === "string") return capitalize(variant.meta.typeName);
   if (discriminator !== undefined && variant.shape.kind === "object") {
-    const discRef = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator]
+    const discRef = (variant.shape as TypeShape & { kind: "object" }).fields[discriminator];
     if (discRef !== undefined && discRef.shape.kind === "literal") {
-      const value = (discRef.shape as TypeShape & { kind: "literal" }).value
-      if (typeof value === "string") return capitalize(toLowerCamel(value))
+      const value = (discRef.shape as TypeShape & { kind: "literal" }).value;
+      if (typeof value === "string") return capitalize(toLowerCamel(value));
     }
   }
-  return `${baseName}Variant${index}`
+  return `${baseName}Variant${index}`;
 }
 
 /**
@@ -271,48 +297,55 @@ function variantName(baseName: string, variant: TypeRef, index: number, discrimi
  * freezed's default `runtimeType`-keyed JSON encoding.
  */
 function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
-  if (ctx.declaredNames.has(name)) return name
-  ctx.declaredNames.add(name)
-  ctx.usesFreezed = true
+  if (ctx.declaredNames.has(name)) return name;
+  ctx.declaredNames.add(name);
+  ctx.usesFreezed = true;
 
-  const shape = ref.shape as TypeShape & { kind: "union" }
-  const discriminator = typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined
+  const shape = ref.shape as TypeShape & { kind: "union" };
+  const discriminator =
+    typeof ref.meta.discriminator === "string" ? ref.meta.discriminator : undefined;
 
   const variantLines = shape.variants.map((variant, index) => {
-    const className = variantName(name, variant, index, discriminator)
-    const ctorName = toLowerCamel(className)
+    const className = variantName(name, variant, index, discriminator);
+    const ctorName = toLowerCamel(className);
     const objectShape: TypeShape & { kind: "object" } =
-      variant.shape.kind === "object" ? (variant.shape as TypeShape & { kind: "object" }) : { kind: "object", fields: { value: variant } }
+      variant.shape.kind === "object"
+        ? (variant.shape as TypeShape & { kind: "object" })
+        : { kind: "object", fields: { value: variant } };
 
-    let discValue: string | number | boolean | null | undefined
+    let discValue: string | number | boolean | null | undefined;
     if (discriminator !== undefined && variant.shape.kind === "object") {
-      const discRef = objectShape.fields[discriminator]
+      const discRef = objectShape.fields[discriminator];
       if (discRef !== undefined && discRef.shape.kind === "literal") {
-        discValue = (discRef.shape as TypeShape & { kind: "literal" }).value
+        discValue = (discRef.shape as TypeShape & { kind: "literal" }).value;
       }
     }
 
-    const excludeField = discriminator !== undefined && variant.shape.kind === "object" ? discriminator : undefined
-    const params = factoryParams(objectShape, ctx, `${capitalize(name)}${className}`, excludeField)
+    const excludeField =
+      discriminator !== undefined && variant.shape.kind === "object" ? discriminator : undefined;
+    const params = factoryParams(objectShape, ctx, `${capitalize(name)}${className}`, excludeField);
 
     const overrideAnnotation =
-      discValue !== undefined && discValue !== ctorName ? `  @FreezedUnionValue(${quoteDart(String(discValue))})\n` : ""
+      discValue !== undefined && discValue !== ctorName
+        ? `  @FreezedUnionValue(${quoteDart(String(discValue))})\n`
+        : "";
 
-    return `${overrideAnnotation}  const factory ${name}.${ctorName}${params} = ${className};`
-  })
+    return `${overrideAnnotation}  const factory ${name}.${ctorName}${params} = ${className};`;
+  });
 
-  const classAnnotation = discriminator !== undefined ? `@Freezed(unionKey: ${quoteDart(discriminator)})` : "@freezed"
+  const classAnnotation =
+    discriminator !== undefined ? `@Freezed(unionKey: ${quoteDart(discriminator)})` : "@freezed";
 
-  const lines: string[] = []
-  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}${classAnnotation}`)
-  lines.push(`sealed class ${name} with _$${name} {`)
-  lines.push(...variantLines)
-  lines.push("")
-  lines.push(`  factory ${name}.fromJson(Map<String, dynamic> json) => _$${name}FromJson(json);`)
-  lines.push("}")
+  const lines: string[] = [];
+  lines.push(`${dartDocComment(ref.meta)}${dartDeprecatedAnnotation(ref.meta)}${classAnnotation}`);
+  lines.push(`sealed class ${name} with _$${name} {`);
+  lines.push(...variantLines);
+  lines.push("");
+  lines.push(`  factory ${name}.fromJson(Map<String, dynamic> json) => _$${name}FromJson(json);`);
+  lines.push("}");
 
-  ctx.declarations.push(lines.join("\n"))
-  return name
+  ctx.declarations.push(lines.join("\n"));
+  return name;
 }
 
 /**
@@ -327,25 +360,32 @@ function emitUnion(name: string, ref: TypeRef, ctx: Ctx): string {
  * bare-enum or bare-primitive `TypeRef` needs neither.
  */
 export function toFreezed(ref: TypeRef, name = "GeneratedType"): string {
-  const ctx: Ctx = { declarations: [], declaredNames: new Set(), usesJsonKey: false, usesFreezed: false }
+  const ctx: Ctx = {
+    declarations: [],
+    declaredNames: new Set(),
+    usesJsonKey: false,
+    usesFreezed: false,
+  };
 
-  const kind = ref.shape.kind
+  const kind = ref.shape.kind;
   if (kind === "object" || kind === "enum" || kind === "union") {
-    dartTypeName(ref, ctx, name)
+    dartTypeName(ref, ctx, name);
   } else {
-    ctx.declarations.push(`typedef ${name} = ${dartType(ref, ctx, name)};`)
+    ctx.declarations.push(`typedef ${name} = ${dartType(ref, ctx, name)};`);
   }
 
-  const body = ctx.declarations.join("\n\n")
-  const fileBase = toSnakeCaseAcronymAware(name)
+  const body = ctx.declarations.join("\n\n");
+  const fileBase = toSnakeCaseAcronymAware(name);
   const imports = [
     ctx.usesFreezed ? "import 'package:freezed_annotation/freezed_annotation.dart';" : "",
-    ctx.usesJsonKey && !ctx.usesFreezed ? "import 'package:json_annotation/json_annotation.dart';" : "",
+    ctx.usesJsonKey && !ctx.usesFreezed
+      ? "import 'package:json_annotation/json_annotation.dart';"
+      : "",
     body.includes("Uint8List") ? "import 'dart:typed_data';" : "",
     ctx.usesFreezed ? `part '${fileBase}.freezed.dart';` : "",
     ctx.usesFreezed ? `part '${fileBase}.g.dart';` : "",
-  ].filter((line) => line.length > 0)
-  const header = imports.length > 0 ? `${imports.join("\n")}\n\n` : ""
+  ].filter((line) => line.length > 0);
+  const header = imports.length > 0 ? `${imports.join("\n")}\n\n` : "";
 
-  return `${header}${body}\n`
+  return `${header}${body}\n`;
 }

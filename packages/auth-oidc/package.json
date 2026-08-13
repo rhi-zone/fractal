@@ -2,19 +2,22 @@
   "name": "@rhi-zone/fractal-auth-oidc",
   "version": "0.1.0-alpha.0",
   "description": "Generic OIDC/JWT auth adapter for fractal — server-side JWKS-backed JWT validation (AuthAdapter) and client-side OAuth token lifecycle management (AuthClientAdapter), both via Web Crypto (no JWT library dependency)",
+  "keywords": [
+    "auth",
+    "jwks",
+    "jwt",
+    "oauth",
+    "oidc",
+    "web-crypto"
+  ],
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/rhi-zone/fractal.git",
     "directory": "packages/auth-oidc"
   },
-  "keywords": [
-    "oidc",
-    "jwt",
-    "jwks",
-    "oauth",
-    "auth",
-    "web-crypto"
+  "files": [
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.js",
@@ -42,11 +45,13 @@
       "import": "./dist/client.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "engines": {
-    "node": ">=20"
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   },
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*"
@@ -54,12 +59,7 @@
   "devDependencies": {
     "@rhi-zone/fractal-http-api-projector": "workspace:*"
   },
-  "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:watch": "bun test --watch"
-  },
-  "publishConfig": {
-    "access": "public"
+  "engines": {
+    "node": ">=20"
   }
 }

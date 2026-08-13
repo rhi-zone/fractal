@@ -16,7 +16,7 @@
 
 Source: `packages/type-ir/src/index.ts` (452 lines, read in full).
 
-**`TypeKinds`** (`index.ts:8-126`) is an open, augmentable interface of *data-shape*
+**`TypeKinds`** (`index.ts:8-126`) is an open, augmentable interface of _data-shape_
 constructors only: `boolean`, `number`, `integer`, `string`, `null`, `void`,
 `unknown`, `never`, `object` (`:17`), `instance` (`:35-39`, nominal class identity,
 no methods), `array` (`:40`), `stream` (`:41-55`, async sequence), `page` (`:56-69`,
@@ -28,8 +28,9 @@ bag of `method`-kind members — "the equivalent of Protobuf's `service`," per i
 comment at `:114-115`).
 
 **What's already present that's binding-adjacent:**
+
 - `function`/`method` kinds carry ordered `params: {name, type}[]`, a `returnType`,
-  and an optional `thisType` (`:93-98`, `:108-113`) — this is a *call signature*,
+  and an optional `thisType` (`:93-98`, `:108-113`) — this is a _call signature_,
   not a binding: no notion of how the call crosses a language boundary.
 - `interface` (`:122-126`) models a service/contract surface — closest existing
   analogue to what a bindings IR needs for "the thing exposed across the boundary,"
@@ -42,21 +43,22 @@ comment at `:114-115`).
   `src/kinds/*` extension modules (per the file's own header comment, `:1-7`).
 
 **What is absent — confirmed by full read, not inferred:**
+
 - **Ownership/borrowing.** No concept anywhere in `TypeKinds` or `meta`'s documented
   conventions of "who owns this value after the call," "is this borrowed vs. moved,"
   or lifetime relationships between a return value and its inputs.
 - **ABI / calling convention.** No representation of how a function is actually
   invoked at the boundary (C ABI extern "C", WASM import/export table, JNI, a
-  process/IPC boundary). `function`/`method` describe a *signature*, not a
-  *calling convention*.
+  process/IPC boundary). `function`/`method` describe a _signature_, not a
+  _calling convention_.
 - **Async transport across the boundary.** `stream` (`:41-55`) models an
-  in-language async iterable's *data shape* (the element type), not how an async
+  in-language async iterable's _data shape_ (the element type), not how an async
   call or callback is dispatched across an FFI boundary (polling, callback
   registration, promise/future bridging, thread-pool marshaling).
 - **Error propagation across the boundary.** Nothing models "this call can fail and
   the failure crosses the boundary as X" — no exception-vs-result-vs-error-code
   distinction, no representation of a foreign error type.
-- **Callbacks / higher-order boundary functions.** `function` as a *type* can appear
+- **Callbacks / higher-order boundary functions.** `function` as a _type_ can appear
   as a param type (a callback signature), but nothing marks "this callback, once
   passed across the boundary, has calling-convention/lifetime obligations of its own
   (who invokes it, on what thread, how long may it be held)."
@@ -67,9 +69,9 @@ comment at `:114-115`).
   binding generator that must emit monomorphized code per language pair may need
   more than that punt provides.
 
-This is a genuine gap, not a fixable oversight: type-ir's kinds describe *what shape
-a value has*, and every one of the missing concepts above is about *what happens at
-the moment a value crosses a process/language/runtime boundary* — a different axis
+This is a genuine gap, not a fixable oversight: type-ir's kinds describe _what shape
+a value has_, and every one of the missing concepts above is about _what happens at
+the moment a value crosses a process/language/runtime boundary_ — a different axis
 entirely.
 
 ---
@@ -80,7 +82,7 @@ entirely.
   is a plain object with conventional keys; projections read what they recognize,
   ignore the rest; no blessed set of fields. This is the mechanism every existing
   semantic refinement (nullable, optional, readonly, typeName) already rides on —
-  and it is the same mechanism a first pass at ownership/ABI annotations *could*
+  and it is the same mechanism a first pass at ownership/ABI annotations _could_
   ride on, if that route were chosen (see §4).
 - **"Conventions, not contracts"** (`:27-34`): where the metadata bag has expected
   keys, they are documented conventions, not IR-enforced contracts — "if you violate
@@ -94,37 +96,37 @@ entirely.
   it, but it doesn't underwrite it either without a specific answer to "how wrong can
   this data cost you."
 - **"Hierarchy via subtyping, not taxonomy"** (`:36-46`) and **"Extensible DU +
-  interpreter pattern"** (`:5-13`): both describe how new *type* kinds are meant to
+  interpreter pattern"** (`:5-13`): both describe how new _type_ kinds are meant to
   be added (subtype relationships, augmentable interfaces) — relevant if a bindings
   layer wanted new `TypeKinds` entries (e.g. a `callback` kind distinct from
   `function`) rather than only metadata annotations on existing kinds. This is the
   same open-question axis raised in §4 below (new kinds vs. metadata vs. separate
-  layer), not something the philosophy already answers for the *bindings* case
+  layer), not something the philosophy already answers for the _bindings_ case
   specifically — the precedent exists for data-shape kinds, and whether the same
   reasoning transfers cleanly to calling-convention/ownership concepts is exactly
   the open question.
 - **"Three independent layers"** (`:48-55`) and **"Type projection is separate from
   routing"** (`:65-70`): fractal already treats routing (API structure) and type
   projection (data shape) as independent concerns that share structural patterns but
-  operate on different data. A "bindings" concern — which needs *both* a call
-  signature (routing-like) *and* ownership/ABI annotations on the types crossing the
+  operate on different data. A "bindings" concern — which needs _both_ a call
+  signature (routing-like) _and_ ownership/ABI annotations on the types crossing the
   boundary (type-ir-like) — doesn't obviously map onto either existing layer alone;
   this is itself relevant to the "new layer vs. extend existing layer" open question
   in §4.
 
 `docs/design/type-ir-survey.md`'s own scope statement (`type-ir-survey.md:1-11`)
-frames type-ir as explicitly a *data-shape* IR — "a superset of all projection
+frames type-ir as explicitly a _data-shape_ IR — "a superset of all projection
 targets" for structural/nominal type constructors. It surveys 12 systems
 (JSON Schema, JTD, serde, TypeScript, OCaml, Haskell, protobuf, SQL, GraphQL,
 Cap'n Proto/FlatBuffers, Avro, Zod/Valibot/TypeBox) — every one of them a
-*data-shape or data-interchange* format. None of the 12 model a function-call
+_data-shape or data-interchange_ format. None of the 12 model a function-call
 boundary between two running processes/runtimes with distinct ownership models;
 the one partial exception the survey itself flags is Cap'n Proto's RPC/interface
 methods (`type-ir-survey.md` §10, Cap'n Proto entry, "Interfaces" bullet — noted
 there as "out of scope for a data-shape IR" but relevant precedent that one real
 system's schema vocabulary spans both data-shape and behavior-signature concerns).
 That is the closest existing precedent in fractal's own research trail, and it
-stops at RPC method *signatures* — it does not extend to ownership/ABI/lifetime,
+stops at RPC method _signatures_ — it does not extend to ownership/ABI/lifetime,
 which is a strictly different problem from what any of the 12 surveyed systems
 solve.
 
@@ -142,11 +144,11 @@ best-effort, second-hand reporting.
 **[VERIFIED-EXTERNAL: crates.io / typeshare book search results]** Typeshare
 converts Rust struct/enum definitions (marked with a `#[typeshare]` attribute) into
 equivalent type declarations in TypeScript, Kotlin, Swift, Scala, and Go. It is
-explicitly *not* a function-call-boundary tool — it shares data-shape declarations
+explicitly _not_ a function-call-boundary tool — it shares data-shape declarations
 only, the same problem type-ir's existing 118 projectors already solve, just with
 Rust as the one fixed source language instead of TypeScript. It does not touch
 ownership, calling convention, async, or errors at all. Worth naming precisely
-because it demarcates the boundary of the *already-solved* problem: typeshare is
+because it demarcates the boundary of the _already-solved_ problem: typeshare is
 functionally close to "type-ir's own projector fleet, inverted (Rust source instead
 of TS source, but same data-shape-only scope)," not a precedent for anything in the
 harder function-call-boundary problem this survey is about.
@@ -159,7 +161,7 @@ lets Rust code be written once and called from Kotlin, Swift, Python, and Ruby
 generated glue in each target language. Used extensively in Firefox mobile/desktop
 for functionality shared between Kotlin (Android) and Swift (iOS). The interface is
 described either in a dedicated Interface Definition Language file (`.udl`) or via
-Rust proc-macros — notably an IDL *separate from* the source-of-truth type
+Rust proc-macros — notably an IDL _separate from_ the source-of-truth type
 declarations is one of its two supported authoring paths, the other being
 attribute-macro annotation directly on Rust source (closer to type-ir's own
 TS-extraction model).
@@ -169,13 +171,13 @@ against the UniFFI book this session, reported from background knowledge]**:
 object/interface types with owned-pointer handles across the boundary (a Rust
 struct instance held as an opaque handle on the foreign side, with generated
 constructor/method/destructor glue managing its lifetime — i.e., ownership is
-resolved by the *generator's* runtime convention of "foreign side holds a handle,
+resolved by the _generator's_ runtime convention of "foreign side holds a handle,
 Rust retains the actual allocation," not by an ownership annotation the schema
 author writes per-type); a `Result<T, E>`-shaped error convention translated to
 each target's native error mechanism (exceptions in Kotlin/Swift/Python, not
 error codes); and only "a subset of Rust types" is FFI-safe at all (per the search
 result) — i.e. UniFFI's answer to the ownership problem is largely to constrain
-*what can cross the boundary* rather than to let arbitrary Rust ownership
+_what can cross the boundary_ rather than to let arbitrary Rust ownership
 patterns be expressed and translated.
 
 ### wasm-bindgen — Rust↔JS, ownership via JsValue table indirection
@@ -188,8 +190,8 @@ index table owned by the generated JS glue, and Rust holds only an index into th
 table; taking a `JsValue` by value (no `&`) means the Rust side is asserting
 ownership/consumption of that table entry. This is a materially different strategy
 from UniFFI's opaque-handle-plus-generated-destructor approach: wasm-bindgen
-resolves cross-boundary ownership by *indirection through a side table the glue
-code manages*, rather than by handing raw ownership across a C ABI boundary
+resolves cross-boundary ownership by _indirection through a side table the glue
+code manages_, rather than by handing raw ownership across a C ABI boundary
 directly. Search results did not surface wasm-bindgen's async/`Promise`↔`Future`
 bridging mechanics or its error-propagation convention in enough depth to report
 here — **flagged as unverified/incomplete**, not asserted.
@@ -197,7 +199,7 @@ here — **flagged as unverified/incomplete**, not asserted.
 ### diplomat (rust-diplomat, originated at ICU4X/Google) — unidirectional, borrow-aware
 
 **[VERIFIED-EXTERNAL: github.com/rust-diplomat/diplomat, docs.rs]** Diplomat
-generates FFI bindings for calling *into* Rust from C, C++, C#, and
+generates FFI bindings for calling _into_ Rust from C, C++, C#, and
 JavaScript/TypeScript — explicitly unidirectional (foreign code calls Rust, not the
 reverse), unlike UniFFI/wasm-bindgen which both support bidirectional calling in
 their respective pairs. It works by generating `extern "C"` functions, so it is in
@@ -211,12 +213,12 @@ codegen? a runtime borrow-flag?) is not confirmed here.
 
 ### Summary table (fields marked unverified are not independently confirmed this session)
 
-| Tool | Direction | Languages | Ownership model | Error model | Async |
-|---|---|---|---|---|---|
-| typeshare | Rust → target (data only) | TS, Kotlin, Swift, Scala, Go | N/A (data-shape only) | N/A | N/A |
-| uniffi | Rust ↔ target | Kotlin, Swift, Python, Ruby (+3rd-party C#, Go) | opaque handle + generated destructor **[UNVERIFIED]** | `Result<T,E>` → native exception **[UNVERIFIED]** | not confirmed this session |
-| wasm-bindgen | Rust ↔ JS | JS/TS only | `JsValue` index-table indirection **[VERIFIED-EXTERNAL, partial]** | not confirmed this session | not confirmed this session |
-| diplomat | Rust → target (unidirectional) | C, C++, C#, JS/TS | borrow-safety is a named design goal **[UNVERIFIED, mechanism unconfirmed]** | not confirmed this session | not confirmed this session |
+| Tool         | Direction                      | Languages                                       | Ownership model                                                              | Error model                                       | Async                      |
+| ------------ | ------------------------------ | ----------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------- |
+| typeshare    | Rust → target (data only)      | TS, Kotlin, Swift, Scala, Go                    | N/A (data-shape only)                                                        | N/A                                               | N/A                        |
+| uniffi       | Rust ↔ target                  | Kotlin, Swift, Python, Ruby (+3rd-party C#, Go) | opaque handle + generated destructor **[UNVERIFIED]**                        | `Result<T,E>` → native exception **[UNVERIFIED]** | not confirmed this session |
+| wasm-bindgen | Rust ↔ JS                      | JS/TS only                                      | `JsValue` index-table indirection **[VERIFIED-EXTERNAL, partial]**           | not confirmed this session                        | not confirmed this session |
+| diplomat     | Rust → target (unidirectional) | C, C++, C#, JS/TS                               | borrow-safety is a named design goal **[UNVERIFIED, mechanism unconfirmed]** | not confirmed this session                        | not confirmed this session |
 
 No `flapigen`/`swig`-style tool was researched this session — out of scope of the
 searches run; if relevant, it would need its own pass rather than being folded into
@@ -244,7 +246,7 @@ scope), that dependency is called out explicitly rather than guessed.
 
 - **(a) Don't model it — restrict "bindings" to plain-data function calls only**
   (params/return are pure data-shape types already representable in `TypeKinds`,
-  no owned handles, no borrows). *Cost:* cheap, no new IR surface, ships fast —
+  no owned handles, no borrows). _Cost:_ cheap, no new IR surface, ships fast —
   but excludes exactly the cases that make cross-language bindings hard in the
   first place (stateful objects, borrowed views, anything beyond call-by-value
   data). Mirrors typeshare's scope, which this survey's own comparison (§3) shows
@@ -252,13 +254,13 @@ scope), that dependency is called out explicitly rather than guessed.
 - **(b) Add ownership/borrow annotations to type-ir's existing open metadata bag**
   (e.g. `meta.ownership: "owned" | "borrowed" | "shared"`, following the same
   convention-not-contract pattern as `meta.nullable`/`meta.readonly`,
-  `index.ts:135-172`). *Cost:* follows established precedent (design-philosophy.md
+  `index.ts:135-172`). _Cost:_ follows established precedent (design-philosophy.md
   §"open metadata bag"), no new IR surface to design from scratch — but as noted in
   §2, an incorrect value here is a memory-safety bug in generated code, not a
   wrong-shape bug; "conventions, not contracts" (no IR-level enforcement) is a
   materially bigger risk for this metadata than it is for `nullable`/`readonly`,
   and every one of the tools surveyed in §3 that handles ownership does so via a
-  *generator-owned, fixed strategy* (opaque handles, index-table indirection)
+  _generator-owned, fixed strategy_ (opaque handles, index-table indirection)
   rather than an author-supplied per-type annotation — none of the surveyed
   precedent actually validates "let the schema author declare ownership freely,"
   which is a live risk for this option specifically, not a neutral unknown.
@@ -266,7 +268,7 @@ scope), that dependency is called out explicitly rather than guessed.
   that references `TypeRef`s for data shape but carries its own
   ownership/ABI/async/error vocabulary, structurally parallel to how
   `TypeRefDocument`/`defs` layers over bare `TypeRef` today, `index.ts:297-305`).
-  *Cost:* cleanest separation of concerns (data-shape stays exactly as stable as it
+  _Cost:_ cleanest separation of concerns (data-shape stays exactly as stable as it
   is today, zero risk of memory-safety-relevant metadata leaking into the existing
   118 projectors' inputs) — but is a wholly new surface to design, document, and
   maintain, on top of an already-nontrivial existing system, and duplicates
@@ -285,17 +287,17 @@ no clean prior-art transplant available here.
 - **(a) Don't model it — assume the projector-per-language-pair knows its own ABI**
   (e.g. a hypothetical Rust↔Swift projector hardcodes "this means a C ABI extern
   function," the way a specific target's constraints are usually baked into a
-  single-purpose tool per §3). *Cost:* cheapest, matches the observed pattern of
+  single-purpose tool per §3). _Cost:_ cheapest, matches the observed pattern of
   every surveyed tool (each is single-pair or hub-and-spoke, not
   pair-agnostic) — but forfeits type-ir's core value proposition (one IR, many
   projectors) for the bindings case specifically, since ABI-baked-into-projector
-  means a new projector per language *pair*, not per language, and the pair count
+  means a new projector per language _pair_, not per language, and the pair count
   grows combinatorially where type-ir's existing data-shape projectors only grow
   linearly (one per target language, any pair of them already interoperates via the
   shared IR).
 - **(b) Model ABI as IR-level metadata** (an explicit `meta.callingConvention` or
   similar, naming the boundary mechanism — C ABI, WASM import/export, JNI,
-  IPC/RPC). *Cost:* preserves the "one IR, many projectors" value proposition in
+  IPC/RPC). _Cost:_ preserves the "one IR, many projectors" value proposition in
   principle — but ABI concerns are deeply target-pair-specific (a Rust↔Kotlin C-ABI
   convention is not the same shape of fact as a Rust↔JS WASM import), so this
   metadata key would likely need to be itself an open, per-pair-extensible
@@ -303,7 +305,7 @@ no clean prior-art transplant available here.
 - **(c) Treat ABI as entirely a projector concern, orthogonal to any IR
   extension** — the projector for a given language pair decides its ABI
   unilaterally from context (target languages named + call shape), no schema
-  input at all. *Cost:* zero new IR surface — but removes the schema author's
+  input at all. _Cost:_ zero new IR surface — but removes the schema author's
   ability to express "no, use this specific ABI/strategy here," which several
   real tools' own escape hatches (e.g. UniFFI's dual UDL-file/proc-macro authoring
   paths) suggest is sometimes needed in practice **[the "sometimes needed"
@@ -312,7 +314,7 @@ no clean prior-art transplant available here.
 
 ### Q3. Async calling convention across the boundary
 
-Type-ir already has `stream` (`index.ts:41-55`) for async *iterables* as a data
+Type-ir already has `stream` (`index.ts:41-55`) for async _iterables_ as a data
 shape, but nothing for "this function call itself is asynchronous and the
 async-ness must be bridged across the boundary" (JS `Promise` ↔ Rust `Future` ↔
 Kotlin `suspend fun` ↔ Swift `async`, each with different threading/executor
@@ -332,7 +334,7 @@ sum-type value, an error code plus out-parameter, or something else, and how is
 that translated per target language's idiom? UniFFI's `Result<T,E>` → native
 exception convention (§3, flagged unverified) is the one data point surfaced this
 session, and it suggests error-propagation may be a comparatively easier problem
-than ownership (any language pair broadly has *some* "did this fail" surface,
+than ownership (any language pair broadly has _some_ "did this fail" surface,
 whereas not every language pair even has borrowing at all) — but this inference is
 this document's own reasoning from one unverified data point, not an established
 fact, and is flagged accordingly.
@@ -371,7 +373,7 @@ ownership/ABI/calling-convention modeling for cross-language function bindings
 (a problem UniFFI, wasm-bindgen, and diplomat each treat as substantial enough to
 be its own whole project) something fractal should build as a new layer on
 type-ir, or is it — like general-purpose source ingestion — better treated as a
-sibling-project concern fractal would *consume* rather than build? The TODO.md
+sibling-project concern fractal would _consume_ rather than build? The TODO.md
 precedent does not answer this question for bindings specifically (it is a
 different problem: source-language parsing vs. boundary-crossing semantics), but
 it establishes that this project has an existing, recent pattern of drawing that

@@ -31,8 +31,8 @@
  * hierarchy. A handler with no reflection need carries `M = undefined`.
  */
 export interface Handler<in out T, out U, out M = undefined> {
-  (t: T): Promise<U>
-  readonly meta: M
+  (t: T): Promise<U>;
+  readonly meta: M;
 }
 
 /**
@@ -41,9 +41,9 @@ export interface Handler<in out T, out U, out M = undefined> {
  * every combinator ultimately routes through it.
  */
 export function handler<T, U, M>(meta: M, fn: (t: T) => U | Promise<U>): Handler<T, U, M> {
-  const h = (async (t: T) => fn(t)) as Handler<T, U, M> & { meta: M }
-  h.meta = meta
-  return h
+  const h = (async (t: T) => fn(t)) as Handler<T, U, M> & { meta: M };
+  h.meta = meta;
+  return h;
 }
 
 /**
@@ -55,5 +55,5 @@ export function compose<A, B, C, MB>(
   a: Handler<A, B, unknown>,
   b: Handler<B, C, MB>,
 ): Handler<A, C, MB> {
-  return handler(b.meta, async (input: A) => b(await a(input)))
+  return handler(b.meta, async (input: A) => b(await a(input)));
 }
