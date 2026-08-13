@@ -1,7 +1,7 @@
-// spike/linchpins.ts
-//
-// LINCHPIN PROOFS — typed-context-through-mount (zero casts) +
-//                   withValidation validator≡Args (inferred, checked)
+// Proof-of-concept for two typing patterns: threading typed context through
+// router mounts with zero casts, and inferring a validated handler's argument
+// type from its validator (validator output ≡ handler input, checked
+// statically).
 //
 // Run: bun spike/linchpins.ts
 // Typecheck: node_modules/.bin/tsgo --noEmit --project spike/tsconfig.json
@@ -25,7 +25,7 @@ interface HttpCtx<Vars extends Record<string, unknown> = Record<string, never>> 
 
 // ============================================================================
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  LINCHPIN 1 — Typed context through mount, ZERO casts                  ║
+// ║  LINCHPIN 1 — Typed context through mount, zero casts                  ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 // ============================================================================
 //
@@ -83,7 +83,7 @@ interface Router<Vars extends Record<string, unknown>> {
 
 // ---------------------------------------------------------------------------
 // Builder — a separate functional type so we can return Router<Vars & Extra>
-// from use() without a cast at the call site.
+// from mount() without a cast at the call site.
 // ---------------------------------------------------------------------------
 
 interface Builder<Vars extends Record<string, unknown>> {
@@ -291,7 +291,7 @@ const authMiddleware: Middleware<NoVars, AuthVars> = async (ctx, next) => {
 // Handlers can read ctx.vars.user, ctx.vars.scopes — no cast.
 const adminRouter: Router<NoVars & AuthVars> = createBuilder<NoVars & AuthVars>()
   .route("GET", "/me", async (ctx) => {
-    // ZERO casts — ctx.vars is typed as AuthVars
+    // No cast needed here — ctx.vars is typed as AuthVars.
     const user = ctx.vars.user; // type: { id: string; email: string }
     const scopes = ctx.vars.scopes; // type: string[]
     return json({ user, scopes });
@@ -307,7 +307,8 @@ type AdminHandlerCtx = HttpCtx<NoVars & AuthVars>;
 type _AdminVarsProbe = AdminHandlerCtx["vars"];
 // Expected: { user: { id: string; email: string }; scopes: string[] }
 
-// NEGATIVE PROBE — a handler on a NON-authed router must NOT see ctx.vars.user
+// NEGATIVE PROBE — a handler on a router without AuthVars cannot access
+// ctx.vars.user; the following line is expected to fail typechecking.
 const publicRouter: Router<NoVars> = createBuilder<NoVars>()
   .route("GET", "/ping", async (ctx) => {
     // @ts-expect-error — 'user' does not exist on type 'Record<string, never>'
@@ -331,7 +332,7 @@ const app: Router<NoVars> = createBuilder<NoVars>()
 // ============================================================================
 
 // ---------------------------------------------------------------------------
-// Minimal StandardSchemaV1 fixture — NO real valibot dep
+// Minimal StandardSchemaV1 fixture; does not depend on the real valibot package.
 // ---------------------------------------------------------------------------
 
 interface StandardSchema<_In, Out> {
