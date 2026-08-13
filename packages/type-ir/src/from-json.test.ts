@@ -277,7 +277,7 @@ describe("custom leaf heuristics", () => {
 //
 // Inference normally sees JSON-parsed data, where every object's prototype is
 // `Object.prototype` and none of this fires. It matters on the one path that
-// feeds inference values that did NOT come from `JSON.parse` —
+// feeds inference values that did not come from `JSON.parse` —
 // `from-standard-schema.ts`'s `~standard.types.output` sample, whose output
 // type need not be JSON-safe (`z.instanceof(Date)` produces a live Date).
 // ---------------------------------------------------------------------------

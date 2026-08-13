@@ -1,12 +1,10 @@
-// packages/type-ir/src/from-standard-schema-type.ts — @rhi-zone/fractal-type-ir/from-standard-schema-type
-//
-// COMPILE-TIME ingester for Standard Schema (https://standardschema.dev/):
+// Compile-time ingester for Standard Schema (https://standardschema.dev/):
 // a schema's `ts.Type` -> TypeRef, by resolving `~standard.types.output`
 // through the type checker and handing the result to `from-typescript.ts`'s
 // `typeRefFromType`.
 //
 // Why this exists as a separate entry point from `from-standard-schema.ts`.
-// That module takes a live schema OBJECT and has three tiers, each bounded by
+// That module takes a live schema object and has three tiers, each bounded by
 // what is observable at runtime: the vendor's JSON Schema export (lossy for
 // anything JSON Schema cannot say), a runtime `~standard.types` sample (one
 // point in the value space), or `unknown`. This module is bounded by nothing
@@ -15,27 +13,28 @@
 //
 // Concretely it recovers what no runtime path can:
 //
-//   - OPTIONALITY. `note?: string` is absent from a sample that happens not to
+//   - Optionality: `note?: string` is absent from a sample that happens not to
 //     carry it; the checker knows it is optional.
-//   - UNION BRANCHES AND ENUM MEMBERS not taken by whatever sample exists.
-//   - NOMINAL AND BRANDED TYPES. `typeRefFromType` already maps classes to
+//   - Union branches and enum members not taken by whatever sample exists.
+//   - Nominal and branded types: `typeRefFromType` already maps classes to
 //     `types.instance` and the branded/opaque conventions in
 //     `kinds/semantic-strings.ts`, with no dependence on a vendor emitting the
 //     non-standard `x-class-name` JSON Schema extension.
-//   - CONSTRAINTS carried in the type rather than in a JSON Schema export.
+//   - Constraints carried in the type rather than in a JSON Schema export.
 //
-// And critically, `~standard.types` is a PHANTOM property: the spec defines it
+// And critically, `~standard.types` is a phantom property: the spec defines it
 // to drive `InferInput`/`InferOutput` at compile time, and implementations
 // typically do not populate it at runtime. So this is usually the only path
 // that can read it at all — the runtime tier-2 fallback fires only when a
 // vendor happens to leave a real value there.
 //
-// Separate FILE rather than an addition to either neighbour, for two reasons.
-// `typescript` is a PEER dependency of this package: putting this in
-// `from-standard-schema.ts` would drag the whole compiler into the dependency
-// graph of consumers who only ever use the runtime path. And
-// `from-typescript.ts` is a general-purpose TS ingester — Standard Schema is
-// one ecosystem convention layered on it, not part of its core.
+// This lives in a separate file rather than as an addition to either
+// neighbour, for two reasons. `typescript` is a peer dependency of this
+// package: putting this in `from-standard-schema.ts` would drag the whole
+// compiler into the dependency graph of consumers who only ever use the
+// runtime path. And `from-typescript.ts` is a general-purpose TS ingester —
+// Standard Schema is one ecosystem convention layered on it, not part of its
+// core.
 
 import ts from "typescript";
 import { t, types, type TypeRef } from "./index.ts";
@@ -70,7 +69,7 @@ function propertyType(
   return checker.getTypeOfSymbolAtLocation(symbol, loc);
 }
 
-/** `~standard.vendor`, when the vendor declared it as a string LITERAL type. */
+/** `~standard.vendor`, when the vendor declared it as a string literal type. */
 function vendorOf(
   standardType: ts.Type,
   checker: ts.TypeChecker,

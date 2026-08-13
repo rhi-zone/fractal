@@ -45,9 +45,9 @@ function typeOfConst(
   return { ...found, checker };
 }
 
-// A Standard-Schema-shaped declaration whose `~standard.types` is TYPE-ONLY —
-// never present at runtime, exactly as the spec describes it. That is the whole
-// point: the runtime module cannot see any of this.
+// A Standard-Schema-shaped declaration whose `~standard.types` is type-only —
+// never present at runtime, exactly as the spec describes it. The runtime
+// module cannot see any of this.
 const PRELUDE = `
 interface StandardTypes<I, O> { readonly input: I; readonly output: O }
 interface SS<I, O, V extends string = string> {

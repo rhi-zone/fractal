@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { goDocComment, goFieldIdent, quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/go-easyjson.ts — @rhi-zone/fractal-type-ir/go-easyjson
-//
 // TypeRef -> idiomatic Go type declarations for github.com/mailru/easyjson
 // (https://github.com/mailru/easyjson): the same struct/slice/map/const-enum
 // shape go-encoding-json.ts emits, plus a `//easyjson:json` directive comment

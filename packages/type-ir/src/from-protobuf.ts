@@ -1,25 +1,24 @@
-// packages/type-ir/src/from-protobuf.ts — @rhi-zone/fractal-type-ir/from-protobuf
-//
 // Protobuf (proto3) -> TypeRef, the reverse direction of protobuf.ts's
 // TypeRef -> proto3 projector (toProtoField/toProtoMessage/toProtoService).
 //
 // Two entry points, both converging on the same conversion core:
 //
-//   - fromProtoDescriptor(file) — PRIMARY. Takes a JSON structure shaped like
-//     the JSON mapping of protobuf's own self-describing `descriptor.proto`
-//     (`FileDescriptorProto`/`DescriptorProto`/`FieldDescriptorProto`/…,
-//     camelCase field names, `TYPE_*` enum strings for
-//     `FieldDescriptorProto.type` — what `protoc --descriptor_set_out` or a
-//     JS/TS protobuf codegen's descriptor `toObject()`/`toJSON()` produces).
-//     This is the format protobuf uses to describe itself, so it needs no
-//     bespoke grammar.
-//   - parseProtoText(text) / fromProtoText(text) — CONVENIENCE. Parses `.proto`
-//     text via `protobufjs`'s real grammar (protobuf.parse), then adapts its
-//     reflection tree (Type/Enum/Field/OneOf) into the same descriptor shape
-//     `fromProtoDescriptor` consumes, so both paths share one conversion core
-//     and one set of tests-worth of behavior. `protobufjs` is an optional
-//     peer dependency (see package.json) — this module only needs it when
-//     `parseProtoText`/`fromProtoText` are actually called.
+//   - fromProtoDescriptor(file) — the primary entry point. Takes a JSON
+//     structure shaped like the JSON mapping of protobuf's own
+//     self-describing `descriptor.proto` (`FileDescriptorProto`/
+//     `DescriptorProto`/`FieldDescriptorProto`/…, camelCase field names,
+//     `TYPE_*` enum strings for `FieldDescriptorProto.type` — what `protoc
+//     --descriptor_set_out` or a JS/TS protobuf codegen's descriptor
+//     `toObject()`/`toJSON()` produces). This is the format protobuf uses to
+//     describe itself, so it needs no bespoke grammar.
+//   - parseProtoText(text) / fromProtoText(text) — a convenience layer.
+//     Parses `.proto` text via `protobufjs`'s real grammar (protobuf.parse),
+//     then adapts its reflection tree (Type/Enum/Field/OneOf) into the same
+//     descriptor shape `fromProtoDescriptor` consumes, so both paths share
+//     one conversion core and one set of tests-worth of behavior.
+//     `protobufjs` is an optional peer dependency (see package.json) — this
+//     module only needs it when `parseProtoText`/`fromProtoText` are
+//     actually called.
 //
 // Both entry points return a `TypeRefDocument`: every message/enum in the
 // file becomes a named entry in `defs` (keyed by its dotted nested path,
@@ -48,7 +47,7 @@ import {
 
 // ============================================================================
 // Descriptor types — the JSON mapping of google/protobuf/descriptor.proto,
-// trimmed to the subset this converter reads. `description` is NOT part of
+// trimmed to the subset this converter reads. `description` is not part of
 // the real descriptor.proto (doc comments live in a separate `SourceCodeInfo`
 // side-table there) — it's a deliberate extension so callers building this
 // JSON by hand (or `parseProtoText`, which captures `//` comments) have
@@ -285,7 +284,7 @@ function fieldBaseType(
   // TYPE_MESSAGE or TYPE_ENUM (or, from parseProtoText, any non-scalar
   // identifier tagged TYPE_MESSAGE regardless of which it actually is — see
   // parseProtoText's doc comment. Resolution below reads the registry
-  // entry's ACTUAL kind, so a mistagged TYPE_MESSAGE that's really an enum
+  // entry's actual kind, so a mistagged TYPE_MESSAGE that's really an enum
   // still resolves correctly.)
   const rawTypeName = field.typeName ?? "";
   const strippedFull = rawTypeName.replace(/^\./, "");
@@ -359,7 +358,7 @@ function messageToTypeRef(
 
   // Group fields by oneofIndex (proto3 "Using Oneof":
   // https://protobuf.dev/programming-guides/proto3/#oneof) — each oneof
-  // collapses to ONE object field named after the oneof, typed as a union of
+  // collapses to a single object field named after the oneof, typed as a union of
   // its member fields' types (each variant tagged with the original proto
   // field name/number in meta, since `union.variants` carries only TypeRefs,
   // no names).

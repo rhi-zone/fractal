@@ -492,8 +492,7 @@ describe("round-trip: fromOpenApi30(toOpenApi30(ref))", () => {
   // single-value `enum` (§4.8.24 has no other way to pin one value), which
   // is structurally indistinguishable on ingest from an actual one-member
   // `enum`. This is a genuine, inherent asymmetry in the forward projector's
-  // encoding (not a round-trip bug): `literal` -> OAS -> `enum`, never back
-  // to `literal`.
+  // encoding: `literal` -> OAS -> `enum`, never back to `literal`.
   test("literal degrades to a one-member enum through OAS 3.0's const-less encoding", () => {
     const oas = toOpenApi30(t(types.literal("active")));
     expect(oas).toEqual({ enum: ["active"] });

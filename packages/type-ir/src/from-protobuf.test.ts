@@ -360,7 +360,7 @@ describe("fromProtoDescriptor: oneof", () => {
     expect(variants[0]!.meta.protoFieldName).toBe("circle");
     expect(variants[1]!.shape.kind).toBe("int32");
     expect(variants[1]!.meta.protoFieldName).toBe("square");
-    // Individual oneof member fields don't ALSO appear as top-level fields.
+    // Individual oneof member fields are not duplicated as top-level fields.
     expect(fields.circle).toBeUndefined();
     expect(fields.square).toBeUndefined();
   });

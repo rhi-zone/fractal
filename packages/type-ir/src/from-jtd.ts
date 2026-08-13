@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-jtd.ts — @rhi-zone/fractal-type-ir/from-jtd
-//
 // FROM-direction projector: JSON Type Definition (RFC 8927) -> TypeRef.
 // Mirrors from-json-schema.ts's construction style (t(), types, the same
 // extension-kind constructors) and is the reverse of jtd.ts's toJtd — see
@@ -149,7 +147,7 @@ function fromProperties(jtd: Jtd): TypeRef {
 
 // ---------------------------------------------------------------------------
 // Discriminator form (RFC 8927 §3.3.7) — a tagged union. Each `mapping`
-// entry is itself a properties-form schema that does NOT include the
+// entry is itself a properties-form schema that does not include the
 // discriminator field (the tag is implicit); reconstruct it explicitly as a
 // string-literal field on each variant so the union is self-describing
 // structurally, mirroring from-json-schema.ts's oneOf+discriminator handling
@@ -172,7 +170,7 @@ function fromDiscriminator(jtd: Jtd): TypeRef {
 // Form dispatch (RFC 8927 §2.2.1 — exactly one of these keyword sets
 // determines the form) + escape-hatch metadata flags (see module doc above).
 // `metadata` is mutated in place: every key consumed to reconstruct a more
-// precise TypeRef is deleted so it doesn't ALSO survive verbatim into the
+// precise TypeRef is deleted so it doesn't also survive verbatim into the
 // result's meta bag.
 // ---------------------------------------------------------------------------
 

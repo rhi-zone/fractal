@@ -88,10 +88,10 @@ function extractMeta(schema: OpenApiSchema): Record<string, unknown> {
 // x-oneOf is consumed as the Swagger 2.0 union round-trip convention, not
 // preserved as a literal meta key) so they aren't double-recorded here.
 // Extensions this ingester has no special handling for (x-stream,
-// x-page-style, x-function, x-method, x-interface, x-never, …) are NOT
-// reconstructed back into their pre-degrade TypeKinds — same precedent as
-// from-json-schema.ts, which likewise doesn't invert json-schema.ts's
-// x-class-name/x-function — they simply travel as opaque meta entries.
+// x-page-style, x-function, x-method, x-interface, x-never, …) travel as
+// opaque meta entries rather than being reconstructed back into their
+// pre-degrade TypeKinds — same precedent as from-json-schema.ts, which
+// likewise doesn't invert json-schema.ts's x-class-name/x-function.
 function extractExtensions(
   schema: OpenApiSchema,
   exclude: ReadonlySet<string>,

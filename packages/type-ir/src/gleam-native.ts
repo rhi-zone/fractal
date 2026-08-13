@@ -4,7 +4,7 @@
 // Tour, https://tour.gleam.run/, and gleam_stdlib's hexdocs) rather than
 // carried over from another projector:
 //
-//   - Gleam's ONLY structural declaration mechanism is the custom type:
+//   - Gleam's only structural declaration mechanism is the custom type:
 //     `pub type Name(a, b) { Ctor1(field: T) Ctor2(other: U) }`. There is no
 //     separate "record" keyword — a record is just a custom type with a
 //     single constructor and labelled fields
@@ -21,7 +21,7 @@
 //     lowercase names in parens after the type name
 //     (https://tour.gleam.run/data-types/custom-types/). Not used by this
 //     projector's own generated declarations (TypeRef carries no notion of a
-//     type PARAMETER, only concrete structure), but relevant to how `Option`/
+//     type parameter, only concrete structure), but relevant to how `Option`/
 //     `List`/`Dict` below are themselves generic.
 //   - `Option(a)` (`Some(a)` / `None`) and `Result(value, error)` (`Ok(value)`
 //     / `Error(error)`) are ordinary custom types from `gleam/option` and
@@ -52,10 +52,10 @@ import { toPascalCaseStripSeparators, toSnakeCaseStripSeparators } from "./codeg
 // snake_case). IR field/member names are wire-format strings (arbitrary
 // camelCase/kebab-case/whatever the source used) — converted here the same
 // way rust-serde.ts converts for Rust's identical casing convention, but
-// WITHOUT an equivalent to serde's `#[serde(rename = "...")]`: this projector
-// emits type declarations only (no codec), so there is nothing to keep a
-// wire-format name in sync with — the converted identifier is simply the
-// declaration.
+// without an equivalent to serde's `#[serde(rename = "...")]`, since this
+// projector emits type declarations only (no codec) — there is nothing to
+// keep a wire-format name in sync with, so the converted identifier is
+// simply the declaration.
 // ============================================================================
 
 // Gleam's reserved words (collected from the Gleam Language Tour's keyword
@@ -159,7 +159,7 @@ const handlers: Record<string, Converter> = {
   },
   // No naming context here — see the `bareType`/hoisting path below for the
   // real (named) declaration-generating case used inside field/element
-  // positions that DO carry a name hint.
+  // positions that do carry a name hint.
   object: (_shape, meta) =>
     typeof meta.typeName === "string" ? toPascalCaseStripSeparators(meta.typeName) : "Dynamic",
   enum: (_shape, meta) =>
@@ -177,7 +177,7 @@ const handlers: Record<string, Converter> = {
   },
   ref: (shape) => toPascalCaseStripSeparators((shape as TypeShape & { kind: "ref" }).target),
   // No struct-merge/mixin construct in Gleam, and (unlike elm-json.ts, which
-  // can splice merged fields into an INLINE anonymous record) no anonymous
+  // can splice merged fields into an inline anonymous record) no anonymous
   // record syntax to splice a merge into even if the field types were
   // combined — degrades to the first member's own rendering, the same
   // lossy convention rust-serde.ts's `intersection` handler uses for the
@@ -188,7 +188,7 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members;
     return first === undefined ? "Dynamic" : toGleamType(first);
   },
-  // Gleam function TYPES: `fn(ParamType, ...) -> ReturnType` — no parameter
+  // Gleam function types: `fn(ParamType, ...) -> ReturnType` — no parameter
   // names in type position (https://tour.gleam.run/functions/functions/'s
   // `fn` syntax, types-only form). `thisType`, if present, has no receiver
   // position in Gleam (functions are not methods of a type) — prepended as
@@ -209,7 +209,7 @@ const handlers: Record<string, Converter> = {
   //
   // Gleam has no interface/trait/mixin construct — but unlike `instance`
   // (pure nominal identity, no structure to preserve) an `interface`'s
-  // `methods` map IS expressible: Gleam functions are first-class values, so
+  // `methods` map is expressible: Gleam functions are first-class values, so
   // a record of function-typed fields is a faithful (if unenforced —
   // there's no vtable/dispatch, just a plain value) rendering rather than an
   // opaque degrade. Hoisted like `object` — see `bareType` below.

@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-standard-schema.ts — @rhi-zone/fractal-type-ir/from-standard-schema
-//
 // FROM-direction ingester: any object implementing the Standard Schema spec
 // (https://standardschema.dev/) -> TypeRef. Standard Schema is a thin,
 // vendor-neutral validation interface (`~standard.validate`) that Zod,
@@ -10,17 +8,17 @@
 // vendor's own structural description rather than a guess. "Richest of
 // what is available", not "lossless": see the caveat on tier 1 below.
 //
-// RUNTIME path. Everything below is bounded by what is observable from a live
-// schema OBJECT. When compiler context is available — a build step, a codegen
-// pass, anything holding a `ts.Program` — prefer
-// `from-standard-schema-type.ts`'s `fromStandardSchemaType`, which resolves
+// This module covers the runtime path, bounded by what is observable from a
+// live schema object. When compiler context is available — a build step, a
+// codegen pass, anything holding a `ts.Program` — `from-standard-schema-type.ts`'s
+// `fromStandardSchemaType` is the richer alternative: it resolves
 // `~standard.types.output` through the type checker and subsumes all three
-// tiers here: it recovers optionality, untaken union branches, enum members,
+// tiers here, recovering optionality, untaken union branches, enum members,
 // and nominal/branded identity, none of which any runtime observation can
-// supply. It also reads `~standard.types` at all, which is a PHANTOM property
-// the spec defines for compile-time inference and implementations typically do
-// not populate at runtime — so tier 2 below fires only when a vendor happens to
-// leave a real value there.
+// supply. It also reads `~standard.types` at all, which is a phantom property
+// the spec defines for compile-time inference and implementations typically
+// do not populate at runtime — so tier 2 below fires only when a vendor
+// happens to leave a real value there.
 //
 // The tiers below are the fallbacks for when no compiler context exists.
 //
@@ -30,7 +28,7 @@
 //      support 2020-12 — both are the spec's "strongly recommended"
 //      targets) and delegate to fromJsonSchema().
 //
-//      Best of the three paths, but NOT lossless. Two different losses,
+//      Best of the three paths, but not lossless. Two different losses,
 //      worth separating because only one is inherent:
 //
 //      (a) Inherent to JSON Schema. Arbitrary `.refine()` predicates and

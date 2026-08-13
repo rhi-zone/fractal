@@ -1,15 +1,13 @@
-// packages/type-ir/src/from-typescript.memory.test.ts — @rhi-zone/fractal-type-ir
-//
-// MEMORY-SHAPE REGRESSION GUARD for `createExtractorProgram`.
+// Memory-shape regression guard for `createExtractorProgram`.
 //
 // Incident this guards against: `the sibling codebase`'s 16-slice validator codegen
 // script (`apps/web/scripts/codegen-fractal-validators.ts`) called
-// `buildValidatorModuleSource` once per slice, sequentially, in ONE process
+// `buildValidatorModuleSource` once per slice, sequentially, in one process
 // — and, before `createExtractorProgram` grew a multi-root form, every one
-// of those calls built its OWN fresh `ts.Program` internally (walkTree ->
+// of those calls built its own fresh `ts.Program` internally (walkTree ->
 // createExtractorProgram(entryFile)). A `ts.Program`'s dominant cost is
 // parsing+binding its whole transitive import closure, not the root file
-// itself — measured against the real the sibling codebase repo, ONE slice's Program
+// itself — measured against the real the sibling codebase repo, one slice's Program
 // alone peaked ~3-5.5GB RSS. Building 16 of them back-to-back in one
 // process, without ever passing a shared Program, let the garbage from
 // earlier iterations pile up faster than the GC reclaimed it, and RSS
@@ -19,29 +17,29 @@
 //
 // This file cannot depend on the real the sibling codebase repo (wrong direction of
 // coupling — an upstream package's tests must not reach into a downstream
-// consumer's tree), so it reproduces the SHAPE of the problem with a
+// consumer's tree), so it reproduces the shape of the problem with a
 // synthetic fixture generated at test time: many entry files that all
 // import a shared, deliberately large type module — the same shape as
 // the sibling codebase's 16 slices, which all transitively import the same
 // kernel/schema/adapter types. The synthetic fixture is written to a temp
-// directory (never checked in) with NO tsconfig.json, so
+// directory (never checked in) with no tsconfig.json, so
 // `createExtractorProgram` falls back to `FALLBACK_COMPILER_OPTIONS` —
 // fully self-contained, no dependency on this repo's own project config.
 //
 // Two kinds of assertion:
-//   1. DETERMINISTIC (the real gate — not timing/GC-dependent): the shared
-//      multi-root Program's total parsed-file count is close to what ONE
-//      single-entry Program costs, while the SUM of N independent
+//   1. Deterministic (the real gate — not timing/GC-dependent): the shared
+//      multi-root Program's total parsed-file count is close to what one
+//      single-entry Program costs, while the sum of N independent
 //      single-entry Programs' file counts is ~N times that — this is the
 //      literal mechanism the memory blowup is made of, and it can't flake.
-//   2. MEASURED (informative, generous threshold, forced GC before each
+//   2. Measured (informative, generous threshold, forced GC before each
 //      reading via `Bun.gc(true)`): actual heapUsed comparison between the
-//      "16 independent Programs in one process" path (the exact PRE-FIX
-//      shape — still what happens today if a caller omits the `program`
-//      parameter, e.g. a one-off single-file extraction) and the "one
-//      shared Program" path (the FIX). Real memory measurement is
-//      inherently noisier than (1), so the threshold leaves wide margin —
-//      the point is to catch a gross regression, not to pin an exact number.
+//      "16 independent Programs in one process" path (the pre-fix shape —
+//      still what happens today if a caller omits the `program` parameter,
+//      e.g. a one-off single-file extraction) and the "one shared Program"
+//      path (the fix). Real memory measurement is inherently noisier than
+//      (1), so the threshold leaves wide margin — the point is to catch a
+//      gross regression, not to pin an exact number.
 
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -53,7 +51,7 @@ const ENTRY_COUNT = 12;
 /** Each generated interface gets this many fields — big enough that the
  * shared module's parse+bind cost is measurable in the tens-of-MB range
  * (not a full real-app's multi-GB closure, since that would make the test
- * itself slow/heavy — only the SHAPE of "many roots share one big
+ * itself slow/heavy — only the shape of "many roots share one big
  * closure" needs reproducing, not the absolute scale). */
 const INTERFACE_COUNT = 400;
 const FIELDS_PER_INTERFACE = 25;
@@ -97,7 +95,7 @@ function writeSyntheticFixture(): { dir: string; entryFiles: string[] } {
 }
 
 describe("createExtractorProgram — memory-shape regression (batch vs per-call)", () => {
-  it("a multi-root Program's file count is close to ONE single-root Program's — not N times larger", () => {
+  it("a multi-root Program's file count is close to one single-root Program's — not N times larger", () => {
     const { dir, entryFiles } = writeSyntheticFixture();
     try {
       const singleProgram = createExtractorProgram(entryFiles[0]!);
@@ -112,7 +110,7 @@ describe("createExtractorProgram — memory-shape regression (batch vs per-call)
       expect(sharedFileCount).toBeLessThan(singleFileCount * 2);
       expect(sharedFileCount).toBeGreaterThanOrEqual(singleFileCount);
 
-      // The PRE-FIX shape: N independent single-root Programs, each paying
+      // The pre-fix shape: N independent single-root Programs, each paying
       // the full shared.ts parse+bind cost again. Sum of their file counts
       // is ~N times the shared Program's count — this is the literal
       // mechanism of the accumulation (not the GC-timing part, which is
@@ -130,9 +128,9 @@ describe("createExtractorProgram — memory-shape regression (batch vs per-call)
   it("measured: building one shared Program for the whole batch uses far less peak heap than building one independent Program per entry, in the same process", () => {
     const { dir, entryFiles } = writeSyntheticFixture();
     try {
-      // PRE-FIX shape: exactly what codegen-fractal-validators.ts did before
+      // Pre-fix shape: exactly what codegen-fractal-validators.ts did before
       // this fix — loop, build a fresh Program per entry, keep going. No
-      // manual GC between iterations (this IS how the real script ran).
+      // manual GC between iterations (this is how the real script ran).
       const heapBefore = forceGcHeapUsed();
       let independentPeak = heapBefore;
       for (const entry of entryFiles) {
@@ -142,10 +140,10 @@ describe("createExtractorProgram — memory-shape regression (batch vs per-call)
       }
       const independentFinal = forceGcHeapUsed();
 
-      // FIX shape: one shared Program, built once, reused (conceptually —
-      // here just built once, since there's nothing left to reuse it FOR
+      // Fix shape: one shared Program, built once, reused (conceptually —
+      // here just built once, since there's nothing left to reuse it for
       // in this isolated test; the reuse itself is exercised by
-      // build.test.ts's "program shared across TWO different entry files").
+      // build.test.ts's "program shared across two different entry files").
       const sharedProgram = createExtractorProgram(entryFiles);
       sharedProgram.getTypeChecker();
       const sharedFinal = forceGcHeapUsed();

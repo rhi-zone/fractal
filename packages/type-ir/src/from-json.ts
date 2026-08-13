@@ -1,8 +1,6 @@
-// packages/type-ir/src/from-json.ts — @rhi-zone/fractal-type-ir/from-json
-//
 // FROM-direction projector: a single JSON value -> TypeRef, by structural
 // heuristic. Mirrors from-json-schema.ts's construction style (t(), types,
-// the same extension-kind constructors) but the input is a JSON *value*,
+// the same extension-kind constructors) but the input is a JSON value,
 // not a schema — there's no declared type to read, only a shape to guess.
 //
 // Core heuristic (see the design sketch this implements): narrow away from
@@ -13,10 +11,10 @@
 // is a single-inhabitant type, zero information gain once the shape is
 // already known.
 //
-// This function infers from ONE value. Corpus inference (enum detection,
-// discriminated unions, dict-vs-record, dirty-data modeling) needs multiple
-// samples to find accumulation signal and is out of scope here — see the
-// design sketch for that follow-on work.
+// This function infers from a single value. Corpus inference (enum
+// detection, discriminated unions, dict-vs-record, dirty-data modeling)
+// needs multiple samples to find accumulation signal and is a separate,
+// later stage — see the design sketch for that follow-on work.
 
 import { t, types, type TypeRef } from "./index.ts";
 import {
@@ -240,11 +238,11 @@ function inferObject(value: Record<string, unknown>, config: ResolvedConfig): Ty
   for (const key of keys) fields[key] = inferValue(value[key], config);
   const ref = t(types.object(fields));
 
-  // A class instance that DOES carry data. `instance` is nominal-only by
+  // A class instance that carries data. `instance` is nominal-only by
   // design ("never structure" — see index.ts), so returning it here would
-  // discard the fields we can actually see, which downstream projectors that
-  // cannot express nominal identity must then render as an opaque placeholder.
-  // Keep the structure and record the identity alongside it.
+  // discard the visible fields; downstream projectors that cannot express
+  // nominal identity render those as an opaque placeholder instead. The
+  // structure is kept and the identity recorded alongside it.
   return className !== undefined ? t(types.object(fields), { className }) : ref;
 }
 
@@ -271,14 +269,16 @@ function inferValue(value: unknown, config: ResolvedConfig): TypeRef {
 }
 
 /**
- * Per-value structural typing: the shape of ONE value, with no cross-observation
- * evidence. This is the leaf primitive the corpus pipeline is built on —
- * `resolveEvidence` types every raw value with this and then merges.
+ * Per-value structural typing: the shape of one value, with no
+ * cross-observation evidence. This is the leaf primitive the corpus pipeline
+ * is built on — `resolveEvidence` types every raw value with this and then
+ * merges.
  *
- * It is NOT the public single-value entry point. `fromJson` below is, and it
- * routes through the full corpus machinery so that a lone document still gets
- * evidence-based inference for its nested arrays (an array of 30 elements is 30
- * observations, whatever the corpus size).
+ * The public single-value entry point is `fromJsonCorpus` in
+ * from-json-corpus.ts (which imports this function as `fromJson`); it routes
+ * through the full corpus machinery so that a lone document still gets
+ * evidence-based inference for its nested arrays (an array of 30 elements is
+ * 30 observations, whatever the corpus size).
  */
 export function inferValueShape(value: unknown, config?: InferConfig): TypeRef {
   const resolved: ResolvedConfig = {
