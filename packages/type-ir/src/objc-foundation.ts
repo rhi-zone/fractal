@@ -1,4 +1,4 @@
-// packages/type-ir/src/objc.ts — @rhi-zone/fractal-type-ir/objc
+// packages/type-ir/src/objc-foundation.ts — @rhi-zone/fractal-type-ir/objc
 //
 // Objective-C projector: TypeRef -> idiomatic Objective-C header (.h) +
 // implementation (.m) content. Follows the same Converter/`resolve` pattern
