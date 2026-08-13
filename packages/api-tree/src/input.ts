@@ -491,9 +491,8 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
 // STRUCTURALLY, by literal key, never by importing either package's own
 // meta-fragment interface.
 //
-// EXACTNESS FINDING (verified against a scratch `tsc` repro, not asserted
-// from reasoning alone — see this phase's session trace): a field with no
-// explicit `sourceMap` entry could, at `op()` time, either be a PATH-slug
+// EXACTNESS FINDING: a field with no explicit `sourceMap` entry could, at
+// `op()` time, either be a PATH-slug
 // match or fall through to the protocol's own DEFAULT store — and which one
 // is unknowable HERE regardless of `moveTo`. Per 24bd2af (`fix(http-api-
 // projector): moveTo no longer affects input binding`), a leaf's path-slug
