@@ -41,6 +41,10 @@
       "excerpt": "https://kotlinlang.org/api/core/kotlin-stdlib/kotlin/-pair/ and -triple/ —",
       "approvedAt": "2026-08-13T07:09:42.438Z"
     },
+    "018c9e459c547372aeb60011dc3dfa2000330b1f54e7c0d1a1ddaa1336db9901": {
+      "excerpt": "Lower a `TypeRef` to a C++17 header-shaped string targeting simdjson's DOM",
+      "approvedAt": "2026-08-13T07:11:58.695Z"
+    },
     "01c19533f0d888ea44ba45d2ca3d5a3609ccca56df41b2de3dcfae5d7b69d3ab": {
       "excerpt": "True when `newText` provably carries the exact same comments as `oldText`",
       "approvedAt": "2026-08-13T05:02:19.633Z"
@@ -109,6 +113,10 @@
       "excerpt": "A field's Kotlin type plus any nested declarations it needed to synthesize.",
       "approvedAt": "2026-08-13T07:09:42.441Z"
     },
+    "053920a779fd0950755ba6977095fb2f9d916adf4ad8ff03e00958f7d9519773": {
+      "excerpt": "Handled structurally by `toWasmBindgen`/`buildFunction` (a callable",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "053d704d920603184cee75a17cfd1378dde96aa84826e4bcc3dc405cbf2ae8b2": {
       "excerpt": "The Swift type expression for `ref` in a field/element/key/value",
       "approvedAt": "2026-08-13T07:10:46.701Z"
@@ -168,6 +176,10 @@
     "07df2dc238c09870579de921dafa698f201b05d2c5c81943fe3bc22448442f8f": {
       "excerpt": "defined value (`mergeRecords` never assigns `undefined` itself;",
       "approvedAt": "2026-08-13T05:06:32.676Z"
+    },
+    "080a4736697928c2705c60a4011bcf71882ec753d696bde5c8bfb3ebf80b43f5": {
+      "excerpt": "interface{} is Go's only universal value holder pre-generics; `null`",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "08168846e9e85ee3115360151c0861f32e874118ac1e451e0ba6c913221fbe99": {
       "excerpt": "A spy rewriter, built on the exported `mapRoute` tree-visitor, wraps",
@@ -288,6 +300,10 @@
     "0cf82a7fde44d0d74f118b195d63248818100fed94d428b03d2d062d0dbc74fe": {
       "excerpt": "Input goes into query params for read-only/deletion ops.",
       "approvedAt": "2026-08-13T07:08:47.723Z"
+    },
+    "0d013e7e4816ece89df7a68f9bc311ce060a0f8f8867d8386a3d4bc0ac8a3081": {
+      "excerpt": "String-backed const block (rather than an iota int) — enum members here",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
     },
     "0d13213adc301304b5513f1598ea275695ed8f8b02adb0aabd232e0b967ec04d": {
       "excerpt": "Called once per connection when a `connection_init` message arrives,",
@@ -509,6 +525,10 @@
       "excerpt": "No native SwiftyJSON streaming/pagination-window construct — degrades",
       "approvedAt": "2026-08-13T07:10:46.701Z"
     },
+    "1408d1e2058d559ecddbda5c90a177093ab23617e2b098a030d97d45826c3669": {
+      "excerpt": "packages/type-ir/src/go-encoding-json.ts — @rhi-zone/fractal-type-ir/go-encoding…",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
+    },
     "140e0ad3fd93c70f725da98c335824fadd3aee5c336318c3ac20f01ea26d179d": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.673Z"
@@ -532,6 +552,10 @@
     "145fefd50f5a7ce855ac418e4bfc88faa67b0fc0bf459520b27d4d0052ffde17": {
       "excerpt": "dry-types has no intersection combinator (`&`-composing two type",
       "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
+    "146583a87708afc23dae3a73825df856248f36a0ed21736b0bce6c2d65ec227a": {
+      "excerpt": "Same primitive vocabulary as go-encoding-json.ts — jsoniter decodes into",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
     },
     "151ca1e3893550d44b93bfc3d0fa1feb057d4ac357d72802479ea87b800680b7": {
       "excerpt": "Top-level entry point: `object` and `enum` TypeRefs (given a `name`) lower",
@@ -557,6 +581,10 @@
       "excerpt": "No C# equivalent to `never` — degrades to `object`, flagged via comment",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "16175f4ade5d7d9aa8204c256759e0ceaff3784c670f69dc1e3af9ffc0b6737b": {
+      "excerpt": "Convert a `TypeRef` to idiomatic Crystal. Given `name` and an `object`/",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "16251f035dfcfa93d9f5fc25af37d1c386733633e62747d937d5a8d3264943e4": {
       "excerpt": "process.memoryUsage().heapUsed reports deltas in ~10-30MB steps on",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -564,6 +592,10 @@
     "164119331974471e3b07a9f004ee0763606f220bd58f3cf2329743608fd8714a": {
       "excerpt": "FlatBuffers has no doc-comment keyword of its own (§ \"Schemas\"); `///`",
       "approvedAt": "2026-08-13T07:09:56.017Z"
+    },
+    "1649723bc9ea8aff603f53229d4c2c2ed34e82a3e09a4d77b61d99c39c8f08f3": {
+      "excerpt": "No native async-iterable construct — degrades to the same `Array(T)`",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "16729507b5ce1e68e2870bc0af59f1db3a691843c5826b7655e2b8ad19447e0a": {
       "excerpt": "consume this node's own prefix",
@@ -633,6 +665,10 @@
       "excerpt": "@ts-expect-error — a decoder that only accepts `string` (assuming",
       "approvedAt": "2026-08-13T07:10:02.235Z"
     },
+    "18141b7582cf5312d785934601564fd850625f028b312556bf06c4d4293fc88d": {
+      "excerpt": "No naming context here — see the `bareType`/`buildStruct` field-context",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "1857b3571e82dc3fa29b277af48aa96da18238da9394fcd3350ba5dd31176651": {
       "excerpt": "Project a `TypeRefDocument` to a set of Starlight-compatible MDX reference",
       "approvedAt": "2026-08-13T07:10:43.804Z"
@@ -640,6 +676,10 @@
     "185e4bb06c6b790ec539e07b69461da20feb27c43a0cfa8ad70e5dfcd58be644": {
       "excerpt": "Two distinct leaves could in principle share a base name only if",
       "approvedAt": "2026-08-13T07:11:09.579Z"
+    },
+    "185ed8ecfd5fb6c4d6d14a01debef7c8c4dc5e7e13724daac28ffd5bbda0e010": {
+      "excerpt": "Render an `enum` TypeRef as a Crystal `enum` declaration — members",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "188874400fe62bf44a1cc00d5a119cc6c1cb5fe4178deeeb66edf8dae5027a15": {
       "excerpt": "Map fields carry no label (§ \"Maps\": \"repeated is not allowed for map fields\"); …",
@@ -657,6 +697,10 @@
       "excerpt": "Checkout action subtree — nested directly under the fallback (no",
       "approvedAt": "2026-08-13T07:08:47.730Z"
     },
+    "193692f4d3e3b78cffe1328f60880681021e5ded5d4bd8c1c6ae6102c26e3aec": {
+      "excerpt": "Escapes a snake_case Rust identifier that collides with a reserved keyword",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "195435ddb3c7d1ae8d30c5ccb31bbbbfe69c300c93f1fda464bf2eb6952d2776": {
       "excerpt": "Renders a union as a Java 17+ sealed interface (https://openjdk.org/jeps/409)",
       "approvedAt": "2026-08-13T07:09:42.437Z"
@@ -673,9 +717,17 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
     },
+    "19b7a68f72d3c49362ff1b799c63b36809a63d326132c32687d00779dacde4b7": {
+      "excerpt": "No native pagination construct — degrades to `Array(T)` over the page's",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "19ee15fb02cf0883f7eb71dc2c40f156835cf59f190aff3d5aa9c9391281294f": {
       "excerpt": "dry-types has no bottom/uninhabited type — `Types::Any` is the honest",
       "approvedAt": "2026-08-13T07:11:42.588Z"
+    },
+    "19eeb1261b00ea2afe1ba985703c1957f6ddd1902e275ed63cf12b2e1c9973e1": {
+      "excerpt": "Crystal enum members are conventionally PascalCase constants",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "1a1a9a5a83306725dab8d79343fab54430445d6f9aab17f86c2680d143a626be": {
       "excerpt": "generic params, e.g. `struct List(T)` — not modeled",
@@ -709,6 +761,14 @@
       "excerpt": "Invalid JSON was received by the server.",
       "approvedAt": "2026-08-13T07:11:45.921Z"
     },
+    "1b8abc74743a6787c4a08d64f3c9503211b8dad80dc3f8adb13958c0b338c141": {
+      "excerpt": "Lower a TypeRef to idiomatic Go/sonic source: one or more top-level",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
+    "1bba5775c0622ee231e6473e7d6709353d938a61066c119881a477b0b173957a": {
+      "excerpt": "Go has no tagged-union/sum-type construct: the idiomatic encoding is a",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
+    },
     "1bdec8996a0ae2da1a740fb192815e778531f7bad271f6374fbcd18fd83bd69c": {
       "excerpt": "Build a `{ subscribe, resolve }` field config for a subscription",
       "approvedAt": "2026-08-13T07:08:38.040Z"
@@ -717,6 +777,14 @@
       "excerpt": "Top-level entry point: `object` and `enum` TypeRefs (given a `name`) lower",
       "approvedAt": "2026-08-13T07:11:42.597Z"
     },
+    "1c02df7016427bda0ecdaf5e4c5ef28fa398ca3bea01dd19a17ed0bd304ca520": {
+      "excerpt": "No struct-merge/mixin construct in Rust — lossy: falls back to the first",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
+    "1c4e0ce0e5f26de9ec9ae27a694f0f5893bfddfbd46f3fadd2cb671fae3bf156": {
+      "excerpt": "Sanitizes `base` into a Go identifier via `goFieldIdent`, then",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
     "1c61e2d46d30f492f40daba28b6b680000158c3faa034bc3c402c393e874fe78": {
       "excerpt": "PHP's `?T` nullable shorthand only applies to a single type; a union",
       "approvedAt": "2026-08-13T07:11:47.432Z"
@@ -724,6 +792,10 @@
     "1c652c42023b94f71a701f4c6cdd741afe555e14de10814f4e1d5329a17ef7b0": {
       "excerpt": "Path parameters: extracted from the computed path",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "1c6aff0abe7d49000383e58b538627de60a50e00dd8ed3b35f435ba7d789f077": {
+      "excerpt": "`interface`'s methods have no data-field analogue (see index.ts's",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "1c76ffaae93aa6dc8ec24d632fb0584c9ffde1c7cbc4d86cec30e4f56909feed": {
       "excerpt": "The subset of Bun's `ServerWebSocket` this adapter drives.",
@@ -761,9 +833,17 @@
       "excerpt": "Declaration helpers ---------------------------------------------------------",
       "approvedAt": "2026-08-13T07:10:55.724Z"
     },
+    "1e0031e8d8ce1fd56bc5a2cc8fc3379e59fe914f24cea878da0e465961536ab3": {
+      "excerpt": "Lower a `TypeRef` to idiomatic Rust source. With `name`, emits a named",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "1e3d14560a00a9aa37c41e7b7cff6b8eab258c421a2b6197685915457f73729c": {
       "excerpt": "packages/api-tree/src/cli.test.ts — CLI build/check/watch cache behavior",
       "approvedAt": "2026-08-13T07:10:02.239Z"
+    },
+    "1e4295496f2e1d457a81b4ca65d0111db1d4f336850dc9e81c72f881231275f2": {
+      "excerpt": "Delegates to the shared explanatory message the inline-position",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "1e6fa53cce058ab38f1fad335f4b71bb2c04ba113f52254cc838d74b46547cb0": {
       "excerpt": "============================================================================",
@@ -813,6 +893,10 @@
       "excerpt": "Schema definitions, directive definitions, extensions, and",
       "approvedAt": "2026-08-13T07:10:20.620Z"
     },
+    "20c134ae5db1484261172be7a14e485d7a2ff7948cd3e67c2cf31ec3619a8b4f": {
+      "excerpt": "easyjson's generated code decodes RFC 3339 timestamps into time.Time the",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
+    },
     "20cf486b1383361516f1c72d78c44afabee9f2ec516487cc0652a019fe3b22c3": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:45.921Z"
@@ -836,6 +920,10 @@
     "2169319532e37d8471247f5184526bd47a8373d53f2138034f0c761b841ef4f7": {
       "excerpt": "`const` for a field marked `readonly` — Sorbet's T::Props distinguishes",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "2192216b6101ec5f8c41b5bb7f58f865af8c09a56451f69085e714ae86a1982c": {
+      "excerpt": "Kinds whose Go rendering is already a nil-able reference type (slice, map,",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
     },
     "2192ff06919ee36163fc1d4067a94546332152b302b41d26e7563958383c883d": {
       "excerpt": "draft-04 has no boolean schemas (that arrives draft-06), so `never` cannot be",
@@ -869,6 +957,10 @@
       "excerpt": "C# has no structural intersection type — merges every `object` member's",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "228766f6d6a742a28019d99e4c200fefcf3c586ce138375f7f2816c1be525d18": {
+      "excerpt": "A `interface` TypeRef (service method surface — see index.ts's",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
+    },
     "22a46ed136abd9ebb6341d0e4b9c073a909b3ad303655a6e63ef050ae556a0f4": {
       "excerpt": "Convert a struct/group's member list into an `object`-field record —",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -884,6 +976,10 @@
     "2345ae0ffc9649c75b6ebb99c95f475702da9eb37f7592fac17f0cfba0f6afb2": {
       "excerpt": "No native async-stream construct — degrades to `iterable` (PHP's",
       "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
+    "235535c5f3928626cbce6aff10908f34a54cf4262801932211d24f8490fd434a": {
+      "excerpt": "glaze supports std::variant natively (dispatched on parse by trying each",
+      "approvedAt": "2026-08-13T07:11:58.685Z"
     },
     "239e90e42c8219cd9c364fb8ed03b4b00b5526a33aef70d848a73f16e9247e87": {
       "excerpt": "`get`/`remove` (siblings of the fallback, not nested under it) get",
@@ -992,6 +1088,14 @@
     "27650ab44b854e81ac43530a6d83544ab55cce194da324380accc24ceac5acff": {
       "excerpt": "Classic POJO: private final fields (annotated `@SerializedName` where the",
       "approvedAt": "2026-08-13T07:09:42.427Z"
+    },
+    "27770411ed677885dde8655f63765a39ffd15e3072cc917b3932ac641fabad2d": {
+      "excerpt": "Same primitive vocabulary as go-encoding-json.ts — sonic decodes into the",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
+    "27840f2db5e355cd98f07056101b866b0863ca76c17edb729dc10e7ce715f240": {
+      "excerpt": "Lower a TypeRef to idiomatic Go source: one or more top-level declarations",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
     },
     "27d686df4253af3bae338dc3a451b7e9c99d526e55d66d00abe43f1622178fc2": {
       "excerpt": "A service surface (`interface`) has no Sorbet value-type equivalent —",
@@ -1105,6 +1209,10 @@
       "excerpt": "GraphQL's own store names — the stores `graphql.source()`'s map accepts:",
       "approvedAt": "2026-08-13T07:11:09.591Z"
     },
+    "2c1275654063c5778408571f262153dcc5f9da0f0e31c78dc36b6166c7178b1b": {
+      "excerpt": "packages/type-ir/src/go-sonic.ts — @rhi-zone/fractal-type-ir/go-sonic",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
     "2c1c3c0c016c2cf1a7c021343c7252012f9a3b4aedb075a1534056a34bd2b3ac": {
       "excerpt": "`get`/`remove` are authored as SIBLINGS of `books`' fallback",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -1129,6 +1237,10 @@
       "excerpt": "Iterative (not recursive) so an 8k-char route's char-per-state chain can't blow …",
       "approvedAt": "2026-08-13T07:11:03.688Z"
     },
+    "2ca1e1805b20ba069aee64b2642342f0529a02681f5a048b010b066fb1803829": {
+      "excerpt": "unreachable — handlers.union always throws",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "2cb3a2a59b550d9d547fe9a3ab5836ed03f7fcfaa1da8c028aeda78721189bc8": {
       "excerpt": "Plain blockquote — no admonition extension assumed available.",
       "approvedAt": "2026-08-13T07:10:43.815Z"
@@ -1149,6 +1261,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
     },
+    "2dd01bdac998016aee56506e8546a8564d9c1782c34bc0a78fe9e4cb4298ce45": {
+      "excerpt": "`rendered` is already the freshly-declared named type from goType above.",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
     "2e3d7bf74ca0e41ae1e3403512932b51a4b4c506b50ad06c7b8e32c04bd13a24": {
       "excerpt": "Sphinx has no built-in (default-install) tabbed-content directive — a",
       "approvedAt": "2026-08-13T07:10:43.809Z"
@@ -1164,6 +1280,10 @@
     "2ec183af56ed47d82e760275ebedd8bf01a5f87bdf3beddde68e5210579b14b8": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.576Z"
+    },
+    "2f00560022f92a1ee55ddbe66fbc0bf2d647db321a9ccda156884e1eda990f97": {
+      "excerpt": "Fieldless / string-discriminant enum — matches wasm-bindgen's own",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "2f8a4606c79979920e743164277250e39161921b4e775283b0175d861d31e506": {
       "excerpt": "Swagger 2.0 §4.7.4: `discriminator` is a *string* naming the property",
@@ -1189,6 +1309,10 @@
       "excerpt": "packages/graphql-api-projector/src/presets.test.ts — createHttpGraphQLServer tes…",
       "approvedAt": "2026-08-13T07:11:09.590Z"
     },
+    "3090d05973bede0100e92227239d756df2cec363cefd80ef539ebf4c64eea6e3": {
+      "excerpt": "glaze's `glz::object(...)` table (https://github.com/stephenberry/glaze/blob/mai…",
+      "approvedAt": "2026-08-13T07:11:58.685Z"
+    },
     "309bf20ad96f671e07a87d11839780483786919b215a7273f8bc0e1290113d9b": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:35.589Z"
@@ -1209,6 +1333,10 @@
       "excerpt": "Adapts a real `GraphQLServer.execute` into a `GraphQLTransport`.",
       "approvedAt": "2026-08-13T07:08:38.036Z"
     },
+    "310fc23d79aa0fb1f839fbb1ebb1a30404adbf8ce2b1975400dfbcb18bd8725a": {
+      "excerpt": "glaze's `glz::enumerate` table (https://github.com/stephenberry/glaze/blob/main/…",
+      "approvedAt": "2026-08-13T07:11:58.685Z"
+    },
     "311386fcc2348f6cfb49036c22e61172f8ae939d16fc396b359b6a5fd180ebb0": {
       "excerpt": "Emit a data class: `final` fields, a `const`-free constructor with named",
       "approvedAt": "2026-08-13T07:10:51.094Z"
@@ -1224,6 +1352,10 @@
     "319269a07473bf7cdb55d5bdd43c20e5adb13afa6da377a5663123366030ce95": {
       "excerpt": "`contextValue` passed to every `server.subscribe(...)` call on this",
       "approvedAt": "2026-08-13T07:10:43.581Z"
+    },
+    "31abd49670d1dd02479a7451c70304dc742ffb6434d705f48ec100760f937fd8": {
+      "excerpt": "packages/type-ir/src/cpp-simdjson.ts — @rhi-zone/fractal-type-ir/cpp-simdjson",
+      "approvedAt": "2026-08-13T07:11:58.695Z"
     },
     "31c3fbf381b9d4e3814083f9f76c8206313c87b435c003d1cae38d2232a82007": {
       "excerpt": "============================================================================",
@@ -1252,6 +1384,10 @@
     "32bea4c88f24bc4db306927a97dad32d54797df1b3b407dd618fb8e3bc4fdb1b": {
       "excerpt": "Around-hooks wrapping the handler call — `F => F` where",
       "approvedAt": "2026-08-13T07:08:38.040Z"
+    },
+    "32d1590bf19704a74280d64902ad4b1969cf7365a32831ddf78a4c2242d80e2e": {
+      "excerpt": "A `interface` TypeRef (service method surface — see index.ts's",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "32f37b990d1b7a44fdbdacf4ba0190e39009303a1b3ed242019fce0df0b3ce09": {
       "excerpt": "Swift has no structural intersection/mixin construct; lossy fallback",
@@ -1445,6 +1581,10 @@
       "excerpt": "Dialect-appropriate rendering of `meta.description` — MySQL's native inline",
       "approvedAt": "2026-08-13T07:11:45.912Z"
     },
+    "39ed77462095cb4c3661e35e0430de86bf206913753c07385d814a521d51fe7b": {
+      "excerpt": "Field/param-context inline type: same as `toWasmBindgenType`, except",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "39f747736251803c2098abcb54bfc56dd2253b0b62ac0c0b0b6ceff6b837ad35": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:02.233Z"
@@ -1597,9 +1737,17 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.576Z"
     },
+    "3ecd1153b8aa6409a82234f9252e80572ccb21eb6fc5c01a495b40a7ee721d2e": {
+      "excerpt": "discriminator field itself is not rendered as a struct field",
+      "approvedAt": "2026-08-13T07:11:58.699Z"
+    },
     "3eef7f7a3634ec12b6ecdc59a1739dccb8868ec76413bf51fc52018da2d67fa0": {
       "excerpt": "A JSON-Schema-compatible object (open bag — OpenAPI 3.1 allows any $schema).",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "3ef0f9e85cf780c12c7b5c996af80ca2dcc930b86d279b81510cf9762b030d97": {
+      "excerpt": "Each variant gets its own hoisted name — reusing the union's own `hint`",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "3f6856e34bd8d4b76da3f26d337bee0c3e217434533b844d0a0e0251b16ef673": {
       "excerpt": "`$comment` is a draft-07+ keyword (json-schema.org draft-07 §10.1) — not part",
@@ -1620,6 +1768,10 @@
     "405b45da81e02798fa8209d58cd28344ee8f5232f0e25358d74682934d58dbc1": {
       "excerpt": "Both a TypeScript-like expression and the def's real JSON Schema (via",
       "approvedAt": "2026-08-13T07:10:43.813Z"
+    },
+    "4143468630fd30c348d58195c57bea47ee5ed37c159b6b1950a1d3cf8e683345": {
+      "excerpt": "One `toCrystal(ref, name)` declaration per registry entry, joined with",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "4157e81e9aa6d9dd8625e7fbd76d2c87f2c2c93970a5a0e46ed4e36894af08d7": {
       "excerpt": "============================================================================",
@@ -1717,6 +1869,14 @@
       "excerpt": "camelCase/snake_case/kebab-case (or already-PascalCase) -> PascalCase —",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "44abedb4f4a3e1cf80b5deedc926b9e3baa47e1b14d285a10143a68de53becb4": {
+      "excerpt": "String-backed const block (rather than an iota int) — enum members here",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
+    },
+    "44b0407e30907b2940aa49fc50ee390369573c91e2f4ac86378311ebe832bc8c": {
+      "excerpt": "jsoniter's ConfigCompatibleWithStandardLibrary decodes RFC 3339",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
+    },
     "44ce1c411e235106986bb9fd812bc4397e56cfd828ee3cd948fe048ac9548497": {
       "excerpt": "Full field-name override (prefix/camelCase-join ignored when set).",
       "approvedAt": "2026-08-13T07:08:35.589Z"
@@ -1724,6 +1884,10 @@
     "45313d74a6bbe8a3d071406a3fc5fc301c2c9a39d1ee0106ee1d83e78fc6bbba": {
       "excerpt": "prop/const declaration for one T::Struct field, handling the",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "454de68fe185e7d47f3acff22ecc4910e9fc090e3959600974e1e6a153a1bd07": {
+      "excerpt": "Name reference — same caveat as `instance` above (trusts a declaration",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "458079a87c48096e696fde2f9cc9d4d787862f1393581289c997b171e8c497a6": {
       "excerpt": "Proto3 enums (§ \"Enum\"): the first defined value's number must be 0.",
@@ -1785,6 +1949,10 @@
       "excerpt": "FlatBuffers has no nested-vector construct (§ \"Vectors\" —",
       "approvedAt": "2026-08-13T07:09:56.017Z"
     },
+    "47964ed31c7c30304269a0f472afbc9e06bbd0a0fe96146169bbc88c519b7e5a": {
+      "excerpt": "A kind with no direct wasm-bindgen ABI mapping. Throws instead of",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "47a5c8a6e91567e79b16960e20369aff3be45b3432567958cb2d0313afb7051d": {
       "excerpt": "https://kotlinlang.org/docs/lambdas.html#function-types — `(A, B) -> R`.",
       "approvedAt": "2026-08-13T07:09:42.441Z"
@@ -1817,6 +1985,10 @@
       "excerpt": "Fallback name derived purely from path + verb, for handlers absent from a name m…",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "48b00e5c7acd7f001e1e3a234dec0dff8ccacf2af38ad685c7d61eaf0dbc8062": {
+      "excerpt": "packages/type-ir/src/go-jsoniter.ts — @rhi-zone/fractal-type-ir/go-jsoniter",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
+    },
     "48c24faf356f81c0a78fcb12dbf2f027ba67506dcf6d627bd8c9d00fc7ffd3ba": {
       "excerpt": "Functions aren't persistable column data — same opaque fallback as the",
       "approvedAt": "2026-08-13T07:11:45.916Z"
@@ -1824,6 +1996,10 @@
     "492822a0014c22536fa4ec6ec53ee3a329b07297f8d83146953a1d8db93eb7d1": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
+    },
+    "49301a82893a0f123488a75020ca7cbb6c87616a48c78273e6d377ced417a621": {
+      "excerpt": "Free function (`function` kind with no `thisType`) as a",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "4982b171d37b9049e9136b309bbffe6dfca7b24b15674334097721a0bfce7af0": {
       "excerpt": "============================================================================",
@@ -1845,6 +2021,10 @@
       "excerpt": "A class instance carries only nominal identity (see type-ir's",
       "approvedAt": "2026-08-13T07:10:46.705Z"
     },
+    "49f8dc01dae94462267335014981d77fc1fa6f5b6a516776f8f9c17c9d99ad0b": {
+      "excerpt": "Base inline-expression handlers — the wasm-bindgen analogue of",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "4a1184f8fcc2897452d35ecd281bee026595685a3b3385777b24214ba8ffabb0": {
       "excerpt": "Everything a union layout needs to render DDL for a union-rooted TypeRef,",
       "approvedAt": "2026-08-13T07:11:45.912Z"
@@ -1852,6 +2032,10 @@
     "4a2c884d4c6778b7c4efa6631bc368f703916d2b43f8331459e630bf5c4b5d56": {
       "excerpt": "Resolves a TypeRef to its MSSQL column type string (no nullability/default/const…",
       "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
+    "4a3690724c5daeafcd2ad81c37d5b7b3c8b5ce9324b0af8bd0759dab71359cc3": {
+      "excerpt": "Go has no tagged-union/sum-type construct: the idiomatic encoding is a",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "4a53d4a0e49b4ae15e039d0e7120ebe859aee618fc01d0aceca8927f68cd33e8": {
       "excerpt": "Union/enum/intersection/function renderings contain literal `|`/`&`",
@@ -1864,6 +2048,10 @@
     "4a6e7202d0c98c31dfbf898a95efe930aae8e3083acce534a579ad6d09f2712a": {
       "excerpt": "`T`, or the merge-identity `object` when `T` is `undefined` — lets `FoldMetaList…",
       "approvedAt": "2026-08-13T05:12:43.183Z"
+    },
+    "4aa8bfe376da2accd06735d76fdc6d6259d904c8576371d88499605203c0c2c9": {
+      "excerpt": "Base inline-expression handlers — the Rust analogue of typescript.ts's",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "4aaad08463305ecde5f9484ba8b930aac8e67959eebb28f5af368cb24981d34b": {
       "excerpt": "`pattern` (regex) is intentionally skipped: T-SQL has no regex operator, and",
@@ -1900,6 +2088,10 @@
     "4b98c63aefb4f0fe0e32a21c2a0c33c410e2d8cd753325f2cb7f833bd75be27d": {
       "excerpt": "Emit a `mkdocs.yml` for the pages `toMkdocsReference` produces, wired for",
       "approvedAt": "2026-08-13T07:10:43.813Z"
+    },
+    "4bab1784d232978cb99579deb252cd9a8d0bb8f3bb22a396460d09c4867094c0": {
+      "excerpt": "A class instance carries only nominal identity (className/source),",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "4bcef60403cb44933954398cfb0735c531dd01d410d0c2f1b1f3175147ce8ed6": {
       "excerpt": "RFC 8927 §3.3.3 — enum form",
@@ -1981,6 +2173,10 @@
       "excerpt": "PHP has no structural intersection-type construct for anything but",
       "approvedAt": "2026-08-13T07:11:47.428Z"
     },
+    "4ffcb1e3fddc5b7cd9baf543d3795185234d65e56388afa88c945970d53a3ee7": {
+      "excerpt": "A class instance carries only nominal identity (className/source),",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
+    },
     "5018d66ce892ce0a376854d6a654f95771e59a21d1ca0af488226f2421e8b4f6": {
       "excerpt": "True when every union variant is (or descends from) `object` and they all",
       "approvedAt": "2026-08-13T07:09:42.441Z"
@@ -2029,6 +2225,10 @@
       "excerpt": "SDL return type for a leaf — the derived output TypeRef, or an honest `JSON` (nu…",
       "approvedAt": "2026-08-13T07:08:35.589Z"
     },
+    "51912a83d26150a04cecb9192ca12b7738411cb148d79110c0686412c0af8748": {
+      "excerpt": "Crystal has no bottom type usable in value position; `NoReturn` is the",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "51b3931b2a31d44b3ade8a816a38502e6ec1b73703e749fa6e25e53dd81e1f48": {
       "excerpt": "Full ordered arg list (captured-fallback first, then declared) — same order `pro…",
       "approvedAt": "2026-08-13T07:11:09.579Z"
@@ -2057,6 +2257,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.809Z"
     },
+    "5261757a01cc71fa847d4edc9ef072c44497c1fd5d6353631fe0504631b8f17e": {
+      "excerpt": "packages/type-ir/src/cpp-nlohmann.ts — @rhi-zone/fractal-type-ir/cpp-nlohmann",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
     "5269af4367df5be876b94ab76d7bced4778d968700fb57a755ec0279a96ba9e8": {
       "excerpt": "Map fields carry LABEL_REPEATED at the descriptor level too (§ \"Maps\" —",
       "approvedAt": "2026-08-13T07:10:47.064Z"
@@ -2077,9 +2281,17 @@
       "excerpt": "MSSQL has no intersection/mixin column type — lossy fallback: resolve the",
       "approvedAt": "2026-08-13T07:11:45.916Z"
     },
+    "52b055e459f7b7820119b66686c0ffe8692124d1061d429f5a5279701704f7e2": {
+      "excerpt": "Lower a TypeRef to idiomatic Go/easyjson source: one or more top-level",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
+    },
     "52baa15cc341307a091b2493f8c6d4e6ec2a125f2782dbb33902dac0d621b3a1": {
       "excerpt": "Annotation keywords shared verbatim by both OAS versions' Schema Object",
       "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
+    "52bd645e71614f3ccf66ea8315cf270691b9909357b13f2884fcbcdb3b17a5c2": {
+      "excerpt": "`method` has no explicit entry — falls back to `function`'s",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "52c514d61d79753c53bf8fd908fd9e162ce038ef2143ca865e8bbafa83e83979": {
       "excerpt": "No `type` on a field with `properties`/`enabled` is ES's implicit",
@@ -2104,6 +2316,10 @@
     "52fafe915b0d8f836d2c30a72a74bb091e734cc7de84b8d6f199b224f1ba941d": {
       "excerpt": "An OpenAPI 3.1 security requirement object — one entry per alternative",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "530495a65743af5e228b09811297c57547eca6159d859249ee6cfaa44c328e0d": {
+      "excerpt": "datetime/date are the domain `Time` type (Crystal stdlib), not a wire",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "530ebf0ff2cb7783d02b3b9e7e0848379f9091445acdb674a4c213d106f07381": {
       "excerpt": "Recursively merge two record-like values with precedence: `value` wins",
@@ -2149,6 +2365,10 @@
       "excerpt": "An RBS type expression for `ref` — suitable for an `attr_reader`,",
       "approvedAt": "2026-08-13T07:11:42.591Z"
     },
+    "5424ecb551244849f8fb91a6a88e9fb3a2a9c1a056c8813e27661d0bda352e1e": {
+      "excerpt": "Nested enums need field-name context to be named (same as `object`",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "54378c04e3cf8369b9321fc1a177e57b81f8f3dc4d3eb1c2e61c8da5292de1b5": {
       "excerpt": "A column stores a materialized value, not an ongoing async sequence —",
       "approvedAt": "2026-08-13T07:11:45.916Z"
@@ -2181,6 +2401,10 @@
       "excerpt": "Lossy spot: toFlatBuffersTable emits `(required)` only when the source",
       "approvedAt": "2026-08-13T07:09:56.027Z"
     },
+    "552973d3aba3b3ff493d5ace731cc6063c47717c8ffaaae0a7328df81c44ff19": {
+      "excerpt": "`interface`'s methods have no data-field analogue (see index.ts's",
+      "approvedAt": "2026-08-13T07:11:58.693Z"
+    },
     "554b68366f2c7875cb3b62da36cb4c9f518c4e44ff9511823b8843fbb0fe8f6c": {
       "excerpt": "Extract the parenthesized text starting at `text[openIdx]` (must be `(`),",
       "approvedAt": "2026-08-13T07:11:45.919Z"
@@ -2197,6 +2421,10 @@
       "excerpt": "JSON Schema draft-04: https://json-schema.org/specification-links.html#draft-4",
       "approvedAt": "2026-08-13T07:10:55.724Z"
     },
+    "55de6b34a746361bcffed4b64fe20bbe65c4f4bc2cb40ee988aa4eec52fcd7da": {
+      "excerpt": "boost::json::value's initializer-list object constructor calls",
+      "approvedAt": "2026-08-13T07:11:58.682Z"
+    },
     "563c88090500707bf88e4af67ac58c1e1a868d586103c2845044192fd156ca7a": {
       "excerpt": "A class instance carries only nominal identity (see type-ir's",
       "approvedAt": "2026-08-13T07:10:51.094Z"
@@ -2212,6 +2440,10 @@
     "56b80477457f143b61124d72c3323a8473bb28e7c1cc24e5c6e5fada88dd4e2c": {
       "excerpt": "Structural mirror of mcp-api-projector's `McpAlsContext`.",
       "approvedAt": "2026-08-13T07:10:02.219Z"
+    },
+    "56c0d1429f271cf152aedf2e62ca0af0247194904c9e69667a842dfdd06b6ef2": {
+      "excerpt": "No native intersection construct — lossy: degrades to the first member's",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "56c1c1ac6ce935a25bfca127d7999d9e6a1a26250d73303db55f95f7cf8bd30c": {
       "excerpt": "Emit a freezed data class: `@freezed abstract class Foo with _$Foo` with a",
@@ -2241,6 +2473,10 @@
       "excerpt": "Maps a handler's `Result.err(E)` error value to a `GraphQLErrorResponse`",
       "approvedAt": "2026-08-13T07:10:43.573Z"
     },
+    "57745f3de6b8d95d52e321dd61670516deea75ca4227983f59b1e546def989c2": {
+      "excerpt": "struct{} is Go's idiomatic zero-width type (e.g. `chan struct{}`,",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
     "577a116dfefa8b8e10410d3f529e107e7af873d6bc778307f246813e7f5ded90": {
       "excerpt": "One constructor-parameter block (doc comment + optional `@JsonKey` +",
       "approvedAt": "2026-08-13T07:10:51.087Z"
@@ -2248,6 +2484,10 @@
     "57a5fcd8bdc9414b6279804ced254983469dcca3aa7d5affb4162e6ba87a6331": {
       "excerpt": "https://protobuf.dev/programming-guides/proto3/#services — a service's RPCs",
       "approvedAt": "2026-08-13T07:10:47.056Z"
+    },
+    "57d9e33b3d89c0b1a9a3bafc4f4660c968d8ee49408eecec44e7008d820a7e13": {
+      "excerpt": "Purely nominal — referenced by className, trusting a `#[wasm_bindgen]`",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "57fcfc7ac90723c0fd5ad66c9003ec73820d2553027db72d8f26ed3b81685e06": {
       "excerpt": "draft-04 §5.1.1: exclusiveMinimum is a boolean modifier on `minimum`.",
@@ -2332,6 +2572,10 @@
     "5b0353f0350b0f314f2108b61f7b4b549ba6c5737f8ac6e7c724bb72eac7cbd1": {
       "excerpt": "`leaf` is authored NESTED under `books`' fallback (so it authors",
       "approvedAt": "2026-08-13T07:11:03.700Z"
+    },
+    "5b4f33a98038a68406f08731ddc31a529634673fa936a00099aa2c1e42771634": {
+      "excerpt": "packages/type-ir/src/go-easyjson.ts — @rhi-zone/fractal-type-ir/go-easyjson",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
     },
     "5b638902d0cc86bb84baced0f75b137c16b9639d1dc2e6e0592e29aa68b205e9": {
       "excerpt": "FlatBuffers table fields are optional-by-default (unlike structs, § \"Tables",
@@ -2597,6 +2841,10 @@
       "excerpt": "Meta carried by a LEAF node (an `op()` result).",
       "approvedAt": "2026-08-13T05:12:43.183Z"
     },
+    "6462e6f47a40330bf6ff2199862cd94fad00b2a236ee2ff13daf7eea6290f366": {
+      "excerpt": "Predicate string testing whether a rapidjson::Value (`expr`) holds the",
+      "approvedAt": "2026-08-13T07:11:58.693Z"
+    },
     "647a960e8bdde88ab931750ab6a2d8a24507e33ad97fda366ccd5ec29a9a0dd1": {
       "excerpt": "Every `ref` target touched while rendering this page's signature/fields/",
       "approvedAt": "2026-08-13T07:10:43.801Z"
@@ -2673,6 +2921,14 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:47.730Z"
     },
+    "684a418bb1838b1cbb78eec03a808491e6f228740b0db47f3ade1d9ea009bca5": {
+      "excerpt": "The easyjson build directive (https://github.com/mailru/easyjson#usage):",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
+    },
+    "687fd216c0db75a47f414230c93b1a99a6593039703e842ae69b2fa96746b58b": {
+      "excerpt": "Predicate probing whether a simdjson::dom::element (`expr`) holds the",
+      "approvedAt": "2026-08-13T07:11:58.695Z"
+    },
     "687fd8ef36ecf40533293795836f330e7aab2900cdd746b69c51f020dd00c6c7": {
       "excerpt": "XML doc-comment convention (https://learn.microsoft.com/dotnet/csharp/language-r…",
       "approvedAt": "2026-08-13T07:09:42.423Z"
@@ -2728,6 +2984,10 @@
     "6aaaef19ddff3a7418dc978255e021b9e3ce8e65449a56ce1ca603d9e2e182fe": {
       "excerpt": "packages/graphql-api-projector/src/schema.test.ts — SDL assembly tests",
       "approvedAt": "2026-08-13T07:11:09.588Z"
+    },
+    "6ac0872c6d257525af1f6b0febaacdb0bf8e5113a892cd2c2de150de5af8cd67": {
+      "excerpt": "No native Go streaming value type — degrades to a slice of the element",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
     },
     "6ae226178178970df1247e6be69565fc08284a8831fc5dca24324b7f7e5c97e7": {
       "excerpt": "FOREIGN KEY target, mirrored from `meta.references` (from-sql.ts's own",
@@ -2881,6 +3141,10 @@
       "excerpt": "Builds a full MSSQL column definition, including nullability, default, IDENTITY",
       "approvedAt": "2026-08-13T07:11:45.916Z"
     },
+    "7177bd04e7f5084b55a66447b00b8c5f93475f32414e496675083c9ed4040e98": {
+      "excerpt": "Rust 2018+ reserved/strict keywords (https://doc.rust-lang.org/reference/keyword…",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "71971f58e81946d904d5d6e14257a0a27dee1661f4fecb40d6fee4565177cda5": {
       "excerpt": "Render a TypeRef as a standalone C# source file: a `using`-alias for a",
       "approvedAt": "2026-08-13T07:09:42.419Z"
@@ -2892,6 +3156,10 @@
     "71d2883063d79687f6990992b0fa25fdc31e43b7029825a14179672d70722a02": {
       "excerpt": "Emit a Dart 3 `sealed class` hierarchy",
       "approvedAt": "2026-08-13T07:10:51.094Z"
+    },
+    "71df463fb27ab8b6ac4ff32c75fb20a6972713927ffa08c04fcfbaec687a71f4": {
+      "excerpt": "Kinds whose Go rendering is already a nil-able reference type (slice, map,",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
     },
     "721e07df6c23930625990b3021ab3396ae2c9f4ddfbd28a01f3d632cacb421ec": {
       "excerpt": "Deprecation flag override — else derived from `meta.tags.deprecated`.",
@@ -3145,6 +3413,10 @@
       "excerpt": "Underscore-joined name (default operationId source) — see `nameFromPath`.",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "7b79bc137fdbcb853f04cb81a0ec2d7a23f62136a575d5e48989f091e1305073": {
+      "excerpt": "No native Go streaming value type — degrades to a slice of the element",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
     "7b9d28d370b6d6cd068eb3175d37d7c00493460675e1e7959c904768eee9988d": {
       "excerpt": "Proto3 has no callable-type construct — degrades honestly to Any, same as",
       "approvedAt": "2026-08-13T07:10:47.056Z"
@@ -3172,6 +3444,10 @@
     "7c02896d596c4d97837ed644d07e8919b1f6f0094caf21b5b13694c726f6db9e": {
       "excerpt": "Objective-C generics require the type argument to be an object pointer",
       "approvedAt": "2026-08-13T07:10:46.705Z"
+    },
+    "7c3754cf7a4ba13a35dd08cb17a1839144084719bb09a9f6da8931db8b3a61c1": {
+      "excerpt": "packages/type-ir/src/cpp-glaze.ts — @rhi-zone/fractal-type-ir/cpp-glaze",
+      "approvedAt": "2026-08-13T07:11:58.685Z"
     },
     "7c7e135c5ca41370c0b9d9eb8d421af7c42015f2b3763a11a284bc09509df55c": {
       "excerpt": "packages/graphql-api-projector/src/source.ts — @rhi-zone/fractal-graphql-api-pro…",
@@ -3225,6 +3501,10 @@
       "excerpt": "First pass: every declared type-system name, so field/argument types can",
       "approvedAt": "2026-08-13T07:10:20.620Z"
     },
+    "7e76afac214f7c5b3820dcd37180d093b5486bfa53f7d77edd72507d41945fbc": {
+      "excerpt": "Crystal doc comments (`#` immediately above a declaration — Crystal has no",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "7e7d1d2f73da1fa8b19014d3ee75e892cb0cf78a5398c88017dfacef309fd569": {
       "excerpt": "Agnostic description text — read by every projector (cli, mcp, graphql,",
       "approvedAt": "2026-08-13T05:12:43.183Z"
@@ -3232,6 +3512,10 @@
     "7eab847fef5471c1cb6518b419902b3e2ec453fa43a71e73d80f770e3a531a8a": {
       "excerpt": "A non-object variant (e.g. a plain `union([string(), integer()])`",
       "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
+    "7ec6a7f23f2930569eedb5d35308108944069cbe1360cd7c17d00af8c4177901": {
+      "excerpt": "Same primitive vocabulary as go-encoding-json.ts — easyjson decodes into",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
     },
     "7f003a89ba99a8af621105c0ec30219c2cf95cce9ddf3baf28b83690d7ec0be6": {
       "excerpt": "`toDataClass` always ends its own class body with a bare \")\" line",
@@ -3349,6 +3633,10 @@
       "excerpt": "True when any named-type entry (or its transitive references, best-effort) needs…",
       "approvedAt": "2026-08-13T07:11:09.587Z"
     },
+    "8496f0db05d73aa79951a26665af21e2e203427252acf0738a904dfdacb55934": {
+      "excerpt": "Rust has no literal-type construct usable in a serde-derived struct field",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "852a74954a4080eef8ceb6856be0f5064dc969523193e01f11093873d16baccc": {
       "excerpt": "Underscore-joined tree-path → derived input/output TypeRefs — the same `FieldTyp…",
       "approvedAt": "2026-08-13T07:08:38.033Z"
@@ -3392,6 +3680,10 @@
     "86f8a020142b07bb5e8c4a2076b42e588bfd07ef232d31dc82e0c8ba97969364": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:09:56.025Z"
+    },
+    "873f3068b91af63d4dc5d7b7508ae16b63805f231caf497b4b2a416963558b3c": {
+      "excerpt": "Render an `object` TypeRef as a `class` declaration — `include",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "874aecce8771f6fccb4cc2622a1b5deedd7b949f755b1750dae61b3801da0c63": {
       "excerpt": "Parse `.proto` text via `protobufjs`'s own grammar (`protobuf.parse`) and",
@@ -3477,6 +3769,10 @@
       "excerpt": "RFC 8927 §3.3.6 — values form (string-keyed map)",
       "approvedAt": "2026-08-13T07:10:20.621Z"
     },
+    "89ed2cb67b5555aecd94844786c8130d6c296e243459f6a61014e745021f3a54": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "8ab0906b497f469849b800901bb101b7de2503cda155ecfc6d74fd9cea09c067": {
       "excerpt": "Lower one method/function TypeRef to a `JsonRpcMethod` descriptor.",
       "approvedAt": "2026-08-13T07:11:45.921Z"
@@ -3488,6 +3784,10 @@
     "8b01868ac5d81803053e1fb3d5c1a4cc2729dd502f68aa3e9f4d1efd8affedd1": {
       "excerpt": "An `interface` TypeRef (a service/contract's method surface — see",
       "approvedAt": "2026-08-13T07:10:20.614Z"
+    },
+    "8b27a3898b9783fca3015546964b78283529d571966296e201667900b8497071": {
+      "excerpt": "Degrade target for kinds this projector has no native construct for",
+      "approvedAt": "2026-08-13T07:11:58.693Z"
     },
     "8b6602a289ca635f518f4c38a15daf51ed67be8491f1e01380e539a995ab50f8": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
@@ -3677,9 +3977,21 @@
       "excerpt": "Real (user-declared) oneofs only — see convertField's doc comment on why",
       "approvedAt": "2026-08-13T07:10:47.064Z"
     },
+    "90fa4e66063d45b99a29c73fae0ba97b34fc9841c44bedae9ffc689f2a1a7012": {
+      "excerpt": "Uninhabited — std::monostate (from <variant>) is C++'s closest \"value",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
+    "91316dd2a07482e6d907a40d5c69b188eff13abcccc2540c91b6823683c957b3": {
+      "excerpt": "Crystal's stdlib `Proc(*Args, Return)` is a first-class callable type —",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "913fe7d8381b2e20db7bdfc3dffa7fc09283123c88cc3c8fae328b30eb1a9a08": {
       "excerpt": "Gson 2.10+ deserializes records via their canonical constructor",
       "approvedAt": "2026-08-13T07:09:42.427Z"
+    },
+    "91615735a43d9b772f0ea1ad3a06b424c9fadfeb16df6f7d1ceaf9137f94d533": {
+      "excerpt": "Inline Crystal type expression for a `TypeRef` — the leaf-level converter",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "91855dd5a2fe22b55ac3805f05a608a875b216d990b137f5f132e4c77da44605": {
       "excerpt": "Assumes the target is declared elsewhere in the emitted file/assembly —",
@@ -3705,6 +4017,10 @@
       "excerpt": "Files that differ between `base` and the working tree — deliberately",
       "approvedAt": "2026-08-13T05:02:19.630Z"
     },
+    "92e149d2b6869f9e92794a535d37ccf79380025e5ef2b036595bb62b23dfe4dc": {
+      "excerpt": "Delegates to the shared explanatory message the inline-position",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "92eafa7463d4269867e6d1049256fc177a077a9d82078c5163cc904e650233c5": {
       "excerpt": "Detects a discriminated union's shared discriminant field name, following",
       "approvedAt": "2026-08-13T07:09:42.427Z"
@@ -3716,6 +4032,10 @@
     "931d3aef7c13867ac5ebdc3c29397d3ee2417e72ac972dc25a91993e16bb4bbe": {
       "excerpt": "Placeholder root value for callers who want to drive `schema` through",
       "approvedAt": "2026-08-13T07:10:43.573Z"
+    },
+    "9359695ff2ce6aa816d6dea22617d36f8df8527769ae2269073603286a6e3a21": {
+      "excerpt": "String-backed const block (rather than an iota int) — enum members here",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "938c2abc222c1ebb867ea19789a2e423ea21a553e76e56723343ffd4c0eddd39": {
       "excerpt": "Empty form (RFC 8927 §3.3.1) — matches anything.",
@@ -3764,6 +4084,10 @@
     "94c94e7d5d6f05fdfaacc4581ae482f3cbbb3bb65c7edb000dd0eca9a296f77b": {
       "excerpt": "Converts an Elasticsearch index mapping (the `mappings` value of an index",
       "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
+    "94d1f3dcabb73b0d2c64029b58e09189d625f27a38e7e419be06e085a07521e4": {
+      "excerpt": "Inline Rust type expression for `ref`, wrapping in `Option<T>` when",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "94e772298dc39e3cca39631fc4ede2faafb37b7aad9af7b6dbf91b916588f322": {
       "excerpt": "TYPE_MESSAGE or TYPE_ENUM (or, from parseProtoText, any non-scalar",
@@ -3889,6 +4213,10 @@
       "excerpt": "Add a book; capture its generated ID",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "9acd98f21123987b755bf63863d5e0215b371e3837ba237d6f7fd18b5c2e4305": {
+      "excerpt": "Bare `integer` carries no width — int64_t is the safest default (widest",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
     "9adf7c1e525a2dd55ad0305bce6db63c43dc7224670e085bdf75441b72d7c921": {
       "excerpt": "Named type declarations a `ref`-kind output TypeRef may target — needed to expan…",
       "approvedAt": "2026-08-13T07:08:38.033Z"
@@ -3897,9 +4225,17 @@
       "excerpt": "Project a `TypeRefDocument` to a set of Sphinx-compatible reStructuredText",
       "approvedAt": "2026-08-13T07:10:43.809Z"
     },
+    "9aee9bd9cabc7a51cfa199c0d81d90bce5e44116f46f68500197d7b280fbc44a": {
+      "excerpt": "Field type + `js_name`/`readonly` attribute lines needed alongside it.",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "9b555f49cb1d259b7fe4f7628a8fe1a3dd40e11b2a27710fe9d738047ec4adc0": {
       "excerpt": "One resolved GraphQL argument — name + SDL type fragment. Exported so",
       "approvedAt": "2026-08-13T07:08:35.589Z"
+    },
+    "9b7bae2ce3a933419450eacfedf67d642be1ba4dbc6c142300188d386e79ec77": {
+      "excerpt": "Wrap a Crystal type expression as nilable (`T?`) — Crystal's shorthand for",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "9b7ce0b40c94808a4655f1158ecb7244a0388965b51c422f612b0e5c0628ede5": {
       "excerpt": "Books subtree: `list`/`add` are static children; the per-book fallback",
@@ -3912,6 +4248,10 @@
     "9bcc503ed37c621c42e99b737ce8a4e4e6669c772ddfe0a40679b102524cfc1e": {
       "excerpt": "Unrecognized/future ES field type — degrade to unknown rather than",
       "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
+    "9c18c2eb44c19e674e39123078790164732b5337cbd3202eccf018116f019888": {
+      "excerpt": "Go func *types* carry no `this`/receiver slot (a bound method's",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "9c51d1a9061baacf02c26edbd0c96a47cd916dbed31b1b44a13d0369ebbd6168": {
       "excerpt": "A Sorbet type expression for `ref` — suitable for a `sig` param/return",
@@ -3941,6 +4281,10 @@
       "excerpt": "FlatBuffers schema language (.fbs): https://flatbuffers.dev/schema/",
       "approvedAt": "2026-08-13T07:09:56.017Z"
     },
+    "9d102048859150660e87caa6260e0a6e69358354ecd630e76e2cca4524fac021": {
+      "excerpt": "No structural intersection/mixin construct — lossy: falls back to the",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "9d2791889c095434ece0e6f0c6eb6daed0ed726a9015f1b82c4465ca6d59ebf7": {
       "excerpt": "Core primitive/collection type mapping — the Objective-C equivalent of",
       "approvedAt": "2026-08-13T07:10:46.705Z"
@@ -3956,6 +4300,10 @@
     "9d499eeb522eaf88a3ea7ef0e4e7abe049706ef7a86670c6d66400eae056cd6d": {
       "excerpt": "See the identical import's doc comment in `toOpenApi` above — same",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "9d59584d7a95fc037aaa7fc8b2a88eb8b3fa5d452505cff307b1b9095f6725b5": {
+      "excerpt": "Untagged enum (https://serde.rs/enum-representations.html#untagged) — used",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "9da3e6c5cf58657037011d4a9983cd8145d16a7e45c9eb85ef52626ab2fddbdb": {
       "excerpt": "overridden",
@@ -3989,9 +4337,17 @@
       "excerpt": "packages/type-ir/src/swift-objectmapper.ts — @rhi-zone/fractal-type-ir/swift-obj…",
       "approvedAt": "2026-08-13T07:10:46.698Z"
     },
+    "9f5445863e52be0cfb5a42efbea6fd88376a85553297fe15ddd38dd66aa93120": {
+      "excerpt": "Not serializable data — degrades honestly to serde_json::Value, same as",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "9fa619e0d85d87e9d4ddd90754471d8bec1dd29d9e536d1900993a4d571a68af": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.590Z"
+    },
+    "9fa72feea0d56393f3a5004ba8c23690629f52be576709987809e576aed4a210": {
+      "excerpt": "Rust codegen targeting wasm-bindgen (https://wasm-bindgen.github.io/wasm-bindgen…",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "9fe0ef65d77689721921397166095c7f5949e016ee0b2b22f55476e909758c8e": {
       "excerpt": "============================================================================",
@@ -4061,9 +4417,17 @@
       "excerpt": "ID has no type-ir kind of its own (§ \"Scalars\" — ID is serialized as a",
       "approvedAt": "2026-08-13T07:10:20.620Z"
     },
+    "a229fd297bce6cb485ee715940fc2814e2d8da2dc1f70e0805c573bab56f979a": {
+      "excerpt": "No streaming construct crosses the wasm-bindgen ABI — materializes to",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "a246dc63244e9e7a6b93a63a89b8d207396b331a3c3ff6ce2e62b86dca0b317c": {
       "excerpt": "Parse GraphQL SDL type-system definitions into a `Record<string, TypeRef>`",
       "approvedAt": "2026-08-13T07:10:20.620Z"
+    },
+    "a24de4623d3e0b81819430e30c42b74534007039fb2b70c0ead82edd88ec1d0d": {
+      "excerpt": "Internally-tagged enum (https://serde.rs/enum-representations.html#internally-ta…",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "a2a930563ff4eef07cb51ea39e7849249cb419b246bde55b7219195272be456c": {
       "excerpt": "============================================================================",
@@ -4072,6 +4436,14 @@
     "a2adcf22d1c2bea6de95aeb5155b1ce7614b277acf701407a6a8087684bee72b": {
       "excerpt": "biome-ignore lint: test-only helper, erased shape is fine here",
       "approvedAt": "2026-08-13T07:11:03.700Z"
+    },
+    "a2bb987182fbc83556ae51f5b8ccfbfd7c95868b2ef5b3ed0fcb1e567848d719": {
+      "excerpt": "Lower a `TypeRef` to a C++17 header-shaped string targeting RapidJSON:",
+      "approvedAt": "2026-08-13T07:11:58.693Z"
+    },
+    "a2e945370651ad4ac866cc116d3b7976033294520f65c08a021fbdcbd119b7ba": {
+      "excerpt": "No native pagination construct — degrades to its vector equivalent over",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "a3005ea8e284add9b58ca6d6d8a54f80d48bd2a7400bfcf620eeac604104ce00": {
       "excerpt": "Dart enums (https://dart.dev/language/enums) with a `value` slot carrying",
@@ -4193,6 +4565,10 @@
       "excerpt": "Fields present on EVERY object variant (excluding the discriminator",
       "approvedAt": "2026-08-13T07:11:45.912Z"
     },
+    "a788fbdf30673dd894dd5674e6ed8d854588f82fa329dc8112578b1bf8103de3": {
+      "excerpt": "Lower a `TypeRef` to a C++17 header-shaped string: `#include` directives",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
     "a795b2544eea4970a45f5f4b9337f4b101aaebcbe2aa6200ada3e18052166ec0": {
       "excerpt": "Convert `.fbs` schema text into a flat `Record<string, TypeRef>`: every",
       "approvedAt": "2026-08-13T07:09:56.025Z"
@@ -4209,6 +4585,10 @@
       "excerpt": "root, \"list\" leaf, fallback subtree branch, and its \"get\" leaf",
       "approvedAt": "2026-08-13T05:06:32.673Z"
     },
+    "a840b69f02cb1083441af973d58c5891b09a55a1ad864bd46672a20135a122cd": {
+      "excerpt": "Default to HashMap<K, V>; a map TypeRef whose own `meta.ordered` is true",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
+    },
     "a84ed81893830dbc6082c2b56403a894a8f76fc60e22a3122d7182eeb46ec37a": {
       "excerpt": "Fallback-captured slug values seed the variable bag; caller-supplied",
       "approvedAt": "2026-08-13T07:08:38.033Z"
@@ -4224,6 +4604,14 @@
     "a8a4a53faac25709fc30ce26931160cc1e85f42ffd24569259d16fd56e7522e8": {
       "excerpt": "Mirrored into the lowercase `meta.readonly` convention alongside the",
       "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
+    "a8ce378b83dad03b6059d85171a1b71faaa8dc75f67fcc028c064a4024589da3": {
+      "excerpt": "Degrade target for kinds this projector has no native construct for",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
+    "a8d1a5c1e50007ab4bdf917f75ff950a3b97b99a58d17ef82c50d490ff7f2fa6": {
+      "excerpt": "Lower a `TypeRef` to a C++17 header-shaped string targeting Boost.JSON:",
+      "approvedAt": "2026-08-13T07:11:58.682Z"
     },
     "a8d3343d0b5493848dad46c50cd0ad8f7d38121eede5527cc967521077f99c9e": {
       "excerpt": "Wrap each field's handler call so it runs inside its own",
@@ -4281,9 +4669,17 @@
       "excerpt": "Same wrapper-table hoisting as the union-field case above, but at",
       "approvedAt": "2026-08-13T07:09:56.021Z"
     },
+    "aa9cffc3b7e5643d1ff9d88ea5007d53a9e20ee6543bb521cea771f3c21be7f4": {
+      "excerpt": "Go has no tagged-union/sum-type construct: the idiomatic encoding is a",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
+    },
     "aaa403b42782f7d2f0b9e6566acf62989fb6540e64217885b9eb4a14073d2256": {
       "excerpt": "A single field definition inside an ES mapping's `properties`. Every key",
       "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
+    "aab7afc6db792da2d8ca7cb65684e326d22a6998711e7759141c5ba5f8b5309f": {
+      "excerpt": "`meta.unordered: boolean` — opt-in convention (like `meta.optional`/",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "aac7c89eda5283ee67f1c0691840ccd1204808957cb7629755e4c246588bda74": {
       "excerpt": "Structural mirror of cli-api-projector's `CliAlsContext`.",
@@ -4421,6 +4817,10 @@
       "excerpt": "Kinds that produce their own named declaration (record/enum/abstract",
       "approvedAt": "2026-08-13T07:09:42.413Z"
     },
+    "b102987088fd21312d03e08cc0bec2d8de167679f8004b4f8f742589881fb50b": {
+      "excerpt": "One field's rendered lines (doc comment, `@[JSON::Field]` if the JSON key",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "b123f88aa18020944e2fed60313499c0ce5ccf6f62477f98def09731b8a972b0": {
       "excerpt": "An OpenAPI 3.1 security scheme object (`components/securitySchemes/<name>`)",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -4472,6 +4872,14 @@
     "b3eaf999f34955e80b07a0c5902855193125df2c345e48472bc0ca67a649f68e": {
       "excerpt": "Lower an `interface` TypeRef (a service's method surface — see",
       "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
+    "b404f69fa1f8e415aff7c196df3c43ccac6994e60c118d49a5791f9ac6944256": {
+      "excerpt": "No native Go pagination construct — degrades to a slice of the page's",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
+    "b41daec552e07bd1636f09d8e8ef6326eb9de7c4aca3b3c844f689fafd4f56a1": {
+      "excerpt": "Every leaf/primitive kind this projector knows how to render directly —",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
     },
     "b4256873b4eb49694d4bd3275ae9cbfaa9799925b9a74cc44b81df40e7394a11": {
       "excerpt": "post bundles no idempotent tag — hint should be absent or false",
@@ -4544,6 +4952,10 @@
     "b81a91359fc054796f2353ec58c9b4fee92c2269a429ecd1901c16e3b8093e1a": {
       "excerpt": "Emit a built_value abstract class:",
       "approvedAt": "2026-08-13T07:10:51.084Z"
+    },
+    "b832270761a99c83b1c02839edaa50c869d734abffdad631b7ca8d4f09c1db08": {
+      "excerpt": "Kinds whose Go rendering is already a nil-able reference type (slice, map,",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
     },
     "b851d4341c438e00b4c0d848d46be3bd0b2d81af5137ca12ba2a9de63752e617": {
       "excerpt": "============================================================================",
@@ -4669,6 +5081,10 @@
       "excerpt": "Likewise no built-in base64 Data transform — degrades to the raw",
       "approvedAt": "2026-08-13T07:10:46.698Z"
     },
+    "bbcc78538e94ecf22530d4c22f2dae1705110bc0535551d80592482660a43da0": {
+      "excerpt": "Kinds whose Go rendering is already a nil-able reference type (slice, map,",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
+    },
     "bbf066b321db92c30ae9de23e31d262dd2e1c51188c59a46a5e61f753e02da1c": {
       "excerpt": "The socket closed (any reason) — cancels every active subscription on this conne…",
       "approvedAt": "2026-08-13T07:10:43.581Z"
@@ -4709,6 +5125,10 @@
       "excerpt": "True for a plain mergeable object — not null, not an array.",
       "approvedAt": "2026-08-13T05:06:32.668Z"
     },
+    "bdd4657dc504b288a85f7b7033fd3ff00928c73eb3d1401ef6f46fa02741cf41": {
+      "excerpt": "Lower a TypeRef to idiomatic Go/jsoniter source: one or more top-level",
+      "approvedAt": "2026-08-13T07:11:58.706Z"
+    },
     "be4988d30ef1e455564d7f85be78d554fc76a83c8332582167f1e700444811e9": {
       "excerpt": "PHP 8.2 `readonly class` (https://www.php.net/manual/en/language.oop5.basic.php#…",
       "approvedAt": "2026-08-13T07:11:47.428Z"
@@ -4729,6 +5149,10 @@
       "excerpt": "Vendor extensions. JSON Schema reserves nothing here, and dropping them",
       "approvedAt": "2026-08-13T07:10:55.731Z"
     },
+    "bedb20b0275616fd5ae2d481238f355e7f49d860fb74cdc9bfbc6cd91614f667": {
+      "excerpt": "JsValue is wasm-bindgen's actual \"any JS value\" primitive — a faithful,",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "bef99d9d15751862bcf7225ba2afb313af635fccef396ba5263af958d373f771": {
       "excerpt": "https://astro.build/config",
       "approvedAt": "2026-08-13T07:09:53.732Z"
@@ -4744,6 +5168,10 @@
     "bf9d799ecd1f358525475305044f5d22dd3a51b11dabbb470548b89b9ffa43a7": {
       "excerpt": "Lower an `object` TypeRef to a named `T::Struct` class — Sorbet's typed",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "bfae679e509fa5075c2190836916e44c0744d2c194e8f68b9d64d966742ccba2": {
+      "excerpt": "No streaming construct in a plain data type — materializes to Vec<T>,",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "bfcc565ae1ebdee829ee8b60d072680533d92c36808f0cbeb98c2b79b00360ea": {
       "excerpt": "============================================================================",
@@ -4801,6 +5229,10 @@
       "excerpt": "dry-types has no native tuple combinator; a uniform tuple degrades to",
       "approvedAt": "2026-08-13T07:11:42.588Z"
     },
+    "c3303e0a26c2a643fe4461396e9d23dfdea6631fbdff6688957f14b51ecdd506": {
+      "excerpt": "Inline wasm-bindgen Rust type expression for `ref`, wrapping in",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "c36b942fd83d89e8394c5b660839cbceff43775c1ffe61fdcedfd826d289ca9d": {
       "excerpt": "A variant with no `meta.typeName` of its own is named after: a `ref`'s",
       "approvedAt": "2026-08-13T07:10:46.692Z"
@@ -4812,6 +5244,10 @@
     "c3bd065248928fe2aaafa210ce4b0380f8b5f1de17f0eb511c21bf1c2b6b3080": {
       "excerpt": "T::Enum convention: constants are SCREAMING_SNAKE_CASE identifiers bound to",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "c3ec9ee5f8d49bb01ccf9bb914245a1426be39790f6b73e4a77fc31dfc225a79": {
+      "excerpt": "Same base-scalar degrade rust-serde.ts uses — unlike that file's other",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "c408812b9a8d9809346c3e6c2ac9991c731da349020bbb89428af009458dde02": {
       "excerpt": "--- Case B: deep narrow tree — 25 levels, one child each, short segments.",
@@ -4897,6 +5333,10 @@
       "excerpt": "ObjectMapper's built-in transforms don't include a Date parser out of",
       "approvedAt": "2026-08-13T07:10:46.698Z"
     },
+    "c7f7cacd8384c7a093c919808e870d762bd8fcd9b15f1661e9ff1a102ed13d31": {
+      "excerpt": "sonic decodes RFC 3339 timestamps into time.Time the same way",
+      "approvedAt": "2026-08-13T07:11:58.707Z"
+    },
     "c86eb14926fa58387d7082ebba8a29d71d650a558b911921388b6ca2a1b807ae": {
       "excerpt": "True when the method's return type was a `stream` TypeRef — its result",
       "approvedAt": "2026-08-13T07:11:45.921Z"
@@ -4961,6 +5401,10 @@
       "excerpt": "Build the by-name params object schema (see module doc's \"Params\" section)",
       "approvedAt": "2026-08-13T07:11:45.921Z"
     },
+    "cbdff83050dfffe6ec97b8f28c0b0f8a82e1aa062c7066df6bbe48c3466dd287": {
+      "excerpt": "No native streaming construct — degrades to its vector equivalent, same",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
     "cc08b6e711dd20eda48d7eff92344b65856bf4b8810258a44de9533cc567f685": {
       "excerpt": "`mapping` has no forward-projector consumer yet (toOpenApi30 only",
       "approvedAt": "2026-08-13T07:11:16.455Z"
@@ -4980,6 +5424,10 @@
     "ccbad3570d1f5890d7a26aa67ab4694e4f970d40e4d537ceca5bb3fa7f903750": {
       "excerpt": "Derive operationId from meta.openapi.operationId, or from the codegen name",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "ccfd2e404047ae771ad78d13a12e3271b621ed2e2f3beb32c45f2670fdbfd23b": {
+      "excerpt": "A `interface` TypeRef (service method surface — see index.ts's",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
     },
     "cd184c2ff44ab57773adff1ef8f2ac1e33e96d9221a7c4e0eabd6b94de465c63": {
       "excerpt": "The reason must NOT sit on the `::` line itself — docutils' directive",
@@ -5077,6 +5525,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:10:55.732Z"
     },
+    "d0532813741ea4cde91e11ce211b508418bdbf277765478941149abcb23c5631": {
+      "excerpt": "Kinds allowed as a Vec<T>/Box<[T]> element per wasm-bindgen's documented",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
     "d077772f05be4097057ee331d0cdd5852410a727dff57af42a2227b4aadafd05": {
       "excerpt": "Entry point: pass `name` for a full top-level declaration",
       "approvedAt": "2026-08-13T07:09:42.437Z"
@@ -5088,6 +5540,10 @@
     "d0ede11b3c608806461ae9092f49783fd8a985851e10535263e3a9462e1e5a69": {
       "excerpt": "OAS 3.0.3 §4.8.24.1: `nullable: true` is the substitute for JSON",
       "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
+    "d128153b55d943e31e3eef73dd9f12638571d6d9eba9da89a22ccf05b5cc159b": {
+      "excerpt": "packages/type-ir/src/cpp-boost-json.ts — @rhi-zone/fractal-type-ir/cpp-boost-jso…",
+      "approvedAt": "2026-08-13T07:11:58.682Z"
     },
     "d1299289e3cf1003e41963cf7ac3332fe22f05ab1744c41db4bbdb78a3d3e8b1": {
       "excerpt": "PHP 8.1 enum case names must be valid identifiers — member strings (often",
@@ -5125,6 +5581,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:12:43.183Z"
     },
+    "d2b813952ff0f0b3685af20cb850dc77c35320c0d908a82c6eba69e42b836393": {
+      "excerpt": "hoisted decl comes before the main struct",
+      "approvedAt": "2026-08-13T07:11:58.699Z"
+    },
     "d308cd32cf93147491a99ff0f732202c788d00acd3fa3b3932473251b5f1e64d": {
       "excerpt": "sharing.fixture.ts never imports result-reexport.fixture.ts or",
       "approvedAt": "2026-08-13T07:10:02.230Z"
@@ -5136,6 +5596,10 @@
     "d349a4f81e1758a9c8338e088852c13af8bea6ec24e1db05081e7a81977fc9d6": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "d35802de89fa878a1f79bc07f03fe4e3e1124942b5ce8c444b73a7494791afd9": {
+      "excerpt": "`#[derive(Clone)]` is required for `getter_with_clone` (wasm-bindgen's",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "d3a11baf6f34c443d395cc390bcb283ee5a41dc53908e3995aec122c747a6ddf": {
       "excerpt": "An inline (unnamed) object has no Java equivalent expressible as a type",
@@ -5193,6 +5657,10 @@
       "excerpt": "Compose `middleware` around `base`, first entry outermost. An empty array return…",
       "approvedAt": "2026-08-13T07:08:38.040Z"
     },
+    "d582430b7f1f37a9a820ee81772d3b3d810808c80ec960028b544267a00b30b4": {
+      "excerpt": "Boost.JSON's built-in map support keys on std::string specifically",
+      "approvedAt": "2026-08-13T07:11:58.682Z"
+    },
     "d5c899054fb83b05de2d5b80c2bb3a6dafe4d034cf13d0d63e9c5a4f2a22bda7": {
       "excerpt": "Table fields are optional-by-default (§ \"Tables vs. Structs\":",
       "approvedAt": "2026-08-13T07:09:56.025Z"
@@ -5200,6 +5668,14 @@
     "d5ffa120e59fbf140a21871557db2e32e7e338daf6e60bbb9846d184f5dd9fe0": {
       "excerpt": "PascalCase join of a namespace path, e.g. `[\"users\",\"admin\"]` → `\"UsersAdmin\"`.",
       "approvedAt": "2026-08-13T07:08:35.589Z"
+    },
+    "d60fb56eda6f57d9ca296323ef67352b5889e74df101ce34dbdcf1b719f8941b": {
+      "excerpt": "No construct for a bare method-surface value in field position (same",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
+    "d6283a0b5e2f4fd388cbe23b0eca0b3c1aa057bd9a23707b0a88a468953b1c8d": {
+      "excerpt": "`interface`'s methods have no data-field analogue — same abstract-class",
+      "approvedAt": "2026-08-13T07:11:58.685Z"
     },
     "d689db6fe6a5d6949106543969922f85ec269301d5af5c7a5a4257d5b9591ffc": {
       "excerpt": "No null/void primitive (§ \"Scalars\") — skipped entirely rather than",
@@ -5244,6 +5720,10 @@
     "d8856118060965f2ef6104adea59d4108db1beb4d42415c5e877e9a71f0d1bc6": {
       "excerpt": "Flattens `N`'s tree into a map from dot-separated path to",
       "approvedAt": "2026-08-13T05:06:32.678Z"
+    },
+    "d890353305053f32dbbc2756353b43103c509b3af5e546a4ec910a51c532d00b": {
+      "excerpt": "String-backed const block (rather than an iota int) — enum members here",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
     },
     "d8b192da1b67c2ed5a49c16552939f62396ea539ec14fe3618cd03ab829d5b65": {
       "excerpt": "ObjectMapper's `Map` wraps a keyed JSON *object* — `Map.JSON` (see",
@@ -5356,6 +5836,10 @@
     "dd47408ad7dccab63dd32f62a3e62828cbadf6f106342fb0e410238707a7d54e": {
       "excerpt": "`struct Name: Mappable { var field: T!; init?(map: Map) {}; mutating func",
       "approvedAt": "2026-08-13T07:10:46.698Z"
+    },
+    "dd67d10d289b40c85899e07b50ba5b55212cbc3ece8f37c55d3156f0f12dc813": {
+      "excerpt": "Fixed-width/semantic/temporal kinds are optional extension modules",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "dda393a87be56fbc8a858ab65f850b54164f98e60c67cb5376899edbbed4cafc": {
       "excerpt": "============================================================================",
@@ -5481,6 +5965,10 @@
       "excerpt": "Get a single book by ID. GET /books/{bookId} (fallback subtree is a bare leaf — …",
       "approvedAt": "2026-08-13T07:09:53.731Z"
     },
+    "e1602f0ace94c7b2f3d9b4f0eb6dc963d0f9b684ecf814808f0f8ef7f45338bf": {
+      "excerpt": "easyjson's code generator operates on concrete struct/slice/map",
+      "approvedAt": "2026-08-13T07:11:58.702Z"
+    },
     "e1b321778befb5b783451352bc2a806db2b539cc0b2c2a803a8e6a51116ba235": {
       "excerpt": "The discriminant field itself is structural noise once it's encoded",
       "approvedAt": "2026-08-13T07:09:42.440Z"
@@ -5496,6 +5984,10 @@
     "e21d9ab082d4f3df32fcc396240d15525ff614658790bfe304061014be3cb0bd": {
       "excerpt": "Cap'n Proto enums (§ \"Enums\"): ordinals are assigned sequentially starting at 0.",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "e22a107cc0e31591c4457debd3cad0d65eeb5fbb85a963ae6a9cf32859426ac4": {
+      "excerpt": "packages/type-ir/src/cpp-rapidjson.ts — @rhi-zone/fractal-type-ir/cpp-rapidjson",
+      "approvedAt": "2026-08-13T07:11:58.693Z"
     },
     "e22e575388a65e5b8c7355f2fdadebf6e3a6fa53939d6fa7c2b9c9e648067b73": {
       "excerpt": "`FoldMeta`'s counterpart for `mergeMeta`'s own public signature: same",
@@ -5541,6 +6033,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "e392583ac6f7f9f56b608dbc057733f7dfe0acc748a3cb6fa20d4245bee446b2": {
+      "excerpt": "Nested objects need field-name context to be named (see the module doc",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "e39ca92040e1ba4dc04dcbe03c896328f46a3357a75cf76d02f46e78c8655d8e": {
       "excerpt": "`meta.discriminator` (open metadata bag convention, see CLAUDE.md and",
       "approvedAt": "2026-08-13T07:10:46.692Z"
@@ -5560,6 +6056,10 @@
     "e445d4328e146aadf029a3e355b5b8d8d53fb2a6cb380f3f550f11f2edf477f5": {
       "excerpt": "Build the result schema from a method/function TypeRef's `returnType` —",
       "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
+    "e47965d86a402542c74283a04256a6a702f273386b9d1b94376b7de934dbb058": {
+      "excerpt": "Lower a `TypeRef` to wasm-bindgen-annotated Rust source. With `name`,",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
     },
     "e496069f39dc92c47aebb6b1899faaba794aba9bcd018d38eff38cd49917c13b": {
       "excerpt": "Lower a registry of top-level TypeRefs (as would back a whole .fbs file) to",
@@ -5588,6 +6088,10 @@
     "e53f7a901fc38040e6c3cad95dc8ebe22e3b58c6c1c715237ac85d56e4748378": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:09:56.025Z"
+    },
+    "e55d1d750101b07afe770ca6aa27f625b9eae0fc57c60dd5722e7ec77ec110be": {
+      "excerpt": "Crystal union types (https://crystal-lang.org/reference/syntax_and_semantics/uni…",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "e585fc1871bc9f407051796ced51a506c73e6b51a61d58aa76ad718ad9698477": {
       "excerpt": "Resolve a bare (or already-dotted) field/union-member type identifier",
@@ -5688,6 +6192,10 @@
     "e99a5cf0753ed3a54737c48beff0a39bcf57c1e898f3177b94d057815e231ee5": {
       "excerpt": "Build the handler → tree-relative \"/\"-joined path map for a `Node` tree —",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "e99bb5ca44198f8fbe7e90216feb18560062ce189637ba63ef80f3a269df2823": {
+      "excerpt": "Crystal (https://crystal-lang.org/reference/) output projector.",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
     },
     "e9a74d62abaf011b5b4b1d2a88bedc8e3b49b4f4019bc8d7f5747127be59074a": {
       "excerpt": "Useful options to enforce blogging best practices",
@@ -5821,6 +6329,18 @@
       "excerpt": "`graphql.source(map)` — declares which GraphQL store (`argument`,",
       "approvedAt": "2026-08-13T07:11:09.591Z"
     },
+    "ee9d268565c6e4522e89c8dd51c17ef6c7d8e487cb5d37c7f1059fce00535075": {
+      "excerpt": "`interface`'s methods have no data-field analogue — same abstract-class",
+      "approvedAt": "2026-08-13T07:11:58.682Z"
+    },
+    "eea1214c52ae76767e55962f741f7be18e8f9d72e123b84b0d28f1eef0eeb16a": {
+      "excerpt": "No naming context here — see `bareType`'s hoisting path for the named",
+      "approvedAt": "2026-08-13T07:11:58.700Z"
+    },
+    "eec500a53192ab31dbb84025df8ea3f246865977fd5b4c32beed5196069e8258": {
+      "excerpt": "`interface`'s methods have no data-field analogue — same abstract-class",
+      "approvedAt": "2026-08-13T07:11:58.695Z"
+    },
     "eef66d5e56631d352d7ca88fe420ada798ad1d6642c6b1de8838162fc3512809": {
       "excerpt": "The `module Types; include Dry.Types(); end` boilerplate every generated",
       "approvedAt": "2026-08-13T07:11:42.588Z"
@@ -5864,6 +6384,10 @@
     "f06bf7d2f3214fde7cea18a13dfe1e5b86445a25e22891e90f4aa5d241ec0f4b": {
       "excerpt": "Scalar/collection type name — https://dart.dev/language/built-in-types.",
       "approvedAt": "2026-08-13T07:10:51.087Z"
+    },
+    "f0939572bb29f38b2dbbdf64fb95c65e32c468ee6690b96802120ccbb4b7ef35": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
     },
     "f09b727dee4145de7a5e6d3cd8311862a206598a457a080fac57d59334db4d95": {
       "excerpt": "An inline (unnamed) object has no Java equivalent expressible as a type",
@@ -5965,6 +6489,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.673Z"
     },
+    "f40b59512f70b61849db99cf03e052433a056b840f9d79a90b3e22fefaac7104": {
+      "excerpt": "Lower a `TypeRef` to a C++17/20 header-shaped string targeting glaze:",
+      "approvedAt": "2026-08-13T07:11:58.685Z"
+    },
     "f4125cbddb082c29021eafe8d4e771be270def5c8f97a640cb0603c254e719f9": {
       "excerpt": "`storage.getStore()` — read the current context value from anywhere downstream o…",
       "approvedAt": "2026-08-13T07:10:02.219Z"
@@ -6021,6 +6549,10 @@
       "excerpt": "One generated entry's public shape — see type-ir/compile.ts's",
       "approvedAt": "2026-08-13T07:10:02.240Z"
     },
+    "f54ca19aa9ba6ac1d4db18971ee71118f2e089164b381dfabf38d8a7c6bcd768": {
+      "excerpt": "Crystal's stdlib `Time::Span` is an elapsed-duration type — the direct",
+      "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
     "f5aa1f3073e7f4a78ab336df85d27477ded4ce29af0f918c631075ad9c4b8ce2": {
       "excerpt": "Same merge order/precedence as project.ts's buildField/buildDispatch and",
       "approvedAt": "2026-08-13T07:11:09.579Z"
@@ -6028,6 +6560,10 @@
     "f5bf215e0aeb263591520c429a3ce1fee19f1a282bd0fa0f4a22c91fb80637a1": {
       "excerpt": "Only the object variant produces a nested struct.",
       "approvedAt": "2026-08-13T07:09:42.600Z"
+    },
+    "f5f38d8b3cff0544ee165c116443f1c92626ed2d9dc2419ee06c69305251724c": {
+      "excerpt": "encoding/json (https://pkg.go.dev/encoding/json) unmarshals RFC 3339",
+      "approvedAt": "2026-08-13T07:11:58.705Z"
     },
     "f63c86a19e4852cb328b2bc13aec9a99627c5f4cf6b790fb0cf012d44f03407d": {
       "excerpt": "Render a TypeRef as a standalone C# source file: a `using`-alias for a",
@@ -6068,6 +6604,10 @@
     "f75bd88370d865bcd2238fbaea9270a015496467077d953df715ac5b83472311": {
       "excerpt": "A bare property-access expression, or bracket notation when `key` isn't a valid …",
       "approvedAt": "2026-08-13T07:11:09.579Z"
+    },
+    "f787a6338463324392fcfc5527996c55bea993dd29ddf5fce09fc3fdd48885e3": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "f7d6ea89f7daf8e087f044ef6856e513b55f203590ff543891b5c7dc454f18be": {
       "excerpt": "No lazy/asynchronous-sequence combinator in dry-types (it models values,",
@@ -6125,9 +6665,17 @@
       "excerpt": "\"minimum\"/\"maximum\" are handled explicitly in withMeta (interacting with",
       "approvedAt": "2026-08-13T07:11:16.453Z"
     },
+    "f9d2e74ecbd950af1987a70884902e2d24ba65483c84ff2c83439a2d081bb63b": {
+      "excerpt": "`meta.optional`/`meta.nullable` (see index.ts's meta-convention doc",
+      "approvedAt": "2026-08-13T07:11:58.689Z"
+    },
     "f9e478cde2da382b3a2e4a2de996db541a1f37d25593ca171603c1fe2f44d2c9": {
       "excerpt": "An object/interface field with arguments is a resolver, not plain data —",
       "approvedAt": "2026-08-13T07:10:20.620Z"
+    },
+    "f9f934dcd7d13dea0cd4c643a3647565b8cb527d4f1d9c2bc8eb1ba7d40ac53e": {
+      "excerpt": "Field type + whether it needs `#[serde(skip_serializing_if = \"Option::is_none\")]…",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "f9fe4a0e7d063f0d04a81a4bc7e8697ba36416a1a4e92d90039a348f14ab28f3": {
       "excerpt": "Already-formatted return type, e.g. `\"User!\"`, `\"[Book!]!\"`.",
@@ -6200,6 +6748,10 @@
     "fc3082d51140fc16edb65d4a75e2b62ec637de077eb4e6eef07e9cb5feb4c3d0": {
       "excerpt": "No structural equivalent — GraphQL's `Any`-like escape hatch.",
       "approvedAt": "2026-08-13T07:10:20.614Z"
+    },
+    "fc5121129f946b8290836ab4d50790402c4d3a6964236f756094e9664f311258": {
+      "excerpt": "Field/variant-context inline type: same as `toRustType`, except `object`,",
+      "approvedAt": "2026-08-13T07:11:58.698Z"
     },
     "fc96f7ccdcd33e237b40c6505a2a70c56b7c71d375fa000bb980521574af2e58": {
       "excerpt": "============================================================================",
