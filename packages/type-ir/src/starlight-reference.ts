@@ -32,10 +32,6 @@ function toKebabCase(name: string): string {
     .toLowerCase();
 }
 
-/** YAML/JSX-safe double-quoted string literal — JSON's quoting rules are a
- * strict subset of YAML flow-scalar quoting and valid inside a JSX
- * expression, so a single helper covers both frontmatter and MDX body use. */
-
 function defTitle(name: string, ref: TypeRef | undefined): string {
   if (ref !== undefined && typeof ref.meta.title === "string") return ref.meta.title;
   return name;
