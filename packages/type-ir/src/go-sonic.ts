@@ -95,10 +95,11 @@ interface Ctx {
   decls: string[];
 }
 
-/** Sanitize an arbitrary field/type/enum-member name into an exported Go
- * identifier: split on non-alphanumeric runs, capitalize each part, and
- * prefix a leading digit (Go identifiers can't start with one). */
-
+/** Sanitizes `base` into a Go identifier via `goFieldIdent`, then
+ * disambiguates it against `used` by appending a numeric suffix (`2`, `3`,
+ * …) until the result is unique — used for per-variant labels (e.g. union
+ * variant wrapper/marker names) where two variants could otherwise collide
+ * on the same sanitized identifier. */
 function uniqueLabel(base: string, used: Set<string>): string {
   let label = goFieldIdent(base);
   let i = 2;
