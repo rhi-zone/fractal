@@ -305,6 +305,10 @@
       "excerpt": "The struct-property spelling of `fieldType`'s result: implicitly",
       "approvedAt": "2026-08-13T07:10:46.698Z"
     },
+    "0a9a67c9c96cb5aab0735c6b71a1c762e22788e7229d796e293fd8161ef54a53": {
+      "excerpt": "Flow has no `Record<K, V>` utility type — an indexer property type is the",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
+    },
     "0ac13c07e2836f52799cd4f65681452632fe3ab3027e3d010591c9a62c12c524": {
       "excerpt": "The original tags bag is untouched",
       "approvedAt": "2026-08-13T05:06:32.673Z"
@@ -561,6 +565,10 @@
       "excerpt": "Pre-computed schema map (from extractToolSchemas). Takes precedence over",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "11ff3cb181c9f234f7166d4bf10c15480677046d197a8fa97bddfd7c76f76b93": {
+      "excerpt": "Ambient declaration for `flow-parser` — Facebook's own Flow parser",
+      "approvedAt": "2026-08-13T07:13:00.782Z"
+    },
     "1240e16e6c674221923b6da1ba96d8a59b70fe80e05620ea69c690de98a62c5e": {
       "excerpt": "Named SDL type declaration for a TypeRef (e.g. `type User { ... }`,",
       "approvedAt": "2026-08-13T07:10:20.614Z"
@@ -592,6 +600,10 @@
     "12eb4772bb0968e6057778aa31f2e3bed7629b81164362d005341308a2013f74": {
       "excerpt": "§6: a batch consisting entirely of Notifications (or a lone",
       "approvedAt": "2026-08-13T07:12:23.512Z"
+    },
+    "1305a380ddf5a8fb614ec1fe1fc3c8a7e9d562c4ca7d61e008c253f526a88289": {
+      "excerpt": "`impltype` (the type's real, module-private definition) is preferred",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "1310acf4991fddb790d2d798f68f1655f9daa784c8e215f3fc2dd46458a67ba9": {
       "excerpt": "packages/graphql-api-projector/src/ws.ts — @rhi-zone/fractal-graphql-api-project…",
@@ -753,6 +765,10 @@
       "excerpt": "`deprecated` on Schema Object is an OAS 3.0 addition; no standard Swagger",
       "approvedAt": "2026-08-13T07:11:16.450Z"
     },
+    "16caf8cb0ac7bd83e2ca81401213e4e1b8ce347dbfd317ec09b55452f34a0204": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "16ccbeea1e9f602dc9bd84ffb901155d2a31231459c2c22e89ce71fc819f65df": {
       "excerpt": "examples/library-api/src/client.test.ts",
       "approvedAt": "2026-08-13T07:08:47.718Z"
@@ -784,6 +800,10 @@
     "17acb8ff9db1aae45cdd76df0e695a7de2ee76f397b82c6087ca19ce89bc5cbd": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.581Z"
+    },
+    "17ad5ed783ae2aa649f03fad10abbe64bffdbd1af7f8ec948c0ef016913ce123": {
+      "excerpt": "The TypeRef punt: `unknown` tagged with the unhandled case.",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "17b6793a6691a21483793c76ddebd0cbe8fbbd456915843e201aac7b51e062ff": {
       "excerpt": "Render a `QueryNamespace` tree into synthesized object-type SDL fragments",
@@ -1065,6 +1085,10 @@
       "excerpt": "Top-level entry point: an `object` TypeRef becomes a `toJmsClass` readonly",
       "approvedAt": "2026-08-13T07:11:47.423Z"
     },
+    "1ee503d1818f39ac1e5f65f6093df6a3295afcd00107bbf1876cfec566472075": {
+      "excerpt": "Flow's top type (`mixed` accepts any value, nothing is assignable",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "1ee6fb9a8d3fa0dc5bde7128b74e4f1f957458cf0b803be466f7ec679fb497ee": {
       "excerpt": "Strips comment delimiters and normalizes incidental formatting that",
       "approvedAt": "2026-08-13T05:02:19.633Z"
@@ -1076,6 +1100,10 @@
     "1f31ecd9cb973d0b2f3470bc01d3950ce2487249e062e847d76c73f11cfd247a": {
       "excerpt": "A class instance carries only nominal identity, never structure — no",
       "approvedAt": "2026-08-13T07:12:41.879Z"
+    },
+    "1f3fb6b471f98e5f904cda1db9313d531c8866de7a6719aca94dc2d6583f0d56": {
+      "excerpt": "Unwrap `export type X = ...` / `declare export type X = ...` / plain",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "1f70fa1d40c098e25510f81729196deea1769c598f2a579811f013f40dae984d": {
       "excerpt": "Concrete values used to expand dynamic routes into the map, and to build",
@@ -1312,6 +1340,10 @@
     "2609cb3546d5af02a8a05c7e4330d206b6a9f6e525ef1413d18c9bc0073cef06": {
       "excerpt": "Query-nesting path (ancestor tree path, incl. fallback-name segments) — `[]` for…",
       "approvedAt": "2026-08-13T07:11:09.579Z"
+    },
+    "260ba5aab646699fac113010d78deb9d2979e5aa5beec6b069f7ceaa2a652dba": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "265eaa555e9e43a70d284c2d563feac7a0f7c7c4e58589beb32c7a7acfc842e6": {
       "excerpt": "A non-object union variant (e.g. a bare string/number literal) has",
@@ -2417,6 +2449,10 @@
       "excerpt": "One method's full JSON-RPC signature — params/result/error schemas plus",
       "approvedAt": "2026-08-13T07:11:45.921Z"
     },
+    "459075aeecc32fe7af22e73059128739f5dd8c219f32de3dcf6921b65cd45842": {
+      "excerpt": "Flow's own lib-defs ship `AsyncIterable<T>` with the same shape as TS's",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
+    },
     "459be94829cfce529fb910ec2c3a358103cf777d116669f35b259f23e94fb0d7": {
       "excerpt": "Parse `.capnp` schema text into its struct/enum declaration tree, without",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -3361,6 +3397,10 @@
       "excerpt": "Unrecognized character (whitespace variant, stray symbol) — skip rather",
       "approvedAt": "2026-08-13T07:09:42.607Z"
     },
+    "5dc328b122312d11bc4b714473be8005c9e2ebf76a14eaba49f8f26d302a8f3b": {
+      "excerpt": "Flow's function-type syntax (`(params) => ReturnType`) is identical to",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
+    },
     "5dcbfd94b7911c3dbae8d26c95437fdefca4825b549e0332e47e081040cb8c1d": {
       "excerpt": "Full method-name override (dot-prefix ignored when set).",
       "approvedAt": "2026-08-13T07:12:23.503Z"
@@ -3456,6 +3496,10 @@
     "5f8e148b22bb67a70566ec87085432ede2619f7e74a3e343457f524c099aa39e": {
       "excerpt": "Proto3's `stream` keyword (§ \"Services\") only appears in RPC method",
       "approvedAt": "2026-08-13T07:10:47.056Z"
+    },
+    "5fc63b66c6e48be2d253b8321cb17a2559749ada106c881a1056499e8c796ae4": {
+      "excerpt": "`method` has no explicit entry — falls back to the `function` handler",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
     },
     "5ff2457b4570eb88f03040489b1db04057a4f5a6a9ae6f07ca68bc2cc06a689d": {
       "excerpt": "the carrier is `{type:\"object\"}`, which `fromObject` would otherwise",
@@ -3785,6 +3829,10 @@
       "excerpt": "Convert a `TypeRef` to a PHP type expression usable in a property/param/",
       "approvedAt": "2026-08-13T07:11:47.432Z"
     },
+    "699e11bf656cb87c860e5fac87beda1c6f41fe02b72519cd4d1ff3069e0a1c6a": {
+      "excerpt": "packages/type-ir/src/from-flow.ts — @rhi-zone/fractal-type-ir/from-flow",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "69c74006e62d9c9bea9ae59a75ed7c1d08966448fd4c2cee1952b3cde1bf91e8": {
       "excerpt": "Cap'n Proto schema language: https://capnproto.org/language.html",
       "approvedAt": "2026-08-13T07:09:42.597Z"
@@ -3873,6 +3921,10 @@
       "excerpt": "Render a `TypeRef`'s structure as markdown-ready `Part[]`, resolving",
       "approvedAt": "2026-08-13T07:10:43.801Z"
     },
+    "6c8bba327ec55dce0f1d4952d5bdefff5413867f1448b4468688588ac7b5bf26": {
+      "excerpt": "Flow's bottom type — no value inhabits it.",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "6c97eeeea2aba5cc6e55b75cc547938a91174accfd350c6fecf0826ba8eb74ef": {
       "excerpt": "packages/type-ir/src/objc-foundation.ts — @rhi-zone/fractal-type-ir/objc",
       "approvedAt": "2026-08-13T07:10:46.705Z"
@@ -3908,6 +3960,10 @@
     "6dd7a869bd76d650ab00073644e1a33c2dc597ca4395b096bba0118f830a603c": {
       "excerpt": "Project a `TypeRef` to standalone ObjectMapper-flavored Swift source:",
       "approvedAt": "2026-08-13T07:10:46.698Z"
+    },
+    "6e15f1047a19616667a845b4e57a884dbd5cf24f0f9c336ff6fc191edadf3ac2": {
+      "excerpt": "Flow (https://flow.org/) type-annotation projector — structurally very",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
     },
     "6e2247e69f41ab68ee79c52b9d2e65ed0d1493f940d02ef55414222bc769fcd0": {
       "excerpt": "@ts-expect-error — \"database\" is not a registered JsonRpcStoreName.",
@@ -3964,6 +4020,10 @@
     "6f5d6412514a9f78c6b3e5e0eeb3a9de1f4d8891648d3f3cdd509d063e9b8658": {
       "excerpt": "Renders one `object`-shaped variant of a discriminated/plain union as a",
       "approvedAt": "2026-08-13T07:09:42.437Z"
+    },
+    "6fa0fc13cf80f876fcb067a391798f32a6fa519e84aac9456ed150461f06f65f": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "6fb5982587c6d3be45bcb8c8eb890fa7b2dd0d0d191cbdf30d5f9d2f9965dd16": {
       "excerpt": "200 response schema from codegen output",
@@ -4209,9 +4269,17 @@
       "excerpt": "`catalog/search`'s generated schema is `{ q?: string }` — every value a",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "7629d75a557ef2b559c967d2d0b3027557d20343b1882e14d56bb26bb636abee": {
+      "excerpt": "Parse Flow source and lower every top-level type/interface/opaque-type",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "762b9f3d85da3d5beb0b76ac015074a2633e5a4fdf7ea359c2ae278bed8f28f4": {
       "excerpt": "resolveTags reads only known tag keys; custom boolean keys pass through in",
       "approvedAt": "2026-08-13T05:06:32.673Z"
+    },
+    "76441295328afab3fd660db775940a4f14a9fdcca8ad12c991d5d4680a63e018": {
+      "excerpt": "`toFlow(ref)` returns the bare Flow type expression for `ref` (same as",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
     },
     "764abd9e64cc6b037845e8ee3ec84fa0596eb1ae3ff591eb085ffafdde90cd55": {
       "excerpt": "Converts a `TypeRef` into idiomatic Elm source: a type alias (records) or",
@@ -4485,6 +4553,10 @@
       "excerpt": "`securitySchemes` is a SHARED-role field (read at both leaf and branch",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "7ddc9d84c7bffdf334f0caa75951cf7056a4a9f619f5739a2d1ab0c066fcf739": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
+    },
     "7dfce761cf36391a6270e1d72af680b02ff1413d16c1b8c19528c699a5a8c191": {
       "excerpt": "The general (untagged) union fallback — one positionally-named",
       "approvedAt": "2026-08-13T07:12:41.871Z"
@@ -4700,6 +4772,10 @@
     "85398b8f0d2d7577991a64e42879c7d5a0aba143ce00419116a4c35c7eb32c96": {
       "excerpt": "Dispatch entries, keyed differently per operation type (see `buildDispatch`'s",
       "approvedAt": "2026-08-13T07:08:35.589Z"
+    },
+    "85401c8095a6e6b14e64e66b5a9b67f3d63113cfeec866a9b26919cf942e2323": {
+      "excerpt": "The shared-discriminator-field detection `from-typescript.ts` runs over a",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "8544650235b512728c1fe042b8288cb32dff5c7739cfb02cd3c07eaafc82a988": {
       "excerpt": "C# has no literal types outside `enum`/`const` — degrades to the",
@@ -5561,6 +5637,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:42.593Z"
     },
+    "9e7e2b20c3853e22873fcd8c7d12f3cf1eb78d3f2a54d6b6ae091e2fcdb93403": {
+      "excerpt": "Convert an `ObjectTypeAnnotation` to a TypeRef. Three shapes, checked in",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "9e8b8a617d3bbe885e3f94d6c55b66360d6ffd01fe5aab8266bb628173d5fccc": {
       "excerpt": "`id` is bound by the fallback segment, so `assemble` reads it from",
       "approvedAt": "2026-08-13T07:12:24.149Z"
@@ -5889,6 +5969,10 @@
       "excerpt": "A bare (unnamed) enum TypeRef has nowhere to hang a PHP 8.1 backed-enum",
       "approvedAt": "2026-08-13T07:11:47.428Z"
     },
+    "a7fc7628a82c08cfc7b57da477700c220535168efc809526804297df3166cb6f": {
+      "excerpt": "Renders back to the same named alias the extractor matched against (see",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
+    },
     "a8177254e7e6865842f9baa0f4f45cb0f032f7082feb9b4f7f18de73d4bc998c": {
       "excerpt": "root, \"list\" leaf, fallback subtree branch, and its \"get\" leaf",
       "approvedAt": "2026-08-13T05:06:32.673Z"
@@ -6141,6 +6225,10 @@
       "excerpt": "`webpackIgnore` (Rspack honors the webpack-prefixed spelling too, see",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "aee748d7c7e84d036ccce30ca0a77d0e3c56ba42ae0298241e7fe33ab96ace57": {
+      "excerpt": "Wraps `type` in Flow's prefix maybe-type (`?T`). `?` binds tighter than",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
+    },
     "aefad32856e5c4d22014eb77019c5ed094972ce2b9e402a623f731be0a651c00": {
       "excerpt": "Flatten -> finalizeSharedDefs -> reassemble, over this path's single",
       "approvedAt": "2026-08-13T07:12:18.664Z"
@@ -6220,6 +6308,10 @@
     "b1c7e4a976bed883aa310c97bfc9157eb00e1c64c7b4150cb97a44e4350e3281": {
       "excerpt": "camelCase join — used for flat Mutation/Subscription field names. Exported",
       "approvedAt": "2026-08-13T07:08:35.589Z"
+    },
+    "b1e3b7ba42c67deee24009a48feb60810b4a0935934542a7659590ae9af2748a": {
+      "excerpt": "Bare Flow type expression for `ref` — no declaration wrapper, no header.",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
     },
     "b26b6f740e1f22f43418c247a0bdf2531d42892a564c364f1c473ad1d851f0e7": {
       "excerpt": "============================================================================",
@@ -6560,6 +6652,10 @@
     "bd2b77710bc1ed70bad72f09ff747e3a7f92d93302ebe8f37d0097fe96ce6bab": {
       "excerpt": "Not a native ES mapping keyword — ES mappings carry no notion of an",
       "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
+    "bd375ca995d1dce044ccd6852e2355ea473a734f52a34e1a23728f3ca4aa0891": {
+      "excerpt": "See file-header comment: rendered as a string-literal union, same as",
+      "approvedAt": "2026-08-13T07:13:00.781Z"
     },
     "bd4375a0ca0a5d965296dc42c90f40fab7c8b420d868194965aa58ed46ff16b3": {
       "excerpt": "Cap'n Proto enumerants are assigned sequential ordinals by declaration",
@@ -6977,6 +7073,10 @@
       "excerpt": "Build the by-name params object schema (see module doc's \"Params\" section)",
       "approvedAt": "2026-08-13T07:11:45.921Z"
     },
+    "cbb4a0aa131c9872d90a38a5e27168be65aac43e0116bbdebcae177d9047ee1e": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "cbdff83050dfffe6ec97b8f28c0b0f8a82e1aa062c7066df6bbe48c3466dd287": {
       "excerpt": "No native streaming construct — degrades to its vector equivalent, same",
       "approvedAt": "2026-08-13T07:11:58.689Z"
@@ -7013,9 +7113,17 @@
       "excerpt": "True when `meta` (a node's, or an `HttpRoute` method entry's) is tagged",
       "approvedAt": "2026-08-13T07:12:18.653Z"
     },
+    "cce03cad2c8a4c210437acac7e0d3824b780da8ecc6686b4656e2a74f1887d77": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
+    },
     "ccfd2e404047ae771ad78d13a12e3271b621ed2e2f3beb32c45f2670fdbfd23b": {
       "excerpt": "A `interface` TypeRef (service method surface — see index.ts's",
       "approvedAt": "2026-08-13T07:11:58.702Z"
+    },
+    "cd0415b541fbcfaedb83b1f0eb57bee9550254a447d31ca8211cbc93cad51b19": {
+      "excerpt": "`any` is Flow's UNCHECKED escape hatch (unlike `mixed`, which is",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "cd184c2ff44ab57773adff1ef8f2ac1e33e96d9221a7c4e0eabd6b94de465c63": {
       "excerpt": "The reason must NOT sit on the `::` line itself — docutils' directive",
@@ -7028,6 +7136,10 @@
     "cd83c3f2bee6756e0c2d1095b6931863f0ee5a12ce7d9da1d64f7bef41eee256": {
       "excerpt": "No discriminator field — attempt each variant in declaration",
       "approvedAt": "2026-08-13T07:09:42.413Z"
+    },
+    "cd8a43ce9dfe2d0b33db4daa256959235c38daa88607e3d66f2b522eba28d5f4": {
+      "excerpt": "Promise<T> unwraps to T — same convention as from-typescript.ts's",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "cdf2c75f78b6801bdbc7ebb1a90656a530bc732f81d75b3b6e9af5e153d490cc": {
       "excerpt": "Resolve a union variant to the type name usable inside a `union { ... }`",
@@ -7096,6 +7208,10 @@
     "cf4418e7543c22fbc6fa7057d1daba9d1865d910ae1cc6c222be404cbe5f0607": {
       "excerpt": "Prefix the hoisted payload name with the (now-deduplicated) ctorName,",
       "approvedAt": "2026-08-13T07:12:41.882Z"
+    },
+    "cf477c356528167c0cff741384c3407d05626ec305ab5fbb952d6a87d1903e1f": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "cf58e1bf819ae2a1f891d670e6e903e88289d042e3bb551304afc291726f9218": {
       "excerpt": "packages/graphql-api-projector/src/schema.ts — @rhi-zone/fractal-graphql-api-pro…",
@@ -8124,6 +8240,10 @@
     "ed01355a6f77d3666e8f72a4d725d49607419ca9304c67e91eb344fa5db2f739": {
       "excerpt": "Lower a tuple-rooted TypeRef to a struct with positional fields",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "ed0ee270042b27353bea1bc2694dad67c6df6b6eaac7b4d30d397349b43e5b13": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:13:00.787Z"
     },
     "ed19dd9f48384025fec2205adf68fc58684dfb8ff507a5fc2b11dfa4ad2bf5a0": {
       "excerpt": "True when `v` structurally matches `CursorPage<unknown>` — has `items`/`hasMore`…",
