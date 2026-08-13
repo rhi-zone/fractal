@@ -9,10 +9,10 @@
 // playground, a CLI, or a test.
 //
 // The `typescript`-backed importers (`from-typescript`,
-// `from-standard-schema-type`) are NOT registered here, because they need a
-// `ts.Program` plus a symbol name rather than text, and because `typescript`
-// is an OPTIONAL peer dependency that must not be forced on consumers who
-// never ask for it. They ship as their own `Registry` in
+// `from-standard-schema-type`) are not registered here: they need a
+// `ts.Program` plus a symbol name rather than text, and `typescript` is an
+// optional peer dependency that must not be forced on consumers who never
+// ask for it. They ship as their own `Registry` in
 // `./registry-typescript`, built with the same `defineRegistry`, and a caller
 // who wants both merges them:
 //
@@ -29,7 +29,7 @@
 //
 // Two irregularities in the projector surface are absorbed by the adapters
 // below rather than papered over:
-//   - Argument order is NOT uniform. Most `toX(ref, name?)` put `ref` first,
+//   - Argument order is not uniform. Most `toX(ref, name?)` put `ref` first,
 //     but the "build a named declaration" family — `toGraphQLType`,
 //     `toCapnpStruct`, `toProtoMessage`, `toFlatBuffersTable`,
 //     `toCreateTable`, `toMssqlCreateTableFromRef`, every `toXDeclaration` —
@@ -151,6 +151,9 @@ import { toStarlightReference } from "./starlight-reference.ts";
 import { toMkdocsReference } from "./mkdocs-reference.ts";
 import { toMkdocsVanillaReference } from "./mkdocs-vanilla-reference.ts";
 import { toSphinxReference } from "./sphinx-reference.ts";
+import { toOrgModeReference } from "./org-mode-reference.ts";
+import { toDocutilsReference } from "./docutils-reference.ts";
+import { toMarkdownReference } from "./markdown-reference.ts";
 
 /** Name given to the root type when a document has no named definitions and
  * the caller did not supply one. */
@@ -218,10 +221,10 @@ const text = (
   run: (source: string) => TypeRefDocument,
 ): TextImporter => ({ id, subpath, extensions, input: "text", run });
 
-/** JSON importers parse their own source. Hoisting the parse into a dispatch
- * switch was what forced the caller-visible input shapes apart in the first
- * place; doing it here makes every entry in this registry `string -> document`
- * and leaves the tag as pure metadata. */
+/** JSON importers parse their own source. A dispatch switch that hoists the
+ * parse out to a shared caller would force the caller-visible input shapes
+ * apart; parsing here instead keeps every entry in this registry
+ * `string -> document` and leaves the tag as pure metadata. */
 const json = (
   id: string,
   subpath: string,
@@ -330,11 +333,11 @@ export function getImporter(id: string): Importer {
 
 /** Run an importer from this registry against raw source text.
  *
- * Deliberately typed to `Importer`, not to the merged union: a checker-backed
- * importer cannot be driven from a string, and accepting one here would only
- * let the mistake through to a runtime failure. Callers holding a merged
- * registry narrow on `entry.input` and call `entry.run` directly — see
- * `ingestFrom` in `./registry-typescript`. */
+ * Typed to `Importer`, not the merged union, because a checker-backed
+ * importer cannot be driven from a string — accepting one here would trade a
+ * type error for a runtime failure. Callers holding a merged registry narrow
+ * on `entry.input` and call `entry.run` directly — see `ingestFrom` in
+ * `./registry-typescript`. */
 export function ingest(id: string, source: string): TypeRefDocument {
   return getImporter(id).run(source);
 }
@@ -494,11 +497,11 @@ const data = (
   run: (doc, options) => ({ kind: "json", value: build(doc, options) }),
 });
 
-/** Reference-site generators emit one page per `doc.defs` entry, so a
- * defs-less document would otherwise yield nothing at all. Every other
- * projector treats such a document as "one type, named `rootName(options)`";
- * filing the root under that name applies the same normalization here rather
- * than leaving three targets silently empty. */
+/** Reference-site generators emit one page per `doc.defs` entry. A defs-less
+ * document is normalized here by filing the root under `rootName(options)`,
+ * the same treatment every other projector gives such a document ("one type,
+ * named `rootName(options)`"), so these targets render one page instead of
+ * none. */
 const files = (
   id: string,
   subpath: string,
@@ -772,11 +775,14 @@ const projectorList: readonly Projector[] = [
     toMkdocsVanillaReference(doc),
   ),
   files("sphinx-reference", "./sphinx-reference", (doc) => toSphinxReference(doc)),
+  files("org-mode-reference", "./org-mode-reference", (doc) => toOrgModeReference(doc)),
+  files("docutils-reference", "./docutils-reference", (doc) => toDocutilsReference(doc)),
+  files("markdown-reference", "./markdown-reference", (doc) => toMarkdownReference(doc)),
 ];
 
-/** Short ids kept as aliases so existing callers keep resolving. Most are
+/** Short ids that resolve to a canonical projector id. Most alias names are
  * also real package subpaths; the handful that are not (`go`, `swift`, `cpp`,
- * `kotlin`, `php`, `objc`) were the playground's own shorthand. */
+ * `kotlin`, `php`, `objc`) are the playground's own shorthand. */
 const projectorAliases: Readonly<Record<string, string>> = {
   typescript: "typescript-native",
   zod: "typescript-zod",

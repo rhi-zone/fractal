@@ -131,6 +131,18 @@
       "types": "./dist/mkdocs-vanilla-reference.d.ts",
       "import": "./dist/mkdocs-vanilla-reference.js"
     },
+    "./sphinx-reference": {
+      "types": "./dist/sphinx-reference.d.ts",
+      "import": "./dist/sphinx-reference.js"
+    },
+    "./docutils-reference": {
+      "types": "./dist/docutils-reference.d.ts",
+      "import": "./dist/docutils-reference.js"
+    },
+    "./markdown-reference": {
+      "types": "./dist/markdown-reference.d.ts",
+      "import": "./dist/markdown-reference.js"
+    },
     "./json-schema-07": {
       "types": "./dist/json-schema-07.d.ts",
       "import": "./dist/json-schema-07.js"
@@ -545,6 +557,8 @@
     "@sinclair/typebox": "^0.34.41",
     "fast-check": "^4.9.0",
     "protobufjs": "^8.7.1",
+    "remark": "^15.0.1",
+    "remark-gfm": "^4.0.1",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
