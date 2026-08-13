@@ -237,9 +237,7 @@ function buildSources(meta: RouteLeafMeta, authoredPathParams: readonly string[]
   };
 }
 
-function paginatedDirectiveOf(
-  meta: RouteLeafMeta,
-):
+function paginatedDirectiveOf(meta: RouteLeafMeta):
   | {
       readonly style?: "cursor" | "offset";
       readonly inputCursorParam?: string;

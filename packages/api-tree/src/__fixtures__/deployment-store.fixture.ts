@@ -36,9 +36,7 @@ declare module "../input.ts" {
      * checked against.
      */
     tabularSource: {
-      read(
-        sourceId: string,
-      ): Promise<{
+      read(sourceId: string): Promise<{
         readonly headers: readonly string[];
         readonly rows: readonly (readonly unknown[])[];
       }>;

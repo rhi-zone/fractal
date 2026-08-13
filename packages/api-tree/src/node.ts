@@ -227,9 +227,8 @@ type IsOptionalOnBoth<A, B, K extends keyof A & keyof B> =
 type MergeTwoMeta<A, B, Depth extends readonly unknown[] = []> = Omit<A, keyof B> &
   Omit<B, keyof A> & {
     [
-      K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? never : K
-    ]: // `NonNullable` — a key present in the merged object always has a
-    // defined value (`mergeRecords` never assigns `undefined` itself;
+      K in keyof A & keyof B as IsOptionalOnBoth<A, B, K> extends true ? never : K // `NonNullable` — a key present in the merged object always has a
+    ]: // defined value (`mergeRecords` never assigns `undefined` itself;
     // it `continue`s past it), even though `MergeMetaValue<A[K], B[K]>`
     // can otherwise carry a stray `| undefined` through from an
     // optional-on-one-side source field. Required under

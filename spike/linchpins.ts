@@ -337,9 +337,7 @@ const app: Router<NoVars> = createBuilder<NoVars>()
 interface StandardSchema<_In, Out> {
   readonly "~standard": {
     readonly version: 1;
-    validate(
-      value: unknown,
-    ):
+    validate(value: unknown):
       | { readonly value: Out; readonly issues?: undefined }
       | {
           readonly issues: ReadonlyArray<{ readonly message: string }>;

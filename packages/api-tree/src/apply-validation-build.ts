@@ -665,9 +665,7 @@ export function extractWireApplyValidationTypeRefs(
  * `protocol`, derived `FieldProfileDerivation`, and `hookFields` (function-
  * form `encodingMap` field names, empty for every uniform-profile
  * protocol). */
-function flatWireEntries(
-  byKey: WireApplyValidationTypeRefs["byKey"],
-): {
+function flatWireEntries(byKey: WireApplyValidationTypeRefs["byKey"]): {
   name: string;
   ref: TypeRef;
   protocol: ProtocolName;
