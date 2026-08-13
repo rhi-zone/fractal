@@ -22,27 +22,26 @@
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
 //      those remain the direct tree-walk dispatcher's domain; see project.ts).
 //
-// Dispatch (decode → handler → encode) is NOT an interceptable multi-stage
-// pipeline — that abstraction (reqTransforms/inputTransforms/validate/
-// outputTransforms/resTransforms, plus per-route `decode`/`encode`
-// overrides) was removed: nothing in this codebase used those hooks outside
-// of tests exercising the mechanism itself. AOT-COMPILED validation happens
-// via `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation(key,
+// Dispatch (decode → handler → encode) is a fixed, linear pipeline rather
+// than an interceptable multi-stage one — the earlier stage-array
+// abstraction (reqTransforms/inputTransforms/validate/outputTransforms/
+// resTransforms, plus per-route `decode`/`encode` overrides) has been
+// removed. AOT-compiled validation runs via
+// `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation(key,
 // projectedTree, "http")` — the recommended, wire-profile-driven 3-arg form
 // (see preset.ts's module doc for what it buys over the still-supported
 // 2-arg `applyValidation(key, projectedTree)` form) — wired onto the
-// ALREADY-PROJECTED `HttpRoute` (typically as
-// a `preset.ts` `rewriters` entry) — the same leaf-handler wrap
-// `@rhi-zone/fractal-api-tree/build`'s `wrapValidators` does (either can
-// still be used at the `Node` level, before this file's transforms ever run,
-// for a tree shared with MCP/CLI). What's left here is `runRoute` (below): decode
-// the request via `sources` (still genuinely per-route — each route has its
-// own parameter names and source overrides), optionally run a Standard
-// Schema validator declared via `http.validate()` (verbs.ts) against the
-// decoded input, call the handler, encode the response. Simple, linear, no
-// loop over stage arrays — the one added step (Standard Schema validation)
-// is a fixed, single check on `sources.validate`, not a re-introduction of
-// the removed interceptable-array abstraction.
+// already-projected `HttpRoute`, typically as a `preset.ts` `rewriters`
+// entry. The same leaf-handler wrap, `@rhi-zone/fractal-api-tree/build`'s
+// `wrapValidators`, can instead be applied at the `Node` level, before this
+// file's transforms run, for a tree shared with MCP/CLI.
+//
+// What remains here is `runRoute` (below): decode the request via `sources`
+// (per-route — each route has its own parameter names and source
+// overrides), optionally run a Standard Schema validator declared via
+// `http.validate()` (verbs.ts) against the decoded input, call the handler,
+// encode the response — a fixed, single check against `sources.validate`,
+// not a loop over stages.
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node";
@@ -105,32 +104,30 @@ export type Sources = {
   /** explicit list of param names to extract (when absent, bulk-collects all available values) */
   readonly paramNames?: readonly string[];
   /**
-   * The leaf's own pre-moveTo ancestor fallback-name chain, stamped by
-   * `naiveTransform` at the EARLIEST point in the pipeline — before any
+   * The leaf's own pre-`moveTo` ancestor fallback-name chain, stamped by
+   * `naiveTransform` at the earliest point in the pipeline, before any
    * rewriter (including `applyMoveTo` and any user-supplied transform) can
-   * relocate the leaf. Empty/absent means the leaf was never nested under any
-   * wildcard in its AUTHORED tree position.
+   * relocate the leaf. Empty/absent means the leaf was never nested under a
+   * wildcard in its authored tree position.
    *
-   * This is the fix for moveTo's old, unintended effect on input binding: a
-   * leaf's field↔store binding must be a pure function of its authored
+   * A leaf's field↔store binding must be a pure function of its authored
    * declarations (local path-slug ancestry + explicit `sourceMap` entries),
-   * never of where `moveTo` happens to relocate it. `defaultDecode` (below)
-   * intersects this list against whatever the FINAL match actually produces,
+   * not of where `moveTo` happens to relocate it. `defaultDecode` (below)
+   * intersects this list against whatever the final match actually produces,
    * instead of trusting the final match's raw slug set wholesale — see that
    * function's own doc comment for the full reasoning, and
    * `findRouteSourceCoverageProblems` for the wire-time check that turns a
-   * moveTo relocating a leaf away from its authored slug into a loud error
+   * `moveTo` relocating a leaf away from its authored slug into a loud error
    * instead of a silently-empty field.
    *
-   * `undefined` (as opposed to `[]`) specifically means "this `Sources` value
-   * did not come from `naiveTransform` at all" — a hand-built `HttpRoute`
-   * (many low-level tests in this package construct `httpRoute()` literals
-   * directly, bypassing `naiveTransform` entirely) has no authored-position
-   * history to consult, so `defaultDecode` falls back to its pre-existing
-   * bulk-slug behavior for those. A leaf that DID go through `naiveTransform`
-   * but was never nested under a wildcard gets `[]`, not `undefined` — an
-   * empty authored set, correctly excluding it from any implicit path
-   * binding.
+   * `undefined` (as opposed to `[]`) means this `Sources` value did not come
+   * from `naiveTransform` — a hand-built `HttpRoute` (several low-level
+   * tests in this package construct `httpRoute()` literals directly,
+   * bypassing `naiveTransform`) has no authored-position history to consult,
+   * so `defaultDecode` falls back to its bulk-slug behavior for those. A
+   * leaf that did go through `naiveTransform` but was never nested under a
+   * wildcard gets `[]`, not `undefined` — an empty authored set, correctly
+   * excluding it from any implicit path binding.
    */
   readonly authoredPathParams?: readonly string[];
   /** optional reshape after assembly, before the handler sees the input */
@@ -203,13 +200,13 @@ export function isHttpRoute(v: unknown): v is HttpRoute {
 }
 
 // ============================================================================
-// Flat-key readers — shared by the rewriters below. Route.ts's OWN copies of
-// these reads (not calls to `getHttpMeta`, project.ts) — route.ts can't
-// import project.ts, since project.ts imports FROM route.ts and a reverse
-// import would cycle. Since the flat design's fold already resolves each key
-// (last-wins scalars, key-merged sourceMap) at `op()`/`mergeMeta` time
-// (api-tree's node.ts), these are now plain field reads, not a directive-
-// array walk — see project.ts's own module doc for the fuller history.
+// Flat-key readers — shared by the rewriters below. These are route.ts's own
+// copies of these reads, not calls to `getHttpMeta` (project.ts): project.ts
+// imports from this file, so a reverse import would cycle. The flat design's
+// fold already resolves each key (last-wins scalars, key-merged sourceMap)
+// at `op()`/`mergeMeta` time (api-tree's node.ts), so these are plain field
+// reads, not a directive-array walk — see project.ts's own module doc for
+// the fuller design history.
 // ============================================================================
 
 function sourceMapOf(meta: RouteLeafMeta): SourceMap | undefined {
@@ -446,16 +443,14 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
         const method = entry.meta.http?.method;
         const newKey = method !== undefined ? method.toUpperCase() : key;
         if (newKey !== key) changed = true;
-        // No stripping: `meta.http.method` stays on the entry's meta after
-        // the rename — the flat design's "resolved shape = authored shape"
-        // means this is informational, not a directive to consume (see
-        // project.ts's module doc). A bare `op()` leaf's route-position
-        // `meta` and its sole method entry's `meta` therefore stay the SAME
-        // object reference through this rewriter, same as before any
-        // directive existed to strip — `compile.ts`'s `collectRoutes`
-        // already dedupes by function VALUE, not by meta object identity,
-        // so this doesn't change its correctness (see that function's own
-        // doc comment).
+        // `meta.http.method` stays on the entry's meta after the rename —
+        // the flat design's "resolved shape = authored shape" (project.ts's
+        // module doc) treats it as informational, not a directive to
+        // consume. A bare `op()` leaf's route-position `meta` and its sole
+        // method entry's `meta` stay the same object reference through this
+        // rewriter; `compile.ts`'s `collectRoutes` dedupes by function
+        // value, not by meta object identity, so this doesn't affect its
+        // correctness (see that function's own doc comment).
         rebuilt[newKey] = entry;
       }
       methods = changed ? rebuilt : methods;
@@ -615,24 +610,22 @@ function insertAt(
 
 /**
  * Applies every `moveTo` directive detached from the tree by `detach`.
- * Reinserted sequentially via `insertAt`, so conflicts between two DIFFERENT
+ * Reinserted sequentially via `insertAt`, so conflicts between two different
  * placed subtrees converging on the same path+method are caught exactly like
  * a conflict between a placed subtree and a node already sitting at the
  * target — both funnel through `mergeRoutes`'s check.
  *
- * Unlike `naiveTransform`/`applyMethods`/`applyResponse`, this is NOT
- * generic over the input's handler type(s) — deliberately, not by omission.
- * `meta.http.moveTo` (the move target) is a plain runtime `string` read out
- * of the open `meta` bag; TypeScript has no way to know, for a given input
- * tree type, WHERE a subtree ends up without parsing that string as a
- * type-level template literal and re-deriving the whole tree shape from it.
- * Doing that would need `HttpLeafMetaProperties`/`LeafMeta` to carry a typed,
- * literal directive language instead of today's open `{ [key: string]:
- * unknown }` bag — a
- * separate, much larger design question (typed directives), not a narrower
- * fix within this rewriter. `applyMoveTo` returns the erased `HttpRoute`
- * because moved subtrees' positions are genuinely unknowable statically, not
- * because threading the generic through was skipped.
+ * Unlike `naiveTransform`/`applyMethods`/`applyResponse`, this is not generic
+ * over the input's handler type(s): `meta.http.moveTo` is a plain runtime
+ * `string` read out of the open `meta` bag, so TypeScript has no way to know,
+ * for a given input tree type, where a subtree ends up without parsing that
+ * string as a type-level template literal and re-deriving the whole tree
+ * shape from it. That would need `HttpLeafMetaProperties`/`LeafMeta` to carry
+ * a typed, literal directive language instead of today's open
+ * `{ [key: string]: unknown }` bag — a separate, larger design question, not
+ * a fix scoped to this rewriter. `applyMoveTo` returns the erased
+ * `HttpRoute` because moved subtrees' positions are genuinely unknowable
+ * statically.
  */
 export function applyMoveTo(route: HttpRoute): HttpRoute {
   const moves: PendingMove[] = [];
@@ -1043,23 +1036,22 @@ async function defaultDecode(
   }
 
   const stores = httpStores(req, slugs, parsedBody, serviceStores);
-  // moveTo is purely an address transform — it must NOT affect input binding.
-  // `slugs` here are the FINAL (post-moveTo) matched-tree's ancestor-fallback
-  // captures; naively treating every one of them as implicitly path-bound
-  // would let a leaf relocated under a same-named (or coincidentally-named)
-  // wildcard pick up a slug value it never authored under. `authoredPathParams`
-  // (stamped by `naiveTransform`, before any rewriter runs) is the leaf's OWN
-  // pre-moveTo ancestor fallback-name chain — intersecting against it restricts
-  // implicit path-binding to slugs the leaf actually authored itself under.
+  // `moveTo` is purely an address transform — it must not affect input
+  // binding. `slugs` here are the final, post-moveTo matched-tree's
+  // ancestor-fallback captures; treating every one of them as implicitly
+  // path-bound would let a leaf relocated under a same-named (or
+  // coincidentally-named) wildcard pick up a slug value it never authored
+  // under. `authoredPathParams` (see `Sources`, above) is the leaf's own
+  // pre-moveTo ancestor fallback-name chain — intersecting against it
+  // restricts implicit path-binding to slugs the leaf actually authored
+  // itself under.
   //
-  // `authored === undefined` means this `Sources` value didn't come from
-  // `naiveTransform` at all (a hand-built `HttpRoute`, e.g. many of this
-  // package's own low-level tests construct `httpRoute()` literals directly)
-  // — there is no authored-position history to consult, so this falls back to
-  // the pre-existing bulk-slug behavior for those rather than going strict.
   // For the dominant naiveTransform-derived case, an unmoved leaf's final
   // ancestor slugs and its authored slugs are identical, so this filter is a
-  // no-op there — moveTo is the only thing that can make the two sets diverge.
+  // no-op — moveTo is the only thing that can make the two sets diverge.
+  // `authored === undefined` (a hand-built `HttpRoute` that bypassed
+  // `naiveTransform`) falls back to the pre-existing bulk-slug behavior,
+  // since there's no authored-position history to consult.
   const liveSlugNames = Object.keys(slugs);
   const authored = sources?.authoredPathParams;
   const pathParamNames =
@@ -1191,10 +1183,10 @@ export type ThrownErrorEncoder = HttpErrorEncoder;
  * Pre-built `HttpErrorEncoder`: maps error `kind` values to HTTP status
  * codes, e.g. `httpErrors({ notFound: 404, conflict: 409, forbidden: 403 })`.
  * Internally a `composeErrorEncoders` over one `matchKind` per mapping entry
- * — first match wins (object key order). The response body defaults to the
- * error value itself, matching `defaultEncodeError`'s `{ error }` wrapping
- * shape isn't reused here since the status is already known; instead the raw
- * error is sent as the body directly.
+ * — first match wins (object key order). The response body is the raw error
+ * value itself, not wrapped in `defaultEncodeError`'s `{ error }` shape —
+ * the status is already known here, so there's nothing left for that
+ * wrapper to signal.
  */
 export function httpErrors<E = unknown>(mapping: Record<string, number>): HttpErrorEncoder<E> {
   const encoders = Object.entries(mapping).map(([kind, status]) =>
