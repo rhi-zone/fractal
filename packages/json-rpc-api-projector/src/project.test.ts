@@ -110,9 +110,9 @@ describe("tags -> flat method metadata (no ancestor inheritance)", () => {
   });
 
   it("a node-level tag does not flow to leaf children with no own tags", () => {
-    // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
+    // `tags` is a leaf-only field under the SharedMeta/LeafMeta/BranchMeta
     // split (docs/design/meta-role-split-spec.md §2) — api_()'s typed
-    // `opts.meta` no longer accepts it on a BRANCH at all, which is itself
+    // `opts.meta` rejects it at branch position entirely, which is itself
     // a stronger, compile-time version of "no ancestor inheritance." Built
     // via object spread over a real api_() result instead, the same shape
     // a hand-built or legacy-computed tree could still produce.

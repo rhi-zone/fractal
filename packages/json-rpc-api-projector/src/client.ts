@@ -31,7 +31,7 @@
 //   - a leaf          -> an async callable `(input?) => Promise<result>`,
 //     dispatching `call(name, { ...capturedSlugs, ...input })`.
 //
-// Method-name derivation mirrors `projectMethods` (project.ts) exactly: DOT-
+// Method-name derivation mirrors `projectMethods` (project.ts) exactly: dot-
 // joined tree position, `meta.jsonrpc.name`/`meta.jsonrpc.segment` overrides
 // read the same way.
 //
@@ -111,8 +111,8 @@ function buildClient(
     // project.ts's identical fix (mirrors api-tree/tree.ts's `walkNodeType`,
     // aa28952). `buildClient(subtree, ...)` on a bare leaf would read
     // `subtree.children` (undefined for a leaf) and return `{}` — an empty
-    // sub-client with nothing callable. When the subtree IS the leaf, the
-    // fallback function returns the leaf's OWN caller directly (no extra
+    // sub-client with nothing callable. When the subtree is the leaf, the
+    // fallback function returns the leaf's own caller directly (no extra
     // property-access step beyond the fallback's own name) instead of a
     // one-off nested client object.
     client[fallbackName] = isLeaf(subtree)

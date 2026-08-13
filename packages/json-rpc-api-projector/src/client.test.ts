@@ -71,12 +71,12 @@ describe("createJsonRpcClient: proxy shape mirrors the tree", () => {
     ]);
   });
 
-  // A fallback subtree that is a BARE `op()` leaf, not `api({...})` — the
+  // A fallback subtree that is a bare `op()` leaf, not `api({...})` — the
   // Node model (api-tree/node.ts's `fallback: { name, subtree: Node }`)
   // explicitly allows this. Regression coverage for `buildClient`'s own fix
   // (mirrors project.ts's `projectMethods` fix and api-tree/tree.ts's
   // `walkNodeType`, aa28952): calling the fallback capture function returns
-  // the leaf's OWN caller directly (no nested sub-client — there's no
+  // the leaf's own caller directly (no nested sub-client — there's no
   // further tree position to descend into), dispatching under the exact
   // name `projectMethods` derives for this shape ("books.bookId", no extra
   // segment beyond the fallback's own name).
@@ -208,12 +208,12 @@ describe("createJsonRpcHttpCall: request construction", () => {
     expect(capturedHeaders.Authorization).toBe("Bearer xyz");
   });
 
-  // `opts.headers` is spread AFTER the default in the object literal
+  // `opts.headers` is spread after the default in the object literal
   // (`{ "Content-Type": "application/json", ...opts.headers }`, client.ts),
-  // so a caller-supplied Content-Type overrides the default. This is
-  // intended: it lets a caller opt into `application/json; charset=utf-8`
-  // or a vendor-specific JSON media type while keeping `application/json`
-  // as the sane default otherwise.
+  // so a caller-supplied Content-Type overrides the default — letting a
+  // caller opt into `application/json; charset=utf-8` or a vendor-specific
+  // JSON media type while keeping `application/json` as the default
+  // otherwise.
   it("a caller-supplied Content-Type header overrides the default", async () => {
     let capturedHeaders: Record<string, string> = {};
     const call = createJsonRpcHttpCall("http://localhost/rpc", {

@@ -19,8 +19,8 @@
 // MUST return a single Response object"); a non-empty array dispatches each
 // element independently (concurrently, via `Promise.all` — one element's
 // failure or slow handler doesn't block the others) and collects the
-// non-Notification results. If EVERY element was a
-// Notification, the resulting response array is empty; per §6 ("If there are no Response
+// non-Notification results. If every element was a Notification, the
+// resulting response array is empty; per §6 ("If there are no Response
 // objects ... the Server MUST NOT return an empty Array") this returns
 // `undefined`, and each transport's own adapter maps that to "no body sent"
 // (HTTP: 204 No Content; WebSocket: nothing sent).
@@ -35,7 +35,7 @@
 //     original call's `id`, the same `subscription`-keyed convention
 //     several production JSON-RPC pub/sub extensions use, e.g.
 //     `eth_subscribe`'s `eth_subscription` notifications). Once the
-//     iterable completes, the ORIGINAL request's `id` still gets a normal
+//     iterable completes, the original request's `id` still gets a normal
 //     Response carrying the generator's return value (or `null`) as
 //     `result` — symmetric with a non-streaming call, so a client that
 //     only awaits the call's own promise still resolves normally once the
@@ -117,18 +117,18 @@ export {
 } from "./wire.ts";
 
 /**
- * JSON-RPC's own store-name fragment: an INERT, plain interface naming the one
- * store this projector builds and the shape it carries. Deliberately NOT a
- * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * JSON-RPC's own store-name fragment: a plain, inert interface naming the one
+ * store this projector builds and the shape it carries — not a `declare
+ * module` augmentation of api-tree's `StoreRegistry`. Per
  * docs/design/typed-store-spec.md §3, a projector that augments core makes the
  * type surface depend on which packages are in the compilation rather than on
- * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * what the deployment composes. A deployment composes this in, once, in its own
  * augmentation file (`interface StoreRegistry extends JsonRpcStores {}`); see
  * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
  *
- * The member is OPTIONAL — a per-request store this projector builds when it
- * dispatches. `caller` is NOT declared here: core declares it once (api-tree's
- * `CoreStores`), shared across every projector.
+ * The member is optional — a per-request store this projector builds when it
+ * dispatches. `caller` is declared once by core (api-tree's `CoreStores`),
+ * shared across every projector, not by this interface.
  */
 export interface JsonRpcStores {
   /** A request's by-name `params` object (a positional/array `params` degrades to `{}` — see `dispatchRequest`). */
@@ -159,7 +159,7 @@ export type JsonRpcErrorEncoder<E = unknown> = ErrorEncoder<
  * error codes, e.g. `jsonRpcErrors({ notFound: -32001 })` (see module doc's
  * "Error mapping" section for the recommended -32000..-32099 range). The
  * error `message` defaults to the error value's own `message` field when
- * present (a string), else its `JSON.stringify`; the FULL error value is
+ * present (a string), else its `JSON.stringify`; the full error value is
  * always carried as `data`, so no information is lost even when `message`
  * degrades to the JSON dump. Internally a `composeErrorEncoders` over one
  * `matchKind` per mapping entry — first match wins (object key order).
@@ -196,7 +196,7 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
  * `JsonRpcNotification` per yielded `StreamChunk`/untagged value (and one
  * per `StreamProgress`, both keyed by `subscription: id`) via `send`.
  * Returns the generator's own return value (or `null`) — see module doc's
- * "Streaming" section for why that becomes the ORIGINAL call's `result`.
+ * "Streaming" section for why that becomes the original call's `result`.
  */
 async function streamViaNotifications(
   iterable: AsyncIterable<unknown>,
@@ -278,7 +278,7 @@ type RunOptions = {
 };
 
 /**
- * Dispatch ONE JSON-RPC Request/Notification object: look up its method,
+ * Dispatch one JSON-RPC Request/Notification object: look up its method,
  * assemble the handler's input from the single `"params"` store (via the
  * shared `assemble` pipeline — see api-tree's input.ts), call it, and shape
  * the result. Returns `undefined` for a Notification (§4.1: never gets a
@@ -352,7 +352,7 @@ async function dispatchRequest(
     // A thrown error is never surfaced verbatim — matching HTTP/MCP/CLI's
     // own default (collapse to a generic message); a handler that wants a
     // client-facing failure should return `err(...)` instead (surfaced via
-    // `errorEncoder` above), which IS conveyed verbatim.
+    // `errorEncoder` above), which is conveyed verbatim.
     return isNotification
       ? undefined
       : jsonRpcErrorResponse(id, JSON_RPC_INTERNAL_ERROR, "Internal error");
@@ -408,7 +408,7 @@ function jsonResponse(value: unknown, status = 200): Response {
  * `(req: Request) => Promise<Response>` handler, the same shape
  * `createFetch` (http-api-projector)/`Bun.serve`/`Deno.serve`/a Cloudflare
  * Worker all accept directly. Every request is POSTed a JSON-RPC Request
- * object or batch array (§6) as its body; the method itself is NOT read
+ * object or batch array (§6) as its body; the method itself is not read
  * from the URL — JSON-RPC's addressing is entirely inside the payload, so
  * every call goes to the same endpoint URL.
  *
@@ -434,7 +434,7 @@ export function createJsonRpcHttpHandler(
 
     const result = await dispatchBody(handlers, body, runOpts);
     // §6: a batch consisting entirely of Notifications (or a lone
-    // Notification) sends NO response at all — 204 No Content is the
+    // Notification) sends no response at all — 204 No Content is the
     // conventional HTTP rendering of "nothing to say back."
     if (result === undefined) return new Response(null, { status: 204 });
     return jsonResponse(result);
@@ -466,11 +466,11 @@ function decodeMessage(raw: string | ArrayBufferLike | Uint8Array): string {
  * Build a WebSocket transport for `tree`: a `{ message }` handler any
  * WebSocket server can drive per-connection. Unlike the HTTP transport,
  * this one has a genuine push channel — a streaming handler's elements are
- * delivered as JSON-RPC Notifications over the SAME connection the request
+ * delivered as JSON-RPC Notifications over the same connection the request
  * arrived on, interleaved with any other in-flight calls (see module doc's
  * "Streaming" section).
  *
- * One connection dispatches every message it receives against the SAME
+ * One connection dispatches every message it receives against the same
  * `tree`; there is no per-connection state beyond what `tree`'s own
  * handlers close over — a consumer that needs per-connection identity
  * (auth, session) should bake it into the `tree`'s handlers via whatever

@@ -7,7 +7,7 @@
 //
 // Spec: https://www.jsonrpc.org/specification
 
-// Re-export the standard error codes from type-ir's json-rpc.ts — the ONE
+// Re-export the standard error codes from type-ir's json-rpc.ts — the one
 // place they're defined (see that module's doc); this package never
 // redeclares them.
 export {

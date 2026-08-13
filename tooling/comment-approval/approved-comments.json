@@ -57,6 +57,10 @@
       "excerpt": "Emits N-route apps in the composable value model, using the same route",
       "approvedAt": "2026-08-13T07:55:04.671Z"
     },
+    "01f4e877fca8cfbd3411c8b0e4fa256845e6023f045c178de3bb9cb44d38614e": {
+      "excerpt": "Extra headers merged into every request, on top of the default `Content-Type: ap…",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "01fa702b376a1fe742e9bab517400eef9e565ea0162a6f6387190cf21c0047b6": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -111,7 +115,7 @@
     },
     "036b45fde118476684efa6fd401ab418f7771e575c784185ee63d96e8872a2eb": {
       "excerpt": "@ts-expect-error — \"bookid\" is not one of getBook's input keys.",
-      "approvedAt": "2026-08-13T07:53:17.520Z"
+      "approvedAt": "2026-08-13T07:55:47.200Z"
     },
     "0392c3b44f00d3a424ef6fa6487593e5905fb083b4022c733a16290a690a8b4f": {
       "excerpt": "`fieldSetJaccardDistance`, except an empty field set is always treated as",
@@ -172,6 +176,10 @@
     "0561034cec033d15402af91a24f99d4fb3e589f9f007e7a7400cd59a5a37ba9d": {
       "excerpt": "Dispatch context `CreateGraphQLServerOptions.als`'s `init` receives.",
       "approvedAt": "2026-08-13T07:47:48.751Z"
+    },
+    "0576be4753bdad666d22d6faa311e6556258dbe4473ec9921b32d6daac92ecbe": {
+      "excerpt": "Present only for the WebSocket transport — enables the notification-streaming pa…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "05923cb5fffa87e9cbfda5a5d120a7917e5102134c883e695300e3daebd23e03": {
       "excerpt": "============================================================================",
@@ -269,6 +277,10 @@
       "excerpt": "── Discriminated unions ──────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:51:10.076Z"
     },
+    "096596126e9a498af2761c16c0be71ed20322e6779551beb64db24df6895a099": {
+      "excerpt": "packages/json-rpc-api-projector/src/source.test.ts — jsonrpc.source() tests",
+      "approvedAt": "2026-08-13T07:55:47.200Z"
+    },
     "096a9d772c7703b0a33bb194653044fe1c9c6e9eb774da1e43c76084cd235921": {
       "excerpt": "N=3 is below literalMinSamples (5) — not enough evidence to commit.",
       "approvedAt": "2026-08-13T07:46:30.920Z"
@@ -276,6 +288,10 @@
     "098ef5abf1ca5e5df886e9256f2e2d8f1a5f1c83a8a586bb763c78a0449a9011": {
       "excerpt": "Distinct leaf values seen exactly once (Good-Turing's n1).",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "09acd312e258d23a6c541226aeab9aaf8aa3deefb1952186c55d280915821ec5": {
+      "excerpt": "packages/json-rpc-api-projector/src/server.ts — @rhi-zone/fractal-json-rpc-api-p…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "09b2d16c5142838b17b3eb096b312e5f8e6695431048d3c8229fa23e25810b14": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -352,6 +368,10 @@
     "0bff69c3fee7a2d58afe9be3db13fe45fd5dd97fa240d493cc6456173ed028bc": {
       "excerpt": "One entry in the resolution pipeline, tagged with which kind of judgment it make…",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "0c05a0214ab34b90bb14cf7588567194a00a732003b01d896ca32ed95ddf4492": {
+      "excerpt": "Description text override.",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "0c4d30301b6049ad1d6fed54d164a7dd3126722e8b0f4546ff60073ba78f2134": {
       "excerpt": "CORS response headers for `req`, or `{}` when CORS is disabled or the request's …",
@@ -436,6 +456,10 @@
     "0e3ef9fd03ae36b7e681113b0a0d9acd7fd714e5af5e227dde82496bab35a1d9": {
       "excerpt": "Composite-top wrapper: unwraps `meta.nullable`/`page` (mirroring",
       "approvedAt": "2026-08-13T07:54:48.467Z"
+    },
+    "0e4224483b8dc8138fbdd809d6720168d70d0affa45022a224d1ed0bf149cd1b": {
+      "excerpt": "Safely extract the open `meta.jsonrpc` bag. Accepts the intersection of",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "0e56ee1674974c690c0feb400b6d75273afe6e72aeed4d57b6ee0e23d50a327c": {
       "excerpt": "The `ResolveStrategy` boolean toggles this ablation runner evaluates.",
@@ -575,7 +599,7 @@
     },
     "124b05c40cb471a30ee946838cdcbfd1faf3aedab6ca56891411f541f72305e5": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:55:35.028Z"
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "1271dfda103ae999cdc92d6ad5699549788d60839afeffa2a111d8868ceee539": {
       "excerpt": "buildEvidenceNode pushes onto `keySets` in the same order it pushes",
@@ -600,6 +624,10 @@
     "12b9a6ad582ee3f8565b8ef23d3751c98636bc40108b6d0b8c749ed0cf5f86aa": {
       "excerpt": "The user's display name.",
       "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
+    "12be0c0540971672e9a555c2a0d91ff2616b1299e15bb947d355a58a416f7b1c": {
+      "excerpt": "A JSON-RPC 2.0 request `id` — string, number, or `null` (§4/§5: `null` is used, …",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "12edfade27ca1b2bef9f48ffcac47aa13b95b6780f8b823e77833ca5dd9a2cb3": {
       "excerpt": "Positive-control classification: a case only counts as positive for a",
@@ -628,6 +656,10 @@
     "13458a4caa6c912b00696f97de5d09189e9db737ecad69a1d5c64f2b6239fcc3": {
       "excerpt": "A field's resolver `args` — already the flat named-value bag `assemble()` expect…",
       "approvedAt": "2026-08-13T07:47:47.316Z"
+    },
+    "135b4483d3b40db95eff84e285a73d088fa9ac1c5bf0b7af61a132f3bc7268fb": {
+      "excerpt": "Request id generator, called once per call. Defaults to an incrementing counter …",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
     },
     "136bcd9c3ab4406552718fe1cfc37035599947e678a3a2cb8dcf250d846a7cf7": {
       "excerpt": "A param segment: `param(\"id\")` binds `{id:string}`; with a codec, `{id:T}`.",
@@ -660,6 +692,10 @@
     "14104d4dab45f3a97a4b5073f3dbe3bee4a08f7466eac03064a6071b4546fc9e": {
       "excerpt": "Maps a handler's `Result.err(E)` error value to a `GraphQLErrorResponse`. `undef…",
       "approvedAt": "2026-08-13T07:47:47.316Z"
+    },
+    "1478e9d22820d1f7c7f24bc79f9f574357e3faf4181d02c30e972da2a60d7606": {
+      "excerpt": "`jsonrpc.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs…",
+      "approvedAt": "2026-08-13T07:55:47.200Z"
     },
     "1480599745cab6656265d95986a3a99c7584d42c962e1a4ee638da1ed56df50d": {
       "excerpt": "Library API — authored on the HttpRoute pipeline (naiveTransform +",
@@ -697,9 +733,17 @@
       "excerpt": "Non-incremental convenience wrapper around `compileConstraintsFn`/",
       "approvedAt": "2026-08-13T07:54:48.467Z"
     },
+    "161decef0482a72f3d9821c3556c5b80e05cc59895c8880557b4da19d699821d": {
+      "excerpt": "`meta.jsonrpc` fields valid at BRANCH position only.",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "163b4041394f21ddbb9520fe038f2460517d9f9f6ecb662510d47992a4d3daa7": {
       "excerpt": "Minimum samples required in every value-group of a candidate",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "165b76b29cc5fbe616d49a36cfc19a8607c34e14788efa139efb3bff305143c4": {
+      "excerpt": "packages/json-rpc-api-projector/src/client.ts — @rhi-zone/fractal-json-rpc-api-p…",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
     },
     "1684b6271d9dea29076958a91dc076d5e49a9d4d88916e6d0200737c657310ca": {
       "excerpt": "============================================================================",
@@ -761,6 +805,10 @@
       "excerpt": "── Shared-symbol branded types (one `unique symbol` key, literal values) ─",
       "approvedAt": "2026-08-13T07:51:10.076Z"
     },
+    "17c7a754466de8754b3e0eb719f90126cf2189e049f2933b2aef54e149df3fa3": {
+      "excerpt": "Method-name -> derived params/result schema + description (from codegen).",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "17c7bc5e33ab81a78469e7dfa3d9805189d8810e369f6dbcb177056488da8443": {
       "excerpt": "shape-match a segment tuple against path parts (lit must equal; param is free).",
       "approvedAt": "2026-08-13T07:55:41.155Z"
@@ -772,6 +820,10 @@
     "17eb798e0533c65ea168e7573abf12a217fe0aaaa1c45cfc0a8d5a235d539f64": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "17fd8039dcd9f824a34b73283aa7f3c785ec3a7c5725c2a78345718c88334458": {
+      "excerpt": "§6: a batch consisting entirely of Notifications (or a lone",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "18009b936682d62db847550cffc4e8a631e5ae5db359c7c2194c6d6acbebe8e8": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -788,6 +840,10 @@
     "185e4bb06c6b790ec539e07b69461da20feb27c43a0cfa8ad70e5dfcd58be644": {
       "excerpt": "Two distinct leaves could in principle share a base name only if",
       "approvedAt": "2026-08-13T07:49:07.403Z"
+    },
+    "1880e88a0c628adc413bc30eec8a5acbac48fc82f4b528565c9d5251bb77d0b8": {
+      "excerpt": "Build an HTTP POST transport for `tree`: a plain",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "189d3d447c9c44fc9095178200ec2aa3bf35cd9128a3efe5bdb702b68a9d1aa8": {
       "excerpt": "Property-based fuzz harness for fromJson using fast-check.",
@@ -993,6 +1049,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:48:24.471Z"
     },
+    "1e3e033dfbd7be2dafcb70736660e92baa2eaa359d5f8d7728063edba9c76b60": {
+      "excerpt": "By-name params only (see type-ir's json-rpc.ts module doc's \"Params\"",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "1e806b6426cb5da5496b72808dceb4af59173b61a78cb0d390cc1380f8be4f1e": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -1081,6 +1141,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:48:24.471Z"
     },
+    "218149862c94434b1623550630b64fb19299ecd98e60bddc213440f13b603074": {
+      "excerpt": "True when `v` is an async iterable — mirrors MCP's `isAsyncIterable` (mcp-api-pr…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "21a4592b561e34bb0e26bc982f12b5327b5d9a5523ccfc46eda06cd1a9287402": {
       "excerpt": "Wait one microtask/macrotask tick — the protocol handler's async work (subscribe…",
       "approvedAt": "2026-08-13T07:53:17.529Z"
@@ -1113,6 +1177,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:53.086Z"
     },
+    "2309428ce54b3bbb247f774895c177856fda2d80361e8db57c042a803d66be81": {
+      "excerpt": "Build a JSON-RPC 2.0 success Response object. `result` defaults to `null` (never…",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
+    },
     "2310e081a02ad27aa74dc469f00dfa83546e27762d193bf050b0540c765560f5": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:53.077Z"
@@ -1120,6 +1188,10 @@
     "2378d8df7a6ba4aa718c0c17a47fbb84bdd4ff6ca85afbe2ab42c9f88bcdab23": {
       "excerpt": "Regression: walkAndDetectEnums (packages/type-ir/src/from-json-corpus.ts)",
       "approvedAt": "2026-08-13T07:46:30.920Z"
+    },
+    "23a337dc44d359c8e9ee4049cb39a3b47efa77ce355d87d53598708d8c79c64a": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
     },
     "23a3a5eebbe6962575aa036051eb64592d21e3d6c0ac4e83db76a9f249251223": {
       "excerpt": "rank-1 weight normalizes to ~0.53",
@@ -1293,6 +1365,10 @@
       "excerpt": "CFD-style discriminant search (see the \"CFD discriminant search\"",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "27de4c842557c4f97340940f1adbbca38597d402f6d9b9ca066036eaf46ee7cd": {
+      "excerpt": "A dispatch entry: the leaf's handler plus its `meta.jsonrpc.sourceMap` (empty wh…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "27e21935e464551670d07324b41c4c80d7509e67cbd7088feda23dcefe4b7516": {
       "excerpt": "Fingerprint of the SET of shared/recursive def names in scope for this",
       "approvedAt": "2026-08-13T07:53:53.077Z"
@@ -1333,6 +1409,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "29359aac39086a6db772fea2311b3d7b3e861c3deb6e7d44fb30c57789782367": {
+      "excerpt": "Build a `JsonRpcCall` that POSTs a JSON-RPC 2.0 Request object to `url`",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "2998b80f9f816fa6914cc7e988cbbb9c86eaa10f16c8ba815e9943e23c89b382": {
       "excerpt": "Detected as a map because the key set keeps growing.",
       "approvedAt": "2026-08-13T07:48:24.471Z"
@@ -1372,6 +1452,10 @@
     "2b38030438a9d46820f221d17be6ef59c1924a134cab942872067f60646e92e8": {
       "excerpt": "A stand-in for a composition-time value (e.g. `ComposedSurface`) the",
       "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
+    "2bb7ec40d0564de70c81f0fcb89462a77e3a542d922c54eeaf02cdf0507f6dc9": {
+      "excerpt": "Options shared by both transport adapters (`createJsonRpcHttpHandler`/`createJso…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "2bcf9c5fa00463c15d01c485b00d5a4eeabe0567c8bfd221fd5836d00cc4a119": {
       "excerpt": "The typed client surface, derived by walking the app's `.meta` tree.",
@@ -1449,6 +1533,10 @@
       "excerpt": "ARRAY suffix form: `INTEGER ARRAY` (postgres alternate array syntax).",
       "approvedAt": "2026-08-13T07:45:21.107Z"
     },
+    "2e3d7cdca91ea508ecd212e7a63982b8f6c9f28a149aa5a56deb90c6295b3260": {
+      "excerpt": "The Node model allows `fallback.subtree` to be a bare leaf (`op()`),",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "2e4cc2959560c3bbf27961a22783a7fac6b467ad384b6b780cdda42276863ba6": {
       "excerpt": "The class's method surface, if any, is its other half (see",
       "approvedAt": "2026-08-13T07:51:11.417Z"
@@ -1492,6 +1580,10 @@
     "2fd064c4f2df113bf74772dd4857c4c9619e07ce2b268db4e795e3f7deb146fc": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:34.394Z"
+    },
+    "2fee87afebae557a42f028f2cdcd8bfbbc8f89da6398831607c411ce4b348926": {
+      "excerpt": "A request's by-name `params` object (a positional/array `params` degrades to `{}…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "2ff6b1af2b8766d4185bad1e818ee039225650c2949a88daefabd18646279eac": {
       "excerpt": "============================================================================",
@@ -1575,7 +1667,7 @@
     },
     "31c3fbf381b9d4e3814083f9f76c8206313c87b435c003d1cae38d2232a82007": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.394Z"
+      "approvedAt": "2026-08-13T07:55:47.183Z"
     },
     "320638c09343a7e415d7b9e564da1e10c3c3a0523d3963ead0310ff211037828": {
       "excerpt": "No enums in either -> enumDetection reports the vacuous perfect score,",
@@ -1989,6 +2081,10 @@
       "excerpt": "Read the leaf field's own value back out of a transport's `data`, following `pat…",
       "approvedAt": "2026-08-13T07:49:07.394Z"
     },
+    "3dfa7aa44cf68ab914320958ea2c3a6bb650076e801e65220c70e94f8506ed03": {
+      "excerpt": "packages/json-rpc-api-projector/src/server.test.ts — HTTP POST + WebSocket trans…",
+      "approvedAt": "2026-08-13T07:55:47.197Z"
+    },
     "3e1acd24e36a8228fcdd1c67eec9dfe4d11b9043ca9b8882d0ceb186627e0190": {
       "excerpt": "Vendor-extension keys (`x-`-prefixed, same convention across",
       "approvedAt": "2026-08-13T07:51:10.065Z"
@@ -2020,6 +2116,10 @@
     "3f321bf2e762e735ae37bf86914f86d83220cff0c78971af3b45e79029421fd7": {
       "excerpt": "Touch result-reexport.fixture.ts — a real transitive dependency of",
       "approvedAt": "2026-08-13T07:53:53.079Z"
+    },
+    "3f442e90b447012f19aaebc46aec26e946d4a090aeae19d2e16d2f044649df4e": {
+      "excerpt": "Re-export the standard error codes from type-ir's json-rpc.ts — the one",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "3f4f971a394e74d6f20bc82ae0804f32daa9de307bd82e6dc84da258aca001e2": {
       "excerpt": "The TypeRef punt: `unknown` tagged with the unhandled case. Used only by",
@@ -2093,6 +2193,10 @@
       "excerpt": "── Enums / literal unions ────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:51:10.076Z"
     },
+    "4157e81e9aa6d9dd8625e7fbd76d2c87f2c2c93970a5a0e46ed4e36894af08d7": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "417b9a399b4fd8d25699c12932c624ab9739177bdd62acf5fe0259bed0f5ade9": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -2132,6 +2236,10 @@
     "42397e32107766d375ccac573c86f7b9298a9408e91aed226cc419c9f80b000d": {
       "excerpt": "60 declared members (comfortably more than any target K) so the",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "424a031b98500c2660d83e3a22e12118b92803157f6361a69989fff64da964bf": {
+      "excerpt": "A JSON-RPC 2.0 error object (§5.1).",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "4251743fe20701f998954e37ab7866b143e8f6f38ce2cbeedfbab5ea2d3edc8a": {
       "excerpt": "read/replace/remove are moveTo-placed onto the fallback wildcard by",
@@ -2337,6 +2445,10 @@
       "excerpt": "Two fully disjoint object shapes, no shared fields at all. The easy",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "4882f7bb55c9242747a3ae1642916fa9bbddd254d7cabc13956366340ea3f866": {
+      "excerpt": "Maps a handler's `Result.err(E)` value to a JSON-RPC error object — see `JsonRpc…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "48a70c0577ae6773330f2fa0d3788925061aefaab332de415b780ec3def729e0": {
       "excerpt": "Fallback name derived purely from path + verb, for handlers absent from a name m…",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -2344,6 +2456,10 @@
     "48b4f48e7b69a9eb0d7a0496ba17803e26f16c01262f18f0336005fd8b062689": {
       "excerpt": "Contact channel.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "48c292eb30c5c936913daeabe2d94053cd95e6ae4946cd23c8e230a06820a8b5": {
+      "excerpt": "Options for `projectMethods`/`toMethods`.",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "48c8029ba3d8f39328060ab0b234904d1bc9f3097d2cac25c61815d28303fcfe": {
       "excerpt": "`api()`'s `opts.meta` parameter is a `const` type parameter (`M`,",
@@ -2593,6 +2709,10 @@
       "excerpt": "SDL return type for a leaf — the derived output TypeRef, or an honest `JSON` (nu…",
       "approvedAt": "2026-08-13T07:55:35.028Z"
     },
+    "51948b9da377e7b61404e8a3424765c24b21b5c83a98fb79adc558520839d00f": {
+      "excerpt": "Wraps `JsonRpcLeafMetaProperties` under the `jsonrpc` key — extend `LeafMeta` wi…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "51982f8c6aee7568b6f860e32c2545acbf3660da83c3892e83d02d021d4bac36": {
       "excerpt": "Single-signature function, named the same shape as the overloaded one",
       "approvedAt": "2026-08-13T07:47:59.023Z"
@@ -2653,6 +2773,10 @@
       "excerpt": "Under a K/N-only rule, zipfian-presence significantly improves",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "52d4cef2a36d3e68dc218115a8bc0fe09986c1cbb35cc8f5f52d3dde89edcadb": {
+      "excerpt": "`projectMethods`'s full result: the flat descriptor array plus the name -> handl…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "52e2464a8bf46a7ef92b22d1634ae530601b2b5eaa62cb1167ddc0b95c1ac2d8": {
       "excerpt": "-----------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:55:26.267Z"
@@ -2708,6 +2832,14 @@
     "544080f302e54dc655e83e7fa62ec56c715a633366abb36f6db2c0f1a5906541": {
       "excerpt": "Three shapes in a chain: A-B and B-C each overlap on one field, but A-C",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "5445c4a77e0448ab4f6f9bcb5af5e38264793d731266e2817fb043c5adc12be5": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
+    "549b2fe3a9b04c6f5276acf53339f979f297bf268b75cd30595c8d01cdd98199": {
+      "excerpt": "`opts.headers` is spread after the default in the object literal",
+      "approvedAt": "2026-08-13T07:55:47.186Z"
     },
     "549e089eb87fde9d9a9bfbbee17ce82d8d2d1b4152ae6eaca7b539658618ec60": {
       "excerpt": "============================================================================",
@@ -3013,6 +3145,10 @@
       "excerpt": "Structural recursion for the fused `validateEncoding` + `decode` stage.",
       "approvedAt": "2026-08-13T07:54:48.467Z"
     },
+    "5cab1e9347c59880d5b1b2b6e32d113a6d116e9e6a7d4e9961adb1fb12008da9": {
+      "excerpt": "A thrown error is never surfaced verbatim — matching HTTP/MCP/CLI's",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "5cbf84554daeb21e30c9a005db14df4fa071fde38ac32b4ed1409e9014d8427b": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -3028,6 +3164,10 @@
     "5cfedb7312bcb665557700317aa044f79c16809820047f39a01ed3c5542c3fa0": {
       "excerpt": "The `~standard` envelope the playground and CLI accept in place of live",
       "approvedAt": "2026-08-13T07:50:23.795Z"
+    },
+    "5d386a348701f336d44f52a9e7fc6ae4bc77255311cfa52d596e7df45c6855ee": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "5d5f2837f07484bd295aa95c7508be826fcbeac2cdb677077e55ecd789c7e3d8": {
       "excerpt": "only the boundary-defining fields carry presence variation",
@@ -3048,6 +3188,10 @@
     "5d9d755fada58481e52f6ae1073652aac293ff805fbf566bed063931f788ac01": {
       "excerpt": "NEG-3: Nonexistent verb on todos collection (DELETE not in table)",
       "approvedAt": "2026-08-13T07:55:15.563Z"
+    },
+    "5dcbfd94b7911c3dbae8d26c95437fdefca4825b549e0332e47e081040cb8c1d": {
+      "excerpt": "Full method-name override (dot-prefix ignored when set).",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "5df4de0256479a4a5c5a0b30b5cea62a6af7d21d944ba20f546e7b352429368d": {
       "excerpt": "No `union` case here: a union at this position was already produced by",
@@ -3080,6 +3224,10 @@
     "5ebc9989436f18f7e80280462d6bb2e88f67770779899c6b4f9d0b1d07bbc949": {
       "excerpt": "Mount a sub-router under a prefix, threading Extra context via middleware.",
       "approvedAt": "2026-08-13T07:53:52.216Z"
+    },
+    "5eda50b376bafca4db751a22e8f91218b0ee68ca6003cd473543e3b41bbbf089": {
+      "excerpt": "True when `v` has the minimal shape of a JSON-RPC 2.0 Request object — `jsonrpc:…",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "5ee5a2eaeaecca7b2f6369d61d6fd458d2e8efbe1bf6696e4cdcfec08e9471ed": {
       "excerpt": "Walk a Node tree and produce the full GraphQL projection: root",
@@ -3221,6 +3369,10 @@
       "excerpt": "Check that every key in the value has a corresponding field",
       "approvedAt": "2026-08-13T07:43:20.205Z"
     },
+    "63128fe434b5275673d7a586466172cdbc022c100508e078c86bf90e00e0e6b0": {
+      "excerpt": "packages/json-rpc-api-projector/src/wire.ts — @rhi-zone/fractal-json-rpc-api-pro…",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
+    },
     "633215fd99d03e0017e2d22b1208db325c8e231dbc7f2c4de50b7659d830c218": {
       "excerpt": "No value entered yet: the empty-param interpolation this test can't",
       "approvedAt": "2026-08-13T07:51:27.443Z"
@@ -3232,6 +3384,10 @@
     "63a8d6fbf47a109338a31967758fcde23d3955d22150c6226db3195365d14c85": {
       "excerpt": "(c) Further-generic alias: ApiResult<T> = Result<T, string>.",
       "approvedAt": "2026-08-13T07:54:23.702Z"
+    },
+    "63b8b76decdec798548ad0e23623480a6b02bc2e0e0c62c130f258ab674587f2": {
+      "excerpt": "The full per-request store bag a JSON-RPC dispatch builds: the shared",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "63cdefdc25094902a170f4d119d0df2085b88b06a310856e2030bdc44dcff32f": {
       "excerpt": "Param fallthrough",
@@ -3317,6 +3473,10 @@
       "excerpt": "Identical shape to the Docusaurus site's own src/fixture-tree.ts (same",
       "approvedAt": "2026-08-13T07:46:43.099Z"
     },
+    "66397b1b6f38092aebdab2cfe5b632cd2fef9c0357a1b8382e6c9d7a67bf4767": {
+      "excerpt": "A `fetch`-compatible request function — deliberately narrower than `typeof fetch…",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "663d96bd5044d9b7e161d61c27fb945c82ba45923e3a2bd7c9bbade2552eca59": {
       "excerpt": "Build the immutable Router value.",
       "approvedAt": "2026-08-13T07:53:52.216Z"
@@ -3328,6 +3488,10 @@
     "666164e1e13b6e77fba3b90b4a0395f694a2a9bc1ea64be962786837140aacde": {
       "excerpt": "The raw corpus, unmodified.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "66653cb7c45dc9a061fc4e8c7886fc11186017344805284a931de815050790b5": {
+      "excerpt": "Dispatch one JSON-RPC Request/Notification object: look up its method,",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "6676824bab8776840372d0e01de586f5551337ac3bf4ac7f076ccd60ba69aa42": {
       "excerpt": "The typed client surface: one mapped type over the flat route tuple. For",
@@ -3381,6 +3545,10 @@
       "excerpt": "Walk one node's resolved TYPE, invoking `onLeaf` for each leaf (a child",
       "approvedAt": "2026-08-13T07:54:23.698Z"
     },
+    "67c706bf57a64ed6dbc37bd7cbc7f3e49376770fb30b8112fc957965c35a92a3": {
+      "excerpt": "A JSON-RPC 2.0 Notification (§4.1) — a Request with no `id`, sent server -> clie…",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
+    },
     "67cfb9643c42008b1ea57f40af8f766a71ddb9e9bda8258482576822618ca115": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:54:40.422Z"
@@ -3412,6 +3580,10 @@
     "68764ad59b0dfe63bd9623344d0a76944fd24c38d0dc9dd77857c571d93ebe65": {
       "excerpt": "`stage` \"p\"/\"q\"/\"r\" groups chain under single-linkage: p={stage,shared1},",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "68b8e6a8a1cbaa0b88e673ad86a9c8173ae061175dc0ea4efe0b442f30793c2b": {
+      "excerpt": "Side-effect import: this test suite's own \"deployment\" augmentation —",
+      "approvedAt": "2026-08-13T07:55:47.186Z"
     },
     "6908ec8e039cc3f331e7a1ea70e42f046b630b054d6f9184678804c053012336": {
       "excerpt": "A valid bare JS identifier, or a quoted string literal key otherwise.",
@@ -3605,6 +3777,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:10.065Z"
     },
+    "6e2247e69f41ab68ee79c52b9d2e65ed0d1493f940d02ef55414222bc769fcd0": {
+      "excerpt": "@ts-expect-error — \"database\" is not a registered JsonRpcStoreName.",
+      "approvedAt": "2026-08-13T07:55:47.200Z"
+    },
     "6e38dcdb4555bf0ea5f1f3b98dc05b8bfb1fc715060ef437075f06fd449e1c0a": {
       "excerpt": "Walk an `HttpRoute` tree into a `FastifyTreeNode`. Structurally identical",
       "approvedAt": "2026-08-13T07:51:27.466Z"
@@ -3629,6 +3805,14 @@
       "excerpt": "Present when at least one raw value at this position was an array.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "6ed0f1b30d73ce54569c1399dfba62c4656b6f12ccb5fe8cef2ccde346880e9d": {
+      "excerpt": "Derive the three-valued readOnly/destructive/idempotent fields from a Tags bag (…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
+    "6ed39a72d0eb3a19e02c230a84e4ab27b95e1f3a64f65f16ea1a1aa632ef6272": {
+      "excerpt": "Method-name -> derived params/result schema + description (from codegen). Forwar…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "6ef1e6bb980de2c4dd1dafe4da62830512a72b63b012894d1461aa35329e04d0": {
       "excerpt": "Evaluation harness for JSON inference quality. `from-json-corpus.ts`'s",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -3652,6 +3836,10 @@
     "703da086e70c64a0c2785f93d17daff100039efb1211a57304cf39b0eebd3c17": {
       "excerpt": "Probability a nullable value is generated as `null`. Default 0.15.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
+    },
+    "7072779251282d4ab7791c54c8090a813d83f8a683b67a1ecfdce5bee1e565a3": {
+      "excerpt": "Side-effect import: this test suite's own \"deployment\" augmentation",
+      "approvedAt": "2026-08-13T07:55:47.191Z"
     },
     "7099b57e4d0e2c74acd73fd4c743bda569fb0848195b21f51f88f36c90e8e026": {
       "excerpt": "Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no",
@@ -3697,6 +3885,14 @@
       "excerpt": "Present iff an `mcp` extractor was provided — drop directly into `CreateMcpServe…",
       "approvedAt": "2026-08-13T07:53:53.090Z"
     },
+    "715c08d145d54008c2e8de869bcd972cc039d5cc2e6ef1c6c7a172db3454bd6f": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
+    "716c4dc01da7bdd3d945515d93862c86455c6e4711e8421d2532746b4d7f0c60": {
+      "excerpt": "Opt-in return-value detection, mirroring HTTP/MCP/CLI's own `detection` option —…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "717e9d5e300ab8c6ed3bd34395ae17354f7ba78a8c2885e3e7944ac94d57e749": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:10.076Z"
@@ -3708,6 +3904,10 @@
     "71b0a94a4dbde5769ae743b05fdc8f3e2903ffbc781255c13e20e748bea1f94a": {
       "excerpt": "Check if the groups have distinct shapes — use Jaccard distance",
       "approvedAt": "2026-08-13T07:53:40.842Z"
+    },
+    "71b2c3114f171ce8a3db47d99a48971f07a0d95c4bcebeba99d158ad99f28245": {
+      "excerpt": "The handler shape `createJsonRpcWebSocketHandlers` returns — matches (a subset o…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "71c4245b3a9a43407551989f8af124879b3a8c326e76cd6c506aedaade03d4e7": {
       "excerpt": "Symbol/alias names that name a structural convention this extractor",
@@ -3841,6 +4041,10 @@
       "excerpt": "Prints an approve command scoped to exactly the affected files, by",
       "approvedAt": "2026-08-13T07:51:06.502Z"
     },
+    "759f66416a84f79ef365167df379e9920f05be2fb384b9845c7b9a7f592fa4e8": {
+      "excerpt": "Dispatch a parsed JSON body — either a single Request object or a batch",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "75e5056944819f5cb41d60cb382533aa1231663f7693272e5240a0802fbfde33": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
@@ -3877,6 +4081,10 @@
       "excerpt": "Splits `name` on runs of non-alphanumeric characters, capitalizes each",
       "approvedAt": "2026-08-13T07:45:15.377Z"
     },
+    "771f83b7fb2c4800b27e2aaf1d4239e74ece1c757d015666a9b066fb477f2d1a": {
+      "excerpt": "packages/json-rpc-api-projector/src/client.test.ts — typed client tests",
+      "approvedAt": "2026-08-13T07:55:47.186Z"
+    },
     "774deb74745f49facde7a03a49618481b4376879042f094f15e3eef24cf0a647": {
       "excerpt": "packages/http-framework-projector/src/__fixtures__/fastify-tree.ts",
       "approvedAt": "2026-08-13T07:51:27.469Z"
@@ -3892,6 +4100,10 @@
     "77c057b613d0cf65ef715ae776af012ed51e8112d627ae8d5fa668c050568595": {
       "excerpt": "Lower all call signatures of a callable type to `types.function` TypeRefs.",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "77d05f9f822a718c92318b03f0aa769368f0cd2a5e493a42ce5eebb0994206b5": {
+      "excerpt": "JSON-RPC's own store names — the stores `jsonrpc.source()`'s map accepts:",
+      "approvedAt": "2026-08-13T07:55:47.200Z"
     },
     "77d7048f1ffe3fb309eafed3b1e1c24e6dd28511a243178c4e52d57bc80e1786": {
       "excerpt": "Did we find the dict-shaped positions (vs. leaving them as fixed-field record).",
@@ -3980,6 +4192,10 @@
     "79f7dd7aba69b7972b634832b1617b7c4afffe8836ad12ac60b0cdca5c4508b9": {
       "excerpt": "\"books\" is itself a branch — its client object has one property,",
       "approvedAt": "2026-08-13T07:49:07.400Z"
+    },
+    "7a048e3224736bad80692997880d70315b1211d9f0d7e53b2175e15ef7bcb28e": {
+      "excerpt": "A JSON-RPC 2.0 Request object (§4). `id` absent = a Notification (§4.1) — no res…",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "7a0d6e0f6dd5e5b255a4072114bd097770f294d4ff567c5780a868731b8f9edb": {
       "excerpt": "The generated function name for a `defs` entry's check/errors/parse",
@@ -4161,9 +4377,17 @@
       "excerpt": "Dart's native `@Deprecated('reason')` annotation",
       "approvedAt": "2026-08-13T07:45:15.377Z"
     },
+    "7f971865783ac9566755d6153c2716905a76563dd797c6602ff82fd75a01f603": {
+      "excerpt": "Transport-agnostic call signature the proxy dispatches through — one JSON-RPC me…",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "7fa7fc95fb1db3665a2fb33f794b7845e67c00243fe1b2b3839a983eaad25dcc": {
       "excerpt": "405 + Allow: DELETE on a matched path",
       "approvedAt": "2026-08-13T07:55:41.159Z"
+    },
+    "7fbbff6582338b91a4187b849b5606bfd7d4531786292cea3741b0e7ea039167": {
+      "excerpt": "A successful JSON-RPC 2.0 Response object (§5).",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "7fc2e0e0ac797680f7f4067be3f14881611e06ebe1d2dd400c38e89000eccd82": {
       "excerpt": "A throwaway copy of the fixture, with its relative imports rewritten",
@@ -4305,6 +4529,10 @@
       "excerpt": "`\"/books/:bookId\"` -> `[\"bookId\"]` — path-param names, for splitting a combined …",
       "approvedAt": "2026-08-13T07:51:27.466Z"
     },
+    "83d4e374a24bcffe7b746fb21d6915161bdfdcb14441f241a8e521c9e7ee49ad": {
+      "excerpt": "`meta.jsonrpc` fields valid at LEAF position only.",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "83e559a032cf233e6fca0ad8682d6e51121b6b7c335edf68d685c065d8ae961a": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:48:02.799Z"
@@ -4316,6 +4544,10 @@
     "83f668d51e43c74127bd621c80f4fea105c8b13b061cf733a91586ad473ea882": {
       "excerpt": "Files that differ between `base` and the working tree. Compares against",
       "approvedAt": "2026-08-13T07:51:06.502Z"
+    },
+    "841f1f9b6c69bd32191d6b51caa7cca7817c3c599e69e06b47e2b47ec2f5e893": {
+      "excerpt": "Walk a Node tree and produce a flat array of JSON-RPC method descriptors. See `p…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "8425d90dd9de50ddabc9d2b20886cc37e260d3e3e647848c7ffcaed7d30f27d0": {
       "excerpt": "============================================================================",
@@ -4573,6 +4805,10 @@
       "excerpt": "Run one field's assembled input through its handler, Result-unwrapping the",
       "approvedAt": "2026-08-13T07:47:47.316Z"
     },
+    "8b4abe0c558252213854ca6026a3732673ab16a4f99321a72fa58a9d03c566be": {
+      "excerpt": "Walk a Node tree and produce a flat array of JSON-RPC method descriptors,",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "8b6ceb7ce3096b65a9d2d5fac4d0f69e6c615bb68a56135858568497cd065ed4": {
       "excerpt": "A `readonly` field alongside a plain one — must set `meta.readonly` only on the …",
       "approvedAt": "2026-08-13T07:47:59.023Z"
@@ -4624,6 +4860,10 @@
     "8cf57c6b3d28951878d4aedb91f428850a998b201df6e085e99a2f1c7cc1c967": {
       "excerpt": "the params record folded from a segment tuple's `param` leaves — a single",
       "approvedAt": "2026-08-13T07:55:41.155Z"
+    },
+    "8cfb75ad766f25bc6660a9cc11960e8fcac45be92f8be1b2486fbb935e0fb7ee": {
+      "excerpt": "True when the method's handler returns an `AsyncIterable` — its",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "8d12e52f70e1e22f8d2109937b864ac7ba738b7e3daf032889113ee834947857": {
       "excerpt": "Choose one member of an `enum`-shaped leaf's declared members.",
@@ -4681,6 +4921,10 @@
       "excerpt": "Compare an inferred TypeRef against the original schema it was (via a",
       "approvedAt": "2026-08-13T07:48:24.363Z"
     },
+    "8e57022291f5b58126abac9a27cd1ba2529604c752422bc2c984932e08210cc5": {
+      "excerpt": "A failed JSON-RPC 2.0 Response object (§5.1).",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
+    },
     "8e57f6b906e6157eb2446382ee1afff6e189b5b06171c1d4ff97cab5a4181ecb": {
       "excerpt": "Keyed by `${prefix}\\0${expr}` — check/errors/parse each walk the same",
       "approvedAt": "2026-08-13T07:54:48.467Z"
@@ -4720,6 +4964,10 @@
     "8f278504ce7feddd9e613f7b7b9bef6d54be7683bce28f4ac9fc5c6188dc4adc": {
       "excerpt": "── Symbol-branded type fixtures ────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "8f3b7244309a7c4d2eb7d044a0f3935e85f42a3f136c1aa65240aa1601c219c1": {
+      "excerpt": "An error encoder's JSON-RPC-specific target shape — a full error object (code/me…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "8f5747c42c2bb38bfc40624a78bf73df6056f0e7085a9ebba63716a4d37710c4": {
       "excerpt": "A string enum — the checker resolves parameter types of this to a union",
@@ -4865,9 +5113,21 @@
       "excerpt": "packages/api-tree/src/__fixtures__/wire-apply-validation-sharing-input.fixture.t…",
       "approvedAt": "2026-08-13T07:54:23.709Z"
     },
+    "929b13f8b1319cef5af47860e45a3370feedab353e301613f021d28be558a457": {
+      "excerpt": "Lifecycle flag — see `McpTool.deprecated`'s doc (mcp-api-projector/src/project.t…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "929c03625506cc567091d29de255b8c70433cbfdc607e1b2bc773fac4d3d9b0c": {
       "excerpt": "── Generic type parameters — extract constraint bounds ───────────────────",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "92c5ac32c094625d221b1fdec368a3b9abbfe35f2e084792f705acb8f7b32fbd": {
+      "excerpt": "Build a JSON-RPC 2.0 error Response object.",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
+    },
+    "92eafa8ab7e1d5d032f8455ef1bc3a794b7d836f6c3164d3e372f7e4b4ded967": {
+      "excerpt": "packages/json-rpc-api-projector/src/source.ts — @rhi-zone/fractal-json-rpc-api-p…",
+      "approvedAt": "2026-08-13T07:55:47.200Z"
     },
     "93076069c3331571b77f0a53fa4a7757f17eb703ca14febfac607769f8ed01f1": {
       "excerpt": "Among positions found in both, how often did the inferred kind match.",
@@ -4892,6 +5152,10 @@
     "93c1738af560c8f9e03633bbec7e20d9a58f5190bd0d826eb852e9d905bb9dcb": {
       "excerpt": "Relative path pattern (e.g. \"/:id\" or \"/test\"). Supports :param segments.",
       "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "93ca2c0a66cddafd5ef6ab8750f454465a679e688c46d2da75342cfaa20c8c4d": {
+      "excerpt": "packages/json-rpc-api-projector/src/deployment-meta.test-support.ts",
+      "approvedAt": "2026-08-13T07:55:47.188Z"
     },
     "93e0eb92c652f697e2c97b0888bfaef3e9abbbec6fdacc1310b1729620956db3": {
       "excerpt": "Every external (non-workspace, non-relative) specifier reachable from",
@@ -4952,6 +5216,10 @@
     "95943fce8c4f87bf45e79e8f3061143e9a8a0eed2dfa068cc39672922e12baad": {
       "excerpt": "Map<K, V>/ReadonlyMap<K, V>: same rationale as Set<T> immediately above",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "95c4a104fbb2b11d1017abf14a51a5f4a1143ce220f295a01da0d058e5510efa": {
+      "excerpt": "packages/json-rpc-api-projector/src/project.ts — @rhi-zone/fractal-json-rpc-api-…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "95cda3fb7e7f7e587a97ba6dcc8330945c8138fc232b571fc4aaa1c098302c9b": {
       "excerpt": "Resolve a top-level `type X = …` alias or `class X …` to its ts.Type.",
@@ -5036,6 +5304,10 @@
     "98430eb8f9a15a71e852be8a20573ff03c043862a444c286b228de8d4c042ec7": {
       "excerpt": "deleted-then-diffed, nothing to check",
       "approvedAt": "2026-08-13T07:51:06.502Z"
+    },
+    "98a4929daf882b432058cc3cdde854202d2aa2c3ada511ec3a98795afe60d81d": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "98d38ff55021ba52391239b7cbb672a36ef2a2ecc67910e4f28f5f413abdfd33": {
       "excerpt": "Pull `method`/`path`/`responseSchema` back out of a generated MDX page's",
@@ -5305,6 +5577,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "a0e8c1f18524d55b311ece6ac73e5c9ceb4425d59f3ab329885d30b4bd8c261b": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.191Z"
+    },
     "a0ee7b8f9ea6afb9d77a74c465ba3018fcc23f5daa11c65c64bac2d11e98a1da": {
       "excerpt": "`defaultStages` reads the fully-defaulted strategy, so it is built after",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -5313,9 +5589,17 @@
       "excerpt": "Walk down to the bottom and confirm the leaf's real shape survived.",
       "approvedAt": "2026-08-13T07:43:46.976Z"
     },
+    "a128b0015fe30d3e097b3471ef6e45591d4e9cd0200e2a45afd1d8e9b8610a9c": {
+      "excerpt": "Build one JsonRpcMethod (+ register its dispatch handler) for a leaf",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "a135ef51e84ed04a4d53c58ed1f216011a62eb634f5108ee047bc1cc5a6b9e1e": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:51:27.466Z"
+    },
+    "a138c10042f8a4165004bf619b5ede3e1b7cbea83d26ef4634df2b3fe47aff04": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "a153fd6bf18f85fcff983f0400a5d2295ea04572cc234b294a4a60e0e840fd48": {
       "excerpt": "Should not throw",
@@ -5356,6 +5640,14 @@
     "a26aacc62efa0f127481aa91209851e2a15d1c49de13d1869d59ede894a76245": {
       "excerpt": "A function returning `OffsetPage<T>` directly — exercises `page` detection",
       "approvedAt": "2026-08-13T07:47:59.023Z"
+    },
+    "a28193e71cc13265c104150cb240d92c64063f1778c7eea1f44b03df1589a8fc": {
+      "excerpt": "Pre-built `JsonRpcErrorEncoder`: maps error `kind` values to JSON-RPC",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
+    "a2a0d694cf1e0c9e05a73f5747e9eb75b2fad03ecc664db8710d254931bddcde": {
+      "excerpt": "JSON Schema, kept as an open bag — same convention as every other projector's sc…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "a2dc28804026c0613401e936eab242632249f8258ef780dd333709f54a002543": {
       "excerpt": "Dict detected. Separate common keys (record fields) from varying keys (dict entr…",
@@ -5449,6 +5741,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:55:35.028Z"
     },
+    "a653b047ab7d04f8e072e07afd9dea9f347471e0912d526f128de7aad8282dff": {
+      "excerpt": "The Node model allows `fallback.subtree` to be a bare leaf (`op()`),",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "a665fadbb4353c415dbe47e3bcd25132238d3f4a485137e5cd15a726181c1b97": {
       "excerpt": "Length of each array-typed sample, in corpus order.",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -5480,6 +5776,10 @@
     "a74d421fadde1ffd83efa56323f7d37676b9b495cf2cf58cc2d9b2027c79beac": {
       "excerpt": "packages/api-tree/src/wire-apply-validation-hooks.test.ts",
       "approvedAt": "2026-08-13T07:54:23.707Z"
+    },
+    "a7533a2370c16e8d6fcc764b8df2af1e2e901812b93ac7b83c6b01097ce5613c": {
+      "excerpt": "HTTP-transport streaming degrade: drain `iterable` to completion,",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
     },
     "a76240f78f5ebb1fcd74be5230a07da2801a61df16b38f26f5ab1112c1714d74": {
       "excerpt": "A single string literal (no union) — must not widen to plain string.",
@@ -5524,6 +5824,10 @@
     "a85a948091cc8cc7d4bdbb5c50ab52f9306a55c8f8b391a886d26df9746abfe1": {
       "excerpt": "Directories never worth scanning: dependency trees, build output, VCS/tool",
       "approvedAt": "2026-08-13T07:51:06.502Z"
+    },
+    "a8a3696ccfe2645d86e22b8a5e405a60ceb58af70cb5e016112d4251328751d1": {
+      "excerpt": "`tags` is a leaf-only field under the SharedMeta/LeafMeta/BranchMeta",
+      "approvedAt": "2026-08-13T07:55:47.191Z"
     },
     "a8e044e23db0f350e99dafebb14bfc7be81933b85922c94531d446751a8dd7b4": {
       "excerpt": "Every importer id, in registration order.",
@@ -5929,6 +6233,10 @@
       "excerpt": "`ErrorEncoder<E, GraphQLErrorResponse>` — maps a handler's error value to a Grap…",
       "approvedAt": "2026-08-13T07:47:47.316Z"
     },
+    "b499f72b23af30c3ca90c949effe496570efe369bd8dd4633f8d734acdfb3726": {
+      "excerpt": "a, b both resolve to undefined -> NaN, which serializes over JSON as",
+      "approvedAt": "2026-08-13T07:55:47.197Z"
+    },
     "b4b6222df6431da70320502d02b44958ba6e5a0056218febd2342f94cef5c25e": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:52:59.094Z"
@@ -5981,6 +6289,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:55:41.155Z"
     },
+    "b6008563d0e71f701552d97311ffe933e9c6a83b17cab1d00af7dfc659ab2ec6": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "b62176b5c425b10d31fa5d99230d00edf9d17a268ee8bc285911624771a3942f": {
       "excerpt": "Tests for otel.ts's wrapTracing, proven against all four real projectors —",
       "approvedAt": "2026-08-13T07:53:53.089Z"
@@ -5988,6 +6300,10 @@
     "b623b08d32c13f1e4aef8ef6ce7be413c236cbf430de5dd7ab82964dbb6b8aca": {
       "excerpt": "1 -> uint8, -1 -> int8. Union of ranges [0,255] + [-128,127] = [-128,255] -> int…",
       "approvedAt": "2026-08-13T07:48:24.471Z"
+    },
+    "b636ce1f662104d92b9f0070b84cdd950c9b95dee461749f9809bf850ff91668": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "b6602570ba8e23b3742198c453ec176dc6d10e45622353e7853be27a2f530409": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -6036,6 +6352,14 @@
     "b7aa1485a9d25b411cb494cf61f512f5a06252128ed76b6d1024be5e7bf63372": {
       "excerpt": "Merge flat routers — associative concat. `merge(routes(a), routes(b))`.",
       "approvedAt": "2026-08-13T07:55:04.676Z"
+    },
+    "b7c8181a9a4efe57d482f991eecfb31d676c5d971c2e4670f3857ecb18c53bf2": {
+      "excerpt": "Build a JSON-RPC client proxy over `tree`, dispatching every leaf call",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
+    "b802a609dca103a8420787c8c7680c9b29aeec19794faedc4e205aadf1914b28": {
+      "excerpt": "True when `res` is specifically an error response (has an `error` key).",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "b8171faa952fbd15b0665720896ffd3e07b094393cc3cb213122ec22583fe0a4": {
       "excerpt": "-----------------------------------------------------------------------",
@@ -6109,6 +6433,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "ba74df325b832663c8d760fad699077636f7d78fd9149ec7a15be6b4f5fcd044": {
+      "excerpt": "Convenience: `createJsonRpcClient(tree, createJsonRpcHttpCall(url, opts))`",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "ba7a160ab69a0498d5e43b9a044732b7622c0dad6cca0b03966c93b586e0871f": {
       "excerpt": "Building the validator module for the same entry doesn't touch the",
       "approvedAt": "2026-08-13T07:53:53.079Z"
@@ -6120,6 +6448,10 @@
     "baf509055e8cb5126e74068cddd362e27882a3af14f9346d2209fbe15ecc2fe6": {
       "excerpt": "`encodingMap` STRING form (base-profile-name override, phase B) plus its",
       "approvedAt": "2026-08-13T07:54:23.708Z"
+    },
+    "bb0f6c6c6b7e92ef524cd3eb639527642d7e8d87d10f03c78f790d62f87f52db": {
+      "excerpt": "`jsonrpc.source(map)` — declares which JSON-RPC store (`params`,",
+      "approvedAt": "2026-08-13T07:55:47.200Z"
     },
     "bb1a16774f6ba2ddaf7716c937644ae64f0c48fdb62577f0eccc214e738cfddc": {
       "excerpt": "What a dispatch handler reads: the remaining path segments, the method, the",
@@ -6139,7 +6471,7 @@
     },
     "bb39fdf435385fefd79249f2fbe264318f0931ba865dda6a491d16396384d5e4": {
       "excerpt": "eslint-disable-next-line @typescript-eslint/no-explicit-any",
-      "approvedAt": "2026-08-13T07:55:15.563Z"
+      "approvedAt": "2026-08-13T07:55:47.183Z"
     },
     "bb61c9b2f3ebf57cf3d3a6a1e61b54ffb10bae3100f6246826dc7ace0ee4ccdc": {
       "excerpt": "The real runtime projection resolves the same derived schema under the",
@@ -6152,6 +6484,10 @@
     "bb864739d63bfcaa8cb6866ec0c6e3ebb494d6d7941416727ed8017b8152d94d": {
       "excerpt": "(c) Further-generic alias: `type ApiResult<T> = Result<T, string>`.",
       "approvedAt": "2026-08-13T07:51:10.076Z"
+    },
+    "bb95763cb736786b2a9b03805afadeb2805b2923ec4ac7cee83ff22550a1789b": {
+      "excerpt": "Navigation key is the tree key (\"usersNode\"), not the segment override.",
+      "approvedAt": "2026-08-13T07:55:47.186Z"
     },
     "bb9cf6218a456f08ab9e12b9645393557b91a670c3674ab7c911c6d14bbb44e8": {
       "excerpt": "Minimum object samples at a position before structural splitting is",
@@ -6316,6 +6652,10 @@
     "c0ee36b86e0c7d68f0b21769ff82069096a7ba6669db1d713d4be66a86779d64": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:54:48.467Z"
+    },
+    "c0f965515d1700ddb47f42c16e358ec8b78e58723448534937ca7e969ac0bb22": {
+      "excerpt": "Per-param source overrides for this leaf's input assembly (see `packages/api-tre…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "c0fd322769155cac33404c7401945619d3e94656800f1ec745f691985d7972bd": {
       "excerpt": "See the individual profile interfaces for what each varies and why. `{ kind: \"un…",
@@ -6485,6 +6825,10 @@
       "excerpt": "Deep-clone `value` (a plain JSON-shaped tree — objects/arrays/primitives,",
       "approvedAt": "2026-08-13T07:53:53.077Z"
     },
+    "c6314326909447ff5b0107d69ba94f307687f10889a7fe16f9d20a47b98176f9": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "c68e9a3d290486f4aa0bdc2546265314a3164ea765182281f77faebc3255639f": {
       "excerpt": "Flatten unions: if either side is already a union, merge into it",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -6504,6 +6848,10 @@
     "c6c2655e3119c1ebd4ca46affdf5930d3fc57a780d4cc7251245b33d76141935": {
       "excerpt": "packages/fractal/src/module-graph.test.ts",
       "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "c725183d2fd7326e1039ede2710ed44c3a47d946f9e5faab1acb5cded35da380": {
+      "excerpt": "notifyOnly (Notification) produces no response; the other 3 elements each do.",
+      "approvedAt": "2026-08-13T07:55:47.197Z"
     },
     "c7320616ef8a869d8bf92972f36ab397f69b6c05abff5b6e64ffcbd69b89e37c": {
       "excerpt": "── Unions: TS enums + literal unions lower to enum/literal-union shapes;",
@@ -6536,6 +6884,14 @@
     "c7ddc93d5dabe9434bd6777831d20ceccb2033691fe9d2fc515366e1892ca5ae": {
       "excerpt": "CLI entry point: `bun tooling/comment-approval/cli.ts <check|approve> [...]`.",
       "approvedAt": "2026-08-13T07:51:06.502Z"
+    },
+    "c7e34ccc10b850b15d1e2d8e8b03e773b6e9c876a5efda2eabe57e38b3056a18": {
+      "excerpt": "Derived-from-type facts for one method, keyed by its dot-joined name. Same shape…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
+    "c7ec22e665bd6767c400c853dab229428e4a8c86b82a28675c1f142db61a209b": {
+      "excerpt": "A fallback subtree that is a bare `op()` leaf, not `api({...})` — the",
+      "approvedAt": "2026-08-13T07:55:47.186Z"
     },
     "c803b58e7805e754405171350e661c9acd15ccc7cb7c7583c344b5b0c7bb04b3": {
       "excerpt": "client.todos.POST({title}) → Promise<Todo>",
@@ -6609,6 +6965,10 @@
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
     },
+    "ca40f84a4dc6dd6d7d84f6a3496fc0a354690a28cad5caca48b285a96875549c": {
+      "excerpt": "The minimal socket shape this transport needs — deliberately duck-typed (not `im…",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "ca60c6635f67935cbd189bfc1c4d5aca1b2153e00a4a99f8726bfaeacaf15701": {
       "excerpt": "Sends one query/mutation/subscription document + variables to a GraphQL",
       "approvedAt": "2026-08-13T07:49:07.394Z"
@@ -6632,6 +6992,10 @@
     "caabea4a429528127501f1548ad886cd43ff56cd764f6a2e1b0945396f5e2901": {
       "excerpt": "use: attach middleware to this router (applied to all routes).",
       "approvedAt": "2026-08-13T07:54:40.422Z"
+    },
+    "cab88198454de52f38bdcd54def8a6b3d3cfff0095164e3c4272b91c37802c05": {
+      "excerpt": "packages/json-rpc-api-projector/src/index.ts — @rhi-zone/fractal-json-rpc-api-pr…",
+      "approvedAt": "2026-08-13T07:55:47.189Z"
     },
     "cae772cf06342ed3cd5276e898bad9fe4e310c5a2b7541d0fd182c07cbd2cf04": {
       "excerpt": "============================================================================",
@@ -6757,6 +7121,10 @@
       "excerpt": "A field whose type is a callback — lowers to types.function, not punted.",
       "approvedAt": "2026-08-13T07:47:59.023Z"
     },
+    "cef275d12739f56c526d139da07454d70a657ed645838ec789584f8f76526360": {
+      "excerpt": "This node's own contribution to the dot-joined method-name prefix.",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "cef59180f8b5df88ea5f89a031e243e567b5bc71d1426bf5f2a2379459ca19c7": {
       "excerpt": "`toX(ref, name?)` family — ref first, one declaration per call. Multi-def",
       "approvedAt": "2026-08-13T07:50:23.795Z"
@@ -6848,6 +7216,10 @@
     "d0af1274b1802ae0d7eac6ad6a16f4ab716f84fc637050a851fd013d15bc5887": {
       "excerpt": "Sanity check the paired precondition: same case name/n/trialCount on",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "d0b9b5e6173b9b2b501dc0b54c00100b4185fce906edf19d255b22cc6401bca5": {
+      "excerpt": "packages/json-rpc-api-projector/src/project.test.ts — JSON-RPC method projection…",
+      "approvedAt": "2026-08-13T07:55:47.191Z"
     },
     "d0e6750993094c8474f4ded54c9ac807212d6167cb0374764709d4c5a9c0f619": {
       "excerpt": "the app is a handler built by composing handler-returning functions.",
@@ -7209,9 +7581,17 @@
       "excerpt": "End-to-end tests for the library-api on the new fractal model.",
       "approvedAt": "2026-08-13T07:52:59.088Z"
     },
+    "da069bd93e62ad7e4bdc949813ddfe582aabbd310ff7a203ec078d6517ee20ad": {
+      "excerpt": "WebSocket-transport streaming: drain `iterable`, sending one",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "da27f4209df644e79fc740f9fa04e4df59782fd0db7f65a5e4de56a9ced120f7": {
       "excerpt": "A param meta leaf carries the param name and decoded type T as a phantom.",
       "approvedAt": "2026-08-13T07:55:41.155Z"
+    },
+    "da538a350d7fa2b96cd11f62b1626d78a81a56b4c729a78fe4895fd476c553d0": {
+      "excerpt": "Map of method name -> derived schema/description (from codegen).",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "da5f8e8db59a9884eab1d1eaf3451d0368093ec9b6c283cb59a0c43df937d1e0": {
       "excerpt": "-1 -> int8 [-128,127], 300 -> uint16 [0,65535] -> need [-128,65535] -> int32",
@@ -7257,6 +7637,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:55:15.563Z"
     },
+    "db7224c2b88d330c2bc07305d1bfc1a4d0309e79723fd67c629f398bcbd9ab2c": {
+      "excerpt": "kindB's error value has no `message` field -> falls back to JSON.stringify(error…",
+      "approvedAt": "2026-08-13T07:55:47.197Z"
+    },
     "db800b15b68a8aa6f2da40ff003286dadd452c2ee78074513fc5e99e2560a594": {
       "excerpt": "Every leaf's derived input/output TypeRef, PLUS the shared `defs` map a",
       "approvedAt": "2026-08-13T07:54:23.698Z"
@@ -7292,6 +7676,10 @@
     "dc988e83403dd513f7558b4e55abdf2a23987c0c4b5176000108c2540cf3090a": {
       "excerpt": "An error encoder's GraphQL-specific target shape — message + optional `extension…",
       "approvedAt": "2026-08-13T07:47:47.316Z"
+    },
+    "dca0af8e7e4a5036dabe1877dc7717df34ac3f99aae439d3d09e8730d7f97335": {
+      "excerpt": "One method's full JSON-RPC descriptor — one per leaf node in the Node",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "dca23ad17a6f589cc8449a524222e60cad500cc11b0c4107607870d561094919": {
       "excerpt": "no TLD dot",
@@ -7385,9 +7773,17 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:55:35.032Z"
     },
+    "defa6ed081d69c3a14369162efceaa610ac1a5299c09ffce91f4d7eff934f3a5": {
+      "excerpt": "Fetch implementation to use (defaults to the global `fetch`) — mainly for tests.",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
+    },
     "df13694198aaadd3e00569ee1cf00cbfc597760ffa535c89b4b81668752df330": {
       "excerpt": "MethodsClient<Verbs>: { [verb]: callable }",
       "approvedAt": "2026-08-13T07:55:15.563Z"
+    },
+    "df2401eaeb697440cd22b2f9c08ee68ce3538b447cbbf29d993501cfebc81e58": {
+      "excerpt": "packages/json-rpc-api-projector/src/wire.test.ts — JSON-RPC 2.0 wire-format help…",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
     },
     "df5410bf8c6264a217779fc14ac5e1cb2e997a1d04bc34bee279092e24a429f1": {
       "excerpt": "A bare expression may itself contain one balanced paren call, e.g.",
@@ -7396,6 +7792,14 @@
     "df62d91dbb67f7e5cac3f81253b07450bf3cd3b7e1ba73d2b9be8321ebc85540": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:53.088Z"
+    },
+    "df72dc41b065f94620feae2267f2fb0aaa36b04946649e6c44ae43667b2ee378": {
+      "excerpt": "JSON-RPC's own store-name fragment: a plain, inert interface naming the one",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
+    "df7494410a3d76d9c0a6851da32b90b602323e645d57c9f25193ba3930cc11a0": {
+      "excerpt": "`meta.jsonrpc` open bag — per-projection overrides for JSON-RPC method",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "df97406a7b30a4a7ee1a80682ebfdb47c4a91c4e502f3ec4f3a8203555f4cb0f": {
       "excerpt": "============================================================================",
@@ -7525,6 +7929,10 @@
       "excerpt": "SQL DDL (`CREATE TABLE ...`) -> TypeRef, the reverse direction of sql.ts's",
       "approvedAt": "2026-08-13T07:45:21.107Z"
     },
+    "e359c579744acce164a05c853d8165899e508a326ef78e62db2c0b47753a4ea5": {
+      "excerpt": "Either flavor of JSON-RPC 2.0 Response object.",
+      "approvedAt": "2026-08-13T07:55:47.201Z"
+    },
     "e36d78b83ead55bf061b5f6f7baa43fbaadc566753fd5b29c9a21d80709b7675": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:46:30.920Z"
@@ -7536,6 +7944,10 @@
     "e37f9309c51f02324a0258e1b92e71c331f00312a4d159f9b9c454c8f4a4453b": {
       "excerpt": "Member-set fidelity catches what shape detection can't: recall is",
       "approvedAt": "2026-08-13T07:47:33.023Z"
+    },
+    "e38e1fc69af605e709d1a2c03ca8622f117daec40573a24939f866d50e25e5be": {
+      "excerpt": "Narrows the JSON-RPC error envelope's `data` field for this method (see `jsonRpc…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
     },
     "e3b4fec91eebc13dd4160dc13e04012aaf7d86779901efc2d31f5dc2aa62aff8": {
       "excerpt": "leafTwo's fragment is byte-identical to the pre-edit baseline — carried",
@@ -7997,6 +8409,10 @@
       "excerpt": "array + tuple → array (tuple is a special case of array)",
       "approvedAt": "2026-08-13T07:53:40.842Z"
     },
+    "f046a5d375242135ea899758de6008b0aa5c48590ddbf5ea11c204bfd96614a5": {
+      "excerpt": "Build a WebSocket transport for `tree`: a `{ message }` handler any",
+      "approvedAt": "2026-08-13T07:55:47.199Z"
+    },
     "f05976f3bf49790b41e209f24a2ec0bb746a874c1a35ffd0c7f7e0348cda1ba0": {
       "excerpt": "param(\"id\") → {id:string}; param(\"id\", codec) → {id: InferOutput<codec>}.",
       "approvedAt": "2026-08-13T07:55:04.676Z"
@@ -8117,6 +8533,10 @@
       "excerpt": "Conventional output file extension, for CLIs choosing a filename.",
       "approvedAt": "2026-08-13T07:50:23.795Z"
     },
+    "f34ab6b71e9f9c2077c7813b098ca35b78b720a563a8a6f9946509dabead9c76": {
+      "excerpt": "Wraps `JsonRpcBranchMetaProperties` under the `jsonrpc` key — extend `BranchMeta…",
+      "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
     "f377bb3a79ffc721933efc5cdde89b353e71d4189ee01b8e2fa77870355023c2": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:49:07.400Z"
@@ -8148,6 +8568,10 @@
     "f413de5dceb4f8b01a463ceb09b4d0c8d30fc2cda7cc08997d68eb19653c4439": {
       "excerpt": "── Intersections: detect the branded/opaque and/or refinement-tag",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "f41444ee396333c834f26b91cb5ef117ca1478758200a736bccd309fbb397fe3": {
+      "excerpt": "Thrown when a call comes back as a JSON-RPC error Response.",
+      "approvedAt": "2026-08-13T07:55:47.183Z"
     },
     "f414d43e83368a01543e95e24810754585e9fe96d6ec67b5013f5d3f40bfd3a8": {
       "excerpt": "Regression: Set<T>/Map<K,T>'s own interface methods (`forEach(callback:",
@@ -8420,6 +8844,10 @@
     "fbaed98322861eddbbf177896faeebf3ae7bbb5554fdf52c3045ee53eb2f83c5": {
       "excerpt": "tag: K=1, N clears literalMinSamples -> saturates to literal",
       "approvedAt": "2026-08-13T07:46:30.920Z"
+    },
+    "fbf4e2f524fd7175a2c051049a9eb32998d4a16b8921c4bfbbc963f362786ccb": {
+      "excerpt": "Not collected into [\"a\"] — the raw async generator object serializes to {}.",
+      "approvedAt": "2026-08-13T07:55:47.197Z"
     },
     "fc1de65e059f9b8a7c3a90b262726b229e70232a45dc8e06f28746e3ba54246e": {
       "excerpt": "one endpoint's contribution: { \"/path\": { method: sig } }.",

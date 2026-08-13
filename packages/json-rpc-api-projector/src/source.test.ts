@@ -2,9 +2,9 @@
 //
 // Mirrors http-api-projector/src/verbs.test.ts's `http.source()` coverage —
 // docs/design/wire-profiles-and-staged-validation.md's "Prerequisite: meta
-// unification" §"UncoveredSourceParams generalizes": the SAME op()-time
-// static coverage check http has now also has a literal-preserving
-// authoring path for jsonrpc.
+// unification" §"UncoveredSourceParams generalizes": jsonrpc now has its own
+// literal-preserving authoring path for the same op()-time static coverage
+// check http already has.
 
 import { describe, expect, expectTypeOf, it } from "bun:test";
 import { op } from "@rhi-zone/fractal-api-tree/node";

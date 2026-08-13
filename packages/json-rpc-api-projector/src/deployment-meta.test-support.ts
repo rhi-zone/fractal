@@ -2,11 +2,11 @@
 //
 // json-rpc-api-projector has no real deployment of its own (it's a
 // projector package), but its own tests author `meta.jsonrpc` contributions
-// — including at BRANCH position (`meta.jsonrpc.segment`) — to exercise its
+// — including at branch position (`meta.jsonrpc.segment`) — to exercise its
 // projection walk against something closer to what a real deployment's
 // tree looks like. Per docs/design/meta-role-split-spec.md §2/§3:
 // projectors never augment core's SharedMeta/LeafMeta/BranchMeta themselves
-// — only a DEPLOYMENT's own file does, exactly once. This file is that one
+// — only a deployment's own file does, exactly once. This file is that one
 // file for this package's own test suite — the test-suite's stand-in
 // "deployment." Not a `.test.ts` file itself, so bun test skips it;
 // imported for its side effect (the `declare module` augmentation) by

@@ -8,13 +8,13 @@
 // dispatch shape), adapted to JSON-RPC's own naming and metadata
 // conventions:
 //
-//   - Naming: DOT-separated method names from tree position (settled
+//   - Naming: dot-separated method names from tree position (settled
 //     design decision), not MCP's underscore-joined names — e.g.
 //     `users.list`, `books.get`. A `fallback` (wildcard-capture) node
-//     contributes its OWN name (e.g. "bookId") as a literal dot-segment,
+//     contributes its own name (e.g. "bookId") as a literal dot-segment,
 //     exactly like MCP's fallback handling for tools: the segment names the
-//     TREE POSITION, not a captured runtime value (there is no URL to
-//     capture a value FROM at list-time) — the actual argument travels
+//     tree position, not a captured runtime value (there is no URL to
+//     capture a value from at list-time) — the actual argument travels
 //     through `params` like any other field, resolved at call time via the
 //     ordinary `assemble` pipeline against the single `"params"` store (see
 //     `getJsonRpcMeta`'s `sourceMap` and server.ts's dispatch).
@@ -28,14 +28,14 @@
 //     descriptor. `deprecated` likewise reads `meta.tags.deprecated`, same
 //     source every other projector reads.
 //
-// A leaf's tags are read directly from its OWN meta.tags — no ancestor
+// A leaf's tags are read directly from its own meta.tags — no ancestor
 // inheritance (see docs/design/router-model.md — "Tags").
 //
 // Per-projection overrides live in `meta.jsonrpc` (open bag, mirrors
 // `meta.mcp`). `paramsSchema`/`resultSchema` come from a derived-from-type
 // `SchemaMap` (the same shape `@rhi-zone/fractal-api-tree`'s
 // `extractToolSchemas` produces for MCP — `inputSchema`/`outputSchema`),
-// keyed by the method's DOT-joined name. Absent an entry, `paramsSchema`
+// keyed by the method's dot-joined name. Absent an entry, `paramsSchema`
 // degrades to `{ type: "object" }` (JSON Schema's "any object" — the same
 // spec-minimum MCP falls back to) and `resultSchema` is omitted entirely
 // (unlike MCP, JSON-RPC has no spec-mandated minimum result shape).
@@ -178,7 +178,7 @@ export function getJsonRpcMeta(
 // Tag -> metadata
 // ============================================================================
 
-/** Derive the three-valued readOnly/destructive/idempotent fields from a Tags bag (the leaf's OWN meta.tags) — omits a key entirely when its resolved value is unknown (undefined), same convention as MCP's `hintsFromTags`. */
+/** Derive the three-valued readOnly/destructive/idempotent fields from a Tags bag (the leaf's own meta.tags) — omits a key entirely when its resolved value is unknown (undefined), same convention as MCP's `hintsFromTags`. */
 function tagFields(
   tags: Tags,
 ): Pick<JsonRpcMethod, "readOnly" | "destructive" | "idempotent" | "streaming" | "deprecated"> {
@@ -201,7 +201,7 @@ function tagFields(
  * plus the name -> handler dispatch table `server.ts`'s transports use.
  * Single walk, single source of truth for name construction.
  *
- * Name construction (tree-position namespacing, DOT-joined):
+ * Name construction (tree-position namespacing, dot-joined):
  *   root leaf "ping"                    -> "ping"
  *   child "users" / leaf "list"          -> "users.list"
  *   fallback name "bookId" / leaf "get"  -> "books.bookId.get"
@@ -216,7 +216,7 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
   const handlers = new Map<string, Dispatch>();
 
   // Build one JsonRpcMethod (+ register its dispatch handler) for a leaf
-  // node at a fully-resolved `name` — factored out so the SAME construction
+  // node at a fully-resolved `name` — factored out so the same construction
   // applies to an ordinary child leaf (name = prefix + its own tree key) and
   // to a `fallback.subtree` that is itself a bare leaf (name = prefix + the
   // fallback's own name, no further key — see the `n.fallback` branch below,
