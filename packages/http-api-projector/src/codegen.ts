@@ -340,15 +340,13 @@ function attachOperation(
   const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(path, verb);
   const toolSchema = schemas?.[codegenName];
   const requestSchema = stripPathParams(toolSchema?.inputSchema, pathParamNames);
-  // Only unwrap the `x-stream` array-of-element schema down to the bare
-  // element schema when a streaming-aware extension is actually in play
-  // (`streamingEnabled`) — otherwise the operation stays `Promise<Array<T>>`-
-  // shaped (schemaToType's plain `array` branch, ignorant of `x-stream`,
-  // same as before this feature existed) since the client's `__request`
-  // still runs its default JSON/text decode against what will actually be an
-  // SSE-formatted response body: unwrapping the schema without also
-  // changing the runtime call would claim a `T` output the client can't
-  // actually produce.
+  // Unwrap `x-stream` only when `streamingEnabled`. Without a streaming-aware
+  // extension, `__request` still runs its default JSON/text decode against
+  // what will actually be an SSE-formatted response body — unwrapping the
+  // schema without also changing the runtime call would advertise a `T`
+  // output the client can't produce. So the operation stays `Promise<Array<T>>`
+  // (schemaToType's plain `array` branch, ignorant of `x-stream`), same as
+  // before this feature existed.
   const { schema: outputSchema, isStream } = streamingEnabled
     ? unwrapStreamSchema(toolSchema?.outputSchema)
     : { schema: toolSchema?.outputSchema, isStream: false };
