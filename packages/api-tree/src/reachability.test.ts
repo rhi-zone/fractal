@@ -1,10 +1,10 @@
-// packages/api-tree/src/reachability.test.ts — per-entry module-graph
-// reachability over a shared `ts.Program` (reachability.ts).
+// Tests for per-entry module-graph reachability over a shared `ts.Program`
+// (reachability.ts).
 //
-// Covers `computeEntryClosures`/`affectedEntries` against REAL fixture files
+// Covers `computeEntryClosures`/`affectedEntries` against real fixture files
 // (not a synthetic in-memory graph) sharing one multi-root `ts.Program` —
 // the exact shape the sibling codebase's `codegen-fractal-validators.ts` uses — so
-// "an entry's closure excludes a file only some OTHER entry reaches" is
+// "an entry's closure excludes a file only some other entry reaches" is
 // proven against genuine multi-file, multi-entry extraction, not a mocked
 // graph.
 
@@ -32,7 +32,7 @@ describe("reachability.ts — per-entry module-graph closures over a shared Prog
     expect(treeClosure?.has(path.resolve(DEPLOYMENT_META))).toBe(true);
   });
 
-  it("a file reachable from only ONE entry is absent from the other entry's closure — proving per-entry precision, not the whole batch's union", () => {
+  it("a file reachable from only one entry is absent from the other entry's closure — proving per-entry precision, not the whole batch's union", () => {
     const program = createExtractorProgram([TREE_ENTRY, SHARING_ENTRY]);
     const closures = computeEntryClosures([TREE_ENTRY, SHARING_ENTRY], program);
 
@@ -40,13 +40,13 @@ describe("reachability.ts — per-entry module-graph closures over a shared Prog
     expect(sharingClosure).toBeDefined();
     // sharing.fixture.ts never imports result-reexport.fixture.ts or
     // deployment-meta.fixture.ts — if the coarse (pre-fix) behavior were
-    // still in effect, this closure would be the WHOLE shared Program's
+    // still in effect, this closure would be the whole shared Program's
     // union and both would incorrectly be present.
     expect(sharingClosure?.has(path.resolve(RESULT_REEXPORT))).toBe(false);
     expect(sharingClosure?.has(path.resolve(DEPLOYMENT_META))).toBe(false);
   });
 
-  it("a file reachable from BOTH entries (a shared dependency) appears in both closures", () => {
+  it("a file reachable from both entries (a shared dependency) appears in both closures", () => {
     const program = createExtractorProgram([TREE_ENTRY, SHARING_ENTRY]);
     const closures = computeEntryClosures([TREE_ENTRY, SHARING_ENTRY], program);
 

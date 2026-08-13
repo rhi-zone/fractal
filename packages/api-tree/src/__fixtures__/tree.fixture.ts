@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/tree.fixture.ts
-//
 // A real Node tree used by extract.test.ts as BOTH the extractor's source input
 // (parsed via the compiler API for its leaf handler input types + JSDoc) and the
 // runtime tree fed to toTools. Not a test file (no `.test.ts`), so bun test skips it.
@@ -197,16 +195,15 @@ export const tree = api({
   //      the end-to-end one: build.test.ts asserts the FULL generated
   //      module — annotation text included — is syntactically valid TS).
   builtinReturnType: api({
-    // Body never actually runs in any test (`toTools`/`runCli --help`
-    // never invoke a leaf's handler) — deliberately not calling real
-    // `fetch()` regardless, so this fixture can never trigger a network
-    // call if that assumption ever changes.
+    // The body never runs in any test (`toTools`/`runCli --help` never
+    // invoke a leaf's handler): it throws immediately instead of calling a
+    // real `fetch()`, so this fixture cannot trigger a network call.
     fetchIt: op((_input: { url: string }): Promise<Response> => {
       throw new Error("fixture leaf — never actually invoked");
     }),
   }),
-  // Genuinely-different union that must NOT be false-positived.
-  // This is a 2-member union but does NOT have the Result name or DU shape.
+  // A 2-member union without the Result name or DU shape — the negative case
+  // for Result-detection: this union must not be mistaken for one.
   differentUnion: api({
     ping: op((_input: { x: number }): { kind: "a"; x: number } | { kind: "b"; y: string } => ({
       kind: "a",

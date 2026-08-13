@@ -1,8 +1,7 @@
-// packages/api-tree/src/extract.ts — @rhi-zone/fractal-api-tree
-//
-// BUILD-TIME EXTRACTOR: types + JSDoc are the truth. This module reads op
-// source (via the TypeScript compiler API — read-only analysis, NOT a
-// transformer) and DERIVES two things a runtime projection cannot see:
+// Build-time extractor: types + JSDoc are the source of truth. This module
+// reads op source via the TypeScript compiler API — read-only type analysis,
+// not a code transform — and derives two things a runtime projection cannot
+// see:
 //
 //   1. a JSON-Schema for an op's input parameter type
 //   2. the op's leading JSDoc description text
@@ -11,16 +10,15 @@
 // (string/number/boolean), optional (`?` / `| undefined`), arrays, and nested
 // objects are lowered structurally. Callable types (arrow/function values,
 // callback params, method-shaped fields) lower to `types.function`. Anything
-// still exotic (unions, generics, constructable types, …) is PUNTED to
+// still exotic (unions, generics, constructable types, …) punts to
 // `t(types.unknown, { $comment })` carrying a `$comment` that names the
 // unhandled case — self-documenting rather than silently lossy. Extraction
-// goes TS type → TypeRef → JSON Schema; the
-// TypeRef is produced here and projected via
-// `@rhi-zone/fractal-type-ir/json-schema`'s `toJsonSchema`.
+// goes TS type → TypeRef → JSON Schema; the TypeRef is produced here and
+// projected via `@rhi-zone/fractal-type-ir/json-schema`'s `toJsonSchema`.
 //
-// Derived-from-type ONLY: there is no hand-authored schema anywhere. If a shape
-// isn't recovered here, it degrades to the MCP spec minimum, never to a second
-// source of truth.
+// Derived from types only: there is no hand-authored schema anywhere. If a
+// shape isn't recovered here, it degrades to the MCP spec minimum, never to a
+// second source of truth.
 //
 // See:
 //   packages/api-tree/src/node.ts    — the op model (`op(fn, meta)`)
@@ -39,12 +37,11 @@ import {
   typeRefFromType,
 } from "@rhi-zone/fractal-type-ir/from-typescript";
 
-// Re-exported for backward compatibility — every symbol below moved to
+// Re-exported here for API compatibility: the canonical definitions live in
 // `@rhi-zone/fractal-type-ir/from-typescript` (the general-purpose ts.Type →
 // TypeRef ingester; see that module's header comment for the full rationale).
-// This package's own callers (`tree.ts`, `build.ts`) and its test suite still
-// import these names from "./extract.ts", so they're re-exported here rather
-// than requiring every call site to be repointed at the new module.
+// This package's own callers (`tree.ts`, `build.ts`) and its test suite
+// import these names from "./extract.ts" directly.
 export {
   createExtractorProgram,
   createSharingRegistry,
@@ -72,11 +69,11 @@ const puntRef = (reason: string): TypeRef =>
  * the emitted value itself. Punted nodes now come from `types.unknown` via
  * the TypeRef projector, so `type` is no longer guaranteed present.
  *
- * This type's field set must stay a SUPERSET of everything
+ * This type's field set must stay a superset of everything
  * `@rhi-zone/fractal-type-ir/json-schema`'s `toJsonSchema` can actually
  * emit (that module's own `JsonSchema` is intentionally the fully-open
  * `Record<string, unknown>` — a codegen-time projector, not a validated
- * value — so THIS type is the one place a consumer gets real field-level
+ * value — so this type is the one place a consumer gets real field-level
  * structure). Every field below is either a shape-kind's own base rendering
  * (`type`/`properties`/`items`/…) or one of `json-schema.ts`'s
  * `withMeta`/`passthroughKeys` meta-driven additions (numeric/string
@@ -85,18 +82,15 @@ const puntRef = (reason: string): TypeRef =>
  * structural-sharing/union-tag fields (`json-schema.ts`'s `ref`-kind
  * rendering and `discriminatedUnion` handling respectively).
  *
- * This field set was incomplete for a long time without being caught: every
- * prior consumer of `schemaFromType`/`schemaFromFunctionNode`/
- * `schemaFromReturnType`/`extractToolSchemas` read the result as
- * loosely-typed data (an `as JsonSchema` cast inside this module, or JSON
- * serialized straight through), so nothing had type-checked a concrete
- * extracted value's literal shape against this type — the gap (missing
- * `$ref`, `readOnly`, `writeOnly`, `minLength`, `maxLength`, `pattern`,
- * `multipleOf`, `minimum`/`maximum`/`exclusiveMinimum`/`exclusiveMaximum`,
- * `format`, `title`, `deprecated`, `examples`) went unnoticed. It surfaced
- * when the sibling codebase's `codegen-fractal-validators.ts` schema-artifact codegen
- * started emitting `export const schemas: SchemaMap = <object literal>` —
- * a real structural check the loose `as`-cast path never exercised.
+ * Keeping this field set in sync with `toJsonSchema`'s actual emission is a
+ * manual invariant, not a compiler-checked one: a consumer that reads the
+ * result as loosely-typed data (an `as JsonSchema` cast inside this module,
+ * or JSON serialized straight through) never type-checks a concrete
+ * extracted value's literal shape against this type. A consumer that treats
+ * the value structurally instead — e.g. the sibling codebase's
+ * `codegen-fractal-validators.ts` schema-artifact codegen, which emits
+ * `export const schemas: SchemaMap = <object literal>` — will catch a drift
+ * here that the loose `as`-cast path does not.
  */
 export type JsonSchema = {
   type?: "string" | "number" | "boolean" | "array" | "object";
@@ -118,7 +112,7 @@ export type JsonSchema = {
   // interface/class-instance/stream/paginated-sequence type has no native
   // JSON-Schema vocabulary, so each degrades to the closest structural
   // shape (`object`/`array`/untyped) plus one of these markers so tooling
-  // that cares can still tell what it degraded FROM).
+  // that cares can still tell what it degraded from).
   "x-function"?: boolean;
   "x-method"?: boolean;
   "x-interface"?: boolean;
@@ -192,13 +186,13 @@ export function schemaFromType(type: ts.Type, checker: ts.TypeChecker, loc: ts.N
  * of `node_modules` layout (a global/bare install, a `.bun` hoisted path, a
  * pnpm content-addressed store, …), always shaped
  * `<…>/typescript/lib/lib.<name>.d.ts`. These declare TypeScript's own
- * GLOBAL utility types (`Record`, `Partial`, `Pick`, `Omit`, `Readonly`,
+ * global utility types (`Record`, `Partial`, `Pick`, `Omit`, `Readonly`,
  * `Array`, `ReadonlyArray`, `Map`, `Set`, `Promise`, …) as ambient ("no
  * export") declarations — ones a generated `import type { X } from "…"`
  * can never actually reach (`TS2306: File '…' is not a module`), because
  * they were never a module's *export* to import in the first place; they're
  * globally in scope everywhere already, no import needed at all. Matched by
- * PATH rather than by an enumerated type-name list so the whole class of
+ * path rather than by an enumerated type-name list so the whole class of
  * built-in/global TS utility types is covered generally (see
  * `typeProvenanceOf`'s doc comment below), not just the ones observed to
  * trip this so far.
@@ -210,52 +204,52 @@ function isTsBuiltinLibFile(fileName: string): boolean {
 /**
  * The declared-type provenance of a top-level extracted type: its name and
  * the absolute path of the file it's declared in — recoverable only when the
- * type is NAMED (a `type X = …` alias or an `interface X {…}`), not for an
+ * type is named (a `type X = …` alias or an `interface X {…}`), not for an
  * anonymous/inline shape (`(input: { q: string }) => …`).
  *
  * Read only at the top level (a handler's own parameter type), not while
  * descending into `typeRefFromType`'s structural walk — nested named types
- * (e.g. a field typed `Address`) are still inlined structurally there, same
- * as before; only the OUTER type gets a name worth importing, since that's
- * the one a generated type-guard annotation needs to reference.
+ * (e.g. a field typed `Address`) are still inlined structurally there; only
+ * the outer type gets a name worth importing, since that's the one a
+ * generated type-guard annotation needs to reference.
  *
  * Anonymous object-shaped types resolve to a symbol TypeScript itself names
  * `"__type"` — its own universal synthesized placeholder for "an object type
- * with no user-given name," emitted uniformly regardless of what PRODUCED
+ * with no user-given name," emitted uniformly regardless of what produced
  * the shape: a literal `{ … }` (`ts.TypeLiteralNode`), a mapped type
  * (`{ [K in keyof T]: … }`, `ts.MappedTypeNode`), or any other combinator
- * that resolves to a fresh anonymous object type. Excluded here BY NAME
+ * that resolves to a fresh anonymous object type. Excluded here by name
  * (`symbol.name === "__type"`) — general across every AST node kind that can
- * produce it, not narrowed to `ts.TypeLiteralNode` (an earlier version of
- * this check only excluded the TypeLiteralNode case, missing the mapped-type
- * one below) — so it falls through to structural inlining instead of being
- * treated as "named". `"__type"` is TypeScript's own compiler-internal
- * convention (a double-underscore-prefixed synthesized name), never a real
- * project export, so the exclusion is safe unconditionally.
+ * produce it, not narrowed to `ts.TypeLiteralNode` — so it falls through to
+ * structural inlining instead of being treated as "named". `"__type"` is
+ * TypeScript's own compiler-internal convention (a double-underscore-prefixed
+ * synthesized name), never a real project export, so the exclusion is safe
+ * unconditionally.
  *
  * A TS builtin/global utility type used directly as a handler's whole input
  * (`(input: Record<string, unknown>) => …`, `(input: Partial<Foo>) => …`, …)
- * is EXCLUDED the same way: its alias/symbol declaration lives in one of
+ * is excluded the same way: its alias/symbol declaration lives in one of
  * TypeScript's own bundled `lib.*.d.ts` files (`isTsBuiltinLibFile` above),
  * which is nameable (`type.aliasSymbol.name === "Record"`) but never
- * IMPORTABLE — there is no module at that path to import from. Falling
+ * importable — there is no module at that path to import from. Falling
  * through here (returning `undefined`) routes it to the same structural
  * inlining every anonymous type already gets, which is always correct:
  * every builtin utility type has a real structural TypeScript rendering
  * (`toTypeScript` — `compile.ts`'s `guardAnnotation` fallback).
  *
- * Regression (found migrating the sibling codebase's `triggers` slice, 2026-07-30): a
- * type alias defined as `type X = SomeLibrary.InferOutput<typeof schema>`
- * (valibot's `InferOutput`, a `MappedTypeNode`-shaped conditional/mapped
- * utility) resolved with `aliasSymbol` UNDEFINED at the parameter-type
- * reference site — TS does not always preserve the outer alias symbol
- * through a generic mapped-type instantiation — falling to the `symbol`
- * branch, whose declaration was a `MappedTypeNode` (not a
- * `TypeLiteralNode`), so the OLD `!ts.isTypeLiteralNode(decl)` guard missed
- * it and treated `"__type"` itself as a real, importable name, emitting
- * `import type { __type } from ".../valibot/dist/index.d.mts"` — a name
- * valibot never exports (`TS2305`). The name-based check above fixes this
- * generally, not just for valibot's `InferOutput` specifically.
+ * A type alias whose body resolves through a generic mapped type — e.g.
+ * `type X = SomeLibrary.InferOutput<typeof schema>` (valibot's
+ * `InferOutput`, a `MappedTypeNode`-shaped conditional/mapped utility) — can
+ * have `aliasSymbol` undefined at the parameter-type reference site, since TS
+ * does not always preserve the outer alias symbol through a generic
+ * mapped-type instantiation; resolution falls to the `symbol` branch, whose
+ * declaration is a `MappedTypeNode` rather than a `TypeLiteralNode`. The
+ * name-based `"__type"` exclusion above covers this case too, since it
+ * matches on the symbol name regardless of which AST node kind declared it —
+ * a check narrowed to `ts.TypeLiteralNode` would treat `"__type"` as a real,
+ * importable name and emit an unresolvable `import type { __type } from
+ * "…"` (as happened for valibot's `InferOutput`, which never exports
+ * `__type`, producing `TS2305`).
  */
 function typeProvenanceOf(
   type: ts.Type,
@@ -283,7 +277,7 @@ function typeProvenanceOf(
  * expression): its first parameter's type is the op input. A niladic op
  * lowers to an empty object TypeRef.
  *
- * When the parameter type is a NAMED type (alias/interface, not an inline
+ * When the parameter type is a named type (alias/interface, not an inline
  * object literal), the returned TypeRef carries `meta.typeName` +
  * `meta.declarationFile` — provenance a codegen consumer (e.g.
  * `@rhi-zone/fractal-type-ir`'s `compileWireEntryFragment`, via
@@ -327,17 +321,17 @@ export function schemaFromFunctionNode(fn: ts.Node, checker: ts.TypeChecker): Js
 // ============================================================================
 
 //
-// ARCHITECTURE NOTE — Result<T, E> unwrapping under skipLibCheck.
+// Result<T, E> unwrapping under skipLibCheck.
 //
 // With `skipLibCheck: true`, the TypeScript compiler keeps alias
 // instantiations in an "unresolved" state (`type.flags === TypeFlags.Any`
 // internally): `type.isUnion()` is false for `Result<T, E>` even though it
-// IS a union alias, `aliasSymbol.declarations` is always undefined, and
+// is a union alias, `aliasSymbol.declarations` is always undefined, and
 // `getAliasedSymbol()` resolves to `unknown` with no declarations. That
 // rules out structural matching on the resolved union and file-path
 // nominal checks.
 //
-// What IS available on the unresolved type: `aliasSymbol.name`,
+// What is available on the unresolved type: `aliasSymbol.name`,
 // `aliasTypeArguments`, the AST syntax nodes of an explicit return type
 // annotation (the TypeReferenceNode's typeName identifier and its
 // typeArguments), and local TypeAlias declarations — for an alias like
@@ -345,17 +339,17 @@ export function schemaFromFunctionNode(fn: ts.Node, checker: ts.TypeChecker): Js
 // file and is accessible.
 //
 // Two paths follow from this:
-//   1. SYNTAX PATH (primary, annotated returns) — walks the function's
+//   1. Syntax path (primary, annotated returns) — walks the function's
 //      return type annotation node (fn.type). A TypeReference named
 //      "Result" with ≥ 2 type args, or one pointing to a local TypeAlias
 //      whose body is `Result<T, ...>`, yields T = the first type arg.
 //      Promise<Result<T,E>> is handled by stripping the Promise
 //      TypeReference first. Covers: (a) direct import, (b) barrel import
 //      (no rename), (c) further-generic alias.
-//   2. STRUCTURAL PATH (fallback, inferred returns or fully-resolved
+//   2. Structural path (fallback, inferred returns or fully-resolved
 //      types) — matches the exact discriminated-union shape
 //      `{ kind: "ok"; value: T } | { kind: "err"; error: E }` when the
-//      return type IS already a proper union.
+//      return type is already a proper union.
 //
 // The "Result" name is the discriminant for path 1, so an arbitrary union
 // without an alias named "Result" never triggers it. Path 2's exact field
@@ -371,16 +365,16 @@ export function schemaFromFunctionNode(fn: ts.Node, checker: ts.TypeChecker): Js
  *   1. If the outermost ref is "Promise", descend to its first type argument.
  *   2. If the (possibly descended) ref is named "Result" with ≥ 2 type args →
  *      return the first type arg node.
- *      NOMINAL: covers (a) direct import and (b) barrel with no rename.
- *   3. If the ref's identifier is an IMPORT ALIAS (ImportSpecifier) and the
+ *      Nominal: covers (a) direct import and (b) barrel with no rename.
+ *   3. If the ref's identifier is an import alias (ImportSpecifier) and the
  *      original exported name is "Result" → it's a renamed barrel re-export
  *      (`import { Result as X } from "..."`). Extract the call site's first arg.
- *      NOMINAL: covers (b) barrel with rename.
- *   4. If the ref points to a LOCAL TypeAlias (declarations accessible in the
+ *      Nominal: covers (b) barrel with rename.
+ *   4. If the ref points to a local TypeAlias (declarations accessible in the
  *      same file) whose body is a TypeReference named "Result" with ≥ 1 type
  *      parameter → the first alias type parameter maps positionally to the call
  *      site's first type argument. Extract it.
- *      COVERS (c) further-generic aliases like `type ApiResult<T> = Result<T, E>`.
+ *      Covers (c) further-generic aliases like `type ApiResult<T> = Result<T, E>`.
  *
  * Returns the T typeNode on success, undefined if the pattern doesn't match.
  */
@@ -409,9 +403,9 @@ function resultTypeArgNodeFrom(
   if (!sym) return undefined;
 
   // (b-rename): import alias → `import { Result as X } from "..."`.
-  //   The import specifier's declarations ARE accessible (same file) even with
-  //   skipLibCheck. We check that the specifier's ORIGINAL name (propertyName)
-  //   is "Result". This verifies the barrel re-exports core's Result under a
+  //   The import specifier's declarations are accessible (same file) even with
+  //   skipLibCheck. The specifier's original name (propertyName) must be
+  //   "Result", confirming the barrel re-exports core's Result under a
   //   different local name.
   if (sym.flags & ts.SymbolFlags.Alias) {
     const specDecl = sym.declarations?.[0];
@@ -426,7 +420,7 @@ function resultTypeArgNodeFrom(
 
   // (c): local TypeAlias → `type ApiResult<T> = Result<T, SomeError>`.
   //   Local alias declarations are accessible (same file, not behind skipLibCheck).
-  //   If the alias's body is a TypeReference to "Result" with ≥ 2 type parameters,
+  //   If the alias's body is a TypeReference to "Result" with ≥ 1 type parameter,
   //   the first type parameter maps positionally to the call site's first type arg.
   if (sym.flags & ts.SymbolFlags.TypeAlias && sym.declarations?.[0]) {
     const decl = sym.declarations[0];
@@ -445,12 +439,12 @@ function resultTypeArgNodeFrom(
 }
 
 /**
- * STRUCTURAL fallback: detect the exact Result discriminated-union shape.
+ * Structural fallback: detect the exact Result discriminated-union shape.
  *
- * Fires only when the return type IS already a proper union — which happens
+ * Fires only when the return type is already a proper union — which happens
  * for inferred return types or when types are fully resolved (not under
- * skipLibCheck). It does NOT fire for the alias-instantiation case (those
- * types stay "unresolved" under this extractor's program configuration).
+ * skipLibCheck). Does not fire for the alias-instantiation case, since those
+ * types stay "unresolved" under this extractor's program configuration.
  *
  * Exact shape from packages/api-tree/src/index.ts:
  *   `{ readonly kind: "ok"; readonly value: T } | { readonly kind: "err"; readonly error: E }`
@@ -508,14 +502,14 @@ function structuralResultValueType(
  * Exotic/unresolvable return types punt to `unknown` with a TODO $comment,
  * consistent with the input-side fallback.
  *
- * Unwrapping uses two paths (see ARCHITECTURE NOTE above):
+ * Unwrapping uses two paths (see the note on Result<T, E> unwrapping above):
  *
- *   SYNTAX PATH (primary): reads the explicit return type annotation node.
+ *   Syntax path (primary): reads the explicit return type annotation node.
  *     Handles `Result<T,E>` directly, barrel re-exports (no rename), and
  *     further-generic local aliases like `type ApiResult<T> = Result<T, E>`.
  *
- *   STRUCTURAL PATH (fallback): matches the exact DU shape when the return
- *     type IS a proper union — covers inferred-return cases or fully-resolved
+ *   Structural path (fallback): matches the exact DU shape when the return
+ *     type is a proper union — covers inferred-return cases or fully-resolved
  *     contexts outside of skipLibCheck.
  */
 export function typeRefFromReturnType(
@@ -527,16 +521,16 @@ export function typeRefFromReturnType(
   const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call);
   if (!sig) return puntRef("no call signature on op fn");
 
-  // ── SYNTAX PATH: explicit return type annotation on the function node ────
+  // ── Syntax path: explicit return type annotation on the function node ────
   //
-  // When the function has an explicit `: ReturnType` annotation, we read that
-  // type node from the AST directly. This gives us the full structure (including
-  // type argument positions) without relying on the checker's alias resolution,
-  // which is blocked by skipLibCheck.
+  // When the function has an explicit `: ReturnType` annotation, that type
+  // node is read from the AST directly, giving the full structure (including
+  // type argument positions) without relying on the checker's alias
+  // resolution, which skipLibCheck blocks.
   //
-  // We detect `Promise<Result<T,E>>` by stripping the outer Promise TypeRef and
-  // recursing; we detect `Result<T,E>` by name + 2 type args; we detect local
-  // aliases like `ApiResult<T>` by checking their declaration's body.
+  // `Promise<Result<T,E>>` is detected by stripping the outer Promise TypeRef
+  // and recursing; `Result<T,E>` by name + 2 type args; local aliases like
+  // `ApiResult<T>` by checking their declaration's body.
   if (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) {
     const retTypeNode = fn.type;
     if (retTypeNode && ts.isTypeReferenceNode(retTypeNode)) {
@@ -548,7 +542,7 @@ export function typeRefFromReturnType(
     }
   }
 
-  // ── TYPE-LEVEL PATH: inferred returns or non-annotated functions ─────────
+  // ── Type-level path: inferred returns or non-annotated functions ─────────
   //
   // Fall through to the resolved return type from the call signature.
   let returnType = checker.getReturnTypeOfSignature(sig);
@@ -561,7 +555,7 @@ export function typeRefFromReturnType(
     returnType = inner;
   }
 
-  // STRUCTURAL path: match the exact DU shape from core/src/index.ts.
+  // Structural path: match the exact DU shape from core/src/index.ts.
   // Fires when the type is a proper union (not an unresolved alias instantiation).
   const structuralValue = structuralResultValueType(returnType, checker, fn);
   if (structuralValue !== undefined) {
@@ -617,13 +611,13 @@ export function extractJsDoc(node: ts.Node): string | undefined {
 // Op-value extraction
 // ============================================================================
 //
-// `createExtractorProgram` moved to `@rhi-zone/fractal-type-ir/from-typescript`
+// `createExtractorProgram` lives in `@rhi-zone/fractal-type-ir/from-typescript`
 // (general-purpose `ts.Program` factory) and is re-exported above.
 
 /**
- * Given an op VALUE expression from source, return the function node it wraps.
+ * Given an op value expression from source, return the function node it wraps.
  * Supports `op(fn, meta)` calls and bare arrow/function expressions. `op` need
- * not resolve — the arrow's own parameter annotation is what we read.
+ * not resolve — only the arrow's own parameter annotation is read.
  */
 export function opFunctionNode(expr: ts.Expression): ts.Node | undefined {
   if (ts.isArrowFunction(expr) || ts.isFunctionExpression(expr)) return expr;

@@ -1,4 +1,4 @@
-// packages/api-tree/src/auth.test.ts — auth adapter contract (./auth.ts)
+// Tests for the auth adapter contract (./auth.ts).
 //
 // Proves the contract's two halves independently of any real provider
 // (no OIDC/JWT involved — see @rhi-zone/fractal-auth-oidc for that):

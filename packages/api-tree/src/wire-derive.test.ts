@@ -1,5 +1,3 @@
-// packages/api-tree/src/wire-derive.test.ts — @rhi-zone/fractal-api-tree
-//
 // Direct, hand-built-input tests for `deriveFieldProfiles` (wire-derive.ts) —
 // see that file's doc comment and
 // docs/design/wire-profiles-and-staged-validation.md's "Implementation trace

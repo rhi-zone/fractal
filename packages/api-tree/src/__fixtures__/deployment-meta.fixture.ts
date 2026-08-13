@@ -1,12 +1,10 @@
-// packages/api-tree/src/__fixtures__/deployment-meta.fixture.ts
-//
 // api-tree has no real deployment of its own (it's the core package), but
 // several of its own tests/fixtures author `meta.mcp`/`meta.http`/etc.
 // contributions to exercise the role-split machinery (op()/api()'s
 // HasRequiredKeys-driven arity, tree.ts's mcpMetaOverride walk, …) against
 // something closer to what a real deployment's tree looks like. Per
 // docs/design/meta-role-split-spec.md §2/§3: projectors never augment
-// core's SharedMeta/LeafMeta/BranchMeta themselves — only a DEPLOYMENT's
+// core's SharedMeta/LeafMeta/BranchMeta themselves — only a deployment's
 // own file does, exactly once. This file is that one file for api-tree's
 // own test suite — the test-suite's stand-in "deployment."
 //

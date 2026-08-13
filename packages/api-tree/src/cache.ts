@@ -1,117 +1,104 @@
-// packages/api-tree/src/cache.ts — @rhi-zone/fractal-api-tree
-//
-// CONTENT-ADDRESSED INCREMENTAL-BUILD CACHE for the extract/codegen pipeline
+// Content-addressed incremental-build cache for the extract/codegen pipeline
 // (build.ts's `buildValidatorModuleSource`, schema-build.ts's
 // `buildSchemaModuleSource`, wired into cli.ts's build/watch/check commands).
-// Replaces cli.ts's prior `isUpToDate` (output mtime > entry mtime) — that
-// check only looked at the ENTRY file's own mtime, ignored every transitive
-// file the extractor actually reads (so editing an imported kernel type
-// never invalidated a generated module), and wasn't content-addressed at all
-// (a `touch`-without-edit falsely invalidated; a revert-to-identical-content
-// falsely stayed "stale" until mtime happened to line up).
+// The cache key is content, not mtime: an entry is a hit only when the entry
+// file's own content and the content of every transitive file the extractor
+// reads are unchanged from the last successful build, and the output file's
+// bytes still match what was last written. A `touch`-without-edit resolves
+// to a hit; a revert to identical content resolves to a hit regardless of
+// mtime.
 //
-// v3 (docs/design/ir-keyed-cache-spec.md): the cache unit is now a LEAF's
+// v3 (docs/design/ir-keyed-cache-spec.md): the cache unit is a LEAF's
 // type-IR fingerprint, not a file. Everything below this point (file-closure
 // hashing, mtime+size tiering, `reachability.ts`'s per-entry closures) is
-// Tier 1 — a cheap "could anything have changed" file-content gate, kept
-// exactly as-is — demoted from "the cache key" to "the pre-filter before
-// Tier 2's leaf-level fingerprint diff", which lives in the "Tier 2
-// primitives" section further down this file plus build.ts's/
-// schema-build.ts's incremental build orchestration. Read that spec before
-// changing either tier.
+// Tier 1 — a cheap "could anything have changed" file-content gate. Tier 2
+// (the "Tier 2 primitives" section further down this file, plus build.ts's/
+// schema-build.ts's incremental build orchestration) narrows a Tier-1 miss
+// down to which leaves actually changed. Read that spec before changing
+// either tier.
 //
 // ============================================================================
-// Key-granularity decision — SUPERSEDED 2026-08-02, see reachability.ts.
+// Cache key granularity
 // ============================================================================
 //
 // The precise cache key for one entry file is "this entry file's content +
-// every source file its extraction actually reads, transitively". The
-// PRECISE way to get that list is a fresh single-root `ts.Program` over just
-// that entry — `program.getSourceFiles()` on a single-root Program IS
-// exactly that entry's transitive closure, no extra tracking needed.
+// every source file its extraction actually reads, transitively". For a
+// fresh single-root `ts.Program` built over just that entry,
+// `program.getSourceFiles()` IS exactly that closure, with no extra
+// tracking needed — this is the path the CLI's single-entry `build`/`check`/
+// `watch` commands use, each with its own fresh Program.
 //
-// A batch caller (the sibling codebase's `codegen-fractal-validators.ts`) builds ONE
-// shared multi-root Program across many entries specifically to avoid
-// paying a fresh Program's multi-GB cost per entry (see build.ts's
+// A batch caller (the sibling codebase's `codegen-fractal-validators.ts`) instead builds
+// ONE shared multi-root Program across many entries, to avoid paying a
+// fresh Program's multi-GB cost per entry (see build.ts's
 // `buildValidatorModuleSource` doc comment for the measured before/after).
-// The PRIOR design here hashed `program.getSourceFiles()` unchanged for
-// whatever Program the caller passed — precise for the single-entry path
-// (CLI `build`/`check`/`watch`, none of which share a Program), but for a
-// batch caller passing a shared multi-root Program, that file set is the
-// whole BATCH's union closure applied identically to every entry: touching
-// one slice's source invalidated all 34 tracked artifacts (17 slices ×
-// validators+schemas) even though most entries never reach the touched
-// file. That was a deliberate, documented interim tradeoff — see this
-// file's git history for the original doc block — accepted because
-// `writeCacheMetadata`'s cost wasn't the bottleneck at the time; 711dfbb4's
-// warm-check tiering fixed the actually-measured warm-path cost (stat
-// before content-hash) but left this coarse invalidation granularity in
-// place.
+// `program.getSourceFiles()` on that shared Program is the whole batch's
+// union closure, not any one entry's own closure — recording it unfiltered
+// against every entry means touching one slice's source invalidates every
+// tracked artifact in the batch, not just the entries that actually reach
+// the touched file.
 //
-// RESOLVED: `reachability.ts`'s `computeEntryClosures` does the per-entry
-// module-graph walk that decision's option "(b)" named and deferred —
-// starting from `ts.SourceFile.imports` (which TypeScript's own parser
-// already populates per file, so no hand-rolled import-statement AST walker
-// is needed) and `ts.resolveModuleName` against a shared
-// `ts.ModuleResolutionCache`, memoized once across the whole batch so
-// computing every entry's closure costs O(files in the union), not
-// O(entries × files). `writeCacheMetadata` below now accepts an optional
-// `reachable` file-path set; when given, only files in that set are hashed
-// and recorded, instead of every file `program.getSourceFiles()` returns.
-// Omitting `reachable` keeps the old (single-entry-precise,
-// batch-union-coarse) behavior — the CLI's single-entry callers don't need
-// to change, since for a fresh single-root Program the two are identical
-// anyway.
+// `reachability.ts`'s `computeEntryClosures` computes each entry's own
+// closure against a shared Program directly: a per-entry module-graph walk
+// starting from `ts.SourceFile.imports` (already populated by TypeScript's
+// own parser, so no hand-rolled import-statement AST walker is needed) and
+// `ts.resolveModuleName` against a shared `ts.ModuleResolutionCache`,
+// memoized once across the whole batch so computing every entry's closure
+// costs O(files in the union), not O(entries × files). `writeCacheMetadata`
+// below accepts an optional `reachable` file-path set; when given, only
+// files in that set are hashed and recorded, giving a shared-Program batch
+// caller the same per-entry precision a fresh single-root Program gets for
+// free. Omitting `reachable` records the whole Program's file set — for a
+// fresh single-root Program (the CLI's single-entry callers) that's already
+// identical to the precise closure, so those callers have no need to pass it.
 //
 // One correctness note this key shape depends on: a file's identity is its
-// resolved path. Adding a NEW file to an entry's closure (a fresh import)
+// resolved path. Adding a new file to an entry's closure (a fresh import)
 // changes the file that added the import (its content changed), which is
-// already tracked — so the new file's absence from `files.length` before
-// isn't a blind spot: the edit that introduced it always shows up as a
-// changed-content hash on some file already in (or about to reenter) the
-// closure. The only thing this key CANNOT detect is a change to something
+// already tracked — so the new file's absence from the recorded file set
+// before isn't a blind spot: the edit that introduced it always shows up as
+// a changed-content hash on some file already in (or about to reenter) the
+// closure. The only thing this key can't detect is a change to something
 // outside file content entirely (compiler options embedded in tsconfig.json
-// resolution, environment) — out of scope here; `tsVersion`/`typeIrVersion`
-// below cover the toolchain half of that, which is what the task asked for.
+// resolution, environment) — `tsVersion`/`typeIrVersion` below cover the
+// toolchain half of that; the rest is out of scope here.
 //
 // ============================================================================
-// Warm-check cost (measured, resolved) — READ THIS before changing how
-// `checkCache` re-validates the recorded closure.
+// Warm-check cost — read this before changing how `checkCache` re-validates
+// the recorded closure.
 // ============================================================================
 //
 // `checkCache` never builds a `ts.Program` — it only ever re-reads the file
-// list `writeCacheMetadata` recorded last time. But for a caller that shares
-// one Program across many entries (the sibling codebase's batch codegen script — see the
-// key-granularity decision above), that recorded list is the WHOLE shared
-// closure, duplicated per entry: 17 slices × ~4,548 files each (measured
-// against this monorepo's `apps/web` checkout, 2026-08-02) is 77,316
-// tracked-file entries for the validator artifacts alone, another 77,316 for
-// the schema artifacts. Reading and sha256-hashing the full CONTENT of every
-// one of those on every warm run measured at ~52ms per 4,548-file entry ×
-// 34 entries ≈ 1.5-1.8s wall time — content-addressing inverted at a smaller
-// scale than a fresh Program build, but the same shape of bug: paying near
-// the cost of the expensive thing to decide the expensive thing can be
-// skipped.
+// list `writeCacheMetadata` recorded last time. For a caller that shares one
+// Program across many entries (the sibling codebase's batch codegen script — see the
+// cache-key-granularity section above), that recorded list is the whole
+// shared closure, duplicated per entry: 17 slices × ~4,548 files each
+// (measured against this monorepo's `apps/web` checkout, 2026-08-02) is
+// 77,316 tracked-file entries for the validator artifacts alone, another
+// 77,316 for the schema artifacts. Reading and sha256-hashing the full
+// content of every one of those on every warm run measured at ~52ms per
+// 4,548-file entry × 34 entries ≈ 1.5-1.8s wall time — most of that cost
+// spent deciding that nothing changed.
 //
-// FIX: tier the check. `writeCacheMetadata` now records each file's `size` +
-// `mtimeMs` alongside its content hash. `checkCache` first compares the
-// current `fs.statSync` size/mtime against the recorded pair — a `stat`, no
-// file content read at all — and only falls back to reading + hashing a
-// file's content when that cheap pair doesn't match (a real edit, OR an
-// unrelated touch/checkout that changed mtime without changing content; the
-// content-hash fallback tells the two apart so a `touch`-without-edit still
-// resolves to a hit, matching this cache's existing touch-tolerance
-// guarantee). Measured against the same fixture set: stat-only re-validation
-// of one 4,548-file entry drops from ~52ms to ~5ms — roughly 10x — so a
-// fully warm 34-entry run's file-re-validation cost drops from ~1.5-1.8s to
-// well under 200ms. mtime+size (not mtime alone, not size alone) is the
-// standard cheap-invalidation-signal pair (make/Bazel/Nix all use it) because
-// either one alone under-detects real edits that happen to preserve the
-// other (a same-size edit; a rewrite that lands on the same mtime tick under
-// coarse filesystem timestamp resolution) — a false stat-level MISS just
-// costs one content hash (still correct, just not free), so there's no
-// correctness reason to trust either signal alone; querying both from the
-// same single `fs.statSync` call costs nothing extra.
+// The check is tiered to avoid that cost. `writeCacheMetadata` records each
+// file's `size` + `mtimeMs` alongside its content hash. `checkCache` first
+// compares the current `fs.statSync` size/mtime against the recorded pair —
+// a `stat`, no file content read at all — and only falls back to reading +
+// hashing a file's content when that cheap pair doesn't match (a real edit,
+// or an unrelated touch/checkout that changed mtime without changing
+// content; the content-hash fallback tells the two apart so a
+// `touch`-without-edit still resolves to a hit, matching this cache's
+// touch-tolerance guarantee). Measured against the same fixture set:
+// stat-only re-validation of one 4,548-file entry drops from ~52ms to
+// ~5ms — roughly 10x — so a fully warm 34-entry run's file-re-validation
+// cost drops from ~1.5-1.8s to well under 200ms. mtime+size (not mtime
+// alone, not size alone) is the standard cheap-invalidation-signal pair
+// (make/Bazel/Nix all use it): either one alone under-detects real edits
+// that happen to preserve the other (a same-size edit; a rewrite that lands
+// on the same mtime tick under coarse filesystem timestamp resolution) — a
+// false stat-level miss just costs one content hash (still correct, just
+// not free), so there's no correctness reason to trust either signal alone;
+// querying both from the same single `fs.statSync` call costs nothing extra.
 //
 // ============================================================================
 
@@ -326,17 +313,17 @@ function readMeta(outFile: string, opts?: CacheLocationOptions): CacheFileShape 
   }
 }
 
-/** True when `meta` is a v3 record whose TOOLCHAIN identity (format version,
+/** True when `meta` is a v3 record whose toolchain identity (format version,
  * entry file, TypeScript version, fractal-type-ir version) matches the
  * current run — the bar `readCarryForwardState` uses to decide whether
- * `meta`'s per-leaf data is even worth comparing fingerprints against.
- * Deliberately does NOT check `outputHash`/tracked-file state — a leaf's
- * carry-forward safety comes from FINGERPRINT equality (see
+ * `meta`'s per-leaf data is even worth comparing fingerprints against. Checks
+ * only the toolchain signals, not `outputHash`/tracked-file state: a leaf's
+ * carry-forward safety comes from fingerprint equality alone (see
  * `compileEntryFragment`'s doc comment, type-ir/compile.ts), not from why an
- * outer cache tier hit or missed; an output file hand-edited outside the
+ * outer cache tier hit or missed, so an output file hand-edited outside the
  * pipeline, or one tracked source file changed, doesn't invalidate every
- * OTHER leaf's still-fingerprint-matching carried-forward artifact. A
- * toolchain change, in contrast, can change what ANY leaf's codegen produces
+ * other leaf's still-fingerprint-matching carried-forward artifact. A
+ * toolchain change, in contrast, can change what any leaf's codegen produces
  * (a `fractal-type-ir` upgrade can change `compile.ts`'s own templates), so
  * that specifically disqualifies every leaf's carry-forward, not just the
  * ones whose fingerprint changed. */
@@ -580,15 +567,15 @@ export function computeDefNamesFingerprint(
  * TRUSTWORTHY to diff against (no cache file, unreadable, wrong format
  * version, or a toolchain signal changed — see `toolchainMatches`).
  *
- * Deliberately independent of `checkCache`'s Tier-1 hit/miss outcome (and of
- * `outputHash`): a leaf's carry-forward safety is proven by FINGERPRINT
+ * Independent of `checkCache`'s Tier-1 hit/miss outcome (and of
+ * `outputHash`): a leaf's carry-forward safety is proven by fingerprint
  * equality alone (see `compileEntryFragment`'s doc comment, type-ir/
- * compile.ts) — a Tier-1 miss (some tracked file's content changed) or an
+ * compile.ts). A Tier-1 miss (some tracked file's content changed) or an
  * `outputHash` mismatch (the output file was hand-edited) says nothing about
- * whether any INDIVIDUAL leaf's resolved type actually moved, so neither
- * should disqualify carry-forward on its own. Only a toolchain change
+ * whether any individual leaf's resolved type actually moved, so neither
+ * disqualifies carry-forward on its own. Only a toolchain change
  * (`toolchainMatches`) disqualifies every leaf at once, because that can
- * change what ANY leaf's codegen produces, not just the ones whose
+ * change what any leaf's codegen produces, not just the ones whose
  * fingerprint changed.
  */
 export function readCarryForwardState(

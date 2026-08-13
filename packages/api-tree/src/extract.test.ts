@@ -1,4 +1,4 @@
-// packages/api-tree/src/extract.test.ts — build-time extractor tests
+// Build-time extractor tests.
 //
 // Covers the four contracts of the slice:
 //   1. object type (primitive + optional + array + nested) → correct schema
@@ -251,11 +251,11 @@ describe("walkTree recognizes trees returned from an exported factory function",
 // ============================================================================
 // 3a-default-export. A bare `export default api(...)` — the tree expression
 // exported directly, no function wrapper, no variable binding. Parses as
-// ts.ExportAssignment, a shape forEachTreeCandidate didn't recognize before
-// this regression fix (matched neither the export-const nor the
-// export-function branch, so the candidate was silently skipped — no error,
-// leaves just absent everywhere). treeId falls back to "default", same as
-// the anonymous `export default function(...)` factory case.
+// ts.ExportAssignment, a shape distinct from both the export-const and
+// export-function branches, so forEachTreeCandidate matches it via its own
+// explicit case — an unmatched candidate would be silently skipped (no
+// error, leaves just absent everywhere). treeId falls back to "default",
+// same as the anonymous `export default function(...)` factory case.
 // ============================================================================
 
 describe("walkTree recognizes a bare `export default api(...)` (no function wrapper, no binding)", () => {
@@ -297,14 +297,15 @@ describe("walkTree recognizes a bare `export default api(...)` (no function wrap
 });
 
 // ============================================================================
-// 3a-collision. Two trees in ONE file sharing a relative leaf path
+// 3a-collision. Two trees in one file sharing a relative leaf path
 // ("list") — the same-file collision the treeId prefix (tree.ts's
-// `forEachTreeCandidate`/`walkTree`) exists to fix. Regression coverage for
-// the bug: extractRouteTypeRefs/extractRouteSchemas used to key both
-// trees' "list" leaf as bare "list" in the SAME flat output map, so the
-// second tree silently overwrote the first — collectUnvalidatedLeaves
-// (build.ts) can't catch this class of bug (it only detects an undefined
-// lookup, not a leaf resolved against the WRONG tree's validator/schema).
+// `forEachTreeCandidate`/`walkTree`) exists to fix. Regression coverage:
+// without the treeId prefix, extractRouteTypeRefs/extractRouteSchemas would
+// key both trees' "list" leaf as bare "list" in one flat output map, so the
+// second tree would silently overwrite the first — a class of bug
+// collectUnvalidatedLeaves (build.ts) cannot catch, since it only detects an
+// undefined lookup, not a leaf resolved against the wrong tree's
+// validator/schema.
 // ============================================================================
 
 describe("two trees in one file with a colliding leaf path — treeId disambiguates them", () => {
@@ -367,31 +368,30 @@ describe("meta.mcp overrides reflected in the reconstructed name", () => {
       properties: { q: { type: "string" } },
       required: ["q"],
     });
-    // And the real runtime projection resolves the SAME derived schema under
-    // the SAME name — this is the divergence the two code paths must not have.
+    // The real runtime projection resolves the same derived schema under the
+    // same name — the two code paths must not diverge here.
     expect(byName["custom_search"]?.inputSchema).toEqual(schemas["custom_search"]!.inputSchema);
   });
 
-  // `api()`'s `opts.meta` parameter is now a `const` type parameter (`M`,
+  // `api()`'s `opts.meta` parameter is a `const` type parameter (`M`,
   // node.ts), matching how `children` (`C`) and `fallback` (`const F`)
-  // already preserve literal types. `{ mcp: { segment: "products" } }`
-  // therefore survives as a literal into api()'s own return type, so
-  // tree.ts's checker-driven walk (`mcpMetaOverride("segment", …)`) reads it
-  // directly off the resolved TYPE — the same mechanism that already reads a
-  // leaf's `meta.mcp.name`. The default underscore-joined name
-  // ("mcpOverrides_catalog_list") is NOT used; the override
+  // preserve literal types. `{ mcp: { segment: "products" } }` therefore
+  // survives as a literal into api()'s own return type, so tree.ts's
+  // checker-driven walk (`mcpMetaOverride("segment", …)`) reads it directly
+  // off the resolved type — the same mechanism used for a leaf's
+  // `meta.mcp.name`. The default underscore-joined name
+  // ("mcpOverrides_catalog_list") is unused; the override
   // ("mcpOverrides_products_list") replaces this branch's own contribution to
-  // the prefix. This matches mcp-api-projector's `project.ts`, which already
-  // honored `meta.mcp.segment` at runtime — the two code paths no longer
-  // diverge.
+  // the prefix, matching mcp-api-projector's `project.ts`, which honors
+  // `meta.mcp.segment` at runtime — the two code paths agree.
   it("a branch's meta.mcp.segment overrides this child's contribution to the reconstructed name — schemas keys under the override, not the default join", () => {
     expect(schemas["mcpOverrides_catalog_list"]).toBeUndefined();
     expect(schemas["mcpOverrides_products_list"]?.inputSchema).toEqual({
       type: "object",
       properties: { limit: { type: "number" } },
     });
-    // And the real runtime projection resolves the SAME derived schema under
-    // the SAME name — this is the divergence the two code paths must not have.
+    // The real runtime projection resolves the same derived schema under the
+    // same name — the two code paths must not diverge here.
     expect(byName["mcpOverrides_products_list"]?.inputSchema).toEqual(
       schemas["mcpOverrides_products_list"]!.inputSchema,
     );
@@ -478,11 +478,11 @@ describe("outputSchema derivation", () => {
     });
   });
 
-  // Genuine 2-member union that is NOT a Result — must NOT be false-positived.
-  // No "Result" identifier in the annotation → syntax path skips it.
-  // The union has no ok/value/error DU shape → structural path also skips it.
-  // It IS, however, a discriminated union on `kind` — it now extracts fully
-  // rather than punting (discriminated-union detection, see extract.ts).
+  // A genuine 2-member union that isn't a Result: no "Result" identifier in
+  // the annotation, so the syntax path skips it; no ok/value/error DU shape,
+  // so the structural path skips it too. It is a discriminated union on
+  // `kind`, so it extracts fully as its own union rather than punting
+  // (discriminated-union detection, see extract.ts).
   it("a different 2-member union with a different discriminant does not unwrap as Result — extracts as its own discriminated union instead", () => {
     const output = schemas["differentUnion_ping"]?.outputSchema;
     expect(output).toEqual({
@@ -617,7 +617,7 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
   });
 
   // Regression: a TS builtin/global utility type (`Record<K,V>`) used
-  // directly as a handler's whole parameter type IS nameable
+  // directly as a handler's whole parameter type is nameable
   // (`type.aliasSymbol.name === "Record"`, same as `BookQuery`/`BookIdParam`
   // above) but its declaration lives in TypeScript's own bundled
   // `lib.es5.d.ts`, not a real project file — there is no module at that
@@ -636,15 +636,14 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
 
   // Regression: a conditional/mapped-type utility alias (mirroring valibot's
   // `InferOutput<TSchema>`) used directly as a handler's parameter type
-  // resolves with `type.aliasSymbol` UNDEFINED at the reference site, falling
+  // resolves with `type.aliasSymbol` undefined at the reference site, falling
   // to `type.getSymbol()` — TypeScript's own synthesized `"__type"`
   // placeholder for the anonymous mapped-type result, declared via a
-  // `ts.MappedTypeNode`, not a `ts.TypeLiteralNode`. The OLD
-  // `!ts.isTypeLiteralNode(decl)` guard missed this shape and treated
-  // `"__type"` as a real, importable name — found migrating the sibling codebase's
-  // `triggers` slice, where it emitted an unusable `import type { __type }
-  // from ".../valibot/dist/index.d.mts"` (valibot never exports `__type`).
-  // `typeProvenanceOf` must exclude ANY symbol named `"__type"`, regardless
+  // `ts.MappedTypeNode` rather than a `ts.TypeLiteralNode`. A guard narrowed
+  // to `ts.TypeLiteralNode` treats `"__type"` as a real, importable name here
+  // and emits an unresolvable `import type { __type } from
+  // ".../valibot/dist/index.d.mts"` (valibot never exports `__type`).
+  // `typeProvenanceOf` must exclude any symbol named `"__type"`, regardless
   // of the declaring AST node kind.
   it("typeRefFromFunctionNode carries NO typeName/declarationFile for a mapped-type-utility (InferOutput-shaped) parameter type", () => {
     const mappedFn = findExportedFn(source, "mappedUtilityNamedParamFn");
@@ -972,15 +971,14 @@ describe("typeRefFromType gap fixes", () => {
     expect((self.shape as { kind: "ref"; target: string }).target).toBe("DirectRecursive");
   });
 
-  // Regression: Set<T>/Map<K,T>'s OWN interface methods (`forEach(callback:
+  // Regression: Set<T>/Map<K,T>'s own interface methods (`forEach(callback:
   // (value: T, value2: T, set: Set<T>) => void)`, `set(key, value): Map<K,
-  // V>`, …) are themselves self-referential. Before Set/Map got the same
-  // early elem-extraction treatment as Array/Tuple, recursing through one of
-  // these containers fell through to the generic object-properties walk,
-  // which re-entered the container's own (unnamed, unregistered) type via
-  // those methods and emitted a dangling `ref("Set")`/`ref("Map")` — pointing
-  // at the CONTAINER, not the real named type the recursion is actually
-  // through.
+  // V>`, …) are themselves self-referential, which is why Set/Map get the
+  // same early elem-extraction treatment as Array/Tuple. Recursing through
+  // the generic object-properties walk instead re-enters the container's own
+  // (unnamed, unregistered) type via those methods and emits a dangling
+  // `ref("Set")`/`ref("Map")` pointing at the container rather than the real
+  // named type the recursion is actually through.
   it("does not emit a dangling ref('Set') on a Set-mediated recursive type — refs the named type instead", () => {
     const ref = typeRefFromType(typeOf("SetRecursiveType"), checker, source);
     expect(ref.shape.kind).toBe("object");

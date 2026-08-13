@@ -1,4 +1,4 @@
-// packages/api-tree/src/cache.test.ts — content-addressed build cache tests
+// Content-addressed build cache tests.
 //
 // Covers checkCache/writeCacheMetadata (cache.ts) via apply-validation-build.ts's
 // `writeWireApplyValidationModuleCached`/schema-build.ts's `writeSchemaModuleCached`
@@ -7,16 +7,15 @@
 // against genuine multi-file extraction, not a synthetic closure list).
 //
 // FIXTURE wraps tree.fixture.ts in a single 2-arg `applyValidation` call site
-// (__fixtures__/apply-validation-tree.fixture.ts) — phase D deleted the
-// 2-arg-specific `writeApplyValidationModuleCached` this file used as its
-// cache.ts exercise vehicle (docs/design/wire-profiles-and-staged-validation.md);
-// every `applyValidation` call site, 2-arg included, now compiles through the
-// wire-profile build path (an omitted protocol resolves to `"identity"`), so
-// `writeWireApplyValidationModuleCached` against the SAME fixture is the
-// like-for-like replacement. `writeWireApplyValidationModuleCached` writes the
-// SAME cache-metadata contract (cache.ts tracks the whole `ts.Program`'s file
-// set by default), so touching DEP_FIXTURE — still reachable transitively
-// through tree.fixture.ts, just one hop further from FIXTURE now — still
+// (__fixtures__/apply-validation-tree.fixture.ts). Every `applyValidation`
+// call site, 2-arg included, compiles through the wire-profile build path (an
+// omitted protocol resolves to `"identity"`, docs/design/wire-profiles-and-staged-validation.md),
+// so `writeWireApplyValidationModuleCached` against this fixture exercises
+// cache.ts's contract the same way `writeApplyValidationModuleCached` did
+// before the wire-profile path existed. `writeWireApplyValidationModuleCached`
+// writes the same cache-metadata contract (cache.ts tracks the whole
+// `ts.Program`'s file set by default), so touching DEP_FIXTURE — reachable
+// transitively through tree.fixture.ts, one hop further from FIXTURE — still
 // invalidates.
 
 import { describe, expect, it, beforeEach, afterEach, spyOn } from "bun:test";
@@ -232,12 +231,12 @@ describe("cache.ts — content-addressed incremental build cache", () => {
       expect(checkCache(FIXTURE, treeOut).hit).toBe(true);
       expect(checkCache(SHARING_FIXTURE, sharingOut).hit).toBe(true);
 
-      // Touch DEP_FIXTURE — reachable from FIXTURE (tree.fixture.ts) but NOT
+      // Touch DEP_FIXTURE — reachable from FIXTURE (tree.fixture.ts) but not
       // from SHARING_FIXTURE (sharing.fixture.ts never imports it, see
-      // reachability.test.ts). With the OLD coarse behavior (recording the
-      // whole shared Program's file set for every entry), this touch would
-      // invalidate BOTH entries; with per-entry closures, only the entry
-      // that actually reaches the touched file invalidates.
+      // reachability.test.ts). Recording the whole shared Program's file set
+      // for every entry (the behavior when `reachable` is omitted, see below)
+      // would invalidate both entries on this touch; per-entry closures
+      // invalidate only the entry that actually reaches the touched file.
       const original = fs.readFileSync(DEP_FIXTURE, "utf8");
       try {
         fs.writeFileSync(DEP_FIXTURE, `${original}\n// cache-test perturbation\n`);

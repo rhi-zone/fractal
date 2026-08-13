@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/typeref.fixture.ts
-//
 // Standalone functions used to exercise typeRefFromType / typeRefFromFunctionNode
 // / typeRefFromReturnType directly (not through the tree walker).
 
@@ -56,7 +54,7 @@ export type DirectRecursive = { self: DirectRecursive };
  * (`forEach(callback: (value: T, value2: T, set: Set<T>) => void)`) are
  * themselves self-referential, so this exercises the same
  * container-mediated-recursion path as `RecursiveType` above, but through a
- * generic container that ISN'T special-cased by `checker.isArrayType`. */
+ * generic container not special-cased by `checker.isArrayType`. */
 export type SetRecursiveType = { name: string; children: Set<SetRecursiveType> };
 
 /** Recursive via a `Map<K, T>` value of self — same rationale as
@@ -117,7 +115,7 @@ export type BoundMethodType = (this: MethodOwner, amount: number) => void;
 // signatures: `((A) => X) & ((B) => Y)`. The extractor mirrors that with
 // `types.intersection([types.function(...), types.function(...)])`. The
 // implementation signature (the final, widest signature that backs the
-// overloads) is never visible to callers and must NOT appear in the
+// overloads) is never visible to callers and does not appear in the
 // extracted set — `checker.getSignaturesOfType` already excludes it.
 
 /** Overloaded free function: different param + return type per overload. */
@@ -215,7 +213,7 @@ export type PromotedBrandField = { id: UserIdUuid; contact: EmailBrand };
 
 /** A brand tag matching a known kind name, but over `number` instead of
  * `string` — every current promotable kind (uuid/uri/email) subtypes
- * `string`, so this must NOT promote; it stays `types.number` with
+ * `string`, so this does not promote; it stays `types.number` with
  * `meta.brand` set, same as any other unrecognized-base brand. */
 export type NumberBrandedUuid = number & { readonly __brand: "uuid" };
 
@@ -263,7 +261,7 @@ export type MixedUnion = string | number;
 export type LiteralMixedUnion = "a" | 1 | true;
 
 /** A boolean parameter — TS represents `boolean` as `true | false` internally;
- * must NOT be extracted as `enum(["true", "false"])`. */
+ * must not be extracted as `enum(["true", "false"])`. */
 export type BooleanParam = boolean;
 
 // Standalone functions, one per fixture type above, so tests can drive them
@@ -287,7 +285,7 @@ export type Square = { type: "square"; side: number };
 /** A union of object types sharing a common literal-typed discriminator field. */
 export type ShapeUnion = Circle | Square;
 
-/** A union of object types with NO shared literal field — no discriminator. */
+/** A union of object types with no shared literal field — no discriminator. */
 export type NonDiscriminated = { a: string } | { b: number };
 
 export const shapeUnionFn = (_shape: ShapeUnion): void => {};
@@ -322,18 +320,16 @@ export const namedInterfaceParamFn = (_input: BookIdParam): void => {};
 export const builtinNamedParamFn = (_input: Record<string, number>): void => {};
 
 /**
- * A conditional/mapped-type utility ALIAS (`MyInferOutput<T>`, mirroring
+ * A conditional/mapped-type utility alias (`MyInferOutput<T>`, mirroring
  * valibot's own `InferOutput<TSchema>`) applied to a named interface, then
  * itself aliased and used directly as a handler's parameter type. At the
  * reference site, `type.aliasSymbol` resolves to `undefined` (TS does not
  * preserve the `MappedResult` alias through the mapped-type instantiation),
  * falling to `type.getSymbol()` — TypeScript's own synthesized `"__type"`
  * placeholder name for the anonymous mapped-type result, whose declaration
- * is a `ts.MappedTypeNode`, NOT a `ts.TypeLiteralNode`. Regression fixture
- * for the exact shape that broke `typeProvenanceOf`'s old
- * `!ts.isTypeLiteralNode(decl)` guard (found migrating the sibling codebase's `triggers`
- * slice) — `extract.ts` must recognize `symbol.name === "__type"` generally,
- * not just the `TypeLiteralNode` case, and carry NO
+ * is a `ts.MappedTypeNode`, not a `ts.TypeLiteralNode`. `extract.ts`'s
+ * `typeProvenanceOf` must recognize `symbol.name === "__type"` generally,
+ * not just the `TypeLiteralNode` case, and carry no
  * `meta.typeName`/`meta.declarationFile`.
  */
 interface MappedUtilitySchema<TEntries> {

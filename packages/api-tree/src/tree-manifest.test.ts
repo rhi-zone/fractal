@@ -1,4 +1,4 @@
-// packages/api-tree/src/tree-manifest.test.ts — TreeManifest<N> type-level checks
+// Tests for TreeManifest<N>'s type-level checks.
 //
 // TreeManifest<N> is a pure type (no runtime constructor — flattening a
 // tree TYPE into a path map is entirely a compile-time computation; a

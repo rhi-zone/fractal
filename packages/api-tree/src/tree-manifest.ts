@@ -1,5 +1,3 @@
-// packages/api-tree/src/tree-manifest.ts — @rhi-zone/fractal-api-tree
-//
 // TreeManifest<N> — flattens a Node tree into a map from dot-separated path
 // to that leaf's `{ input; output }` contract. Distinct from `TypedClient<N>`
 // (typed-client.ts), which preserves the tree's nested shape as a callable
@@ -63,15 +61,15 @@ type UnionToIntersection<U> = (U extends unknown ? (u: U) => void : never) exten
 
 /**
  * Force eager evaluation of a mapped/intersection type into a single plain
- * object type. Without this, `TreeManifest`'s recursive union-then-intersect
- * construction leaves behind an unresolved intersection of mapped types that
- * is structurally equal to the flat object it represents (any one leaf's
+ * object type. `TreeManifest`'s recursive union-then-intersect construction
+ * otherwise leaves behind an unresolved intersection of mapped types that is
+ * structurally equal to the flat object it represents (any one leaf's
  * property, e.g. `Manifest["books.list"]["input"]`, checks out fine on its
  * own) but that structural-equality checkers comparing the WHOLE object in
  * one shot (`expectTypeOf(...).toEqualTypeOf<...>()`) see as a different
- * shape than a literal object type with the same properties — until it's
- * been run through a key-remapping identity like this one, which forces TS
- * to resolve the intersection down to concrete properties before comparison.
+ * shape than a literal object type with the same properties. Running it
+ * through this key-remapping identity forces TS to resolve the intersection
+ * down to concrete properties before comparison.
  */
 type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
 

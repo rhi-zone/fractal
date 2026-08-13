@@ -1,12 +1,10 @@
-// packages/api-tree/src/reachability.ts — @rhi-zone/fractal-api-tree
-//
-// PER-ENTRY MODULE-GRAPH REACHABILITY over an already-built `ts.Program` —
+// Per-entry module-graph reachability over an already-built `ts.Program` —
 // the "(b)" option cache.ts's key-granularity decision doc named and
 // deferred: "walking each root's resolvedModules/import graph by hand to
 // derive per-entry reachability from the shared Program's already-parsed
-// files". Exists so a caller sharing ONE multi-root `ts.Program` across many
+// files". Exists so a caller sharing one multi-root `ts.Program` across many
 // entries (the sibling codebase's `codegen-fractal-validators.ts` — 17 slices, one
-// `ts.Program`) can still record each entry's OWN precise transitive-import
+// `ts.Program`) can still record each entry's own precise transitive-import
 // closure as its cache key, instead of the whole shared Program's file set
 // applied identically to every entry (cache.ts's previous coarse fallback —
 // see git history on that file's key-granularity doc block for the
@@ -19,7 +17,7 @@
 // A `ts.Program` doesn't expose a public per-file "what does this file
 // import" API (no public `resolvedModules` on `ts.SourceFile` in this
 // TypeScript version — that map lives inside the Program's own closure
-// state). What IS available, and has been a stable (if formally internal)
+// state). What is available, and has been a stable (if formally internal)
 // field across many TypeScript versions, is `ts.SourceFile.imports`: a
 // `readonly StringLiteralLike[]` the parser itself populates with every
 // module-specifier string literal it saw while parsing the file — `import`
@@ -42,9 +40,9 @@
 // is simply skipped — it can't be a source-file dependency edge if there's
 // no source file to point at.
 //
-// The per-file "direct dependencies" result is memoized once, GLOBALLY
+// The per-file "direct dependencies" result is memoized once, globally
 // across every entry's walk (not per-entry) — the module graph is walked
-// ONCE regardless of how many entries share it, and each entry's closure is
+// once regardless of how many entries share it, and each entry's closure is
 // just a BFS over that shared, memoized edge set starting from a different
 // root. This is what makes computing closures for all N entries cost O(files
 // in the union closure), not O(N × files) — the same sharing rationale
@@ -59,17 +57,17 @@
 // type`/`export ... from`/dynamic `import()`/`require()`, at any depth,
 // including declaration (`.d.ts`) files and files inside `node_modules` —
 // the same files a fresh single-root `ts.Program` over that one entry would
-// include in `getSourceFiles()`. A file reachable from MULTIPLE entries
+// include in `getSourceFiles()`. A file reachable from multiple entries
 // (shared kernel/support types, a common utility module) appears in every
 // one of those entries' closures — invalidating every dependent entry when
 // it changes, and no others, which is the whole point of computing this
 // per-entry rather than once for the whole batch.
 //
 // Not captured: triple-slash reference directives (`/// <reference path=…
-// />` / `<reference types=… />`) and ambient ("global") ONLY when a file
-// reaches them WITHOUT syntactic sight of any of the traversal edges above
-// — e.g. relying purely on tsconfig `types`/`include` to pull in an ambient
-// `.d.ts` that nothing ever imports. None of this monorepo's source uses
+// />` / `<reference types=… />`) and ambient ("global") declarations only
+// when a file reaches them without syntactic sight of any of the traversal
+// edges above — e.g. relying purely on tsconfig `types`/`include` to pull in
+// an ambient `.d.ts` that nothing ever imports. None of this monorepo's source uses
 // triple-slash directives (verified: no `/// <reference` occurrences under
 // `packages/`), and every ambient ".d.ts" the sibling codebase's codegen pipeline
 // depends on is reached through a real import somewhere in the closure — so
@@ -126,11 +124,11 @@ function directDependenciesOf(
  * entry file itself plus every source file reachable from it via
  * import/export/dynamic-import/require, transitively) from `program` —
  * whether `program` is a fresh single-root Program (in which case the
- * closure IS `program.getSourceFiles()`, computed here just as cheaply) or,
+ * closure is `program.getSourceFiles()`, computed here just as cheaply) or,
  * the case this function exists for, one shared multi-root Program spanning
  * many entries.
  *
- * Returns a map from each entry's RESOLVED absolute path (`path.resolve`,
+ * Returns a map from each entry's resolved absolute path (`path.resolve`,
  * matching cache.ts's own `entryFile` normalization convention) to the set
  * of resolved absolute paths in its closure. TypeScript's own bundled
  * `lib.*.d.ts` files are excluded from every closure (mirrors cache.ts's
@@ -138,7 +136,7 @@ function directDependenciesOf(
  * `isTsBuiltinLibFile`'s doc comment) since the toolchain-version signal
  * already covers them as one check, not a per-file one.
  *
- * The module graph is walked ONCE, globally memoized by file path, and
+ * The module graph is walked once, globally memoized by file path, and
  * every entry's closure is a BFS over that shared memo — see this module's
  * doc comment for why that keeps the total cost O(files in the union
  * closure) rather than O(entries × files).

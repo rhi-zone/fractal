@@ -1,5 +1,3 @@
-// packages/api-tree/src/auth.ts — @rhi-zone/fractal-api-tree/auth
-//
 // Auth adapter contract — the stable interface a provider package (e.g.
 // `@rhi-zone/fractal-auth-oidc`) implements, and every projector consumes
 // the SAME way regardless of provider. Two independent adapters, one per
@@ -17,10 +15,10 @@
 //     with no privileged access — a hand-authored extension could do
 //     everything `authExtension` does.
 //
-// Deliberately NOT importing `ClientExtension`/`Fetch` from
-// `http-api-projector`: that package already depends on `api-tree`
-// (dependencies, not devDependencies — see its package.json), so an import
-// the other way would be a package cycle. Instead, `authExtension` and
+// Not importing `ClientExtension`/`Fetch` from `http-api-projector`: that
+// package already depends on `api-tree` (dependencies, not devDependencies —
+// see its package.json), so an import the other way would be a package
+// cycle. Instead, `authExtension` and
 // `authMiddleware` return values whose shape structurally matches
 // `ClientExtension`/`Fetch` (TypeScript's structural typing accepts them at
 // any call site expecting the real type, no cast needed) — the same trick

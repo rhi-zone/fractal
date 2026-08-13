@@ -1,5 +1,3 @@
-// packages/api-tree/src/wire-of-check.test.ts
-//
 // Decision 3 of docs/design/wire-profiles-and-staged-validation.md's
 // implementation-trace addendum (function-form `encodingMap`): a decoder's
 // declared param/return types should type-check against

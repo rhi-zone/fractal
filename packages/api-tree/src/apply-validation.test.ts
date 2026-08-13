@@ -1,4 +1,4 @@
-// packages/api-tree/src/apply-validation.test.ts — applyValidation runtime tests
+// applyValidation runtime tests.
 //
 // Covers the structural walker (both recognized leaf shapes: a direct
 // `handler`, and an `HttpRoute`-style `methods` record whose entries carry
@@ -17,7 +17,7 @@ import { isResultShape } from "./index.ts";
 
 /** A generated-entry stand-in: accepts an object carrying `ok: true`, and
  * narrows it by adding `parsed: true` (so a test can tell the handler saw the
- * PARSED value, not the raw one). */
+ * parsed value, not the raw one). */
 const entry = (): GeneratedEntry => ({
   parse: (value: unknown) =>
     typeof value === "object" && value !== null && (value as { ok?: unknown }).ok === true
@@ -96,10 +96,9 @@ describe("createApplyValidation — keyed application", () => {
     const outA = applyValidation("a", treeA);
     const outB = applyValidation("b", treeB);
     // "wrapped" is verified by handler identity (a covered leaf's handler is a
-    // freshly-built wrapper, never the original function) rather than a public
-    // brand-check API — `isApplyValidationWrapped` (and the sniff sites it
-    // existed to support) is deleted per phase C, since nothing needs to skip
-    // itself in favor of this mechanism anymore.
+    // freshly-built wrapper, never the original function) rather than a
+    // public brand-check API: nothing in this mechanism needs to detect its
+    // own wrapping at runtime, so no such API exists.
     expect(outA.children.list.handler).not.toBe(originalA);
     expect(outB.children.list.handler).toBe(originalB);
   });
@@ -118,7 +117,7 @@ const queryLikeEntry = (): GeneratedEntry => ({
 });
 
 /** An "identity"-shaped entry: `page` must already be a number — a numeric
- * STRING is rejected, matching `identityProfile`'s strict, non-coercing
+ * string is rejected, matching `identityProfile`'s strict, non-coercing
  * posture. */
 const identityLikeEntry = (): GeneratedEntry => ({
   parse: (value: unknown) => {

@@ -1,6 +1,6 @@
-// packages/api-tree/src/context.test.ts — createContext (./context.ts)
+// Tests for createContext (./context.ts).
 //
-// Proves the cross-projector claim: ONE `createContext` call, fed one
+// Proves the cross-projector claim: one `createContext` call, fed one
 // extractor per surface, produces `{ storage, init }` configs that plug
 // directly into `createFetch`'s `PresetOptions.als`, `runCli`'s
 // `CliOpts.als`, and `createMcpServer`'s `CreateMcpServerOptions.als` — with

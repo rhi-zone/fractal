@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/apply-validation-projected.fixture.ts
-//
 // A projected route value declared away from any call site — the "declared in
 // another file" case `apply-validation-cross-file.fixture.ts` passes to
 // `applyValidation`.

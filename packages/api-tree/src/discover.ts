@@ -1,6 +1,4 @@
-// packages/api-tree/src/discover.ts — @rhi-zone/fractal-api-tree
-//
-// AUTODETECTION: a library-level replacement for a hand-maintained
+// Autodetection: a library-level replacement for a hand-maintained
 // per-consumer entry-file list.
 //
 // The pain point this exists to kill: a consumer of `buildValidatorModuleSource`
@@ -15,7 +13,7 @@
 // them are even extracted).
 //
 // The design: recursively scan one or more `roots` for candidate source
-// files (the recursive walk itself IS the implicit `**/*` glob — no
+// files (the recursive walk itself is the implicit `**/*` glob — no
 // separate glob-syntax parser needed), then keep exactly the candidates
 // `hasTreeExport` (tree.ts) says actually export an `api()`/`op()` tree at
 // their top level. A file dropped anywhere under a scanned root is picked
@@ -29,8 +27,8 @@
 //   - `include` force-adds a file regardless of what `hasTreeExport` said —
 //     either a genuine miss (an export shape detection doesn't recognize)
 //     or a hand-pinned entry a consumer wants included on purpose. A
-//     `string` include can reach ANY file (not just one under `roots`) and
-//     THROWS if it doesn't exist — loud, not silent, matching the spirit of
+//     `string` include can reach any file (not just one under `roots`) and
+//     throws if it doesn't exist — loud, not silent, matching the spirit of
 //     `wrapValidators`'s own rewrite: a caller who names a path expects it
 //     to be used, and a typo'd override silently doing nothing is exactly
 //     the failure class both fixes exist to kill. A `RegExp` include can
@@ -38,7 +36,7 @@
 //     `roots` (it re-adds a candidate `exclude` removed, or one
 //     `hasTreeExport` rejected) — it is not a way to reach outside `roots`
 //     entirely, only a literal string can do that.
-//   - `include` is applied AFTER `exclude`, so an explicit include always
+//   - `include` is applied after `exclude`, so an explicit include always
 //     wins over an exclude on the same file — the override is visible in
 //     the caller's own options object, not a silent ordering accident.
 
@@ -49,12 +47,12 @@ import { createExtractorProgram } from "./extract.ts";
 import { hasTreeExport } from "./tree.ts";
 
 /**
- * One matcher against a candidate's absolute path. A `string` is an EXACT
+ * One matcher against a candidate's absolute path. A `string` is an exact
  * literal match — the caller must pass what they mean (an absolute path, or
  * one they intend to resolve against `process.cwd()`, see `findEntryFiles`'s
  * doc); there is no implicit relative-to-`roots` resolution magic. A
  * `RegExp` is tested against the candidate's POSIX-normalized absolute path
- * — this IS the "grep-style pattern" support this module offers, a real
+ * — this is the "grep-style pattern" support this module offers, a real
  * `RegExp` rather than a hand-rolled glob engine (the recursive directory
  * walk already covers the any-depth-wildcard case; a `RegExp` covers
  * everything finer).
@@ -64,7 +62,7 @@ export type PathMatcher = string | RegExp;
 /** Options for `findEntryFiles` — see the module doc above for the overall design. */
 export type FindEntryFilesOptions = {
   /**
-   * One or more directories to scan RECURSIVELY for candidate entry files.
+   * One or more directories to scan recursively for candidate entry files.
    * Default skip: any directory named `node_modules`, `dist`, or `.git`,
    * and any dotfile/dotdir (name starting with `.`). Default file filter:
    * `extensions` (below, default `[".ts"]`), always excluding `.d.ts` files
@@ -72,25 +70,25 @@ export type FindEntryFilesOptions = {
    */
   readonly roots: string | readonly string[];
   /**
-   * Matchers that FORCE-ADD files regardless of `hasTreeExport` autodetection
-   * — applied AFTER `exclude`, so an explicit include always wins over an
+   * Matchers that force-add files regardless of `hasTreeExport` autodetection
+   * — applied after `exclude`, so an explicit include always wins over an
    * exclude on the same file (the deliberate, visible override). A `string`
    * matcher is a literal path to force in: resolved (relative strings
-   * against `process.cwd()`), and THROWS if the file doesn't exist — a
+   * against `process.cwd()`), and throws if the file doesn't exist — a
    * `string` include can reach any file, not just one under `roots`. A
-   * `RegExp` matcher is tested against the SAME scanned-candidate set
+   * `RegExp` matcher is tested against the same scanned-candidate set
    * `exclude` draws from (every file the directory scan under `roots`
    * found, independent of whether `hasTreeExport` accepted or rejected it)
    * — it can only pull in / additionally select among files the scan
    * already found, never reach outside `roots` entirely. `include` does
-   * NOT require `hasTreeExport` to be true for either matcher kind — it's a
+   * not require `hasTreeExport` to be true for either matcher kind — it's a
    * deliberate bypass of detection, for a file whose export shape detection
    * doesn't recognize, or to hand-pin an entry.
    */
   readonly include?: readonly PathMatcher[];
   /**
-   * Matchers applied against the AUTODETECTED candidate set (files found by
-   * scanning `roots` that also pass `hasTreeExport`) — a match REMOVES that
+   * Matchers applied against the autodetected candidate set (files found by
+   * scanning `roots` that also pass `hasTreeExport`) — a match removes that
    * file from the result. Use this for something like a vacuous-extraction
    * file a consumer wants to skip even though it technically has a tree
    * export. See `include` above for the override ordering.
@@ -108,7 +106,7 @@ export type FindEntryFilesOptions = {
    * (`@rhi-zone/fractal-type-ir/from-typescript`): a `ts.Program`'s dominant
    * cost is parsing+binding its transitive import closure, which is nearly
    * the same whether rooted at one file or many siblings under the same
-   * project — so a batch caller should build ONE Program up front and pass
+   * project — so a batch caller should build one Program up front and pass
    * it here (and again into `buildValidatorModuleSource` for the actual
    * codegen pass) rather than paying that cost once per candidate. If
    * omitted, and there's at least one scanned candidate, a Program is built
@@ -179,7 +177,7 @@ function matches(matcher: PathMatcher, absPath: string): boolean {
  *   3. Remove any `exclude` match.
  *   4. Add any `include` match (string: resolved literal path, throwing if
  *      missing; RegExp: re-drawn from the full scanned-candidate set) — this
- *      step runs AFTER exclude, so include always wins.
+ *      step runs after exclude, so include always wins.
  *   5. Dedupe, sort, return.
  */
 export function findEntryFiles(options: FindEntryFilesOptions): string[] {

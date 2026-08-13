@@ -1,16 +1,13 @@
-// packages/api-tree/src/input.ts — @rhi-zone/fractal-api-tree
-//
 // Shared input-source resolution mechanism: a request/invocation is exposed
 // as named stores — uniform key-value interfaces over all input sources
 // (path, query, header, body for HTTP; flag, positional for CLI; argument
 // for MCP; ...). An assembler reads params from stores based on conventions
 // + optional per-param overrides.
 //
-// Extracted from packages/http-api-projector/src/decode.ts, which had the
-// first well-factored version of this pipeline. That projector's Stores/
-// SourceMap/assemble live on, re-exported from here (see follow-up wiring
-// task) so CLI and MCP projectors — which had parallel-but-separate or
-// entirely absent resolution logic — can share one mechanism.
+// This is the one resolution mechanism every projector shares. http-api-
+// projector's Stores/SourceMap/assemble re-export from here, so CLI and MCP
+// projectors (which would otherwise each carry their own parallel resolution
+// logic) use the same types and the same `assemble` function.
 //
 // The convention: each projector defines its own "primary store" — the
 // default source for params not explicitly overridden — and, optionally,
@@ -93,17 +90,17 @@ export interface CoreStores {
 export interface StoreRegistry extends CoreStores {}
 
 /**
- * All input stores available for a given request/invocation — an IDENTITY
- * projection over `StoreRegistry`, deliberately NOT a `Partial<>`-style
- * blanket-`?` mapped type. Each member's own optionality, declared by whoever
- * added that member, survives unchanged to every read site: an optional
- * projector store needs a guard (`stores.query?.q`), a required service store
- * does not (`stores.tabularSource.read(...)`). Blanket-optionaling every member
- * here would make a required service store silently `| undefined` again — the
- * exact hole docs/design/typed-store-spec.md §9(2) rules out.
+ * All input stores available for a given request/invocation — an identity
+ * projection over `StoreRegistry`, not a `Partial<>`-style blanket-`?` mapped
+ * type. Each member's own optionality, declared by whoever added that
+ * member, survives unchanged to every read site: an optional projector store
+ * needs a guard (`stores.query?.q`), a required service store does not
+ * (`stores.tabularSource.read(...)`). A blanket-optional mapped type would
+ * make a required service store silently `| undefined` again, the exact hole
+ * docs/design/typed-store-spec.md §9(2) rules out.
  *
- * `stores.someUndeclaredName` remains a compile-time error, unchanged — that
- * property is what this type has always existed to enforce.
+ * `stores.someUndeclaredName` is a compile-time error — the property this
+ * type exists to enforce.
  */
 export type Stores = Readonly<{ [K in keyof StoreRegistry]: StoreRegistry[K] }>;
 
@@ -136,12 +133,12 @@ export type RequiredServiceStoreKeys = Exclude<RequiredStoreKeys, keyof CoreStor
  * }
  * ```
  *
- * Deliberately one object, checked once — a required store supplied ad hoc at
- * several call sites (each building its own partial `Stores`-shaped value)
- * loses exactly the completeness property this type exists to provide
- * (§9(6)). Projector data stores are NOT registered here; they stay
- * per-request-built by the dispatching projector, which is precisely what their
- * optionality buys.
+ * One object, checked once, at the composition root: this is what makes the
+ * completeness property (§9(6)) hold — a required store supplied ad hoc
+ * across several call sites, each building its own partial `Stores`-shaped
+ * value, would not be checked anywhere. Projector data stores are not
+ * registered here; they stay per-request-built by the dispatching projector,
+ * which is precisely what their optionality buys.
  *
  * Resolves to `{}` in a compilation whose merged registry declares no service
  * stores at all — a deployment with none simply never needs the registration
@@ -226,25 +223,23 @@ export type EncodingMap = Readonly<Record<string, WireProfileName | ((w: never) 
 // `<proto>.source(map)`
 //
 // The literal-key-preserving mapped type and the shorthand-expansion runtime
-// logic used to be http-api-projector-only (`verbs.ts`'s `SourceMapInput`/
-// `ResolvedSourceMap`/`source()`, pre-dating this generalization). Extracted
-// here so cli/mcp/graphql/json-rpc can each grow their own thin
+// logic live here so cli/mcp/graphql/json-rpc can each grow their own thin
 // `<proto>.source()` helper without re-deriving the same mapped type per
 // package — see docs/design/wire-profiles-and-staged-validation.md's
 // "Prerequisite: meta unification" §"UncoveredSourceParams generalizes".
 //
-// Why a helper is needed at all, not just a raw object literal passed to
-// `op()`: raw literals DO stay literal-keyed today (TS's `const C` inference
-// on `op()`'s own `contributions` parameter), but nothing enforces that
-// property against `sourceMap`'s declared type on each protocol's
-// `LeafMetaProperties` — a value passed through any intermediately-typed
-// variable or helper widens `sourceMap` back to the index-signature
-// `SourceMap`, silently defeating `UncoveredSourceParams`/`FindStoreForParam`
-// for that param the same way an un-exact-typed HTTP verb bundle would (see
-// `VerbBundle`'s doc comment, http-api-projector's verbs.ts, for the
-// original hazard this same shape guards against for verb bundles). A
-// `source()` helper makes literal-preservation the DEFAULT authoring path
-// instead of an accidental property of writing the object literal inline.
+// A `source()` helper matters because a raw object literal is not enough on
+// its own: TS's `const C` inference on `op()`'s own `contributions` parameter
+// keeps a literal's keys literal today, but nothing enforces that against
+// `sourceMap`'s declared type on each protocol's `LeafMetaProperties` — a
+// value passed through any intermediately-typed variable or helper widens
+// `sourceMap` back to the index-signature `SourceMap`, silently defeating
+// `UncoveredSourceParams`/`FindStoreForParam` for that param, the same hazard
+// an un-exact-typed HTTP verb bundle has (see `VerbBundle`'s doc comment,
+// http-api-projector's verbs.ts, for the original case this shape guards
+// against). A `source()` helper makes literal-preservation the default
+// authoring path instead of an accidental property of writing the object
+// literal inline.
 // ============================================================================
 
 /**
@@ -331,14 +326,14 @@ export function resolveSourceMap<const M extends SourceMapInput>(map: M): Resolv
 // independent overrides under each protocol's own namespace, e.g. both
 // `meta.http.sourceMap` and `meta.cli.sourceMap`).
 //
-// Simpler than the directive-array-era version this replaces (pre the http-
-// directive-dissolution migration, docs/design/wire-profiles-and-staged-
-// validation.md's "Prerequisite: meta unification" section): there is no
-// tuple to walk and no "last match wins" scan, because `mergeMeta`/`FoldMeta`
-// (node.ts) already resolve N composed `source()`-style contributions into
-// ONE flat `sourceMap` value, last-wins per key, before this module ever sees
-// it (node.ts's `MergeMetaValue`/`mergeRecords` doc comments cover the depth-
-// capped "keyed, whole-value-replace" merge this relies on).
+// There is no tuple to walk and no "last match wins" scan here (see
+// docs/design/wire-profiles-and-staged-validation.md's "Prerequisite: meta
+// unification" section for the fuller resolution-order picture), because
+// `mergeMeta`/`FoldMeta` (node.ts) already resolve N composed
+// `source()`-style contributions into ONE flat `sourceMap` value, last-wins
+// per key, before this module ever sees it (node.ts's `MergeMetaValue`/
+// `mergeRecords` doc comments cover the depth-capped "keyed, whole-value-
+// replace" merge this relies on).
 // ============================================================================
 
 /**
@@ -491,64 +486,62 @@ export type UncoveredSourceParams<H, Meta> = [InputKeys<H>] extends [never]
 // STRUCTURALLY, by literal key, never by importing either package's own
 // meta-fragment interface.
 //
-// EXACTNESS FINDING: a field with no explicit `sourceMap` entry could, at
-// `op()` time, either be a PATH-slug
-// match or fall through to the protocol's own DEFAULT store — and which one
-// is unknowable HERE regardless of `moveTo`. Per 24bd2af (`fix(http-api-
-// projector): moveTo no longer affects input binding`), a leaf's path-slug
-// binding is now a pure function of its AUTHORED ancestry (the local,
-// pre-moveTo path segments it's nested under — `http-api-projector`'s
-// `Sources.authoredPathParams`) rather than of where `moveTo` eventually
-// relocates it; `wire-derive.ts`'s codegen can see that authored ancestry
-// because it statically walks the whole call-site tree, so its own
-// derivation is exact (see that module's header comment). `op()`'s own
-// type-level check has no equivalent visibility: it type-checks the leaf in
-// isolation, before the leaf is ever composed into a tree — that composition
-// (nesting under `path(...)`, establishing the very authored ancestry
-// 24bd2af's binding rule reads) happens only afterward, at the caller's
-// composition site, which `op()`'s own `Meta` argument carries no trace of.
-// So the ambiguity is `op()`'s own ancestry-blindness at invocation time,
-// not a "future mount position" question — moveTo is irrelevant to it either
-// way. Whether that ambiguity forces a real type-level UNION depends on
-// whether "path" and the default store map to the SAME wire profile:
-//   - CLI: `cliStoreEncoding` is CONSTANT (every store -> `argvProfile`) —
-//     "path" and CLI's default store ("flag") always agree. NEVER
-//     ambiguous; `ResolvedStoresForField` below still returns a two-member
-//     union structurally, but `EncodingMapWireOf`'s distribution collapses
-//     it to ONE type after `WireOf` maps both through the same profile.
+// Exactness: a field with no explicit `sourceMap` entry could, at `op()`
+// time, either be a path-slug match or fall through to the protocol's own
+// default store, and which one it is is unknowable here regardless of
+// `moveTo`. A leaf's path-slug binding is a pure function of its authored
+// ancestry — the local, pre-`moveTo` path segments it's nested under
+// (`http-api-projector`'s `Sources.authoredPathParams`) — not of where
+// `moveTo` eventually relocates it (`fix(http-api-projector): moveTo no
+// longer affects input binding`). `wire-derive.ts`'s codegen sees that
+// authored ancestry because it statically walks the whole call-site tree, so
+// its own derivation is exact (see that module's header comment). `op()`'s
+// own type-level check has no equivalent visibility: it type-checks the leaf
+// in isolation, before the leaf is composed into a tree — that composition
+// (nesting under `path(...)`, which establishes the authored ancestry) only
+// happens afterward, at the caller's composition site, which `op()`'s own
+// `Meta` argument carries no trace of. The ambiguity is `op()`'s own
+// ancestry-blindness at invocation time; `moveTo` itself is irrelevant to
+// it. Whether that ambiguity forces a real type-level union depends on
+// whether "path" and the default store map to the same wire profile:
+//   - CLI: `cliStoreEncoding` is constant (every store maps to
+//     `argvProfile`) — "path" and CLI's default store ("flag") always
+//     agree, so this is never ambiguous. `ResolvedStoresForField` below
+//     still returns a two-member union structurally, but
+//     `EncodingMapWireOf`'s distribution collapses it to one type once
+//     `WireOf` maps both through the same profile.
 //   - HTTP: `httpStoreEncoding` maps `"body"` to `jsonProfile`, everything
 //     else (including `"path"`) to `queryProfile`. The default store is
 //     `primaryStoreForMethod(method)`: `query` for GET/HEAD/DELETE (or an
 //     absent method literal — `wire-derive.ts`'s own `method ?? "GET"`
 //     default), `body` otherwise. So:
-//       - GET/HEAD/DELETE (or no method authored) — default store IS
-//         `"query"`, matching `"path"`'s own profile. NOT ambiguous.
-//       - any other method — default store is `"body"` (`jsonProfile`),
-//         which genuinely DIFFERS from `"path"`'s `queryProfile` for any
-//         coercing kind (`number`/`boolean`/`Date` — confirmed empirically:
+//       - GET/HEAD/DELETE (or no method authored) — the default store is
+//         `"query"`, matching `"path"`'s own profile: not ambiguous.
+//       - any other method — the default store is `"body"` (`jsonProfile`),
+//         which differs from `"path"`'s `queryProfile` for any coercing
+//         kind (`number`/`boolean`/`Date` — confirmed empirically:
 //         `WireOf<number,"query">` is `string`, `WireOf<number,"json">` is
-//         `number`, NOT the same type). For THIS one case, a field with no
-//         explicit override genuinely cannot be resolved to a single store
-//         at `op()` time — the type is the UNION
-//         `WireOf<T,"query"> | WireOf<T,"json">`, exactly the doc's own
+//         `number`). For this one case, a field with no explicit override
+//         cannot be resolved to a single store at `op()` time — the type is
+//         the union `WireOf<T,"query"> | WireOf<T,"json">`, the doc's own
 //         suggested fallback ("default to the union... when it can't
 //         statically rule out a path-slug match").
 //
-// Net result: NOT fully exact in general. The gap is real but narrow — it
+// Net result: not fully exact in general. The gap is real but narrow — it
 // only bites an HTTP field with (a) a non-GET/HEAD/DELETE method authored at
 // `op()` time, (b) no explicit `sourceMap` entry for that field, and (c) a
 // domain type whose query-vs-json wire shapes actually differ (a coercing
 // leaf kind — plain `string` fields are unaffected, since `WireOf<string,
-// P>` is `string` under every profile). Concretely, it MISSES (does not
-// reject) a decoder typed narrower than the true union — e.g. one that only
-// handles the numeric-string case and silently mishandles a genuine
-// same-key JSON-body number this leaf might ALSO receive if it turns out NOT
-// to be authored under a same-named path slug after all — and it ALLOWS
-// (does not force) a decoder to handle both shapes even when the leaf's
-// authored ancestry would only ever deliver one. Both directions are the
-// SOUND-but-imprecise side of a real "op() cannot see its own authored
-// ancestry at invocation time" limitation the design doc's own decision 3
-// flagged as an open question, not a bug in this implementation.
+// P>` is `string` under every profile). Concretely, it misses a decoder
+// typed narrower than the true union — e.g. one that only handles the
+// numeric-string case and mishandles a genuine same-key JSON-body number
+// this leaf might also receive if it turns out not to be authored under a
+// same-named path slug after all — and it allows (does not force) a decoder
+// to handle both shapes even when the leaf's authored ancestry would only
+// ever deliver one. Both directions are the sound-but-imprecise side of
+// `op()`'s inability to see its own authored ancestry at invocation time —
+// the design doc's own decision 3 names this as an open question, not a bug
+// in this implementation.
 // ============================================================================
 
 /** `Meta["http"]`/`Meta["cli"]`, structurally — `undefined` when that

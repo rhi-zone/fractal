@@ -1,6 +1,4 @@
-// packages/api-tree/src/__fixtures__/apply-validation-route.fixture.ts
-//
-// A stand-in for an already-PROJECTED HTTP route tree: `methods` at a leaf
+// A stand-in for an already-projected HTTP route tree: `methods` at a leaf
 // position instead of a direct `handler`. That property is what tells a
 // projected tree from a `Node` tree at the type level — this package cannot
 // import `HttpRoute` itself (http-api-projector depends on api-tree, not the

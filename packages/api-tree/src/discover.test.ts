@@ -1,9 +1,9 @@
-// packages/api-tree/src/discover.test.ts — findEntryFiles / hasTreeExport tests
+// Tests for findEntryFiles / hasTreeExport (discover.ts).
 //
 // Covers discover.ts's autodetect-by-directory-scan design: a plain scan
 // picks up every tree-exporting file under `roots` (and only those),
 // `exclude`/`include` are the deliberate overrides, and `hasTreeExport`
-// (tree.ts) itself detects by export SHAPE, not leaf count.
+// (tree.ts) itself detects by export shape, not leaf count.
 
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
@@ -44,7 +44,7 @@ describe("findEntryFiles — exclude", () => {
 });
 
 describe("findEntryFiles — include", () => {
-  it("a literal string include OUTSIDE roots force-adds a file even though it has no tree export", () => {
+  it("a literal string include outside roots force-adds a file even though it has no tree export", () => {
     const result = findEntryFiles({ roots: FIXTURE_DIR, include: [OUTSIDE_FIXTURE] });
     expect(result).toContain(OUTSIDE_FIXTURE);
   });
@@ -75,7 +75,7 @@ describe("hasTreeExport", () => {
     expect(hasTreeExport(noTree)).toBe(false);
   });
 
-  it("true for a genuinely EMPTY tree (api({}), zero children) — detects by export shape, not leaf count", () => {
+  it("true for a genuinely empty tree (api({}), zero children) — detects by export shape, not leaf count", () => {
     expect(hasTreeExport(emptyTree)).toBe(true);
   });
 });

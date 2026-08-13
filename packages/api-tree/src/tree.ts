@@ -1,5 +1,3 @@
-// packages/api-tree/src/tree.ts — @rhi-zone/fractal-api-tree
-//
 // Walk an authored Node tree AT THE TYPE LEVEL and produce a tool-name →
 // { inputSchema, description } map — the artifact the MCP projection consumes.
 //
@@ -248,17 +246,16 @@ export function readMetaSourceMap(
  * Read `meta.<namespace>.encodingMap`'s STRING-literal (base-profile-name)
  * entries off a resolved `Node` TYPE — `readMetaSourceMap`'s sibling for
  * `encodingMap` (see docs/design/wire-profiles-and-staged-validation.md's
- * "Implementation trace (phase B)" section for the field name decision and
- * the KNOWN GAP this function deliberately does NOT close: an `encodingMap`
- * entry may ALSO be a custom decoder FUNCTION, `(w: FieldValidWire) =>
- * TField` — a function value has no literal TYPE for the checker to hand
- * back (unlike a string), so there is no analogous way to read one off a
- * TYPE alone; doing so would require re-emitting the function's own source
- * into the generated module, which this phase does not attempt (see the
- * design doc for the full writeup). A function-valued entry is silently
- * OMITTED from this function's result — exactly like `readMetaSourceMap`
- * omitting a non-literal `store` — so a caller sees only the entries it CAN
- * safely act on.
+ * "Implementation trace (phase B)" section for the field name decision).
+ * An `encodingMap` entry may also be a custom decoder FUNCTION,
+ * `(w: FieldValidWire) => TField` — a function value has no literal TYPE for
+ * the checker to hand back (unlike a string), so there is no analogous way
+ * to read one off a TYPE alone; doing so would require re-emitting the
+ * function's own source into the generated module, which this phase does not
+ * attempt (see the design doc for the full writeup). This function omits
+ * function-valued entries from its result, the same way `readMetaSourceMap`
+ * omits a non-literal `store` — a caller sees only the entries it can safely
+ * act on.
  */
 export function readMetaEncodingMapProfileNames(
   nodeType: ts.Type,
@@ -285,11 +282,11 @@ export function readMetaEncodingMapProfileNames(
 
 /**
  * Read `meta.<namespace>.encodingMap`'s FUNCTION-form entries off a resolved
- * `Node` TYPE — the gap `readMetaEncodingMapProfileNames`'s own doc comment
- * documents as deliberately NOT closed by that function: a custom-decoder
- * function value has no literal TYPE the checker can hand back "as a value"
- * (unlike a string), so there is nothing to READ here — only something to
- * DETECT. This function answers a strictly narrower question than its
+ * `Node` TYPE — the counterpart to what `readMetaEncodingMapProfileNames`
+ * leaves unread: a custom-decoder function value has no literal TYPE the
+ * checker can hand back "as a value" (unlike a string), so there is nothing
+ * to READ here — only something to DETECT. This function answers a strictly
+ * narrower question than its
  * string-form sibling: not "what does this entry say" but "does a callable
  * live at this entry at all" — existence, via
  * `checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call)` being
@@ -488,8 +485,8 @@ export function walkNodeType(
  * A body ending in anything else — a conditional/branch, a loop, an
  * expression statement, multiple top-level returns spread across branches —
  * doesn't match and the factory is skipped, same as any other export that
- * isn't a tree. Deliberately no control-flow analysis: this only ever looks
- * at the LAST statement.
+ * isn't a tree. Only the LAST statement is inspected; no control-flow
+ * analysis is performed.
  */
 function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefined {
   const stmts = body.statements;
@@ -538,8 +535,8 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
  * export, so it can collide with another NAMED tree's own id only in the
  * (pathological, untested) case a file also has a `const` literally named
  * `default`, which isn't valid JS anyway. `export =` (`stmt.isExportEquals`
- * true, a TS-only construct distinct from a plain default export) is
- * deliberately NOT handled here — left unrecognized, same as before.
+ * true, a TS-only construct distinct from a plain default export) is not
+ * handled here and stays unrecognized.
  */
 function forEachTreeCandidate(
   source: ts.SourceFile,
@@ -560,7 +557,7 @@ function forEachTreeCandidate(
     // ts.getModifiers can see) — checked ahead of the modifier-based
     // isExported guard below, which doesn't apply to this node kind.
     // `stmt.isExportEquals` true means `export =` (a TS-only construct,
-    // different export mechanism entirely) — deliberately left unhandled.
+    // different export mechanism entirely), which this scan does not handle.
     if (ts.isExportAssignment(stmt)) {
       if (!stmt.isExportEquals) {
         visitIfTree(checker.getTypeAtLocation(stmt.expression), stmt.expression, "default");
@@ -605,9 +602,9 @@ function forEachTreeCandidate(
  * raw path-segment array `onLeaf` receives (and therefore into
  * `extractRouteTypeRefs`/`extractRouteSchemas`'s `path.join("/")` keys)
  * without touching the underscore-joined MCP tool `name` (`prefix` still
- * starts at `""`, exactly as before) — a tool name is scoped by convention to
- * ONE standalone tree already (`extractToolSchemas`'s own doc comment), so
- * leaving it unprefixed is deliberate, not an oversight.
+ * starts at `""`) — a tool name is scoped by convention to ONE standalone
+ * tree already (`extractToolSchemas`'s own doc comment), so it stays
+ * unprefixed by design.
  */
 function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
   const program = sharedProgram ?? createExtractorProgram(entryFile);

@@ -1,5 +1,3 @@
-// packages/api-tree/src/wire-derive.ts — @rhi-zone/fractal-api-tree
-//
 // Protocol -> wire-profile derivation, computed PER LEAF at codegen time from
 // that leaf's own declared meta (`sourceMap`, and for HTTP, `method`/`verb`)
 // plus its tree-relative path's fallback-segment names — the mechanism
@@ -9,18 +7,16 @@
 // mcp/graphql argument stores identity+json-dates").
 //
 // See docs/design/wire-profiles-and-staged-validation.md's "Implementation
-// trace (phase B)" section for the full derivation write-up. That section's
-// original phase-B trace flagged this module's HTTP branch reading LOCAL,
-// pre-projection path segments only as a "known limitation" relative to a
-// runtime that resolved `moveTo`-relocated leaves' path binding against their
-// FINAL mounted position — that runtime no longer exists: moveTo is now
+// trace (phase B)" section for the full derivation write-up. This module's
+// HTTP branch reads LOCAL, pre-projection path segments — `http.moveTo` is
 // purely an address transform, and a leaf's field<->store binding is defined
-// to be a pure function of its own authored (pre-moveTo) declarations (see
+// as a pure function of its own authored (pre-moveTo) declarations (see
 // http-api-projector's route.ts, `Sources.authoredPathParams`). Local,
 // pre-projection path segments are exactly that authored set, so this
-// module's HTTP branch was already computing the CORRECT thing, under the
-// new definition, without needing any change — see that section's dated note
-// for the supersession.
+// module's HTTP branch computes the correct binding for every leaf. See that
+// design-doc section's dated note for the earlier, now-superseded framing of
+// this as a known limitation relative to a runtime that instead resolved a
+// relocated leaf's path binding against its final mounted position.
 
 import {
   argvProfile,
@@ -37,10 +33,10 @@ import {
  * `apply-validation.ts` as the third `applyValidation` argument's type. */
 export type ProtocolName = "http" | "cli" | "mcp" | "graphql" | "jsonrpc" | "identity";
 
-/** A minimal `ParamSource`-shaped override — deliberately NOT imported from
- * `input.ts`'s `ParamSource` (this module only reads `store`/`key`
- * structurally, and importing the full type would pull codegen into a
- * runtime-shape dependency it doesn't otherwise need). */
+/** A minimal `ParamSource`-shaped override, not imported from `input.ts`'s
+ * `ParamSource`: this module only reads `store`/`key` structurally, and
+ * importing the full type would pull codegen into a runtime-shape dependency
+ * it doesn't otherwise need. */
 export type FieldSource = { readonly store: string; readonly key?: string };
 
 /** A leaf's per-protocol `sourceMap` override, field name -> source. */
@@ -60,10 +56,9 @@ export type FieldSourceMap = Readonly<Record<string, FieldSource>>;
  *     field falls through to `defaultProfile`, computed from the protocol's
  *     default/primary store. Because a leaf's full field-name set isn't known
  *     to this function (only `sourceMap`'s own keys and the path-param names
- *     are), `fieldProfiles` is deliberately a PARTIAL map, not a per-field
- *     entry for every field on the leaf — `compileWireEntryFragmentComposite`
- *     already resolves an absent field via `fieldProfiles[name] ??
- *     defaultProfile`.
+ *     are), `fieldProfiles` is a PARTIAL map, not a per-field entry for every
+ *     field on the leaf — `compileWireEntryFragmentComposite` already
+ *     resolves an absent field via `fieldProfiles[name] ?? defaultProfile`.
  */
 export type FieldProfileDerivation =
   | {
@@ -127,15 +122,13 @@ function primaryStoreForMethod(method: string): "query" | "body" {
  * LOCAL tree-relative path segments, computed PRE-projection (`http.moveTo`
  * runs later, over the projected `HttpRoute` tree, and is purely an address
  * transform — it does not relocate or change which path segments a leaf
- * AUTHORED itself under). This is exactly `http-api-projector`'s own
- * `authoredPathParams` definition (route.ts), so this derivation is correct
- * for every leaf, `moveTo` or not — not an approximation of anything. This
- * used to be documented as a known limitation relative to an OLDER runtime
- * behavior where a `moveTo`-relocated leaf's path binding was resolved
- * against wherever it ended up (see docs/design/
+ * AUTHORED itself under). This matches `http-api-projector`'s own
+ * `authoredPathParams` definition (route.ts) exactly, so this derivation is
+ * correct for every leaf, `moveTo` or not. See docs/design/
  * wire-profiles-and-staged-validation.md's dated supersession note in its
- * phase-B trace); that runtime behavior is gone, and local-authored-path-only
- * is now the actual definition of path-sourced binding, not a stand-in for it.
+ * phase-B trace for the earlier framing of this as a known limitation
+ * relative to a runtime that instead resolved a relocated leaf's path
+ * binding against wherever it ended up mounted.
  */
 export function deriveFieldProfiles(
   protocol: ProtocolName,

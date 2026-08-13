@@ -1,50 +1,38 @@
-// packages/api-tree/src/apply-validation-build.ts — @rhi-zone/fractal-api-tree
-//
-// CALL-SITE-ANCHORED BUILD ORCHESTRATOR for the `applyValidation(key, tree,
+// Call-site-anchored build orchestrator for the `applyValidation(key, tree,
 // protocol?)` mechanism (apply-validation.ts) — the sibling of `build.ts`,
-// which anchors on EXPORTED `api()` trees instead:
+// which anchors on exported `api()` trees instead:
 //
-//   build.ts:                entryFile --extractRouteTypeRefs (scans exports)-->
-//                            `${treeId}/${path}` -> TypeRef --compile--> module
+//   build.ts:  entryFile --extractRouteTypeRefs (scans exports)-->
+//              `${treeId}/${path}` -> TypeRef --compile--> module
 //
-//   this file:               entryFile --scan applyValidation() CALL SITES-->
-//                            per key: `${path}` -> TypeRef --compile--> module
-//                            (+ the nested `Record<key, Record<path, entry>>`
-//                             and the `createApplyValidation` composition)
+//   this file: entryFile --scan applyValidation() call sites-->
+//              per key: `${path}` -> TypeRef --compile--> module
+//              (+ the nested `Record<key, Record<path, entry>>`
+//               and the `createApplyValidation` composition)
 //
-// PHASE D RETIREMENT (docs/design/wire-profiles-and-staged-validation.md):
-// there used to be TWO parallel extraction/build pipelines here — a 2-arg
-// one (`extractApplyValidationTypeRefs`/`buildApplyValidationModuleSource*`,
-// backed by type-ir's now-deleted `compileValidatorModule`/
-// `compileEntryFragment`/`assembleValidatorModule`) and this one, the
-// staged wire-profile pipeline (`extractWireApplyValidationTypeRefs`/
-// `buildWireApplyValidationModuleSource*`, backed by
-// `compileWireEntryFragment`/`compileConstraintsFn`). The 2-arg pipeline was
-// kept only as long as it alone supported `shouldShare`/defs structural
-// sharing; once that capability landed on this pipeline too (phase D,
-// `b5c7254`), the 2-arg pipeline had nothing left the 3-arg one didn't cover
-// and was deleted. Every `applyValidation` call site — 2-arg or 3-arg — now
-// compiles through THIS pipeline: an omitted `protocol` argument is sugar
-// for `"identity"` (decision A of the retirement — see
+// This is the sole `applyValidation` codegen pipeline
+// (`extractWireApplyValidationTypeRefs`/`buildWireApplyValidationModuleSource*`,
+// backed by `compileWireEntryFragment`/`compileConstraintsFn`). Every
+// `applyValidation` call site — 2-arg or 3-arg — compiles through it: an
+// omitted `protocol` argument is sugar for `"identity"` (see
 // `extractWireApplyValidationTypeRefs`'s doc comment).
 //
 // The extraction machinery is shared, not reimplemented: each traced tree is
 // descended with `walkNodeType` (tree.ts) and each leaf's TypeRef comes from
 // `typeRefFromFunctionNode` (extract.ts), exactly as `extractRouteTypeRefs`
-// does. Only the ANCHOR differs (call sites, not exports) and therefore the
-// KEYING: paths here are tree-relative, because `applyValidation`'s own `key`
+// does. Only the anchor differs (call sites, not exports) and therefore the
+// keying: paths here are tree-relative, because `applyValidation`'s own `key`
 // argument already scopes one tree — where `extractRouteTypeRefs` has to
 // prefix every path with a `treeId` to keep two trees in one file from
 // colliding in a single flat map.
 //
-// Codegen is where the LOUD checks live for this mechanism, since the runtime
-// stub is deliberately permissive (apply-validation.ts):
+// The loud checks for this mechanism live in codegen; the runtime stub
+// (apply-validation.ts) is permissive:
 //   - a non-literal `key` argument, a `key` used at two call sites in one
-//     entry file, or a tree expression that can't be traced to a `Node`, all
-//     throw here rather than silently producing a wrong/last-wins map;
-//   - a tree expression whose declaration lives in ANOTHER file throws too:
-//     same-file resolution is this phase's deliberate first cut, and giving
-//     up silently would emit a module missing that call site's whole key.
+//     entry file, or a tree expression that can't be traced to a `Node`,
+//     each throw here, naming the location and the reason;
+//   - a tree expression whose declaration lives in another file throws too —
+//     same-file resolution is this phase's scope.
 
 import * as path from "node:path";
 import ts from "typescript";
@@ -117,14 +105,14 @@ function isProtocolName(value: string): value is ProtocolName {
 export const DEFAULT_RUNTIME_IMPORT = "@rhi-zone/fractal-api-tree/apply-validation";
 
 /** Separator joining a call site's `key` and a leaf's tree-relative path into
- * the FLAT entry name handed to the type-ir compiler (which emits one flat
+ * the flat entry name handed to the type-ir compiler (which emits one flat
  * `validators` record). `\u0000` cannot occur in either half of a real key —
  * a path segment is a JS identifier-ish object key and a `key` is an authored
  * string literal — and `JSON.stringify` (how compile.ts emits entry names)
- * escapes it, so the generated source stays plain ASCII. The generated module
- * never asks a consumer to know about this: it re-groups the flat record into
- * the nested `Record<key, Record<path, entry>>` `createApplyValidation` wants
- * (see `composeApplyValidationTail`). */
+ * escapes it, so the generated source stays plain ASCII. A consumer of the
+ * generated module never sees this encoding: `composeWireApplyValidationTail`
+ * re-groups the flat record into the nested `Record<key, Record<path,
+ * entry>>` `createApplyValidation` wants. */
 const FLAT_KEY_SEPARATOR = "\u0000";
 
 const flatName = (key: string, leafPath: string): string =>
@@ -134,24 +122,25 @@ const flatName = (key: string, leafPath: string): string =>
 export type ApplyValidationCallSite = {
   /** The literal first argument. */
   readonly key: string;
-  /** The resolved TYPE of the `Node` tree the second argument traces back to. */
+  /** The resolved type of the `Node` tree the second argument traces back to. */
   readonly nodeType: ts.Type;
   /** A node in the entry file to resolve types against (checker calls need a
    * location); the traced tree expression itself. */
   readonly loc: ts.Node;
-  /** The literal third argument, when present — see decision 1,
-   * docs/design/wire-profiles-and-staged-validation.md's "Implementation
-   * trace (phase B)" section. `undefined` for an ordinary 2-arg call site —
+  /** The literal third argument, when present — see
+   * docs/design/wire-profiles-and-staged-validation.md's "`protocol` as
+   * `applyValidation`'s optional third argument" section. `undefined` for an
+   * ordinary 2-arg call site —
    * `extractWireApplyValidationTypeRefs` treats an `undefined` protocol as
-   * sugar for `"identity"` (phase D's decision A), so a 2-arg call site is
-   * NOT skipped by extraction; this field still records the literal source
-   * text (present vs. absent) for diagnostics/tests that care about it. */
+   * sugar for `"identity"`, so a 2-arg call site is not skipped by
+   * extraction; this field still records the literal source text (present
+   * vs. absent) for diagnostics/tests that care about it. */
   readonly protocol?: ProtocolName;
 };
 
-/** True when the CALLEE of `call` is a `createApplyValidation` result.
+/** True when the callee of `call` is a `createApplyValidation` result.
  *
- * Resolution is by TYPE IDENTITY, via the checker — never by the callee's
+ * Resolution is by type identity, via the checker — never by the callee's
  * name. `ApplyValidation` (apply-validation.ts) declares a phantom optional
  * property, `APPLY_VALIDATION_BRAND`, that exists only in the type; asking
  * `checker.getTypeAtLocation(callee)` for that property answers "is this the
@@ -161,8 +150,9 @@ export type ApplyValidationCallSite = {
  * unrelated local function literally named `applyValidation` has no such
  * property and is never matched.
  *
- * The alias chain is ALSO resolved (below) — not to decide the match, but so
- * a diagnostic can name the declaration a matched callee came from. */
+ * The alias chain is also resolved (below), separately — not to decide the
+ * match, but so a diagnostic can name the declaration a matched callee came
+ * from. */
 function isApplyValidationCallee(callee: ts.Expression, checker: ts.TypeChecker): boolean {
   const calleeType = checker.getTypeAtLocation(callee);
   return checker.getPropertyOfType(calleeType, APPLY_VALIDATION_BRAND) !== undefined;
@@ -182,8 +172,8 @@ function calleeDeclaration(
 }
 
 /** A `Node` tree's type, structurally: carries `meta` (every `Node` does —
- * the same discriminator `forEachTreeCandidate` uses, tree.ts) and carries NO
- * `methods` property (an already-PROJECTED HTTP tree does — that's the one
+ * the same discriminator `forEachTreeCandidate` uses, tree.ts) and carries no
+ * `methods` property (an already-projected HTTP tree does — that's the one
  * property that tells the two apart at the type level, and this package can't
  * import `HttpRoute` to check nominally). */
 function isNodeType(type: ts.Type, checker: ts.TypeChecker): boolean {
@@ -193,7 +183,7 @@ function isNodeType(type: ts.Type, checker: ts.TypeChecker): boolean {
   );
 }
 
-/** The declaration an identifier ultimately binds to, with any IMPORT alias
+/** The declaration an identifier ultimately binds to, with any import alias
  * resolved through — an imported binding's own symbol declares only the
  * `ImportSpecifier` in the importing file, which would make a cross-file
  * declaration look local. Resolving the alias is what lets the cross-file
@@ -216,24 +206,23 @@ function describeLocation(node: ts.Node): string {
 }
 
 /**
- * Trace an `applyValidation` call's SECOND argument back to the underlying
+ * Trace an `applyValidation` call's second argument back to the underlying
  * `api()`-produced `Node` tree, returning its resolved type.
  *
  * Three forms are traced, in this order:
  *   1. the expression's own type is already `Node`-shaped — `applyValidation
  *      ("books", apiTree)` where `apiTree` is an identifier the checker
  *      resolves on its own, or `applyValidation("books", api({...}))` inline;
- *   2. an identifier bound in THIS file — followed to its declaration's
+ *   2. an identifier bound in this file — followed to its declaration's
  *      initializer and retried (this is what makes `const routes =
  *      httpProjection(apiTree)` traceable through `routes`);
  *   3. a wrapping call — `httpProjection(apiTree)`, `composeTransforms(...)
  *      (apiTree)`, any one-level wrapper — unwrapped by scanning its
- *      ARGUMENTS for the first `Node`-typed one.
+ *      arguments for the first `Node`-typed one.
  *
- * Anything else, including an identifier declared in a DIFFERENT file, throws.
- * Cross-file tracing is deliberately out of this phase's scope, and silence
- * there would mean emitting a module that's missing this key entirely — the
- * exact class of quiet miss this mechanism's loudness exists to kill.
+ * Anything else, including an identifier declared in a different file, throws,
+ * naming the location and the reason. Cross-file tracing is out of this
+ * phase's scope.
  */
 function traceNodeType(expr: ts.Expression, checker: ts.TypeChecker, keyLabel: string): ts.Type {
   const entryFile = expr.getSourceFile().fileName;
@@ -314,10 +303,10 @@ function traceNodeType(expr: ts.Expression, checker: ts.TypeChecker, keyLabel: s
  * call's tree traced to its `Node` type.
  *
  * Throws on a non-literal `key` (nothing can be generated for a key that
- * isn't known statically), on a missing tree argument, and on a DUPLICATE key
- * across two call sites in the same entry file — last-wins would silently
- * apply one tree's validators to another tree's leaves, and the runtime's own
- * duplicate-key guard would only catch it later, at the second call.
+ * isn't known statically), on a missing tree argument, and on a duplicate key
+ * across two call sites in the same entry file — each call site must claim
+ * its own key. (The runtime's own duplicate-key guard, apply-validation.ts,
+ * catches the same case later, at the second call.)
  */
 export function findApplyValidationCallSites(
   source: ts.SourceFile,
@@ -387,19 +376,17 @@ const runtimeImportLine = (runtimeImport: string): string =>
   `import { createApplyValidation } from ${JSON.stringify(runtimeImport)}\n`;
 
 /**
- * The PRE-CODEGEN STUB module: a pass-through `applyValidation` over an empty
+ * The pre-codegen stub module: a pass-through `applyValidation` over an empty
  * map, so a freshly scaffolded project compiles and runs before codegen has
  * ever produced validators — the consumer's single
  * `import { applyValidation } from "./generated"` resolves from the first
  * commit onward.
  *
- * Note this differs from `wrapValidators`' pre-codegen convention, which has
- * no stub at all: there, a consumer simply OMITS the optional `validators`
- * option (see build.ts's module doc). That option-omission convention has no
- * analogue here, because the whole point of this mechanism is a call site
- * that names its key unconditionally — hence an actual emitted stub.
- * Permissive by construction and SILENT about it: coverage is enforced by
- * codegen and by `assertValidationCoverage` (apply-validation.ts), never here.
+ * An actual emitted stub, rather than an omittable option: a call site names
+ * its key unconditionally, with no option to skip passing validators. The
+ * stub is permissive by construction and silent about it; coverage is
+ * enforced elsewhere, by codegen and by `assertValidationCoverage`
+ * (apply-validation.ts).
  */
 export function applyValidationStubSource(options?: { readonly runtimeImport?: string }): string {
   const runtimeImport = options?.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
@@ -430,24 +417,20 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
 }
 
 // ============================================================================
-// Wire-profile build path — the SOLE `applyValidation` codegen pipeline as of
-// phase D (decision 1's 3-arg call sites, PLUS every 2-arg call site, treated
-// as sugar for protocol `"identity"` — see `extractWireApplyValidationTypeRefs`'s
-// doc comment below). This used to be a pipeline PARALLEL to a separate 2-arg
-// one (`extractApplyValidationTypeRefs`/`buildApplyValidationModuleSource*`,
-// deleted in phase D once this pipeline gained the `shouldShare`/defs
-// structural-sharing capability that was the 2-arg pipeline's only remaining
-// reason to exist) — see docs/design/wire-profiles-and-staged-validation.md's
-// "Implementation trace (phase C)"'s retirement-blocker note.
+// Wire-profile build path — the sole `applyValidation` codegen pipeline:
+// every 3-arg call site, plus every 2-arg call site treated as sugar for
+// protocol `"identity"` — see `extractWireApplyValidationTypeRefs`'s doc
+// comment below.
 //
 // `meta.<proto>.encodingMap` entries take one of two authored shapes (see
-// the design doc's decision-5 discussion): a base-profile-name STRING
-// (`"identity" | "json" | "query" | "argv"`) or a custom decoder FUNCTION
-// (`(w: FieldValidWire) => TField`).
+// docs/design/wire-profiles-and-staged-validation.md's "Static-meta-read
+// investigation" section): a base-profile-name string (`"identity" | "json" |
+// "query" | "argv"`) or a custom decoder function (`(w: FieldValidWire) =>
+// TField`).
 //
 // The string form is read the same way `walkNodeType`'s existing
 // `mcpMetaOverride` (tree.ts) already reads other scalar meta literals off a
-// resolved `Node` TYPE — not just a type shape, an actual authored VALUE
+// resolved `Node` type — not just a type shape, an actual authored value
 // (`meta.mcp.name`), via
 // `checker.getPropertyOfType`/`getTypeOfSymbolAtLocation`/`isStringLiteral()`.
 // `meta.http.method`/`meta.http.verb` (flat scalars) and `meta.<proto>.
@@ -459,27 +442,27 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
 // (`readMetaEncodingMapProfileNames`, tree.ts) — wired in below.
 //
 // The function form has no analogous read path: a function value has no
-// literal TYPE for the checker to hand back (unlike a string), so there's
+// literal type for the checker to hand back (unlike a string), so there's
 // nothing to read "as a value." It doesn't need one — the function never
 // moves through codegen at all (no inlining, no source re-emission, no
 // cross-file import); it stays exactly where it was authored, an ordinary
-// runtime value on the tree's own `meta`, read at WRAP time (not codegen
+// runtime value on the tree's own `meta`, read at wrap time (not codegen
 // time) by `apply-validation.ts`'s `createApplyValidation`. What codegen
 // genuinely needs statically is narrower than "the function's value": just
-// WHICH field names have one, so the generated fragment can emit a HOOK
+// which field names have one, so the generated fragment can emit a hook
 // call-site for that field instead of its fused default decode. That's
-// answerable from the TYPE alone — a function value's type still carries a
-// call SIGNATURE, even with no literal payload
+// answerable from the type alone — a function value's type still carries a
+// call signature, even with no literal payload
 // (`readMetaEncodingMapFunctionFields`, tree.ts, via
 // `checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call)`). See
 // `compileWireLeafFragment`'s call below for how the resulting field-name set
 // threads into `compileWireEntryFragmentComposite`'s `hookFields` parameter,
-// and docs/design/wire-profiles-and-staged-validation.md's implementation-
-// trace addendum for this phase for the full mechanism writeup (runtime hook
+// and docs/design/wire-profiles-and-staged-validation.md's "Implementation
+// trace (phase E)" section for the full mechanism writeup (runtime hook
 // injection, the `"decode"` error kind, the wrap-time stale-module checks).
 // ============================================================================
 
-/** The base profile a `meta.<proto>.encodingMap` entry's STRING form names —
+/** The base profile a `meta.<proto>.encodingMap` entry's string form names —
  * see `readMetaEncodingMapProfileNames` (tree.ts) for what this doesn't cover
  * (a function-valued entry; the documented gap above). */
 const BASE_PROFILE_BY_NAME: Readonly<Record<string, WireProfile>> = {
@@ -492,10 +475,10 @@ const BASE_PROFILE_BY_NAME: Readonly<Record<string, WireProfile>> = {
 /** One 3-arg call site's leaf: its input `TypeRef`, the derived wire profile
  * assignment (`wire-derive.ts`), and — http/cli only, see this section's
  * header comment — the field names whose `encodingMap` entry is a custom
- * decoder FUNCTION rather than a base-profile-name string, sorted for
+ * decoder function rather than a base-profile-name string, sorted for
  * deterministic fingerprinting. Empty (never `undefined`) for every
  * uniform-profile protocol (`identity`/`mcp`/`graphql`/`jsonrpc`), matching
- * the same scope cut the STRING form already makes (see
+ * the same scope cut the string form already makes (see
  * `readMetaEncodingMapProfileNames`'s doc comment). */
 export type WireApplyValidationLeaf = {
   readonly ref: TypeRef;
@@ -518,8 +501,7 @@ export type WireApplyValidationTypeRefs = {
     >
   >;
   /** Shared/recursive `defs` a `shouldShare` extraction produced (empty
-   * without it) — phase D's closing of this path's own "No `shouldShare`/defs
-   * support" scope cut. */
+   * without it). */
   readonly defs: Record<string, TypeRef>;
 };
 
@@ -534,29 +516,27 @@ export type WireApplyValidationTypeRefs = {
  * leaf's own tree-relative path's `:name` fallback segments as its path-param
  * name set (already exactly what `leafPath` carries — no extra read needed).
  *
- * DECISION A (phase D retirement): a call site whose literal third argument
- * is absent (`site.protocol === undefined`) is treated as `protocol =
- * "identity"` — every `applyValidation` call site is now extracted here,
- * whether or not its source spells a protocol. This is what lets `apply-
- * validation.ts`'s `createApplyValidation` keep resolving a 2-arg call
- * against real generated coverage even though the dedicated 2-arg codegen
- * route (`extractApplyValidationTypeRefs`, deleted) is gone — see that
- * runtime's `resolveForKey` doc comment for the matching runtime-side half of
- * this decision. `identity` needs no meta read (same branch as
- * mcp/graphql/jsonrpc below), so this costs nothing extra for a 2-arg site.
+ * A call site whose literal third argument is absent
+ * (`site.protocol === undefined`) is treated as `protocol = "identity"` —
+ * every `applyValidation` call site is extracted here, whether or not its
+ * source spells a protocol. This is what lets `apply-validation.ts`'s
+ * `createApplyValidation` resolve a 2-arg call against real generated
+ * coverage through the same pipeline a 3-arg call uses — see that runtime's
+ * `resolveForKey` doc comment for the matching runtime-side half of this.
+ * `identity` needs no meta read (same branch as mcp/graphql/jsonrpc below),
+ * so this costs nothing extra for a 2-arg site.
  *
- * `encodingMap`'s STRING-form entries (base-profile-name overrides) are read
- * and applied on top for `http`/`cli`. FUNCTION-form entries are detected
+ * `encodingMap`'s string-form entries (base-profile-name overrides) are read
+ * and applied on top for `http`/`cli`. Function-form entries are detected
  * (existence only, per `readMetaEncodingMapFunctionFields`'s doc comment —
  * see this section's header comment for the full resolution) and threaded
  * into each leaf's own `hookFields`, consumed by `compileWireLeafFragment`.
  *
-
- * `options.shouldShare` (phase D) opts into structural sharing: a
- * `SharingRegistry`, `finalizeSharedDefs` over the flattened `(key,
- * leafPath)` roots, and the resulting `defs` threaded into the returned
- * `WireApplyValidationTypeRefs`. Without it, `defs` is empty and every leaf's
- * `ref` is exactly what this function always produced.
+ * `options.shouldShare` opts into structural sharing: a `SharingRegistry`,
+ * `finalizeSharedDefs` over the flattened `(key, leafPath)` roots, and the
+ * resulting `defs` threaded into the returned `WireApplyValidationTypeRefs`.
+ * Without it, `defs` is empty and every leaf's `ref` is exactly what this
+ * function always produced.
  */
 export function extractWireApplyValidationTypeRefs(
   entryFile: string,
@@ -691,7 +671,7 @@ function flatWireEntries(byKey: WireApplyValidationTypeRefs["byKey"]): {
 
 /** Compile one leaf's `CompiledWireEntryFragment` — the uniform-profile case
  * (`{ profile }`) goes through `compileWireEntryFragment` directly (hooks are
- * out of scope for a uniform protocol — same deliberate cut the STRING form
+ * out of scope for a uniform protocol — the same scope cut the string form
  * already makes, see this section's header comment); the composite case
  * (`{ fieldProfiles, defaultProfile }`) goes through
  * `compileWireEntryFragmentComposite`, threading `hookFields` through so a
@@ -732,18 +712,18 @@ function indentGenerated(lines: readonly string[], spaces: number): string[] {
 }
 
 /**
- * `assembleWireModule`'s (type-ir) sibling for THIS file's shape: each entry
- * has exactly ONE protocol (a call site names exactly one), not a uniform
- * profile SET shared across every entry the way `assembleWireModule` assumes
+ * `assembleWireModule`'s (type-ir) sibling for this file's shape: each entry
+ * has exactly one protocol (a call site names exactly one), not a uniform
+ * profile set shared across every entry the way `assembleWireModule` assumes
  * — so this reassembles from already-compiled fragments directly rather than
  * reusing that function. `wireFragments` is keyed by
  * `wireValidatorKey(name, protocol)`, same convention.
  *
- * `defsBlockLines`/`wireDefsLines` (phase D, default `[]`) mirror
- * `assembleWireModule`'s own two new params — the constraints layer's shared
- * `__def_NAME_*` block (`compileDefsBlock`) and the decode layer's
- * `WireDefsRegistry.moduleLines()`, spliced ONCE at module scope regardless
- * of how many entries/protocols reference them.
+ * `defsBlockLines`/`wireDefsLines` (default `[]`) mirror `assembleWireModule`'s
+ * own two params — the constraints layer's shared `__def_NAME_*` block
+ * (`compileDefsBlock`) and the decode layer's `WireDefsRegistry.moduleLines()`,
+ * spliced once at module scope regardless of how many entries/protocols
+ * reference them.
  */
 function assembleWireApplyValidationModule(
   entries: readonly { readonly name: string; readonly protocol: ProtocolName }[],
@@ -813,18 +793,15 @@ function assembleWireApplyValidationModule(
 /**
  * The tail appended to the compiled wire module: regroup the flat
  * `wireValidators` record into the nested `Record<key, Record<path,
- * Partial<Record<protocol, entry>>>>` `createApplyValidation`'s SECOND
+ * Partial<Record<protocol, entry>>>>` `createApplyValidation`'s second
  * argument wants, and export a standalone `applyValidation`.
  *
- * An entry file mixing 2-arg and 3-arg call sites gets TWO separately built
- * modules (this one, and the 2-arg path's) — each exports its own usable
- * `applyValidation`, but a consumer that wants ONE shared function (so
- * `usedKeys` is tracked across both kinds of call in one file) composes
- * manually: `createApplyValidation(validatorsByKey, wireValidatorsByKey)`,
- * importing `validatorsByKey`/`wireValidatorsByKey` from each generated
- * module respectively. Documented here as a scope note, not a contradiction —
- * the same class of explicit scope cut this file already makes elsewhere
- * (e.g. same-file-only tree tracing, `traceNodeType`'s doc comment).
+ * Every `applyValidation` call site in an entry file — 2-arg or 3-arg —
+ * lands in this one module's `wireValidatorsByKey`, so a consumer normally
+ * just imports the exported `applyValidation` directly. A consumer that also
+ * has a hand-authored `ValidatorMap` (a `createApplyValidation` built from a
+ * map without codegen, independent of this file entirely) composes the two
+ * manually: `createApplyValidation(handAuthoredValidators, wireValidatorsByKey)`.
  */
 function composeWireApplyValidationTail(byKey: WireApplyValidationTypeRefs["byKey"]): string {
   const lines: string[] = [];
@@ -863,9 +840,9 @@ export type WireApplyValidationBuildOptions = {
  * `assembleWireApplyValidationModule`, followed by the nested regrouping and
  * `createApplyValidation` composition (`composeWireApplyValidationTail`).
  *
- * An entry file with no 3-arg call sites yields the SAME stub module the
- * 2-arg path yields (`applyValidationStubSource`) — nothing to generate, and
- * a consumer's import must still resolve.
+ * An entry file with no `applyValidation` call sites at all yields the stub
+ * module (`applyValidationStubSource`) — nothing to generate, and a
+ * consumer's import must still resolve.
  */
 export function buildWireApplyValidationModuleSource(
   entryFile: string,
@@ -917,17 +894,17 @@ export function buildWireApplyValidationModuleSource(
 }
 
 /** JSON-serializable fingerprint input for one leaf's derivation — profile
- * NAMES, not the `WireProfile` objects themselves (whose `leafHandlers`
- * values are functions; `JSON.stringify` silently drops them, which would
- * still distinguish most profiles via their surviving keys but needlessly
- * relies on that side effect) — see `computeLeafFingerprint`'s doc comment
- * (cache.ts) and this design's item 7 ("just pass `{ input: ref, profile:
- * profileName }`"). `hookFields` folds in separately (see this function's
- * caller) rather than here, since it's orthogonal to which PROFILE a field
- * resolves to — a field can flip between fused and hook-covered without its
- * profile assignment changing at all, and that flip alone must still
- * invalidate the leaf's cached artifact (a fused fragment and a hook
- * fragment for the SAME field/profile emit different code). */
+ * names, not the `WireProfile` objects themselves. (A `WireProfile`'s
+ * `leafHandlers` values are functions, which `JSON.stringify` silently drops;
+ * fingerprinting on the profile name is the direct route to a stable
+ * fingerprint, per `computeLeafFingerprint`'s doc comment (cache.ts): "just
+ * pass `{ input: ref, profile: profileName }`".) `hookFields`
+ * folds in separately (see this function's caller) rather than here, since
+ * it's orthogonal to which profile a field resolves to — a field can flip
+ * between fused and hook-covered without its profile assignment changing at
+ * all, and that flip alone must still invalidate the leaf's cached artifact
+ * (a fused fragment and a hook fragment for the same field/profile emit
+ * different code). */
 function fingerprintableDerivation(derivation: FieldProfileDerivation): unknown {
   if ("profile" in derivation) return { profile: derivation.profile.name };
   return {
@@ -944,18 +921,16 @@ export type WireApplyValidationIncrementalResult = {
   readonly leafArtifacts: Record<string, CompiledWireEntryFragment>;
   readonly defNamesFingerprint: string;
   /** Flat `(leafName, protocol)` keys (via `wireValidatorKey`) actually
-   * RECOMPILED this run — everything else was carried forward. */
+   * recompiled this run — everything else was carried forward. */
   readonly changedLeaves: readonly string[];
 };
 
-/** Prior Tier-2 state for one wire-path entry — `defNamesFingerprint`
- * tracking (phase D closed this path's "no defs/ref-recursion support at all"
- * scope cut) mirrors `ApplyValidationCarryForwardState` one-for-one: a leaf's
- * carry-forward reuse must also check the def-name-set fingerprint hasn't
- * changed, since a `ref`'s generated code (both layers — the constraints
- * fn's `ctx.defNames`-gated call, and the decode fn's `WireDefsRegistry`
- * lookup) depends on which def names are callable, not just the leaf's own
- * IR fingerprint. */
+/** Prior Tier-2 state for one wire-path entry. `defNamesFingerprint` tracks
+ * whether the def-name set changed: a leaf's carry-forward reuse must check
+ * that fingerprint too, since a `ref`'s generated code (both layers — the
+ * constraints fn's `ctx.defNames`-gated call, and the decode fn's
+ * `WireDefsRegistry` lookup) depends on which def names are callable, not
+ * just the leaf's own IR fingerprint. */
 export type WireApplyValidationCarryForwardState = {
   readonly leafFingerprints: Readonly<Record<string, string>>;
   readonly leafArtifacts: Readonly<Record<string, unknown>>;
@@ -976,10 +951,9 @@ function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragm
  * extraction/derivation and identical codegen, except a leaf whose
  * `(input ref, protocol, derivation)` fingerprint matches
  * `prior.leafFingerprints` reuses `prior.leafArtifacts`'s fragment verbatim
- * instead of recompiling. Mirrors `buildApplyValidationModuleSourceIncremental`
- * one-for-one, keyed by `wireValidatorKey(name, protocol)` instead of bare
- * `name` (this path's fingerprint/artifact keys fold `protocol` in — see item
- * 7: "the profile identity is already folded into the fingerprint for free").
+ * instead of recompiling. Keyed by `wireValidatorKey(name, protocol)` instead
+ * of bare `name`, so the fingerprint/artifact keys fold `protocol` in — the
+ * profile identity is already folded into the fingerprint for free.
  */
 export function buildWireApplyValidationModuleSourceIncremental(
   entryFile: string,
@@ -1059,9 +1033,11 @@ export function buildWireApplyValidationModuleSourceIncremental(
 }
 
 /**
- * `buildWireApplyValidationModuleSource`, cached — same two-tier shape as
- * `buildApplyValidationModuleCached`, now WITH real `defNamesFingerprint`
- * tracking (phase D — see `WireApplyValidationCarryForwardState`'s doc
+ * `buildWireApplyValidationModuleSource`, cached — Tier 1 (cache.ts's
+ * `checkCache`) gates whether a `ts.Program` gets built at all; on a Tier-1
+ * miss, `buildWireApplyValidationModuleSourceIncremental` (Tier 2) recompiles
+ * only the leaves whose fingerprint actually changed, including the
+ * def-name-set fingerprint (see `WireApplyValidationCarryForwardState`'s doc
  * comment for why a leaf's carry-forward reuse depends on it too).
  */
 export function buildWireApplyValidationModuleCached(
@@ -1105,8 +1081,8 @@ export function buildWireApplyValidationModuleCached(
 }
 
 /**
- * `buildWireApplyValidationModuleCached`, writing the result — mirrors
- * `writeApplyValidationModuleCached`.
+ * `buildWireApplyValidationModuleCached`, writing the result to `outFile`
+ * when it actually built something (a cache hit writes nothing).
  */
 export async function writeWireApplyValidationModuleCached(
   entryFile: string,

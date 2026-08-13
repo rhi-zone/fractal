@@ -1,14 +1,12 @@
-// packages/api-tree/src/node.ts — @rhi-zone/fractal-api-tree  (new model, alongside legacy spine)
-//
-// The new fractal authoring model: Node / Handler / SharedMeta / LeafMeta /
-// BranchMeta + constructors (op / api) + mergeMeta.
+// The fractal authoring model: Node / Handler / SharedMeta / LeafMeta /
+// BranchMeta, constructors (op / api), and mergeMeta.
 //
 // Node shape:
-//   - A LEAF node carries `handler` (the bare fn) and may have no `children`.
-//   - A BRANCH node carries `children` and no handler.
+//   - A leaf node carries `handler` (the bare fn) and may have no `children`.
+//   - A branch node carries `children` and no handler.
 //   - Both is valid (uncommon but valid).
 //   - Every node carries `meta` (the open metadata bag).
-//   - A node MAY carry `fallback: { name, subtree }` — when keyed dispatch at
+//   - A node may carry `fallback: { name, subtree }`: when keyed dispatch at
 //     this node finds no matching child, the fallback consumes the value,
 //     binds it as a named parameter, and continues into `subtree`. Static
 //     children always win; fallback fires only when no child matches.
@@ -16,8 +14,8 @@
 // `op(fn, meta?)` produces a leaf node.
 // `api(children, opts?)` produces a branch node.
 //
-// This module is SEPARATE from the legacy function-core spine in index.ts.
-// Import directly from "./node.ts" until the two are merged.
+// This module is separate from the legacy function-core spine in index.ts;
+// import directly from "./node.ts" until the two modules are merged.
 //
 // See:
 //   docs/design/router-model.md — Node Shape (settled node shape + fallback)
@@ -31,7 +29,7 @@ import type { MismatchedEncodingMapDecoders, UncoveredSourceParams } from "./inp
 // ============================================================================
 
 /**
- * Open metadata bag — arbitrary keys, NOT a closed set. Split by ROLE
+ * Open metadata bag: arbitrary keys, not a closed set. Split by role
  * (shared / leaf-only / branch-only) instead of one flat interface, so a
  * consumer's `HasRequiredKeys`-driven requiredness (below) and a
  * projector's own namespaced fields (e.g. `http`, `mcp`) can each target the
@@ -41,14 +39,14 @@ import type { MismatchedEncodingMapDecoders, UncoveredSourceParams } from "./inp
  *   1. Projection namespaces: `meta.http = { method: "GET", sourceMap: {...} }`
  *   2. Agnostic behavioral tags: `meta.tags = { readOnly: true }`
  *
- * Types (+ JSDoc) are the truth for domain data. This bag is ONLY for
+ * Types (+ JSDoc) are the truth for domain data; this bag holds only
  * non-type-expressible projection/taste concerns (verb, segment, idempotency,
- * auth). Never a second source for domain data.
+ * auth), never a second source for domain data.
  *
- * Core itself declares no protocol namespace and performs no `declare
- * module` augmentation — every projector exports its own namespaced
- * fragments as inert interfaces, and exactly one deployment-owned file
- * augments `SharedMeta`/`LeafMeta`/`BranchMeta` via `extends`. See
+ * Core declares no protocol namespace and performs no `declare module`
+ * augmentation — every projector exports its own namespaced fragments as
+ * inert interfaces, and exactly one deployment-owned file augments
+ * `SharedMeta`/`LeafMeta`/`BranchMeta` via `extends`. See
  * docs/design/meta-role-split-spec.md.
  */
 export interface SharedMeta {
@@ -62,12 +60,12 @@ export interface SharedMeta {
   description?: string;
 }
 
-/** Meta carried by a LEAF node (an `op()` result). */
+/** Meta carried by a leaf node (an `op()` result). */
 export interface LeafMeta extends SharedMeta {
   tags?: Tags;
 }
 
-/** Meta carried by a BRANCH node (an `api()` result). */
+/** Meta carried by a branch node (an `api()` result). */
 export interface BranchMeta extends SharedMeta {}
 
 /**
@@ -90,7 +88,7 @@ export type HasRequiredKeys<T> = {} extends T ? false : true;
 
 // ============================================================================
 // Type-level meta merge — mirrors `mergeRecords`'/`mergeMeta`'s runtime
-// semantics (below) so `op()`'s return type can carry the EXACT merged meta
+// semantics (below) so `op()`'s return type can carry the exact merged meta
 // type instead of widening every contribution to the erased `Meta`. This is
 // what lets a leaf's meta — e.g. `op(fn, http.get, http.moveTo(".."))` from
 // http-api-projector's verbs.ts — carry literal directive values
@@ -108,25 +106,25 @@ type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
  * generic, indexed erasure field (see that field's own doc comment,
  * node.ts) whenever a constructed node widens into a plain `Node<any>` slot
  * (a `children` map entry, `fallback.subtree`, any function parameter typed
- * plain `Node`) — which is EVERY ordinary use of `op()`/`api()` together
+ * plain `Node`) — which covers every ordinary use of `op()`/`api()` together
  * (`api({ child: op(fn, ...) })`'s own `C extends Record<string, Node<any>>`
  * constraint check is exactly such a widening).
  *
  * Needed for two distinct reasons depending on what `T` resolves to:
- *   - `T` a genuinely EMPTY contribution (`op(fn)`'s `FoldMeta<[]>` = the
+ *   - `T` a genuinely empty contribution (`op(fn)`'s `FoldMeta<[]>` = the
  *     bare `object` type, or `api(children)`'s bare `BranchMeta` fallback)
  *     — the built-in `object` type carries no provable properties at all,
- *     so it fails to satisfy ANY indexed target on its own; a NAMED
+ *     so it fails to satisfy any indexed target on its own; a named
  *     `interface` (`BranchMeta`) fails too, for an unrelated but equally
  *     real reason — TypeScript's assignability check treats a value typed
- *     by a plain `interface` reference as NOT implicitly satisfying an
+ *     by a plain `interface` reference as not implicitly satisfying an
  *     index signature (only fresh/anonymous object types and type aliases
  *     get that leniency), even though every one of `BranchMeta`'s own
  *     members is optional. Both were verified empirically (scratch `tsc`,
  *     not asserted from memory) to fail `: { readonly [k: string]: unknown
- *     } = value` on their own and succeed once intersected with the index
- *     signature at the SOURCE, which is what this type does.
- *   - `T` a REAL contribution (e.g. `op(fn, http.get)`'s `{ http: {...} }`)
+ *     } = value` on their own, and to succeed once intersected with the
+ *     index signature at the source, which is what this type does.
+ *   - `T` a real contribution (e.g. `op(fn, http.get)`'s `{ http: {...} }`)
  *     — this case doesn't strictly need the intersection on its own (an
  *     anonymous object literal type already satisfies an indexed target
  *     without it), but applying `Widen` unconditionally, rather than only
@@ -137,52 +135,53 @@ type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
 type Widen<T> = T & { readonly [key: string]: unknown };
 
 /**
- * Merge two meta VALUES at the type level, matching `mergeRecords`: arrays
+ * Merge two meta values at the type level, matching `mergeRecords`: arrays
  * concatenate (`http.directives`'s case), two plain objects merge
  * recursively (`tags`/`http`'s case), anything else resolves to `B` (later
  * wins) — same three-way branch as the runtime function, just as a
  * conditional type instead of an `Array.isArray`/`typeof` check.
  *
- * `A`/`B` here are frequently an OPTIONAL property's type (e.g.
+ * `A`/`B` here are frequently an optional property's type (e.g.
  * `Tags | undefined`, when only one of two merged contributions declares
  * that key required) — `mergeRecords` itself special-cases this at runtime
  * (`if (v === undefined) continue` — an absent contribution never overrides
  * an existing value). The leading `B extends undefined ? A : A extends
- * undefined ? B : ...` branch mirrors that, and DELIBERATELY distributes
- * over `A`/`B`'s naked union (rather than defeating distribution) — for
+ * undefined ? B : ...` branch mirrors that, and distributes over `A`/`B`'s
+ * naked union by design (rather than defeating distribution) — for
  * `MergeMetaValue<Record<...>, Tags | undefined>` this evaluates once per
  * union member of `B` and unions the results, producing exactly "the merged
- * object, OR plain `A` if the caller's `B` turns out to have been absent" —
- * which is the honest static type given the input actually is optional.
+ * object, or plain `A` if the caller's `B` turns out to have been absent" —
+ * the honest static type given the input actually is optional.
  *
  * `Depth` caps object recursion at 2 levels (Meta's own keys, e.g. `http`;
  * then that value's own keys, e.g. `directives`/`response`) — deep enough to
- * concatenate `http.directives` (an ARRAY field, whose branch above doesn't
+ * concatenate `http.directives` (an array field, whose branch above doesn't
  * even consult `Depth`) and to merge `http`'s own immediate fields, but not
  * so deep that an incidental nested object arbitrarily far down a
  * projector's own meta namespace (e.g. a `response` directive's `headers:
- * Record<string,string>`) gets recursively torn apart into a
- * per-string-key mapped type — `Record<string,string>`'s single index
- * signature has no discrete `keyof` for `Omit`/`Pick` to preserve modifiers
- * over, which produces a bogus optional string index incompatible with the
- * plain `Record<string,string>` `exactOptionalPropertyTypes` expects. Beyond
- * the cap, `MergeMetaValue` takes the plain-override branch (`B` wins) —
- * losing recursive-merge precision for that deep a nesting, never losing the
- * value itself.
+ * Record<string,string>`) gets recursively torn apart into a per-string-key
+ * mapped type — `Record<string,string>`'s single index signature has no
+ * discrete `keyof` for `Omit`/`Pick` to preserve modifiers over, which
+ * produces a bogus optional string index incompatible with the plain
+ * `Record<string,string>` `exactOptionalPropertyTypes` expects. Beyond the
+ * cap, `MergeMetaValue` takes the plain-override branch (`B` wins), losing
+ * recursive-merge precision for that deep a nesting, never losing the value
+ * itself.
  *
- * This is also what gives a THREE-level-deep map-shaped value (`Meta -> http
+ * This is also what gives a three-level-deep map-shaped value (`Meta -> http
  * -> sourceMap -> { store, key? }`, e.g. two composed `http.source()` calls
  * naming the same param) correct "keyed, last-wins, whole-value-replace"
- * merge semantics FOR FREE, with no separate branch: `sourceMap`'s own keys
+ * merge semantics with no separate branch needed: `sourceMap`'s own keys
  * (param names) merge via the ordinary `Omit`/`Pick` machinery one level up
- * (Depth 1, well inside the cap), but the VALUE two overlapping keys carry
+ * (Depth 1, well inside the cap), but the value two overlapping keys carry
  * (a single param's `ParamSource`) is compared at Depth 2 — the cap — so it
- * resolves via the plain-override branch (`B` wins WHOLESALE), never a
+ * resolves via the plain-override branch (`B` wins wholesale), never a
  * partial field-by-field merge of `{store, key?}`. Verified empirically
  * (scratch `tsc`) during the http-directive-dissolution migration, which
  * first exercised a real 3-level meta object this deep; `mergeRecords`
- * (below) is depth-capped to match this EXACTLY, closing a latent runtime/
- * type divergence the same scratch check surfaced (see its own doc comment).
+ * (below) is depth-capped to match this exactly, closing a latent
+ * runtime/type divergence the same scratch check surfaced (see its own doc
+ * comment).
  */
 type MergeMetaValue<A, B, Depth extends readonly unknown[] = []> = B extends undefined
   ? A
@@ -203,7 +202,7 @@ type MergeMetaValue<A, B, Depth extends readonly unknown[] = []> = B extends und
         : B;
 
 /**
- * True when key `K` is optional on BOTH `A` and `B` — the only case where
+ * True when key `K` is optional on both `A` and `B` — the only case where
  * the merged key may still be legally absent (if either contribution always
  * supplies it, the merge always will too, regardless of the other side).
  */
@@ -211,17 +210,17 @@ type IsOptionalOnBoth<A, B, K extends keyof A & keyof B> =
   {} extends Pick<A, K> ? ({} extends Pick<B, K> ? true : false) : false;
 
 /**
- * Merge two meta OBJECTS at the type level, key by key, via `MergeMetaValue`.
+ * Merge two meta objects at the type level, key by key, via `MergeMetaValue`.
  * Built from `Omit`/`Pick`-shaped pieces (not one mapped type over
  * `keyof A | keyof B`) specifically so each key's optional/readonly modifier
  * survives — `Omit` is a homomorphic mapped type that copies a property's
- * own modifiers through; a single mapped type keyed by a COMPUTED union like
+ * own modifiers through; a single mapped type keyed by a computed union like
  * `keyof A | keyof B` is not homomorphic and would flatten every key back to
  * required, which fails under `exactOptionalPropertyTypes` the moment an
  * optional-only field (`tags?`, `description?`, …) meets `Node["meta"]`'s own
  * optional declaration. The keys common to both sides are split further, via
  * key remapping (`as`), into a required-in-the-merge piece and an
- * optional-in-the-merge piece (`IsOptionalOnBoth`) so THEIR modifier is
+ * optional-in-the-merge piece (`IsOptionalOnBoth`) so their modifier is
  * correct too, not just copied from whichever side happened to be picked.
  */
 type MergeTwoMeta<A, B, Depth extends readonly unknown[] = []> = Omit<A, keyof B> &
@@ -284,12 +283,12 @@ type FoldMetaList<T extends readonly unknown[]> = T extends readonly []
 export type Handler<I = any, O = any> = (input: I) => O | Promise<O>;
 
 /**
- * [CERTIFIED] One tree = grouping AND addressing.
- * A node's key IS its address segment; behavior (`handler`) carries none.
+ * [CERTIFIED] One tree = grouping and addressing.
+ * A node's key is its address segment; behavior (`handler`) carries none.
  * Both `op()` and `api()` lower to this value.
  *
- * - LEAF: `handler` is present (a callable). May have no `children`.
- * - BRANCH: `children` is present. May have no `handler`.
+ * - Leaf: `handler` is present (a callable). May have no `children`.
+ * - Branch: `children` is present. May have no `handler`.
  * - Both is valid (uncommon).
  * - `fallback`: optional wildcard-capture subtree. When keyed dispatch at this
  *   node finds no child matching the current request value, the fallback
@@ -316,7 +315,7 @@ export type Handler<I = any, O = any> = (input: I) => O | Promise<O>;
  * `LeafMeta | BranchMeta` or `LeafMeta & BranchMeta` — a plain `Node<H>`
  * value (a map entry in `children`, a `fallback.subtree`, …) doesn't
  * statically know whether it's a leaf, a branch, or both (§ node doc above),
- * so its generic field can only safely promise what's valid at EVERY
+ * so its generic field can only safely promise what's valid at every
  * position: `SharedMeta`. `op()`/`api()` each override `meta` on their own
  * return type with the role-precise `LeafMeta`/`BranchMeta`-checked type
  * (below) — reading a role-specific field (`.tags`, a leaf-only projector
@@ -329,19 +328,19 @@ export type Handler<I = any, O = any> = (input: I) => O | Promise<O>;
  * string]: unknown }`, not bare `SharedMeta` — an implementation point the
  * spec's own text doesn't cover (it only specifies `SharedMeta`/`LeafMeta`/
  * `BranchMeta`'s own shape and op()/api()'s return types, never this erased
- * field). Without the index signature, EVERY real op()/api() result (any
+ * field). Without the index signature, every real op()/api() result (any
  * meta literal that doesn't happen to include a `description` key — i.e.
  * nearly all of them, since a projector's own namespaced key like `http`/
  * `mcp` is never `description`) fails to widen into a plain `Node<any>`
  * slot (a `children` map entry, `fallback.subtree`, any function parameter
  * typed plain `Node`): TypeScript's "weak type" detection flags an object
- * literal as an error when the TARGET type has only optional properties AND
- * the source shares NOT ONE property name with it — exactly what happens
+ * literal as an error when the target type has only optional properties and
+ * the source shares not one property name with it — exactly what happens
  * once projectors stop declaration-merging their own keys onto
  * `SharedMeta`/`LeafMeta` (§9(4)) and this field is left with only
  * `description?`. Before this split, `Meta`'s own augmented shape usually
  * shared a key (`http`, `mcp`, …) with any real contribution, so the same
- * failure mode never surfaced. The index signature is added ONLY here, on
+ * failure mode never surfaced. The index signature is added only here, on
  * this one erased field — never on `SharedMeta`/`LeafMeta`/`BranchMeta`
  * themselves, which stay exactly the shape §2 specifies — and restores the
  * "open metadata bag, arbitrary keys" character this module's own doc
@@ -377,24 +376,24 @@ export const isLeaf = (n: Node): boolean => n.handler !== undefined;
  * (including a type mismatch) resolves to `value`.
  *
  * `depth` caps object recursion at 2 levels, mirroring `MergeMetaValue`'s own
- * `Depth` cap (below) EXACTLY — not just in spirit. This parity was verified
+ * `Depth` cap (below) exactly, not just in spirit. This parity was verified
  * empirically (scratch `tsc` + `bun run`, during the http-directive-dissolution
- * migration that first exercised a THREE-level-deep object merge — `meta.http
+ * migration that first exercised a three-level-deep object merge — `meta.http
  * .sourceMap`'s own per-param `ParamSource` values, `Meta -> http -> sourceMap
- * -> { store, key? }`): before this cap existed, an UNBOUNDED runtime
+ * -> { store, key? }`): before this cap existed, an unbounded runtime
  * recursion here silently diverged from the type-level fold's already-capped
  * result. Concretely: composing two `http.source()` calls whose maps both
- * name the same param, where the LATER call's `ParamSource` omits `key`
+ * name the same param, where the later call's `ParamSource` omits `key`
  * (relying on `assemble()`'s own "defaults to param name when omitted"),
- * merged the two `ParamSource` objects FIELD BY FIELD at runtime — silently
- * resurrecting the FIRST call's stale `key` — while the type-level fold
+ * merged the two `ParamSource` objects field by field at runtime — silently
+ * resurrecting the first call's stale `key` — while the type-level fold
  * (already depth-capped) correctly reported the later call's value winning
- * WHOLESALE, with no `key` field at all. Capping the runtime recursion here
+ * wholesale, with no `key` field at all. Capping the runtime recursion here
  * closes that gap: at depth 2, a later value now replaces an earlier one
- * WHOLESALE (never field-merged), the same "whole value wins" resolution the
+ * wholesale (never field-merged), the same "whole value wins" resolution the
  * type-level cap already computes — which is also the exact semantics a
  * keyed map of opaque per-key values (`sourceMap`'s own per-param entries)
- * needs: union the KEYS (param names), but never partially merge the VALUE
+ * needs: union the keys (param names), but never partially merge the value
  * (a single param's `ParamSource`) two contributions both set.
  */
 function mergeRecords(
@@ -471,7 +470,7 @@ export function mergeMeta<const T extends readonly (object | undefined)[]>(
  *   left-to-right via `mergeMeta` (later wins per key; undefined defers).
  *   A verb-bundle + extra tags compose without either clobbering the other.
  *
- * The result IS a Node (not a separate `{fn, meta}` record). Projections
+ * The result is a Node (not a separate `{fn, meta}` record). Projections
  * detect a leaf by `node.handler !== undefined`.
  *
  * Generic in `H` (the exact handler type): `op(fn)`'s result carries `fn`'s
@@ -500,7 +499,7 @@ export function mergeMeta<const T extends readonly (object | undefined)[]>(
  * When `HasRequiredKeys<LeafMeta>` is true (a consumer declaration-merged a
  * required field onto `LeafMeta` — e.g. the sibling codebase's `scopes` on every op, see
  * docs/design/meta-role-split-spec.md §5/§7), `contributions` is checked
- * against `FoldMeta<C> extends LeafMeta` — the FOLDED (right-to-left merged)
+ * against `FoldMeta<C> extends LeafMeta` — the folded (right-to-left merged)
  * contribution, not each contribution individually. This is deliberate, not
  * incidental: constraining each element of `C` to individually extend
  * `LeafMeta` would make a single `VerbBundle` contribution (e.g.
@@ -508,7 +507,7 @@ export function mergeMeta<const T extends readonly (object | undefined)[]>(
  * to typecheck on its own, before it's ever composed with the contribution
  * that supplies `scopes` — breaking exactly the "verb bundle + extra tags
  * compose" DX this function exists for. Folding first means only the
- * COMPOSED result has to satisfy `LeafMeta`. When the fold doesn't satisfy
+ * composed result has to satisfy `LeafMeta`. When the fold doesn't satisfy
  * `LeafMeta` (a required member like `scopes` is missing from every
  * contribution combined), `contributions` falls back to the erased
  * `[LeafMeta, ...LeafMeta[]]` — a shape no literal-preserving call can
@@ -517,12 +516,12 @@ export function mergeMeta<const T extends readonly (object | undefined)[]>(
  * silently widening.
  */
 /**
- * Structurally extracts the `E` in a handler's `Result<T, E>` return type —
- * PROBE: matches the DU's raw `{ kind: "err"; error: E }` shape rather than
- * the `Result<T, E>` alias itself. Matching the alias name (`R extends
+ * Structurally extracts the `E` in a handler's `Result<T, E>` return type by
+ * matching the DU's raw `{ kind: "err"; error: E }` shape rather than the
+ * `Result<T, E>` alias itself. Matching the alias name (`R extends
  * Result<any, infer E>`) does not work here: with `skipLibCheck: true`,
  * alias instantiations are left unresolved by the checker (see the
- * ARCHITECTURE NOTE in extract.ts), so a pattern keyed to the alias's own
+ * architecture note in extract.ts), so a pattern keyed to the alias's own
  * identity always misses and falls through. The raw shape pattern sidesteps
  * that because it matches the union's structure, not the alias reference.
  *
@@ -545,7 +544,7 @@ type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
 
 /**
  * `C` when every `source`-declared param name is one the handler `H` actually
- * declares as an input, and an UNSATISFIABLE intersection naming the offenders
+ * declares as an input, and an unsatisfiable intersection naming the offenders
  * otherwise — the static half of docs/design/typed-store-spec.md §6's coverage
  * check, applied to `op()`'s own contributions.
  *
@@ -554,7 +553,7 @@ type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
  * argument list didn't match.
  *
  * Written as `C & ...` rather than a conditional returning some other type
- * specifically to keep `C` in an INFERENCE position: `contributions`' declared
+ * specifically to keep `C` in an inference position: `contributions`' declared
  * type is what `C` is inferred from, and wrapping it in a type that doesn't
  * mention `C` nakedly would break the literal-preserving inference every
  * downstream `FoldMeta<C>` depends on. Verified against a scratch repro before
@@ -569,7 +568,7 @@ type ExtractErrorKind<H> = H extends (...args: any[]) => infer R
  * addendum) — a function-form `meta.http.encodingMap`/`meta.cli.encodingMap`
  * decoder whose param/return types don't match
  * `(w: WireOf<FieldType, ResolvedStore>) => FieldType` for its own field.
- * Checked against `FoldMeta<C>` (the same COMPOSED contribution
+ * Checked against `FoldMeta<C>` (the same composed contribution
  * `UncoveredSourceParams` above checks against), for the same reason: a
  * `sourceMap`/`encodingMap`-bearing contribution composed from several
  * `op()` arguments only has its full field set once folded.
@@ -632,7 +631,7 @@ export function op<H extends Handler, const C extends readonly unknown[] = []>(
 
 /**
  * Produce a branch node: a Node carrying children (and optional meta/fallback).
- * Leaf nodes (callables) belong in `children` keyed by name — they ARE nodes,
+ * Leaf nodes (callables) belong in `children` keyed by name — they are nodes,
  * created with `op()`.
  *
  * `api(children, opts?)` — positional children for the common case, an
@@ -656,7 +655,7 @@ export function op<H extends Handler, const C extends readonly unknown[] = []>(
  * Generic in `F` (the exact fallback shape) the same way: `opts.fallback`'s
  * literal `{ name, subtree }` — subtree included — survives into the
  * result's `fallback`, instead of widening `subtree` to the erased `Node`
- * OR widening `name` to plain `string`. Defaults to `undefined` (no
+ * or widening `name` to plain `string`. Defaults to `undefined` (no
  * `fallback` key on the result at all) when `opts.fallback` isn't passed, so
  * a plain `api(children)` call doesn't grow a spurious optional `fallback`
  * field.
@@ -682,7 +681,7 @@ export function op<H extends Handler, const C extends readonly unknown[] = []>(
  * `opts.meta` value, so no fold is needed — `M` flows straight through to
  * the result's `meta` field. Defaults to `undefined` (mirroring `F`'s
  * default), in which case the result falls back to the erased `BranchMeta`
- * — `api()`'s own `meta` field is always PRESENT on `Node` (unlike
+ * — `api()`'s own `meta` field is always present on `Node` (unlike
  * `fallback`, which is optional), so the `undefined` case widens to
  * `BranchMeta` rather than omitting the field. This is what lets a branch's
  * `meta.mcp.segment` survive as a literal into tree.ts's `mcpMetaOverride`
@@ -744,7 +743,7 @@ export function api<
  *     built `Node` (typically an `api()` call site the caller wrote out in
  *     full, e.g. one that also needs `opts.meta` or its own nested
  *     `opts.fallback` for a second dynamic segment). Passed through unchanged
- *     — `fallback()` only wraps the FIRST shape in `api()`, never re-wraps an
+ *     — `fallback()` only wraps the first shape in `api()`, never re-wraps an
  *     already-built subtree.
  *
  * Generic in `Name` (`const` — same literal-preserving technique `api()`'s

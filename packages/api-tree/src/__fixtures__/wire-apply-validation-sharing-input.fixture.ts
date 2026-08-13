@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/wire-apply-validation-sharing-input.fixture.ts
-//
 // Wire-path (3-arg `applyValidation(key, tree, protocol)`) sibling of
 // apply-validation-sharing-input.fixture.ts — same Address-reuse shape (two
 // ops, `setBilling`/`setShipping`, both taking an `Address`-typed field), but

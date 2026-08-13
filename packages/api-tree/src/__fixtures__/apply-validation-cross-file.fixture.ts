@@ -1,12 +1,10 @@
-// packages/api-tree/src/__fixtures__/apply-validation-cross-file.fixture.ts
-//
-// A call site whose tree argument is an already-PROJECTED value declared in
-// ANOTHER file — nothing in this file's AST leads back to an `api()` Node
-// tree, and same-file resolution is this phase's deliberate first cut. Codegen
-// must fail LOUDLY here rather than silently emit a module missing this key.
+// A call site whose tree argument is an already-projected value declared in
+// another file — nothing in this file's AST leads back to an `api()` Node
+// tree, and same-file resolution is this phase's first cut. Codegen fails
+// loudly here rather than silently emitting a module missing this key.
 //
 // (An imported `Node` tree, by contrast, needs no tracing at all: the
-// identifier's own TYPE is already the tree, which is everything the leaf
+// identifier's own type is already the tree, which is everything the leaf
 // extraction reads — see `traceNodeType`'s first form.)
 //
 // Not a test file (no `.test.ts`), so bun test skips it.

@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/discover-fixtures/with-tree.fixture.ts
-//
 // A minimal genuine `api()` tree export — one of `findEntryFiles`'s
 // (discover.ts) positive fixtures: this file must be picked up by a plain
 // `findEntryFiles({ roots: <discover-fixtures dir> })` call, and

@@ -1,4 +1,4 @@
-// packages/api-tree/src/node.test.ts — new Node/Handler/Meta/fallback model
+// Tests for the Node/Handler/Meta/fallback model (node.ts).
 
 import { describe, expect, it } from "bun:test";
 import {
@@ -28,7 +28,7 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 // bag's genuinely-open, undeclared-key runtime behavior — arbitrary keys
 // still pass through unchanged at the value level, they're just not
 // statically known here. `OpenMeta` is the test-only escape hatch for that:
-// an index signature back on top of `SharedMeta`, used ONLY where a test's
+// an index signature back on top of `SharedMeta`, used only where a test's
 // whole point is an undeclared key.
 type OpenMeta = SharedMeta & Record<string, unknown>;
 
@@ -114,10 +114,11 @@ describe("resolveTags", () => {
   });
 
   it("readOnly does not override an explicitly-set idempotent", () => {
-    // idempotent: false is an explicit negative — readOnly ⇒ idempotent should
-    // not stomp an explicit false (conflict is a domain issue, not our job here)
+    // readOnly's implication of idempotent yields to an explicitly-set
+    // `idempotent: false`; reconciling a readOnly+non-idempotent conflict is
+    // a domain-level concern, outside resolveTags's scope.
     const result = resolveTags({ [TAG_READ_ONLY]: true, [TAG_IDEMPOTENT]: false });
-    expect(result.idempotent).toBe(false); // explicit negative preserved
+    expect(result.idempotent).toBe(false); // explicit value preserved
   });
 
   it("unknown stays unknown — absence does not default to false", () => {
@@ -255,7 +256,7 @@ describe("op surfaces", () => {
     const n = api({});
     const leaf = op(() => "x");
     expect(isNode(n)).toBe(true);
-    expect(isNode(leaf)).toBe(true); // a leaf IS a node (has meta)
+    expect(isNode(leaf)).toBe(true); // a leaf is a node (has meta)
     expect(isLeaf(n)).toBe(false); // branch node with no handler
     expect(isLeaf(leaf)).toBe(true);
     expect(isNode(null)).toBe(false);
@@ -376,7 +377,7 @@ describe("mergeMeta", () => {
     expect((m.tags as Tags).readOnly).toBe(true);
   });
 
-  it("map-shaped value at depth 3 (e.g. http.sourceMap's per-param ParamSource) replaces WHOLESALE on key overlap, never field-merges (mergeRecords' depth cap, see its own doc comment)", () => {
+  it("map-shaped value at depth 3 (e.g. http.sourceMap's per-param ParamSource) replaces wholesale on key overlap, never field-merges (mergeRecords' depth cap, see its own doc comment)", () => {
     const m = mergeMeta(
       { http: { sourceMap: { year: { store: "query", key: "fiscal_year" } } } } as OpenMeta,
       { http: { sourceMap: { year: { store: "header" } } } } as OpenMeta,
@@ -397,11 +398,11 @@ describe("api()", () => {
 
   it("api(children, opts) forwards meta and fallback exactly as given", () => {
     const children = { users: op(() => []) };
-    // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
-    // split (docs/design/meta-role-split-spec.md §2) — `description` is the
-    // real BranchMeta-valid field this branch-node test exercises instead;
-    // the point of this test is generic forwarding, not which field. No
-    // explicit `: SharedMeta` annotation — a bare interface reference isn't
+    // `tags` is a leaf-only field under the SharedMeta/LeafMeta/BranchMeta
+    // split (docs/design/meta-role-split-spec.md §2); `description` is the
+    // BranchMeta-valid field this branch-node test exercises instead — the
+    // point of this test is generic forwarding, not which field. No explicit
+    // `: SharedMeta` annotation, since a bare interface reference isn't
     // assignable to `api()`'s own `Widen<...>`-indexed return type (see
     // node.ts's `Widen` doc comment), where a plain inferred object literal
     // type is.

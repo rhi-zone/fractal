@@ -1,6 +1,4 @@
-// packages/api-tree/src/otel.test.ts — otel.ts
-//
-// Covers the two independent halves of otel.ts:
+// Tests for otel.ts, covering its two independent halves:
 //   - W3C traceparent parse/format (pure, no ALS)
 //   - runServerSpan/runClientSpan/getActiveSpan lifecycle (a fake OtelTracer
 //     test double, proving span start/end/status/exception recording without

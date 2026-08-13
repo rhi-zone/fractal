@@ -1,4 +1,4 @@
-// packages/api-tree/src/typed-client.test.ts — TypedClient<N> type-level checks
+// Tests for TypedClient<N>'s type-level checks.
 //
 // TypedClient<N, CallOpts> is a pure type — no runtime constructor lives in
 // this package (a remote client needs a transport, which is a projector

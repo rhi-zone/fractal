@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/default-export.fixture.ts
-//
 // A bare `export default api(...)` — the tree expression exported directly
 // as default, no function wrapper, no variable binding. Parses as a
 // ts.ExportAssignment, a shape distinct from both the `export const` and

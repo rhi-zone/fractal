@@ -1,18 +1,16 @@
-// packages/api-tree/src/__fixtures__/apply-validation.fixture.ts
-//
 // A multi-tree entry file for the CALL-SITE-anchored codegen
 // (apply-validation-build.ts): two independent `applyValidation(key, tree)`
 // call sites over two different trees, exercising both tracing forms —
 //   - `applyValidation("books", booksTree)`: the argument is already the
 //     `Node` tree;
 //   - `applyValidation("widgets", fakeProjection(widgetsTree))`: the argument
-//     is a PROJECTION call that has to be unwrapped one level to find the
+//     is a projection call that has to be unwrapped one level to find the
 //     Node-typed argument.
 //
-// Name-resolution is exercised in BOTH directions: the real `applyValidation`
-// is imported under an ALIAS (`validate`) and must still be found, while a
+// Name-resolution is exercised in both directions: the real `applyValidation`
+// is imported under an alias (`validate`) and must still be found, while a
 // local function literally named `applyValidation` — called with a tree — must
-// NOT be picked up. The scan resolves the callee by the brand on its TYPE, not
+// not be picked up. The scan resolves the callee by the brand on its type, not
 // by name (see `isApplyValidationCallee`).
 //
 // Not a test file (no `.test.ts`), so bun test skips it.

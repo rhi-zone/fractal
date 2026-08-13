@@ -1,12 +1,12 @@
-// packages/api-tree/src/otel.integration.test.ts — otel.ts's wrapTracing,
-// proven against all four real projectors — same cross-projector-proof
-// style as context.test.ts, but for `wrapTracing` instead of `createContext`:
-// ONE `wrapTracing(tree, integration, { projectorType })` call per surface,
-// wired in BEFORE the tree reaches `createFetch`/`runCli`/`createMcpServer`/
-// `createGraphQLServer` (mirroring `wrapValidators`'s own call-site
-// convention), produces one span per handler invocation with the expected
-// `projector.type` attribute, and `getActiveSpan()` is readable from INSIDE
-// the handler — proving a handler can create its own child span downstream.
+// Tests for otel.ts's wrapTracing, proven against all four real projectors —
+// same cross-projector-proof style as context.test.ts, but for `wrapTracing`
+// instead of `createContext`: one `wrapTracing(tree, integration,
+// { projectorType })` call per surface, wired in before the tree reaches
+// `createFetch`/`runCli`/`createMcpServer`/`createGraphQLServer` (mirroring
+// `wrapValidators`'s own call-site convention), produces one span per handler
+// invocation with the expected `projector.type` attribute, and
+// `getActiveSpan()` is readable from inside the handler — proving a handler
+// can create its own child span downstream.
 
 import { describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

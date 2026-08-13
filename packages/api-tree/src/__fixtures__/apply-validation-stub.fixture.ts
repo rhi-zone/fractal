@@ -1,6 +1,4 @@
-// packages/api-tree/src/__fixtures__/apply-validation-stub.fixture.ts
-//
-// Stands in for a consumer's PRE-CODEGEN generated module — exactly what
+// Stands in for a consumer's pre-codegen generated module — exactly what
 // `applyValidationStubSource` (apply-validation-build.ts) emits, hand-written
 // here so the call-site fixtures beside it import `applyValidation` through
 // the same re-export hop a real consumer does (`./generated`), which is what

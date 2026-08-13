@@ -1,4 +1,4 @@
-// packages/api-tree/src/direct.test.ts — createDirectApi (zero-protocol-overhead projection)
+// Tests for createDirectApi (zero-protocol-overhead projection, direct.ts).
 
 import { describe, expect, expectTypeOf, it } from "bun:test";
 import { api, op } from "./node.ts";

@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/tree-factory.fixture.ts
-//
 // A Node tree built inside a top-level `export function` factory instead of
 // a top-level `export const` — the pattern the sibling codebase uses when a tree's
 // handlers close over a value only available at deployment/composition time
@@ -21,7 +19,7 @@ import { api, op } from "../node.ts";
 type Composed = { greeting: string };
 
 // The multi-statement form: destructuring + local `op(...)` consts, ending
-// in `return api(...)` directly — the sibling codebase's ACTUAL pattern
+// in `return api(...)` directly — the sibling codebase's actual pattern
 // (`buildDomainAuthTree` in domain-auth.ts destructures `composed`, builds
 // three `op(...)` locals, then returns `api({}, { fallback: {...} })`).
 export function buildGreeterTree(composed: Composed) {
@@ -41,16 +39,16 @@ export function buildPingTree(_composed: Composed) {
   });
 }
 
-// A non-exported factory — must NOT be picked up (mirrors the exported-only
-// discipline already applied to `export const` trees).
+// A non-exported factory — the negative case for the exported-only
+// discipline already applied to `export const` trees; the walker skips it.
 function buildUnexportedTree(_composed: Composed) {
   return api({
     hidden: op((_input: { x: number }) => ({ y: _input.x })),
   });
 }
 
-// An exported factory that returns something other than a tree — must be
-// skipped, same as an unrelated `export const`.
+// An exported factory that returns something other than a tree — the walker
+// skips it, the same as an unrelated `export const`.
 export function buildNotATree() {
   return { plain: "object" };
 }

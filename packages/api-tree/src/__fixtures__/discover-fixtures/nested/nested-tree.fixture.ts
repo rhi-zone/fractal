@@ -1,6 +1,4 @@
-// packages/api-tree/src/__fixtures__/discover-fixtures/nested/nested-tree.fixture.ts
-//
-// A genuine `api()` tree export one directory level BELOW the scanned root
+// A genuine `api()` tree export one directory level below the scanned root
 // — proves `findEntryFiles`'s (discover.ts) directory scan is recursive, not
 // just a single-level `readdir`.
 //

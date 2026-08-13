@@ -1,5 +1,3 @@
-// packages/api-tree/src/typed-client.ts — @rhi-zone/fractal-api-tree
-//
 // TypedClient<N> — the fully typed shape a *remote* (out-of-process) client
 // projects from a `Node` tree's own type. Sibling to `DirectApi<N>`
 // (direct.ts), which does the same computation for the zero-protocol

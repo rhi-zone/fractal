@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/wire-apply-validation-hooks.fixture.ts
-//
 // Function-form `encodingMap` fixtures — the phase this fixture exercises is
 // the "one real gap" the phase-B trace in docs/design/
 // wire-profiles-and-staged-validation.md documented and this implementation
@@ -35,14 +33,13 @@ import { api, op } from "../node.ts";
 import { applyValidation } from "./apply-validation-stub.fixture.ts";
 
 /** Parses a plain-decimal dollar-amount numeric string (`"12.34"`) -> `1234`
- * (integer cents). Deliberately nontrivial: this runs on a value that has
- * ALREADY passed `numericStringLeaf`'s own "is this a numeric string" check
- * (decision 2 reuses that check unmodified for a hooked field) — what no
- * built-in leaf handler does is the DOLLARS-TO-CENTS interpretation, and the
- * rejection of a >2-decimal-place amount below (numeric-string-valid, but
- * not a valid CENTS amount) is exactly the kind of decoder-level rejection
- * that becomes a `"decode"` `ValidationError`, distinct from an
- * `"encoding"` one. */
+ * (integer cents). This runs on a value that has ALREADY passed
+ * `numericStringLeaf`'s own "is this a numeric string" check (decision 2
+ * reuses that check unmodified for a hooked field) — what no built-in leaf
+ * handler does is the DOLLARS-TO-CENTS interpretation, and the rejection of
+ * a >2-decimal-place amount below (numeric-string-valid, but not a valid
+ * CENTS amount) is exactly the kind of decoder-level rejection that becomes
+ * a `"decode"` `ValidationError`, distinct from an `"encoding"` one. */
 function decodeCents(wire: unknown): number {
   if (typeof wire !== "string") throw new Error(`expected a numeric string, got ${typeof wire}`);
   const match = /^-?\d+(?:\.(\d+))?$/.exec(wire);

@@ -1,5 +1,3 @@
-// packages/api-tree/src/page.ts — @rhi-zone/fractal-api-tree
-//
 // Page<T> — the pagination convention, sibling to StreamEffect<T>
 // (index.ts). A handler returning `CursorPage<T>` / `OffsetPage<T>` (or a
 // `Promise` of either) signals "this endpoint is paginated" the same way a
@@ -8,7 +6,7 @@
 // build-time extractor (extract.ts) recognizes the shape via its type alias
 // name and lowers it to `type-ir`'s `page` TypeRef kind (mirroring `stream`);
 // `@rhi-zone/fractal-http-api-projector`'s `pagination()` client extension
-// (extensions/pagination.ts) recognizes the shape at RUNTIME, on the actual
+// (extensions/pagination.ts) recognizes the shape at runtime, on the actual
 // resolved value — the same "conventions over contracts" split streaming
 // uses between its build-time `stream` TypeRef and its runtime
 // `isStreamChunk`/`isStreamProgress` checks.

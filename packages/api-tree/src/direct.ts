@@ -1,5 +1,3 @@
-// packages/api-tree/src/direct.ts — @rhi-zone/fractal-api-tree
-//
 // createDirectApi(tree) — the zero-protocol-overhead projection.
 //
 // Same nested-proxy shape as the HTTP client (packages/http-api-projector/

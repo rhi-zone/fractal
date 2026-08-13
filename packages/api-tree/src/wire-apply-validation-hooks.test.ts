@@ -1,5 +1,3 @@
-// packages/api-tree/src/wire-apply-validation-hooks.test.ts
-//
 // Function-form `encodingMap` — the "one real gap" the phase-B trace in
 // docs/design/wire-profiles-and-staged-validation.md documented ("a
 // function-valued `encodingMap` entry is silently OMITTED") and this

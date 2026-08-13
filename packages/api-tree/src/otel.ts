@@ -1,6 +1,4 @@
-// packages/api-tree/src/otel.ts — @rhi-zone/fractal-api-tree/otel
-//
-// OpenTelemetry-COMPATIBLE tracing integration, kept dependency-free: this
+// OpenTelemetry-compatible tracing integration, kept dependency-free: this
 // module defines structural mirrors of the handful of `@opentelemetry/api`
 // interfaces the framework's tracing wiring actually calls (`Tracer`/`Span`/
 // `SpanContext`/`SpanStatusCode`/`SpanKind`) instead of importing the real
@@ -112,8 +110,8 @@ export interface OtelSpan {
 
 /**
  * Structural mirror of @opentelemetry/api's `Tracer` — only `startSpan` and
- * the single- and options-taking `startActiveSpan` overloads. Deliberately
- * OMITS the real `Tracer`'s `context`-taking overload: this package never
+ * the single- and options-taking `startActiveSpan` overloads. The real
+ * `Tracer`'s `context`-taking overload is left out: this package never
  * constructs a real OTel `Context` object (that lives in `@opentelemetry/api`
  * itself, which this package doesn't depend on) — see `TracingIntegration`'s
  * `contextFromTraceParent` for how a consumer who DOES have the real SDK

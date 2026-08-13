@@ -1,4 +1,4 @@
-// packages/api-tree/src/cache-v3.test.ts — IR-keyed build cache (v3) tests
+// IR-keyed build cache (v3) tests.
 //
 // Covers docs/design/ir-keyed-cache-spec.md's Task 3 required scenarios:
 //   1. Precision win: a comment/implementation-only edit inside one leaf's

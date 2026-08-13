@@ -1,7 +1,5 @@
-// packages/api-tree/src/__fixtures__/apply-validation-duplicate-key.fixture.ts
-//
-// Two `applyValidation` call sites claiming the SAME literal key over two
-// DIFFERENT trees — a codegen error (last-wins would silently apply one
+// Two `applyValidation` call sites claiming the same literal key over two
+// different trees — a codegen error (last-wins would silently apply one
 // tree's validators to the other tree's leaves). See
 // `findApplyValidationCallSites`' duplicate-key check.
 //

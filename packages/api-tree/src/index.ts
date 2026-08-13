@@ -1,14 +1,12 @@
-// packages/api-tree/src/index.ts — @rhi-zone/fractal-api-tree
-//
 // The function-core model base:
 //   - The function category: plain functions `A => B` composed with compose/pipe.
 //   - Result<T, E> — the fallible-value type — plus map/bind/match fold.
 //   - Derived combinators: composeK (Kleisli) and collect (applicative record).
 //
-// Protocol-neutral routing (the former D-tree / path/param/group/methods/route)
-// has been retired to the new Node/Op/Meta model in ./node.ts.
-// Schema validators (str/num/bool/obj) are retired; use a real validation
-// library (Standard Schema compatible) from the host instead.
+// Protocol-neutral routing lives in the Node/Op/Meta model in ./node.ts,
+// superseding the old D-tree names (path/param/group/methods/route).
+// Schema validation is not built in; bring a real validation library
+// (Standard Schema compatible) from the host instead.
 
 // `api()` — the primary authoring-surface constructor — is re-exported
 // here so it's reachable from the package root, alongside
@@ -71,7 +69,7 @@ export type {
 
 // Dev tooling — the build-time extractor (extract.ts, TS source -> TypeRef)
 // and the source-level api()/op() tree walker (tree.ts) it feeds — lives on
-// "./extract" and "./tree" subpaths, NOT the package root: they pull in the
+// "./extract" and "./tree" subpaths, not the package root: they pull in the
 // TypeScript compiler, which the base runtime model has no reason to force
 // on every consumer. The `fractal-api-tree` build/watch/check CLI
 // (cli.ts) wires them to @rhi-zone/fractal-type-ir's validator codegen.
@@ -199,17 +197,16 @@ export function isStreamEffect(value: unknown): value is StreamEffect {
  * Opt-in configuration, shared by every projector preset (HTTP, MCP, CLI),
  * for which return-value protocols get auto-detected on a handler's output.
  * `result` gates `isResultShape` unwrapping; `streaming` gates
- * `AsyncIterable` detection AND interpretation of yielded `StreamEffect`
+ * `AsyncIterable` detection and interpretation of yielded `StreamEffect`
  * tags (`isStreamProgress`/`isStreamChunk`) — with streaming off, an async
  * iterable is never drained specially, it's just an ordinary return value.
- * Both default to `true` at every call site for backwards compatibility —
- * a consumer opts OUT only when its own data legitimately collides with one
- * of these shapes (see `docs/design/middleware-and-caller-context.md`).
+ * Both default to `true` at every call site; a consumer opts out only when
+ * its own data legitimately collides with one of these shapes (see
+ * `docs/design/middleware-and-caller-context.md`).
  *
  * `ResponseOverride` (HTTP-only, `packages/http-api-projector/src/route.ts`)
- * is deliberately NOT covered here — it's tagged with a `Symbol`, which is
- * structurally impossible for user data to collide with, so it's always
- * detected.
+ * is not covered here: it's tagged with a `Symbol`, which is structurally
+ * impossible for user data to collide with, so it's always detected.
  */
 export type DetectionOptions = {
   readonly result?: boolean;
@@ -286,7 +283,7 @@ export function matchKind<R>(kind: string, response: R): ErrorEncoder<unknown, R
 }
 
 // ============================================================================
-// Derived combinators — Kleisli + applicative. NEVER the base.
+// Derived combinators — Kleisli + applicative, never the base.
 // ============================================================================
 
 /** Kleisli composition over Result: `composeK(f)(g) = a => bind(f(a), g)`.

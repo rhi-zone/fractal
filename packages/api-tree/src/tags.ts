@@ -1,5 +1,3 @@
-// packages/api-tree/src/tags.ts — @rhi-zone/fractal-api-tree  (new model, alongside legacy spine)
-//
 // Standard agnostic behavioral tags + the implication lattice resolver.
 //
 // Tags are well-known keys in the open meta.tags sub-bag — NOT a closed enum.
@@ -29,10 +27,9 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
  * `readOnly`: The operation produces no observable side-effects on persistent
  * state; calling it any number of times is equivalent to calling it once.
  *
- * `readOnly` is the canonical name for this tag; an earlier draft of the
- * canonical tag-set document used `safe`, rejected as too ambiguous — "safe"
- * conflates "no side effects" with other unrelated senses of safety (type
- * safety, memory safety, safe-to-retry).
+ * `readOnly` is the canonical name for this tag. `safe` is avoided as a name
+ * because it conflates "no side effects" with other, unrelated senses of
+ * safety (type safety, memory safety, safe-to-retry).
  *
  * Implies `idempotent`. Mutually exclusive with `destructive`.
  */
@@ -80,26 +77,25 @@ export const TAG_STREAMING = "streaming" as const;
  * away from it. Orthogonal to all other standard tags — a deprecated
  * operation may still be readOnly, destructive, etc.
  *
- * Previously this only existed as the HTTP/OpenAPI-specific
- * `meta.openapi.deprecated`; it is now a tree-level tag so every projector
- * (CLI, MCP, HTTP, …) can surface it. `meta.openapi.deprecated` still works
+ * This is the tree-level source of deprecation status, surfaced by every
+ * projector (CLI, MCP, HTTP, …). `meta.openapi.deprecated` remains available
  * as a per-projection override (see http-api-projector/src/openapi.ts).
  */
 export const TAG_DEPRECATED = "deprecated" as const;
 
 /**
- * `unvalidated`: this leaf is DELIBERATELY exempt from `build.ts`'s
- * `wrapValidators` loud "every leaf must have a matching generated
- * validator" check — tag a leaf `op(fn, { tags: { unvalidated: true } })` to
- * opt it out when no generated validator entry exists (and none is coming)
- * for its route path, instead of `wrapValidators` throwing
- * `UnvalidatedLeafError` for it.
+ * `unvalidated`: exempts a leaf from `build.ts`'s `wrapValidators` check,
+ * which otherwise requires every leaf to have a matching generated
+ * validator. Tag a leaf `op(fn, { tags: { unvalidated: true } })` to opt it
+ * out when no generated validator entry exists (and none is coming) for its
+ * route path, instead of `wrapValidators` throwing `UnvalidatedLeafError`
+ * for it.
  *
- * Deliberately NOT part of the implication lattice below (`resolveTags`/
- * `ResolvedTags` are untouched by this tag): it has no implications, isn't
- * forwarded to any projector, and is read directly off `meta.tags` by
- * `wrapValidators` itself — a build-time escape hatch, not a behavioral
- * fact about the operation the way `readOnly`/`destructive`/etc. are.
+ * Not part of the implication lattice below — `resolveTags`/`ResolvedTags`
+ * are untouched by this tag. It has no implications, is not forwarded to any
+ * projector, and is read directly off `meta.tags` by `wrapValidators`
+ * itself: a build-time escape hatch, not a behavioral fact about the
+ * operation the way `readOnly`/`destructive`/etc. are.
  */
 export const TAG_UNVALIDATED = "unvalidated" as const;
 
@@ -207,13 +203,12 @@ export function resolveTags(tags: Tags, outputType?: TypeRef): ResolvedTags {
 // Tree transforms — the general modification primitive
 // ============================================================================
 //
-// Tag inheritance (the former closest-wins tree-walk / `effectiveTags`) is
-// removed: a node's tags are exactly what's on the node — they do not depend
-// on ancestors (inheritance-by-position breaks composability: moving a
-// subtree would silently change its behavior). `(tree) => tree` transforms
-// are the general modification primitive instead. `mapNodes` is the pre-order
-// visitor: a transform that wants "push this tag down to descendants" builds
-// that explicitly as its own recursive transform; `mapNodes` is the shared
+// A node's tags are exactly what's on the node — they do not depend on
+// ancestors. Inheritance-by-position would break composability: moving a
+// subtree would silently change its behavior. `(tree) => tree` transforms
+// are the general modification primitive instead: a transform that wants to
+// push a tag down to descendants builds that explicitly as its own recursive
+// transform, with `mapNodes` (the pre-order visitor below) as the shared
 // walking primitive underneath.
 //
 // See docs/design/router-model.md — "Tags" section.

@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/wire-apply-validation.fixture.ts
-//
 // 3-arg `applyValidation(key, tree, protocol)` call sites — one per protocol
 // under test (http, cli, mcp, graphql, jsonrpc), plus a variant exercising an
 // explicit HTTP `sourceMap` override and a variant exercising `encodingMap`'s

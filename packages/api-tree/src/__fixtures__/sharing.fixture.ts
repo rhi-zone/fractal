@@ -1,5 +1,3 @@
-// packages/api-tree/src/__fixtures__/sharing.fixture.ts
-//
 // A Node tree exercising structural sharing (Address reused across three
 // tools) and self-recursion (Category.parent points back at Category) for
 // extract.test.ts's SharingRegistry/shouldShare/finalizeSharedDefs tests.

@@ -1,10 +1,7 @@
-// packages/api-tree/src/cli.test.ts — CLI build/check/watch cache behavior
-//
 // Spawns the actual CLI entry point (`bun src/cli.ts ...`) rather than
-// calling internal functions — the thing this test needs to prove is the
-// USER-VISIBLE contract: a second `build` with nothing changed prints an
-// explicit "(cache hit)" signal (not just "ran fast"), and `--force` /
-// touching a dependency defeat that signal.
+// calling internal functions, to prove the user-visible contract: a second
+// `build` with nothing changed prints an explicit "(cache hit)" signal (not
+// just "ran fast"), and `--force` / touching a dependency defeat that signal.
 
 import { describe, expect, it, afterEach, beforeEach } from "bun:test";
 import * as fs from "node:fs";
@@ -104,9 +101,7 @@ describe("cli.ts — build/watch/check cache behavior end-to-end", () => {
   }, 30_000);
 
   it("build/check get the same cache treatment over applyValidation call sites that name a protocol", async () => {
-    // Phase D (docs/design/wire-profiles-and-staged-validation.md) retired
-    // the separate `build-wire`/`check-wire` subcommands — `build`/`check`
-    // themselves now run the (sole) staged wire-profile pipeline, covering
+    // `build`/`check` run the single staged wire-profile pipeline, covering
     // every applyValidation call site, 2-arg or 3-arg alike.
     const outFile = path.join(TMP_DIR, "out-wire.ts");
     const first = await runCli(["build", WIRE_FIXTURE, "-o", outFile]);

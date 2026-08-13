@@ -1,4 +1,4 @@
-// packages/api-tree/src/input.test.ts — input resolution pipeline
+// Tests for the input resolution pipeline.
 //
 // The `deployment-store.fixture.ts` side-effect import is load-bearing: it is
 // this test suite's stand-in "deployment" augmentation (typed-store-spec §3),
@@ -23,10 +23,9 @@ const tabularSource: StoreRegistry["tabularSource"] = {
 };
 
 /**
- * Build a full `Stores` bag for a test. `Stores` is no longer
- * blanket-optional — `caller` (core) and `tabularSource` (this suite's
- * stand-in deployment) are required members, so a test that only cares about
- * `query` still has to be honest about the rest of the bag.
+ * Build a full `Stores` bag for a test. `caller` (core) and `tabularSource`
+ * (this suite's stand-in deployment) are required members of `Stores`, so a
+ * test that only cares about `query` still has to supply the rest of the bag.
  */
 const storesOf = (data: Partial<Pick<Stores, "query" | "header" | "path" | "body">>): Stores => ({
   caller: {},

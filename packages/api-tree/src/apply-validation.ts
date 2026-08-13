@@ -1,114 +1,104 @@
-// packages/api-tree/src/apply-validation.ts — @rhi-zone/fractal-api-tree
-//
-// `applyValidation(key, projectedTree)` — the KEYED, call-site-anchored way
-// to wire generated validators onto a tree, applied to the PROJECTED tree
+// `applyValidation(key, projectedTree)` is the keyed, call-site-anchored way
+// to wire generated validators onto a tree. It applies to the projected tree
 // (HTTP's `HttpRoute`, or the `Node` tree itself for CLI/MCP, which have no
-// separate projected type) rather than to the raw `api()` `Node` tree the way
-// `build.ts`'s `wrapValidators` does.
+// separate projected type), not to the raw `api()` `Node` tree.
 //
-// SETTLED (phase 3): this is now the ONLY validation mechanism — `createFetch`
-// (phase 2), `createMcpServer`/`runCli`/`createGraphQLServer` (phase 3) all
-// wire validation through `applyValidation`, and `wrapValidators` (build.ts)
-// is deleted. See docs/design/routing-and-transforms.md's "Dispatch is not an
-// interceptable multi-stage pipeline" section for the full history: an
-// earlier `createApplyValidation` (removed in 670e0dd) injected validators
-// into a per-method `pipeline.validate` array on `HttpRoute`; a node-level
-// `wrapValidators` interlude followed; this mechanism wraps a leaf's HANDLER
-// (the same contract `wrapValidators` used), so it carries none of the
-// retired stage-array machinery.
+// This is the only validation mechanism: `createFetch`, `createMcpServer`,
+// `runCli`, and `createGraphQLServer` all wire validation through
+// `applyValidation`. See docs/design/routing-and-transforms.md's "Dispatch is
+// not an interceptable multi-stage pipeline" section for how this relates to
+// the node-level handler-wrapping this mechanism replaced — it wraps a
+// leaf's handler, the same contract that approach used, without any stage-
+// array machinery.
 //
-// Why keyed, and why anchored on the call site: codegen owns a NAMESPACE of
-// path -> validator per key, so several independent trees (and several
-// independent codegen runs) each register their own set without colliding —
-// the key is the disambiguator that `wrapValidators` instead has to encode
-// as a `treeId` prefix inside every path (see `extractRouteTypeRefs`'s
-// `${treeId}/${path}` keying and `wrapValidators`'s `path` argument). Under
-// this mechanism the inner path keys are TREE-RELATIVE (no `treeId` prefix):
+// Keyed, and anchored on the call site, because codegen owns a namespace of
+// path -> validator per key: several independent trees (and several
+// independent codegen runs) each register their own set without colliding.
+// The inner path keys are tree-relative — no tree-id prefix is needed, unlike
+// `extractRouteTypeRefs`'s `${treeId}/${path}` keying, since the key already
+// scopes one tree:
 //
 //   const applyValidation = createApplyValidation(generatedValidators)
 //   const routes = applyValidation("books", httpProjection(apiTree))
 //
-// SHAPE-AGNOSTIC BY CONSTRUCTION: the walk below matches structurally, never
+// Shape-agnostic by construction: the walk below matches structurally, never
 // against an imported route type. `@rhi-zone/fractal-api-tree` cannot import
 // `@rhi-zone/fractal-http-api-projector` — the dependency runs the other way
 // (http-api-projector depends on api-tree; api-tree lists it only as a
-// devDependency), so a structural walk is the only way one mechanism covers
+// devDependency) — so a structural walk is the only way one mechanism covers
 // both projected shapes. Two leaf shapes are recognized at any tree position:
 //   - a direct `handler` field (a `Node` leaf), and
 //   - a `methods` record whose entries each carry `handler` (an `HttpRoute`
 //     leaf — handlers nested one level deeper, under `methods.<VERB>`),
 // plus the `children` / `fallback` recursion both shapes share. A position
-// carrying both is handled too; neither shape is assumed.
+// carrying both is handled too.
 
 import { err } from "./index.ts";
 import { TAG_UNVALIDATED } from "./tags.ts";
 import type { GeneratedEntry } from "./build.ts";
 import type { ProtocolName } from "./wire-derive.ts";
 
-/** Re-exported for convenience: the generated-entry shape this mechanism
- * consumes is EXACTLY `wrapValidators`' own (build.ts) — one generated
- * validator module can feed either mechanism. Type-only import, so this file
- * pulls in none of build.ts's codegen machinery at runtime. */
+/** The generated-entry shape this mechanism consumes, re-exported from
+ * build.ts for convenience. Type-only import, so this file pulls in none of
+ * build.ts's codegen machinery at runtime. */
 export type { GeneratedEntry };
 
-/** Re-exported for convenience — the type of `applyValidation`'s optional
- * third argument. See wire-derive.ts. */
+/** The type of `applyValidation`'s optional third argument, re-exported from
+ * wire-derive.ts for convenience. */
 export type { ProtocolName };
 
 /**
  * outer key = the string key passed to `applyValidation(key, tree)`.
  * inner key = the tree-relative path (segments joined with `/`; a fallback
  * segment rendered as `:name` — e.g. `"books/:bookId"`), the same path
- * convention `wrapValidators`/`extractRouteTypeRefs` use, minus the `treeId`
- * prefix (the outer key already scopes one tree).
+ * convention `extractRouteTypeRefs` uses, minus the `treeId` prefix (the
+ * outer key already scopes one tree).
  *
- * This is the PROTOCOL-BLIND map — a 2-argument `applyValidation(key, tree)`
- * call site's shape, UNCHANGED since phase 1. Phase D retired the 2-arg
- * CODEGEN route (`apply-validation-build.ts` no longer has an extraction/build
- * path that populates this map) — every call site, 2-arg or 3-arg, now
- * compiles through the single staged wire-profile pipeline, with an omitted
- * `protocol` argument sugar for `"identity"` (see `resolveForKey`'s doc
- * comment below). This map stays fully live for HAND-AUTHORED validators
- * built without codegen (as several of this package's own runtime tests do),
- * and takes precedence over an identity-tagged `WireValidatorMap` entry when
- * both are present for the same key. See `WireValidatorMap` for the
- * per-protocol sibling a 3-argument call site (`applyValidation(key, tree,
- * protocol)`) resolves against instead.
+ * This is the protocol-blind map: a 2-argument `applyValidation(key, tree)`
+ * call site's shape. `apply-validation-build.ts` has no extraction/build path
+ * that populates this map — every call site, 2-arg or 3-arg, compiles through
+ * the single staged wire-profile pipeline, with an omitted `protocol`
+ * argument sugar for `"identity"` (see `resolveForKey`'s doc comment below).
+ * This map stays live for hand-authored validators built without codegen (as
+ * several of this package's own runtime tests do), and takes precedence over
+ * an identity-tagged `WireValidatorMap` entry when both are present for the
+ * same key. See `WireValidatorMap` for the per-protocol sibling a 3-argument
+ * call site (`applyValidation(key, tree, protocol)`) resolves against
+ * instead.
  */
 export type ValidatorMap = Readonly<Record<string, Readonly<Record<string, GeneratedEntry>>>>;
 
 /**
  * The per-(key, path, protocol) sibling of `ValidatorMap` — what a 3-argument
- * `applyValidation(key, tree, protocol)` call site resolves against (see
- * decision 1, docs/design/wire-profiles-and-staged-validation.md's
- * "Implementation trace (phase B)" section, for why this is a SECOND,
- * OPTIONAL map rather than a change to `ValidatorMap`'s own shape: every
- * existing single-argument `createApplyValidation(validatorsByKey)` call site
- * — every already-codegen'd module, every existing test/fixture — keeps
- * compiling and running with ZERO changes, since this map is additive and
- * defaults to `{}`).
+ * `applyValidation(key, tree, protocol)` call site resolves against. It is a
+ * second, optional map rather than a change to `ValidatorMap`'s own shape
+ * (docs/design/wire-profiles-and-staged-validation.md's "Implementation
+ * trace (phase B)" section) so every existing single-argument
+ * `createApplyValidation(validatorsByKey)` call site — every already-
+ * codegen'd module, every existing test/fixture — keeps compiling and
+ * running unchanged: this map is additive and defaults to `{}`.
  *
  * outer key = the `applyValidation` call site's `key` argument (same as
  * `ValidatorMap`). middle key = the leaf's tree-relative path (same
  * convention). inner key = the protocol named at that call site's third
- * argument — a leaf validated for two protocols under the SAME key would
- * carry two entries here, one per protocol (in practice a leaf normally gets
- * its own key per protocol instead — see decision 1's "one 3-arg call/key
- * per protocol with a different wire shape" — but nothing here assumes that).
+ * argument — a leaf validated for two protocols under the same key carries
+ * two entries here, one per protocol. In practice a leaf normally gets its
+ * own key per protocol instead (one 3-arg call/key per protocol with a
+ * different wire shape), but nothing here assumes that.
  */
 export type WireValidatorMap = Readonly<
   Record<string, Readonly<Record<string, Readonly<Partial<Record<ProtocolName, GeneratedEntry>>>>>>
 >;
 
 /**
- * The property name a `createApplyValidation` result carries at the TYPE
+ * The property name a `createApplyValidation` result carries at the type
  * level (never at runtime — it's an optional, never-assigned field). This is
  * how `apply-validation-build.ts`'s call-site scan identifies a genuine
  * `applyValidation(key, tree)` invocation: it asks the checker whether the
- * CALLEE's type has this property, so an unrelated local function that merely
- * happens to be named `applyValidation` is never matched, and a genuine one
- * IS matched no matter what it was renamed to or how many re-export hops sit
- * between the generated module and the call site.
+ * callee's type has this property, so an unrelated local function that
+ * merely happens to be named `applyValidation` is never matched, and a
+ * genuine one is matched no matter what it was renamed to or how many
+ * re-export hops sit between the generated module and the call site.
  */
 export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const;
 
@@ -119,12 +109,12 @@ export const APPLY_VALIDATION_BRAND = "__fractalApplyValidation" as const;
 export type ApplyValidation = {
   /**
    * `protocol` given (3-arg call): resolves against `WireValidatorMap`, for
-   * THIS `(key, path, protocol)` triple. `protocol` omitted (2-arg call):
+   * this `(key, path, protocol)` triple. `protocol` omitted (2-arg call):
    * resolves against `ValidatorMap` first (hand-authored maps keep working
    * unchanged), falling back to `WireValidatorMap` tagged `"identity"`
-   * otherwise — see `resolveForKey`'s doc comment for why (phase D retired
-   * the 2-arg-specific codegen route; an omitted `protocol` is now sugar for
-   * `"identity"` at the codegen layer too).
+   * otherwise — an omitted `protocol` is sugar for `"identity"` at the
+   * codegen layer too. See `resolveForKey`'s doc comment for the full
+   * resolution order.
    */
   <T>(key: string, tree: T, protocol?: ProtocolName): T;
   /** Phantom — never present at runtime. See `APPLY_VALIDATION_BRAND`. */
@@ -132,8 +122,8 @@ export type ApplyValidation = {
 };
 
 /** A handler in either recognized position — a `Node`'s own `handler`, or an
- * `HttpRoute` method entry's. Deliberately not `Handler` from node.ts: this
- * walk never assumes the value it found came from this package's model. */
+ * `HttpRoute` method entry's. Not `Handler` from node.ts: this walk never
+ * assumes the value it found came from this package's model. */
 type AnyHandler = (input: unknown) => unknown;
 
 /**
@@ -141,16 +131,17 @@ type AnyHandler = (input: unknown) => unknown;
  * original handler with the parsed (coerced, validated, narrowed) value,
  * `err` returns this package's `Result` error (`err(errors)`, index.ts)
  * without the handler ever running. Identical contract to `build.ts`'s
- * `wrapHandler`, and deliberately so: a dispatcher already checks a returned
- * `Result`'s `kind` (see that function's doc comment for why a returned
- * Result beats a thrown error class here).
+ * `wrapHandler` — a dispatcher already checks a returned `Result`'s `kind`
+ * (see that function's doc comment for why a returned Result beats a thrown
+ * error class here).
  *
  * `hooks` (see `resolveHooks` below) is `undefined` whenever this leaf has no
- * function-form `encodingMap` entries — the overwhelmingly common case —
- * so `entry.parse(input)` (one argument) is what actually runs there; a
- * `GeneratedEntry.parse` with no hook fields never even looks at its second
- * parameter, so passing `undefined` explicitly vs. omitting it is behaviorally
- * identical, this just avoids a redundant `hooks === undefined` branch here.
+ * function-form `encodingMap` entries — the overwhelmingly common case — so
+ * `entry.parse(input)` (one argument) is what actually runs there. A
+ * `GeneratedEntry.parse` with no hook fields never looks at its second
+ * parameter, so passing `undefined` explicitly vs. omitting it is
+ * behaviorally identical; this just avoids a redundant `hooks === undefined`
+ * branch here.
  */
 function wrapHandler(
   handler: AnyHandler,
@@ -170,16 +161,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Every function-VALUED `meta.<protocol>.encodingMap` entry on a leaf's own
+ * Every function-valued `meta.<protocol>.encodingMap` entry on a leaf's own
  * `meta` — the runtime counterpart of `tree.ts`'s static
- * `readMetaEncodingMapFunctionFields` (which only detects EXISTENCE, off a
- * TYPE, at codegen time). This is the real, closed-over decoder VALUE, read
- * off the actual running tree at WRAP time — the function itself never moved
+ * `readMetaEncodingMapFunctionFields` (which only detects existence, off a
+ * type, at codegen time). This reads the real, closed-over decoder value off
+ * the actual running tree at wrap time — the function itself never moves
  * through codegen (see `build.ts`'s `GeneratedEntry` doc comment: "no
  * inlining, no source re-emission"). A string-valued `encodingMap` entry
  * (base-profile-name override, already fused into the generated fragment at
- * codegen time) is not a function and is correctly skipped here — it has no
- * hook to supply, the fragment already decodes that field itself.
+ * codegen time) is not a function and is skipped here — it has no hook to
+ * supply, since the fragment already decodes that field itself.
  */
 function readEncodingMapHooks(
   meta: unknown,
@@ -201,25 +192,24 @@ function readEncodingMapHooks(
  * Resolve the hooks map to pass into `entry.parse` for one leaf position,
  * enforcing the two-directional stale-module contract (decision 5, docs/
  * design/wire-profiles-and-staged-validation.md's implementation-trace
- * addendum for this phase) — LOUD in both directions, on the theory that a
- * silent mismatch here means either an outright missing decoder (a request
+ * addendum for this phase). Both directions throw rather than fail silently:
+ * a silent mismatch here means either an outright missing decoder (a request
  * would crash or decode wrong later, invisibly) or a decoder that was
- * authored but never actually wired in (the exact class of "ran the wrong
- * decode silently" bug the design doc's own loud-by-default posture exists
- * to prevent):
+ * authored but never actually wired in (the wrong decode running silently) —
+ * the two failure modes this mechanism's loud-by-default posture exists to
+ * catch at wrap time instead:
  *
  *   (a) `entry.hookFields` names a field, but the real tree's meta has no
  *       function there — codegen ran against an `encodingMap` that no longer
  *       matches this tree (a stale generated module, or `meta` built without
- *       the override at all). Thrown eagerly, at WRAP time, not deferred to
+ *       the override at all). Thrown eagerly, at wrap time, not deferred to
  *       the first request that happens to hit this field.
- *   (b) The real tree's meta HAS a function-valued `encodingMap` entry for a
- *       field `entry.hookFields` does NOT list — codegen ran BEFORE this
+ *   (b) The real tree's meta has a function-valued `encodingMap` entry for a
+ *       field `entry.hookFields` does not list — codegen ran before this
  *       override was authored (or codegen simply wasn't re-run since). Left
  *       unhandled, this field would silently fall through to the fragment's
- *       FUSED default decode for that field instead of the user's own
- *       decoder — the wrong decode, run silently, exactly what this
- *       mechanism exists to never do. Thrown for the same reason as (a).
+ *       fused default decode for that field instead of the user's own
+ *       decoder. Thrown for the same reason as (a).
  *
  * Returns `undefined` (not an empty map) when there is nothing to hook —
  * `wrapHandler` then calls `entry.parse(input)` with no second argument,
@@ -235,7 +225,7 @@ function resolveHooks(
   if (protocol === undefined) {
     // A 2-arg `applyValidation(key, tree)` call never derives hook fields at
     // all (see `apply-validation-build.ts`'s extraction: the http/cli-only
-    // meta read that produces `hookFields` only runs for a LITERAL 3-arg
+    // meta read that produces `hookFields` only runs for a literal 3-arg
     // protocol) — a non-empty `declared` here would itself be the stale-
     // module signal, just with no real protocol namespace to check against.
     if (declared.length > 0) {
@@ -282,7 +272,7 @@ function isTaggedUnvalidated(meta: unknown): boolean {
 }
 
 /** The fallback segment's rendering in a path key — `:name`, matching
- * `wrapValidators`/`extractRouteTypeRefs`. */
+ * `extractRouteTypeRefs`'s convention. */
 function fallbackSegment(fallback: Record<string, unknown>): string | undefined {
   const name = fallback["name"];
   return typeof name === "string" ? `:${name}` : undefined;
@@ -353,24 +343,21 @@ function walkTreePositions(
 /**
  * Wire `forKey`'s entries onto every matching position of `tree`.
  *
- * A position's validator is looked up by its own path — NOT per HTTP method:
+ * A position's validator is looked up by its own path — not per HTTP method:
  * an `HttpRoute` position's methods all sit at the same tree path, and all
  * project from the same `Node` leaf, so they share one generated validator
- * (the same one a `Node`-shaped tree would get at that path). This matches
- * the removed `injectValidators` (ad8b921), which likewise applied one
- * path-keyed validator to every method entry at the position.
- */
-/**
- * `protocol` (the LITERAL argument `applyValidation(key, tree, protocol?)`
+ * (the same one a `Node`-shaped tree would get at that path).
+ *
+ * `protocol` (the literal argument `applyValidation(key, tree, protocol?)`
  * was called with — not the codegen-side "omitted means identity" sugar) is
  * threaded through so `resolveHooks` knows which `meta.<protocol>` namespace
  * to read a leaf's function-form `encodingMap` entries off of. A raw `Node`
  * leaf's hooks come off its own `meta`; an `HttpRoute` position's methods
- * each carry their OWN `meta` (that's where an HttpRoute keeps leaf meta —
+ * each carry their own `meta` (that's where an HttpRoute keeps leaf meta —
  * see `collectUncoveredLeaves`'s doc comment for the same fact), so each
  * method entry is resolved independently even though they all share one
- * `entry`/`hookFields` (one path, one generated validator, per
- * `injectValidators`'s own top doc comment).
+ * `entry`/`hookFields` (one path, one generated validator, per this
+ * function's own first paragraph above).
  */
 function injectValidators(
   tree: unknown,
@@ -427,24 +414,21 @@ function flattenWireForKey(
 }
 
 /**
- * Decision A (phase D retirement of the 2-arg codegen route, see
- * docs/design/wire-profiles-and-staged-validation.md): a 2-arg call —
- * `protocol` omitted — resolves against `validators[key]` (the legacy,
- * hand-authored `ValidatorMap`) FIRST, for backward compatibility with any
- * caller that builds `createApplyValidation` from a hand-rolled map directly
- * (as several of this package's own runtime tests do, independent of
- * codegen). When that's absent, it falls back to `wireValidators[key]`
- * tagged `"identity"` — because codegen (`apply-validation-build.ts`) no
- * longer has a 2-arg-specific extraction/build path at all: EVERY call site,
- * 2-arg or 3-arg, is now compiled through the single staged wire-profile
- * pipeline, with an omitted third argument treated as sugar for the explicit
- * `"identity"` protocol (the design doc's own framing: "the identity profile
- * is `validateEncoding` reduced to a trivial check plus the full
+ * A 2-arg call — `protocol` omitted — resolves against `validators[key]`
+ * (the hand-authored `ValidatorMap`) first, so a caller that builds
+ * `createApplyValidation` from a hand-rolled map directly (as several of this
+ * package's own runtime tests do, independent of codegen) keeps working
+ * unchanged. When that's absent, it falls back to `wireValidators[key]`
+ * tagged `"identity"`: codegen (`apply-validation-build.ts`) has a single
+ * extraction/build path, and every call site — 2-arg or 3-arg — compiles
+ * through the staged wire-profile pipeline, with an omitted third argument
+ * treated as sugar for the explicit `"identity"` protocol (docs/design/
+ * wire-profiles-and-staged-validation.md's framing: "the identity profile is
+ * `validateEncoding` reduced to a trivial check plus the full
  * `validateConstraints` pass — i.e. what today's check/errors/parse do for an
- * in-process, already-typed value with no wire in between"). This keeps every
- * existing 2-arg call site — including every hand-authored-map test — working
- * unchanged, while giving a 2-arg call site real generated coverage again
- * once codegen has run.
+ * in-process, already-typed value with no wire in between"). This gives a
+ * 2-arg call site real generated coverage once codegen has run, while every
+ * hand-authored-map caller still takes precedence.
  */
 function resolveForKey(
   key: string,
@@ -462,22 +446,22 @@ function resolveForKey(
  * calls) — see `ApplyValidation`'s doc comment for the split.
  *
  * - `key` not present in the relevant map → `tree` is returned unchanged.
- *   This is the PASS-THROUGH / pre-codegen case: a freshly scaffolded
+ *   This is the pass-through / pre-codegen case: a freshly scaffolded
  *   project's stub generated module is `createApplyValidation({})` (see
  *   `applyValidationStubSource`, apply-validation-build.ts), so the consumer's
  *   one import compiles and runs before codegen has ever produced validators.
- *   Deliberately SILENT — coverage is enforced by codegen and by the explicit
- *   `assertValidationCoverage` build-mode check below, never by the stub.
+ *   This is silent by design — coverage is enforced by codegen and by the
+ *   explicit `assertValidationCoverage` build-mode check below, never by the
+ *   stub.
  * - Otherwise the tree is walked structurally and every leaf whose path
  *   matches an entry gets its handler(s) wrapped (see `injectValidators`).
  * - Each `key` may be used at most once per returned function, regardless of
  *   `protocol` — a second `applyValidation(sameKey, …)` throws, catching
  *   double registration of one generated set (codegen run twice, two trees
- *   claiming one key). Mirrors the removed runtime's `usedKeys` Set
- *   (ad8b921). A tree shared across two protocols with different wire shapes
- *   needs its OWN key per protocol (decision 1) — `usedKeys` staying
- *   key-only, not key+protocol, is exactly what makes reusing one key twice
- *   under two different protocols an error rather than a silent last-wins.
+ *   claiming one key). A tree shared across two protocols with different wire
+ *   shapes needs its own key per protocol — `usedKeys` staying key-only, not
+ *   key+protocol, is what makes reusing one key twice under two different
+ *   protocols an error rather than a silent last-wins.
  *
  * Never mutates `tree`; always returns a freshly rebuilt structure.
  */
@@ -502,10 +486,9 @@ export function createApplyValidation(
  * Thrown by `assertValidationCoverage` when one or more leaves of the tree
  * have neither a matching validator entry under `key` nor a
  * `meta.tags.unvalidated` opt-out. Mirrors `build.ts`'s `UnvalidatedLeafError`
- * in shape (`paths` carries EVERY offending path, not just the first) and in
- * remediation messaging; a separate class because phase 1 does not touch
- * build.ts and because the message names this mechanism's own remediation
- * (a `key`-scoped codegen run).
+ * in shape (`paths` carries every offending path, not just the first) and in
+ * remediation messaging; a separate class since it names this mechanism's own
+ * remediation (a `key`-scoped codegen run).
  */
 export class UncoveredLeafError extends Error {
   readonly key: string;
@@ -528,10 +511,10 @@ export class UncoveredLeafError extends Error {
  * Every leaf path in `tree` that is neither covered by `forKey` nor tagged
  * `meta.tags.unvalidated`. Both leaf shapes are checked:
  *   - a direct `handler` — the position's own `meta` carries the tag;
- *   - a `methods` record — each entry carries its OWN `meta` (that's where an
+ *   - a `methods` record — each entry carries its own `meta` (that's where an
  *     `HttpRoute` keeps leaf meta), so a position counts as opted out only
  *     when every handler-bearing method entry is tagged (or the position's own
- *     `meta` is). A position is reported ONCE, by path: methods at one
+ *     `meta` is). A position is reported once, by path: methods at one
  *     position share one validator (see `injectValidators`).
  */
 function collectUncoveredLeaves(
@@ -562,14 +545,14 @@ function collectUncoveredLeaves(
 }
 
 /**
- * LOUD build-mode coverage check: throws `UncoveredLeafError` listing EVERY
- * leaf of `tree` that `validators[key]` doesn't cover and that isn't tagged
- * `meta.tags.unvalidated` — the same total-coverage guarantee `wrapValidators`
- * enforces inline, kept as a separate, explicitly-called function here so the
+ * Explicit build-mode coverage check: throws `UncoveredLeafError` listing
+ * every leaf of `tree` that `validators[key]` doesn't cover and that isn't
+ * tagged `meta.tags.unvalidated`. Kept as a separate, explicitly-called
+ * function (rather than enforced inline by `createApplyValidation`) so the
  * pass-through stub (`createApplyValidation({})`) stays silently permissive
  * pre-codegen. An unknown `key` means "nothing generated for this tree", so
- * every leaf is uncovered — that is exactly what a build-mode caller wants to
- * hear, and exactly what the stub must NOT say at runtime.
+ * every leaf is uncovered — the right answer for a build-mode caller, and
+ * the opposite of what the stub must say at runtime.
  */
 export function assertValidationCoverage(
   key: string,

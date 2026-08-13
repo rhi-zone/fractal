@@ -1,5 +1,3 @@
-// packages/api-tree/src/context.ts — @rhi-zone/fractal-api-tree/context
-//
 // createContext — one shared `AsyncLocalStorage<T>` plus per-projector
 // `{ storage, init }` config objects that plug directly into each
 // projector's `als` option (`PresetOptions.als` in http-api-projector,
@@ -30,12 +28,13 @@ import type { LeafMeta } from "./node.ts";
 // Structural mirrors of the per-projector middleware context shapes
 // ============================================================================
 //
-// Deliberately NOT imported from cli-api-projector / mcp-api-projector (see
-// module doc above — would create a package cycle). Kept intentionally
-// narrow: only the fields `createContext`'s own extractors need to accept,
-// which happen to be the full shape of `CliAlsContext` / `McpAlsContext`
-// today. If either grows a field this module doesn't reference, no update is
-// needed here — structural typing only checks the fields actually used.
+// Redeclared here rather than imported from cli-api-projector /
+// mcp-api-projector (see module doc above — importing either would create a
+// package cycle). Kept narrow: only the fields `createContext`'s own
+// extractors need to accept, which happen to be the full shape of
+// `CliAlsContext` / `McpAlsContext` today. If either grows a field this
+// module doesn't reference, no update is needed here — structural typing
+// only checks the fields actually used.
 
 /** Structural mirror of cli-api-projector's `CliAlsContext`. */
 export type CliContextShape = {
