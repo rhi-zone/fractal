@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/cpp-simdjson.ts — @rhi-zone/fractal-type-ir/cpp-simdjson
-//
 // TypeRef -> C++17 struct/enum-class declarations with simdjson
 // (https://github.com/simdjson/simdjson) DOM-API *deserialization* support
 // only. simdjson's dom API is read-only by design (it's a parser, not a

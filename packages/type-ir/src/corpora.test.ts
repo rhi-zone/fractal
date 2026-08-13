@@ -1,19 +1,18 @@
-// packages/type-ir/src/corpora.test.ts — real-world schema corpora
-// round-trip testing. Unlike test-fixtures.ts's hand-crafted TypeRefs (built
-// directly with `t(types.X(...))`), this suite starts from schema TEXT that
-// looks like what actually ships in the wild — a trimmed but structurally
-// faithful package.json/tsconfig.json/GeoJSON JSON Schema, an OpenAPI 3.0
-// Petstore-shaped components.schemas set, and a googleapis-styled .proto
-// file — and drives it through this package's own ingesters
-// (from-json-schema.ts / from-openapi.ts / from-protobuf.ts) before handing
-// the resulting TypeRef(s) to the projector matrix.
+// Real-world schema corpora round-trip testing. Unlike test-fixtures.ts's
+// hand-crafted TypeRefs (built directly with `t(types.X(...))`), this suite
+// starts from schema text that looks like what actually ships in the wild —
+// a trimmed but structurally faithful package.json/tsconfig.json/GeoJSON
+// JSON Schema, an OpenAPI 3.0 Petstore-shaped components.schemas set, and a
+// googleapis-styled .proto file — and drives it through this package's own
+// ingesters (from-json-schema.ts / from-openapi.ts / from-protobuf.ts)
+// before handing the resulting TypeRef(s) to the projector matrix.
 //
-// This is deliberately NOT snapshot testing: real-world schemas combine
-// kinds in ways hand-written fixtures rarely think to try (deeply nested
-// optional objects, oneOf-with-discriminator unions, additionalProperties
-// dicts, $ref cycles, map<string,V> + oneof + well-known types in the same
-// message) — the goal is to catch a projector crashing or emitting empty
-// output on a shape it's never seen, not to pin exact output text.
+// This is not snapshot testing: real-world schemas combine kinds in ways
+// hand-written fixtures rarely think to try (deeply nested optional objects,
+// oneOf-with-discriminator unions, additionalProperties dicts, $ref cycles,
+// map<string,V> + oneof + well-known types in the same message). The goal is
+// to catch a projector crashing or emitting empty output on a shape it's
+// never seen, not to pin exact output text.
 //
 // The schemas below are typed out by hand rather than fetched over the
 // network at test time (SchemaStore/googleapis) so this suite stays

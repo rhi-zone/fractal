@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/cpp-nlohmann.ts — @rhi-zone/fractal-type-ir/cpp-nlohmann
-//
 // TypeRef -> C++17 struct/enum-class declarations with nlohmann/json
 // (https://github.com/nlohmann/json) serialization support. Unlike
 // typescript.ts (a single expression-position converter — TS structural
@@ -245,10 +243,10 @@ const handlers: Record<string, Converter> = {
     ctx.headers.add(unordered ? "<unordered_map>" : "<map>");
     return `${unordered ? "std::unordered_map" : "std::map"}<${key}, ${value}>`;
   },
-  // Each variant gets its own hoisted name — reusing the union's own `hint`
-  // for every variant (as this used to do) makes every anonymous member
-  // struct collapse onto the same name as the union alias itself, producing
-  // a self-referential `using Foo = std::variant<Foo, Foo, Foo>` that g++
+  // Each variant gets its own hoisted name: reusing the union's own `hint`
+  // for every variant would make every anonymous member struct collapse
+  // onto the same name as the union alias itself, producing a
+  // self-referential `using Foo = std::variant<Foo, Foo, Foo>` that g++
   // rejects. Per protobuf.ts's toProtoUnionMessage precedent: when
   // `meta.discriminator` names a field and a variant's shape carries a
   // string `literal` at that field (the tagged-union convention shared by

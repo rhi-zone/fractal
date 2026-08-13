@@ -1,4 +1,4 @@
-// Cross-projector smoke tests: complex, realistic schemas fed through EVERY
+// Cross-projector smoke tests: complex, realistic schemas fed through every
 // output projector this package ships, asserting each one ingests the shape
 // and produces non-empty output without throwing. Individual projectors
 // already have unit tests over the full kind vocabulary in isolation — this
@@ -122,14 +122,13 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
     },
   },
   { name: "compile (AOT validator)", fn: (ref, name) => compileValidator(ref) + name },
-  // protobuf is NOT struct-only: toProtoMessage handles a union-rooted
-  // TypeRef directly by synthesizing a wrapper message with a `oneof` (§
-  // "Using Oneof") holding one field per variant — see toProtoUnionMessage
-  // in protobuf.ts.
+  // toProtoMessage handles a union-rooted TypeRef directly by synthesizing a
+  // wrapper message with a `oneof` (§ "Using Oneof") holding one field per
+  // variant — see toProtoUnionMessage in protobuf.ts.
   { name: "protobuf", fn: (ref, name) => renderProto([toProtoMessage(name, ref)]) },
-  // capnp is NOT struct-only: toCapnpStruct handles a union-rooted TypeRef
-  // directly by synthesizing a wrapper struct with an anonymous union (§
-  // "Unions") — see toCapnpUnionStruct in capnp.ts.
+  // toCapnpStruct handles a union-rooted TypeRef directly by synthesizing a
+  // wrapper struct with an anonymous union (§ "Unions") — see
+  // toCapnpUnionStruct in capnp.ts.
   { name: "capnp", fn: (ref, name) => renderCapnp([toCapnpStruct(name, ref)]) },
   {
     name: "flatbuffers",
@@ -155,8 +154,8 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
 ];
 
 // Struct-shaped projectors that require an `object` root and cannot represent
-// a bare `union` root directly. Empty for now — every projector in the matrix
-// above can now take a union root:
+// a bare `union` root directly. Every projector in the current matrix can
+// take a union root, so this set is empty:
 //
 // protobuf's toProtoMessage synthesizes a `oneof` wrapper message for a union
 // root (see the protobuf wrapper above); flatbuffers has a second entry point
@@ -169,9 +168,9 @@ const projectors: { name: string; fn: (ref: TypeRef, name: string) => string }[]
 // `MssqlUnionLayout` strategy (default: single-table-inheritance) — see
 // `singleTableInheritanceSqlLayout`/`tablePerVariantSqlLayout` in sql.ts.
 //
-// Kept as a live mechanism (not deleted) so a future struct-only projector
-// added to the matrix has somewhere to register itself as `.todo` rather than
-// asserted to throw.
+// This mechanism stays live so a future struct-only projector added to the
+// matrix has somewhere to register itself as `.todo` rather than asserted to
+// throw.
 const structOnlyProjectorNames = new Set<string>([]);
 
 describe("cross-projector smoke tests", () => {

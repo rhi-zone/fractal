@@ -333,8 +333,8 @@ const handlers: Record<string, Converter> = {
     }
     return emitObjectType({ kind: "object", fields }, suggestedName, ctx);
   },
-  // Callables have no data-record equivalent — degrade honestly (see `never`
-  // above for the same comment-then-strip convention).
+  // Callables have no data-record equivalent (see `never` above for the same
+  // comment-then-strip convention).
   function: leaf("object /* function */"),
   method: leaf("object /* method */"),
   interface: leaf("object /* interface */"),

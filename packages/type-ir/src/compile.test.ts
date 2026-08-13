@@ -1,21 +1,13 @@
-// packages/type-ir/src/compile.test.ts — AOT validator codegen tests
+// AOT validator codegen tests.
 //
 // Covers: compileValidator produces standalone JS evaluating to a `{ check,
 // errors, parse }` triple for a single TypeRef, and check()/errors()/parse()
 // agree with each other across leaf/composite shapes, meta-driven
 // constraints, and coercion.
 //
-// Phase D (docs/design/wire-profiles-and-staged-validation.md) deleted
-// `compileValidatorModule`/`compileEntryFragment`/`assembleValidatorModule` —
-// the 2-arg `applyValidation` codegen route's own module-assembly layer,
-// retired once api-tree's staged wire-profile build path
-// (`buildWireApplyValidationModuleSource*`) gained the `shouldShare`/defs
-// capability that was this layer's only remaining reason to exist — along
-// with the tests here that covered them specifically. `compileValidator`
-// (this file's actual subject) is unaffected: it's a separate, still-live,
-// general-purpose "compile one TypeRef to a standalone validator expression"
-// API, used directly by @rhi-zone/fractal-type-ir consumers (see
-// corpora.test.ts/cross-projector.test.ts) and not part of that codegen route.
+// compileValidator is a general-purpose "compile one TypeRef to a standalone
+// validator expression" API, used directly by @rhi-zone/fractal-type-ir
+// consumers (see corpora.test.ts, cross-projector.test.ts).
 
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -473,11 +465,11 @@ describe("compileValidator — a map whose VALUE is an object typechecks (bug: O
   // on an `any`-typed expression — TS's `values<T>(o: {[s:string]:T}): T[]`
   // overload matches even an `any` argument, but with no contextual type to
   // infer `T` from it resolves to `unknown` (not `any`), so `.every`'s
-  // callback parameter loses `any`'s implicit-index-access exemption. Only
-  // surfaces when the map's VALUE type is itself an object/interface (the
-  // callback then indexes a property on it, e.g. `__e["before"]` — a plain
-  // leaf-valued map, `Record<string, string>`, never indexes into `__e` so
-  // never trips it) — this reproduces that exact shape:
+  // callback parameter loses `any`'s implicit-index-access exemption. This
+  // only surfaces when the map's *value* type is itself an object/interface
+  // (the callback then indexes a property on it, e.g. `__e["before"]` — a
+  // plain leaf-valued map, `Record<string, string>`, never indexes into
+  // `__e` so never trips it). This test reproduces that exact shape:
   // `Record<string, { before: string; after: string }>`.
   it("a map with an object value type typechecks under tsc with no TS7053", () => {
     const ref = t(
@@ -597,12 +589,11 @@ describe("compileValidator — duplicate const hoisting (quality: enum/known-fie
   it("an enum field's member array is hoisted once, not once per check/errors/parse", () => {
     const ref = t(types.object({ status: t(types.enum(["a", "b", "c"])) }));
     const source = compileValidator(ref);
-    // Count `const __membersN = [...]` DECLARATIONS specifically (not
-    // substring occurrences of the array literal text, which also shows up
+    // Counts `const __membersN = [...]` declarations specifically, not
+    // substring occurrences of the array literal text (which also shows up
     // nested inside the unrelated `__ref` TypeRef literal used for `type`
-    // errors) — errors()/parse() both reference `.enum` handling, so a
-    // pre-fix build would declare this const twice (once per handler
-    // invocation) even though check() only invokes it once more.
+    // errors). errors()/parse() both reference `.enum` handling, so the
+    // member array must be hoisted once and shared, not declared per handler.
     const memberConstDecls = source.match(/const __members\d+ = /g) ?? [];
     expect(memberConstDecls).toHaveLength(1);
   });
@@ -678,14 +669,14 @@ describe("compileValidator — defs + recursive validator codegen", () => {
 
 describe("compileDefs — a shared/recursive def gets a real static type alias, not a bare unimported name (bug: TS2304)", () => {
   // Reproduces the real-world shape (the sibling codebase's `triggers.ts`'s self-
-  // recursive `Expr` type): the recursive def is NOT the entry's own
-  // top-level type — it's a field NESTED inside an unrelated object (the
-  // route/tool input). Before this fix, `guardAnnotation`'s fallback branch
-  // (`toTypeScript(ref)`, no `defNames` awareness) rendered that nested
-  // field's `ref` as the bare string `"Expr"` with no corresponding
-  // declaration anywhere in the generated module — a build-time `TS2304:
-  // Cannot find name 'Expr'` in the entry's `value is {...}` guard
-  // annotation. A self-recursive `Expr`-shaped def:
+  // recursive `Expr` type): the recursive def is not the entry's own
+  // top-level type — it's a field nested inside an unrelated object (the
+  // route/tool input). `guardAnnotation`'s fallback branch (`toTypeScript(ref)`)
+  // is `defNames`-aware, so a nested ref to a shared def renders the local
+  // `__def_Expr` alias with a matching declaration in the generated module,
+  // rather than a bare `"Expr"` that leaves a build-time `TS2304: Cannot find
+  // name 'Expr'` in the entry's `value is {...}` guard annotation. A
+  // self-recursive `Expr`-shaped def:
   //   Expr = { op: "ref"; ref: string }
   //        | { op: "and"; args: Expr[] }
   //        | { op: "not"; arg: Expr }
@@ -697,7 +688,7 @@ describe("compileDefs — a shared/recursive def gets a real static type alias, 
     ]),
   );
   const defs = { Expr: exprRef };
-  // The entry's own top-level type: an unrelated object with a NESTED field
+  // The entry's own top-level type: an unrelated object with a nested field
   // typed as the recursive def — not the def itself.
   const conditionRef = t(types.object({ name: t(types.string), condition: t(types.ref("Expr")) }));
   const validValue = {

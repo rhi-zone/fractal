@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/cpp-glaze.ts — @rhi-zone/fractal-type-ir/cpp-glaze
-//
 // TypeRef -> C++17/20 struct/enum-class declarations with glaze
 // (https://github.com/stephenberry/glaze) compile-time-reflection
 // serialization support. glaze reads a struct's shape through a

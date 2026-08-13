@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/cpp-boost-json.ts — @rhi-zone/fractal-type-ir/cpp-boost-json
-//
 // TypeRef -> C++17 struct/enum-class declarations with Boost.JSON
 // (https://www.boost.org/doc/libs/release/libs/json/) serialization support
 // via the `tag_invoke` customization-point pattern
@@ -22,8 +20,8 @@ import { quote } from "./codegen-helpers.ts";
 //
 // `union` still gets no generated tag_invoke of its own: Boost.JSON has no
 // built-in std::variant support, and this IR carries no discriminator to
-// synthesize one honestly — same "type mapping only, no serialization
-// glue" scope cpp-nlohmann.ts leaves union at.
+// synthesize one from — same "type mapping only, no serialization glue"
+// scope cpp-nlohmann.ts leaves union at.
 
 type Ctx = {
   readonly headers: Set<string>;

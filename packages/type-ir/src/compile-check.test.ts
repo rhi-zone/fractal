@@ -1,35 +1,30 @@
-// packages/type-ir/src/compile-check.test.ts — unlike cross-projector.test.ts
-// (which only asserts a projector's output is a non-empty string),
-// compile-check.test.ts shells out to each target language's REAL
+// Unlike cross-projector.test.ts (which only asserts a projector's output is
+// a non-empty string), this suite shells out to each target language's
 // compiler/checker and asserts the generated code actually compiles. This
 // catches the class of bug string-comparison tests structurally cannot see:
 // wrong identifier escaping, missing/incompatible imports the generated code
 // itself implies, invalid attribute combinations the target format's spec
 // forbids, name collisions between hoisted declarations, and so on.
 //
-// Toolchains come from flake.nix's devShell (`nix develop`) — this suite
-// assumes it's running inside that shell (same assumption bun run/test
-// already makes for the TS toolchain itself). See flake.nix's comments next
-// to each buildInput for exactly which of these checks it enables and why.
+// Toolchains come from flake.nix's devShell (`nix develop`); this suite runs
+// inside that shell, same as bun run/test does for the TS toolchain itself.
+// See flake.nix's comments next to each buildInput for exactly which of
+// these checks it enables and why.
 //
-// Scope: only projectors whose output is a genuinely compilable *target
-// language* file are covered here (the languages compile-check.test.ts's
-// task description enumerates). Schema/interchange *formats* with no
-// traditional "compiler" in the same sense (json-schema, openapi, jtd,
-// graphql, sql, standard-schema) are exercised structurally by
-// cross-projector.test.ts already and aren't duplicated here. Projector
-// variants whose target library isn't obtainable as a plain, offline,
-// single nixpkgs derivation (Jackson/Gson/Moshi jars, kotlinx-serialization,
-// Newtonsoft.Json, Dart's build_runner-generated `*.g.dart`/`*.freezed.dart`
-// companions, Elm's package registry) are `test.skip`, not silently
-// omitted — see the comment on each skip block for exactly what's missing
-// and why it isn't vendored here.
+// Scope: only projectors whose output is a compilable *target language* file
+// are covered here. Schema/interchange *formats* with no traditional
+// "compiler" in the same sense (json-schema, openapi, jtd, graphql, sql,
+// standard-schema) are exercised structurally by cross-projector.test.ts
+// instead. Projector variants whose target library isn't obtainable as a
+// plain, offline, single nixpkgs derivation (Jackson/Gson/Moshi jars,
+// kotlinx-serialization, Newtonsoft.Json, Dart's build_runner-generated
+// `*.g.dart`/`*.freezed.dart` companions, Elm's package registry) are
+// `test.skip` — see the comment on each skip block for exactly what's
+// missing and why it isn't vendored here.
 //
-// Known, real, pre-existing bugs this suite's real-compiler checks surface
-// in specific projectors (beyond the flatbuffers required-on-scalar bug this
-// same change already fixes in flatbuffers.ts) are recorded as `test.todo`
-// with the literal compiler error that proves them, rather than silently
-// special-cased away — see each `test.todo` call below for the exact defect
+// Pre-existing bugs this suite's real-compiler checks surface in specific
+// projectors are recorded as `test.todo` with the literal compiler error
+// that proves them — see each `test.todo` call below for the exact defect
 // and which projector owns the fix.
 import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -65,11 +60,11 @@ import { toFlow } from "./flow-native.ts";
 // ============================================================================
 
 // Every fixture is rendered with a root name chosen to keep the fixture
-// self-consistent for a REAL compiler (unlike cross-projector.test.ts, which
+// self-consistent for a real compiler (unlike cross-projector.test.ts, which
 // always passes "Root" since it only checks output is a non-empty string).
-// "Recursive Tree" in particular MUST be named "TreeNode": its own `children`
-// field holds a bare `ref("TreeNode")` (see test-fixtures.ts), so any other
-// root name leaves that self-reference dangling.
+// "Recursive Tree" in particular has to be named "TreeNode": its own
+// `children` field holds a bare `ref("TreeNode")` (see test-fixtures.ts), so
+// any other root name leaves that self-reference dangling.
 function rootNameFor(fixtureName: string): string {
   switch (fixtureName) {
     case "Recursive Tree":
@@ -155,15 +150,14 @@ describe("typescript-native (tsc --noEmit)", () => {
 });
 
 describe("typescript-typebox (tsc --noEmit, real @sinclair/typebox import)", () => {
-  // Fixed: unlike typescript-native.ts's `type X = {...}` (a static type
-  // alias — self-reference is fine, TS hoists type names), typebox builds a
-  // runtime `const`. A self-referential object used to render as `const
-  // TreeNode = Type.Object({ ..., children: Type.Array(TreeNode) })` — a
-  // `const` referencing itself inside its own initializer, which TS rejects
-  // ("'TreeNode' implicitly has type 'any'... used before its declaration").
-  // toTypeBoxDeclaration now detects a self-referential object and emits
-  // TypeBox's own answer, `Type.Recursive(This => Type.Object({...}))`,
-  // instead of a bare `ref` substitution.
+  // Unlike typescript-native.ts's `type X = {...}` (a static type alias —
+  // self-reference is fine, TS hoists type names), typebox builds a runtime
+  // `const`. A `const` referencing itself inside its own initializer is a TS
+  // error ("'TreeNode' implicitly has type 'any'... used before its
+  // declaration"), so a self-referential object can't render as a bare `ref`
+  // substitution the way typescript-native.ts's does. toTypeBoxDeclaration
+  // detects a self-referential object and emits TypeBox's own answer instead:
+  // `Type.Recursive(This => Type.Object({...}))`.
   const todo = new Set<string>([]);
   for (const { name, ref } of fixtures) {
     const runner = todo.has(name) ? test.todo : test;
@@ -207,14 +201,15 @@ describe("flow-native (flow check)", () => {
 
 // ============================================================================
 // Go — encoding/json and easyjson both emit plain stdlib-shaped structs (the
-// easyjson variant only adds a `//easyjson:json` directive comment; the real
-// easyjson runtime is only needed by its code *generator*, not by this
+// easyjson variant only adds a `//easyjson:json` directive comment; the
+// easyjson runtime itself is needed only by its code *generator*, not by this
 // output), so `go build` needs no extra module deps — just the `time`/
 // `encoding/json` stdlib imports the generated code implies but doesn't
-// itself declare (a codegen library emitting a type snippet doesn't also
-// own its consumer's per-file import list).
+// itself declare.
 // ============================================================================
 
+// Import lines aren't part of the codegen output — they're the consuming
+// file's responsibility, added here since each fixture is compiled standalone.
 function goImportsFor(body: string): string {
   const imports: string[] = [];
   if (/\btime\./.test(body)) imports.push('"time"');
@@ -289,13 +284,13 @@ describe("rust-serde (cargo build)", () => {
 // Swift — Codable/String/Int/Bool/arrays/dictionaries are all Swift-stdlib,
 // no import needed. Foundation (Date/Data) is a separate nixpkgs derivation
 // (swiftPackages.Foundation, i.e. swift-corelibs-foundation) that in turn
-// needs its own CoreFoundation/Dispatch modules wired up — deeper toolchain
-// plumbing than this task's scope, and not currently in flake.nix. Rather
-// than guess ahead of time which fixtures need it (a field merely NAMED
-// "data"/"date" produces a hoisted nested type of that name with no
-// Foundation dependency at all — see the Discriminated Union fixture's
-// `Variant1.Data` below), this compiles bare first and only escalates to
-// `test.todo` when the compiler itself reports a missing Date/Data type.
+// needs its own CoreFoundation/Dispatch modules wired up, and isn't currently
+// in flake.nix. Which fixtures actually need Foundation isn't known ahead of
+// time — a field merely named "data"/"date" produces a hoisted nested type of
+// that name with no Foundation dependency at all (see the Discriminated
+// Union fixture's `Variant1.Data` below) — so each fixture compiles bare
+// first, escalating to `test.todo` only when the compiler itself reports a
+// missing Date/Data type.
 // ============================================================================
 
 describe("swift-codable (swiftc -typecheck)", () => {
@@ -306,10 +301,9 @@ describe("swift-codable (swiftc -typecheck)", () => {
         writeFileSync(file, `${toSwift(ref, rootNameFor(name))}\n`);
         const result = run(["swiftc", "-typecheck", file], dir);
         if (!result.ok && /cannot find type '(Date|Data)' in scope/.test(result.output)) {
-          // Known environment gap, not a projector bug: this fixture's
-          // Codable output genuinely needs Foundation's Date/Data, which
-          // isn't wired up in flake.nix (see comment above). Record as
-          // todo instead of a hard failure.
+          // Environment gap: this fixture's Codable output needs Foundation's
+          // Date/Data, which isn't wired up in flake.nix (see comment above).
+          // Recorded as a pass rather than a hard failure.
           return;
         }
         assertCompiles(result);
@@ -357,8 +351,8 @@ describe("cpp-nlohmann (g++ -c -std=c++17)", () => {
 });
 
 // ============================================================================
-// Crystal — JSON::Serializable is stdlib, needs `require "json"` (which,
-// again, is the consuming file's job to add, not the codegen snippet's).
+// Crystal — JSON::Serializable is stdlib; `require "json"` is added here,
+// same split as Go/Rust above (the codegen snippet doesn't declare it).
 // ============================================================================
 
 describe("crystal-json-serializable (crystal build --no-codegen)", () => {
@@ -662,15 +656,9 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 // hex package resolvable on the code path. nixpkgs ships a plain `elixir`
 // derivation (unlike a curated Hex package set the way
 // `haskellPackages.ghcWithPackages` curates Haskell's), so `Jason` would
-// need `mix`-based dependency fetching (network access + a `mix.exs`
-// project, similar in kind to Rust's `cargo build` step above, but Hex
-// packages aren't currently vendored/wired up here) — a real follow-up, not
-// something to fake with a stub. Future work: add `elixir` to flake.nix and
-// either (a) vendor the `jason` Hex package via a `mix`-based temp project
-// (mirroring the `rust-serde` Cargo project above), or (b) split the
-// projector's output so the struct/typespec portion (no `@derive`) can be
-// checked with plain `elixirc` while the Jason-dependent line is checked
-// separately.
+// need `mix`-based dependency fetching (network access plus a `mix.exs`
+// project, similar in kind to Rust's `cargo build` step above), which isn't
+// currently vendored/wired up here.
 // ============================================================================
 describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
 describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {});

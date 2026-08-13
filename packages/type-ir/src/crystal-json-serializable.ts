@@ -4,7 +4,7 @@ import { capitalize, quote, toSnakeCaseAcronymAware } from "./codegen-helpers.ts
 // Crystal (https://crystal-lang.org/reference/) output projector.
 //
 // Crystal has no anonymous/structural object type — every `object` or `enum`
-// TypeRef needs a NAME to become a `class`/`enum` declaration, same
+// TypeRef needs a name to become a `class`/`enum` declaration, same
 // name-dependency `capnp.ts`'s `struct` has (see that file's `object` handler
 // doc comment). `toCrystal(ref, name?)` is the entry point: given a name, an
 // `object`/`enum` TypeRef renders a full declaration (nested `object`/`enum`
@@ -72,7 +72,7 @@ const handlers: Record<string, Converter> = {
   uri: leaf("String"),
   email: leaf("String"),
   // datetime/date are the domain `Time` type (Crystal stdlib), not a wire
-  // format — same "describes what a value IS" reasoning kinds/date-time.ts
+  // format — same "describes what a value is" reasoning kinds/date-time.ts
   // documents for why these aren't subtypes of `string`.
   datetime: leaf("Time"),
   date: leaf("Time"),

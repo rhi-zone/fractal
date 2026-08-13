@@ -89,9 +89,9 @@ const handlers: Record<string, Converter> = {
   // object fields to emit a properly named nested struct instead of falling through here.
   object: (_shape, meta) => (typeof meta.structName === "string" ? meta.structName : "AnyPointer"),
   // A class instance carries only nominal identity (className/source), never fields
-  // (see type-ir's TypeKinds.instance doc comment) — Cap'n Proto has no construct for
-  // an opaque class reference, so this degrades honestly to AnyPointer rather than
-  // emitting a struct with no fields.
+  // (see type-ir's TypeKinds.instance doc comment). Cap'n Proto has no construct for
+  // an opaque class reference; this degrades to AnyPointer instead of emitting a
+  // struct with no fields.
   instance: leaf("AnyPointer"),
   array: (shape) => {
     const s = shape as TypeShape & { kind: "array" };
@@ -137,8 +137,8 @@ const handlers: Record<string, Converter> = {
     const [first] = s.members;
     return first === undefined ? "AnyPointer" : toCapnpType(first);
   },
-  // Cap'n Proto has no callable-type construct — degrades honestly to
-  // AnyPointer, same as `instance` above. (`method` falls back here too via
+  // Cap'n Proto has no callable-type construct — degrades to AnyPointer,
+  // same as `instance` above. (`method` falls back here too via
   // `registerParent` for the field-position case; the real encoding of a
   // method surface is `toCapnpInterface` below, which is Cap'n Proto's own
   // native `interface` construct — https://capnproto.org/language.html#interfaces.)

@@ -1,8 +1,6 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
 import { quote } from "./codegen-helpers.ts";
 
-// packages/type-ir/src/cpp-rapidjson.ts — @rhi-zone/fractal-type-ir/cpp-rapidjson
-//
 // TypeRef -> C++17 struct/enum-class declarations with RapidJSON
 // (https://github.com/Tencent/rapidjson) serialization support. Unlike
 // cpp-nlohmann.ts's target library, RapidJSON has no ADL-based generic
