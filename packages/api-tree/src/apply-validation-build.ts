@@ -440,40 +440,36 @@ function relativeImportSpecifier(outFile: string, declarationFile: string): stri
 // reason to exist) — see docs/design/wire-profiles-and-staged-validation.md's
 // "Implementation trace (phase C)"'s retirement-blocker note.
 //
-// STATIC-META-READ INVESTIGATION (decision 4/5's "investigate before
-// assuming"): `walkNodeType`'s existing `mcpMetaOverride` (tree.ts) already
-// reads a scalar STRING-LITERAL meta value off a resolved `Node` TYPE — not
-// just a type shape, an actual authored VALUE (`meta.mcp.name`), via
+// `meta.<proto>.encodingMap` entries take one of two authored shapes (see
+// the design doc's decision-5 discussion): a base-profile-name STRING
+// (`"identity" | "json" | "query" | "argv"`) or a custom decoder FUNCTION
+// (`(w: FieldValidWire) => TField`).
+//
+// The string form is read the same way `walkNodeType`'s existing
+// `mcpMetaOverride` (tree.ts) already reads other scalar meta literals off a
+// resolved `Node` TYPE — not just a type shape, an actual authored VALUE
+// (`meta.mcp.name`), via
 // `checker.getPropertyOfType`/`getTypeOfSymbolAtLocation`/`isStringLiteral()`.
-// That IS "a legitimate static-meta-read path" (option (a) from the task):
 // `meta.http.method`/`meta.http.verb` (flat scalars) and `meta.<proto>.
 // sourceMap` (a map of per-field `{ store, key? }` literals — one level
-// deeper, enumerated via `getPropertiesOfType`, the SAME enumeration
-// `walkNodeType` already uses for `children`) generalize the identical
-// technique — see `readMetaStringLiteral`/`readMetaSourceMap` (tree.ts).
-// `option (b)` (`getConstantValue`/partial evaluation) was not needed once
-// (a) panned out and wasn't separately investigated.
-//
-// `encodingMap`'s two authorable shapes (see the design doc's decision-5
-// discussion) are a base-profile-name STRING (`"identity" | "json" | "query"
-// | "argv"`) or a custom decoder FUNCTION (`(w: FieldValidWire) => TField`).
-// The string form reads exactly like a `sourceMap` entry's `store`
+// deeper, enumerated via `getPropertiesOfType`, the same enumeration
+// `walkNodeType` uses for `children`) generalize the identical technique —
+// see `readMetaStringLiteral`/`readMetaSourceMap` (tree.ts). The
+// `encodingMap` string form reads exactly like a `sourceMap` entry's `store`
 // (`readMetaEncodingMapProfileNames`, tree.ts) — wired in below.
 //
-// **RESOLVED (2026-08-05, session
-// https://claude.ai/code/session_011tFKVomiW7x2MkeRg3mw88):** the FUNCTION
-// form used to have no analogous path — a function value has no literal
-// TYPE for the checker to hand back (unlike a string), so there was nothing
-// to READ "as a value." The closing move was to stop trying to read it: the
-// function never needs to move through codegen at all (no inlining, no
-// source re-emission, no cross-file import) — it stays exactly where it was
-// authored, an ordinary runtime value on the tree's own `meta`, read at WRAP
-// time (not codegen time) by `apply-validation.ts`'s `createApplyValidation`.
-// What codegen genuinely needs statically is narrower than "the function's
-// value": just WHICH field names have one, so the generated fragment can
-// emit a HOOK call-site for that field instead of its fused default decode.
-// That IS answerable from the TYPE alone — a function value's type still
-// carries a call SIGNATURE, even though it carries no literal payload
+// The function form has no analogous read path: a function value has no
+// literal TYPE for the checker to hand back (unlike a string), so there's
+// nothing to read "as a value." It doesn't need one — the function never
+// moves through codegen at all (no inlining, no source re-emission, no
+// cross-file import); it stays exactly where it was authored, an ordinary
+// runtime value on the tree's own `meta`, read at WRAP time (not codegen
+// time) by `apply-validation.ts`'s `createApplyValidation`. What codegen
+// genuinely needs statically is narrower than "the function's value": just
+// WHICH field names have one, so the generated fragment can emit a HOOK
+// call-site for that field instead of its fused default decode. That's
+// answerable from the TYPE alone — a function value's type still carries a
+// call SIGNATURE, even with no literal payload
 // (`readMetaEncodingMapFunctionFields`, tree.ts, via
 // `checker.getSignaturesOfType(fieldType, ts.SignatureKind.Call)`). See
 // `compileWireLeafFragment`'s call below for how the resulting field-name set
