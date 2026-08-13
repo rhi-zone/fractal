@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-capnp.ts — @rhi-zone/fractal-type-ir/from-capnp
-//
 // Cap'n Proto schema language (https://capnproto.org/language.html) -> TypeRef,
 // the reverse direction of capnp.ts's TypeRef -> Cap'n Proto projector
 // (toCapnpType/toCapnpStruct/toCapnpInterface).
@@ -782,7 +780,7 @@ function structToTypeRef(
 
 function enumToTypeRef(decl: CapnpEnumDecl): TypeRef {
   // Cap'n Proto enumerants are assigned sequential ordinals by declaration
-  // order by default (§ "Enums") but MAY be declared out of order — sort by
+  // order by default (§ "Enums") but may be declared out of order — sort by
   // ordinal so `members`' array order matches wire order, and keep the exact
   // name -> ordinal mapping in meta for callers that need it precisely
   // (`types.enum`'s `members` is a bare name array with no numbering slot).

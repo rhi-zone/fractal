@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-cql.ts — @rhi-zone/fractal-type-ir/from-cql
-//
 // Cassandra CQL DDL (`CREATE TABLE ...` / `CREATE TYPE ...`) -> TypeRef.
 // Sibling to from-sql.ts (SQL DDL -> TypeRef) — CQL's surface is SQL-*like*
 // but its own grammar (no JOINs/CHECK/FOREIGN KEY, but partition/clustering

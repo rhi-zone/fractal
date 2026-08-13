@@ -1,6 +1,4 @@
-// packages/type-ir/src/from-flow.ts — @rhi-zone/fractal-type-ir/from-flow
-//
-// Flow (https://flow.org/) source ingester: Flow type-annotation SYNTAX (not
+// Flow (https://flow.org/) source ingester: Flow type-annotation syntax (not
 // a resolved/checked type — flow-parser is a parser, not a type checker) ->
 // `TypeRef`. Uses `flow-parser`, Facebook's own OCaml Flow parser compiled to
 // WASM with a JS-facing `parse(code, options) -> ESTree-ish AST` API — the
@@ -17,20 +15,20 @@
 // already substituted — a reference to a locally-declared generic alias
 // (`ListOf<string>` where `type ListOf<T> = Array<T>`) can't be specialized;
 // it lowers to a plain `{ kind: "ref", target: "ListOf" }`, losing the `<string>`
-// instantiation. This is a real (documented, not silent) gap versus the TS
-// ingester, not an oversight.
+// instantiation. This is a known, documented limitation relative to the TS
+// ingester.
 //
 // Returned as a `TypeRefDocument` (see index.ts) — the same convention
 // `from-protobuf.ts`'s `fromProtoText` uses for a source format that declares
 // multiple named types in one file: every top-level type/interface/opaque-type
 // declaration becomes a `defs` entry keyed by its declared name, `root` is a
-// `ref` to the FIRST top-level declaration (or `t(types.unknown)` if the
+// `ref` to the first top-level declaration (or `t(types.unknown)` if the
 // source declares none), and every reference to another declared name lowers
 // to a `{ kind: "ref", target }` pointing into `defs` — so mutually-recursive
 // Flow types round-trip without infinite inlining.
 //
 // Punts anything genuinely unsupported (conditional/mapped/indexed-access
-// types, `typeof` queries, class declarations — Flow classes are VALUE
+// types, `typeof` queries, class declarations — Flow classes are value
 // declarations, not type declarations, so they're out of scope the same way
 // GraphQL executable definitions are out of scope for `from-graphql.ts`) to
 // `t(types.unknown, { $comment })` carrying a `$comment` that names the
@@ -140,7 +138,7 @@ interface InterfaceLike extends TypeAliasLike {
 
 // ============================================================================
 // Generic-scope handling — mirrors `from-typescript.ts`'s type-parameter
-// constraint extraction: a reference to the CURRENT alias/interface's own
+// constraint extraction: a reference to the current alias/interface's own
 // type parameter lowers to its `extends` bound (recursively converted, tagged
 // `meta.generic: true`), or `unknown` with a descriptive comment when
 // unconstrained. `TypeScope` maps a type-parameter name to its already-
@@ -416,14 +414,14 @@ function convertType(node: TypeNode, declared: ReadonlySet<string>, scope: TypeS
     case "NullLiteralTypeAnnotation":
       return t(types.null);
     // Flow's top type (`mixed` accepts any value, nothing is assignable
-    // FROM it without a refinement) maps to the IR's own top, `unknown` —
+    // from it without a refinement) maps to the IR's own top, `unknown` —
     // same role TypeScript's `unknown` plays for from-typescript.ts.
     case "MixedTypeAnnotation":
       return t(types.unknown);
     // Flow's bottom type — no value inhabits it.
     case "EmptyTypeAnnotation":
       return t(types.never);
-    // `any` is Flow's UNCHECKED escape hatch (unlike `mixed`, which is
+    // `any` is Flow's unchecked escape hatch (unlike `mixed`, which is
     // checked) — degrades to `unknown` same as `mixed`, but tagged so the
     // distinction isn't silently lost.
     case "AnyTypeAnnotation":

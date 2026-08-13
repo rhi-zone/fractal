@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-flatbuffers.ts — @rhi-zone/fractal-type-ir/from-flatbuffers
-//
 // FlatBuffers schema (.fbs) text -> TypeRef, the reverse direction of
 // flatbuffers.ts's TypeRef -> .fbs projector (toFlatBuffers/toFlatBuffersTable/
 // toFlatBuffersDeclarations). Read flatbuffers.ts first — its `handlers` table
@@ -172,7 +170,7 @@ function qualify(namespace: string, name: string): string {
  * Resolve a bare (or already-dotted) field/union-member type identifier
  * against the flat set of every declared top-level name, namespace-aware.
  * Mirrors from-protobuf.ts's `resolveTypeName` fallback chain: (1) qualified
- * with the CURRENT namespace, (2) the bare identifier as a top-level (no-
+ * with the current namespace, (2) the bare identifier as a top-level (no-
  * namespace) name — which also covers the case where `ident` is already a
  * fully-qualified dotted name matching a registered key exactly, (3) any
  * registered key whose last dotted segment matches (last resort). Falls back

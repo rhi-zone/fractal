@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-elasticsearch.ts — @rhi-zone/fractal-type-ir/from-elasticsearch
-//
 // Elasticsearch index mapping (the `mappings` value of an index definition,
 // or a single mapping-properties object) -> TypeRef. No text parsing — an ES
 // mapping is already a structured JSON object, so this is pure structural

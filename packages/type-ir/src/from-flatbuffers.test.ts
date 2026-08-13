@@ -322,7 +322,7 @@ describe("round-trip via toFlatBuffersTable/toFlatBuffersDeclarations", () => {
     expect(fields.id!.shape.kind).toBe("string");
     expect(fields.age!.shape.kind).toBe("string");
     // Lossy spot: toFlatBuffersTable emits `(required)` only when the source
-    // field is NOT optional/nullable (fieldRequired). Both fields above are
+    // field is not optional/nullable (fieldRequired). Both fields above are
     // plain (non-optional) TypeRefs, so both round-trip as required — i.e.
     // `meta.optional` should be absent on both sides here.
     expect(fields.id!.meta.optional).toBeUndefined();

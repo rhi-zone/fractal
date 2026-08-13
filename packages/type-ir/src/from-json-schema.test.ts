@@ -478,11 +478,10 @@ describe("round-trip: fromJsonSchema(toJsonSchema(ref))", () => {
 // ---------------------------------------------------------------------------
 // Nominal identity and vendor extensions
 //
-// `json-schema.ts` has always SERIALIZED `instance` as
-// `{type:"object", "x-class-name": …}` — index.ts names that convention as how
-// nominal identity travels — but the importer used to drop it, so the round
-// trip degraded `instance("Date")` to a field-less `object`. Unrecognized `x-`
-// keywords were dropped the same way.
+// `json-schema.ts` serializes `instance` as `{type:"object", "x-class-name":
+// …}` (index.ts names this convention as how nominal identity travels).
+// `fromJsonSchema` rebuilds the `instance` type from `x-class-name`, and
+// carries forward any other unrecognized `x-` keyword unchanged.
 // ---------------------------------------------------------------------------
 
 describe("nominal instance round trip", () => {
