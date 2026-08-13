@@ -616,11 +616,14 @@ Acceptance criteria for green:
 
 **Status: PARTIALLY COMPLETE (2026-08-12)**
 
-Code-level doc comment emission complete; six site-level doc projectors are
-now implemented (Docusaurus, Starlight, MkDocs (vanilla), Material for
-MkDocs, Sphinx, plus a generator-agnostic plain Markdown target added
-2026-08-13 — see "Plain Markdown (generator-agnostic) target, added
-(2026-08-13)" below). MkDocs and Material for MkDocs were previously
+Code-level doc comment emission complete; eight site-level doc projectors
+are now implemented (Docusaurus, Starlight, MkDocs (vanilla), Material for
+MkDocs, Sphinx, plus a generator-agnostic plain Markdown target, a
+plain-docutils (core reStructuredText, no Sphinx extensions) target, and an
+Org mode (Emacs Org markup) target, all three added 2026-08-13 — see
+"Plain Markdown (generator-agnostic) target, added (2026-08-13)", "Docutils
+(plain reStructuredText) target, added (2026-08-13)", and "Org mode target,
+added (2026-08-13)" below). MkDocs and Material for MkDocs were previously
 conflated under one file (`mkdocs-reference.ts`, which turned out to
 already be Material-flavored despite its name); they are now two
 genuinely separate built targets — see "MkDocs vs. Material for MkDocs
@@ -872,6 +875,200 @@ its own documentation would not actually have resolved. Added alongside
 the new `./markdown-reference` export, same shape as every sibling
 target's entry.
 
+**Docutils (plain reStructuredText) target, added (2026-08-13)**:
+`docutils-reference.ts` (`toDocutilsReference`) — confirmed today that
+`sphinx-reference.ts`'s own header comment already calls out `:ref:`,
+`.. code-block::`, and `.. deprecated::` as genuine Sphinx extensions, not
+core docutils/RST — the exact same vanilla-vs-flavored split already
+resolved for MkDocs above (`mkdocs-vanilla-reference.ts` vs.
+`mkdocs-reference.ts`), now applied to the RST family. Unlike the plain
+Markdown target above, this one _is_ built for one specific installable
+tool (the `docutils` PyPI package, whose CLI entry points are
+`rst2html`/`rst2html5`/etc.), just a different tool from Sphinx — so it
+gets a real bar-D check against that tool and a real (if caveated —
+see the popularity-ranking note below) place in the ranked list, neither
+of which the plain Markdown target could get. See
+docs/reference/type-ir/doc-projectors.md's "Docutils" section for the full
+syntax breakdown; summary of what changes relative to `sphinx-reference.ts`:
+
+- Cross-page links become plain external-style hyperlink references to the
+  sibling def's own filename (`` `Name <name.rst>`_ ``) in place of
+  Sphinx's `:ref:`/`.. _label:` pair — bare docutils has no multi-document
+  project graph for a label to resolve against, so pages no longer open
+  with a `.. _label:` target at all.
+- `.. code-block:: <lang>` becomes the plain `.. code:: <lang>` directive
+  (core docutils since 0.9 — the extended options Sphinx's directive adds
+  are simply not used).
+- `.. deprecated:: <version>` becomes a generic titled admonition
+  (`.. admonition:: Deprecated`) — core docutils' own closest-fit
+  callout-box primitive, with no version/changeset concept to fabricate a
+  placeholder for.
+- `.. list-table::` is untouched — it's core docutils, not a Sphinx
+  extension.
+
+Status against the same bars the other retrofitted targets clear:
+
+- **(A) Structural smoke test** — clears via `registry.test.ts`'s generic
+  loop plus `docutils-reference.test.ts`'s own RST-specific structural
+  assertions (the same title-underline/list-table checks
+  `sphinx-reference.test.ts` runs, plus assertions that none of Sphinx's
+  `:ref:`/`.. _label:`/`.. code-block::`/`.. deprecated::` syntax leaks in
+  anywhere across its whole fixture's output).
+- **(B) Dedicated fixture + reviewed output** — `docutils-reference.test.ts`
+  has its own conference-CFP-flavored fixture (`Talk`/`Speaker`/`Track`/
+  `ReviewEvent`/`ProgramCommittee`, distinct from every other target's
+  fixture) exercising a nested object, an enum with a deprecation reason,
+  a deprecated leaf field, an optional field, a discriminated union with
+  both `ref` and inline-object variants, an interface method, and a
+  documented example — with hand-reviewed explicit-string assertions per
+  section kind, same convention as the other targets' test files.
+- **(D) Verified correct, not just accepted** — done as one-time, ad hoc,
+  local verification, same scope as every other RST/MkDocs target's own
+  bar-D pass: the dedicated fixture's five generated `.rst` pages were fed
+  through a real `rst2html --report=2` run (nixpkgs'
+  `python3Packages.docutils`, added to `flake.nix`'s Python toolchain
+  alongside the pre-existing `sphinx`/`mkdocs` entries) and confirmed to
+  produce zero WARNING-or-higher messages once `python3Packages.pygments`
+  was added alongside it — not committed as a CI gate, not a persisted
+  script/fixture under `packages/type-ir/src`, per the same bar-C-out-of-
+  scope framing `sphinx-reference.ts`'s own dated note established.
+
+What the ad hoc bar-D check actually found (recorded for the same reason
+the Sphinx write-up above records its three findings — bar A's smoke test
+could not have caught either of these; only feeding the output to a real
+`docutils` install did):
+
+1. **`.. admonition:: <title>` requires non-empty body content.** An
+   admonition directive with only a title and no body is a real docutils
+   ERROR ("Content block expected for the 'admonition' directive; none
+   found"), not a silently-accepted empty box — confirmed by first trying
+   the argument-only form. `deprecatedAdmonition` (internal) always
+   supplies a body: the real reason string when `meta.deprecated` carries
+   one, otherwise a fixed fallback sentence ("This type is deprecated.")
+   rather than an empty directive.
+2. **Pygments is not a required `docutils` dependency, unlike Sphinx.**
+   `python3Packages.sphinx` bundles Pygments transitively (needed for its
+   own `.. code-block::` highlighting), so the pre-existing Sphinx bar-D
+   pass never hit this; standalone `docutils` does not pull it in, so
+   every `.. code::`/`.. code:: json` block in this target's output
+   produced a "Cannot analyze code. Pygments package not found." WARNING
+   until `ps.pygments` was added to `flake.nix` alongside `ps.docutils`.
+   The output itself was never wrong — this was purely an environment gap
+   in what a real, complete docutils setup needs — but it's recorded here
+   because it's exactly the kind of thing bar A's structural checks can't
+   surface and only a real-tool bar-D pass does.
+
+Both findings are reflected in the committed `docutils-reference.ts` and
+`flake.nix`, re-verified against a fresh `rst2html --report=2` run after
+each fix. The scratch directory used for the visual check (the dedicated
+fixture's five generated `.rst`/`.html` pages) was not committed, per the
+same not-persisted precedent `sphinx-reference.ts`'s own bar-D note set.
+
+Registered in `registry.ts` (`docutils-reference`) and given its own
+`packages/type-ir/` subpath export (`./docutils-reference`), same
+convention as every other target.
+
+**Naming judgment call, flagged rather than assumed:** every doc-projector
+file in this package is named after the specific downstream tool it
+targets (`sphinx-reference.ts`, `mkdocs-reference.ts`,
+`mkdocs-vanilla-reference.ts`, `docusaurus-reference.ts`,
+`starlight-reference.ts`), never after the output *format* — so this file
+is named `docutils-reference.ts` / `toDocutilsReference`, after the real
+tool identity (the `docutils` PyPI package), rather than
+`rst-vanilla-reference.ts` (a format-plus-"vanilla"-suffix name that would
+have mirrored `mkdocs-vanilla-reference.ts`'s surface pattern but broken
+the tool-name convention every other file in this family actually follows
+— there is no sibling `rst-reference.ts`/`docutils-material-reference.ts`
+this file is the "vanilla" counterpart to, the way `mkdocs-vanilla-
+reference.ts` is a counterpart to `mkdocs-reference.ts`). This is a
+grounded convention match, not a guess, but it's still a call the project
+owner should confirm or correct before it becomes precedent for whatever
+target ships next.
+
+**Org mode target, added (2026-08-13)**: `org-mode-reference.ts`
+(`toOrgModeReference`) — a genuinely new target with zero prior presence
+anywhere in this repo (not previously mentioned in this doc, not a
+previously-considered-and-deferred target). Sits between the two
+categories above rather than fitting either cleanly: like Plain Markdown,
+Org's own markup is not owned by one specific *site-generator* tool the
+way Sphinx/MkDocs are (there is no separate "Org doc-site generator" this
+target is written for); unlike Plain Markdown, Org mode's syntax is not
+generic prose markup either — headline depth, `:PROPERTIES:`/`:CUSTOM_ID:`
+drawers, in-buffer `#+TITLE:`/`#+DESCRIPTION:` keywords, and
+`[[file:…::#id][…]]` links are real, tool-recognized Org semantics (Emacs'
+own `org` package, bundled since Emacs 24.1), not an invented convention.
+Every syntax fact this projector depends on was checked against Org's own
+manual (orgmode.org/manual) and the Worg syntax reference rather than
+assumed from Markdown/RST familiarity — see
+docs/reference/type-ir/doc-projectors.md's "Org mode" section for the
+full syntax breakdown, including the `\vert{}` table-cell pipe-escape and
+the literal-marker/embedded-link interaction bar-D below actually
+exercised. Status against the same bars the other retrofitted targets
+clear:
+
+- **(A) Structural smoke test** — clears via `registry.test.ts`'s generic
+  loop plus `org-mode-reference.test.ts`'s own structural assertions
+  (every page's `:PROPERTIES:` drawer sits immediately below its level-1
+  headline with no blank line, every table's separator-row segment count
+  matches its header row's cell count, trailing-newline discipline).
+- **(B) Dedicated fixture + reviewed output** — `org-mode-
+reference.test.ts` has its own task/project-management-flavored fixture
+  (`Task`/`Assignee`/`Priority`/`ActivityEvent`/`ProjectBoard`) exercising
+  a nested object, a deprecated enum, a deprecated leaf field, an optional
+  field, a discriminated union with both `ref` and inline-object variants,
+  an interface method, and a documented example — hand-reviewed
+  explicit-string assertions per section kind, same convention as every
+  other target's test file. Chosen independently for Org's own real-world
+  niche (TODO/task tracking is Org mode's original use case) rather than
+  copied from a sibling, but it coincidentally lands on the same
+  domain shape `markdown-reference.test.ts`'s fixture already uses — noted
+  here rather than left implicit, since this doc's convention elsewhere is
+  each target's fixture should read as distinct from its siblings'.
+- **(D) Verified correct, not just accepted** — a real `emacs --batch`
+  run: `org-lint` against every generated page (zero structural warnings;
+  one expected low-severity "unknown source block language: typescript"
+  note per `#+BEGIN_SRC typescript` block, since Org's babel-language
+  registry only recognizes languages it can *execute* and this target
+  never asks Org to evaluate the block, so the note is expected and not
+  actionable), and a real `org-html-export-to-html` run whose rendered
+  output was inspected directly: cross-page `[[file:…::#id][…]]` links
+  resolve to the correct `<a href="other-page.html#id">` anchors, the
+  `:PROPERTIES:` drawer does not leak into rendered output, the
+  `#+BEGIN_QUOTE` deprecation block renders as a real `<blockquote>`, and
+  — the one genuine correctness question this bar-D pass existed to
+  answer — a union type's literal `|` landing inside a table cell (e.g.
+  `"unassigned" | "reassigned"`) renders through the `\vert{}` escape as
+  an actual pipe glyph (`&vert;` in the exported HTML) rather than
+  splitting the table into extra columns. Unlike `sphinx-reference.ts`'s
+  first bar-D pass, this run found no defects to fix — recorded as a data
+  point, not assumed to mean future targets will be defect-free too.
+  `emacs-nox` was added to `flake.nix`'s `buildInputs` for this purpose
+  only (same not-CI-gated, ad hoc/local precedent as `sphinx`/`mkdocs`/
+  `docutils` above), and the scratch fixture used for the check was not
+  committed, same as every prior bar-D pass on this page.
+- **Popularity-ranking placement — genuinely ambiguous, flagged rather
+  than guessed.** Org mode was not part of the original 10-target research
+  pass below and does not fit that list's methodology at all: every other
+  entry there is a separately installable tool with *some* real
+  popularity signal (a package-registry download count, or — for GitBook,
+  flagged there for the same reason — a SaaS usage/market-share figure).
+  Org mode has neither. It ships bundled with GNU Emacs itself (since
+  Emacs 24.1, released 2012) rather than being installed as a separate
+  package most of the time, so there is no npm/PyPI/crates.io-style
+  download metric that measures *it* rather than Emacs as a whole; its
+  canonical home is a Savannah/GNU repository, not GitHub, and the
+  unofficial read-only GitHub mirrors that exist (`bzg/org-mode`,
+  `emacs-straight/org-mode`) have no claim to being *the* canonical
+  star-count source the way `mkdocs-material`'s own repository does for
+  that target. Inventing a ranking position from Emacs' own popularity
+  would conflate "how popular is Emacs" with "how popular is this one
+  markup target," a substitution none of the other 10 targets required.
+  Given that, Org mode is left out of the numbered list entirely rather
+  than assigned a placeholder position — this is the project owner's call
+  to make if a comparable proxy signal (e.g. Emacs' own install-base
+  estimates, or MELPA-adjacent Org-ecosystem package counts as an
+  indirect signal) is wanted instead.
+
 **Still planned**: The remaining site-level generators listed below
 (VitePress for JS/TS beyond Docusaurus/Starlight, mdBook for Rust, DocFX
 for C#, and Zensical/GitBook cross-language) — none of these
@@ -884,12 +1081,20 @@ below were built around — it isn't tied to any one ecosystem/generator, so
 it was never a candidate answer to that list's "what order do the
 remaining ecosystem-native targets ship in?" sequencing question. It's
 still recorded in the popularity-ranking section below, unranked, with
-that mismatch flagged explicitly — see the note there.
+that mismatch flagged explicitly — see the note there. The Docutils target
+above is a seventh built projector, also outside the original "10
+in-scope targets" — it wasn't a candidate answer to the sequencing
+question for the same reason (bare docutils was never one of the 10
+targets that research pass covered) — but unlike the plain Markdown
+target, it does target one specific installable tool with its own real
+popularity signal, so it gets a ranked (caveated) entry below rather than
+the "deliberately left unranked" treatment plain Markdown got.
 
 Site-level generators to target, by language ecosystem:
 
 - JS/TS — Docusaurus, VitePress, Starlight
-- Python — Sphinx (autodoc), MkDocs (mkdocstrings)
+- Python — Sphinx (autodoc), MkDocs (mkdocstrings), docutils (core RST,
+  no Sphinx extensions)
 - Rust — mdBook
 - C# — DocFX (conceptual-Markdown mode — see scope note below)
 - Cross-language — Zensical (squidfunk's newer Rust-based doc
@@ -1009,6 +1214,28 @@ numbering.
     here given the project's very early release stage), and its true
     standing will likely rise further once Material for MkDocs sunsets
     in November 2026.
+11. **docutils** (Python — **built**, `docutils-reference.ts` as of
+    2026-08-13; not one of the original 10 targets this research pass
+    covered — see the "Docutils (plain reStructuredText) target, added"
+    note above — appended here past the original 1-10 numbering rather
+    than interleaved by rank, same "numbering left as originally
+    researched" policy this list's own intro states) — ~50.4M PyPI
+    downloads/week (pypistats.org, 2026-08-13), nominally the highest
+    figure in this entire list, well above even Sphinx's #1 spot.
+    **Not treated as actually outranking Sphinx**, and flagged rather than
+    taken at face value: `docutils` is Sphinx's own parser dependency, so
+    every `pip install sphinx` also downloads `docutils` — this figure is
+    inflated by that transitive-dependency relationship (and by however
+    many other tools also depend on it) in a way none of the other entries
+    above are, including Zensical's "possibly inflated by CI/bot traffic"
+    caveat, which is a different kind of inflation (traffic noise, not a
+    structural is-a-dependency-of-#1 relationship). Placed at #11, directly
+    after the original 10, rather than reordered to #1 — a judgment call
+    the project owner should confirm: the alternative reading is that a
+    raw, real 50.4M/week figure for an installable tool with its own CLI
+    (`rst2html`) is still a legitimate signal of real Python-ecosystem RST
+    demand and arguably deserves more weight than "just noise," even
+    accounting for the inflation.
 
 **Caveats on this whole list, restated:** this was a general-popularity
 check (registry download APIs, GitHub star counts, current comparison
@@ -1040,6 +1267,25 @@ other representation (e.g. folding it into the sequencing question
 differently, or treating "no installable tool" itself as a placement
 signal) is preferred instead.**
 
+**Docutils — ranked (at #11, above), unlike plain Markdown, but its own
+kind of flagged.** Built 2026-08-13 (see the "Docutils (plain
+reStructuredText) target, added" note above). Unlike the plain Markdown
+target, this one does target one specific installable tool (`docutils`,
+with its own PyPI listing and CLI), so the "not a tool or product at all"
+reasoning that keeps plain Markdown unranked doesn't apply here — it gets
+a numbered slot. What's flagged instead is the _number itself_: `docutils`
+is a required transitive dependency of `sphinx` (and of many other
+packages), so its 50.4M/week figure measures "how many installs pulled in
+docutils for any reason," not "how many people build documentation sites
+with bare docutils/rst2html specifically" — a genuinely different question
+from every other entry's download count, which is why it's placed at #11
+past the original ranking rather than reordered to #1. This is this
+implementer's reasoning, not a verified fact about real-world docutils
+usage patterns (no data source distinguishes "installed as a transitive
+Sphinx dependency" from "installed and used standalone" within that
+50.4M figure) — **flagged for the project owner to confirm or correct**,
+same as every other placement call in this section.
+
 ### Production-grade initiative across all doc-generation targets — open
 
 The project owner wants to push all doc-generator targets — the five
@@ -1049,12 +1295,13 @@ of this writing: 5 built, 5 planned, after the 2026-08-13 trim removing
 the 15 API-reference-extractor tools listed as out of scope above, and
 the same-day resolution of the MkDocs/Material-for-MkDocs target-identity
 ambiguity, see above) — to "production grade" together, as one
-initiative. The generator-agnostic plain Markdown target (also built
-2026-08-13, see above) sits outside this ten-target count, per the same
-"not one of the original in-scope targets" framing given where it's
-introduced above; whether it's meant to be pulled into this
-production-grade push too is left to the project owner alongside the two
-open questions below, not assumed either way here. No
+initiative. The generator-agnostic plain Markdown target and the
+plain-docutils target (also built 2026-08-13, see above) both sit outside
+this ten-target count, per the same "not one of the original in-scope
+targets" framing given where each is introduced above; whether either (or
+both) is meant to be pulled into this production-grade push too is left
+to the project owner alongside the two open questions below, not assumed
+either way here. No
 definition of "production grade" exists yet for this repo's doc
 projectors, and none is proposed here; both of the following are open
 questions belonging to the project owner:

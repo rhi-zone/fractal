@@ -135,6 +135,10 @@
       "types": "./dist/sphinx-reference.d.ts",
       "import": "./dist/sphinx-reference.js"
     },
+    "./org-mode-reference": {
+      "types": "./dist/org-mode-reference.d.ts",
+      "import": "./dist/org-mode-reference.js"
+    },
     "./docutils-reference": {
       "types": "./dist/docutils-reference.d.ts",
       "import": "./dist/docutils-reference.js"

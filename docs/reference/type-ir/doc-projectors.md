@@ -1,15 +1,19 @@
 # Doc projectors
 
 Unlike every code-generating projector above (`TypeRef => string`), these
-six take a whole `TypeRefDocument` — `root` + `defs` — and produce a
+eight take a whole `TypeRefDocument` — `root` + `defs` — and produce a
 `Map<string, string>` of generated documentation _pages_ (filename → Markdown/
-MDX/RST content), one per named `defs` entry. `doc.root` gets no page of its
-own (it's typically the operation/entry-point shape that _uses_ the named
+MDX/RST/Org content), one per named `defs` entry. `doc.root` gets no page of
+its own (it's typically the operation/entry-point shape that _uses_ the named
 types, not a named type itself) — a caller wanting a page for it adds it to
-`defs` under a name first. All six cross-link `ref` targets to each other's
+`defs` under a name first. All eight cross-link `ref` targets to each other's
 pages by kebab-case filename (Sphinx via an explicit `:ref:`/`.. _label:`
-pair rather than a bare Markdown link, since RST has no implicit per-file
-anchor — see its section below).
+pair, since RST has no implicit per-file anchor; Docutils via a plain
+external-style hyperlink reference to the sibling `.rst` file instead, since
+`:ref:` itself is a Sphinx-only role with no bare-docutils equivalent; Org
+mode via a `:CUSTOM_ID:` property drawer plus a `[[file:page.org::#id][…]]`
+link, Org's own native cross-file anchor mechanism — see each target's own
+section below).
 
 ## Docusaurus
 
@@ -286,6 +290,89 @@ standalone helpers, same convention as every other doc projector in this
 package. `options.basePath` (default none) prefixes every returned
 filename, e.g. `"reference/"` → `"reference/user.md"`.
 
+## Org mode
+
+```ts
+import {
+  toOrgModeReference,
+  renderTypeExpr,
+  kebabCase,
+} from "@rhi-zone/fractal-type-ir/org-mode-reference";
+
+const pages = toOrgModeReference({
+  root: t(types.ref("User")),
+  defs: { User: t(types.object({ id: t(types.integer) })) },
+});
+// pages.get("user.org")
+```
+
+```org
+#+TITLE: User
+#+DESCRIPTION: Reference for User.
+
+* User
+:PROPERTIES:
+:CUSTOM_ID: user
+:END:
+
+** Type Signature
+
+#+BEGIN_SRC typescript
+type User = { id: integer }
+#+END_SRC
+
+** Fields
+
+| Field | Type | Required | Description |
+|---+---+---+---|
+| id | integer | Yes | |
+```
+
+Native Emacs Org markup — the plain-text outline format Org mode itself
+parses, not any one export backend's rendered HTML/LaTeX. One `.org` page
+per `defs` entry. Org's structural unit is the headline (`*` repeated per
+depth — level inferred from star count, unlike RST's underline-length
+matching or Markdown's `#` count, so there is no per-page "underline must
+match title length" invariant to maintain the way `sphinx-reference.ts`
+needs one), and its cross-reference mechanism is a `:CUSTOM_ID:` property
+on the target headline plus a `[[file:page.org::#id][text]]` link — the
+structural equivalent of Sphinx's `.. _label:`/`:ref:` pair, placed inside
+a `:PROPERTIES:` drawer that must sit immediately below the headline it
+belongs to (no blank line in between — Org's own placement rule).
+`#+TITLE:` and `#+DESCRIPTION:` are real in-buffer export keywords (Org's
+nearest analogue to YAML frontmatter); unlike the RST target, which has no
+per-file description convention and so omits one on a def with no
+`meta.description`, Org does have `#+DESCRIPTION:`, so this target follows
+the MkDocs-family convention instead — always emitting both keywords, with
+a synthesized `"Reference for X."` fallback when `meta.description` is
+absent. `#+BEGIN_SRC <lang>` / `#+END_SRC` fences code without requiring
+indented content (unlike RST's `.. code-block::` directive). Table rows
+are `|`-delimited; a literal `|` inside a cell (a rendered union type, or
+`meta.nullable`'s `| null` suffix, landing inside a Fields/Methods table
+cell) is escaped as `\vert{}` — Org's only documented way to quote a
+column separator, since an unescaped `|` would otherwise split the cell
+into extra, invalid columns. Deprecation renders as a `#+BEGIN_QUOTE`
+block with a bold `*Deprecated.*` lead-in rather than an admonition — Org
+has no bundled callout/admonition syntax to assume, the same reasoning
+`mkdocs-vanilla-reference.ts` gives for its own plain-blockquote choice.
+Multiple `meta.examples` render as numbered `Example N` subsections rather
+than a tabbed UI, for the same no-bundled-tabs reasoning. A cross-linked
+method signature cell is left unwrapped rather than put inside `~…~`
+(Org's inline-code/verbatim markers): `~…~`/`=…=` content is not
+reprocessed for nested Org syntax, so wrapping a signature that embeds a
+`[[file:…]]` link would render the link as dead literal text — the same
+class of defect `sphinx-reference.ts`'s bar-D pass found and fixed for
+RST's literal spans, checked here up front rather than found later.
+`renderTypeExpr(ref, linked?)` and `kebabCase(name)` are exported as
+standalone helpers, same convention as every other doc projector in this
+package. `options.basePath` (default none) prefixes every returned
+filename, e.g. `"reference/"` → `"reference/user.org"`.
+
+This target's generated output has been verified against real Emacs Org
+tooling — `org-lint` (via `emacs --batch`) and a real
+`org-html-export-to-html` run — see docs/roadmap.md's doc-generator
+"basics" bar-D note for what that check covered and found.
+
 ## Sphinx
 
 ```ts
@@ -367,6 +454,97 @@ Variants tables, so nothing is lost by omitting it.
 standalone helpers, same convention as the MkDocs projector.
 `options.basePath` (default none) prefixes every returned filename, e.g.
 `"reference/"` → `"reference/user.rst"`.
+
+## Docutils
+
+```ts
+import {
+  toDocutilsReference,
+  renderTypeExpr,
+  kebabCase,
+} from "@rhi-zone/fractal-type-ir/docutils-reference";
+
+const pages = toDocutilsReference({
+  root: t(types.ref("User")),
+  defs: { User: t(types.object({ id: t(types.integer) })) },
+});
+// pages.get("user.rst")
+```
+
+```rst
+User
+====
+
+Type Signature
+--------------
+
+.. code:: typescript
+
+   type User = { id: integer }
+
+Fields
+------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 10 45
+
+   * - Field
+     - Type
+     - Required
+     - Description
+   * - id
+     - integer
+     - Yes
+     -
+```
+
+Plain **docutils** (the `docutils` PyPI project's own `rst2html`/`rst2html5`
+writers), not Sphinx — the same vanilla-vs-flavored split as MkDocs above,
+applied to the RST family: `sphinx-reference.ts`'s own header comment
+identifies `:ref:`, `.. code-block::`, and `.. deprecated::` as genuine
+Sphinx extensions over core docutils, not native RST, so this target
+renders none of them. Instead:
+
+- Cross-page links are plain external-style hyperlink references to the
+  sibling def's own filename (`` `Name <name.rst>`_ ``), the RST-native
+  counterpart to the vanilla-Markdown targets' `[Name](name.md)` — there is
+  no `.. _label:`/`:ref:` pair, since that role is Sphinx's own
+  `StandardDomain` addition and bare docutils has no multi-document project
+  graph to resolve a label against in the first place. Each page therefore
+  opens directly with its title, not a cross-reference target.
+- Code blocks use the plain `.. code:: <lang>` directive
+  (`docutils.parsers.rst.directives.body.CodeBlock`, part of core docutils
+  since 0.9), not Sphinx's extended `.. code-block::`.
+- Deprecation renders as a generic titled admonition
+  (`.. admonition:: Deprecated`) rather than Sphinx's version-aware
+  `.. deprecated::` directive — core docutils has no changeset/version
+  concept, and the generic admonition directive is docutils' own
+  closest-fit callout-box primitive. Confirmed against a real `rst2html`
+  run that an argument-only admonition with no body is a docutils ERROR
+  ("Content block expected"), so a reason-less deprecation
+  (`meta.deprecated === true`) still renders a fallback body sentence
+  rather than an empty directive.
+- `.. list-table::` is unchanged from the Sphinx target — it's core
+  docutils, not a Sphinx extension, so there was nothing to swap out.
+- Multiple `meta.examples` render as numbered `Example N` subsections, same
+  reasoning as the Sphinx target's own (no tabs directive is part of a
+  default install — core docutils has even less UI chrome than Sphinx does).
+- Same fixed underline-character-per-level heading convention as the Sphinx
+  target (`=` page title, `-` sections, `~` variant subsections, `^` a
+  variant's nested Fields table) — a core RST feature, not Sphinx-specific.
+
+This target's generated output has been verified against a real
+`rst2html --report=2` (warnings promoted to a non-zero exit) run over its
+dedicated test fixture, with zero warnings once `pygments` is installed
+alongside `docutils` — see docs/roadmap.md's doc-generator "basics" bar-D
+note and `flake.nix`'s Python toolchain comment for why `pygments` needs to
+be added explicitly here (unlike the Sphinx target, which bundles Pygments
+as one of its own dependencies).
+`renderTypeExpr(ref, linked?)` and `kebabCase(name)` are exported as
+standalone helpers, same convention as every other doc projector in this
+package. `options.basePath` (default none) prefixes every returned
+filename, e.g. `"reference/"` → `"reference/user.rst"`.
 
 ## Plain Markdown (generator-agnostic)
 

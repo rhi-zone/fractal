@@ -33,8 +33,27 @@
             # verification runs — both packages are pulled in together since the
             # two targets are genuinely separate `mkdocs.yml` themes (plain
             # `mkdocs` vs. `mkdocs-material`), not one target with an optional
-            # extra)
-            (python3.withPackages (ps: [ ps.pydantic ps.attrs ps.sphinx ps.mkdocs ps.mkdocs-material ]))
+            # extra); docutils/pygments: same not-CI-gated precedent again, for
+            # docutils-reference.ts's own bar-D `rst2html --report=2` local
+            # verification run — docutils is Sphinx's own parser dependency, so
+            # `ps.sphinx` above already carries it transitively, but the plain
+            # `docutils-reference.ts` target is checked against the standalone
+            # `docutils` package/CLI (`rst2html`/`rst2html5`) directly, not
+            # through Sphinx; pygments is added alongside it because it's an
+            # optional, not required, docutils dependency (unlike Sphinx, which
+            # bundles Pygments itself) — without it, every `.. code::` block
+            # emits a "Cannot analyze code. Pygments package not found." WARNING,
+            # which would fail a warnings-as-errors bar-D run for a reason that
+            # has nothing to do with this projector's actual output being wrong)
+            (python3.withPackages (ps: [
+              ps.pydantic
+              ps.attrs
+              ps.sphinx
+              ps.mkdocs
+              ps.mkdocs-material
+              ps.docutils
+              ps.pygments
+            ]))
 
             # Go (encoding/json, easyjson projectors — both stdlib-only: easyjson's
             # own runtime is only needed by its code-*generator*, not by the
@@ -126,6 +145,17 @@
             protobuf # protoc
             capnproto # capnp
             flatbuffers # flatc
+
+            # Emacs (org-mode-reference.ts's target ecosystem) — NOT used by
+            # any committed test — pulled in for one-time local visual
+            # verification of org-mode-reference.ts's generated .org output,
+            # via a real `emacs --batch` load of `org` plus `org-lint` and an
+            # `org-export-to-html` run (docs/roadmap.md's doc-generator
+            # "basics" bar D), same not-CI-gated precedent as sphinx/mkdocs
+            # above. `emacs-nox` (no GUI toolkit) is enough for a batch-mode
+            # check; `org` itself ships bundled with Emacs since 24.x, no
+            # separate package needed.
+            emacs-nox
           ];
         };
       }

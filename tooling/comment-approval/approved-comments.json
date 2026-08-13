@@ -61,6 +61,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:56:55.974Z"
     },
+    "00a401859653b9401325035c73cd0afaff068604dd8ce03983da63d64e6a055d": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:29.893Z"
+    },
     "00a5edb1054a5c11b88975443d92df43137a59d82780b6c9614ecb404d090223": {
       "excerpt": "packages/http-api-projector/src/compile.ts — @rhi-zone/fractal-http-api-projecto…",
       "approvedAt": "2026-08-13T08:03:36.762Z"
@@ -1641,6 +1645,10 @@
       "excerpt": "A class instance carries only nominal identity (className/declarationFile),",
       "approvedAt": "2026-08-13T08:04:03.756Z"
     },
+    "116f9fabc7f82eaef197645d501d238cbcfa87087ad7699da8c6612be747fd3c": {
+      "excerpt": "Every `|---+---|`-shaped separator row must be made only of `|`, `-`, and",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
+    },
     "1172293894d1e9ff19d887a08862c48a7647b0bc80e95c5de17abd49b3fe1b06": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:53:17.526Z"
@@ -2044,6 +2052,10 @@
     "16107f9c3236fbdc357409d13a4eb7a7520a2237ed4c0612910183f44c0ccc37": {
       "excerpt": "Non-incremental convenience wrapper around `compileConstraintsFn`/",
       "approvedAt": "2026-08-13T07:54:48.467Z"
+    },
+    "1610f414cf4e0c01c461fddd3533c6a72334f68a751a068c8a489663a5a35111": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "16175f4ade5d7d9aa8204c256759e0ceaff3784c670f69dc1e3af9ffc0b6737b": {
       "excerpt": "Convert a `TypeRef` to idiomatic Crystal. Given `name` and an `object`/",
@@ -3221,6 +3233,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:03:36.786Z"
     },
+    "22c74388ebb20c9be480d44f44081fe7be6c143b4d376fb42a36147b3af49a92": {
+      "excerpt": "Same reasoning sphinx-reference.ts gives for its own numbered",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
+    },
     "22e0015dcb3a7b29946e0f096b1e5d10d47a78a9b05c45ae4972b64beb06f7bb": {
       "excerpt": "Must be exactly \"GET\" | \"POST\", not the full Method union.",
       "approvedAt": "2026-08-13T07:56:54.067Z"
@@ -3743,7 +3759,7 @@
     },
     "28e4c320abc1014cd6b2792747521db9ab26126cdb390a6db9f3172025c4a701": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:04:03.781Z"
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "28ff4345e90327d1403622fea6634cd6cace4a6784bec7e3bb3686abb7f2f5f8": {
       "excerpt": "Auto-discovery (`sourceFile`, no caller-supplied `schemas`) keys every",
@@ -3772,6 +3788,10 @@
     "296dcd2d294559dd09c240340f1a0f91b026721bac8509df7b3ee10a83fb1788": {
       "excerpt": "Project a `TypeRef` to a standalone Swift declaration. `object`/`enum`/",
       "approvedAt": "2026-08-13T08:04:03.791Z"
+    },
+    "29738b100ff11726000b4c4011e658a7519c16c0b2e074343fa3e74378ef13d0": {
+      "excerpt": "Cross-file link to another def's page, targeting its `CUSTOM_ID` via the",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "2998b80f9f816fa6914cc7e988cbbb9c86eaa10f16c8ba815e9943e23c89b382": {
       "excerpt": "Detected as a map because the key set keeps growing.",
@@ -3832,6 +3852,10 @@
     "2a5cc1fe5ea94a6117587b53fd272d3a6a0e047b3522152235203beb878fe8c1": {
       "excerpt": "What `prompts/list` answers with, and the table `prompts/get` dispatches through…",
       "approvedAt": "2026-08-13T08:46:58.807Z"
+    },
+    "2a6fb6f4026e68e4ce33f700e8d2a8841940b4df6aeb9ea2657babaf9a370eb6": {
+      "excerpt": "Plain blockquote — no admonition extension assumed available, same",
+      "approvedAt": "2026-08-13T08:52:26.847Z"
     },
     "2a758b896714fbf39fa19575cbac80d2c09cc65eb5d8d224c487ee7c7d65a117": {
       "excerpt": "Resource -> a Gleam \"external type\" declaration: `pub type Name` with no",
@@ -3980,6 +4004,10 @@
     "2c2f7536fc2cc1d0408a3cf6125dd34f22c4f0aff07f93756021f8a79fc92637": {
       "excerpt": "no \"mod fs\" or namespace wrapper of any kind",
       "approvedAt": "2026-08-13T07:56:55.980Z"
+    },
+    "2c331647303b46be3a8847bd6b748f744be5d51ea0a172744fdb0897f6b0608a": {
+      "excerpt": "A property drawer must sit immediately below its headline (no blank",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "2c3991de43ea9b06e60734a4ad9ca6184ee897bd4affbb5945d3e069cdc9a803": {
       "excerpt": "basetype omitted -> defaults to \"int\"",
@@ -5417,6 +5445,10 @@
       "excerpt": "A class instance that carries data. `instance` is nominal-only by",
       "approvedAt": "2026-08-13T08:04:03.797Z"
     },
+    "3c9f3e403606a87d661e5fbc6793b51bb3955be411b99a10a6295bbfd5a09e9b": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
+    },
     "3cc6f1375639d43bd8531f59c059a22d09f6a16c6f6b9f2d525065d1880f9843": {
       "excerpt": "True when the callee of `call` is a `createApplyValidation` result.",
       "approvedAt": "2026-08-13T08:14:47.631Z"
@@ -5604,6 +5636,10 @@
     "3e9bc058fff78131d419ebf64f9c6a70e3ad3c0a5e22b26d2ba4c7b4e2e1e7f4": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:04:03.741Z"
+    },
+    "3ebd1005739c8ce2e90a4948724fa3f6dda69a281c08be411ef86db566615b0c": {
+      "excerpt": "No bundled admonition syntax to assume (see this file's header comment);",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "3eccb0abddb81388b4eee7007bf3b4f3333ef3ff937627b78111e2ecf1d01825": {
       "excerpt": "Default heuristic: share when a type is both reused (appears more than",
@@ -6384,6 +6420,10 @@
     "46b7b9ecad15fb735ab720d95f1078d77f6fc7de0d6130c4bfad80110452e70e": {
       "excerpt": "A thrown message can carry stack frames, file paths, driver text —",
       "approvedAt": "2026-08-13T08:46:58.818Z"
+    },
+    "46b8771da85602a7297b1b75ff75e702a5d72e34ba49e630d07d40b087e1cb8d": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T08:52:26.852Z"
     },
     "46c0fe598a1be29c9b0e808d0e56291124db4458bdaa5d4085e903036952a681": {
       "excerpt": "Dart style (https://dart.dev/effective-dart/style#identifiers): fields and",
@@ -7357,6 +7397,10 @@
       "excerpt": "Per-tool derived facts as TypeRefs (pre-projection).",
       "approvedAt": "2026-08-13T08:14:47.635Z"
     },
+    "51d71eb9664901721d99f446aef1d56e6bff1d2070f839683e2e29dea17fce3d": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
+    },
     "51d722a8ba689d28cabf7c5982d9e09e9b45e5b5b206dcb1fa1869afd727b960": {
       "excerpt": "Untyped implementation — does the actual work without generic constraints",
       "approvedAt": "2026-08-13T07:55:15.563Z"
@@ -7704,6 +7748,10 @@
     "54efaba16254e0d676ee187239af9f7fb96e23e6238bce4c88bfe7bbcfa2a1c0": {
       "excerpt": "Cap'n Proto has no doc-comment keyword (§ \"Language Reference\"); `#` line",
       "approvedAt": "2026-08-13T08:04:03.673Z"
+    },
+    "54f56416bb037a8ce0a848d64dcbd5b165e3aa2c520dc3e14f9c1a12e6969dca": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T08:52:26.852Z"
     },
     "54f73b79940f54697b70e77a4aa558ee8d880c6e8b473c3500fc575c6d5a0f16": {
       "excerpt": "A leaf that declares it needs {id}.",
@@ -9405,6 +9453,10 @@
       "excerpt": "idempotent = true, destructive ≠ true → PUT (unknown destructive treated as ¬des…",
       "approvedAt": "2026-08-13T08:03:36.743Z"
     },
+    "67407264f1b105e4be2cf8b03d1464d6a4f5f68650f042869b585643b5bb023c": {
+      "excerpt": "`to` is `\"unassigned\" | \"reassigned\"` (an inline enum) rendered into a",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
+    },
     "674b4898422079a92a2fcc1f9632ea4aedf3709572b0c19caaab4eb21f4f5b64": {
       "excerpt": "Like `partial`, but recurses into nested object fields (and object elements",
       "approvedAt": "2026-08-13T08:04:03.568Z"
@@ -10017,6 +10069,10 @@
       "excerpt": "Project a `TypeRef` to standalone ObjectMapper-flavored Swift source:",
       "approvedAt": "2026-08-13T08:04:03.682Z"
     },
+    "6de467990593a7948f6b52762ce89096894de909a18b3e683c5dc5dc885fe93f": {
+      "excerpt": "Same heading-underline convention sphinx-reference.ts uses — a core RST",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
+    },
     "6dec27ab07e70f334dd1cf46eb8668c1fed52c14de53aedc0493e2809033f73e": {
       "excerpt": "True when `name` (a single path segment) should never be descended into",
       "approvedAt": "2026-08-13T08:14:47.623Z"
@@ -10052,6 +10108,10 @@
     "6e5565f3534157a7529f135ad0b476d97b21de1448c3694667b6dd7d3dc52033": {
       "excerpt": "methods: T captures literal verb keys.",
       "approvedAt": "2026-08-13T07:55:26.272Z"
+    },
+    "6e5e63ef9b04131e06dc59ed109ee35a15302456d1243f99f5143dff53eb31f5": {
+      "excerpt": "Same adjacency rule sphinx-reference.ts's array handler documents and",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "6e5ede359659feb5b0317c38577e8d743144be3a58be7386a358343ce9ec5266": {
       "excerpt": "Extract param names from path segments like /books/{bookId}/details → [\"bookId\"]…",
@@ -10585,6 +10645,10 @@
       "excerpt": "Resolve which store param `P` reads from, given a folded `Meta` object —",
       "approvedAt": "2026-08-13T08:14:47.642Z"
     },
+    "73cdd17e7e79f12758830f99cd3297dde52a1cee5c7b13f5f0140aa4be389310": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T08:52:26.847Z"
+    },
     "73d67957b73d5ec8be9fb9e112a624fb045b49112fbadcd2d23dc6f3e200481b": {
       "excerpt": "Clone `req` with its pathname replaced by `segs` (method/headers/body kept).",
       "approvedAt": "2026-08-13T07:58:33.854Z"
@@ -10871,7 +10935,7 @@
     },
     "76c4ba9b24c0534d98c8950318c55c5fb74062aa41bece7ad384a59f3a278d7b": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:04:03.781Z"
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "76cbd9ffe7741bf979bd87e07cbbf393909ea1602857f64e296034094083984d": {
       "excerpt": "Evaluate a `compileValidator(...)`-produced expression string into its `{ check,…",
@@ -11124,6 +11188,10 @@
     "7945a0a2f7975756e2b0b45ef188c705d4425a4ae1ddee5903e10b87cdc6eae4": {
       "excerpt": "match a segment tuple against request path parts; bind+decode params or null.",
       "approvedAt": "2026-08-13T07:55:41.155Z"
+    },
+    "794f3f228ce21e9f40859c165d047412488c09e4663f40fbe58df043e2d97de0": {
+      "excerpt": "A discriminated-union variant's display name — identical selection logic",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "7960f4ffd91827727ad0608c220dec5c1f50f2b267d44af2e7f06d78f832b982": {
       "excerpt": "Run each `(case, n)` pair in `cases` x `sizes` across `trialCount`",
@@ -12409,6 +12477,10 @@
       "excerpt": "No non-lossy field-position fallback for a bare `Int`/`Float` — type-ir's",
       "approvedAt": "2026-08-13T08:04:03.576Z"
     },
+    "88b03f35b1bf23adc16422bc36d488381f369a45eb1c70e29c9e4627698b9985": {
+      "excerpt": "Numbered subsections, not a tabbed UI — no tabs extension can be assumed",
+      "approvedAt": "2026-08-13T08:52:26.847Z"
+    },
     "88bdce9d0a35199b3f446496461a844fcd4bba721550897624773213367c8dee": {
       "excerpt": "Measuring `detectDirtyData` requires a corpus with a genuinely",
       "approvedAt": "2026-08-13T07:47:33.023Z"
@@ -12556,6 +12628,10 @@
     "89fde69a6f71abe2efa90873065c6d9edbd53cc169e443a6212144a689556d19": {
       "excerpt": "Must register the DOM globals before anything below touches `document`/",
       "approvedAt": "2026-08-13T07:51:27.443Z"
+    },
+    "8a041262ff869206dff6a4910cd3109952ab806770fe7cc3d46b6e6e3609a837": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T08:52:26.852Z"
     },
     "8a14e16f7ee728df72e525e6a3ffd7d7df93e35f9d32b4963df0ff1f2639e7b2": {
       "excerpt": "CORS preflight: OPTIONS with Access-Control-Request-Method",
@@ -13817,6 +13893,10 @@
       "excerpt": "`nullable` already wrapped `rawType` in `| None` inside toAttrsType",
       "approvedAt": "2026-08-13T08:04:03.686Z"
     },
+    "96a70ce49088570b8980fa79bf83e2debeb62aaff75c69befa53a44af3ea5991": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
+    },
     "96ba1d5dca9fbeaa39899ea6b57ce32a976c32524358a243318b402975ee0414": {
       "excerpt": "Around-hooks wrapping each field's handler call — `F => F` where",
       "approvedAt": "2026-08-13T07:47:48.751Z"
@@ -13953,6 +14033,10 @@
       "excerpt": "deleted-then-diffed, nothing to check",
       "approvedAt": "2026-08-13T07:51:06.502Z"
     },
+    "9858aa960fe3b8c1ff7e28081b916d04daab14621d5e022f6b91f2cb96cf6171": {
+      "excerpt": "No `.. _label:` cross-reference target — nothing on this page's own",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
+    },
     "987fabe2757198fb07de67ef50d52199be6c99e08dbcfff910075fdcfb4412f7": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:46:58.814Z"
@@ -14012,6 +14096,10 @@
     "996ec6ce4b955ebb83b5b0e6809e40da30ae1ea812d7069d2f276da53cabb191": {
       "excerpt": "Page<T> — the pagination convention (CursorPage/OffsetPage/Page + runtime",
       "approvedAt": "2026-08-13T08:14:47.640Z"
+    },
+    "9998c20ed55a479fbe0697d5bdfb178f52583cb7968717efd5fa12d47bbdc81b": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "99a0b1b8e2de40404c01bdcb434696c4b1e6b7ce731e9d76c6fbeb2565b42abe": {
       "excerpt": "Given the evidence at a position, decide what type to emit.",
@@ -15329,6 +15417,10 @@
       "excerpt": "Derived schemas and descriptions, keyed by projected tool name. Forwarded to `pr…",
       "approvedAt": "2026-08-13T08:46:58.818Z"
     },
+    "a7d1681fb68a6586eeb8abac2601a1906d6263f07af68e335b7cf40642b5baa9": {
+      "excerpt": "Project a `TypeRefDocument` to a set of plain-**docutils**-compatible",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
+    },
     "a7da26290855b3cf5956f01e6b2cc7e4764293e47bf52a1304855d5e890d1daa": {
       "excerpt": "A bare (unnamed) enum TypeRef has nowhere to hang a PHP 8.1 backed-enum",
       "approvedAt": "2026-08-13T08:04:03.614Z"
@@ -15893,6 +15985,10 @@
       "excerpt": "list now reflects the create",
       "approvedAt": "2026-08-13T08:03:36.745Z"
     },
+    "adab85a9d1c158a36c1cffc92dfad2fd3926b304d41a86745e10f062f9dc9f02": {
+      "excerpt": "A level-1 headline (a page's own title) must be followed immediately by a",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
+    },
     "adb9b06eacdf43ced07f7dd8b87ef94823033ac0a88b2f325712708baa71cb87": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:56:55.957Z"
@@ -16004,6 +16100,10 @@
     "aee748d7c7e84d036ccce30ca0a77d0e3c56ba42ae0298241e7fe33ab96ace57": {
       "excerpt": "Wraps `type` in Flow's prefix maybe-type (`?T`). `?` binds tighter than",
       "approvedAt": "2026-08-13T08:04:03.586Z"
+    },
+    "aeec1d767d27d3992a2440ee7440059bed584a42f382ed287654560ca5906771": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:29.893Z"
     },
     "aefad32856e5c4d22014eb77019c5ed094972ce2b9e402a623f731be0a651c00": {
       "excerpt": "Flatten -> finalizeSharedDefs -> reassemble, over this path's single",
@@ -16176,6 +16276,10 @@
     "b075b6e113fcf02aecc4e137449091a91a03426c303dbac028511136abe83797": {
       "excerpt": "10 minutes",
       "approvedAt": "2026-08-13T07:56:55.954Z"
+    },
+    "b075c623a4e8ca2d1eebbcc581765b7106c337d23e2ead863fea865d3cd29ab2": {
+      "excerpt": "Not wrapped in `~…~`: a cross-linked signature embeds a `[[file:…]]`",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "b08782aaccc00b8bf3a3a3632c8e0d52e51e92bd933b7f68ad34dbc86773ebe6": {
       "excerpt": "no methods at this position — pure branch",
@@ -16644,6 +16748,10 @@
     "b63ba5fc411522f0f3b963299bdccf80502e2d163cb4efcf8a9cba9cfc704172": {
       "excerpt": "The method does not exist / is not available.",
       "approvedAt": "2026-08-13T08:04:03.677Z"
+    },
+    "b63ea99d396997bf906898454f59f8ffd086b426f1279e1caeb5119177627004": {
+      "excerpt": "A plain external-style hyperlink reference (core docutils: any inline",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "b6483c53668bd12ac93d83566c583198eeb19bdf15fc338e88bc37709bd15866": {
       "excerpt": "============================================================================",
@@ -17149,6 +17257,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:14:47.602Z"
     },
+    "bbbf92ca6b7c2820b15b3e200cb0d2b00454c7450539caa69407061bc9bb9fa4": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T08:52:26.852Z"
+    },
     "bbc7f275937826fc1e9994436377c6a7239ae5caed7cc76adb2516b335ca6af3": {
       "excerpt": "The Swift type expression for `ref` in a field/element/key/value",
       "approvedAt": "2026-08-13T08:04:03.682Z"
@@ -17193,6 +17305,10 @@
       "excerpt": "Ping the default-exported tree.",
       "approvedAt": "2026-08-13T08:14:47.652Z"
     },
+    "bc7eea07033f5d83cf89f5571a3ccaad85f0a8ec932d57aabd08bfe29c556b7e": {
+      "excerpt": "Project a `TypeRefDocument` to a set of Emacs Org (`.org`) reference",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
+    },
     "bc82b9f6a102cba7ac2243a42bf7a174518bd71913b5a6041bfc632b94117cbd": {
       "excerpt": "PathClient<Children>: maps path segment keys to their client types.",
       "approvedAt": "2026-08-13T07:55:26.272Z"
@@ -17216,6 +17332,10 @@
     "bccd93a414e2507e04910e37cdcf41d57271ea7731d057986af84088a41f0963": {
       "excerpt": "Convert a `protobufjs` map field into its `ProtoFieldDescriptor` plus the",
       "approvedAt": "2026-08-13T08:04:03.723Z"
+    },
+    "bcd53e3e3c0bce1313a23c8c2a149a01e72d3f17f8f8f08f569715d7dbff83cb": {
+      "excerpt": "Same selection order as mkdocs-reference.ts/sphinx-reference.ts's own",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "bce9cfcd495fc52ebd12c724ec9e2dd902914f28cce772a1db446f7f99ca4f4c": {
       "excerpt": "Try each extension's `decodeResponse` in order (same order as",
@@ -17544,6 +17664,10 @@
     "c03e762fa89c824c34547c0732c0ae134917cef31f9d644255bfb3ba5a52f38e": {
       "excerpt": "`meta.http` fields valid at both leaf and branch position — all flat",
       "approvedAt": "2026-08-13T08:03:36.794Z"
+    },
+    "c0494c1962213ee215f97f9479731a51af88065a67cf93eb4a1eb357a2343c99": {
+      "excerpt": "A table cell must not carry a raw newline (breaks Org's line-based table",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "c059607f7ca5ffa251db3b8a732b08bc9da4f6b6e91feca951e05e8158e1a461": {
       "excerpt": "The checker doesn't guarantee member order, so compare as a set of values.",
@@ -18097,6 +18221,10 @@
       "excerpt": "Default `encode`: a 200 JSON response, with a `Link: ...; rel=\"next\"` header att…",
       "approvedAt": "2026-08-13T08:03:36.802Z"
     },
+    "c702b677ebbb57a89310fb6bef0c285fc3357cecc837eac9508f4ec4ade2ea75": {
+      "excerpt": "Numbered subsections, not a tabbed UI — Org has no bundled tabs concept",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
+    },
     "c718567f918c13823b4b968b7c74618f35e86a248e63e47a47fd5aa28690d190": {
       "excerpt": "A real Node tree used by extract.test.ts as BOTH the extractor's source input",
       "approvedAt": "2026-08-13T08:14:47.652Z"
@@ -18132,6 +18260,10 @@
     "c76d7c43380b4a3a16292255efcb60a6cae7c10a74cb6a41b16726add59ff036": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:04:03.677Z"
+    },
+    "c7783061e3eba75f1a5b32cc2dc5c67365cdffaaa45fb6bd7dd9f15090dcc858": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
     },
     "c78def6ef4f194e631260be3ec1e27688acec3c5afbd4837667835d51ad3331e": {
       "excerpt": "Compose a list of extensions' `wrapFetch` hooks around a base",
@@ -18377,6 +18509,10 @@
       "excerpt": "A multi-tree entry file for the CALL-SITE-anchored codegen",
       "approvedAt": "2026-08-13T08:14:47.657Z"
     },
+    "ca512105011a12dc3436ad2642d1686870d509d08d9fa5c258eeb90b014646dc": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:21.064Z"
+    },
     "ca5a5864a2f8385188eda11dc1967c0630838ae4e56941d2de68e9597c78ba7d": {
       "excerpt": "`method` has no explicit entry — falls back to the `function` handler",
       "approvedAt": "2026-08-13T08:04:03.560Z"
@@ -18484,6 +18620,10 @@
     "cb2b735b6f1cc5bcdf3ab78a74dc6763799b89c7e27a7cae5b2c8d65b5b40aef": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:03:36.818Z"
+    },
+    "cb615277c93592da04112b2be9302f6dc0ee4092c3b1c362e5776eee2e023730": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:29.893Z"
     },
     "cb661d3655e6115732c054b3720b543079e6b137e9520f4177f2ba509cca06e6": {
       "excerpt": "Compile+evaluate one (entry, profile) pair via the full `compileWireModule`",
@@ -19553,6 +19693,10 @@
       "excerpt": "not a significant advantage in either direction",
       "approvedAt": "2026-08-13T07:47:33.023Z"
     },
+    "d594328bab58d5dfc98780798f7a621c64ed907e1e19a19121e0ccab4b6360f9": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
+    },
     "d5a440144ed6ea951854c21067e97e8423e6c230b4ba7a41c914496930952401": {
       "excerpt": "Everything derived from one leaf's handler types, keyed by the name the leaf",
       "approvedAt": "2026-08-13T08:46:58.807Z"
@@ -19572,6 +19716,10 @@
     "d5aeb94a1ab23a9900f41aa99e16c7e022ba39ee3c1cb206ba65ad942ecb19f6": {
       "excerpt": "Tagged onto every span's `projector.type` attribute and its name prefix",
       "approvedAt": "2026-08-13T08:14:47.591Z"
+    },
+    "d5c413c85779d49ca46c0465bb4f29bec7d928f89a4ae5861bf3aa661e35030c": {
+      "excerpt": "Same list-body `fieldsSection` emits, minus its own heading — used when a",
+      "approvedAt": "2026-08-13T09:01:21.069Z"
     },
     "d5c899054fb83b05de2d5b80c2bb3a6dafe4d034cf13d0d63e9c5a4f2a22bda7": {
       "excerpt": "Table fields are optional-by-default (§ \"Tables vs. Structs\":",
@@ -20220,6 +20368,10 @@
     "dcdda438bee6df6047d82ffd0c1996c2f60fd473cd1a3942ef6b962286e7001c": {
       "excerpt": "General-purpose TypeScript compiler-API ingester: `ts.Type` + `ts.TypeChecker`",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "dcf57f82d0f3f590782dec87d24570236817e024cda791c0ab20ed6175d9c4ac": {
+      "excerpt": "Unwrapped, not `` `` ``-literal-quoted — same reasoning",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "dd0801f88b8a8cc3629c69aeec38bddbadf2067091077880b8b4a3baf35ca272": {
       "excerpt": "A handler is `(input) => output` and never receives `stores`, so anything",
@@ -21393,6 +21545,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:48:26.652Z"
     },
+    "e9d99b05aeedb3337a48db4d69985c4cc98d81469d8e8e4d31d6175c5529a0ac": {
+      "excerpt": "Project a `TypeRefDocument` to a set of plain **CommonMark + GFM** (GitHub",
+      "approvedAt": "2026-08-13T08:52:26.847Z"
+    },
     "e9e3a171b8afa17af80645168787875e83026eb187872cbe31a5b8396572e2c0": {
       "excerpt": "Like `viaNameFirst`, but the projector has no registry form — the",
       "approvedAt": "2026-08-13T07:50:23.795Z"
@@ -21528,6 +21684,10 @@
     "eb2a28b22fca766b722cbf4513aaf1eeae1ff5f6918ba1996dfe95604efec480": {
       "excerpt": "root: ref (0 ancestors); defs.User: object (0 ancestors), then id: string (1 anc…",
       "approvedAt": "2026-08-13T08:04:03.765Z"
+    },
+    "eb32536f1096fb36a78b7363263646f70fa42f513462acd3dda063426e4016fe": {
+      "excerpt": "Core docutils' generic titled-admonition directive stands in for Sphinx's",
+      "approvedAt": "2026-08-13T09:01:29.888Z"
     },
     "eb397b2089ce5402511866f12ea5966438fc94b1eb21159f2cd430ee9cf4b695": {
       "excerpt": "`unknown`/`instance` have no structure to validate or reconstruct from",
@@ -21892,6 +22052,10 @@
     "eef66d5e56631d352d7ca88fe420ada798ad1d6642c6b1de8838162fc3512809": {
       "excerpt": "The `module Types; include Dry.Types(); end` boilerplate every generated",
       "approvedAt": "2026-08-13T08:04:03.773Z"
+    },
+    "eef6ea3c4099b171733caeba18e8effb1920e7c4d5520ae58b922af5298ecdeb": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T08:52:26.847Z"
     },
     "eef8208e69b9c26db4b5e9eb0c79b01d23cbc0e21f18bbfceecef11ff0c5aa38": {
       "excerpt": "============================================================================",
@@ -22523,7 +22687,7 @@
     },
     "f4d75af9b8c668efe1bc38a20a89dce1a5146039ea2f491f6f698ce8ccba35c6": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:04:03.666Z"
+      "approvedAt": "2026-08-13T09:01:29.893Z"
     },
     "f4daae9f640ba8d06a39c44733c550c0c7dd6c38dac691ede2f0428636519018": {
       "excerpt": "============================================================================",
