@@ -616,12 +616,14 @@ Acceptance criteria for green:
 
 **Status: PARTIALLY COMPLETE (2026-08-12)**
 
-Code-level doc comment emission complete; five site-level doc projectors are
-now implemented, one per distinct target (Docusaurus, Starlight, MkDocs
-(vanilla), Material for MkDocs, Sphinx). MkDocs and Material for MkDocs
-were previously conflated under one file (`mkdocs-reference.ts`, which
-turned out to already be Material-flavored despite its name); they are now
-two genuinely separate built targets — see "MkDocs vs. Material for MkDocs
+Code-level doc comment emission complete; six site-level doc projectors are
+now implemented (Docusaurus, Starlight, MkDocs (vanilla), Material for
+MkDocs, Sphinx, plus a generator-agnostic plain Markdown target added
+2026-08-13 — see "Plain Markdown (generator-agnostic) target, added
+(2026-08-13)" below). MkDocs and Material for MkDocs were previously
+conflated under one file (`mkdocs-reference.ts`, which turned out to
+already be Material-flavored despite its name); they are now two
+genuinely separate built targets — see "MkDocs vs. Material for MkDocs
 target-identity ambiguity, resolved (2026-08-13)" below.
 
 **Completed (2026-07-22)**: Doc comment emission across all 25 projectors.
@@ -813,12 +815,76 @@ still only clear what "What the three built targets currently clear"
 below describes (that description now predates Sphinx and both MkDocs
 targets, all three of which have since moved past it).
 
+**Plain Markdown (generator-agnostic) target, added (2026-08-13)**:
+`markdown-reference.ts` (`toMarkdownReference`) — a new target distinct in
+kind from the five above, not just another entry in the same family. Every
+other target on this page is built for one specific consuming tool
+(a doc-site generator) and leans on that tool's own syntax extensions;
+this one has no consuming tool at all — output is plain CommonMark plus
+only the GFM table extension, meant to render correctly wherever a
+generic CommonMark/GFM renderer is used (a repository file viewer, a
+Markdown previewer, a static site with no special Markdown config), never
+assuming any admonition/content-tab/frontmatter convention a specific tool
+would need to opt into. See docs/reference/type-ir/doc-projectors.md's
+"Plain Markdown (generator-agnostic)" section for the full syntax
+breakdown. Status against the same bars the other three retrofitted
+targets clear:
+
+- **(A) Structural smoke test** — clears via `registry.test.ts`'s generic
+  loop plus `markdown-reference.test.ts`'s own structural assertions
+  (correct filenames, no leaked frontmatter/admonition/content-tab/
+  abbreviation/MDX-component syntax across its whole fixture's output).
+- **(B) Dedicated fixture + reviewed output** — `markdown-reference.test.ts`
+  has its own task-tracker-flavored fixture (`Task`/`Assignee`/`Priority`/
+  `ActivityEvent`/`ProjectBoard`, distinct from the four existing targets'
+  fixtures) exercising a nested object, an enum with a deprecation reason,
+  a deprecated leaf field, an optional field, a discriminated union with
+  both `ref` and inline-object variants, an interface method, and a
+  documented example — with hand-reviewed explicit-string assertions per
+  section kind, same convention as the other four targets' test files.
+- **(D) Verified correct, not just accepted** — this target has no single
+  real tool to build against the way MkDocs/Sphinx do, since it isn't tied
+  to any doc-site generator; a real-tool build step (bar C) has no
+  candidate tool to name here at all, not just an out-of-scope one. The
+  nearest equivalent to the other targets' "human confirms rendered output
+  isn't broken" bar-D intent, chosen as the best fit for a target with no
+  consuming tool: every generated page is parsed with a real,
+  spec-compliant GFM parser (`remark` + `remark-gfm`, the same parser
+  powering MDX/Next.js/Gatsby Markdown pipelines — added as a
+  `packages/type-ir` devDependency for this purpose) and asserted to parse
+  cleanly (no parser messages) into the expected AST node types — a table
+  as a real `table` node, a fenced code block as a real `code` node, a
+  cross-link as a real `link` node — rather than silently degrading into
+  literal text on a syntax mistake bar A's substring checks wouldn't
+  catch. This is a judgment call reading bar D's intent onto a target
+  shape the bar's own text (written with a real build tool in mind) didn't
+  anticipate — flagged the same way the Sphinx D-presupposes-C tension
+  above was flagged, for the project owner to confirm or correct before it
+  becomes the unstated precedent for any future generator-agnostic target.
+
+While building this target, a pre-existing gap was also found and fixed
+in passing: `sphinx-reference.ts` had a working `registry.ts` entry and is
+documented as importable from
+`@rhi-zone/fractal-type-ir/sphinx-reference` in
+docs/reference/type-ir/doc-projectors.md, but `packages/type-ir/package.json`
+had no matching `./sphinx-reference` subpath export — the import shown in
+its own documentation would not actually have resolved. Added alongside
+the new `./markdown-reference` export, same shape as every sibling
+target's entry.
+
 **Still planned**: The remaining site-level generators listed below
 (VitePress for JS/TS beyond Docusaurus/Starlight, mdBook for Rust, DocFX
 for C#, and Zensical/GitBook cross-language) — none of these
 ecosystem-native generators have a fractal projector yet; five
 cross-ecosystem/ecosystem-native doc-site frameworks (Docusaurus,
-Starlight, MkDocs, Material for MkDocs, Sphinx) are done.
+Starlight, MkDocs, Material for MkDocs, Sphinx) are done. The plain
+Markdown target above is a sixth built projector but isn't one of the
+original "10 in-scope targets" this count and the popularity-ranked list
+below were built around — it isn't tied to any one ecosystem/generator, so
+it was never a candidate answer to that list's "what order do the
+remaining ecosystem-native targets ship in?" sequencing question. It's
+still recorded in the popularity-ranking section below, unranked, with
+that mismatch flagged explicitly — see the note there.
 
 Site-level generators to target, by language ecosystem:
 
@@ -954,16 +1020,41 @@ uses. GitBook (SaaS, no package-download metric) is flagged individually
 above for that reason. Coin-flip-close pairs called out above: MkDocs
 vs. Material for MkDocs (#2/#3), VitePress vs. Starlight (#6/#7).
 
+**Plain Markdown (generator-agnostic) — deliberately left unranked, not
+just missing a metric.** Built 2026-08-13 (see the "Plain Markdown
+(generator-agnostic) target, added" note above). Every entry in the
+ranked list above, including GitBook's SaaS-market-share substitute
+signal, measures adoption of one specific installable tool or product;
+this target isn't a tool or product at all — it's an output format
+(CommonMark + the GFM table extension) with no install step, no package
+registry listing, and no natural adoption metric to stand in for one.
+Assigning it a numbered rank next to Sphinx/MkDocs/Docusaurus would imply
+a popularity comparison that doesn't actually make sense category-wise,
+not just one this research pass happened not to measure — the way
+"GitBook has no clean download metric" still does, since GitBook is a
+real product other signals (market share, stars) can stand in for. This
+is a genuine ambiguity in how to represent it here, not a decision the
+implementer should make unilaterally: **the project owner should confirm
+whether "unranked, listed separately" is the right call, or whether some
+other representation (e.g. folding it into the sequencing question
+differently, or treating "no installable tool" itself as a placement
+signal) is preferred instead.**
+
 ### Production-grade initiative across all doc-generation targets — open
 
 The project owner wants to push all doc-generator targets — the five
-built (Docusaurus, Starlight, MkDocs, Material for MkDocs, Sphinx) plus
-every planned target above (10 targets total as of this writing: 5
-built, 5 planned, after the 2026-08-13 trim removing the 15
-API-reference-extractor tools listed as out of scope above, and the
-same-day resolution of the MkDocs/Material-for-MkDocs target-identity
-ambiguity, see above) — to "production grade" together,
-as one initiative. No
+ecosystem-native built targets (Docusaurus, Starlight, MkDocs, Material
+for MkDocs, Sphinx) plus every planned target above (10 targets total as
+of this writing: 5 built, 5 planned, after the 2026-08-13 trim removing
+the 15 API-reference-extractor tools listed as out of scope above, and
+the same-day resolution of the MkDocs/Material-for-MkDocs target-identity
+ambiguity, see above) — to "production grade" together, as one
+initiative. The generator-agnostic plain Markdown target (also built
+2026-08-13, see above) sits outside this ten-target count, per the same
+"not one of the original in-scope targets" framing given where it's
+introduced above; whether it's meant to be pulled into this
+production-grade push too is left to the project owner alongside the two
+open questions below, not assumed either way here. No
 definition of "production grade" exists yet for this repo's doc
 projectors, and none is proposed here; both of the following are open
 questions belonging to the project owner:

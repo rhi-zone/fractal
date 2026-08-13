@@ -1,12 +1,12 @@
 # Doc projectors
 
 Unlike every code-generating projector above (`TypeRef => string`), these
-four take a whole `TypeRefDocument` — `root` + `defs` — and produce a
+six take a whole `TypeRefDocument` — `root` + `defs` — and produce a
 `Map<string, string>` of generated documentation _pages_ (filename → Markdown/
 MDX/RST content), one per named `defs` entry. `doc.root` gets no page of its
 own (it's typically the operation/entry-point shape that _uses_ the named
 types, not a named type itself) — a caller wanting a page for it adds it to
-`defs` under a name first. All four cross-link `ref` targets to each other's
+`defs` under a name first. All six cross-link `ref` targets to each other's
 pages by kebab-case filename (Sphinx via an explicit `:ref:`/`.. _label:`
 pair rather than a bare Markdown link, since RST has no implicit per-file
 anchor — see its section below).
@@ -367,3 +367,78 @@ Variants tables, so nothing is lost by omitting it.
 standalone helpers, same convention as the MkDocs projector.
 `options.basePath` (default none) prefixes every returned filename, e.g.
 `"reference/"` → `"reference/user.rst"`.
+
+## Plain Markdown (generator-agnostic)
+
+```ts
+import { toMarkdownReference } from "@rhi-zone/fractal-type-ir/markdown-reference";
+
+const pages = toMarkdownReference({
+  root: t(types.ref("User")),
+  defs: { User: t(types.object({ id: t(types.integer) })) },
+});
+// pages.get("user.md")
+```
+
+````markdown
+# User
+
+Reference for User.
+
+## Type Signature
+
+```typescript
+type User = { id: number };
+```
+
+## Fields
+
+| Field | Type   | Required | Description |
+| ----- | ------ | -------- | ----------- |
+| `id`  | number | yes      |             |
+````
+
+Unlike every other target on this page, this one isn't built for any
+particular consuming tool — no doc-site generator, no static-site build.
+Every page is plain **CommonMark plus the GFM (GitHub Flavored Markdown)
+table extension** and nothing else, meant to render correctly as-is
+wherever a generic CommonMark/GFM renderer is used: a repository file
+viewer, a Markdown previewer, a static-site generator with no special
+Markdown config. Nothing here leans on syntax any one tool would need to
+opt into:
+
+- **No YAML frontmatter.** Every other target on this page carries
+  `---`-fenced frontmatter because its own consuming tool actually parses
+  it for page routing/metadata. A target with no consuming tool has
+  nothing to parse that block, so title and description render as a plain
+  `# Heading` and prose paragraph instead — the same reasoning the Sphinx
+  section above gives for omitting RST frontmatter, for a related but
+  distinct underlying reason (no frontmatter _consumer_ here, versus RST
+  having no frontmatter _convention_ at all).
+- **Deprecation** renders as a plain blockquote (`> **Deprecated.**
+  reason`) — core CommonMark, no extension required.
+- **Multiple `meta.examples`** render as numbered `### Example N`
+  subsections rather than a tabbed UI, same reasoning the MkDocs (vanilla)
+  and Sphinx sections give for their own numbered subsections — no tabs
+  extension can be assumed present for a target with no consuming tool at
+  all.
+- There is **no abbreviations-equivalent hover-tooltip section** — same
+  reasoning as MkDocs (vanilla)/Sphinx: cross-linking is already covered
+  by the inline `[Name](name.md)` links every Fields/Methods/Variants
+  table renders.
+
+`renderTypeExpr(ref, linked?)` and `kebabCase(name)` are exported as
+standalone helpers, same convention as every other doc projector in this
+package. `options.basePath` (default none) prefixes every returned
+filename, e.g. `"reference/"` → `"reference/user.md"`.
+
+This target has no single real tool to build the output against the way
+MkDocs/Sphinx do, since it isn't tied to any doc-site generator — its
+generated pages have instead been verified by parsing them with a real,
+spec-compliant GFM parser (`remark` + `remark-gfm`) and confirming a clean
+parse into the expected AST node types (tables as `table` nodes, fenced
+code blocks as `code` nodes, cross-links as `link` nodes), covered by
+`markdown-reference.test.ts`'s own dedicated bar-D section — see
+docs/roadmap.md's doc-generator "basics" bar-D note for how this compares
+to the ad hoc real-`mkdocs build`/`sphinx-build` verification the other
+targets use.
