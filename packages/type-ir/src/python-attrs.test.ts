@@ -97,9 +97,11 @@ describe("basic attrs class generation", () => {
   });
 
   test("field order is preserved even when an optional field precedes a required one", () => {
-    // Unlike python-dataclass.ts, attrs (like Pydantic) has no positional-
-    // before-keyword-default ordering constraint this generator needs to
-    // work around — source order is kept as-is.
+    // Unlike python-dataclass.ts, this generator doesn't reshuffle fields to
+    // satisfy attrs' positional-before-keyword-default ordering constraint —
+    // it keeps source order and instead emits the later mandatory field as
+    // `attrs.field(kw_only=True)` (see python-attrs.ts's file-header
+    // comment), which attrs allows to interleave with defaulted params.
     const ref = t(
       types.object({
         nickname: t(types.string, { optional: true }),
