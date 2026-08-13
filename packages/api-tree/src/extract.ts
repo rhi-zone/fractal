@@ -85,19 +85,18 @@ const puntRef = (reason: string): TypeRef =>
  * structural-sharing/union-tag fields (`json-schema.ts`'s `ref`-kind
  * rendering and `discriminatedUnion` handling respectively).
  *
- * Found incomplete (2026-08-02): every prior consumer of `schemaFromType`/
- * `schemaFromFunctionNode`/`schemaFromReturnType`/`extractToolSchemas` read
- * the result as loosely-typed data (an `as JsonSchema` CAST inside this
- * module, or JSON serialized straight through) — nothing had previously
- * type-checked a concrete extracted value's LITERAL shape against this
- * type, so the gap (missing `$ref`, `readOnly`, `writeOnly`, `minLength`,
- * `maxLength`, `pattern`, `multipleOf`, `minimum`/`maximum`/
- * `exclusiveMinimum`/`exclusiveMaximum`, `format`, `title`, `deprecated`,
- * `examples`) went unnoticed. Surfaced by the sibling codebase's
- * `codegen-fractal-validators.ts` schema-artifact codegen (Task 2, this
- * commit's sibling change), which emits `export const schemas: SchemaMap =
- * <object literal>` — a real structural check the loose `as`-cast path
- * never exercised.
+ * This field set was incomplete for a long time without being caught: every
+ * prior consumer of `schemaFromType`/`schemaFromFunctionNode`/
+ * `schemaFromReturnType`/`extractToolSchemas` read the result as
+ * loosely-typed data (an `as JsonSchema` cast inside this module, or JSON
+ * serialized straight through), so nothing had type-checked a concrete
+ * extracted value's literal shape against this type — the gap (missing
+ * `$ref`, `readOnly`, `writeOnly`, `minLength`, `maxLength`, `pattern`,
+ * `multipleOf`, `minimum`/`maximum`/`exclusiveMinimum`/`exclusiveMaximum`,
+ * `format`, `title`, `deprecated`, `examples`) went unnoticed. It surfaced
+ * when the sibling codebase's `codegen-fractal-validators.ts` schema-artifact codegen
+ * started emitting `export const schemas: SchemaMap = <object literal>` —
+ * a real structural check the loose `as`-cast path never exercised.
  */
 export type JsonSchema = {
   type?: "string" | "number" | "boolean" | "array" | "object";
@@ -328,44 +327,40 @@ export function schemaFromFunctionNode(fn: ts.Node, checker: ts.TypeChecker): Js
 // ============================================================================
 
 //
-// ARCHITECTURE NOTE: The TypeScript compiler, when run with `skipLibCheck: true`
-// on this project, keeps alias instantiations in an "unresolved" state
-// (`type.flags === TypeFlags.Any` internally). This means:
-//   - `type.isUnion()` is false for `Result<T, E>` even though it IS a union alias
-//   - `aliasSymbol.declarations` is always undefined (modules not fully resolved)
-//   - `getAliasedSymbol()` resolves to `unknown` with no declarations
+// ARCHITECTURE NOTE — Result<T, E> unwrapping under skipLibCheck.
 //
-// This rules out:
-//   - Structural matching on the resolved union (type isn't a union yet)
-//   - File-path nominal checks (no declarations to read)
+// With `skipLibCheck: true`, the TypeScript compiler keeps alias
+// instantiations in an "unresolved" state (`type.flags === TypeFlags.Any`
+// internally): `type.isUnion()` is false for `Result<T, E>` even though it
+// IS a union alias, `aliasSymbol.declarations` is always undefined, and
+// `getAliasedSymbol()` resolves to `unknown` with no declarations. That
+// rules out structural matching on the resolved union and file-path
+// nominal checks.
 //
-// WHAT DOES WORK:
-//   - `aliasSymbol.name` — the alias name is available on the unresolved type
-//   - `aliasTypeArguments` — the type arguments are available
-//   - AST syntax nodes — when an explicit return type annotation exists, the
-//     TypeReferenceNode's typeName identifier and its typeArguments are accessible
-//   - Local TypeAlias declarations — for local aliases like `type ApiResult<T> = Result<T, E>`,
-//     the declaration IS in the same file and IS accessible (sym.declarations is defined)
+// What IS available on the unresolved type: `aliasSymbol.name`,
+// `aliasTypeArguments`, the AST syntax nodes of an explicit return type
+// annotation (the TypeReferenceNode's typeName identifier and its
+// typeArguments), and local TypeAlias declarations — for an alias like
+// `type ApiResult<T> = Result<T, E>`, the declaration lives in the same
+// file and is accessible.
 //
-// STRATEGY:
-//   1. SYNTAX PATH (primary, for annotated returns):
-//      Walk the function's return type annotation node (fn.type).
-//      For a TypeReference named "Result" with ≥ 2 typeArgs → T = typeArgs[0].
-//      For a TypeReference to a LOCAL TypeAlias whose body is Result<T,...> → T = typeRef's typeArgs[0].
-//      Also handles Promise<Result<T,E>>: strip the Promise TypeReference first.
-//      This covers: (a) direct import, (b) barrel import (no rename), (c) further-generic alias.
+// Two paths follow from this:
+//   1. SYNTAX PATH (primary, annotated returns) — walks the function's
+//      return type annotation node (fn.type). A TypeReference named
+//      "Result" with ≥ 2 type args, or one pointing to a local TypeAlias
+//      whose body is `Result<T, ...>`, yields T = the first type arg.
+//      Promise<Result<T,E>> is handled by stripping the Promise
+//      TypeReference first. Covers: (a) direct import, (b) barrel import
+//      (no rename), (c) further-generic alias.
+//   2. STRUCTURAL PATH (fallback, inferred returns or fully-resolved
+//      types) — matches the exact discriminated-union shape
+//      `{ kind: "ok"; value: T } | { kind: "err"; error: E }` when the
+//      return type IS already a proper union.
 //
-//   2. STRUCTURAL PATH (fallback, for INFERRED returns or fully-resolved types):
-//      When the return type IS a proper union (rare in this extractor's usage but
-//      possible when types resolve fully), check the exact DU shape:
-//        `{ kind: "ok"; value: T } | { kind: "err"; error: E }`
-//      This fires when the type was genuinely expanded to a union.
-//
-//   3. FALSE-POSITIVE GUARD:
-//      The name check ("Result") is the primary discriminant. Arbitrary unions
-//      without an alias named "Result" never trigger path 1.
-//      The structural path (2) matches the exact DU fields (kind/value/error with
-//      string literal discriminants "ok"/"err") — too specific for accidental collisions.
+// The "Result" name is the discriminant for path 1, so an arbitrary union
+// without an alias named "Result" never triggers it. Path 2's exact field
+// match (kind/value/error with "ok"/"err" string-literal discriminants) is
+// specific enough to avoid accidental collisions on unrelated unions.
 
 /**
  * Given a TypeReferenceNode (possibly `Promise<ResultRef<T,E>>`), try to find
