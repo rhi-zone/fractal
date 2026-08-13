@@ -234,7 +234,7 @@ describe("generateClientFromNode — validation() eval end-to-end against a real
   });
 
   it("a generated client throws ValidationError against a real server's malformed response", async () => {
-    // Handler is cast to `any` to deliberately return a body that violates
+    // Handler is cast to `never` to deliberately return a body that violates
     // its own declared schema (missing "pages") — exercising validation()
     // against a real server round-trip, not just an in-memory Response.
     const badTree = api_({

@@ -128,9 +128,9 @@ describe("errors — codegen", () => {
     const helperSrc = ext.codegen?.helpers;
     expect(helperSrc).toBeDefined();
 
-    // ERRORS_CODEGEN_HELPERS extends the `ClientError` class codegen.ts's
+    // ERRORS_CODEGEN_HELPERS assumes the `ClientError` class that codegen.ts's
     // RUNTIME_HELPERS always emits ahead of extension helpers (see errors.ts's
-    // module doc) — reproduce that one declaration here so the helper module
+    // module doc). Reproduce that one declaration here so the helper module
     // is self-contained for this eval.
     const clientErrorSrc = `
 export class ClientError extends Error {
