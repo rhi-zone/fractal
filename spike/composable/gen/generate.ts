@@ -1,10 +1,10 @@
-// spike/composable/gen/generate.ts — emit N-route apps in the COMPOSABLE value
-// model, using the SAME route plan as spike/scale (deterministic get/post/put
-// mix, :id params, ~1-in-4 mutating routes with a validated body) so the
-// instantiation counts are directly comparable to the old chained variant A.
+// Emits N-route apps in the composable value model, using the same route
+// plan as spike/scale (deterministic get/post/put mix, :id params, ~1-in-4
+// mutating routes with a validated body) so instantiation counts are
+// directly comparable to variant A there.
 //
-// Variant D — the composable model: flat `routes(route(...), ...)` of route
-// VALUES with structural param segments, `client(app)` derivation, and typed
+// Variant D is the composable model: flat `routes(route(...), ...)` of route
+// values with structural param segments, `client(app)` derivation, and typed
 // call-site probes spread across the span (forcing the flat Client<R> mapped
 // type to instantiate). This is the composable analogue of variant A.
 
@@ -104,7 +104,7 @@ function variantD(routes: R[]): string {
 }
 
 // Variant E — per-route typing only (composable analogue of B): same route
-// VALUES typed locally, but NEVER fed to client() — isolates per-route cost.
+// values typed locally, but never fed to client() — isolates per-route cost.
 function variantE(routes: R[]): string {
   const L: string[] = [];
   L.push(`import { lit, param, path, route } from "../router.ts"`);

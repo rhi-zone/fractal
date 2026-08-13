@@ -1,20 +1,21 @@
-// spike/composable/client.ts — typed client projection (surface #2).
+// Typed client projection: a call surface keyed by route, derived from the
+// flat route array.
 //
-// client(router) → a typed surface keyed by route, derived from the FLAT route
-// array. NO chained accumulation: one mapped type walks the flat tuple R, and
-// each route's call signature comes from its OWN segment structure (params),
-// its body type I, and its return O. In-process transport: the client builds a
-// Request and feeds it to toHandler, OR (here) calls the handler directly.
+// client(router) returns a typed surface keyed by route. There is no chained
+// accumulation — one mapped type walks the flat tuple R, and each route's
+// call signature comes from its own segment structure (params), its body
+// type I, and its return O. Transport is in-process: each call builds a
+// Request and feeds it to toHandler.
 //
-// The key access is a structural path key derived from the segments
+// The key is a structural path key derived from the segments
 // ("/users/{id}"), so distinct routes key distinctly without string patterns.
 
 import type { Route, AnyRoute, Segment, ParamSegment, ParamsOf } from "./router";
 import { toHandler, type Json } from "./http";
 
-// --- a stable string KEY for a route, derived from its segment STRUCTURE -----
-// lit("users"), param("id") → "/users/{id}". This is a type-level fold over the
-// segment tuple (depth ~2–3), not over N routes.
+// A stable string key for a route, derived from its segment structure:
+// lit("users"), param("id") → "/users/{id}". This is a type-level fold over
+// the segment tuple (depth ~2–3), not over N routes.
 type KeyOf<S extends readonly Segment[]> = S extends readonly [infer H, ...infer Rest]
   ? H extends { readonly kind: "lit"; readonly value: infer V extends string }
     ? Rest extends readonly Segment[]
@@ -42,7 +43,7 @@ type CallSig<S extends readonly Segment[], I, O> = keyof CallArgs<S, I> extends 
   ? () => Promise<BodyOf<O>>
   : (args: CallArgs<S, I>) => Promise<BodyOf<O>>;
 
-/** The typed client surface: one mapped type over the FLAT route tuple. For
+/** The typed client surface: one mapped type over the flat route tuple. For
  *  each route value, key by its structural path, then by lowercased method. */
 export type Client<R extends readonly AnyRoute[]> = {
   readonly [Rt in R[number] as KeyOf<Rt["pattern"]>]: {

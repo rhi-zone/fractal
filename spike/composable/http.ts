@@ -1,17 +1,19 @@
-// spike/composable/http.ts — dispatch projection (surface #1).
+// Dispatch projection: the request/response surface over the router model.
 //
-// toHandler(router): (Request) => Promise<Response>. Walks the FLAT route
-// structs: linear match on segments + method, binds params (running any param
-// codec), calls the handler. 405 + Allow on method-mismatch, 404 on no match.
+// toHandler(router) returns (Request) => Promise<Response>. It walks the flat
+// route structs — linear match on segments and method, binds params (running
+// any param codec), then calls the handler. Responds 405 + Allow on a method
+// mismatch, 404 on no match.
 //
-// This file is the ONLY http/Bun-aware code in the model. The core (router.ts)
-// imports nothing http/runtime. The handler is the opaque leaf; segments,
-// method, and schema are all data this projection walks.
+// This is the only http/Bun-aware code in the model; router.ts imports no
+// http or runtime APIs. The handler is the opaque leaf — segments, method,
+// and schema are all data this projection walks.
 
 import type { AnyRoute, Segment, Method } from "./router";
 
-// --- json helper: handlers return data; we render it. A phantom `__body`
-// lets the typed client recover the domain type from a Response-shaped return.
+// json helper: handlers return { status, body } data, rendered as JSON by the
+// dispatcher. The phantom `__body` field lets the typed client recover the
+// domain type from a Response-shaped return.
 export interface Json<T> {
   readonly status: number;
   readonly body: T;
@@ -71,10 +73,10 @@ export function toHandler(router: readonly AnyRoute[]): (req: Request) => Promis
         body = res.value;
       }
 
-      // r.handler is bound to `(ctx: never) => unknown` by the AnyRoute element
-      // bound; at runtime we invoke it with the bound ctx. The cast is confined
-      // to this internal projection — it is NOT in any public path/param/route/
-      // client TYPE (those stay cast-free).
+      // r.handler is typed `(ctx: never) => unknown` by the AnyRoute element
+      // bound; at runtime it's invoked with the bound ctx. This cast is
+      // confined to this internal projection — no public path/param/route/
+      // client type uses a cast.
       const call = r.handler as (ctx: {
         params: Record<string, string>;
         body: unknown;

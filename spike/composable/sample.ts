@@ -1,6 +1,6 @@
-// spike/composable/sample.ts — the sample-flavored endpoints from
-// docs/design/vs-hono-elysia.md, written in the COMPOSABLE value model, to
-// judge reads-clean honestly vs the stringly Hono/Elysia versions.
+// The sample-flavored endpoints from docs/design/vs-hono-elysia.md, written
+// in the composable value model, for comparing readability against the
+// stringly-typed Hono/Elysia versions.
 //
 //   (a) GET  /users/:id              → a user or 404
 //   (b) POST /users {name,email}     → 201
@@ -19,7 +19,8 @@ const newUser: StandardSchema<unknown, { name: string; email: string }> = {
   "~standard": { version: 1, validate: (v) => ({ value: v as { name: string; email: string } }) },
 };
 
-// a reusable error->status table — a VALUE, applied per action (the fractal win)
+// A reusable error->status table — a plain value, applied per action rather
+// than duplicated per route.
 type UserError = { code: "USER_NOT_FOUND" | "ALREADY_INACTIVE"; id: string };
 const userErrorPolicy = (e: UserError) =>
   e.code === "USER_NOT_FOUND"
@@ -43,14 +44,14 @@ const app = routes(
     const u: User = { id: "caller", name: ctx.body.name };
     return json(u, 201);
   }),
-  // (c) domain Outcome mapped via the reusable policy VALUE
+  // (c) domain Outcome mapped via the reusable policy value
   route("POST", path(lit("users"), param("id"), lit("deactivate")), async (ctx) => {
     const r = deactivate(ctx.params.id);
     return r.ok ? json(r.user, 200) : userErrorPolicy(r);
   }),
 );
 
-// a path PREFIX is itself a value; mount prepends it flat (no string prefix)
+// a path prefix is itself a value; mount prepends it flat (no string prefix)
 const v1 = mount(path(lit("v1")), app);
 
 void [app, v1];

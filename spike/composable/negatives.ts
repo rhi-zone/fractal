@@ -1,6 +1,7 @@
-// spike/composable/negatives.ts — @ts-expect-error negatives. If the typed
-// client were degenerate (`any`), these would NOT error and tsgo would report
-// TS2578 "unused @ts-expect-error". Their silence is the proof the client types.
+// @ts-expect-error negatives for the typed client. Each call below is
+// expected to fail type-checking; tsgo reports TS2578 "unused @ts-expect-error"
+// on any line that doesn't, which is how these assertions confirm the client
+// surface is precisely typed rather than degenerating to `any`.
 
 import { lit, param, path, route, routes } from "./router";
 import { json } from "./http";

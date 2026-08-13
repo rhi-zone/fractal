@@ -1,6 +1,7 @@
-// spike/composable/demo.ts — runtime verification (bun). Three endpoint shapes,
-// dispatched via toHandler; the typed client returns server-identical results
-// in-process; toOpenApi emits the structural document.
+// Runtime verification (bun) for the composable router model: three endpoint
+// shapes dispatched via toHandler, the typed client returning
+// server-identical results in-process, and toOpenApi emitting the structural
+// document.
 
 import { lit, param, path, route, routes, mount } from "./router";
 import { toHandler, json } from "./http";
@@ -54,7 +55,7 @@ const deactivate = route(
   },
 );
 
-// --- FLAT compose ----------------------------------------------------------
+// --- flat compose ------------------------------------------------------
 const api = routes(getUser, createUser, deactivate);
 
 // mount demo: prefix value-transform — same routes under /v1

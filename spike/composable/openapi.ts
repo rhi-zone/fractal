@@ -1,9 +1,11 @@
-// spike/composable/openapi.ts — OpenAPI projection (surface #3).
+// OpenAPI projection: a structural document derived from the router's flat
+// route data.
 //
-// toOpenApi(router) → an OpenAPI 3.1 document. Pure structural projection from
-// the FLAT route data: segments → path template "/users/{id}", method → an
-// operation, param segments → parameters, schema → requestBody. No closures are
-// inspected — only the inert data (pattern / method / schema).
+// toOpenApi(router) returns an OpenAPI 3.1 document. It is a pure structural
+// projection from the flat route data: segments become a path template
+// ("/users/{id}"), method becomes an operation, param segments become
+// parameters, and schema becomes a requestBody. No closures are inspected —
+// only the inert data (pattern / method / schema).
 
 import type { AnyRoute, Segment, ParamSegment } from "./router";
 

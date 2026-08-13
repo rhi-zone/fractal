@@ -1,6 +1,7 @@
-// spike/composable/run.ts — typecheck each generated composable variant×N in
-// ISOLATION via tsgo --extendedDiagnostics (Types, Instantiations, Memory,
-// Check time) + wall-clock (best of RUNS after a warm-up). Writes CSV + md.
+// Typechecks each generated composable variant×N in isolation via tsgo
+// --extendedDiagnostics (types, instantiations, memory, check time) plus
+// wall-clock time (best of several runs after a warm-up). Writes results to
+// CSV and a markdown table.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";

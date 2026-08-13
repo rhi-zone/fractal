@@ -1,16 +1,17 @@
-// spike/composable/router.ts — THE composable router model.
+// The composable router model.
 //
-// One primitive: a route is a VALUE. A path is a composable struct of segment
-// VALUES (never a string). Routers compose FLAT (an associative array of route
-// values). `mount` is a flat value-transform: prepend prefix segments to each
-// route. Three surfaces are projected from the SAME flat route data:
+// One primitive: a route is a value. A path is a composable struct of segment
+// values, never a string. Routers compose flat — an associative array of
+// route values. `mount` is a flat value-transform: it prepends prefix
+// segments to each route. Three surfaces are projected from the same flat
+// route data:
 //   toHandler  — dispatch (walk segments+method, bind params, call handler)
 //   client     — typed in-process client derived from the flat route array
 //   toOpenApi  — structural projection (segments → /users/{id}, method → op)
 //
-// Per-route typing is LOCAL: params come from the param-segment STRUCTURE, not
-// from parsing a path string. The router's type is the FLAT union of its route
-// values — no deep accumulation chain. This is the whole point: linear cost.
+// Per-route typing is local: params come from the param-segment structure,
+// not from parsing a path string. The router's type is the flat union of its
+// route values, with no deep accumulation chain — that keeps the cost linear.
 
 import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree";
 
@@ -64,10 +65,11 @@ export function path<const S extends readonly Segment[]>(...segs: S): S {
   return segs;
 }
 
-// --- params type, derived from the STRUCTURE of the segment tuple ----------
-// Walk the tuple, collect each ParamSegment's {name: T}. This is a single pass
-// over a tuple whose length is the path depth (~2–3), NOT over N routes. No
-// template-literal string parsing, no accumulation across routes.
+// --- params type, derived from the structure of the segment tuple ----------
+// Walk the tuple, collect each ParamSegment's {name: T}. This is a single
+// pass over a tuple whose length is the path depth (~2–3), not over N
+// routes — no template-literal string parsing, no accumulation across
+// routes.
 
 export type ParamsOf<S extends readonly Segment[]> = {
   readonly [Seg in Extract<S[number], ParamSegment> as Seg["name"]]: Seg extends ParamSegment<
@@ -96,13 +98,14 @@ export interface RouteCtx<S extends readonly Segment[], I> {
 /** A route value. The pattern is data (Segment[]); `schema` (optional) is the
  *  body validator as data; `handler` is the opaque leaf. `__out` is a phantom
  *  carrying the handler's return for the typed client. */
-// I/O are carried as PHANTOM optional fields (`__in`/`__out`), never as a
+// I/O is carried as phantom optional fields (`__in`/`__out`), never as a
 // variance-bearing position. The `schema` field is type-erased to
 // `StandardSchema<unknown, unknown>` so it imposes no variance on `I`; the
-// precise input lives only in the `__in` phantom (a bare property → invariant
-// is harmless because it's optional & never read at runtime). This lets a flat
-// collection bound `Route<...Segment[], Method>` admit body-less (`__in: never`)
-// and validated (`__in: Body`) routes alike without collapsing either.
+// precise input lives only in the `__in` phantom (a bare, optional property
+// that's never read at runtime, so its invariance is harmless). This lets a
+// flat collection bound by `Route<...Segment[], Method>` admit both
+// body-less (`__in: never`) and validated (`__in: Body`) routes without
+// collapsing either.
 export interface Route<
   S extends readonly Segment[] = readonly Segment[],
   M extends Method = Method,
@@ -120,10 +123,11 @@ export interface Route<
 
 /** Permissive element bound for flat collections. The `handler` position is
  *  contravariant in its ctx, so a fixed `I` would reject either body-less or
- *  validated routes. We bound by a structural shape whose handler accepts the
- *  bottom ctx (`never`) — every concrete route's handler is assignable to it —
- *  and whose phantoms are unconstrained, so each route keeps its own I/O on the
- *  inferred tuple. This is the element constraint; the inferred `R` is precise. */
+ *  validated routes. The bound uses a structural shape whose handler accepts
+ *  the bottom ctx (`never`) — every concrete route's handler is assignable to
+ *  it — and whose phantoms are unconstrained, so each route keeps its own I/O
+ *  on the inferred tuple. This is the element constraint only; the inferred
+ *  `R` stays precise. */
 export interface AnyRoute {
   readonly pattern: readonly Segment[];
   readonly method: Method;
@@ -169,12 +173,12 @@ export function route(
 }
 
 // ============================================================================
-// Router — a FLAT collection of route values. `routes(...)` / `merge` are
+// Router — a flat collection of route values. `routes(...)` / `merge` are
 // associative array concatenation. `mount` is a flat value-transform.
 // ============================================================================
 
-/** A router IS its flat tuple of routes. No wrapper object, no accumulation
- *  state — the value and its type are the flat array. */
+/** A router is its flat tuple of routes — no wrapper object, no accumulation
+ *  state. The value and its type are the flat array. */
 export type Router<R extends readonly AnyRoute[] = readonly AnyRoute[]> = R;
 
 /** Collect routes into a flat router value. `routes(a, b, c)` === `[a, b, c]`. */
@@ -190,7 +194,7 @@ export function merge<const A extends readonly AnyRoute[], const B extends reado
   return [...a, ...b];
 }
 
-/** mount(prefix, sub) — prepend `prefix` segments to EACH route's pattern. A
+/** mount(prefix, sub) — prepend `prefix` segments to each route's pattern. A
  *  pure flat value-transform; no string mount prefix, no nesting. */
 export function mount<const P extends readonly Segment[], const R extends readonly AnyRoute[]>(
   prefix: P,
