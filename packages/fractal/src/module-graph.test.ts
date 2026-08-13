@@ -1,17 +1,17 @@
 // packages/fractal/src/module-graph.test.ts
 //
-// The umbrella's load-bearing property, checked rather than asserted in a
-// comment: importing ONE protocol subpath must not drag another protocol's
+// The umbrella's load-bearing property, checked here rather than asserted in
+// a comment: importing one protocol subpath must not drag another protocol's
 // runtime into the module graph. `@rhi-zone/fractal/http` pulling in
 // graphql-js or the MCP SDK would re-create exactly the bloat that keeps the
 // five projectors in five packages (docs/design/decisions.md § "Umbrella
 // package @rhi-zone/fractal").
 //
-// The walk is over the STATIC import graph of the source tree, starting at
+// The walk is over the static import graph of the source tree, starting at
 // each facade module. `Bun.Transpiler.scanImports` is the parser: it runs the
 // real TS transpiler, so `import type` / `export type` edges — which are
 // erased and cost nothing at runtime — are correctly absent from its output,
-// which a regex over the source text could not tell apart. Workspace
+// where a regex over the source text could not tell them apart. Workspace
 // specifiers are resolved through the target package's own `exports` map (the
 // authoritative answer, aliases included) and followed; anything else is an
 // external leaf and is recorded, not followed.

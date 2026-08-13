@@ -1,4 +1,485 @@
 {
   "version": 1,
-  "approved": {}
+  "approved": {
+    "017bcc00b942d0bbf691e292fdca666f43e30c93434a8b0440a4a3821b216e56": {
+      "excerpt": "The umbrella itself is `@rhi-zone/fractal`, whose package dir is `fractal`.",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "0280eb08387c4fd7feb71889911890b076a73c9b337d0893f5d59eb7349cb065": {
+      "excerpt": "This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)",
+      "approvedAt": "2026-08-13T07:43:11.324Z"
+    },
+    "042fbed6eb0909dd4bee9b6f57e12f23d62e611cab5e8631cd4b98d1b967754e": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "045e1d4dbd7a3c5418649b81b41d579c330e1f49e3808630a311f97804521a57": {
+      "excerpt": "Creating a sidebar enables you to:",
+      "approvedAt": "2026-08-13T07:43:11.324Z"
+    },
+    "06a33cc6554c4023ade5a81aa5cb7893aa8d8a9855f8ab6018a5e2aa105b6cf4": {
+      "excerpt": "Check the value actually fits the inferred width's range",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "0b4fa1ea23ac66f0aed00e4e5ccd345d6aaee0d5248c2a459cf9c451e7b627a2": {
+      "excerpt": "Check that the value is a valid inhabitant of the inferred TypeRef.",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "0e8b77c858acbfbf7196271828a705ad7e22f9461668b749025f243d9903662b": {
+      "excerpt": "Reusable CodeMirror 6 pane, wrapped for Solid. Owns exactly one",
+      "approvedAt": "2026-08-13T07:44:41.546Z"
+    },
+    "0ea2029669c97d4e7deb1bf7aa806d6e1ce2328c9b0522405931c24fbe7500fd": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "0f2de6a41f83f36dfa64101d37f9b2f91d65340710b1932305cf19eaab581d18": {
+      "excerpt": "Property 1: fromJson never crashes on any valid JSON",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "1016a99ba443d2c16c9927be5e7cff3f92910e47ac52024f9fc1037b493d5526": {
+      "excerpt": "Positive controls first: if the walker could not see a protocol runtime",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "117f79d2b074c2d11cd769a523f1e843e2d6f37dee189ea2f1dc0db59fbf6127": {
+      "excerpt": "packages/fractal/src/graphql.ts — @rhi-zone/fractal/graphql",
+      "approvedAt": "2026-08-13T07:44:41.531Z"
+    },
+    "168c4460632db6cbb70e6b2a06c9d11575a2bc4909c356254f09a5be7ae75295": {
+      "excerpt": "Generate small objects with plain-string keys and mixed values",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "16bf22f1a0b09dba385f9a7ae62954f924a4ea93453148deae7d5ac5732fb209": {
+      "excerpt": "All elements are small non-negative integers -> all infer as uint8",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "189d3d447c9c44fc9095178200ec2aa3bf35cd9128a3efe5bdb702b68a9d1aa8": {
+      "excerpt": "Property-based fuzz harness for fromJson using fast-check.",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "1c083211db8f4ec3066d31e5634979a04606e15f4a4be4f26a1164e97c049197": {
+      "excerpt": "packages/fractal/src/json-rpc.ts — @rhi-zone/fractal/json-rpc",
+      "approvedAt": "2026-08-13T07:44:41.532Z"
+    },
+    "1d00b8a9dde94992391b5142502c8636a24194865af7574f5a3fe6e5db163d9c": {
+      "excerpt": "fromStandardSchema expects a real `~standard`-shaped object at runtime, not",
+      "approvedAt": "2026-08-13T07:44:41.547Z"
+    },
+    "1f59737bac21bdf54dd5fca3da8a699a481c8241bf9380b3d73f5be3f3ecbacd": {
+      "excerpt": "Deduplicate — enum members must be distinct",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "24491df4aff94706fb9a73a4614930a715006171266132d9fd13272cfb8d1e80": {
+      "excerpt": "Property 7: array homogeneity — arrays of same-typed values infer as array (not …",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "252cf400158dc9ca3d0d9a45dd9fdcc01987223b04316cfd3ea69bde7c98001f": {
+      "excerpt": "Build an in-memory `ts.Program` + `ts.TypeChecker` over `source` — no",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "26001fbc4389e04e86749d6128efbe59415e9473060ac976f5c75bde56b1bf38": {
+      "excerpt": "unknown/undefined — anything goes",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "26832f1ce6146cb9ce06e69b9b54cc9b86ef9ec5601201e9c29f5d223d5d1d2f": {
+      "excerpt": "`json-rpc` needs an `interface` root; the JSON Schema sample is an",
+      "approvedAt": "2026-08-13T07:44:41.543Z"
+    },
+    "30d071a95ba5cb865907b94f6b328dd7c0d77da58838922ab90241ddb23db002": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "312370da016636870a9a351336f2f49668901a30228a2e42d6ee561ed2c5a1e7": {
+      "excerpt": "`json-rpc` needs an `interface` root (a service method surface); no",
+      "approvedAt": "2026-08-13T07:44:41.543Z"
+    },
+    "34276b54721da4407ca6ba7c39356d6878101b9d3da4ec2c3fdf4788cd5fe552": {
+      "excerpt": "Alternate serializer bindings for languages already listed above, plus",
+      "approvedAt": "2026-08-13T07:44:41.547Z"
+    },
+    "389520a229a204c24decd39963c65eb89de3c01c504bae38b75a99ab42dd4ce1": {
+      "excerpt": "Set the /<baseUrl>/ pathname under which your site is served",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "39a6f0b2bb07bf9ee87f8f1926d59c78d1c82459f26090f4fcdc474e28f84b8d": {
+      "excerpt": "Even if you don't use internationalization, you can use this field to set",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "40c322df3b8365f981e0d0a3529701e4200c83b449ed719a61794ee454858bca": {
+      "excerpt": "eslint-disable-next-line @typescript-eslint/no-explicit-any -- exercising `any` …",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "42e392720851e9e111e752f607cc381a83896fd2e939828c439c4339a97d6e3d": {
+      "excerpt": "`@rhi-zone/fractal-http-api-projector/route` -> `[http-api-projector, ./route]`",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "452937d2d1ea82838fcbc41e8d94ceb82002e212a798170589239020e9be38ea": {
+      "excerpt": "Property 8: string format detection is sound — formats only detected for valid s…",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "45c76413bc5389ea9edbcff71015c8b69ad5d4fb9298f6f0c6a3d8abb7430796": {
+      "excerpt": "`seen`'s cycle detection is identity-keyed (a `Set<ts.Type>`), which",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "49083fcd91ee45ee0dd9a89ef9e45a95e623119512f0f19fbc08efcbda56323c": {
+      "excerpt": "Property 2: determinism — same input yields structurally equal output",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "523e48dab9def9f1c6d884c71e6b230bc5f349a8a4d1a697cd577a51452b2bce": {
+      "excerpt": "Set the production url of your site here",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "52fe5789a2f97704f647f3528fadc9d30ba0363c9e7bd3dc9860457cca822871": {
+      "excerpt": "packages/fractal/src/index.ts — @rhi-zone/fractal",
+      "approvedAt": "2026-08-13T07:44:41.532Z"
+    },
+    "56668e8ffba1727accebb4b9d6602e79e0b7f8955db9da306dd6d2fe0b0585b8": {
+      "excerpt": "Generate 2-5 entries with plain-string keys (won't match formats)",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "5905823583a5a6f161745b222bb175440861bb8ba15ce6e4a8bc19d9d8621428": {
+      "excerpt": "Replace with your project's social card",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "592bd3681c07eae490b75fe29238d7793a055dd3dd2036405c5760fc2a6b6b98": {
+      "excerpt": "Replay the inferrer's tightest-first logic: uint8, int8, uint16, int16, uint32, …",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "59c07a1d32a6da1d44a5167b97776b760d520f1ba16bf7b3c763887a71222607": {
+      "excerpt": "External value changes (format switch reloading a sample, or a",
+      "approvedAt": "2026-08-13T07:44:41.546Z"
+    },
+    "5aeb4af45eda3ac7d6e323c24a94e9d2a29f0b115ccd87b2626de4145b3900fc": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "5d746f67d8b50a232b4ac56e2eaf4b21f96e3e38f7c4daf38119ab501f9f9581": {
+      "excerpt": "A symbol-keyed member (a `unique symbol`-computed property name — the",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "5eb26cb76c13780d4c8199208b6b0d6966fa18f0ead56756ccf506143f8d1138": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "60b262fcbc43baaca05fcaa9b0b594d3b63742a3bb795384ceea8fb43e336a47": {
+      "excerpt": "Fractional number",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "614caaeef981fd268cae931711be9af230c2b98d40e7af5dcaeca806b28733e7": {
+      "excerpt": "packages/fractal/src/mcp.ts — @rhi-zone/fractal/mcp",
+      "approvedAt": "2026-08-13T07:44:41.532Z"
+    },
+    "6310a8673b1b4d508092b590ed9248560a44c569e1e484e9f120e734439cc40c": {
+      "excerpt": "Check that every key in the value has a corresponding field",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "63582a58d441e2d63c983ad17c0850ae1874a1b52dc0571d65440c73eb23e6e9": {
+      "excerpt": "packages/playground/src/formats.test.ts — format registry lookup tests",
+      "approvedAt": "2026-08-13T07:44:41.546Z"
+    },
+    "649a1ae4bb1728521f9bd03735c162473c40b04ff14231beb9e5233cea09b1b7": {
+      "excerpt": "A hand-authored type nested many objects deep, but genuinely non-cyclic",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "673eed4153e3c4a67ff158e61e390e519dbd95093de58cebc1eea47e5391bb5f": {
+      "excerpt": "A plain string that won't accidentally match date/datetime/uuid/email/uri format…",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "6851da9589f71c7d4977a816656e34cab67ea23d7e8584de2e7f89a588c7a13b": {
+      "excerpt": "Generate 3-7 elements (at least 3 to meet the default arrayThreshold)",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "69f1c8b3907e160046d14250fdc132a0b5d428b70ba791d21c1deb8041a556c5": {
+      "excerpt": "Neither X (used once, as root) nor Address (used once, as X's one field) is reus…",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "6dd0f2d40dd15a27c6e901e7862b99526daf792873b35e075f9aa492ca236318": {
+      "excerpt": "Ordinary (non-symbol-keyed) members are unaffected — the filter is",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "736ada2ecd9df9e45ac4667c59465901a3319b022b30aec0c5b32bd99b6219be": {
+      "excerpt": "packages/fractal/src/http.ts — @rhi-zone/fractal/http",
+      "approvedAt": "2026-08-13T07:44:41.532Z"
+    },
+    "75357e78a2a7919dd38ba43897eaff37870170847afc844e2e2c6caaff811f8a": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "780a42be1799cc5593877f65afd9fcfb3677f3bc1b08e49b20c3628823f37626": {
+      "excerpt": "Combined arbitrary: generate a type, then generate a conforming value",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "7849958608214943df89dd52ae46cf539cb2754b74eef54b3c830be6d6b2ce88": {
+      "excerpt": "Any string subtype is a valid inhabitant for a string value. `date` and",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "7b1cc88034a077aadeb75a08bc10b3eccfa025670f3c06dbfd112c4ee1172302": {
+      "excerpt": "Integer widths — generate within exact range",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "7c75e30b912cee4aa94bb9e15e3d1d0a2ba94cc32ccc208a849ab13599e8bd8d": {
+      "excerpt": "Single-value inference is the N=1 case of the one public entry point; there",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "7d4b16966a7f7ffb2f92adaf58f50c7088a096adad9792a51f4edb2cd793eaa7": {
+      "excerpt": "Address is reused (useCount 2) and big enough (nodeCount > 5) → kept",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "7e2fbe06a954916e279e90ce638a8a2bd1a48f25946f0650533259d4455a3d87": {
+      "excerpt": "The isolation walk above is static; this checks the facades actually",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "82ba323bb628a1ae31ec069b874bd0def1c13d9877c1e09207164b694bf031ab": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "82c46a487bbaeab1fe33ebb8b105b9daa711bad67bc2f5c7b79ed9e708cabb5a": {
+      "excerpt": "With a registry supplied, the top-level named alias (X itself) is also",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "82c91aaed34d8135cc6818c990bd3b78d9c79bc2efdc5e8a5d73572c9ef3011a": {
+      "excerpt": "Plain strings (starting with uppercase, no special format) should",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "89aa02e00890d6cc416259d2b69eff93c4b8c92212234e2fdebd3760e9810591": {
+      "excerpt": "Property 6: object field preservation — all value keys appear in inferred object",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "8ee99bd140cc3f011c33576cae68b7a9bc1a7109dddd5b998ea7c4e9ec3a6f3e": {
+      "excerpt": "Every field is a ref into the registry (unconditional sharing at extraction time…",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "9063ca2da664469fb3012ba567300d1a60595fd57f9f0c00014eaf6afe80f49f": {
+      "excerpt": "Integer values should infer as some integer kind",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "90d110c0b212016c9894e3380875a9cef95da7747e23179bb6ea96cf57c7a24b": {
+      "excerpt": "String format kinds",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "91f3d1951f78ef024f5f37e297ea27315a9f763720db7ae245d69ebb4e3bd379": {
+      "excerpt": "`?: string` strips `| undefined`, so the field's own shape is plain string.",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "9251884bfd16876d8b91761949d1c970ea26449c9e69c6f26d61433b8765cb27": {
+      "excerpt": "No valid values — should not be reached",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "93e0eb92c652f697e2c97b0888bfaef3e9abbbec6fdacc1310b1729620956db3": {
+      "excerpt": "Every external (non-workspace, non-relative) specifier reachable from",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "9453c6c5a93927814da0b928decde7b1938bb5296430426b6e0489fb30fde15c": {
+      "excerpt": "Beyond 32-bit",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "9e118074b9afbac129c28787fb1dafe67d5201b6c63a1bfd9e4fd839085933c3": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "a10a59cbaf4a1d5117785f19d99b40c64590703ee16d1b399482706b706fbc95": {
+      "excerpt": "Walk down to the bottom and confirm the leaf's real shape survived.",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "a153fd6bf18f85fcff983f0400a5d2295ea04572cc234b294a4a60e0e840fd48": {
+      "excerpt": "Should not throw",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "a557e037fdc6933fe22d81b13c9a1dc54214da8709d3122c7bfdb51d9e630087": {
+      "excerpt": "Always fractional — avoid accidentally producing an integer",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "a9cc47923e88baf6f8b03f75f9b7c16daf79a0742a0811825d84fbdd5a397701": {
+      "excerpt": "The umbrella is a re-export surface. If a facade module ever grows logic,",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "ab14115999e08b846ec2c060ccd0f63241e04cdde007eedd2e80416f70beb99f": {
+      "excerpt": "`ts.Type#getNonNullableType()` applied to a field typed `unknown` does",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "b2fcc9e1c10a47c656e8966f693b71349ad2301eeec39813690ff0f44a01954e": {
+      "excerpt": "GitHub pages deployment config.",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "b39bd31314fb4366eb6ce2a3e2b00b6111f1f2ec2ab4c136ff877110ef474203": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "b3eb1e34d6075f9d29e86a6c3667eda55b6be24a0b8cc16e0db7ab4d67874c9a": {
+      "excerpt": "Property 3: the generated value inhabits the inferred type",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "b42e32d13c2521bea4c5db6d96001efac14656502b4a46e451ed1649b6640a23": {
+      "excerpt": "packages/playground/src/convert.test.ts — ingest/project/convert bridge tests",
+      "approvedAt": "2026-08-13T07:44:41.543Z"
+    },
+    "b516e52b4b7f743a5d35fdc382cf4903b3d45c5c83c9c891b1ae314c4c7a398c": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "b526ace5219d121429269d16516e311e52d8777bf920ad891b2acfc2bc716d15": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "b5368f5c37fcdcd22235621ec4f0c763398aaf0f915915e435264e1fbb64586a": {
+      "excerpt": "Builds small in-memory TS programs (source text never touches disk — a",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "b5675a1c34c8464dff772038bd9b01b67f923f821cf25c98dff2442e56eaeabe": {
+      "excerpt": "Check that every required inferred field is present in the value",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "b6602570ba8e23b3742198c453ec176dc6d10e45622353e7853be27a2f530409": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "b725ccc26f7e5ba63098c8161a4a5eb6780dfd49455a92004481d7485507a512": {
+      "excerpt": "Recursive TypeRef tree — fc.memo controls depth",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "b8475d104945c0bb1976f89cea71981fea9fbc57b9c6f3605284eae7d8c60876": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "b91b213975ed15f857ce523cf8b3659e56ad7b7062fc0ef42670ab35dd4af292": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "bb26bfab49c4759fa83f099487ab11078da65e74153b608e794601589338c624": {
+      "excerpt": "Protocol runtimes that must stay quarantined behind their own subpath.",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "bb832ce19869cfdb1879504ec0a4f818561ae416be6e5d5d1d074e87abb0876f": {
+      "excerpt": "Please change this to your repo.",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "bdfafdb2e91029e8360710206dc07751ac6d0a678f5ffdf7e0c99e9ff0455bed": {
+      "excerpt": "Integer could also be inferred as number (if narrowing is off)",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "be5d1c2e6a8b6bb26f9f634035607f88240f64fd4005762bcc15fbee43e3a4f4": {
+      "excerpt": "Generate a \"canonical\" value from the inferred type and re-infer.",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "bf2fc0c27f830df30ea85c9a863ac17c989bb3b32c9dd07194b87cbef50174da": {
+      "excerpt": "Placeholder/sample text shown when this format is picked for the input pane.",
+      "approvedAt": "2026-08-13T07:44:41.547Z"
+    },
+    "c059607f7ca5ffa251db3b8a732b08bc9da4f6b6e91feca951e05e8158e1a461": {
+      "excerpt": "The checker doesn't guarantee member order, so compare as a set of values.",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "c11e1b7c586424ae8b442a07ac78ac9894489e948ea748f74f4735e550115687": {
+      "excerpt": "Resolve a workspace specifier to the source file that backs it. The `exports`",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "c35e75592a1a3afe9e1ca47d2c3c81fadbe584669f4a7bdd55a689a48b2ab4a5": {
+      "excerpt": "Derive the `TypeRef` for a top-level `type <name> = …` alias in `source`.",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "c6c2655e3119c1ebd4ca46affdf5930d3fc57a780d4cc7251245b33d76141935": {
+      "excerpt": "packages/fractal/src/module-graph.test.ts",
+      "approvedAt": "2026-08-13T07:44:41.540Z"
+    },
+    "c84b944d66eaa9dc222e3f9a69a8eff3400b04ee3aa41b06d7e4f4ecee084c99": {
+      "excerpt": "Conversion bridge: the playground's view of `@rhi-zone/fractal-type-ir/registry`…",
+      "approvedAt": "2026-08-13T07:44:41.545Z"
+    },
+    "c9128c6f951fe4e3cbb093846a697800a3035249671fabddeaff184e92f8ee19": {
+      "excerpt": "`cursor` is now `Leaf` itself (`{ value: number }`) — one more field hop.",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "caf70e25387d66c505268addff961e700b9ced7c3891dceae2fb858c4db0cbb1": {
+      "excerpt": "For optional fields, sometimes omit them",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "ce6a4b7ccad1a8938dfb683d26a86cdd5d124797e79b117b2aa8234da66daa1d": {
+      "excerpt": "Project to display text. The registry preserves each target's real output",
+      "approvedAt": "2026-08-13T07:44:41.545Z"
+    },
+    "d013d70114fe4b459d657ab92dbb279b1f9f0e1ab218d09990fde1ef7fa435c4": {
+      "excerpt": "Loading a fresh sample on format switch is the common case (exploring",
+      "approvedAt": "2026-08-13T07:44:41.541Z"
+    },
+    "d051c1c4c8ce04bd47eb7167fee38ffb69625332172dbb09843521da13cf73be": {
+      "excerpt": "Property 5: leaf type stability — re-inferring a leaf value gives the same type",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "d1baa411db0450120668868d3a625ed635c657e59df3f12e128abce4c7aca0eb": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "d3e8ba2b0a38ed456681a94623ca0610acfbeb7ce979d2ad6ee9c877ed68220e": {
+      "excerpt": "All integer-like kinds (subtypes of integer, plus integer itself)",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "de5ec11c37d89a7c52841995ace019c6f4274f11113fa7e4e7a844a763958fd7": {
+      "excerpt": "Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "de6fb4d64b8beaa8bc216cb8b9842ac83eef9b39f1762c3b66de47399664b0ee": {
+      "excerpt": "Depth 3 gives types up to 3 levels of nesting — deep enough to exercise",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "e2fde454f24332ac40514ad6223ff50955ac811c9d112014d82cf9b8c5719100": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "e3fdb1a820918b2c56f7ebe2ff2c98ff264539e7c4640bdb1cab5acae47d12dd": {
+      "excerpt": "Generate some valid JSON — mix of types",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "e4ed28a4a032e0cee2d8dbc649accba0ca301024adaad688ee0c946de5375cb7": {
+      "excerpt": "Property 4: integer tightness — inferred width is the tightest possible",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "e9a74d62abaf011b5b4b1d2a88bedc8e3b49b4f4019bc8d7f5747127be59074a": {
+      "excerpt": "Useful options to enforce blogging best practices",
+      "approvedAt": "2026-08-13T07:43:11.323Z"
+    },
+    "ea2922b6f998f908d51c77590e173f1a83e2bf6319224d34b2af0fe01d0c38d6": {
+      "excerpt": "---------------------------------------------------------------------------",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "eb49156fac3ab1af306d66ffa517d1151c8e02d41be375751d662871fd9564fe": {
+      "excerpt": "packages/fractal/src/cli.ts — @rhi-zone/fractal/cli",
+      "approvedAt": "2026-08-13T07:44:41.531Z"
+    },
+    "ec7bd1ddb39ff52a0d6d6c540d8bf6466510b37aeb678194d6683ecd6edb351e": {
+      "excerpt": "Terminating at all (no RangeError) is the primary regression this pins",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "ed7eac1f10e7a2f1e1de7f1e3d53d292d9e9245e69379d13925315a25042b263": {
+      "excerpt": "Check the inferred type is the tightest integer width for this value.",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "f1dbabfabcc68e8d6728950d339646c4295773a23ece8a9a472ab5ccb52ee149": {
+      "excerpt": "Registry of every format the playground can read from and/or write to.",
+      "approvedAt": "2026-08-13T07:44:41.547Z"
+    },
+    "f2a52c988b412c7a3295360d0933c0cdcd1bd6551549fe19f151a3874dd269e3": {
+      "excerpt": "nodeCount import above is exercised implicitly via defaultShouldShare; keep",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "f5f1c315d82029b5dcefa5061b02c15b8dbec2b0520c0240fe0b2b67328137fe": {
+      "excerpt": "The `ts.Type` of a top-level `type <name> = …` alias's right-hand side.",
+      "approvedAt": "2026-08-13T07:43:46.976Z"
+    },
+    "f73a2821d4ab9b2cd644b6e0f5a6e46749803b0f83bcc2a66793dd82fd9cb758": {
+      "excerpt": "Build a record by generating each field's value independently",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "fc5dd2be72a3fa24cffc36de47db8173c45a70f05fd7c248efa9ef8c2230730c": {
+      "excerpt": "Leaf arbitraries — no recursion needed",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "fcb299e338578f300a7002872dc1090980eebf17b48e3e60b08d440dc1801f48": {
+      "excerpt": "All leaf types (no children) — used at max depth and weighted heavily",
+      "approvedAt": "2026-08-13T07:43:20.205Z"
+    },
+    "fe09b3814fe3a2c51b0c84a6b8c282922515932b4d40f638dadfd84b698debb4": {
+      "excerpt": "By default, Docusaurus generates a sidebar from the docs folder structure",
+      "approvedAt": "2026-08-13T07:43:11.324Z"
+    }
+  }
 }

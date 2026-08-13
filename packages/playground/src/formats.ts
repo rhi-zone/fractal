@@ -6,10 +6,10 @@
 // even for formats whose ingestor takes a parsed JS object (JSON-ish
 // formats) — convert.ts is responsible for JSON.parse-ing those.
 //
-// `lang` picks the CodeMirror language extension (see Editor.tsx) — a small,
-// deliberately approximate set (json/js/python/sql/rust) rather than one
-// package per target language, since syntax highlighting is a nicety here,
-// not the point of the tool (see CLAUDE.md: don't gold-plate).
+// `lang` picks the CodeMirror language extension (see Editor.tsx) from a
+// small set covering common cases (json/js/python/sql/rust) rather than one
+// package per target language — syntax highlighting here is a nicety, not
+// the point of the tool (see CLAUDE.md: don't gold-plate).
 
 export type LangHint = "json" | "js" | "python" | "sql" | "rust" | "plain";
 
@@ -219,9 +219,9 @@ export const outputFormats: readonly FormatSpec[] = [
   { id: "openapi20", label: "OpenAPI/Swagger 2.0 schema", lang: "json" },
 
   // Alternate serializer bindings for languages already listed above, plus
-  // the targets that have no entry at all up there. Everything here resolves
-  // through the same shared registry as the entries above — the split is
-  // ordering for the picker, not two mechanisms.
+  // the targets that have no entry at all up there. All entries, above and
+  // below this line, resolve through the same shared registry; the split is
+  // presentation ordering for the picker.
   { id: "python-msgspec", label: "Python (msgspec)", lang: "python" },
   { id: "python-cattrs", label: "Python (cattrs)", lang: "python" },
   { id: "go-easyjson", label: "Go (easyjson)", lang: "plain" },

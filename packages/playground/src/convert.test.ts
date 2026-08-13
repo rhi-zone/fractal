@@ -1,7 +1,7 @@
 // packages/playground/src/convert.test.ts — ingest/project/convert bridge tests
 //
-// The dispatch itself now lives in `@rhi-zone/fractal-type-ir/registry` and is
-// unit-tested there. What these tests cover is the playground's own view of
+// The ingest/project dispatch lives in `@rhi-zone/fractal-type-ir/registry`
+// and is unit-tested there. These tests cover the playground's own view of
 // it: that every format id the UI offers actually resolves, that the exact
 // sample text shown in the UI (formats.ts) really converts, and that the
 // text-flattening the two panes depend on produces something displayable.
