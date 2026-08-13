@@ -1,7 +1,7 @@
 import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 
 // FFI-IR — boundary-crossing vocabulary for modules/interfaces, function and
-// method signatures, and opaque resource handles, layered ON TOP of type-ir
+// method signatures, and opaque resource handles, layered on top of type-ir
 // rather than folded into it. See docs/design/ffi-ir-architecture-options.md
 // for the full design record; this file implements the decided forks:
 //
@@ -30,7 +30,7 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 //     boundary's calling/ownership contract).
 //
 // Structural convention mirrors type-ir's own `TypeKinds`/`TypeShape`/
-// `TypeRef` pattern exactly, but as ITS OWN separate kind space
+// `TypeRef` pattern exactly, but as its own separate kind space
 // (`FfiKinds`/`FfiShape`/`FfiRef`) — not new entries registered into
 // type-ir's `TypeKinds`/`parents` registry. Fork A's "modules are not really
 // types" reasoning applies here too: boundary-semantics kinds (`function`,
@@ -61,8 +61,8 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
  *     count reaches zero. Native to uniffi's `Arc` model and to JS via
  *     `FinalizationRegistry` decrementing a Rust-side `Arc` (not yet
  *     implemented in `wasm-bindgen.ts`, which uses the copy path instead).
- *     Explicitly NOT native to WIT — its Canonical ABI `resource` mechanism
- *     is a lend-count-and-trap discipline, not reference counting (see the
+ *     Not native to WIT — its Canonical ABI `resource` mechanism is a
+ *     lend-count-and-trap discipline, not reference counting (see the
  *     design doc's Fork C "deeper pass," point 4).
  *   - `"resource"` — an owned-or-borrowed handle, WIT's own shipped
  *     `resource` + `own`/`borrow<T>` mechanism (per-instance handle table,
@@ -181,8 +181,8 @@ export interface FfiKinds {
     readonly receiver: string;
   };
   // An opaque/owned handle to an entity that exists at the FFI boundary —
-  // informed by, but deliberately narrower than, WIT's `resource` (WIT's
-  // own `own<T>`/`borrow<T>` qualifiers are NOT reproduced here as a type
+  // informed by, but narrower than, WIT's `resource` (WIT's own
+  // `own<T>`/`borrow<T>` qualifiers are not reproduced here as a type
   // constructor — per Fork C's decided representation, own/borrow is
   // metadata on the *reference* to a resource, not part of the resource
   // declaration itself; see `OwnershipDiscipline`'s `"resource"` case and
@@ -225,7 +225,7 @@ export type FfiRef = {
 
 const parents: Record<string, string | null> = {
   function: null,
-  // A method IS a callable — projectors without an explicit `method`
+  // A method is a callable — projectors without an explicit `method`
   // handler fall back to their `function` handler, mirroring type-ir's own
   // method -> function relationship exactly.
   method: "function",

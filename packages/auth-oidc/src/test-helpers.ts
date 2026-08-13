@@ -1,6 +1,6 @@
 // packages/auth-oidc/src/test-helpers.ts — @rhi-zone/fractal-auth-oidc (test-only)
 //
-// JWT signing via Web Crypto, for tests only — mirrors what a REAL OIDC
+// JWT signing via Web Crypto, for tests only — mirrors what a real OIDC
 // provider does server-side, so tests exercise the same verification path
 // `verifyJwtSignature`/`oidcServer` use, without a JWT library on either
 // side of the round trip.

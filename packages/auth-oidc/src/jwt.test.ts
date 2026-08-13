@@ -77,9 +77,9 @@ describe("verifyJwtSignature", () => {
 
   it('returns false (never throws) for an unsupported/forged alg, e.g. the classic "alg: none" attack', async () => {
     // A token whose header claims an algorithm this module doesn't
-    // recognize (HS256 is deliberately unsupported — see jwt.ts's module
-    // doc — and "none" is the textbook JWT signature-bypass attack). Both
-    // must fail closed via the boolean return, not throw and not verify.
+    // recognize: HS256 (unsupported — see jwt.ts's module doc) and "none"
+    // (the textbook JWT signature-bypass attack). Both fail closed via the
+    // boolean return: no throw, no verify.
     for (const alg of ["none", "HS256"]) {
       const header = jsonToBase64Url({ alg });
       const claims = jsonToBase64Url({ sub: "attacker", exp: 9999999999 });

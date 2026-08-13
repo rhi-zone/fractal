@@ -7,12 +7,11 @@
 // two, and verifies the third against a JWKS public key with
 // `crypto.subtle.verify`.
 //
-// Deliberately narrow: supports the algorithm families an OIDC provider's
-// JWKS realistically publishes (RS256/384/512, PS256/384/512, ES256/384/
-// 512) — HS256 (symmetric) is intentionally NOT supported, since a shared
-// secret has no place in a JWKS (a JWKS publishes PUBLIC keys only; HS256
-// verification would need the provider's private secret, which defeats the
-// entire point of JWKS-based verification).
+// Supports the algorithm families an OIDC provider's JWKS realistically
+// publishes (RS256/384/512, PS256/384/512, ES256/384/512). HS256
+// (symmetric) is unsupported: a JWKS publishes public keys only, and HS256
+// verification needs the provider's private secret, which a JWKS never
+// contains.
 
 // ============================================================================
 // base64url <-> bytes/string
@@ -82,7 +81,7 @@ export class JwtParseError extends Error {
 
 /**
  * Splits a compact JWT into its three segments and decodes the header/
- * payload as JSON. Does NOT verify the signature or any claim — see
+ * payload as JSON. Does not verify the signature or any claim — see
  * `verifyJwt` for that. Throws `JwtParseError` on a malformed token (wrong
  * segment count, invalid base64url, non-JSON header/payload).
  */
@@ -283,13 +282,12 @@ export function checkClaims(claims: JwtClaims, options: ClaimCheckOptions = {}):
 
 /**
  * Full verification pipeline: parse, verify signature against `jwk`, then
- * check standard claims. Returns the validated claims on success; throws
- * `JwtParseError`/`JwtClaimError` (or returns via the boolean signature
- * check — see below) on any failure. Signature failure throws
- * `JwtClaimError`-adjacent `Error` rather than silently returning `false`,
- * so a caller doing `try { verifyJwt(...) } catch { return null }` (the
- * `AuthAdapter.resolve` convention — see `../server.ts`) treats every
- * failure mode uniformly.
+ * check standard claims. Returns the validated claims on success. Every
+ * failure mode — parse, signature, claims — throws `JwtParseError` or
+ * `JwtClaimError` here, in contrast to `verifyJwtSignature`'s boolean
+ * return (see below). This matches the
+ * `try { verifyJwt(...) } catch { return null }` pattern `AuthAdapter.resolve`
+ * uses (see `../server.ts`).
  */
 export async function verifyJwt(
   token: string,

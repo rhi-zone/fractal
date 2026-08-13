@@ -106,10 +106,9 @@ describe("toMelangeFfi — module", () => {
   test("groups functions/resources into an OCaml module, functions carrying [@@mel.module]", () => {
     const closeMethod: FfiRef = f(boundary.method([], t(types.void), "FileHandle"));
     const fileHandle: FfiRef = f(boundary.resource("FileHandle", { close: closeMethod }));
-    // A resource returned "own" would throw (resource discipline unsupported
-    // on this target, see the ownership-gating describe block above) — copy
-    // discipline is used here instead, matching what this target actually
-    // supports.
+    // Uses copy discipline, the only discipline this target supports for a
+    // returned resource reference (see the ownership-gating describe block
+    // above for why resource/own throws).
     const openFn: FfiRef = f(
       boundary.function(
         [{ name: "path", type: t(types.string) }],

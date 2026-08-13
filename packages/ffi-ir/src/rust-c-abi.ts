@@ -9,11 +9,11 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // Rust-as-source matches the established precedent in this monorepo
 // (type-ir's `wasm-bindgen.ts` emits Rust targeting a *different* consumer,
 // JS via wasm-bindgen; this file emits Rust targeting a C consumer via
-// cbindgen). A C header itself is NOT emitted here — cbindgen's own
-// documented job is generating that header FROM compiled Rust source
+// cbindgen). A C header itself is not emitted here — cbindgen's own
+// documented job is generating that header from compiled Rust source
 // (docs.md, confirmed in docs/design/ffi-ir-architecture-options.md's Fork C
 // deeper pass, point 1: cbindgen covers "type layout, header config, type
-// mappings, and function declarations", reading FROM Rust, not the reverse),
+// mappings, and function declarations", reading from Rust, not the reverse),
 // so a header would be a downstream artifact of this file's output, not
 // something fractal emits directly. type-ir has no existing "type-ir ->
 // Rust with repr(C)" projector to build on other than `rust-serde.ts` (serde
@@ -32,7 +32,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 //     (https://doc.rust-lang.org/nomicon/ffi.html#representing-opaque-structs —
 //     `pub struct Foo { _private: [u8; 0] }`, a zero-sized-field marker type
 //     with no C-visible layout).
-// `refcount` and `resource` (own/borrow) are explicitly OUT OF SCOPE for this
+// `refcount` and `resource` (own/borrow) are explicitly out of scope for this
 // target per the same decided subsection — "no native mechanism" for
 // refcount (would be entirely fractal/author-maintained bookkeeping cbindgen
 // doesn't generate or verify) and "no host runtime exists for plain C to
@@ -119,15 +119,14 @@ function quote(value: string): string {
  * or return's `TypeRef`), applying the C target's ownership rule:
  *   - no `meta.ownership` at all, or `{ kind: "copy" }` — plain by-value,
  *     delegating straight to rust-serde.ts's `toRustType` (reused, not
- *     re-derived, per the task's own instruction to mirror that mapping).
+ *     re-derived, to mirror that mapping).
  *   - `{ kind: "opaque-handle" }` — `*mut <T>`, where `<T>` is the same
  *     `toRustType` expression (for the documented `resourceRef`/`ref`
  *     convention this collapses to the bare resource name, e.g. `*mut
  *     FileHandle`, but the mapping is general: an opaque-handle TypeRef of
  *     any structural kind becomes a raw pointer to its Rust type).
  *   - `{ kind: "refcount" }` / `{ kind: "resource", mode }` — explicitly
- *     unsupported for this target (see file header) — throws rather than
- *     silently approximating as a pointer or a copy.
+ *     unsupported for this target (see file header) — throws.
  */
 export function toRustCAbiType(ref: TypeRef): string {
   const discipline = ref.meta.ownership as OwnershipDiscipline | undefined;
@@ -256,7 +255,7 @@ function buildResource(
  *     `name` field, matching ffi-ir's `FfiKinds.resource` shape).
  *   - `module` -> all contained functions then all contained resources,
  *     concatenated — C has no module/namespace construct of its own, so
- *     this is the "no special module wrapper" case the task calls out.
+ *     there is no wrapper to emit.
  *
  * Throws for `refcount`/`resource`-discipline ownership metadata anywhere in
  * a crossed `TypeRef` (see `toRustCAbiType`) — same explicit-throw-on-unsupported

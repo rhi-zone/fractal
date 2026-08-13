@@ -3,7 +3,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Ruby `ffi` gem projector — the consumer side of `rust-c-abi.ts`: where rust-c-abi.ts
 // emits the Rust source implementing a plain C ABI, this file emits the
-// Ruby-side loader code that calls INTO a compiled C-ABI shared library
+// Ruby-side loader code that calls into a compiled C-ABI shared library
 // through the `ffi` gem (https://github.com/ffi/ffi). This is a different
 // shape of task than every other projector in this package: those all target
 // languages with their own native FFI-declaration syntax embedded in the
@@ -13,8 +13,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // declarations are ordinary Ruby method calls (`ffi_lib`, `attach_function`)
 // evaluated at load time, not a compiler-recognized attribute/keyword.
 //
-// `ffi` gem API, verified 2026-08-03 against github.com/ffi/ffi's wiki (not
-// carried over from memory):
+// `ffi` gem API, per github.com/ffi/ffi's wiki:
 //   - Basic-Usage (github.com/ffi/ffi/wiki/Basic-Usage): the canonical
 //     pattern is `module Foo; extend FFI::Library; ffi_lib 'libname_or_path';
 //     attach_function :symbol, [:argtype, ...], :returntype; end` — `extend
@@ -35,30 +34,30 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 //     `:float`/`:double` for floating point.
 //   - Structs (github.com/ffi/ffi/wiki/Structs): `class Foo < FFI::Struct;
 //     layout :field, :type, ...; end` for structs with known field layout —
-//     NOT used for opaque handles here (see below).
+//     not used for opaque handles here (see below).
 //   - Pointers (github.com/ffi/ffi/wiki/Pointers): no documented
 //     typedef-to-a-named-handle-type convention, and Structs' own page
 //     doesn't address opaque (fields-unknown) handles either. The
 //     confirmed, documented idiom for an opaque handle in both pages is a
-//     bare `:pointer` used directly in `attach_function`'s type list — NOT
+//     bare `:pointer` used directly in `attach_function`'s type list — not
 //     an `FFI::Struct` subclass with an empty `layout` (no such convention is
-//     documented anywhere fetched; a struct's whole purpose per the Structs
-//     page is exposing named fields, which an opaque handle by definition
-//     has none of). This resolves the task's flagged ambiguity: bare
-//     `:pointer`, not a struct wrapper.
+//     documented anywhere; a struct's whole purpose per the Structs page is
+//     exposing named fields, which an opaque handle by definition has none
+//     of). The idiom this projector follows: bare `:pointer`, not a struct
+//     wrapper.
 //
 // Ownership-discipline mapping (see `OwnershipDiscipline` in ./index.ts):
 // unlike gleam.ts (where JS's GC means literally every discipline produces
-// the same declaration) this target has ONE real branch, not zero — `"copy"`
+// the same declaration) this target has one real branch, not zero — `"copy"`
 // crosses as the value's own mapped type (`toRubyFfiType`'s base-type table
 // below), because the ffi gem's type-symbol vocabulary genuinely
 // distinguishes value types from `:pointer`. But `"opaque-handle"`,
-// `"refcount"`, and `"resource"` (own/borrow) all collapse to the exact same
+// `"refcount"`, and `"resource"` (own/borrow) all collapse to the same
 // `:pointer` declaration as each other: the `ffi` gem's type vocabulary (see
 // Types above) has no ownership-aware pointer variant — refcounting and
-// WIT-style own/borrow are memory-management PROTOCOLS a caller or generated
+// WIT-style own/borrow are memory-management protocols a caller or generated
 // wrapper follows on top of a plain pointer, not something `attach_function`'s
-// type-symbol list itself distinguishes. So this is the "declaration is
+// type-symbol list itself distinguishes. This is the "declaration is
 // identical regardless of discipline" case for three of the four, not a
 // throw — there is no unsupported case here at all, since every discipline
 // maps onto something the gem can genuinely express (unlike rust-c-abi.ts, which
@@ -71,7 +70,7 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // `buildFreeFunction`/`buildResource`) by attaching that same paired free
 // function as an ordinary `attach_function` alongside the resource's own
 // methods — the Ruby-side counterpart callers need to actually release a
-// handle obtained from this library, not a new convention invented here.
+// handle obtained from this library.
 
 function toSnakeCase(name: string): string {
   return name
@@ -99,15 +98,13 @@ function docComment(meta: Readonly<Record<string, unknown>>): string[] {
 }
 
 /**
- * Base (no-ownership-metadata, or `"copy"` discipline) type mapping —
- * intentionally minimal, per the task's own framing: only the type-ir kinds
- * that map onto a genuine `ffi`-gem primitive symbol. Anything structural
- * (`object`, `array`, `tuple`, `map`, `union`, `enum`, a bare unannotated
- * `ref`, ...) would require synthesizing an `FFI::Struct` subclass or a
- * richer per-shape convention this task didn't ask for, so it throws
- * explicitly rather than guessing at one — same throw-not-degrade precedent
- * `rust-c-abi.ts`/`wasm-bindgen.ts` already use for shapes/disciplines they don't
- * implement.
+ * Base (no-ownership-metadata, or `"copy"` discipline) type mapping — covers
+ * only the type-ir kinds that map onto a genuine `ffi`-gem primitive symbol.
+ * Anything structural (`object`, `array`, `tuple`, `map`, `union`, `enum`, a
+ * bare unannotated `ref`, ...) would require synthesizing an `FFI::Struct`
+ * subclass or a richer per-shape convention, out of scope here, so it throws
+ * explicitly — same throw-not-degrade precedent `rust-c-abi.ts`/`wasm-bindgen.ts`
+ * already use for shapes/disciplines they don't implement.
  */
 function toBaseRubyFfiType(ref: TypeRef): string {
   const kind = ref.shape.kind;
@@ -252,7 +249,7 @@ function buildModule(name: string, ref: FfiRef, shape: FfiShape & { kind: "modul
  *   - `function` -> a single `attach_function` declaration (requires `name`,
  *     mirroring `rust-c-abi.ts`'s/`wasm-bindgen.ts`'s identical requirement — a
  *     free function's name lives as the key in the enclosing
- *     `module.functions` map, not on the shape itself). Emitted BARE (no
+ *     `module.functions` map, not on the shape itself). Emitted bare (no
  *     enclosing `extend FFI::Library`/`ffi_lib`) when called directly on a
  *     `function` outside a `module` context — same as `rust-c-abi.ts`'s bare
  *     `#[no_mangle] fn`, since `attach_function` is only meaningful inside a

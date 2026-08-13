@@ -4,57 +4,54 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // JNI (Java Native Interface) projector — the Java-side `native` method
 // declaration surface for calling into native code, the human-facing
 // counterpart of ReScript's `external`/Gleam's `@external`/C-ABI's `extern
-// "C" fn`, NOT the auto-generated `JNIEnv*`/`jobject`-shaped C glue header.
+// "C" fn`; not the auto-generated `JNIEnv*`/`jobject`-shaped C glue header.
 //
-// Why JNI needs its own file rather than reusing rust-c-abi.ts (verified this
-// session, not assumed): [VERIFIED-EXTERNAL:
-// docs.oracle.com/en/java/javase/17/docs/specs/jni/design.html, fetched
-// 2026-08-03] a native method is declared in Java as `native ReturnType
-// name(Params...);`; the corresponding native function's REQUIRED first two
-// parameters are `JNIEnv *env` plus `jobject`/`jclass` (the implicit
-// receiver), with the function's exact C name deterministically derived from
-// the fully-qualified class + method name (`Java_p_q_r_A_f`, or with a
+// JNI needs its own file rather than reusing rust-c-abi.ts. Per
+// docs.oracle.com/en/java/javase/17/docs/specs/jni/design.html, a native
+// method is declared in Java as `native ReturnType name(Params...);`; the
+// corresponding native function's required first two parameters are
+// `JNIEnv *env` plus `jobject`/`jclass` (the implicit receiver), with the
+// function's exact C name deterministically derived from the
+// fully-qualified class + method name (`Java_p_q_r_A_f`, or with a
 // `__<descriptor>` suffix for overloads). That signature shape — `JNIEnv*`,
 // opaque `jobject`/`jclass`/`jstring` handles, VM-managed reference lifetime
-// — has no analogue in a plain `extern "C"` function signature, matching
-// this session's earlier §5 target-inventory finding
-// (docs/design/ffi-ir-architecture-options.md, item 4): "categorically
+// — has no analogue in a plain `extern "C"` function signature (see
+// docs/design/ffi-ir-architecture-options.md, item 4: JNI is "categorically
 // different from [LuaJIT/Deno/Bun]: not 'a C-ABI library plus a loader,' a
-// distinct glue-generation target."
+// distinct glue-generation target").
 //
-// Header generation IS genuinely automatic tooling, confirmed this session
-// (not assumed by analogy to cbindgen): `javac -h <dir>` (the JDK 8+
-// replacement for the deprecated standalone `javah` utility) generates the
-// `JNIEnv*`-shaped C header directly from a compiled class's `native` method
-// declarations — [VERIFIED-EXTERNAL, via search: docs.oracle.com javah
-// history + JDK 8 `javac -h` documentation, cross-checked against multiple
-// independent tutorial/reference sources, fetched 2026-08-03]. Exactly like
-// `rust-c-abi.ts` not emitting the cbindgen-generated C header (that file's own
-// header comment: "a header would be a downstream artifact of this file's
-// output, not something fractal emits directly"), this file emits ONLY the
-// Java-side `native` declarations — the `javac -h` header is a downstream
-// artifact of compiling them, not something fractal emits here.
+// Header generation is genuinely automatic tooling, not merely analogous to
+// cbindgen: `javac -h <dir>` (the JDK 8+ replacement for the deprecated
+// standalone `javah` utility) generates the `JNIEnv*`-shaped C header
+// directly from a compiled class's `native` method declarations. Exactly
+// like `rust-c-abi.ts` not emitting the cbindgen-generated C header (that
+// file's own header comment: "a header would be a downstream artifact of
+// this file's output, not something fractal emits directly"), this file
+// emits only the Java-side `native` declarations — the `javac -h` header is
+// a downstream artifact of compiling them, not something fractal emits
+// here.
 //
-// Resource idiom — verified, not assumed identical to C's opaque pointer:
-// [VERIFIED-EXTERNAL: developer.android.com/training/articles/perf-jni,
-// "64-bit considerations" section, fetched 2026-08-03] "To support
-// architectures that use 64-bit pointers, use a `long` field rather than an
-// `int` when storing a pointer to a native structure in a Java field." This
-// is a DIFFERENT mechanism from JNI's own `jobject`/local-ref/global-ref
-// reference-type system (which the same JNI spec page describes as
-// VM-managed handles into a per-thread/per-critical-section reference table,
-// freed automatically on native-method return for locals, requiring explicit
-// `NewGlobalRef`/`DeleteGlobalRef` for anything outstanding beyond one call)
-// — that system governs how the JVM tracks *Java objects* handed to native
-// code, a GC-safety concern with no free/ownership decision for fractal's
-// IR to make at all (the VM handles it unconditionally). The native-pointer-
-// as-a-long-field idiom is the one with a citable, established convention
-// answering the actual question this session's ownership vocabulary asks
-// ("how does a native-owned resource cross the boundary"), so that is what
-// `buildResource` below implements — a `private long nativeHandle;` field on
-// a generated wrapper class, not an attempt to reproduce jobject/local-ref
-// semantics (which the IR's `OwnershipDiscipline` vocabulary was never
-// modeling in the first place; see the ownership note below).
+// Resource idiom — the JNI/Android-documented native-pointer-field idiom,
+// not identical to C's opaque pointer: per
+// developer.android.com/training/articles/perf-jni ("64-bit
+// considerations"), "To support architectures that use 64-bit pointers, use
+// a `long` field rather than an `int` when storing a pointer to a native
+// structure in a Java field." This is a different mechanism from JNI's own
+// `jobject`/local-ref/global-ref reference-type system (which the JNI spec
+// describes as VM-managed handles into a per-thread/per-critical-section
+// reference table, freed automatically on native-method return for locals,
+// requiring explicit `NewGlobalRef`/`DeleteGlobalRef` for anything
+// outstanding beyond one call) — that system governs how the JVM tracks
+// *Java objects* handed to native code, a GC-safety concern with no
+// free/ownership decision for fractal's IR to make at all (the VM handles
+// it unconditionally). The native-pointer-as-a-long-field idiom is the
+// established convention answering the actual question the ownership
+// vocabulary asks ("how does a native-owned resource cross the boundary"),
+// so that is what `buildResource` below implements — a
+// `private long nativeHandle;` field on a generated wrapper class, not an
+// attempt to reproduce jobject/local-ref semantics (which the IR's
+// `OwnershipDiscipline` vocabulary was never modeling in the first place;
+// see the ownership note below).
 //
 // Ownership discipline coverage — mirrors rust-c-abi.ts's decided split exactly,
 // for closely related reasons:
@@ -72,26 +69,24 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 //     own GC-triggered cleanup facilities (`finalize()`, `java.lang.ref.
 //     Cleaner`) are a single-owner "run this when the JVM decides to
 //     collect it" callback, not an increment/decrement shared-count
-//     discipline — forcing that into "refcount" would be inventing a
-//     mapping this session found no citable convention for, not reporting
-//     an established one.
+//     discipline.
 //   - `"resource"` (own/borrow) — throws. This mode is WIT's own
 //     Canonical-ABI per-instance handle-table + lend-count-and-trap
 //     mechanism (see `./index.ts`'s doc comment on `OwnershipDiscipline`);
-//     nothing in the JNI spec or the Android NDK docs verified this session
-//     enforces an own/borrow distinction or traps on a lend-count
-//     violation — same "no native mechanism" reasoning `rust-c-abi.ts` already
-//     applies to this exact discipline. A `resourceRef(...)`-built
-//     TypeRef (which sets `ownership.resource(mode)` by convention, per
-//     `./index.ts`) is therefore NOT the right constructor to reach for
-//     targeting JNI, mirroring `c-abi.test.ts`'s own local `handleRef`
-//     helper (built with `ownership.opaqueHandle()` instead) — this file's
-//     test suite does the same.
+//     no JNI spec or Android NDK mechanism enforces an own/borrow
+//     distinction or traps on a lend-count violation — same "no native
+//     mechanism" reasoning `rust-c-abi.ts` already applies to this exact
+//     discipline. A `resourceRef(...)`-built TypeRef (which sets
+//     `ownership.resource(mode)` by convention, per `./index.ts`) is
+//     therefore not the right constructor to reach for targeting JNI,
+//     mirroring `c-abi.test.ts`'s own local `handleRef` helper (built with
+//     `ownership.opaqueHandle()` instead) — this file's test suite does the
+//     same.
 //
 // Type mapping is intentionally minimal, per the task's own scope: Java's
 // primitive vocabulary (`boolean`, `int`/`long`, `float`/`double`) plus
 // `String` and `byte[]` for the `bytes` kind. Bare `integer`/`number` (no
-// declared width) default to the WIDEST native form (`long`/`double`),
+// declared width) default to the widest native form (`long`/`double`),
 // matching the same "no width info -> widest safe default" precedent
 // type-ir's own `cpp-nlohmann.ts` documents for its bare-`integer` case;
 // `int32`/`int64`/`float32`/`float64` (type-ir's optional fixed-width
@@ -102,9 +97,9 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // to `snake_case` with no external constraint) or `rescript.ts` (whose
 // `external` syntax keeps the ReScript-side identifier and the JS-side
 // string-literal target independently spellable), a JNI `native` method's
-// Java name and its JNI-mandated linkable C symbol name are THE SAME STRING,
-// deterministically derived (verified above) — there is no separate
-// "wire name" to decouple through. This file therefore does NOT camelCase-
+// Java name and its JNI-mandated linkable C symbol name are the same string,
+// deterministically derived (see above) — there is no separate
+// "wire name" to decouple through. This file therefore does not camelCase-
 // or snake_case-transform an incoming name; it only sanitizes characters
 // that would not compile as a Java identifier and escapes exact Java
 // reserved words, since either would otherwise be a hard compile error, not
@@ -168,9 +163,9 @@ const JAVA_RESERVED = new Set([
 
 /** A valid Java identifier for `name` — replaces characters that cannot
  * appear in a Java identifier, prefixes a leading digit, and escapes exact
- * Java reserved words. Deliberately NOT a casing transform (see file header:
- * a `native` method's Java name IS the linkable JNI symbol name, so this
- * file does not rewrite spelling beyond what's needed to compile). */
+ * Java reserved words. Not a casing transform (see file header: a `native`
+ * method's Java name is the linkable JNI symbol name, so this file does not
+ * rewrite spelling beyond what's needed to compile). */
 function sanitizeIdent(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9_$]/g, "_");
   const based = /^[A-Za-z_$]/.test(cleaned) ? cleaned : `_${cleaned}`;
@@ -259,7 +254,7 @@ type FfiFunctionLike = {
  * One `native` method declaration. `isStatic` distinguishes a module-level
  * free function (`public static native`, no receiver) from a resource
  * method (`public native`, no `static` — the receiver is JNI's own implicit
- * `jobject this`, requiring NO explicit handle parameter in the Java-side
+ * `jobject this`, requiring no explicit handle parameter in the Java-side
  * declaration, unlike `rust-c-abi.ts`'s synthesized `handle: *mut T` first
  * parameter for the same case: JNI supplies the receiver itself, per the
  * Oracle spec's documented native-function signature shape verified in the
@@ -288,11 +283,10 @@ function buildDecl(
  * needs `static` to avoid an implicit, unwanted enclosing-instance
  * reference; a top-level resource class needs no such modifier).
  *
- * Deliberately does NOT synthesize a constructor: ffi-ir's `resource` kind
- * (`./index.ts`) carries only a `methods` map, no separate constructor
- * field — the same gap `rust-c-abi.ts`/`rescript.ts`/`wasm-bindgen.ts` already
- * document and decline to invent one for, rather than guessing at a
- * constructor signature the schema does not express.
+ * Does not synthesize a constructor: ffi-ir's `resource` kind (`./index.ts`)
+ * carries only a `methods` map, no separate constructor field — the same
+ * gap `rust-c-abi.ts`/`rescript.ts`/`wasm-bindgen.ts` already document and
+ * decline to invent one for.
  */
 function buildResource(
   name: string,
@@ -334,13 +328,13 @@ function buildResource(
  * the backing native library before any native method on the class is
  * invoked.
  *
- * Naming judgment call, flagged per the task (not guessed silently): ffi-ir's
- * `FfiKinds.module.name` carries no field distinguishing "a Java class name"
- * from "a native shared-library name" (they are conventionally DIFFERENT
- * strings — e.g. class `MyModule` loading library `"mymodule"`, without the
- * platform's `lib`/`.so`/`.dll` decoration, which `System.loadLibrary`
- * itself adds). This projector uses the SAME `name` for both the generated
- * class (PascalCased) and the `loadLibrary` argument (passed through
+ * Naming judgment call: ffi-ir's `FfiKinds.module.name` carries no field
+ * distinguishing "a Java class name" from "a native shared-library name"
+ * (they are conventionally different strings — e.g. class `MyModule`
+ * loading library `"mymodule"`, without the platform's `lib`/`.so`/`.dll`
+ * decoration, which `System.loadLibrary` itself adds). This projector uses
+ * the same `name` for both the generated class (PascalCased) and the
+ * `loadLibrary` argument (passed through
  * verbatim, undecorated) since the schema gives no second name to draw the
  * library name from — the same kind of naming gap `rescript.ts`'s file
  * header already flags for its own `@module`-vs-`@val` judgment call.

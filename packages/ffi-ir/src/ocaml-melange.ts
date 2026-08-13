@@ -3,16 +3,15 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 
 // ffi-ir -> Melange (https://melange.re) `external`-declaration projector.
 //
-// Toolchain determination (this file's first job, per the task that
-// produced it): "OCaml/Reason binds to JS" names TWO genuinely different,
-// unrelated toolchains, not one syntax with two names —
+// Toolchain determination (this file's first job): "OCaml/Reason binds to
+// JS" names two genuinely different, unrelated toolchains, not one syntax
+// with two names —
 //
 //   - js_of_ocaml (https://ocsigen.org/js_of_ocaml) — compiles a whole
 //     (already-typed, already-compiled-from-OCaml) program to JS. Its
 //     idiomatic FFI story, per its own `Js.Unsafe`/`Js.t` machinery (verified
-//     via web search against ocaml.org's published `Js_of_ocaml.Js` API docs
-//     and a copy of `js.mli`, 2026-08-03 — the ocsigen.org manual pages
-//     themselves were unreachable, DNS timeout from this sandbox), is either
+//     against ocaml.org's published `Js_of_ocaml.Js` API docs and a copy of
+//     `js.mli`, 2026-08-03), is either
 //     (a) hand-written `class type ... = object method m : t1 -> t2 meth
 //     ... end` declarations giving typed `Js.t` wrappers around JS objects,
 //     or (b) untyped escape-hatch calls through `Js.Unsafe.meth_call`/
@@ -33,11 +32,10 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 //     precedent this package already has two siblings for (rust-c-abi.ts,
 //     wasm-bindgen.ts) and the one this file follows most directly.
 //
-// Given that structural match, THIS FILE implements Melange only. A
+// Given that structural match, this file implements Melange only. A
 // js_of_ocaml backend is a genuinely separate, differently-shaped piece of
-// work (either a class-type synthesizer or an untyped-call emitter) — not
-// implemented here; flagged back to the task, not guessed at, per the
-// "genuine unresolved ambiguity" instruction this task was given.
+// work (either a class-type synthesizer or an untyped-call emitter) that
+// this file does not implement.
 //
 // ----------------------------------------------------------------------------
 // Ownership-discipline scope for this target (mirrors the file-level
@@ -59,7 +57,7 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 //     is given, a normal `[@mel.send]`-bound external for it (the same
 //     shape as any other bound method — e.g. Node's `fs` file-descriptor
 //     `.close()`, DOM `WebSocket.close()`). This is the discipline this
-//     target implements NATIVELY, unlike wasm-bindgen (no manual-free idiom
+//     target implements natively, unlike wasm-bindgen (no manual-free idiom
 //     there) or WIT (redundant with `resource`).
 //   - `"refcount"` — THROWS. Melange has no `Arc`/refcount-wrapper construct
 //     and no bundled `FinalizationRegistry` pairing the way wasm-bindgen's
@@ -72,7 +70,7 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 //
 // ----------------------------------------------------------------------------
 // Data-shape (type-ir TypeRef -> Melange type syntax) coverage is
-// DELIBERATELY MINIMAL, the same scope-limiting call `wit.ts` makes and
+// deliberately minimal, the same scope-limiting call `wit.ts` makes and
 // documents for the identical reason: no type-ir -> OCaml/Melange projector
 // exists yet in packages/type-ir/src/ (confirmed by listing that directory —
 // only `rescript-native.ts`, a different toolchain/syntax, is present), and
@@ -172,8 +170,8 @@ function ocamlLabel(name: string): string {
 }
 
 // `@rhi-zone/fractal-type-ir/codegen-helpers` is an internal (unexported)
-// module of a sibling package this file must not modify (per this task's own
-// scope), so `splitWords`/`toPascalCase`/`toCamelCase` are reimplemented
+// module of a sibling package this file does not modify, so
+// `splitWords`/`toPascalCase`/`toCamelCase` are reimplemented
 // locally here rather than imported — the same "small local copy, not a
 // cross-package reach into another package's internals" precedent
 // `wasm-bindgen.ts`'s own local `toSnakeCase` already establishes in this
@@ -260,7 +258,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
 }
 
 // ============================================================================
-// type-expression rendering — DELIBERATELY MINIMAL, see file-level doc
+// type-expression rendering — deliberately minimal, see file-level doc
 // comment above.
 // ============================================================================
 
@@ -378,7 +376,7 @@ function buildFunction(
  * Method on a resource -> `[@mel.send]`, verified against melange.re's own
  * documented pattern (`external get_by_id : document -> string ->
  * Dom.element = "getElementById" [@@mel.send]`, called as `document |.
- * get_by_id "my-id"`) — the receiver is the FIRST explicit parameter (typed
+ * get_by_id "my-id"`) — the receiver is the first explicit parameter (typed
  * as the resource's abstract `t`), not an implicit `self`; Melange's
  * `external` mechanism has no receiver-binding syntax distinct from "first
  * argument", unlike wasm-bindgen's `&self` splice or WIT's implicit
@@ -411,7 +409,7 @@ function buildMethod(
  * comment: "a resource exposes behavior only through its methods map... a
  * resource... 'cannot be plain data structures'" — an abstract type with no
  * exposed representation is the direct Melange analog) plus one `[@mel.send]`
- * external per method, receiver typed `t`. When the resource's OWN
+ * external per method, receiver typed `t`. When the resource's own
  * `meta.ownership` names `opaque-handle` with a `freeFn`, an additional
  * `[@mel.send]`-bound external for that free function is emitted alongside
  * the declared methods (the same "explicit, separately-declared free

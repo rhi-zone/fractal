@@ -5,8 +5,8 @@
 // grant (server-to-server; a `clientSecret` is required) — the grant an
 // unattended fractal client (a backend service calling another fractal
 // service) uses. An interactive user-delegated grant (authorization code +
-// PKCE) is a DIFFERENT flow with a browser redirect in the middle; it isn't
-// in scope here — this adapter is for machine-to-machine calls.
+// PKCE) is a different flow with a browser redirect in the middle; this
+// adapter covers machine-to-machine calls only.
 //
 // ```ts
 // import { oidc } from "@rhi-zone/fractal-auth-oidc"
@@ -34,7 +34,7 @@ export type OidcClientOptions = {
   /** `audience` parameter some providers (e.g. Auth0) require to scope the token to a specific API. */
   readonly audience?: string;
   /**
-   * Refresh this many seconds BEFORE the token's actual expiry, so a
+   * Refresh this many seconds before the token's actual expiry, so a
    * request already in flight doesn't race a just-expired token. Default
    * 30.
    */

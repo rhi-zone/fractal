@@ -4,7 +4,7 @@ import { toRustCAbi, toRustCAbiType } from "./rust-c-abi.ts";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
 
 /** The C-target convention for referencing an opaque resource by pointer:
- * a plain `ref` TypeRef carrying `opaque-handle` ownership (NOT the
+ * a plain `ref` TypeRef carrying `opaque-handle` ownership (not the
  * `resource`-discipline `resourceRef` helper, which is the WIT-oriented own/
  * borrow convention this target explicitly does not implement). */
 function handleRef(resourceName: string, freeFn?: string): ReturnType<typeof withOwnership> {

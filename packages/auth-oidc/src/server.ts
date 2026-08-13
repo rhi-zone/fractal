@@ -132,7 +132,7 @@ export function oidcServer(options: OidcServerOptions): AuthAdapter<OidcClaims> 
    * (missing header, invalid/expired token, etc.). Enforced only when this
    * adapter is also wired through `authMiddleware` (see module doc) — using
    * `authLayer` alone (no `authMiddleware`) makes auth informational-only,
-   * for routes that want to know WHO is calling without requiring it.
+   * for routes that want to know who is calling without requiring it.
    */
   function guard(_req: Request, user: OidcClaims | null): Response | void {
     if (user === null) {

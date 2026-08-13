@@ -84,11 +84,11 @@ describe("toWasmBindgenFfi — resource, refcount discipline", () => {
     expect(src).toContain("Self { inner: std::sync::Arc::clone(&self.inner) }");
     expect(src).toContain("pub fn read(&self) -> String {");
 
-    // Corrected design: no hand-rolled release()/FinalizationRegistry glue —
-    // wasm-bindgen's own generated free() + internal weak-refs machinery
-    // covers deterministic/GC-driven cleanup, so no such code is emitted
-    // (the struct's doc comment above references "free()"/GC timing in
-    // prose, but no `fn release`/`new FinalizationRegistry` construct).
+    // No hand-rolled release()/FinalizationRegistry glue is emitted —
+    // wasm-bindgen's own generated free() plus its internal weak-refs
+    // machinery covers deterministic/GC-driven cleanup. The struct's doc
+    // comment references "free()"/GC timing in prose, but no `fn release`
+    // or `new FinalizationRegistry` construct appears in the output.
     expect(src).not.toContain("pub fn release");
     expect(src).not.toContain("new FinalizationRegistry");
   });

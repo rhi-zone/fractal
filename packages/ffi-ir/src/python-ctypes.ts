@@ -3,14 +3,13 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Python ctypes projector — Python source (a `ctypes.CDLL` load, per-function
 // `.argtypes`/`.restype` declarations, and thin wrapper functions/classes)
-// as the CONSUMER side of a plain-C FFI boundary. This is the mirror image
-// of `rust-c-abi.ts` (which emits the Rust/cbindgen PRODUCER side of the same
+// for the consumer side of a plain-C FFI boundary. This is the mirror image
+// of `rust-c-abi.ts` (which emits the Rust/cbindgen producer side of the same
 // boundary): where `rust-c-abi.ts` emits the shared library, this file emits the
 // Python code that dlopen()s it and calls in.
 //
-// Every API fact below was verified against Python's own official docs
-// (docs.python.org/3/library/ctypes.html, fetched during implementation of
-// this file, not recalled from memory), specifically:
+// Every API fact below is sourced from Python's own official docs
+// (docs.python.org/3/library/ctypes.html), specifically:
 //   - Loading: `ctypes.CDLL(path)` (also `ctypes.cdll.LoadLibrary(path)`,
 //     equivalent) — "instantiate CDLL ... to load shared libraries into the
 //     Python process."
@@ -53,21 +52,19 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 //     ctypes-managed ownership discipline for values crossing the boundary.
 //     Consequently — see `toCtypesType` below — every `OwnershipDiscipline`
 //     other than `"copy"` (`"opaque-handle"`, `"refcount"`, `"resource"`)
-//     produces the IDENTICAL ctypes declaration: a pointer. ctypes has no
+//     produces the same ctypes declaration: a pointer. ctypes has no
 //     type-level way to express "this pointer is refcounted" or "this
 //     pointer is owned vs. borrowed" — that bookkeeping is either done by
 //     the C library itself (refcount) or simply isn't checked at all
 //     (resource own/borrow, absent a host runtime — same point `rust-c-abi.ts`'s
-//     own file header makes about plain C generally). This file states that
-//     collapse explicitly rather than inventing three different
-//     declarations for a distinction ctypes cannot see.
+//     own file header makes about plain C generally). All three disciplines
+//     collapse to this one declaration.
 //
-// Python source, not Rust — this is the only projector in this package
-// targeting Python rather than Rust, so none of `rust-c-abi.ts`/`wasm-bindgen.ts`'s
-// Rust-specific helpers (identifier escaping, snake_case conversion) apply
-// as-is; Python identifier rules and keyword list are re-derived below,
-// self-contained, matching this package's existing per-file duplication
-// precedent (each projector file owns its own copy of these small helpers).
+// This is the only projector in this package targeting Python rather than
+// Rust, so `rust-c-abi.ts`/`wasm-bindgen.ts`'s Rust-specific helpers (identifier
+// escaping, snake_case conversion) don't apply here. Python identifier rules
+// and keyword list are re-derived below, self-contained (each projector file
+// owns its own copy of these small helpers).
 
 function toSnakeCase(name: string): string {
   return name
@@ -174,12 +171,11 @@ export function toCtypesType(ref: TypeRef): string {
 /**
  * The by-value ctypes expression for a type-ir `TypeShape`, ignoring
  * ownership (see `toCtypesType`, which applies the pointer wrap on top of
- * this). Covers the primitive/struct/ref subset ctypes can genuinely
- * marshal; throws — rather than silently degrading — for shapes with no
- * native C-ABI representation ctypes itself defines (`array`/`tuple`/`map`/
- * `union`/`intersection`/`enum`/`stream`/`page`/`instance`/`unknown`/
- * `never`), matching `rust-c-abi.ts`'s own throw-not-degrade convention for
- * shapes outside its target's representable subset.
+ * this). Covers the primitive/struct/ref subset ctypes can marshal;
+ * throws for shapes with no native C-ABI representation ctypes itself defines
+ * (`array`/`tuple`/`map`/`union`/`intersection`/`enum`/`stream`/`page`/
+ * `instance`/`unknown`/`never`), matching `rust-c-abi.ts`'s own throw-not-degrade
+ * convention for shapes outside its target's representable subset.
  */
 export function toCtypesShape(ref: TypeRef): string {
   const shape = ref.shape;
@@ -235,10 +231,10 @@ type FfiFunctionLike = {
  * synthesized `handle` parameter for a resource method (mirroring
  * `rust-c-abi.ts`'s `buildFunction`'s identical `selfParam` synthesis — ffi-ir's
  * `method` kind names its receiver by resource name only, carrying no
- * parameter of its own). The wrapper's body is a genuine call-through (it
- * really does call into the loaded library) — ffi-ir carries only the
- * signature, so there is no library-side implementation to stub, unlike the
- * producer-side `rust-c-abi.ts`/`wasm-bindgen.ts` `todo!()` bodies. */
+ * parameter of its own). The wrapper's body calls through to the loaded
+ * library — ffi-ir carries only the signature, so there is no library-side
+ * implementation to stub, unlike the producer-side `rust-c-abi.ts`/`wasm-bindgen.ts`
+ * `todo!()` bodies. */
 function buildFunction(
   fnName: string,
   ref: FfiRef,

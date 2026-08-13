@@ -5,7 +5,7 @@ import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
 
 /** The JNI-target convention for referencing a native-owned resource by its
  * long-native-pointer-field handle: a plain `ref` TypeRef carrying
- * `opaque-handle` ownership — NOT the `resource`-discipline `resourceRef`
+ * `opaque-handle` ownership — not the `resource`-discipline `resourceRef`
  * helper, which is WIT's own own/borrow lend-count convention this target
  * does not implement (no citable JNI/Android NDK mechanism enforces it; see
  * jni.ts's file header). Mirrors c-abi.test.ts's identical local helper. */
@@ -142,9 +142,9 @@ describe("toJniFfi — resource", () => {
     expect(src).toContain("private long nativeHandle;");
     expect(src).toContain("public native byte[] read();");
     expect(src).toContain("public native void close();");
-    // no invented constructor — ffi-ir's `resource` kind has no constructor
-    // field, only a methods map (same gap rust-c-abi.ts/rescript.ts/
-    // wasm-bindgen.ts already document and decline to paper over).
+    // ffi-ir's `resource` kind has no constructor field, only a methods map
+    // (same gap rust-c-abi.ts/rescript.ts/wasm-bindgen.ts already document
+    // and decline to paper over), so this backend emits no constructor.
     expect(src).not.toMatch(/FileHandle\s*\(/);
   });
 

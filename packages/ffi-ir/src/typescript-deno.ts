@@ -11,17 +11,16 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 import "@rhi-zone/fractal-type-ir/kinds/common";
 import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
-// ffi-ir -> Deno FFI consumer projector: NOT a producer (unlike rust-c-abi.ts,
-// which emits Rust `extern "C"` source implementing a C-ABI library) — this
-// file emits the Deno-SIDE TypeScript loader that calls INTO whatever
-// library rust-c-abi.ts's Rust output compiles to, via `Deno.dlopen`. Consumer
-// and producer are deliberately separate files/concerns, the same split
-// wasm-bindgen.ts (Rust producer) already has no consumer-side counterpart
-// for in this package — this is the first *consumer*-side backend here.
+// ffi-ir -> Deno FFI consumer projector — a consumer, not a producer, of the
+// C ABI: unlike rust-c-abi.ts, which emits Rust `extern "C"` source
+// implementing a C-ABI library, this file emits the Deno-side TypeScript
+// loader that calls into whatever library rust-c-abi.ts's Rust output
+// compiles to, via `Deno.dlopen`. Consumer and producer are separate
+// files/concerns; wasm-bindgen.ts (the Rust producer) has no consumer-side
+// counterpart in this package, so this is the first consumer-side backend
+// here.
 //
-// Deno.dlopen API surface, verified against docs.deno.com/runtime/
-// fundamentals/ffi/ (fetched 2026-08-03, re-verified this session rather
-// than trusting memory of earlier research):
+// Deno.dlopen API surface (per docs.deno.com/runtime/fundamentals/ffi/):
 //
 //   - `Deno.dlopen(path, symbols)` returns `{ symbols, close() }`; each
 //     `symbols[name]` is `{ parameters: FfiType[], result: FfiType }` and,
@@ -29,79 +28,72 @@ import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "
 //     (synchronous — the docs describe no async/nonblocking calling
 //     convention at the API level; `Deno.dlopen` itself "throws
 //     synchronously when the library cannot be loaded").
-//   - Full verified FFI type vocabulary (Deno type | C type): `i8`/`u8`
-//     (`number`), `i16`/`u16` (`number`), `i32`/`u32` (`number`), `i64`/`u64`
-//     (`bigint`), `usize`/`isize` (`bigint`), `f32`/`f64` (`number`), `void`
+//   - FFI type vocabulary (Deno type | C type): `i8`/`u8` (`number`),
+//     `i16`/`u16` (`number`), `i32`/`u32` (`number`), `i64`/`u64` (`bigint`),
+//     `usize`/`isize` (`bigint`), `f32`/`f64` (`number`), `void`
 //     (`undefined`), `pointer` (opaque object or `null` — "as of Deno 1.31
 //     the JavaScript representation of `pointer` has become an opaque
 //     pointer object or `null` for null pointers"; the docs' own type table
-//     gives it as `{} | null`, and expose no dedicated `Deno.PointerValue`-
-//     named type on that page, so this file spells the TS annotation out as
-//     that literal union rather than asserting an unverified type name),
-//     `buffer` (`TypedArray | null`), `function` (callback pointer).
-//   - Structs ARE natively supported by value, contrary to this file's task
-//     description's suggestion that Deno FFI has no struct-by-value
-//     marshaling — re-verified this session, not assumed stale: `{ struct:
-//     [...] }` describes a C struct's layout as an ordered array of field
-//     FFI types, and struct values cross the boundary as a `TypedArray`
-//     whose bytes match that C layout (params) / a `Uint8Array` of the
-//     right length (returns). This file does NOT implement that path (see
-//     `denoFfiType`'s throw for `"object"` below) — correctly computing the
-//     `{ struct: [...] }` field-type array AND the C ABI byte layout
-//     (natural alignment + padding rules) a caller must pack/unpack against
-//     is a separate, nontrivial undertaking (matching rust-serde's
-//     `toRustType` "object" case, which does not target `#[repr(C)]`
-//     layout either — rust-c-abi.ts's own "copy" path for an object TypeRef
-//     inherits whatever non-C-ABI shape `toRustType` gives it, so there is
-//     no established fractal C-ABI struct-layout convention yet to mirror
-//     here) — out of scope for this minimal projector, same "minimal
-//     subset, throw for the rest" scoping wit.ts's own file header
-//     documents for its own data-shape coverage.
-//   - No dedicated `"bool"` FFI type exists in Deno's vocabulary (re-
-//     verified, not assumed) — `u8` is this file's documented convention
-//     for `boolean` (the natural 1-byte width matching both Rust `bool` and
-//     C99 `_Bool`'s own layout, not an arbitrary pick).
-//   - `"string"` has NO native Deno FFI type and the docs describe no
+//     gives it as `{} | null` and expose no dedicated `Deno.PointerValue`
+//     name on that page, so this file spells the TS annotation out as that
+//     literal union), `buffer` (`TypedArray | null`), `function` (callback
+//     pointer).
+//   - Structs are natively supported by value: `{ struct: [...] }` describes
+//     a C struct's layout as an ordered array of field FFI types, and struct
+//     values cross the boundary as a `TypedArray` whose bytes match that C
+//     layout (params) / a `Uint8Array` of the right length (returns). This
+//     file does not implement that path (see `denoFfiType`'s throw for
+//     `"object"` below) — computing the `{ struct: [...] }` field-type array
+//     and the C ABI byte layout (natural alignment + padding rules) a caller
+//     must pack/unpack against is a separate undertaking (rust-serde's
+//     `toRustType` "object" case doesn't target `#[repr(C)]` layout either,
+//     and rust-c-abi.ts's own "copy" path for an object TypeRef inherits
+//     whatever non-C-ABI shape `toRustType` gives it, so there is no
+//     established fractal C-ABI struct-layout convention yet to mirror
+//     here) — out of scope for this minimal projector, the same "minimal
+//     subset, throw for the rest" scoping wit.ts's own file header documents
+//     for its own data-shape coverage.
+//   - No dedicated `"bool"` FFI type exists in Deno's vocabulary — `u8` is
+//     this file's convention for `boolean`, the 1-byte width matching both
+//     Rust `bool` and C99 `_Bool`'s own layout.
+//   - `"string"` has no native Deno FFI type, and the docs describe no
 //     established C-string convention (no `cstr`/`getCString()`/pointer+
-//     length guidance found on this page) — genuinely unresolved, not a
-//     gap this file's judgment can close: crossing a string requires a
-//     concrete encoding decision (null-terminated buffer vs. pointer+length
-//     pair, and who owns/frees the bytes) that neither ffi-ir's schema
-//     (index.ts) nor rust-c-abi.ts's own "copy" path (which just inherits
-//     rust-serde's `toRustType` `"string" -> "String"` mapping — itself not
-//     a real `#[repr(C)]`-safe C-ABI string representation) has decided.
+//     length guidance on that page). Crossing a string requires a concrete
+//     encoding decision (null-terminated buffer vs. pointer+length pair, and
+//     who owns/frees the bytes) that neither ffi-ir's schema (index.ts) nor
+//     rust-c-abi.ts's own "copy" path (which inherits rust-serde's
+//     `toRustType` `"string" -> "String"` mapping, itself not a
+//     `#[repr(C)]`-safe C-ABI string representation) has decided.
 //     `denoFfiType` throws explicitly for `"string"` rather than inventing
 //     an encoding.
 //
-// Ownership-discipline scope for THIS target (mirrors the file-level
-// per-target reasoning rust-c-abi.ts/wit.ts/gleam.ts each give, re-derived here
-// since Deno FFI's situation matches neither exactly):
+// Ownership-discipline scope for this target (mirrors the file-level
+// per-target reasoning rust-c-abi.ts/wit.ts/gleam.ts each give, re-derived
+// here since Deno FFI's situation matches neither exactly):
 //
 //   - `"copy"` (or no `meta.ownership` at all) — the primitive/bytes value
 //     crosses by its structural Deno FFI type (`denoFfiType`'s primitive
 //     table). Struct/object-shaped copies throw (see above).
 //   - `"opaque-handle"`, `"refcount"`, and `"resource"` (own/borrow) all
-//     collapse to the exact same Deno-side representation: `"pointer"`.
-//     This is Deno FFI's OWN structural fact, not a design choice made here
-//     — `Deno.dlopen`'s raw calling convention has no ownership model of
-//     its own (no inc/dec-refcount hook, no lend-count/trap runtime the way
-//     WIT's Canonical ABI has); every one of these three disciplines is, at
-//     the raw symbol-table level, "an opaque native handle, represented as
-//     `pointer`" — the same conclusion gleam.ts's file header reaches for
-//     why ownership metadata doesn't gate/branch its own codegen (JS/Gleam
-//     has nothing an ownership qualifier could attach to), extended here to
-//     Deno's raw-pointer FFI layer specifically. Unlike gleam.ts, though,
-//     ownership metadata is NOT entirely irrelevant to this file's output:
-//     `"opaque-handle"`'s `freeFn` field (index.ts's `OwnershipDiscipline`)
-//     is the one piece that changes generated code shape — when present (or
-//     for any resource at all, see `buildResourceGroup` below, mirroring
-//     rust-c-abi.ts's own unconditional per-resource free-function emission), an
-//     explicit `<resource>Free` wrapper calling the paired free symbol is
-//     synthesized. `"refcount"`/`"resource"` carry no equivalent function
-//     name in today's schema (index.ts defines `freeFn` only on the
-//     `opaque-handle` variant), so no such wrapper is synthesized for them —
-//     not an oversight, a direct reading of what the schema does and
-//     doesn't name.
+//     collapse to the same Deno-side representation: `"pointer"`. This is
+//     Deno FFI's own structural fact: `Deno.dlopen`'s raw calling convention
+//     has no ownership model of its own (no inc/dec-refcount hook, no
+//     lend-count/trap runtime the way WIT's Canonical ABI has), so each of
+//     these three disciplines is, at the raw symbol-table level, an opaque
+//     native handle represented as `pointer` — the same conclusion
+//     gleam.ts's file header reaches for why ownership metadata doesn't
+//     gate/branch its own codegen (JS/Gleam has nothing an ownership
+//     qualifier could attach to), extended here to Deno's raw-pointer FFI
+//     layer specifically. Ownership metadata still shapes this file's
+//     output in one place: `"opaque-handle"`'s `freeFn` field (index.ts's
+//     `OwnershipDiscipline`) is what changes generated code shape — when
+//     present (or for any resource at all, see `buildResourceGroup` below,
+//     mirroring rust-c-abi.ts's own unconditional per-resource
+//     free-function emission), an explicit `<resource>Free` wrapper calling
+//     the paired free symbol is synthesized. `"refcount"`/`"resource"`
+//     carry no equivalent function name in today's schema (index.ts defines
+//     `freeFn` only on the `opaque-handle` variant), so no such wrapper is
+//     synthesized for them.
 
 function toSnakeCase(name: string): string {
   return name
@@ -125,11 +117,11 @@ function quote(value: string): string {
   return JSON.stringify(value);
 }
 
-/** Deno's own documented FFI pointer representation ("as of Deno 1.31 the
+/** Deno's documented FFI pointer representation ("as of Deno 1.31 the
  * JavaScript representation of `pointer` has become an opaque pointer
  * object or `null`") — spelled out as this literal union rather than a
- * `Deno.PointerValue` reference, since that name was not confirmed on the
- * fetched docs page. Emitted once per generated file as a local alias. */
+ * `Deno.PointerValue` reference, since the docs don't name a dedicated type
+ * for it. Emitted once per generated file as a local alias. */
 const POINTER_TYPE_ALIAS = "type Pointer = {} | null";
 
 const PRIMITIVE_DENO_TYPES: Readonly<Record<string, string>> = {
@@ -150,7 +142,7 @@ const PRIMITIVE_DENO_TYPES: Readonly<Record<string, string>> = {
 };
 
 /** Deno FFI type -> the TS type a wrapper function's parameter/return
- * position should carry, per the verified Deno/C/Rust type table (see file
+ * position should carry, per the Deno/C/Rust type table (see file
  * header). */
 function tsTypeFor(denoType: string): string {
   if (denoType === "i64" || denoType === "u64" || denoType === "usize" || denoType === "isize")
@@ -374,7 +366,7 @@ function renderModuleOrGroup(
  *     symbol plus the paired free-function symbol, with one wrapper per
  *     method plus the free wrapper (requires `meta.libPath`; `name`, if
  *     given, is ignored — the shape carries its own `name` field).
- *   - `module` -> one `Deno.dlopen` call grouping ALL of its functions' AND
+ *   - `module` -> one `Deno.dlopen` call grouping all of its functions' and
  *     all of its resources' methods'/free-functions' symbols together (a
  *     module is one FFI boundary sharing one native library, so one shared
  *     `lib` handle is the natural mapping — unlike the single-item

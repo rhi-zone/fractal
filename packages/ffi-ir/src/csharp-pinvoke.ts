@@ -4,18 +4,18 @@ import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir";
 // merging — required here because this file's kind-keyed lookup tables
 // reference those kind names as string literals, the same reason
 // `wasm-bindgen.ts` (ffi-ir's own sibling) imports this module for its own
-// "bytes" reference. Not modified, just relied on.
+// "bytes" reference. This file uses no named export from it.
 import "@rhi-zone/fractal-type-ir/kinds/common";
 import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
-// .NET/P-Invoke consumer-side projector — the CALLER of a C-ABI shared
+// .NET/P-Invoke consumer-side projector — the caller of a C-ABI shared
 // library (the counterpart to `rust-c-abi.ts`'s Rust/`#[no_mangle] pub extern "C"`
-// PRODUCER side). Named by target platform (`dotnet.ts`), matching this
+// producer side). Named by target platform (`dotnet.ts`), matching this
 // package's established naming split: `rescript.ts`/`gleam.ts`/`melange.ts`
 // name by target language/platform (the file emits a whole language's own
 // idiomatic external-declaration syntax), while `wasm-bindgen.ts`/`rust-c-abi.ts`
 // name by technique (a specific binding mechanism inside one language, Rust).
-// P/Invoke is .NET's ONE mechanism for calling native code — there is no
+// P/Invoke is .NET's only mechanism for calling native code — there is no
 // second competing technique inside .NET the way wasm-bindgen is one of
 // several ways to bind Rust to JS — so, like ReScript's `external`, "the
 // platform" and "the technique" name the same thing here, and the
@@ -48,7 +48,7 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // Requirements this imposes (also verified from the same source-generation
 // doc): a `[LibraryImport]`-annotated method must be `static` AND `partial`
 // (the source generator supplies the body in a compiler-generated partial
-// declaration) — which in turn requires its ENCLOSING type be declared
+// declaration) — which in turn requires its enclosing type be declared
 // `partial` too (an ordinary C# partial-method constraint, not something the
 // doc states explicitly but a direct consequence of C#'s partial-method
 // feature: a partial method cannot exist inside a non-partial type). Hence
@@ -76,10 +76,9 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // "Boolean parameters and fields" + "Blittable types" sections: a bare C#
 // `bool` is explicitly listed as NOT blittable, and "by default, a .NET
 // `bool` is marshalled to a Windows `BOOL`... a 4-byte value. However, the
-// `_Bool`... type in C... [is] a *single* byte" — silently leaving a C#
-// `bool` unmarshaled against a C/Rust `bool` (both 1 byte, matching Rust's
-// own `bool` that `rust-c-abi.ts`/`rust-serde.ts` emit) risks exactly this
-// mismatch. The doc's own Windows-data-types table gives the fix: `BOOLEAN`
+// `_Bool`... type in C... [is] a *single* byte" — an unmarshaled C# `bool`
+// mismatches a C/Rust `bool` (both 1 byte, matching Rust's own `bool` that
+// `rust-c-abi.ts`/`rust-serde.ts` emit). The doc's own Windows-data-types table gives the fix: `BOOLEAN`
 // (an 8-bit Windows bool, the same width as Rust/C's `bool`) maps to
 // `[MarshalAs(UnmanagedType.U1)] bool`. Confirmed the source generator
 // respects `[MarshalAs]` (same doc, "The source generator also respects the
@@ -98,26 +97,24 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // actually produce, so in practice only `"copy"` and `"opaque-handle"` cross
 // this specific boundary today.
 //
-// That said, this file does NOT throw for `"refcount"`/`"resource"`
-// (own/borrow) the way `rust-c-abi.ts` does — reasoned through explicitly, not
-// guessed: ownership discipline governs WHO is responsible for freeing a
-// handle and WHEN (call an explicit free-fn once / decrement a refcount /
-// respect a lend-count-and-trap contract) — a caller-side bookkeeping
-// question. It does NOT change how the handle crosses the ABI wire: in every
-// one of the four disciplines, a resource reference is still, physically, one
-// pointer-sized value — `IntPtr` on the .NET side, `*mut T` on the C-ABI
-// side. `toDotNetType` below therefore renders `IntPtr` uniformly for ANY
-// non-`"copy"` ownership discipline attached to a resource reference,
-// regardless of which of the three it is, with this reasoning recorded here
-// rather than silently assumed. A caller pairing this against a producer that
-// doesn't yet emit a matching refcount/resource-discipline C ABI (i.e.
-// `rust-c-abi.ts` today) gets a `P/Invoke`-correct `IntPtr` declaration for a
-// symbol that doesn't yet exist to link against — that mismatch is a
-// producer-side coverage gap, not something this consumer-side backend can
-// detect or should paper over by throwing instead.
+// Unlike `rust-c-abi.ts`, this file does not throw for `"refcount"`/`"resource"`
+// (own/borrow) ownership. Ownership discipline governs who is responsible
+// for freeing a handle and when (call an explicit free-fn once / decrement a
+// refcount / respect a lend-count-and-trap contract) — a caller-side
+// bookkeeping question that does not change how the handle crosses the ABI
+// wire: in every one of the four disciplines, a resource reference is still,
+// physically, one pointer-sized value — `IntPtr` on the .NET side, `*mut T`
+// on the C-ABI side. `toDotNetType` below therefore renders `IntPtr`
+// uniformly for any non-`"copy"` ownership discipline attached to a
+// resource reference, regardless of which of the three it is. A caller
+// pairing this against a producer that doesn't yet emit a matching
+// refcount/resource-discipline C ABI (i.e. `rust-c-abi.ts` today) gets a
+// `P/Invoke`-correct `IntPtr` declaration for a symbol that doesn't yet
+// exist to link against — that mismatch is a producer-side coverage gap,
+// not something this consumer-side backend detects.
 //
-// The one case this file DOES throw for, as a genuine P/Invoke-side
-// limitation rather than a caller-side bookkeeping distinction: a `"copy"`
+// The one case this file throws for, a genuine P/Invoke-side limitation
+// rather than a caller-side bookkeeping distinction: a `"copy"`
 // (or unset) ownership TypeRef whose structural `type-ir` kind is anything
 // beyond the flat scalar set below (`object`/`array`/`map`/`tuple`/`union`/
 // `enum`/`intersection`/`interface`/a bare `ref` with no ownership metadata/
@@ -128,10 +125,9 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // handling of its own; `rust-serde.ts`'s `object` case only degrades to a
 // bare type-name reference, not a real repr(C) layout), so emitting a
 // same-layout C# struct here would be inventing a struct definition with
-// nothing on the producer side to verify it against. Throws explicitly
-// rather than guessing at a layout, matching the throw-not-degrade
-// convention `wasm-bindgen.ts`/`rust-c-abi.ts` already use for kinds/disciplines
-// they can't realize on their own targets.
+// nothing on the producer side to verify it against. Throws explicitly,
+// matching the throw-not-degrade convention `wasm-bindgen.ts`/`rust-c-abi.ts`
+// already use for kinds/disciplines they can't realize on their own targets.
 
 function toSnakeCase(name: string): string {
   return name
@@ -346,15 +342,15 @@ type FfiFunctionLike = {
  * `method` kind names its receiver by resource name only, carrying no
  * parameter of its own).
  *
- * Method/parameter naming: kept as the EXACT native symbol/parameter name
+ * Method/parameter naming: kept as the exact native symbol/parameter name
  * (not PascalCased) per "Native interoperability best practices"'s own
  * guidance ("DO use the same naming and capitalization for your methods and
  * parameters as the native method you want to call") — `fnName` here is
  * already the snake_case symbol `rust-c-abi.ts` emits for the paired producer
  * side (see `toSnakeCase` calls at each call site below), so this function
- * does not reformat it. `EntryPoint` is still set explicitly (defensive,
- * doesn't rely on any implicit exact-spelling assumption) even though it
- * equals the method's own escaped name in every case emitted here.
+ * does not reformat it. `EntryPoint` is set explicitly on every declaration,
+ * even though it equals the method's own escaped name in every case emitted
+ * here.
  */
 function buildFunction(
   fnName: string,
@@ -391,7 +387,7 @@ function buildFunction(
 }
 
 /** The paired free-function declaration for a resource — `rust-c-abi.ts`'s
- * `buildResource` ALWAYS emits a `<resource>_free(handle: *mut T)` Rust
+ * `buildResource` always emits a `<resource>_free(handle: *mut T)` Rust
  * function for every resource (regardless of whether `OwnershipDiscipline`'s
  * `opaque-handle.freeFn` names one explicitly), so this backend always emits
  * the matching P/Invoke declaration too, to stay paired 1:1 with what the

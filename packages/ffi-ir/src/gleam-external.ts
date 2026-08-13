@@ -26,8 +26,7 @@ function toSnakeCaseStripSeparators(name: string): string {
 // information Gleam's `@external` attribute itself requires.
 //
 // `@external` syntax, verified 2026-08-03 against gleam.run/documentation/
-// externals/ and tour.gleam.run/advanced-features/externals/ (not carried
-// over from memory):
+// externals/ and tour.gleam.run/advanced-features/externals/:
 //
 //   @external(javascript, "<module-path-or-package>", "<exported-name>")
 //   pub fn <name>(<params>) -> <ReturnType>
@@ -60,23 +59,21 @@ function toSnakeCaseStripSeparators(name: string): string {
 //     own examples (`reverse_list`/`reverse_list`), so this only needs
 //     overriding when the JS export is actually named differently.
 //
-// Ownership metadata (`meta.ownership`, ffi-ir's `OwnershipDiscipline`):
-// deliberately NOT gated or branched on anywhere in this file, unlike
-// wasm-bindgen.ts/rust-c-abi.ts (both of which throw for disciplines their target
-// can't realize). Those two throw because ownership discipline changes the
+// Ownership metadata (`meta.ownership`, ffi-ir's `OwnershipDiscipline`) is
+// not gated or branched on anywhere in this file, unlike wasm-bindgen.ts/
+// rust-c-abi.ts (both of which throw for disciplines their target can't
+// realize). Those two throw because ownership discipline changes the
 // emitted Rust code shape itself (`*mut T` vs a plain value, `Arc<T>`
 // wrapping, a paired free function). Here it doesn't: JS has no
 // manual-free/refcount/lend-count-and-trap machinery of its own for
 // `@external` to hook into (the JS side of an external binding is opaque,
 // hand-written glue code this projector doesn't generate), and Gleam's own
 // type system has nothing an ownership qualifier could attach to (no
-// borrow-checking, no linear types) — so every one of the four disciplines
-// produces the exact same Gleam declaration. There is no "unsupported"
-// branch to take because there is no code-shape difference to fail to
-// produce; a value crossing this boundary is simply an opaque, GC-managed
-// reference either way, which is the same conclusion this session's earlier
-// Gleam type-ir research reached for Gleam's own type system (no null, no
-// subtyping, no inheritance) extended to the ownership-metadata question.
+// borrow-checking, no linear types, no subtyping, no inheritance) — so every
+// one of the four disciplines produces the exact same Gleam declaration: a
+// value crossing this boundary is simply an opaque, GC-managed reference
+// either way, with no code-shape difference to fail to produce and
+// therefore no "unsupported" branch to take.
 
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
   return typeof meta.description === "string" ? [`/// ${meta.description}`] : [];
@@ -135,21 +132,20 @@ function buildFunction(
 
 /**
  * Method -> free function taking the receiver as an explicit first
- * parameter. Verified, not assumed: gleam.run/documentation/externals/ and
- * tour.gleam.run/advanced-features/externals/ show `@external` binding only
- * free functions in every example found (`get_element_by_id`,
- * `reverse_list`, `halt`) — no method/receiver syntax of any kind is
- * documented, which matches this session's earlier Gleam type-ir research
- * finding that Gleam's own type system has no method-on-a-type/receiver
- * concept at all (custom types carry no attached functions; a Gleam
- * "method" is conventionally just a function taking the value as its first
- * argument, e.g. `list.map(my_list, f)`). Degrading a `method` shape to that
- * same "receiver as first explicit parameter" convention is therefore the
- * idiomatic Gleam shape for this, not an invented workaround — it is
- * genuinely how every Gleam stdlib/ecosystem "method" is already written.
- * The receiver's own type is the resource's external-type name (see
- * `buildResource`), referenced here by `types.ref`-style PascalCase name via
- * a synthetic ref TypeRef so it flows through `toGleamType` unchanged.
+ * parameter, matching Gleam's own type system. gleam.run/documentation/
+ * externals/ and tour.gleam.run/advanced-features/externals/ show
+ * `@external` binding only free functions in every example found
+ * (`get_element_by_id`, `reverse_list`, `halt`) — no method/receiver syntax
+ * of any kind is documented, and Gleam's own type system has no
+ * method-on-a-type/receiver concept at all (custom types carry no attached
+ * functions; a Gleam "method" is conventionally just a function taking the
+ * value as its first argument, e.g. `list.map(my_list, f)`). Degrading a
+ * `method` shape to that same "receiver as first explicit parameter"
+ * convention is the idiomatic Gleam shape for this — every Gleam
+ * stdlib/ecosystem "method" is already written this way. The receiver's own
+ * type is the resource's external-type name (see `buildResource`),
+ * referenced here by `types.ref`-style PascalCase name via a synthetic ref
+ * TypeRef so it flows through `toGleamType` unchanged.
  */
 function buildMethod(
   name: string,
@@ -171,8 +167,7 @@ function buildMethod(
  * names exactly this construct as Gleam's idiom for an opaque foreign value
  * ("Gleam doesn't know anything about this type other than its existence
  * and the name it has been given... it cannot be constructed or manipulated
- * directly in Gleam code. External functions must be used instead.") — this
- * is an established Gleam idiom, not an invented one. Each of the
+ * directly in Gleam code. External functions must be used instead."). Each of the
  * resource's own methods is emitted as a `buildMethod`-style free function
  * (see that function's doc comment) alongside the type declaration, since
  * Gleam's external types carry no attached-function/impl-block syntax of
@@ -200,11 +195,11 @@ function buildResource(
 }
 
 /**
- * Module -> concatenated declarations, NOT an inline wrapping construct.
+ * Module -> concatenated declarations, not an inline wrapping construct.
  * Verified against Gleam's own project-layout convention (gleam.run/
  * documentation/externals/'s own examples import across files by path,
  * e.g. `./my_app/pokemon.mjs`, and the Gleam Tour's project-structure
- * material): a Gleam module IS a source file located by its path in
+ * material): a Gleam module is a source file located by its path in
  * `src/`, not an inline `module name { ... }`/`mod name { ... }` block the
  * way Rust or many other targets support (contrast wasm-bindgen.ts's
  * `pub mod name { ... }`, which C-ABI-analogue targets can express inline).

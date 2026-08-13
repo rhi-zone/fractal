@@ -158,10 +158,9 @@ describe("oidcClient", () => {
   });
 
   it('getToken throws OidcTokenError (a distinct failure from "unauthenticated") when a 200 response has no access_token', async () => {
-    // A malformed/misconfigured provider response is not the same failure
-    // mode as "no credentials" — it's surfaced as a thrown error rather
-    // than swallowed into the null the !res.ok path returns, so a caller
-    // can tell "we're unauthenticated" apart from "the provider is broken".
+    // A 200 response missing "access_token" is a broken/misconfigured
+    // provider: it throws OidcTokenError, distinct from the null the
+    // !res.ok path returns for "no credentials".
     const fetchImpl: FetchLike = async () =>
       new Response(JSON.stringify({ token_type: "Bearer" }), { status: 200 });
     const client = oidcClient({

@@ -11,32 +11,30 @@ import { toWasmBindgen, toWasmBindgenType } from "@rhi-zone/fractal-type-ir/rust
 import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts";
 
 // Rust codegen targeting wasm-bindgen for ffi-ir's boundary layer —
-// module/function/resource/ownership-discipline shapes — layered ON TOP of
+// module/function/resource/ownership-discipline shapes — layered on top of
 // type-ir's `wasm-bindgen.ts` (data-shape-only: primitives/structs/fieldless
 // enums/plain functions, throws on union/map/tuple/intersection/interface/
-// method-with-receiver/never). That file is NOT modified here; this file
-// imports and calls into its exported `toWasmBindgen`/`toWasmBindgenType` for
-// every data-shape position (params, return types, hoisted struct/enum
-// declarations) rather than reimplementing type mapping, and adds only what
-// ffi-ir carries that type-ir doesn't: function/module boundaries, resource
-// declarations, and ownership-discipline-aware handling.
+// method-with-receiver/never). That file is unmodified; this one imports and
+// calls into its exported `toWasmBindgen`/`toWasmBindgenType` for every
+// data-shape position (params, return types, hoisted struct/enum
+// declarations) and adds only what ffi-ir carries that type-ir doesn't:
+// function/module boundaries, resource declarations, and
+// ownership-discipline-aware handling.
 //
-// Target-discipline scope, confirmed against
-// docs/design/ffi-ir-architecture-options.md's Fork C "discipline-per-target:
-// decided" section (2026-08-03): JS/wasm-bindgen implements exactly two of
-// the four disciplines `OwnershipDiscipline` can express —
-//   - `"copy"` — already how `wasm-bindgen.ts` works today (`Clone` +
-//     `getter_with_clone`); reused directly here for resources too.
-//   - `"refcount"` — NEW in this file: an `Arc<...>`-wrapped struct. See the
-//     "FinalizationRegistry, verified" comment on `buildRefcountResource`
-//     below for what was confirmed about wasm-bindgen's own free()/weak-refs
-//     machinery and why no custom JS glue is emitted.
-// `"opaque-handle"` (no native manual-free idiom in JS — refcount already
-// covers shared ownership) and `"resource"`/own-borrow (no host runtime JS
-// can enforce lend-count-and-trap against) are explicitly NOT implemented —
+// Per docs/design/ffi-ir-architecture-options.md's Fork C
+// "discipline-per-target: decided" section, JS/wasm-bindgen implements two
+// of the four disciplines `OwnershipDiscipline` can express:
+//   - `"copy"` — `wasm-bindgen.ts`'s existing `Clone` + `getter_with_clone`
+//     pattern, reused directly here for resources too.
+//   - `"refcount"` — an `Arc<...>`-wrapped struct. See the doc comment on
+//     `buildRefcountResource` for how it interacts with wasm-bindgen's
+//     generated `free()`/weak-refs machinery.
+// `"opaque-handle"` (no native manual-free idiom in JS; refcount already
+// covers shared ownership) and `"resource"`/own-borrow (no host runtime in
+// JS enforces lend-count-and-trap semantics) are not implemented —
 // `requireSupportedOwnership` throws for both, matching the
 // throw-on-unsupported convention `wasm-bindgen.ts` already uses for type-ir
-// kinds it can't realize, rather than approximating either discipline.
+// kinds it can't realize.
 
 function toSnakeCase(name: string): string {
   return name
@@ -59,25 +57,22 @@ function isA(kind: string, target: string): boolean {
 
 /**
  * Ownership-discipline gate for a single type-ir `TypeRef` crossing this
- * target's boundary (a parameter's type or a return type) — throws for the
+ * target's boundary (a parameter's type or a return type). Throws for the
  * two disciplines JS/wasm-bindgen has no native mechanism for
- * (`opaque-handle`, `resource`), matching the exact per-target scope decided
- * in Fork C above. `"copy"` and `"refcount"` (and no `meta.ownership` at all,
- * which defaults to copy-by-value the same way the underlying type-ir
- * projector already treats an unannotated value) pass through unchanged —
- * this function only gates, it doesn't transform.
+ * (`opaque-handle`, `resource`), per the per-target scope in Fork C above.
+ * `"copy"` and `"refcount"` (and no `meta.ownership` at all, which defaults
+ * to copy-by-value the same way the underlying type-ir projector treats an
+ * unannotated value) pass through unchanged; this function gates, it doesn't
+ * transform.
  *
- * Scope note: this checks the TypeRef handed to it directly (a param's
- * `.type`, a `returnType`), not a deep recursive walk into e.g. an object
- * shape's own field TypeRefs — `wasm-bindgen.ts`'s `bareType`/`buildStruct`
- * (where that recursion happens) are not exported from that file, so a field
- * carrying its own `meta.ownership` inside a struct is not independently
- * gated here. In practice this matches how the existing data-shape projector
- * already treats struct fields (plain data, no ownership concept crosses
- * struct field boundaries in wasm-bindgen's ABI) — ownership discipline is
- * conventionally attached at parameter/return/resource-reference positions
- * (see `@rhi-zone/fractal-ffi-ir`'s own doc comment on `withOwnership`), not
- * on arbitrary nested fields.
+ * Checks the TypeRef handed to it directly (a param's `.type`, a
+ * `returnType`), not a recursive walk into e.g. an object shape's own field
+ * TypeRefs — `wasm-bindgen.ts`'s `bareType`/`buildStruct`, where that
+ * recursion happens, aren't exported from that file, so a field carrying its
+ * own `meta.ownership` inside a struct isn't independently gated here.
+ * Ownership discipline is conventionally attached at parameter/return/
+ * resource-reference positions (see `@rhi-zone/fractal-ffi-ir`'s doc comment
+ * on `withOwnership`), not on nested fields.
  */
 function requireSupportedOwnership(ref: TypeRef, where: string): void {
   const discipline = ref.meta.ownership as { readonly kind: string } | undefined;
@@ -95,14 +90,13 @@ function requireSupportedOwnership(ref: TypeRef, where: string): void {
   }
 }
 
-/** Builds a synthetic type-ir `function` `TypeRef` from ffi-ir params/return —
+/** Builds a synthetic type-ir `function` `TypeRef` from ffi-ir params/return.
  * ffi-ir's `FfiParam`/`function`/`method` shapes are structurally identical
  * to type-ir's own `function` kind (same `{ name, type }[]` params +
- * `returnType`, minus `thisType`/`receiver`), so this is a faithful
- * reconstruction, not an approximation — letting `toWasmBindgen` (imported,
- * unmodified) do 100% of the actual signature/hoisting/doc-comment/rename
- * work for both `function` and `method` (methods get their receiver spliced
- * in afterward — see `buildMethod`).
+ * `returnType`, minus `thisType`/`receiver`), so the reconstruction lets
+ * `toWasmBindgen` (imported, unmodified) do the actual signature/hoisting/
+ * doc-comment/rename work for both `function` and `method` (methods get
+ * their receiver spliced in afterward — see `buildMethod`).
  */
 function syntheticFunctionRef(
   params: readonly FfiParam[],
@@ -134,23 +128,20 @@ function buildFunction(
  * `todo!()` stub, `js_name` renaming, doc comments — everything
  * `buildFunction` in `wasm-bindgen.ts` does) via the same synthetic-ref
  * reconstruction, then splices a `&self` receiver into the generated
- * signature and wraps the result in an `impl Receiver { ... }` block. String
- * manipulation, not re-derivation: `wasm-bindgen.ts` doesn't export its
- * internal `buildFunction`/`bareType`, so this is the only reuse path that
- * doesn't reimplement type mapping or struct-hoisting from scratch.
+ * signature and wraps the result in an `impl Receiver { ... }` block.
+ * `wasm-bindgen.ts` doesn't export its internal `buildFunction`/`bareType`,
+ * so string manipulation on the rendered output is the reuse path here.
  *
- * Receiver mutability judgment call: methods are spliced with `&self`
- * (shared reference), never `&mut self` — ffi-ir's `FfiKinds.method` carries
- * no mutability signal (no field on `FfiParam`/`method` distinguishes a
- * read from a write), so there is no schema-driven way to pick `&mut self`
- * for some methods and `&self` for others. `&self` is the safer default
- * (compiles for both read-only and, via the refcount resource's `Arc`
- * without interior mutability, for shared-but-immutable access); a method
- * that genuinely needs mutation requires the resource's backing data to be
+ * Methods are spliced with `&self` (shared reference), never `&mut self`.
+ * ffi-ir's `FfiKinds.method` carries no mutability signal (no field on
+ * `FfiParam`/`method` distinguishes a read from a write), so there is no
+ * schema-driven way to pick `&mut self` for some methods and `&self` for
+ * others. `&self` compiles for both read-only access and, via the refcount
+ * resource's `Arc` without interior mutability, shared-but-immutable access.
+ * A method that needs mutation requires the resource's backing data to be
  * wrapped in `Mutex`/`RwLock` by hand and its emitted method body edited
- * accordingly — this projector does not infer that need. Named explicitly
- * here as a judgment call, same as `buildRefcountResource`'s Arc-vs-
- * Arc<Mutex<_>> call below.
+ * accordingly — this projector does not infer that need (same judgment call
+ * as `buildRefcountResource`'s Arc-vs-Arc<Mutex<_>> choice below).
  */
 function buildMethod(
   name: string,
@@ -167,18 +158,17 @@ function buildMethod(
 }
 
 /**
- * `copy`-discipline resource -> the existing wasm-bindgen.ts struct pattern
- * (`#[derive(Clone)]`), reused by name only (not re-derived) since ffi-ir's
- * `resource` kind — per its own doc comment in `index.ts` ("a resource
- * exposes behavior only through its methods map... mirroring WIT's own
- * constraint that resources 'cannot be plain data structures'") — carries no
- * field/data shape at all, unlike an `object` TypeRef. The generated struct
- * is therefore intentionally fieldless: its private Rust-side storage is
- * implementation detail outside ffi-ir's boundary contract (the same
- * "signature is the contract, body is a stub" precedent `wasm-bindgen.ts`'s
- * own `todo!()` function bodies already establish for behavior). No
- * `getter_with_clone` attribute is emitted since it only matters for
- * non-Copy fields and there are no fields.
+ * `copy`-discipline resource -> the same `#[derive(Clone)]` struct pattern
+ * `wasm-bindgen.ts` uses, applied to a fieldless struct: ffi-ir's `resource`
+ * kind — per its own doc comment in `index.ts` ("a resource exposes
+ * behavior only through its methods map... mirroring WIT's own constraint
+ * that resources 'cannot be plain data structures'") — carries no
+ * field/data shape at all, unlike an `object` TypeRef. The struct's private
+ * Rust-side storage is implementation detail outside ffi-ir's boundary
+ * contract, the same "signature is the contract, body is a stub" precedent
+ * `wasm-bindgen.ts`'s own `todo!()` function bodies establish for behavior.
+ * No `getter_with_clone` attribute is emitted since it only matters for
+ * non-Copy fields and there are none.
  */
 function buildCopyResource(
   name: string,
@@ -209,48 +199,36 @@ function buildCopyResource(
 }
 
 /**
- * `refcount`-discipline resource -> NEW. Emits a struct wrapping the
- * resource's (implementation-internal, per the same fieldless reasoning as
+ * `refcount`-discipline resource. Emits a struct wrapping the resource's
+ * (implementation-internal, per the same fieldless reasoning as
  * `buildCopyResource`) data in `Arc<NameData>`, an explicit `share()` method
- * (`Arc::clone`, the increment path — JS callers that want a second owning
- * handle to the same underlying value call this rather than any implicit
- * copy), and relies on wasm-bindgen's own generated `free()` for the
- * decrement path (dropping the struct drops its `Arc` field, decrementing
- * the strong count via `Arc`'s own `Drop` impl — ordinary Rust semantics,
- * nothing custom needed there).
+ * (`Arc::clone` — the increment path; JS callers that want a second owning
+ * handle to the same underlying value call this rather than relying on any
+ * implicit copy), and wasm-bindgen's own generated `free()` for the
+ * decrement path: dropping the struct drops its `Arc` field, decrementing
+ * the strong count via `Arc`'s own `Drop` impl.
  *
- * FinalizationRegistry, verified (WebFetch against
- * rustwasm.github.io/docs/wasm-bindgen's "Support for Weak References" page,
- * 2026-08-03): wasm-bindgen already auto-generates a `.free()` method for
- * every `#[wasm_bindgen]`-exported struct, AND — since the TC39 weak-refs
- * proposal shipped — "by default wasm-bindgen does use the TC39 weak
- * references proposal if support is detected" (all major browsers do),
- * pairing that generated `free()` with a wasm-bindgen-internal
- * `FinalizationRegistry` automatically, with no `--weak-refs` flag or Cargo
- * feature required. This means the task's initially assumed shape
- * ("wasm-bindgen doesn't auto-generate FinalizationRegistry wiring... needs
- * Rust-side release fn AND JS-side glue") does not hold for the
- * already-shipped struct-free path — no custom Rust release function
- * distinct from the default `free()`, and no hand-written JS
- * `FinalizationRegistry` snippet, is needed to get the Arc decremented when
- * the JS-side handle is GC'd.
- * What IS still worth emitting (and is emitted, as a comment on the struct)
- * is the caveat the same research surfaced: automatic GC-driven cleanup is
- * non-deterministic and — per a still-open wasm-bindgen issue (#3917) —
- * does not run at all in fully synchronous code, so a JS caller wanting
- * deterministic release should call the generated `.free()` explicitly
- * rather than rely solely on GC.
+ * wasm-bindgen auto-generates a `.free()` method for every
+ * `#[wasm_bindgen]`-exported struct and, by default, pairs it with a
+ * wasm-bindgen-internal `FinalizationRegistry` when the TC39 weak
+ * references proposal is supported (all major browsers), with no
+ * `--weak-refs` flag or Cargo feature required — no custom Rust release
+ * function and no hand-written JS `FinalizationRegistry` glue is needed to
+ * decrement the Arc when the JS-side handle is GC'd. Automatic GC-driven
+ * cleanup is non-deterministic and, per wasm-bindgen issue #3917, does not
+ * run in fully synchronous code — the struct carries a comment noting that a
+ * JS caller wanting deterministic release should call the generated
+ * `.free()` explicitly.
  *
- * Arc vs. Arc<Mutex<_>>, judgment call: plain `Arc<NameData>` (no interior
- * mutability) is emitted, not `Arc<Mutex<NameData>>`. ffi-ir's `method` kind
- * carries no mutability signal to decide this from (same gap noted on
- * `buildMethod`'s `&self`-only splice above) — `Arc<Mutex<_>>` would be a
- * defensible alternative if any of the resource's methods need to mutate
- * shared state, at the cost of lock overhead/deadlock risk for methods that
- * don't. Named explicitly rather than guessed; a caller whose resource
- * methods need mutation should change `Arc<NameData>` to
- * `Arc<Mutex<NameData>>` (and thread `.lock()` calls through the generated
- * method bodies) by hand.
+ * Plain `Arc<NameData>` (no interior mutability) is emitted, not
+ * `Arc<Mutex<NameData>>`. ffi-ir's `method` kind carries no mutability
+ * signal to decide this from (same gap as `buildMethod`'s `&self`-only
+ * splice above). `Arc<Mutex<_>>` is the alternative if any of the
+ * resource's methods need to mutate shared state, at the cost of lock
+ * overhead/deadlock risk for methods that don't; a caller whose resource
+ * methods need mutation changes `Arc<NameData>` to `Arc<Mutex<NameData>>`
+ * (and threads `.lock()` calls through the generated method bodies) by
+ * hand.
  */
 function buildRefcountResource(
   name: string,
@@ -336,11 +314,11 @@ function buildResource(
   );
 }
 
-/** Module -> groups its functions/resources into a `pub mod name { ... }` —
+/** Module -> groups its functions/resources into a `pub mod name { ... }`.
  * wasm-bindgen has no dedicated module-scoping attribute of its own;
  * `#[wasm_bindgen]` items work unmodified inside an ordinary Rust `mod`
- * block (confirmed by the guide's own multi-file examples nesting exports
- * under plain Rust modules), so this is the direct, unsurprising mapping. */
+ * block, per the guide's own multi-file examples nesting exports under
+ * plain Rust modules. */
 function buildModule(name: string, shape: FfiShape & { kind: "module" }): string {
   const functionDecls = Object.entries(shape.functions).map(([fnName, fnRef]) =>
     toWasmBindgenFfi(fnRef, fnName),

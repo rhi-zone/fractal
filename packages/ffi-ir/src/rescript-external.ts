@@ -6,20 +6,20 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 // resource/ownership-discipline shapes — targeting ReScript's `external`
 // declaration syntax for binding to JS
 // (https://v11.rescript-lang.org/docs/manual/v11.0.0/bind-to-js-function,
-// https://v11.rescript-lang.org/docs/manual/v11.0.0/bind-to-js-object;
-// fetched 2026-08-03). This is the direct structural sibling of
-// `wasm-bindgen.ts` (which generates the `#[wasm_bindgen]` annotations a
-// human would otherwise hand-write for the Rust/JS boundary): this file
-// generates the `external`/`@module`/`@val`/`@send`/`@new` declarations a
-// ReScript developer would otherwise hand-write for the ReScript/JS boundary.
+// https://v11.rescript-lang.org/docs/manual/v11.0.0/bind-to-js-object).
+// This is the direct structural sibling of `wasm-bindgen.ts` (which generates
+// the `#[wasm_bindgen]` annotations a human would otherwise hand-write for
+// the Rust/JS boundary): this file generates the
+// `external`/`@module`/`@val`/`@send`/`@new` declarations a ReScript
+// developer would otherwise hand-write for the ReScript/JS boundary.
 //
-// Verified against the manual (both pages above), not from memory:
+// Per the manual (both pages above):
 //   - `@module("name") external x: T = "jsName"` — binds a named export of a
 //     JS module.
 //   - `@val external x: T = "jsName"` — binds a global JS value/function (no
 //     enclosing module).
 //   - `@send external f: (t, ...params) => ret = "jsMethodName"` — calls a
-//     method on a JS value; the receiver is the function type's FIRST
+//     method on a JS value; the receiver is the function type's first
 //     positional parameter, not a special calling form.
 //   - `@new external make: (...params) => t = "JsClassName"` — constructs via
 //     JS's `new`; combines with `@module` for a class exported from a module.
@@ -38,45 +38,40 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 // a `method`'s receiver is expressed by constructing a synthetic type-ir
 // `function` TypeRef with `thisType` set to a `ref` TypeRef naming the
 // receiver resource — type-ir's `rescript-native.ts` `function` handler
-// ALREADY prepends `thisType` as a leading positional parameter (the same
+// already prepends `thisType` as a leading positional parameter (the same
 // convention it uses for TypeScript/Flow `this` parameters), which is exactly
 // ReScript's own "@send takes the receiver as its first parameter" shape.
 // This is a closer structural match than `wasm-bindgen.ts` gets from Rust's
 // `toWasmBindgen` (which has no `this`-splicing at all, forcing that file
-// into a regex string-splice) — no string surgery is needed here.
+// into a regex string-splice).
 //
 // Ownership: JS/ReScript's FFI docs say nothing about ownership discipline at
 // all (both sides are garbage-collected; `external` bindings are plain type
 // signatures with no lifetime/ownership annotation anywhere in the syntax
-// verified above). Per the task's own framing, this target does not force an
-// artificial ownership mapping: every `OwnershipDiscipline` — `copy`,
-// `opaque-handle`, `refcount`, `resource` — is treated identically, as "just
-// a reference/value crossing the boundary," and none of them gates or throws
-// (contrast `wasm-bindgen.ts`'s `requireSupportedOwnership`, which throws for
-// two of the four disciplines it can't realize in Rust). The one
-// borderline case actually considered: `"copy"` on a `TypeRef` whose shape is
-// already a ReScript-native by-value primitive (`bool`/`float`/`int`/
-// `string`) needs no special handling either — those types are already
-// immutable values in both JS and ReScript, so "copy discipline" and "no
-// discipline at all" render identically. No mismatch was found worth flagging
-// beyond this note.
+// verified above). This target does not force an artificial ownership
+// mapping: every `OwnershipDiscipline` — `copy`, `opaque-handle`, `refcount`,
+// `resource` — is treated identically, as just a reference/value crossing the
+// boundary, and none of them gates or throws (contrast `wasm-bindgen.ts`'s
+// `requireSupportedOwnership`, which throws for two of the four disciplines
+// it can't realize in Rust). `"copy"` on a `TypeRef` whose shape is already a
+// ReScript-native by-value primitive (`bool`/`float`/`int`/`string`) needs no
+// special handling either — those types are already immutable values in both
+// JS and ReScript, so "copy discipline" and "no discipline at all" render
+// identically.
 //
-// Naming judgment call — function vs. global binding (flagged per the task,
-// not guessed silently): ffi-ir's `FfiKinds.function` carries no field saying
-// where in JS the function lives (a module export vs. a global). The
-// enclosing `FfiKinds.module`'s `name` is the only place that information
-// could come from, and only when a function is actually reached through a
-// module's `functions` map. So: when `toReScriptFfi` lowers a function/method
-// as part of a `module` (via `buildModule`, threading the module's `name`
-// down), it emits `@module(moduleName)` — never `@val` — even though the
-// schema can't truly distinguish "this JS module export" from "this is
-// secretly a global"; this matches the task's explicit instruction to
-// default to `@module` there. When `toReScriptFfi` is called directly on a
-// bare `function`/`method` `FfiRef` with NO enclosing module context at all
-// (no name to put in `@module(...)`), there is nothing to reference, so it
-// falls back to `@val` — the only attribute that needs no module name. Both
-// branches are judgment calls the schema does not resolve; this comment (not
-// silent code) is where that's flagged.
+// Naming — function vs. global binding: ffi-ir's `FfiKinds.function` carries
+// no field saying where in JS the function lives (a module export vs. a
+// global). The enclosing `FfiKinds.module`'s `name` is the only place that
+// information could come from, and only when a function is actually reached
+// through a module's `functions` map. When `toReScriptFfi` lowers a
+// function/method as part of a `module` (via `buildModule`, threading the
+// module's `name` down), it emits `@module(moduleName)` — never `@val` —
+// even though the schema can't truly distinguish "this JS module export"
+// from "this is secretly a global"; `@module` is the default there. When
+// `toReScriptFfi` is called directly on a bare `function`/`method` `FfiRef`
+// with no enclosing module context at all (no name to put in `@module(...)`),
+// there is nothing to reference, so it falls back to `@val` — the only
+// attribute that needs no module name.
 
 function toPascalCase(name: string): string {
   const words = name
@@ -145,7 +140,7 @@ const RESERVED = new Set([
  * name (right-hand string literal) is untouched, since `external x: T =
  * "actualName"` already separates "what ReScript calls it" from "what JS
  * calls it" (unlike a struct field label, no `@as`-style attribute is needed
- * here — the string literal already IS that mechanism). */
+ * here — the string literal already is that mechanism). */
 function externalIdent(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_");
   const lowered = /^[A-Z]/.test(cleaned) ? decapitalize(cleaned) : cleaned;
@@ -200,11 +195,11 @@ function syntheticFunctionRef(
   ) as TypeRef;
 }
 
-/** Free function -> `@module`/`@val` external, per the file-level "naming
- * judgment call" note above. `moduleName`, when given, is the enclosing
- * `FfiKinds.module`'s raw JS name (passed through to `@module(...)` verbatim,
- * NOT PascalCased — that's a JS module specifier / npm package / relative
- * path string, not a ReScript identifier). */
+/** Free function -> `@module`/`@val` external, per the file-level "Naming —
+ * function vs. global binding" note above. `moduleName`, when given, is the
+ * enclosing `FfiKinds.module`'s raw JS name (passed through to `@module(...)`
+ * verbatim, not PascalCased — that's a JS module specifier / npm package /
+ * relative path string, not a ReScript identifier). */
 function buildFunction(
   name: string,
   shape: FfiShape & { kind: "function" },
@@ -238,32 +233,29 @@ function buildMethod(
 /**
  * Resource -> an opaque `type Name` (the manual's own documented "this type
  * exists in JS, structure not modeled" idiom — verified above) plus one
- * `@send` external per entry in `methods`, all at the SAME nesting level the
+ * `@send` external per entry in `methods`, all at the same nesting level the
  * resource's own `type` declaration is emitted at (see `buildModule`, which
  * wraps a whole `FfiKinds.module`'s resources/functions together in one
  * ReScript `module` block — that's the namespacing unit, not a per-resource
  * wrapper here).
  *
- * Deliberately does NOT invent a constructor/`@new` binding: ffi-ir's
- * `resource` kind (see `index.ts`) has no separate constructor field, only a
- * `methods` map, uniformly receiver-based — the exact same gap
- * `wasm-bindgen.ts`'s `buildResource` already lives with (it wraps every
- * entry in `methods` as a `&self`-receiving impl method too, no constructor
- * concept). Matching that precedent here rather than inventing a
- * ReScript-only constructor notion the schema doesn't carry.
+ * No constructor/`@new` binding is emitted: ffi-ir's `resource` kind (see
+ * `index.ts`) has no separate constructor field, only a `methods` map,
+ * uniformly receiver-based — the same gap `wasm-bindgen.ts`'s `buildResource`
+ * lives with (it wraps every entry in `methods` as a `&self`-receiving impl
+ * method too, no constructor concept).
  *
  * Naming: `type` is named `toPascalCase(name)` to match exactly how
  * `toReScriptType`'s `ref` handler renders a `{ kind: "ref", target }`
  * TypeRef (`toPascalCaseFromWords`-equivalent) — this is what lets a
  * `resourceRef(name, ...)` used as a parameter/return type elsewhere resolve
- * to the SAME identifier this opaque type declares, with no string-patching
+ * to the same identifier this opaque type declares, with no string-patching
  * needed to bridge the two. Method binding identifiers are prefixed with the
  * decapitalized resource name (`bufferRead`, not bare `read`) since ffi-ir's
- * `resource.methods` keys are only unique WITHIN one resource, not across a
+ * `resource.methods` keys are only unique within one resource, not across a
  * whole module's flat ReScript declaration namespace — two resources with a
  * same-named method (e.g. both having `close`) would otherwise collide at
- * the top level; this prefixing is a style choice to avoid that, not a
- * schema requirement.
+ * the top level; this prefixing avoids that collision.
  */
 function buildResource(
   name: string,
@@ -295,7 +287,7 @@ function buildResource(
       { ...methodShape, kind: "method", receiver: name },
       methodRef.meta,
     ).replace(
-      // keep the JS-side name literal as the ORIGINAL unprefixed method name
+      // keep the JS-side name literal as the original unprefixed method name
       // (`"read"`, not `"bufferRead"`) — only the ReScript-side identifier
       // gets prefixed, the JS call target must stay exact.
       new RegExp(`= ${JSON.stringify(prefixedName)}$`),

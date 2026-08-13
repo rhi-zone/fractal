@@ -17,9 +17,9 @@ export type { Jwk, Jwks } from "./jwt.ts";
 
 /**
  * The minimal `fetch`-shaped signature every `fetchImpl` override in this
- * package accepts — deliberately NOT `typeof fetch` (Bun's global `fetch`
- * type additionally requires a `preconnect` static property, which a plain
- * test double / mock function doesn't have and has no reason to implement).
+ * package accepts — narrower than `typeof fetch`, whose Bun global type
+ * additionally requires a `preconnect` static property that a plain test
+ * double or mock function has no reason to implement.
  */
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -70,7 +70,7 @@ export type JwksCache = {
 
 /**
  * Builds a cache around one JWKS endpoint. Concurrent callers during a
- * cache miss share the SAME in-flight fetch (no duplicate requests) —
+ * cache miss share the same in-flight fetch (no duplicate requests) —
  * `inflight` is cleared once that fetch settles, success or failure.
  */
 export function createJwksCache(
