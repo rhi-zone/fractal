@@ -11,10 +11,10 @@ import { toTypeScript } from "./typescript-native.ts";
 // other via relative MDX paths, so it needs the whole `defs` map up front to
 // know which `ref` targets resolve to a page versus render as plain text.
 //
-// This projector does NOT ship the `<TypeRef>` React component itself (that's
-// a Docusaurus-site concern, living alongside the site's own component tree,
-// not type-ir's output). Every generated page opens with an MDX comment
-// pointing this out — see the note emitted in `renderPage` below — so a
+// The `<TypeRef>` React component is a Docusaurus-site concern, living
+// alongside the site's own component tree — it is not part of type-ir's
+// output. Every generated page opens with an MDX comment describing the
+// component contract (see the note emitted in `renderPage` below), so a
 // caller wiring the output into a real site knows what to add.
 // ============================================================================
 

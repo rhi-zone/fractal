@@ -26,7 +26,7 @@ import { toCamelCaseFromWords, toPascalCaseFromWords } from "./codegen-helpers.t
 // naming
 // ============================================================================
 
-/** Wraps a type expression in parens when used as a type ARGUMENT (`List (Maybe Int)`) —
+/** Wraps a type expression in parens when used as a type argument (`List (Maybe Int)`) —
  * needed whenever the expression is a multi-word application, but not for a
  * bare name, a record (`{ ... }`, self-delimited), or a tuple (already parenthesized). */
 function parenArg(type: string): string {
@@ -421,7 +421,7 @@ function fieldEncoderEntry(
   return `( ${JSON.stringify(fieldName)}, ${elmEncoder(fieldRef, ctx, nameHint, access)} )`;
 }
 
-/** A `Type -> Encode.Value` FUNCTION expression for a field's element type —
+/** A `Type -> Encode.Value` function expression for a field's element type —
  * needed wherever the value isn't available as a simple accessor expression
  * yet (e.g. passed on to `encodeMaybe`, or `List.map`/`Encode.list`). */
 function elmEncoderFn(ref: TypeRef, ctx: Ctx, nameHint: string): string {
@@ -527,7 +527,7 @@ function elmEncoder(ref: TypeRef, ctx: Ctx, nameHint: string, valueExpr: string)
   if (ref.meta.nullable === true) {
     // `meta.nullable` widens the Elm type to `Maybe T` (see `elmType`) — reuse
     // the same `encodeMaybe` helper optional fields use. Recurses through
-    // `elmEncoderBase` (not `elmEncoder`) on the SAME `ref` so a nested
+    // `elmEncoderBase` (not `elmEncoder`) on the same `ref` so a nested
     // enum/union's hoisting cache (keyed by `ref` identity) still hits.
     ctx.needsEncodeMaybeHelper = true;
     return `encodeMaybe (\\v -> ${elmEncoderBase(ref, ctx, nameHint, "v")}) ${valueExpr}`;

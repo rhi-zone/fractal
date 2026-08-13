@@ -16,7 +16,7 @@
 //     every property gets one unconditionally, unlike STJ's projector which
 //     only reaches for an attribute when the identifier itself needs
 //     reshaping.
-//   - Enums: ServiceStack.Text serializes an enum by its member NAME by
+//   - Enums: ServiceStack.Text serializes an enum by its member name by
 //     default (https://docs.servicestack.net/csharp-client) — no attribute
 //     needed to opt into that behavior, so (unlike STJ's
 //     `[JsonConverter(typeof(JsonStringEnumConverter))]`) this projector
@@ -89,11 +89,10 @@ function emitObjectType(
 }
 
 /** Builds one property's `[DataMember(Name = "...")]` attribute + declaration.
- * Always attached (not only when the identifier needs reshaping) — once a
- * type carries `[DataContract]`, WCF-attribute-driven serializers (including
- * ServiceStack.Text) only (de)serialize members explicitly opted in via
- * `[DataMember]`, so omitting it on a clean-named property would silently
- * drop that property from the wire format. */
+ * Every property gets the attribute, regardless of whether its identifier
+ * needs reshaping: `[DataContract]` puts WCF-attribute-driven serializers
+ * (including ServiceStack.Text) into opt-in mode, where only members
+ * annotated with `[DataMember]` are (de)serialized. */
 function renderProperty(fieldName: string, fieldRef: TypeRef, ownerName: string, ctx: Ctx): string {
   const propName = pascalCase(fieldName);
   const optional = fieldRef.meta.optional === true;

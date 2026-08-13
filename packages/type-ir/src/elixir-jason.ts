@@ -20,7 +20,7 @@ import { isA, quote } from "./codegen-helpers.ts";
 // `elixir-jason.ts`, not a bare `elixir-native.ts`.
 //
 // Definition mechanism: plain `defstruct` + `@type t :: %__MODULE__{...}`
-// Dialyzer-style typespecs — NOT `Ecto.Schema`. Every other struct-like
+// Dialyzer-style typespecs, not `Ecto.Schema`. Every other struct-like
 // projector in this package (`python-dataclass.ts`, `kotlin-kotlinx.ts`,
 // `ruby-sorbet.ts`, `swift-codable.ts`, …) defaults to the plain
 // language-level struct/class idiom, reserving ORM-specific mechanisms
@@ -67,7 +67,7 @@ import { isA, quote } from "./codegen-helpers.ts";
 // declaration site). Unlike `kotlin-kotlinx.ts`'s sealed-class encoding
 // (which drops the discriminant field from each variant, since
 // `@SerialName` re-derives it structurally at the protocol level), the
-// discriminant field is KEPT as an ordinary required field on each variant
+// discriminant field is kept as an ordinary required field on each variant
 // struct — Jason has no equivalent mechanism to reconstruct it from the
 // module name, so dropping it would silently break the JSON wire shape.
 // This matches `python-dataclass.ts`'s handling of the same case (which
@@ -79,11 +79,11 @@ import { isA, quote } from "./codegen-helpers.ts";
 // (`@type t :: :active | :inactive`), wrapped in its own `defmodule` so it
 // has a `.t()` to be referenced by. Unlike Python's enum member names (which
 // must sanitize into valid Python identifiers — see `python-dataclass.ts`'s
-// `enumMemberName`), Elixir atom literals can carry the ORIGINAL member
+// `enumMemberName`), Elixir atom literals can carry the original member
 // string byte-for-byte via `:"quoted form"` when it isn't already a bare
 // identifier, so no sanitization/lookup table is needed here at all.
 //
-// Declaration-per-name convention: EVERY top-level/nested named TypeRef
+// Declaration-per-name convention: every top-level/nested named TypeRef
 // (not just object/enum, unlike `python-dataclass.ts`/`kotlin-kotlinx.ts`,
 // which leave bare-alias-able kinds as a plain top-level `Name = expr`
 // statement) gets wrapped in its own `defmodule Name do @type t :: expr end`
@@ -92,7 +92,7 @@ import { isA, quote } from "./codegen-helpers.ts";
 // back to the way Python's/Kotlin's host languages allow.
 //
 // Nested naming: a nested object/enum/union field is promoted to its own
-// FLAT top-level module named from the field name alone (not dotted under
+// flat top-level module named from the field name alone (not dotted under
 // its parent, e.g. `Address`, not `User.Address`) — same "capitalize the
 // field/context name, dedupe via a `seen` set" convention
 // `python-dataclass.ts`/`kotlin-kotlinx.ts` use for their own nested
@@ -137,7 +137,7 @@ const leaf =
   () =>
     type;
 
-// A valid BARE Elixir atom/identifier: lowercase-or-underscore leading
+// A valid bare Elixir atom/identifier: lowercase-or-underscore leading
 // character, alphanumerics/underscores after, optional trailing `?`/`!`.
 // Anything else needs the `:"quoted"` atom form (field names) or the
 // `"quoted": value` keyword form (map/struct keys) instead.
@@ -326,7 +326,7 @@ const handlers: Record<string, Converter> = {
     // position (field, list element, …) — unlike Kotlin/Ruby, whose type
     // systems require a named declaration site for a value with more than
     // one possible shape, a non-discriminated union here needs no promoted
-    // wrapper module of its own; only object/enum VARIANTS still need one
+    // wrapper module of its own; only object/enum variants still need one
     // (handled recursively by their own handlers below).
     const parts = s.variants.map((variant, i) =>
       toElixirType(variant, `${ctxName}Variant${i + 1}`, ctx),
@@ -335,7 +335,7 @@ const handlers: Record<string, Converter> = {
   },
   // No literal-value typespec for strings (Erlang/Elixir's type system has
   // no string-singleton type the way TS/Python's `Literal[...]` do) —
-  // degrades to `String.t()`. Integers, atoms (`nil`/booleans) DO have
+  // degrades to `String.t()`. Integers and atoms (`nil`/booleans) have
   // native literal-typespec forms, so those render exactly.
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" };
@@ -394,7 +394,7 @@ const handlers: Record<string, Converter> = {
   interface: leaf("any()"),
 };
 
-/** Convert a `TypeRef` to an Elixir type EXPRESSION (e.g. `list(String.t())`,
+/** Convert a `TypeRef` to an Elixir type expression (e.g. `list(String.t())`,
  * `integer() | nil`, or a `<Module>.t()` reference for object/enum/
  * discriminated-union-variant shapes) — the building block `toElixir` uses
  * for the module-level render. `ctxName` seeds any nested module this call

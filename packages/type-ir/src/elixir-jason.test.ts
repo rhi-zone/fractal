@@ -247,7 +247,7 @@ describe("unions", () => {
     const out = toElixir(ref, "Shape");
     expect(out).toContain("defmodule Circle do");
     expect(out).toContain("defmodule Square do");
-    // The discriminant field is KEPT (unlike kotlin-kotlinx.ts's sealed-class
+    // The discriminant field is kept (unlike kotlin-kotlinx.ts's sealed-class
     // encoding) since Jason has no out-of-band mechanism to reconstruct it.
     expect(out).toContain("kind: String.t()");
     expect(out).toContain("defmodule Shape do\n  @type t :: Circle.t() | Square.t()\nend");

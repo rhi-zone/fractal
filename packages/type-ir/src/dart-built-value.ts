@@ -16,7 +16,7 @@ import {
 // mutable `FooBuilder`. Unlike dart-freezed.ts's `const factory` constructor
 // syntax, built_value's declaration idiom is:
 //
-//   - Fields are ABSTRACT GETTERS (`String get name;`), not constructor
+//   - Fields are abstract getters (`String get name;`), not constructor
 //     parameters — built_value derives the builder's mutable fields from
 //     these getter signatures, so there's no parameter list to write at all.
 //   - `Foo._()` is a required private, empty, unnamed constructor (built_value's
