@@ -152,8 +152,8 @@ describe("instance", () => {
     expect(toJsonSchema(ref)).toEqual({
       type: "object",
       "x-class-name": "User",
-      // carried so `fromJsonSchema` can rebuild the full identity; without it
-      // the round trip reconstructs only half the `instance`
+      // Paired with x-class-name to give `fromJsonSchema` the full identity
+      // needed to reconstruct the original `instance`.
       "x-declaration-file": "src/user.ts",
     });
   });

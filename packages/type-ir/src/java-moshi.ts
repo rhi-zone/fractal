@@ -8,7 +8,7 @@ import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-hel
 // both, different annotation vocabulary.
 //
 // Two renderers, same split java-jackson.ts/java-gson.ts (and TypeScript's
-// projector) use: `moshiType` renders a TYPE EXPRESSION (usable inside a
+// projector) use: `moshiType` renders a type expression (usable inside a
 // field, a generic argument, a method signature — "List<String>",
 // "OrderStatus", "int") with no accompanying declaration; `toMoshiDeclaration`
 // renders a full top-level declaration (a record/class/enum/sealed
@@ -26,7 +26,7 @@ import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-hel
 //     via `moshi-adapters`) looks for to generate/select an adapter at build
 //     time rather than falling back to slower runtime reflection.
 //   - Enum constants: Moshi reads `@Json(name = "value")` placed directly on
-//     each enum CONSTANT — the same per-constant pattern Gson's
+//     each enum constant — the same per-constant pattern Gson's
 //     `@SerializedName` uses, and unlike Jackson's backing-`value`-field +
 //     `@JsonValue`/`@JsonCreator` pattern.
 //   - Records: Moshi 1.15+ (https://github.com/square/moshi/blob/master/CHANGELOG.md
@@ -47,7 +47,8 @@ import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-hel
 //     java-gson.ts do, plus a comment documenting the
 //     `PolymorphicJsonAdapterFactory` registration the caller's
 //     `Moshi.Builder` setup needs — annotations alone can't wire this up, so
-//     leaving a precise comment is the honest degrade. (A Kotlin codebase
+//     leaving a precise comment documenting it is this projector's approach.
+//     (A Kotlin codebase
 //     consuming these types reflectively, rather than through generated
 //     Kotlin data classes, would additionally register
 //     `com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory` as a
@@ -89,7 +90,7 @@ const NULLABLE_ANNOTATION = "org.jspecify.annotations.Nullable";
 
 // A leaf scalar's Java rendering: `primitive` (when one exists — Java's 8
 // primitive types have no null value, so a leaf with a primitive form only
-// gets rendered as that primitive in a NON-nullable, non-generic position;
+// gets rendered as that primitive in a non-nullable, non-generic position;
 // nullable fields and generic type arguments always fall back to `boxed`,
 // since Java generics cannot be parameterized by a primitive) and `boxed`
 // (the reference-type equivalent, always defined). `imports` is the set of
@@ -193,8 +194,8 @@ const handlers: Record<string, Converter> = {
     return { boxed: `Tuple${elements.length}<${elements.join(", ")}>`, imports: [] };
   },
   // No native async-sequence type in Java's standard type system — degrades
-  // to `List<T>` of the element type, the same honest-degrade convention
-  // every other data-only projector (Zod, protobuf, ...) applies to `stream`.
+  // to `List<T>` of the element type, the same degrade convention every
+  // other data-only projector (Zod, protobuf, ...) applies to `stream`.
   stream: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "stream" };
     const element = javaType(s.element, ctx);
@@ -216,7 +217,7 @@ const handlers: Record<string, Converter> = {
   },
   union: (_shape, meta) => {
     // A union's idiomatic Java rendering is a top-level sealed interface
-    // (see `renderSealedInterface` below) — as a bare type EXPRESSION (this
+    // (see `renderSealedInterface` below) — as a bare type expression (this
     // path, used when a union appears nested inside a field/generic
     // position) it's rendered as a reference to that interface's name, which
     // must come from `meta.typeName` (there is no other name to reach for:
@@ -258,7 +259,7 @@ const handlers: Record<string, Converter> = {
   // `java.util.function` has fixed-arity functional interfaces for 0-2
   // params (Supplier/Function/BiFunction); arities above that have no
   // standard-library equivalent (Java, unlike some ecosystems, doesn't
-  // define TriFunction+) and degrade to Object, the same honest-degrade
+  // define TriFunction+) and degrade to Object, the same degrade convention
   // protobuf.ts applies to its own uncoverable cases.
   function: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "function" };
@@ -285,7 +286,7 @@ const handlers: Record<string, Converter> = {
     }
     return { boxed: "Object", imports: [] };
   },
-  // An interface's method surface has no Java FIELD-position equivalent
+  // An interface's method surface has no Java field-position equivalent
   // (unlike TypeScript, which can spell an inline callable-object type) —
   // degrades to Object, same as protobuf.ts's handling of the same kind.
   interface: () => ({ boxed: "Object", imports: [] }),
@@ -480,8 +481,8 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
     if (variantRef.shape.kind !== "object") {
       // A non-object union variant (e.g. a bare string/number literal) has
       // no fields to carry as record components — wrapped in a single-field
-      // "value" record, the same honest degrade a discriminated union with
-      // a scalar variant needs to stay a valid `implements` target.
+      // "value" record, the degrade a discriminated union with a scalar
+      // variant needs to stay a valid `implements` target.
       const inner = moshiFieldType(variantRef, ctx);
       const annotationPrefix =
         inner.annotations.length > 0 ? `${inner.annotations.join(" ")} ` : "";
@@ -498,7 +499,7 @@ function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   const doc = javaDocComment(ref.meta, "");
   const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }));
   const needsJsonName = constants.some(({ member, constant }) => member !== constant);
-  // Moshi serializes/deserializes an enum by its constant NAME by default —
+  // Moshi serializes/deserializes an enum by its constant name by default —
   // unlike Jackson (which needs a backing `value` field + `@JsonValue`/
   // `@JsonCreator` to diverge from the constant name), Moshi's convention is
   // to place `@Json(name = "wire-value")` directly on each constant whose

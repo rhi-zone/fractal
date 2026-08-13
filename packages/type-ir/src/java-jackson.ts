@@ -6,7 +6,7 @@ import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-hel
 // classic POJOs as an opt-in style; see JavaOptions.style).
 //
 // Two renderers, same split TypeScript's projector uses (toTypeScript vs
-// toTypeDeclaration): `toJavaType` renders a TYPE EXPRESSION (usable inside a
+// toTypeDeclaration): `toJavaType` renders a type expression (usable inside a
 // field, a generic argument, a method signature — "List<String>",
 // "OrderStatus", "int") with no accompanying declaration; `toJavaDeclaration`
 // renders a full top-level declaration (a record/class/enum/sealed
@@ -52,7 +52,7 @@ const NULLABLE_ANNOTATION = "org.jspecify.annotations.Nullable";
 
 // A leaf scalar's Java rendering: `primitive` (when one exists — Java's 8
 // primitive types have no null value, so a leaf with a primitive form only
-// gets rendered as that primitive in a NON-nullable, non-generic position;
+// gets rendered as that primitive in a non-nullable, non-generic position;
 // nullable fields and generic type arguments always fall back to `boxed`,
 // since Java generics cannot be parameterized by a primitive) and `boxed`
 // (the reference-type equivalent, always defined). `imports` is the set of
@@ -123,9 +123,9 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "object" };
     const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous";
     // An inline (unnamed) object has no Java equivalent expressible as a type
-    // reference — Java has no anonymous record/struct type. Honest degrade:
-    // callers that need a real declaration for an inline object should route
-    // through `toJavaDeclaration` with an explicit name instead of nesting it.
+    // reference — Java has no anonymous record/struct type. Callers that need
+    // a real declaration for an inline object route through
+    // `toJavaDeclaration` with an explicit name instead of nesting it.
     void s;
     return { boxed: name, imports: [] };
   },
@@ -155,8 +155,8 @@ const handlers: Record<string, Converter> = {
     return { boxed: `Tuple${elements.length}<${elements.join(", ")}>`, imports: [] };
   },
   // No native async-sequence type in Java's standard type system — degrades
-  // to `List<T>` of the element type, the same honest-degrade convention
-  // every other data-only projector (Zod, protobuf, ...) applies to `stream`.
+  // to `List<T>` of the element type, the same degrade convention every
+  // other data-only projector (Zod, protobuf, ...) applies to `stream`.
   stream: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "stream" };
     const element = javaType(s.element, ctx);
@@ -178,7 +178,7 @@ const handlers: Record<string, Converter> = {
   },
   union: (_shape, meta) => {
     // A union's idiomatic Java rendering is a top-level sealed interface
-    // (see `renderSealedInterface` below) — as a bare type EXPRESSION (this
+    // (see `renderSealedInterface` below) — as a bare type expression (this
     // path, used when a union appears nested inside a field/generic
     // position) it's rendered as a reference to that interface's name, which
     // must come from `meta.typeName` (there is no other name to reach for:
@@ -220,7 +220,7 @@ const handlers: Record<string, Converter> = {
   // `java.util.function` has fixed-arity functional interfaces for 0-2
   // params (Supplier/Function/BiFunction); arities above that have no
   // standard-library equivalent (Java, unlike some ecosystems, doesn't
-  // define TriFunction+) and degrade to Object, the same honest-degrade
+  // define TriFunction+) and degrade to Object, the same degrade convention
   // protobuf.ts applies to its own uncoverable cases.
   function: (shape, _meta, ctx) => {
     const s = shape as TypeShape & { kind: "function" };
@@ -247,7 +247,7 @@ const handlers: Record<string, Converter> = {
     }
     return { boxed: "Object", imports: [] };
   },
-  // An interface's method surface has no Java FIELD-position equivalent
+  // An interface's method surface has no Java field-position equivalent
   // (unlike TypeScript, which can spell an inline callable-object type) —
   // degrades to Object, same as protobuf.ts's handling of the same kind.
   interface: () => ({ boxed: "Object", imports: [] }),
@@ -393,7 +393,7 @@ function renderRecordOrClass(
  * `@JsonSubTypes` naming each variant. A plain (non-discriminated) union gets
  * no `@JsonTypeInfo` — Jackson has no default way to pick among structurally
  * arbitrary variants, so deserialization of that case is left to the caller
- * (e.g. a custom deserializer), same as the honest-degrade convention used
+ * (e.g. a custom deserializer), same as the degrade convention used
  * elsewhere in this projector for constructs Java/Jackson can't express.
  */
 function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
@@ -422,8 +422,8 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
     if (variantRef.shape.kind !== "object") {
       // A non-object union variant (e.g. a bare string/number literal) has
       // no fields to carry as record components — wrapped in a single-field
-      // "value" record, the same honest degrade a discriminated union with
-      // a scalar variant needs to stay a valid `implements` target.
+      // "value" record, the degrade a discriminated union with a scalar
+      // variant needs to stay a valid `implements` target.
       const inner = javaFieldType(variantRef, ctx);
       const annotationPrefix =
         inner.annotations.length > 0 ? `${inner.annotations.join(" ")} ` : "";
@@ -441,7 +441,7 @@ function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }));
   const needsBackingValue = constants.some(({ member, constant }) => member !== constant);
   // Even when constant names round-trip cleanly to the original string,
-  // Jackson serializes an enum by its constant NAME by default — a backing
+  // Jackson serializes an enum by its constant name by default — a backing
   // `value` field + `@JsonValue`/`@JsonCreator` is the only way to guarantee
   // the wire format matches `shape.members` exactly, so it's always added
   // when Jackson support is requested.

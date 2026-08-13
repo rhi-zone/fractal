@@ -1,5 +1,3 @@
-// packages/type-ir/src/json-rpc.ts — @rhi-zone/fractal-type-ir
-//
 // JSON-RPC 2.0 method signature projection: lowers an `interface` TypeRef
 // (a service's method surface — see TypeKinds.interface's doc comment,
 // index.ts) to a flat array of `JsonRpcMethod` descriptors, one per method,
@@ -27,7 +25,7 @@
 // layer's design (`packages/json-rpc-api-projector`), a streaming method's
 // individual elements are instead delivered as JSON-RPC Notification
 // messages over a persistent transport (WebSocket) — `resultSchema` here
-// describes ONE ELEMENT's shape (the notification payload), and
+// describes one element's shape (the notification payload), and
 // `JsonRpcMethod.streaming` records that this method streams rather than
 // returning its result schema directly, mirroring protobuf.ts's
 // `ProtoRpc.responseStreaming` convention (the synthesized wrapper describes
@@ -91,7 +89,7 @@ export type JsonRpcMethod = {
   /**
    * True when the method's return type was a `stream` TypeRef — its result
    * is delivered as a sequence of JSON-RPC Notifications (one per element)
-   * rather than a single "result" response; `resultSchema` describes ONE
+   * rather than a single "result" response; `resultSchema` describes one
    * element. See module doc's "Result" section.
    */
   readonly streaming?: boolean;

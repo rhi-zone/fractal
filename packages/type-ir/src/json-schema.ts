@@ -127,10 +127,9 @@ const handlers: Record<string, Converter> = {
   // tooling that wants the identity back can still read it.
   instance: (shape) => {
     const s = shape as TypeShape & { kind: "instance" };
-    // `x-declaration-file` alongside `x-class-name` so `fromJsonSchema` can
-    // rebuild the full nominal identity rather than half of it — without it
-    // the round trip loses `declarationFile` and cannot reconstruct the
-    // original `instance`.
+    // `x-declaration-file` carries `declarationFile` alongside `x-class-name`,
+    // giving `fromJsonSchema` the full nominal identity needed to reconstruct
+    // the original `instance`.
     const out: Record<string, unknown> = { type: "object", "x-class-name": s.className };
     if (s.declarationFile !== "") out["x-declaration-file"] = s.declarationFile;
     return out as ReturnType<typeof toJsonSchema>;
