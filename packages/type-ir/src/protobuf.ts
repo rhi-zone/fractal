@@ -43,8 +43,8 @@ export type ProtoRpc = {
   responseType: string;
   // Proto3 server-streaming RPC (§ "Services"): `returns (stream Response)`,
   // set when the method's TypeRef return type is `stream` — the one place in
-  // this projector where `stream` DOES have a native keyword, since it's a
-  // real part of proto3's RPC syntax (unlike message-field position, where
+  // this projector where `stream` has a native keyword, since it's a real
+  // part of proto3's RPC syntax (unlike message-field position, where
   // `toProtoField`'s `stream` handler degrades to `repeated` instead).
   responseStreaming?: boolean;
 };
@@ -348,7 +348,7 @@ export function toProtoUnionMessage(name: string, ref: TypeRef): ProtoMessage {
 
 /**
  * Lower an `interface` TypeRef (a service's method surface) to a
- * `ProtoService` — the KEY use case `method`/`interface` were added for
+ * `ProtoService` — the primary use case `method`/`interface` were added for
  * (Cap'n Proto's/Protobuf's own missing "callable contract" vocabulary,
  * see TypeKinds.interface's doc comment in index.ts). Each method becomes an
  * RPC; since proto3 RPCs take exactly one request and one response message

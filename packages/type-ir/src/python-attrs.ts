@@ -21,11 +21,11 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 //     `attrs.field(validator=...)` calls against `attrs.validators.*`
 //     (`min_len`, `max_len`, `matches_re`, `ge`/`le`/`gt`/`lt`), chained with
 //     `attrs.validators.and_(...)` when more than one applies to a field.
-//     Deliberately NOT included here: `multipleOf` — attrs ships no
-//     multiple-of validator, so (unlike Pydantic, which has `multiple_of` in
-//     `Field()`) it's left out of `KNOWN_FIELD_META` below and falls through
-//     to the same generic "unrecognized metadata" stub every other
-//     unmodeled key gets, rather than inventing a bespoke lambda for it.
+//     `multipleOf` is not included — attrs ships no multiple-of validator, so
+//     (unlike Pydantic, which has `multiple_of` in `Field()`) it's left out
+//     of `KNOWN_FIELD_META` below and falls through to the same generic
+//     "unrecognized metadata" stub every other unmodeled key gets, rather
+//     than inventing a bespoke lambda for it.
 //   - Any *unrecognized* meta key left over on a field TypeRef becomes a
 //     standalone `_validate_<field>(instance, attribute, value)` function
 //     (attrs' own validator-callable signature) emitted just above the
@@ -43,7 +43,7 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 //     home in attrs, so they're carried as `attrs.field(metadata={...})`
 //     entries instead — attrs' own convention for attaching arbitrary
 //     non-validating data to a field.
-//   - Mutable `meta.default` values (list/object) are NOT safe to place as a
+//   - Mutable `meta.default` values (list/object) are unsafe to place as a
 //     bare class-body literal the way python-pydantic.ts's comment
 //     documents Pydantic being safe with (Pydantic deep-copies on every
 //     instantiation; attrs does not) — they're wrapped as
@@ -65,7 +65,7 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 // fields are emitted in source order with no required-before-optional
 // reshuffle — attrs' generated `__init__` positional params still need to
 // read the way the source schema does. But attrs (like stdlib dataclasses,
-// unlike Pydantic) DOES enforce "no mandatory attribute after one with a
+// unlike Pydantic) enforces "no mandatory attribute after one with a
 // default" for positional params, raising `ValueError: No mandatory
 // attributes allowed after an attribute with a default value` at class-
 // definition time otherwise. Rather than reshuffle (which would lose the
@@ -96,10 +96,10 @@ const KNOWN_FIELD_META = new Set([
   // intent, nothing to stub.
   "typeName",
   "declarationFile",
-  // NOT included: "multipleOf" — attrs has no built-in multiple-of
-  // validator (see the file-header comment), so it deliberately falls
-  // through to the generic unrecognized-metadata stub below instead of
-  // getting its own bespoke lambda.
+  // "multipleOf" is not included — attrs has no built-in multiple-of
+  // validator (see the file-header comment), so it falls through to the
+  // generic unrecognized-metadata stub below instead of getting its own
+  // bespoke lambda.
 ]);
 
 type FieldDecl = {
@@ -179,7 +179,7 @@ function isMutableLiteral(value: unknown): boolean {
 // Build the `attrs.validators.*` call expressions implied by a TypeRef's
 // `meta` — the same validation-constraint keys json-schema.ts's
 // `passthroughKeys` reads, translated to attrs' validator vocabulary.
-// `multipleOf` is deliberately absent — see the file-header comment.
+// `multipleOf` is absent — see the file-header comment.
 function fieldValidators(meta: Readonly<Record<string, unknown>>): string[] {
   const validators: string[] = [];
   if (typeof meta.minLength === "number")

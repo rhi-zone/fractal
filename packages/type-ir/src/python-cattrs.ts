@@ -18,16 +18,15 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 //   - Discriminated unions (`meta.discriminator`, the same open-metadata-bag
 //     convention json-schema.ts's union handler reads): unlike
 //     python-attrs.ts's generic "consider a cattrs hook" comment, this
-//     projector — since it's already cattrs-flavored — emits the ACTUAL
-//     hook registration cattrs' own docs recommend
+//     projector — since it's already cattrs-flavored — emits the hook
+//     registration cattrs' own docs recommend
 //     (https://catt.rs/en/stable/unions.html#discriminated-unions):
 //     `converter.register_structure_hook(<Union>, cattrs.gen.strategies.include_subclasses(...))`
 //     is the general-purpose escape hatch; this projector instead emits the
 //     more common bespoke-dispatch-function form
 //     (`cattrs.Converter().register_structure_hook(<Union>, lambda v, _: ...)`)
-//     as a `# TODO` stub near the alias, since actually wiring subclass
-//     discovery needs runtime class objects this static projector doesn't
-//     have.
+//     as a `# TODO` stub near the alias, since wiring subclass discovery
+//     needs runtime class objects this static projector doesn't have.
 //   - The module preamble emits a `converter = cattrs.Converter()` plus a
 //     trailing comment noting `converter.structure(data, X)` /
 //     `converter.unstructure(obj)` as the (de)serialization entry points —
@@ -36,11 +35,11 @@ import { capitalize, quote } from "./codegen-helpers.ts";
 //     not in the class bodies.
 //
 // Field/validator/constraint/metadata/default/frozen conventions below are
-// otherwise IDENTICAL to python-attrs.ts — see that file's header comment
+// otherwise identical to python-attrs.ts — see that file's header comment
 // for the full rationale (attrs.validators.*, attrs.field(metadata=...),
 // attrs.setters.frozen, mutable-default factories, plain Enum, etc.). cattrs
 // structures/unstructures whatever attrs.define produces with no extra
-// class-body ceremony, so there was nothing to diverge on for those parts.
+// class-body ceremony, so there is nothing to diverge on for those parts.
 // ============================================================================
 
 const KNOWN_FIELD_META = new Set([
@@ -63,9 +62,9 @@ const KNOWN_FIELD_META = new Set([
   // intent, nothing to stub.
   "typeName",
   "declarationFile",
-  // NOT included: "multipleOf" — attrs (which cattrs' classes are built on)
-  // has no built-in multiple-of validator, same as python-attrs.ts — falls
-  // through to the generic unrecognized-metadata stub below.
+  // "multipleOf" is not included — attrs (which cattrs' classes are built
+  // on) has no built-in multiple-of validator, same as python-attrs.ts —
+  // falls through to the generic unrecognized-metadata stub below.
 ]);
 
 type FieldDecl = {
@@ -186,8 +185,8 @@ function unrecognizedMeta(meta: Readonly<Record<string, unknown>>): string[] {
   return Object.keys(meta).filter((key) => !KNOWN_FIELD_META.has(key));
 }
 
-// Unlike python-attrs.ts's generic advisory comment, this projector actually
-// names the union alias in a `# TODO` stub for `converter.register_structure_hook`
+// Unlike python-attrs.ts's generic advisory comment, this projector names
+// the union alias in a `# TODO` stub for `converter.register_structure_hook`
 // — since this file already assumes a `converter = cattrs.Converter()` exists
 // in the module preamble (see `toCattrs` below), the stub can point straight
 // at it instead of describing the mechanism abstractly.
