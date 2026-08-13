@@ -1,9 +1,9 @@
-// packages/mcp-api-projector/src/server.test.ts — createMcpServer end-to-end tests
+// createMcpServer, end to end.
 //
-// Drives `createMcpServer` through a real `@modelcontextprotocol/sdk` `Client`
-// over `InMemoryTransport` — exercises the actual `tools/list` and
-// `tools/call` wire protocol, not just the internal `projectTools` walk
-// (already covered by project.test.ts).
+// Every case here goes through a real `@modelcontextprotocol/sdk` `Client` over
+// `InMemoryTransport`, so what is asserted is what a client actually receives
+// over the protocol. The projection walks underneath are covered separately, in
+// project.test.ts.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { describe, expect, it } from "bun:test";
@@ -18,7 +18,7 @@ import { createMcpServer } from "./server.ts";
 import type { CreateMessageFn, McpMiddleware, SendLogFn } from "./server.ts";
 
 // ============================================================================
-// Fixture: a small Node tree with a happy-path leaf and a throwing leaf
+// Fixture: one leaf that succeeds, one that throws
 // ============================================================================
 
 const tree = api_({
@@ -41,7 +41,7 @@ async function connectedClient() {
 }
 
 // ============================================================================
-// 1. Lists tools — verifies the McpTool[] shape reaches the client unaltered
+// 1. tools/list — the descriptors reach the client intact
 // ============================================================================
 
 describe("createMcpServer — tools/list", () => {
@@ -59,7 +59,7 @@ describe("createMcpServer — tools/list", () => {
 });
 
 // ============================================================================
-// 2. Calls a tool and verifies the response
+// 2. tools/call — dispatch, and the two ways a call can fail
 // ============================================================================
 
 describe("createMcpServer — tools/call", () => {
@@ -76,10 +76,6 @@ describe("createMcpServer — tools/call", () => {
     expect(content[0]!.type).toBe("text");
     expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" });
   });
-
-  // ==========================================================================
-  // 3. Error handling — tool throws → MCP error response, not a crash
-  // ==========================================================================
 
   it("a throwing handler surfaces as an MCP tool error result without leaking the thrown message", async () => {
     const { client } = await connectedClient();
@@ -102,16 +98,14 @@ describe("createMcpServer — tools/call", () => {
 });
 
 // ============================================================================
-// 4. Runtime input validation — NONE without a wired `applyValidation`
+// 3. Fixtures for the validation cases, whose describe block is further below
 //
-// `validateAgainstSchema`'s manual, hand-rolled `typeof` gate has been
-// deleted (docs/design/wire-profiles-and-staged-validation.md, "What goes
-// away" item 3) — `opts.schemas` only shapes the `inputSchema` ADVERTISED to
-// MCP clients (project.ts), it is never consulted at dispatch time. The only
-// validation path now is `applyValidation(key, tree, "mcp")` wired through
-// `opts.rewriters` (see server-validators.test.ts's "3-arg
-// applyValidation(...)" describe block for that path's structured-error
-// coverage) — a leaf with no such wiring gets raw wire args, unvalidated.
+// `opts.schemas` shapes the `inputSchema` clients are shown and nothing else —
+// it is never consulted at dispatch (docs/design/wire-profiles-and-staged-
+// validation.md). Validation happens only where `applyValidation` was wired
+// through `opts.rewriters`, which server-validators.test.ts covers; these
+// fixtures exist to demonstrate what a leaf without that wiring does, which is
+// to accept whatever arrives.
 // ============================================================================
 
 const validatedTree = api_({
@@ -145,7 +139,7 @@ async function connectedValidatedClient() {
 }
 
 // ============================================================================
-// 5. Resource projection — resources/list, resources/templates/list, resources/read
+// 4. Resources — listing, reading, and the capability gate
 // ============================================================================
 
 const resourceTree = api_({
@@ -233,7 +227,7 @@ describe("createMcpServer — resource capability advertisement", () => {
 });
 
 // ============================================================================
-// 6. Prompt projection — prompts/list, prompts/get
+// 5. Prompts — listing, getting, and the capability gate
 // ============================================================================
 
 const promptTree = api_({
@@ -337,13 +331,11 @@ describe("createMcpServer — prompt capability advertisement", () => {
 });
 
 // ============================================================================
-// 7. Rich content pass-through — tools/call and resources/read
+// 6. Rich content — what a handler returns decides how it is carried
 // ============================================================================
 //
-// A handler's return shape drives the content type: a plain value still
-// wraps as text (backward compat), but a value that already looks like MCP
-// content (or an array of such values) passes through untouched instead of
-// being flattened to JSON text.
+// A plain value becomes text. A value already shaped like MCP content, or an
+// array of them, is carried as it stands rather than flattened into JSON.
 
 const richContentTree = api_({
   plain: op((_: unknown) => ({ id: "1", name: "Alice" })),
@@ -468,6 +460,7 @@ describe("createMcpServer — resources/read rich content", () => {
   });
 });
 
+// The describe block for section 3's fixtures.
 describe("createMcpServer — no runtime input validation without a wired applyValidation", () => {
   it("valid input passes through to the handler", async () => {
     const { client } = await connectedValidatedClient();
@@ -478,7 +471,7 @@ describe("createMcpServer — no runtime input validation without a wired applyV
     expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" });
   });
 
-  it("a missing required field is NOT rejected — reaches the handler as undefined (no manual fallback exists)", async () => {
+  it("a missing required field is accepted, reaching the handler as undefined", async () => {
     const { client } = await connectedValidatedClient();
     const result = await client.callTool({ name: "users_get", arguments: {} });
 
@@ -487,7 +480,7 @@ describe("createMcpServer — no runtime input validation without a wired applyV
     expect(JSON.parse(content[0]!.text)).toEqual({ name: "Alice" });
   });
 
-  it("a wrong field type is NOT rejected — reaches the handler verbatim (no manual fallback exists)", async () => {
+  it("a field of the wrong type is accepted, reaching the handler as sent", async () => {
     const { client } = await connectedValidatedClient();
     const result = await client.callTool({ name: "users_get", arguments: { id: 42 } });
 
@@ -498,24 +491,17 @@ describe("createMcpServer — no runtime input validation without a wired applyV
 });
 
 // ============================================================================
-// 8. Shared input pipeline (packages/api-tree/src/input.ts) — sourceMap
+// 7. sourceMap — reading a parameter from somewhere other than the default
 // ============================================================================
 //
-// Tool calls, resource template reads, and prompt calls are all now
-// assembled via the shared `assemble` pipeline (packages/api-tree/src/input.ts)
-// — stores are plain objects with property access — instead of
-// handing the raw arguments/captured-vars object to the handler directly.
-// With no `meta.mcp.sourceMap`, this must be behaviorally identical to
-// before (already covered by the describe blocks above, all still
-// passing). These tests cover the NEW capability: `sourceMap` lets a leaf
-// pull a named param from a different key (or, in the future, a different
-// store) than the surface's default convention.
+// All three surfaces assemble their input through the shared pipeline
+// (packages/api-tree/src/input.ts). With no `sourceMap` that assembly is the
+// identity, which the sections above already exercise throughout. What follows
+// covers the case where a leaf redirects a parameter to a different key.
 
 describe("createMcpServer — sourceMap support (tools)", () => {
   const sourceMapTree = api_({
-    // Handler expects `id`, but sourceMap pulls it from the `identifier` key
-    // of the call's `arguments` — an aliasing override, not the default
-    // same-named lookup.
+    // The handler wants `id`; the call sends `identifier`.
     get: op((input: { id: string }) => ({ id: input.id, name: "Alice" }), {
       mcp: { sourceMap: { id: { store: "argument", key: "identifier" } } },
     }),
@@ -559,8 +545,7 @@ describe("createMcpServer — sourceMap support (resource templates)", () => {
         fallback: {
           name: "userId",
           subtree: api_({
-            // Handler expects `id`, sourceMap pulls it from the "uri-variable"
-            // store's "userId" key (the fallback-captured segment name).
+            // The handler wants `id`; the URI captures it as `userId`.
             profile: op((input: { id: string }) => ({ id: input.id, name: "Alice" }), {
               mcp: { as: "resource", sourceMap: { id: { store: "uri-variable", key: "userId" } } },
             }),
@@ -601,15 +586,16 @@ describe("createMcpServer — sourceMap support (resource templates)", () => {
 });
 
 // ============================================================================
-// 9. Streaming — a handler returning an AsyncIterable (async generator) is
-// drained into progress notifications + collected content instead of going
-// through the plain-value path. See docs/design/middleware-and-caller-
-// context.md's "Streaming and Progress" section.
+// 8. Streaming — a handler that yields rather than returns
 // ============================================================================
+//
+// Progress yields become notifications; everything else, including the
+// generator's return value, becomes content. See
+// docs/design/middleware-and-caller-context.md, "Streaming and Progress".
 
 const streamingTree = api_({
-  // Progress + chunk effects, untagged yields, and a generator return value —
-  // all four kinds this projector must interpret.
+  // Progress, chunks, untagged yields and a return value — everything a
+  // generator can produce that this projector has to read.
   progressAndChunks: op(async function* (_: unknown) {
     yield { kind: "progress" as const, progress: 1, total: 3 };
     yield { kind: "chunk" as const, data: "first" };
@@ -657,10 +643,9 @@ describe("createMcpServer — tools/call streaming", () => {
   it("does not send progress notifications when the caller supplies no progressToken", async () => {
     const { client } = await connectedStreamingClient();
     const progressUpdates: unknown[] = [];
-    // No `onprogress` option — the SDK never attaches a progressToken to the
-    // request, so the server-side check on `extra._meta?.progressToken` must
-    // skip sending notifications entirely (not just skip client-side
-    // reporting of the same notifications).
+    // With no `onprogress`, the SDK attaches no progress token, so the server
+    // has nothing to correlate a notification against and must send none —
+    // as opposed to sending them and having the client quietly discard them.
     const result = await client.callTool({ name: "progressAndChunks", arguments: {} });
 
     expect(result.isError).toBeFalsy();
@@ -672,7 +657,7 @@ describe("createMcpServer — tools/call streaming", () => {
     const result = await client.callTool({ name: "progressAndChunks", arguments: {} });
 
     const content = result.content as Array<{ type: string; text: string }>;
-    // Two chunks ("first", "second") plus the generator's return value ("done").
+    // The two chunks, then the return value.
     expect(content.map((c) => c.text)).toEqual(["first", "second", "done"]);
   });
 
@@ -712,8 +697,7 @@ describe("createMcpServer — tools/call streaming", () => {
 });
 
 // ============================================================================
-// 10. opts.detection — opt-out of the Result/streaming structural sniffing
-// (see CreateMcpServerOptions.detection). Both default to `true`.
+// 9. opts.detection — turning off the shape recognition
 // ============================================================================
 
 describe("createMcpServer — detection", () => {
@@ -770,13 +754,12 @@ describe("createMcpServer — detection", () => {
     expect(content.map((c) => c.text)).toEqual(["1", "2"]);
   });
 
-  it("detection.streaming: false — an async-iterable return value is NOT streamed; treated as a plain value", async () => {
+  it("detection.streaming: false — an async-iterable return value is treated as a plain value", async () => {
     const { client } = await connectedClientFor(streamingTree2, { streaming: false });
     const result = await client.callTool({ name: "getStream", arguments: {} });
 
-    // Not drained via collectStreamedToolContent — falls through to the
-    // ordinary content path, which wraps the (async generator) object as a
-    // single JSON text block rather than one block per yield.
+    // Not drained: the generator object itself goes down the ordinary content
+    // path and becomes one text block, not one block per yield.
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     expect(content).toHaveLength(1);
@@ -784,9 +767,11 @@ describe("createMcpServer — detection", () => {
   });
 });
 
+// Belongs with section 7 above; the prompt fixtures need the prompt sections
+// that precede it.
 describe("createMcpServer — sourceMap support (prompts)", () => {
   const sourceMapPromptTree = api_({
-    // Handler expects `text`, sourceMap pulls it from the `body` argument key.
+    // The handler wants `text`; the call sends `body`.
     summarize: op((input: { text: string }) => `summary of: ${input.text}`, {
       mcp: { as: "prompt", sourceMap: { text: { store: "argument", key: "body" } } },
     }),
@@ -827,25 +812,14 @@ describe("createMcpServer — sourceMap support (prompts)", () => {
 });
 
 // ============================================================================
-// 11. Sampling — CreateMcpServerOptions.sampling opts a handler into
-// `stores.caller.createMessage` (MCP's `sampling/createMessage`, wired to the
-// SDK's own `Server.createMessage`).
-//
-// Note there is no "sampling capability advertisement" test mirroring the
-// resources/prompts capability tests above: per the MCP spec, `sampling` is
-// a CLIENT capability (the CLIENT declares support for being asked to
-// sample), not a server one — `ServerCapabilitiesSchema`
-// (@modelcontextprotocol/sdk/types.js) has no `sampling` field at all, so
-// there is nothing for this server to advertise either way. What
-// `CreateMcpServerOptions.sampling` actually gates is covered directly
-// below: whether `stores.caller.createMessage` exists for a handler to call.
-// A mock CLIENT-side `sampling/createMessage` handler stands in for "the
-// connected client supports sampling" — the SDK's `Server.createMessage`
-// itself asserts against the CLIENT's declared `ClientCapabilities.sampling`
-// before sending the request, and `client.setRequestHandler` is how a test
-// double answers it over `InMemoryTransport`, same wiring `Client` uses for
-// real clients.
+// 10. Sampling — a handler asking the client for a completion
 // ============================================================================
+//
+// Sampling is a client capability, so there is nothing here for the server to
+// advertise; what `opts.sampling` controls is whether
+// `stores.caller.createMessage` exists at all, and that is what these cases
+// assert. The client side is answered by a `setRequestHandler` double — the
+// same mechanism a real client answers with, over the same transport.
 
 describe("createMcpServer — sampling", () => {
   it("stores.caller.createMessage is unavailable to a handler when sampling is not enabled", async () => {
@@ -901,16 +875,11 @@ describe("createMcpServer — sampling", () => {
     expect(typeof sawCreateMessage).toBe("function");
   });
 
-  // A leaf handler is always `(input) => output` (see api-tree's `Handler`
-  // type, node.ts) — it never receives `stores` directly, only middleware
-  // does (see this file's middleware.test.ts and server.ts's own doc on
-  // `McpMiddleware`). So "a tool handler that uses createMessage" is wired
-  // the same way any other caller-context value reaches a handler: a small
-  // bridging middleware reads `stores.caller.createMessage` and runs the
-  // rest of the call inside an `AsyncLocalStorage` context the handler can
-  // read from — the exact pattern middleware.test.ts already demonstrates
-  // for `stores.caller` in general ("middleware sets up an
-  // AsyncLocalStorage caller-context the handler can read").
+  // A handler is `(input) => output` and never receives `stores`, so anything
+  // on `stores.caller` reaches it the same way: a middleware reads the value
+  // and runs the rest of the call inside an `AsyncLocalStorage` the handler
+  // reads back. middleware.test.ts demonstrates the pattern for `stores.caller`
+  // generally; this is it applied to `createMessage`.
   const createMessageAls = new AsyncLocalStorage<CreateMessageFn>();
   const bridgeCreateMessage: McpMiddleware = (next) => (input, stores) => {
     const createMessage = stores.caller?.createMessage as CreateMessageFn | undefined;
@@ -919,9 +888,9 @@ describe("createMcpServer — sampling", () => {
   };
 
   it("a tool handler can call stores.caller.createMessage (bridged via ALS) and use the client's completion in its result", async () => {
-    // Handler asks the connected client to complete a prompt built from its
-    // own input, then folds the completion text into its return value — the
-    // LLM-in-the-loop pattern sampling exists for.
+    // The handler asks the client to complete something built from its own
+    // input and folds the answer into its result — sampling's whole purpose,
+    // exercised end to end.
     const askTree = api_({
       askLlm: op(async (input: { question: string }) => {
         const createMessage = createMessageAls.getStore()!;
@@ -946,8 +915,8 @@ describe("createMcpServer — sampling", () => {
       { capabilities: { sampling: {} } },
     );
     client.setRequestHandler(CreateMessageRequestSchema, async (request) => {
-      // `SamplingMessage.content` is single-block-or-array (tool-call
-      // support) — narrow to the single-text-block case this test sends.
+      // `SamplingMessage.content` may be one block or many; this test sends
+      // one, so narrow to that.
       const firstMessage = request.params.messages[0];
       const firstBlock =
         firstMessage !== undefined
@@ -979,13 +948,10 @@ describe("createMcpServer — sampling", () => {
   });
 
   it("stores.caller.createMessage rejects when the connected client hasn't declared sampling support", async () => {
-    // Sampling is enabled server-side (opts.sampling: true), but the
-    // connected CLIENT declares no `sampling` capability — the SDK's own
-    // `Server.createMessage` asserts against the client's declared
-    // capabilities and rejects before ever sending the request. Proves
-    // `CreateMcpServerOptions.sampling` only controls whether the FIELD
-    // exists on `stores.caller`, not whether the call itself can succeed —
-    // that remains gated by the client, exactly as the MCP spec intends.
+    // Enabled on the server, unsupported by the client: the SDK rejects before
+    // the request is ever sent. The option decides whether a handler can reach
+    // for sampling, never whether reaching for it works — that stays the
+    // client's to grant.
     const askTree = api_({
       askLlm: op(async (_input: unknown) => {
         const createMessage = createMessageAls.getStore()!;
@@ -1004,7 +970,7 @@ describe("createMcpServer — sampling", () => {
       middleware: [bridgeCreateMessage],
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    // No `capabilities: { sampling: {} }` on the client this time.
+    // This client declares no sampling capability.
     const client = new Client({ name: "test-client", version: "1.0.0" });
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
@@ -1014,14 +980,13 @@ describe("createMcpServer — sampling", () => {
 });
 
 // ============================================================================
-// 12. Logging — MCP Tier 2. `CreateMcpServerOptions.logging` opts a handler
-// into `stores.caller.sendLog` (MCP's `notifications/message`, wired to the
-// SDK's own `Server.sendLoggingMessage`) and advertises the `logging`
-// server capability. Log-level negotiation (`logging/setLevel`) is the
-// SDK's own doing once the capability is declared (see server.ts's
-// "Logging" doc section) — covered here by proving a level below the
-// client's negotiated minimum is actually dropped.
+// 11. Logging — a handler sending messages to the client
 // ============================================================================
+//
+// `opts.logging` both advertises the capability and exposes
+// `stores.caller.sendLog`. Level negotiation is the SDK's once the capability
+// is declared, which the last case here checks by watching a message below the
+// negotiated minimum fail to arrive.
 
 describe("createMcpServer — logging", () => {
   it("advertises the logging capability only when opts.logging is set", async () => {
@@ -1090,10 +1055,8 @@ describe("createMcpServer — logging", () => {
     expect(typeof sawSendLog).toBe("function");
   });
 
-  // A leaf handler is always `(input) => output` (never receives `stores`
-  // directly, see the sampling section's matching comment above) — bridge
-  // `sendLog` through ALS the same way `bridgeCreateMessage` does for
-  // `createMessage`.
+  // Bridged through ALS exactly as `createMessage` is above, and for the same
+  // reason.
   const sendLogAls = new AsyncLocalStorage<SendLogFn>();
   const bridgeSendLog: McpMiddleware = (next) => (input, stores) => {
     const sendLog = stores.caller?.sendLog as SendLogFn | undefined;
@@ -1159,10 +1122,8 @@ describe("createMcpServer — logging", () => {
 
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
-    // Client negotiates a minimum level of "error" via logging/setLevel — the
-    // SDK's own Server registers this handler once `logging: true` declares
-    // the capability (see server.ts's "Logging" doc section); no code in
-    // this package handles the request itself.
+    // The handler answering this request is the SDK's, registered because the
+    // capability was declared. No code in this package sees it.
     await client.setLoggingLevel("error");
 
     await client.callTool({ name: "doWork", arguments: {} });

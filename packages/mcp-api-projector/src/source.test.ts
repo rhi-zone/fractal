@@ -1,10 +1,11 @@
-// packages/mcp-api-projector/src/source.test.ts — mcp.source() tests
+// mcp.source().
 //
-// Mirrors http-api-projector/src/verbs.test.ts's `http.source()` coverage —
-// docs/design/wire-profiles-and-staged-validation.md's "Prerequisite: meta
-// unification" §"UncoveredSourceParams generalizes": the SAME op()-time
-// static coverage check http has now also has a literal-preserving
-// authoring path for mcp.
+// Two things to hold: the literal key-and-store association survives into
+// `meta.mcp.sourceMap` as types, and `op()` rejects a map naming a parameter
+// the handler does not have or a store MCP does not know. The same ground
+// http-api-projector/src/verbs.test.ts covers for `http.source()`; the shared
+// mechanism is described in docs/design/wire-profiles-and-staged-validation.md,
+// under "UncoveredSourceParams generalizes".
 
 import { describe, expect, expectTypeOf, it } from "bun:test";
 import { op } from "@rhi-zone/fractal-api-tree/node";

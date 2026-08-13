@@ -1,10 +1,10 @@
-// packages/mcp-api-projector/src/client.test.ts — createMcpClient end-to-end tests
+// createMcpClient, end to end.
 //
-// Drives a real `createMcpClient` proxy against a real `createMcpServer`
-// (built from the SAME Node tree) over `InMemoryTransport` — exercises the
-// actual wire protocol (tools/call, resources/read, prompts/get), and
-// verifies the client's independently-derived names/URIs land on the exact
-// same handlers the server's own projection dispatches to.
+// A real proxy against a real server, both built from the same tree, talking
+// over `InMemoryTransport`. Beyond exercising the wire calls themselves, this
+// is what holds the client's own name and URI derivation to the server's:
+// client.ts walks the tree a second time, and every call landing on the right
+// handler is the evidence that the two walks agree.
 
 import { describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -14,9 +14,8 @@ import { createMcpClient, McpClientError } from "./client.ts";
 import { createMcpServer } from "./server.ts";
 
 // ============================================================================
-// Fixture: tools (including a co-located branch + fallback), a resource
-// (fixed and templated), and a prompt — one tree exercising all three
-// surfaces plus fallback slug capture.
+// Fixture: one tree covering all three surfaces, fixed and templated URIs, a
+// throwing handler, and both shapes a fallback subtree can take.
 // ============================================================================
 
 const tree = api_({
@@ -47,14 +46,11 @@ const tree = api_({
   summarize: op((input: { text: string }) => `summary of: ${input.text}`, {
     mcp: { as: "prompt" },
   }),
-  // A fallback subtree that is a BARE `op()` leaf, not `api({...})` — the
-  // Node model (api-tree/node.ts's `fallback: { name, subtree: Node }`)
-  // explicitly allows this. Regression coverage for `buildClientNode`'s own
-  // fix (mirrors `project.ts`'s three walks and api-tree/tree.ts's
-  // `walkNodeType`, aa28952): calling the fallback capture function returns
-  // the leaf's OWN caller directly (no nested sub-client — there's no
-  // further tree position to descend into), keyed with no extra segment
-  // beyond the fallback's own name.
+  // A fallback subtree that is a bare `op()` rather than an `api({...})`,
+  // which the Node model allows. Capturing a value here returns the leaf's own
+  // caller, since there is no further tree position to descend into.
+  // project.ts's walks and api-tree's `walkNodeType` (aa28952) handle the same
+  // shape.
   widgets: api_(
     {},
     {
@@ -76,7 +72,7 @@ async function connectedClientPair() {
 }
 
 // ============================================================================
-// 1. Proxy shape mirrors the tree
+// 1. The proxy has the tree's shape
 // ============================================================================
 
 describe("createMcpClient — proxy shape", () => {
@@ -85,7 +81,7 @@ describe("createMcpClient — proxy shape", () => {
 
     expect(typeof proxy.users).toBe("object");
     expect(typeof proxy.users.list).toBe("function");
-    expect(typeof proxy.users.userId).toBe("function"); // fallback capture
+    expect(typeof proxy.users.userId).toBe("function");
     expect(typeof proxy.config).toBe("function");
     expect(typeof proxy.boom).toBe("function");
     expect(typeof proxy.summarize).toBe("function");
@@ -93,7 +89,7 @@ describe("createMcpClient — proxy shape", () => {
 });
 
 // ============================================================================
-// 2. Tool calls — plain leaf and co-located-under-fallback leaf
+// 2. Tool calls, with and without a captured fallback value
 // ============================================================================
 
 describe("createMcpClient — tool calls", () => {
@@ -124,9 +120,9 @@ describe("createMcpClient — tool calls", () => {
 
   it("a bare op() fallback.subtree's capture function returns the leaf's own caller directly, reaching the right handler with the captured slug", async () => {
     const { proxy } = await connectedClientPair();
-    // "widgets" is itself a branch (an `api_({}, { fallback: {...} })`) —
-    // its client object has one property, keyed by the fallback's own name
-    // ("widgetId"), whose value is the fallback capture function.
+    // `widgets` is a branch with nothing but a fallback, so its client object
+    // has exactly one property: the capture function, under the fallback's
+    // name.
     expect(typeof proxy.widgets).toBe("object");
     expect(typeof proxy.widgets.widgetId).toBe("function");
     const caller = proxy.widgets.widgetId("w-1");
@@ -137,7 +133,7 @@ describe("createMcpClient — tool calls", () => {
 });
 
 // ============================================================================
-// 3. Resource reads — fixed and templated (fallback-derived URI)
+// 3. Resource reads, fixed and templated
 // ============================================================================
 
 describe("createMcpClient — resource reads", () => {
@@ -155,7 +151,7 @@ describe("createMcpClient — resource reads", () => {
 });
 
 // ============================================================================
-// 4. Prompt gets — returned as-is (messages array)
+// 4. Prompt gets, returned whole
 // ============================================================================
 
 describe("createMcpClient — prompt gets", () => {
@@ -171,7 +167,10 @@ describe("createMcpClient — prompt gets", () => {
 });
 
 // ============================================================================
-// 5. Name/URI derivation matches the server's own projection
+// 5. The two derivations agree
+//
+// Every name and URI the client walk produces appears in what the server's own
+// projection advertised. This is what keeps client.ts's separate walk honest.
 // ============================================================================
 
 describe("createMcpClient — name/URI parity with server projection", () => {

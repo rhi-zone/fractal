@@ -1,15 +1,13 @@
-// packages/mcp-api-projector/src/presets.test.ts — createStdioMcpServer / createHttpMcpServer tests
+// The two transport presets.
 //
-// Stdio: connects over an in-memory Readable/Writable pair (not the real
-// process streams — see `CreateStdioMcpServerOptions.stdio`) and drives the
-// connected `Server` with a real `Client` over `InMemoryTransport`, since the
-// stdio transport itself is already covered by the SDK's own test suite —
-// what this preset adds is the "one call, already connected" wiring.
+// What each preset adds over `createMcpServer` is wiring, so that is what is
+// tested. The transports themselves are the SDK's, and already covered there.
 //
-// HTTP: drives the returned fetch handler directly with real `Request`
-// objects — initialize (no session id) => 200 + `Mcp-Session-Id` header,
-// follow-up `tools/call` with that header => routed to the same session,
-// unknown session id => 404, no session id + non-initialize body => 400.
+// The stdio case connects over an in-memory stream pair rather than the
+// process's own, and asserts only that it connected. The HTTP case drives the
+// returned handler with real `Request` objects through the whole session
+// lifecycle: initialize, a routed follow-up, an unknown session, and a request
+// that has no session and is not an initialize.
 
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "bun:test";
@@ -39,8 +37,8 @@ describe("createStdioMcpServer", () => {
       stdio: { stdin, stdout },
     });
 
-    // `connect` resolving without throwing is the contract here — the
-    // transport itself (framing, read loop) is the SDK's own tested code.
+    // Connecting without throwing is the whole contract; framing and the read
+    // loop belong to the SDK.
     expect(server).toBeDefined();
 
     await server.close();

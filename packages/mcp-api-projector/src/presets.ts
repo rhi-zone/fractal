@@ -1,51 +1,41 @@
-// packages/mcp-api-projector/src/presets.ts — @rhi-zone/fractal-mcp-api-projector
+// One-call entry points for the two transports most servers actually want.
 //
-// Transport-owning convenience presets over `createMcpServer` (server.ts).
-// `createMcpServer` deliberately returns an unconnected `Server` and leaves
-// transport choice/wiring to the caller (see server.ts's module comment) —
-// these presets are the "I don't want to think about it" one-call entry
-// points for the two most common cases, mirroring `createFetch`
-// (http-api-projector/src/preset.ts) which owns the HTTP stack the same way.
+// `createMcpServer` returns an unconnected `Server` on purpose, leaving
+// transport choice to the caller. These two make that choice, for callers who
+// would rather not — the same service `createFetch`
+// (http-api-projector/src/preset.ts) provides by owning the HTTP stack outright.
 //
-// Two presets, because those are the two transports the SDK actually ships
-// that fit a one-call preset shape:
+// `createStdioMcpServer` connects a `StdioServerTransport`: one process, one
+// pipe, one session for as long as the process lives. That is the shape a
+// CLI-launched server runs in, which covers most local development and most
+// desktop MCP clients.
 //
-//   - `createStdioMcpServer` — `StdioServerTransport` (`server/stdio.js`).
-//     The common case for CLI-launched MCP servers (Claude Desktop, most
-//     local dev setups): one process, one stdio pipe, one session for the
-//     life of the process. Connects and returns the `Server`.
+// `createHttpMcpServer` returns a `(req: Request) => Promise<Response>` handler
+// over the SDK's Streamable HTTP transport. Of the SDK's two implementations it
+// uses the fetch-flavored `WebStandardStreamableHTTPServerTransport`, whose
+// handler `Bun.serve`, `Deno.serve` and a Cloudflare Worker all accept as-is —
+// the other wants Node's `IncomingMessage`/`ServerResponse`.
 //
-//   - `createHttpMcpServer` — `WebStandardStreamableHTTPServerTransport`
-//     (`server/webStandardStreamableHttp.js`), the fetch-Request/Response
-//     flavor of the SDK's Streamable HTTP transport (as opposed to
-//     `server/streamableHttp.js`'s `StreamableHTTPServerTransport`, which
-//     wants Node's `http.IncomingMessage`/`ServerResponse`). Picked because
-//     it returns a `(req: Request) => Promise<Response>` handler — the same
-//     shape `createFetch` returns, and the shape `Bun.serve`/`Deno.serve`/a
-//     Cloudflare Worker all accept directly.
+// HTTP needs more than stdio does, because Streamable HTTP is session-based. An
+// `initialize` call is issued a session id, every later call carries it, and
+// all of them must reach the same transport instance, which holds that
+// session's negotiated state. So this preset keeps a map from session id to its
+// server and transport, and routes on the way in:
 //
-//     Unlike stdio, one HTTP transport instance can't serve every request:
-//     the Streamable HTTP spec is session-based (an `initialize` call gets a
-//     fresh session ID, every later call for that session carries an
-//     `Mcp-Session-Id` header and must reach the *same* transport/server
-//     pair — it holds the session's protocol/negotiation state). So this
-//     preset keeps a `Map<sessionId, { server, transport }>` and:
-//       - a request with a known `Mcp-Session-Id` routes to its transport;
-//       - a request with an unknown session id is rejected (session expired
-//         or never existed — nothing to route to);
-//       - a request with no session id must be an `initialize` call (peeked
-//         via `isInitializeRequest` on the parsed body, since the transport
-//         itself only reads the body after routing decides where it goes) —
-//         anything else with no session id is a protocol error, not a new
-//         session; this preset builds a fresh `createMcpServer` + transport
-//         pair for it, connects them, and lets `onsessioninitialized` /
-//         `onsessionclosed` keep the map in sync as the session's lifecycle
-//         plays out.
+//   - a known session id goes to its own transport;
+//   - an unknown one is rejected — expired or never issued, either way there is
+//     nothing to route it to;
+//   - no session id at all is only valid for `initialize`, which gets a fresh
+//     server and transport, connected and recorded. Anything else without a
+//     session id is a protocol error, not an invitation to start one.
 //
-// SSE (`server/sse.js`, the pre-Streamable-HTTP transport) is intentionally
-// not presented here: it's the deprecated predecessor to Streamable HTTP,
-// superseded for new servers, and would just duplicate the session-map
-// plumbing above for a legacy wire format.
+// Recognizing `initialize` means reading the body before the transport does,
+// which is why the request is cloned and the parsed body handed onward rather
+// than parsed twice.
+//
+// The SDK's older SSE transport is not offered here. Streamable HTTP replaced
+// it, and wrapping it would mean maintaining the same session plumbing twice,
+// once for a wire format new servers have no reason to choose.
 
 import type { Readable, Writable } from "node:stream";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -59,25 +49,24 @@ import type { CreateMcpServerOptions } from "./server.ts";
 
 export type CreateStdioMcpServerOptions = CreateMcpServerOptions & {
   /**
-   * Streams to read/write instead of the real `process.stdin`/`process.stdout`
-   * — mainly for tests, so a preset call doesn't reach for the actual
-   * process streams. Forwarded as-is to `StdioServerTransport`'s
-   * constructor, which defaults to the real process streams when omitted.
+   * Streams to use in place of the process's own. Forwarded to
+   * `StdioServerTransport`, which falls back to `process.stdin`/`process.stdout`
+   * when this is omitted. Mainly for tests, which should not have to give up
+   * their real streams to exercise a preset.
    */
   readonly stdio?: { readonly stdin?: Readable; readonly stdout?: Writable };
 };
 
 /**
- * Build an MCP `Server` from `tree` (via `createMcpServer`), connect it to a
- * `StdioServerTransport`, and return the connected server.
+ * Serve `tree` over stdio: build the server, connect it, hand it back
+ * connected.
  *
  * ```ts
  * const server = await createStdioMcpServer(tree, { name: "my-api", version: "1.0.0" })
  * ```
  *
- * This is the CLI/local-process case: one stdio pipe, one session for the
- * life of the process. For a server address by multiple concurrent clients
- * over HTTP, see `createHttpMcpServer`.
+ * One pipe, one session, for as long as the process runs. For a server several
+ * clients address concurrently, see `createHttpMcpServer`.
  */
 export async function createStdioMcpServer(
   tree: Node,
@@ -91,9 +80,9 @@ export async function createStdioMcpServer(
 
 export type CreateHttpMcpServerOptions = CreateMcpServerOptions & {
   /**
-   * Forwarded to each session's `WebStandardStreamableHTTPServerTransport`,
-   * except `sessionIdGenerator`/`onsessioninitialized`/`onsessionclosed` —
-   * this preset owns those three to maintain its session map.
+   * Forwarded to each session's transport. Three options are missing from the
+   * type — `sessionIdGenerator`, `onsessioninitialized` and `onsessionclosed` —
+   * because this preset supplies them itself to keep its session map true.
    */
   readonly transport?: Omit<
     WebStandardStreamableHTTPServerTransportOptions,
@@ -108,18 +97,17 @@ const jsonRpcError = (status: number, code: number, message: string): Response =
   });
 
 /**
- * Build a fetch-compatible `(req: Request) => Promise<Response>` handler
- * that serves `tree` as an MCP server over Streamable HTTP.
+ * Serve `tree` over Streamable HTTP, as a handler any fetch-shaped runtime can
+ * take.
  *
  * ```ts
  * const handler = createHttpMcpServer(tree, { name: "my-api", version: "1.0.0" })
  * Bun.serve({ fetch: handler })
  * ```
  *
- * Handles the transport's session lifecycle (see the module comment above
- * for the routing rules): a fresh `createMcpServer` + transport pair is
- * built and connected per new session, keyed by the session id the
- * transport itself generates on `initialize`.
+ * Sessions are handled for you: one server and transport per session, created
+ * on `initialize`, kept until the session closes. The module comment above has
+ * the routing rules.
  */
 export function createHttpMcpServer(
   tree: Node,
@@ -141,10 +129,10 @@ export function createHttpMcpServer(
       return entry.transport.handleRequest(req);
     }
 
-    // No session id: the only valid request without one is `initialize` —
-    // peek at the body (without consuming the request the transport will
-    // itself read) to tell an initialize call from a stray/expired-session
-    // request.
+    // The body has to be read to tell an `initialize` from a request that
+    // simply lost its session — but the transport will read it too, so this
+    // reads a clone and passes the parsed result along rather than leaving the
+    // real request drained.
     const parsedBody: unknown = await req
       .clone()
       .json()

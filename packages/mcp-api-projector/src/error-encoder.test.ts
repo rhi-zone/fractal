@@ -1,10 +1,9 @@
-// packages/mcp-api-projector/src/error-encoder.test.ts — structured error
-// types: composable error-to-transport mapping (McpErrorEncoder/mcpErrors).
+// mcpErrors, and what happens to the errors it declines to map.
 //
-// Covers: a tool handler returns `err({ kind, ... })`; `mcpErrors` maps
-// `kind` to an MCP error code. Unmatched kinds and an absent `errorEncoder`
-// fall back to the existing default (isError text: `Invalid input for tool
-// "<name>": <JSON>`). See docs/design/middleware-and-caller-context.md.
+// One tree of a handler returning err values of several kinds, read back
+// through a client: kinds the encoder names get their configured code, and
+// everything else — an unnamed kind, or any kind when no encoder is configured
+// — falls through to the default error result.
 
 import { describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";

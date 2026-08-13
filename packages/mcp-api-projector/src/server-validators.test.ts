@@ -1,15 +1,13 @@
-// packages/mcp-api-projector/src/server-validators.test.ts — createMcpServer generated-validator wiring
+// Generated validators, wired through `opts.rewriters`.
 //
-// `createMcpServer`'s `opts.rewriters` runs `applyValidation(key, tree, ...)`
-// (@rhi-zone/fractal-api-tree/apply-validation) on `tree` before
-// `projectTools` builds its dispatch map — the leaf's generated `parse()`
-// runs, wrapping `dispatch.handler`. Decode+validation run unconditionally on
-// every leaf a generated validator covers; there is no manual fallback check
-// (`validateAgainstSchema`, deleted per
-// docs/design/wire-profiles-and-staged-validation.md's "What goes away" item
-// 3) for an uncovered leaf to fall back onto — an uncovered leaf's raw wire
-// args reach the handler directly, unvalidated (the design's stated
-// zero-setup tradeoff for a pre-codegen checkout).
+// `applyValidation` rewrites the tree before any projection walk reads it, so
+// the handler registered for dispatch is already wrapped in its leaf's
+// generated `parse()`. Where a validator covers a leaf, decode and validation
+// run on every call to it. Where none does, nothing runs — there is no manual
+// schema check to fall back to (docs/design/wire-profiles-and-staged-
+// validation.md, "What goes away", item 3), and the wire values reach the
+// handler as they arrived. That is the design's stated cost of working in a
+// checkout where codegen has not been run.
 
 import { describe, expect, it } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,8 +19,7 @@ import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/apply-validation
 import { createMcpServer } from "./server.ts";
 import type { SchemaMap } from "./project.ts";
 
-/** A synthetic GeneratedEntry: requires `id` to be a numeric string,
- * coercing it to a number on success. */
+/** Stands in for a generated validator: `id` must be a string of digits, and becomes a number. */
 function idEntry(): GeneratedEntry {
   return {
     parse: (value: unknown) => {
@@ -50,9 +47,7 @@ const tree = api({
   }),
 });
 
-/** A derived schema — no longer consulted for validation (no manual fallback
- * check exists), but still forwarded to `projectTools` for `inputSchema`
- * advertised to MCP clients. */
+/** Shown to clients as the tool's `inputSchema`, and never consulted at dispatch. */
 const schemas: SchemaMap = {
   users_get: {
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
@@ -109,13 +104,10 @@ describe("createMcpServer — generated validators wired via opts.rewriters' app
     expect(handlerCalled).toBe(false);
   });
 
-  it("a tool with no matching generated-validator entry gets NO validation — raw args reach the handler", async () => {
-    // A validator IS wired, but keyed under a DIFFERENT path — "users/get"
-    // isn't covered. There is no manual-schema fallback anymore (deleted
-    // per the wire-profiles design's "What goes away" item 3), so the
-    // uncovered leaf's raw args pass straight through to the handler
-    // unvalidated, even though the derived input schema declares `id` as a
-    // string and the caller sent a number.
+  it("a tool no generated-validator entry covers is not validated at all", async () => {
+    // A validator is wired, but under a different path, so this leaf is
+    // uncovered. The advertised schema says `id` is a string and the call sends
+    // a number; nothing checks, and the handler sees the number.
     const applyValidation = createApplyValidation({ gen: { "other/path": idEntry() } });
     const { client } = await connectedClient([(t) => applyValidation("gen", t)]);
     const result = await client.callTool({ name: "users_get", arguments: { id: 42 } });
@@ -129,10 +121,8 @@ describe("createMcpServer — generated validators wired via opts.rewriters' app
     const { client } = await connectedClient();
     const result = await client.callTool({ name: "users_get", arguments: { id: "42" } });
 
-    // No `applyValidation` rewriter at all -> no decode, no validation. The
-    // handler receives the raw string "42" verbatim (no coercion to a
-    // number) — the design's documented pre-codegen/uncovered-leaf
-    // tradeoff, not a bug.
+    // With no rewriter there is nothing to decode or validate, so "42" stays
+    // the string it arrived as.
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     expect(JSON.parse(content[0]!.text)).toEqual({ id: "42", name: "Alice" });
@@ -140,16 +130,12 @@ describe("createMcpServer — generated validators wired via opts.rewriters' app
 });
 
 describe('createMcpServer — 3-arg applyValidation(key, tree, "mcp") wiring', () => {
-  // Exercises the real `WireValidatorMap`/protocol-keyed runtime path (not
-  // full codegen — see `apply-validation-build.ts`'s
-  // `buildWireApplyValidationModuleSource` in packages/api-tree for the
-  // actual codegen-driven jsonProfile coverage, e.g.
-  // apply-validation-build.test.ts's "http/cli (query/argv-shaped) coerce a
-  // numeric-string \"page\"; mcp (json-shaped) rejects it"). Stands in for
-  // what a generated `mcp` wire entry looks like: strict, no coercion of a
-  // stringified number — matching MCP's identity+JSON-dates profile
-  // (docs/design/wire-profiles-and-staged-validation.md, "MCP / GraphQL:
-  // identity + JSON dates").
+  // The protocol-keyed runtime path, with a hand-written entry standing in for
+  // a generated one: strict, coercing no stringified numbers, as MCP's
+  // identity-plus-JSON-dates profile requires
+  // (docs/design/wire-profiles-and-staged-validation.md). Codegen actually
+  // producing such an entry is covered in packages/api-tree, by
+  // apply-validation-build.test.ts.
   function strictCountEntry(): GeneratedEntry {
     return {
       parse: (value: unknown) => {

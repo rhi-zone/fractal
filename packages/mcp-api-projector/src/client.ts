@@ -1,54 +1,42 @@
-// packages/mcp-api-projector/src/client.ts — @rhi-zone/fractal-mcp-api-projector
+// A runtime client over the same Node tree a server was built from,
+// dispatching through the MCP SDK's `Client`. Like http-api-projector's own
+// client, this is an enumerating projection rather than a dispatching one
+// (docs/design/router-model.md, "Projections"): the whole tree is walked once,
+// up front, into an object mirroring it.
 //
-// Runtime MCP client — the same recursive-proxy pattern as
-// http-api-projector's `createClient` (see that module's doc for the full
-// rationale), but dispatching through the MCP SDK's `Client` class instead
-// of `fetch`. Built directly on the raw `Node` tree (not a projected
-// intermediate), because tool/prompt name and resource URI derivation is
-// exactly `project.ts`'s own walk — reusing that logic (not re-deriving it)
-// is what keeps the client's names/URIs from drifting out of sync with what
-// `createMcpServer` (server.ts) actually dispatches against.
+// So navigating the client reads like navigating the tree:
 //
-// Name/URI derivation mirrors `projectTools`/`projectResources`/
-// `projectPrompts` (project.ts) exactly:
-//   - tool/prompt name: underscore-joined tree position, `meta.mcp.name` wins
-//   - resource URI: slash-joined tree position + scheme prefix,
-//     `meta.mcp.uri` wins; a fallback segment contributes a `{var}`
-//     placeholder
-//   - `meta.mcp.segment` overrides one branch node's own contribution to
-//     both joins (same override, same source of truth as project.ts)
+//   branch child   → a nested client object under that child's own tree key —
+//                    its key, never a `meta.mcp.segment` override, which
+//                    affects the derived name or URI and not how you get there
+//   fallback       → a function under the fallback's name, `(value) => …`,
+//                    capturing the value for everything reached through it
+//   leaf           → an async call, per `meta.mcp.as`:
+//                      tool     → `callTool({ name, arguments })`
+//                      resource → `readResource({ uri })`, the URI assembled
+//                                 at call time from any captured values
+//                      prompt   → `getPrompt({ name, arguments })`
 //
-// The proxy shape mirrors the tree structure exactly, same as the HTTP
-// client and the direct API:
-//   - a branch child            → a nested client object, keyed by its own
-//                                  tree key (not by any `meta.mcp.segment`
-//                                  override — that only affects the derived
-//                                  name/URI, never the navigation key)
-//   - a `fallback`               → a function `(value: string) => sub-client`
-//                                  keyed by `fallback.name`, capturing the
-//                                  slug value into the accumulated
-//                                  name-segment / URI-segment / substitution
-//                                  map for everything under the subtree
-//   - a leaf (`meta.mcp.as`)     → an async callable:
-//       "tool" (default) → `client.callTool({ name, arguments: input })`
-//       "resource"       → `client.readResource({ uri })`, `uri` assembled
-//                           at call time by substituting any `{var}`
-//                           placeholder with its captured slug value
-//       "prompt"          → `client.getPrompt({ name, arguments: args })`
+// Names and URIs are derived here the same way project.ts derives them, by a
+// second walk over the same tree rather than by consuming project.ts's output.
+// That is a real duplication and the reason client.test.ts asserts, against a
+// live server, that every name and URI this walk produces is one the server's
+// own projection listed. Building on the raw tree is what makes the proxy's
+// shape — branches, fallbacks, leaves — available at all; a projected tool list
+// is flat and has lost it.
 //
-// Return-value ergonomics: `callTool`/`readResource` results are unwrapped
-// when they carry exactly one `text` content block — the common case for a
-// handler that returned a plain JS value, which the server wrapped via
-// `JSON.stringify` (see server.ts's `toCallToolContent`/`toResourceContent`).
-// Anything else (multi-part content, non-text content, an `isError` result)
-// is surfaced as-is (or thrown, for `isError`) rather than guessing at a
-// shape to force it into. Prompts are returned as the raw `GetPromptResult`
-// (a `messages` array) — there is no single-value case to unwrap.
+// Results are unwrapped where there is exactly one sensible value to unwrap: a
+// single text block, which is what the server produces for a handler that
+// returned a plain value. Multi-part content, non-text content and anything
+// else come back as the raw result, because forcing a shape onto them would be
+// guessing. An `isError` result is thrown rather than returned. Prompts are
+// never unwrapped — a `GetPromptResult` is a list of messages, with no single
+// value inside it.
 //
 // See:
-//   packages/mcp-api-projector/src/project.ts    — projectTools/projectResources/projectPrompts (name/URI source of truth)
-//   packages/mcp-api-projector/src/server.ts     — createMcpServer (the dispatch this client mirrors)
-//   packages/http-api-projector/src/client.ts    — sibling runtime client (structural mirror)
+//   packages/mcp-api-projector/src/project.ts — where the same names and URIs are derived for the server
+//   packages/mcp-api-projector/src/server.ts  — the dispatch this client is aimed at
+//   packages/http-api-projector/src/client.ts — sibling runtime client (structural mirror)
 
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type {
@@ -66,14 +54,19 @@ import type { McpBranchMeta, McpLeafMeta } from "./project.ts";
 // ============================================================================
 
 export type McpClientOptions = {
-  /** URI scheme prefix for derived resource URIs. Must match what `createMcpServer` was built with (defaults to `"resource://"`, same default as `projectResources`). */
+  /** The scheme resource URIs are built behind. Must be the one the server derived its URIs with, or reads will address nothing. Defaults to `"resource://"`, as `projectResources` does. */
   readonly resourceScheme?: string;
 };
 
+/**
+ * The proxy's type. A branch's children, a fallback's capture function and a
+ * leaf's call all live under the same object, so nothing narrower would
+ * describe it without the tree's own types to project from.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyMcpClient = Record<string, any>;
 
-/** Thrown when a tool call comes back with `isError: true`. */
+/** A tool call the server answered with `isError: true`. Carries the whole result, since the message is only its first text block. */
 export class McpClientError extends Error {
   constructor(
     message: string,
@@ -85,16 +78,16 @@ export class McpClientError extends Error {
 }
 
 // ============================================================================
-// Internal: shared text-content unwrapping
-//
-// The server (server.ts's toCallToolContent/toResourceContent) wraps a
-// plain handler return value as a single JSON.stringify'd text block. The
-// client reverses that: a single text block round-trips through
-// JSON.parse (falling back to the raw string when it isn't valid JSON — a
-// handler is free to return a bare string). Anything else (multiple blocks,
-// a non-text block, an already-MCP-shaped pass-through value) is handed
-// back untouched — there is no single sensible shape to force it into.
+// Unwrapping a result
 // ============================================================================
+//
+// The server turns a plain handler return value into one JSON text block
+// (server.ts's `toCallToolContent` and `toResourceContent`). Undoing exactly
+// that is what makes a proxy call read like the handler call it stands in for.
+//
+// So: one text block, parsed as JSON, or handed back as the string it is when
+// it does not parse — a handler is free to return a bare string, and quoting
+// is not evidence of anything. Anything else keeps its result wrapper.
 
 function unwrapText(text: string): unknown {
   try {
@@ -129,16 +122,17 @@ function unwrapReadResourceResult(result: ReadResourceResult): unknown {
 }
 
 // ============================================================================
-// Internal: URI template substitution
-//
-// A resource leaf's derived (or overridden) URI may carry `{var}`
-// placeholders contributed by ancestor fallback nodes. Slug values are
-// accumulated through the recursion (keyed by `fallback.name`) as the proxy
-// is navigated, and substituted into the template at CALL time (not proxy-
-// construction time) — matching the task's own framing and staying correct
-// even when `meta.mcp.uri` is a hand-authored override that reuses the same
-// `{var}` names as the derived URI would have.
+// URI template substitution
 // ============================================================================
+//
+// A resource URI may carry placeholders, contributed by the fallback nodes
+// above it. Their values are collected as the proxy is navigated and
+// substituted when the call is made, not when the proxy is built — which is
+// what keeps a hand-authored `meta.mcp.uri` working, placeholders and all,
+// exactly as the derived URI would have.
+//
+// A placeholder with no captured value is left standing rather than blanked, so
+// a URI that cannot be completed fails visibly at the server.
 
 function substituteSlugs(template: string, slugValues: Readonly<Record<string, string>>): string {
   return template.replace(/\{([^}]+)\}/g, (match, name: string) =>
@@ -147,7 +141,7 @@ function substituteSlugs(template: string, slugValues: Readonly<Record<string, s
 }
 
 // ============================================================================
-// Internal: leaf callers
+// Leaf callers
 // ============================================================================
 
 function makeToolCaller(
@@ -156,14 +150,12 @@ function makeToolCaller(
   slugValues: Readonly<Record<string, string>>,
 ): (input?: unknown) => Promise<unknown> {
   return async (input?: unknown): Promise<unknown> => {
-    // Unlike HTTP (path params parsed server-side into handler input) and
-    // unlike resource templates (server-side regex binds captured URI
-    // segments into input — see server.ts's ReadResourceRequestSchema
-    // handler), a `tools/call` dispatch (server.ts's CallToolRequestSchema
-    // handler) just does `handler(args ?? {})` — there is no server-side
-    // slug binding for tools. Any fallback value captured on the way to
-    // this leaf must therefore be merged into the call arguments here;
-    // caller-supplied fields win on key collision.
+    // A tool name records that a fallback was passed, but not what was passed
+    // — "users_userId_get" is the same string whichever user it was. So unlike
+    // a resource read, where the server binds what the URI captured, or an HTTP
+    // request, where it binds what the path captured, a tool call has no
+    // server-side source for the value. It has to travel as an argument, and
+    // does. An argument the caller supplied under the same name wins.
     const result = await client.callTool({
       name,
       arguments: { ...slugValues, ...((input ?? {}) as Record<string, unknown>) },
@@ -190,8 +182,8 @@ function makePromptCaller(
   slugValues: Readonly<Record<string, string>>,
 ): (args?: Record<string, string>) => Promise<GetPromptResult> {
   return async (args?: Record<string, string>): Promise<GetPromptResult> => {
-    // Same reasoning as makeToolCaller: prompts/get dispatch (server.ts's
-    // GetPromptRequestSchema handler) has no server-side slug binding either.
+    // Prompt names lose captured values exactly as tool names do, so the
+    // values travel as arguments here too.
     return client.getPrompt({
       name,
       arguments: { ...slugValues, ...args },
@@ -200,15 +192,15 @@ function makePromptCaller(
 }
 
 // ============================================================================
-// Internal: recursive sub-client builder over the raw Node tree
-//
-// Mirrors project.ts's three walks exactly: `toolPrefix` accumulates the
-// underscore-joined tree position (tools/prompts), `resourceSegments`
-// accumulates the slash-joined tree position with a literal `{var}` for
-// each fallback (resources), and `slugValues` accumulates the actual
-// captured value for each fallback name encountered so far (substituted
-// into a resource URI template at call time — see `substituteSlugs`).
+// Building the proxy
 // ============================================================================
+//
+// One descent, carrying three accumulators, because a leaf's surface is not
+// known until it is reached: `toolPrefix` is the underscore-joined position a
+// tool or prompt would be named from, `resourceSegments` the slash-joined
+// position a resource URI would be built from, with a placeholder wherever a
+// fallback was passed, and `slugValues` the values those fallbacks actually
+// captured.
 
 function buildClientNode(
   node: Node,
@@ -261,15 +253,13 @@ function buildClientNode(
     const { name, subtree } = node.fallback;
     const childToolPrefix = toolPrefix.length > 0 ? `${toolPrefix}_${name}` : name;
 
-    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
-    // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
-    // project.ts's identical fix (mirrors api-tree/tree.ts's `walkNodeType`,
-    // aa28952). `buildClientNode(subtree, ...)` on a bare leaf would read
-    // `subtree.children` (undefined for a leaf) and return `{}` — an empty
-    // sub-client with nothing callable. When the subtree IS the leaf, the
-    // fallback function returns the leaf's OWN caller directly (no extra
-    // property-access step beyond the fallback's own name) instead of a
-    // one-off nested client object.
+    // `fallback.subtree` may be a bare `op()` rather than an `api({...})`; the
+    // Node model allows either (api-tree/node.ts). Recursing into a bare leaf
+    // would read the `children` it does not have and hand back an empty object
+    // with nothing callable on it. So when the subtree is the leaf, capturing
+    // the value returns that leaf's caller directly — `widgets.widgetId("w-1")`
+    // is itself the call, with no property to reach for afterwards. project.ts
+    // and api-tree's `walkNodeType` (aa28952) handle the same case.
     out[name] = isLeaf(subtree)
       ? (value: string): unknown => {
           const mcp = getMcpMeta(subtree.meta as McpLeafMeta & McpBranchMeta);
@@ -301,35 +291,29 @@ function buildClientNode(
 }
 
 // ============================================================================
-// createMcpClient — public API
+// createMcpClient
 // ============================================================================
 
 /**
- * Build a runtime MCP client from a `Node` tree and a connected MCP SDK
- * `Client`. The returned object mirrors the tree structure exactly (same
- * shape as `createClient` in http-api-projector):
+ * Build a client that mirrors `tree`, calling through an already-connected MCP
+ * SDK `Client`:
  *
- *   - a branch child → a nested client object (keyed by its own tree key)
- *   - a `fallback`    → a function `(value: string) => sub-client` keyed by
- *                       `fallback.name`
- *   - a leaf          → an async callable, dispatched per `meta.mcp.as`:
- *       "tool" (default) → `(input?) => Promise<unknown>` via `callTool`
- *       "resource"        → `() => Promise<unknown>` via `readResource`
- *       "prompt"          → `(args?) => Promise<GetPromptResult>` via `getPrompt`
+ *   - a branch   → a nested client object under its own tree key
+ *   - a fallback → `(value: string) => …`, under the fallback's name
+ *   - a leaf     → an async call, per `meta.mcp.as`:
+ *       tool     → `(input?) => Promise<unknown>`
+ *       resource → `() => Promise<unknown>`
+ *       prompt   → `(args?) => Promise<GetPromptResult>`
  *
- * Name/URI derivation reuses the exact same logic `projectTools`/
- * `projectResources`/`projectPrompts` (project.ts) use to build the server
- * side — the tree walk here is a second, independent computation of the
- * SAME derivation (not a different source of truth), so a client built from
- * the same tree a `createMcpServer` was built from always addresses the
- * right tool/resource/prompt.
+ * Pass the same tree the server was built from and the names and URIs will
+ * match; the module comment above explains why they are derived again here
+ * rather than shared, and what pins them together.
  *
- * `client` must already be connected (`await client.connect(transport)`) —
- * this function only builds the proxy; it does no connection management.
+ * Connecting is the caller's — this builds a proxy and manages no connection.
  *
- * @param tree - The root node to project (same tree passed to `createMcpServer`).
- * @param client - A connected MCP SDK `Client` instance.
- * @param opts - Optional: `resourceScheme` (must match the server's `projectResources` scheme, default `"resource://"`).
+ * @param tree   - The root node, as passed to `createMcpServer`.
+ * @param client - A connected MCP SDK `Client`.
+ * @param opts   - Optionally, the `resourceScheme` the server derives URIs with.
  */
 export function createMcpClient(
   tree: Node,

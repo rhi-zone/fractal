@@ -1,4 +1,3 @@
-// packages/mcp-api-projector/src/index.ts — @rhi-zone/fractal-mcp-api-projector
 export type {
   Dispatch,
   McpAnnotations,
@@ -37,9 +36,10 @@ export type {
 } from "./server.ts";
 export type { McpStoreBag, McpStores } from "./server.ts";
 export { createMcpServer, mcpErrors } from "./server.ts";
-// SDK sampling types re-exported so consumers of `stores.caller.createMessage`
-// (see `CreateMessageFn`, server.ts) don't need to reach into
-// `@modelcontextprotocol/sdk/types.js` directly for the request/result shapes.
+// The SDK types a handler needs in order to use `stores.caller.createMessage`
+// and `stores.caller.sendLog` are re-exported here, so writing against those
+// two does not mean importing from `@modelcontextprotocol/sdk/types.js`
+// alongside this package.
 export type {
   CreateMessageRequestParams,
   CreateMessageRequestParamsBase,
@@ -48,9 +48,6 @@ export type {
   CreateMessageResultWithTools,
   SamplingMessage,
 } from "@modelcontextprotocol/sdk/types.js";
-// SDK logging types re-exported so consumers of `stores.caller.sendLog`
-// (see `SendLogFn`, server.ts) don't need to reach into
-// `@modelcontextprotocol/sdk/types.js` directly for the level enum.
 export type { LoggingLevel } from "@modelcontextprotocol/sdk/types.js";
 export type { CreateHttpMcpServerOptions, CreateStdioMcpServerOptions } from "./presets.ts";
 export { createHttpMcpServer, createStdioMcpServer } from "./presets.ts";

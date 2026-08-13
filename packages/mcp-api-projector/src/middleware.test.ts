@@ -1,12 +1,11 @@
-// packages/mcp-api-projector/src/middleware.test.ts — CreateMcpServerOptions.middleware
+// CreateMcpServerOptions.middleware.
 //
-// Covers: middleware is `F => F` where `F = (input, stores) => result` (see
-// docs/design/middleware-and-caller-context.md) — a middleware can read from
-// the raw pre-assembly `stores`, can inspect/transform the assembled `input`,
-// the handler itself never receives `stores` (structural, not a convention),
-// and composition order (first entry = outermost wrapper). Driven through a
-// real `@modelcontextprotocol/sdk` `Client` over `InMemoryTransport`, same as
-// server.test.ts.
+// A middleware receives the assembled `input` and the `stores` it was assembled
+// from, may change either on the way in or the result on the way out, and
+// composes first-entry-outermost
+// (docs/design/middleware-and-caller-context.md). The handler receives only
+// `input`, whatever middleware sits above it. Driven through a real `Client`
+// over `InMemoryTransport`, as server.test.ts is.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { describe, expect, it } from "bun:test";
@@ -67,10 +66,8 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
   });
 
   it("the handler does not receive stores — only the assembled input", async () => {
-    // A handler declared with a single `input` parameter has no way to reach
-    // `stores` — there is no second parameter to receive it. This proves the
-    // base adapter is `(input, _stores) => handler(input)`, not something
-    // that leaks `stores` through to the handler.
+    // The middleware passes `stores` along faithfully; the handler still
+    // reports only its input, because the base of the chain drops them.
     const argsTree = api_({
       whatArgs: op(
         (input: unknown) => ({
@@ -118,11 +115,10 @@ describe("CreateMcpServerOptions.middleware — tools", () => {
   });
 
   it("middleware can read the caller store — populated from the SDK's RequestHandlerExtra (sessionId/authInfo)", async () => {
-    // InMemoryTransport (no session-managed HTTP transport underneath) never
-    // sets `extra.sessionId`/`extra.authInfo` — this proves the `caller`
-    // store is wired through from `extra` without throwing, and that its
-    // values pass through whatever the SDK actually handed the request
-    // handler (undefined here), not a hardcoded placeholder.
+    // `InMemoryTransport` manages no sessions and no auth, so both fields are
+    // undefined here. The store is still built and still carries exactly what
+    // the SDK supplied — undefined being a real value from `extra`, not a
+    // stand-in.
     let sawCallerStore = false;
     let seenSessionId: unknown;
     let seenAuthInfo: unknown;

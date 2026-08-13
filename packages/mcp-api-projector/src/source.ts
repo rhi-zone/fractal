@@ -1,48 +1,45 @@
-// packages/mcp-api-projector/src/source.ts — @rhi-zone/fractal-mcp-api-projector
+// `mcp.source(map)` — the authoring helper that says which store each of a
+// leaf's parameters is read from, MCP's counterpart to `http.source()`
+// (http-api-projector/src/verbs.ts).
 //
-// `mcp.source(map)` — literal-preserving authoring helper for
-// `meta.mcp.sourceMap`, the MCP counterpart to `http.source()`
-// (http-api-projector/src/verbs.ts). The mapped type and shorthand-expansion
-// logic this wraps are shared machinery, not a per-protocol copy — see
-// api-tree's input.ts (`SourceMapInput<Store>`/`ResolvedSourceMap<M>`/
-// `resolveSourceMap`) for the full rationale. This file only narrows the
-// shared generic to MCP's own store names and wraps the result under
-// `meta.mcp`.
+// The mapped type and shorthand expansion behind it are shared, not copied per
+// protocol: api-tree's input.ts owns `SourceMapInput`, `ResolvedSourceMap` and
+// `resolveSourceMap`, and explains why. All this file adds is MCP's own store
+// names and the `meta.mcp` wrapper around the result.
 
 import { resolveSourceMap } from "@rhi-zone/fractal-api-tree";
 import type { ResolvedSourceMap, SourceMapInput } from "@rhi-zone/fractal-api-tree";
 
 /**
- * MCP's own store names — the stores `mcp.source()`'s map accepts:
- * `argument` (tool-call arguments / prompt arguments, the primary store for
- * those surfaces), `uri-variable` (resource-template URI variables, the
- * primary store for that surface), and `caller` (core's shared per-request
- * store, declared once in api-tree's `CoreStores`).
+ * The stores an `mcp.source()` map may name: `argument`, holding a tool call's
+ * or prompt's arguments; `uri-variable`, holding what a resource template's URI
+ * captured; and `caller`, the per-request store core declares for every
+ * projector.
  *
- * Not a declaration-mergeable registry the way HTTP's `HttpStoreRegistry`
- * is (http-api-projector/src/decode.ts) — MCP has no equivalent extension
- * point today, and this design doesn't introduce one.
+ * A closed union, unlike HTTP's declaration-mergeable `HttpStoreRegistry`
+ * (http-api-projector/src/decode.ts). MCP has no extension point for a
+ * deployment to add a store of its own to.
  */
 export type McpStoreName = "argument" | "uri-variable" | "caller";
 
 /**
- * `mcp.source(map)` — declares which MCP store (`argument`, `uri-variable`,
- * `caller`) each of a leaf's params should be read from, overriding the
- * surface's default argument/uri-variable convention
- * (`assembleArgumentInput`/`assembleUriVariableInput`, server.ts) for just
- * the params listed here. Returns a bare `{ mcp: { sourceMap: M } }`
- * contribution — a key-merged map key, composing with other `meta.mcp`
- * contributions the same way `mergeMeta` composes every other sub-bag
- * (last-wins per key). See `http.source()` (http-api-projector/src/verbs.ts)
- * for the full worked rationale this mirrors, including why a helper —
- * rather than a raw object literal typed against
- * `McpLeafMetaProperties["sourceMap"]` — is what keeps `op()`'s static
- * `UncoveredSourceParams` coverage check honest.
+ * Declare where a leaf's parameters come from, for the ones that do not come
+ * from where their surface would otherwise look.
  *
  * ```ts
  * op(getBook, mcp.source({ bookId: "uri-variable" }))
  * // → meta.mcp.sourceMap === { bookId: { store: "uri-variable", key: "bookId" } }
  * ```
+ *
+ * Parameters left out keep the surface's own convention — a tool or prompt
+ * reads its arguments, a resource template reads what its URI captured
+ * (server.ts's `assembleArgumentInput` and `assembleUriVariableInput`).
+ *
+ * The returned contribution merges into `meta.mcp` key by key, last one
+ * winning, as every other meta contribution does. Going through this helper
+ * rather than writing the object literal directly is what preserves the literal
+ * types `op()` needs for its static coverage check — `http.source()`
+ * (http-api-projector/src/verbs.ts) works that argument through in full.
  */
 export function source<const M extends SourceMapInput<McpStoreName>>(
   map: M,
@@ -50,5 +47,5 @@ export function source<const M extends SourceMapInput<McpStoreName>>(
   return { mcp: { sourceMap: resolveSourceMap(map) } };
 }
 
-/** `mcp.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs.ts). */
+/** The `mcp.*` authoring namespace, as `http.*` is for HTTP (http-api-projector/src/verbs.ts). */
 export const mcp = { source };

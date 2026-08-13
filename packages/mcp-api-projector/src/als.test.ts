@@ -1,12 +1,11 @@
-// packages/mcp-api-projector/src/als.test.ts — CreateMcpServerOptions.als
+// CreateMcpServerOptions.als.
 //
-// Covers: each dispatch path (tool, fixed resource, resource template,
-// prompt) runs its handler inside the configured AsyncLocalStorage context,
-// `init` receives MCP dispatch context (McpAlsContext), concurrent
-// calls stay isolated, and ALS composes with `opts.middleware` as the
-// INNERMOST wrapper — same contract as HTTP's `PresetOptions.als`
-// (`packages/http-api-projector/src/preset.ts`) and CLI's `CliOpts.als`
-// (`packages/cli-api-projector/src/als.test.ts`).
+// Every dispatch path — tool, fixed resource, resource template, prompt — runs
+// its handler inside the configured context; `init` sees which one it is;
+// concurrent calls stay separate; and the context wraps the handler alone, with
+// middleware outside it. The same contract HTTP's `PresetOptions.als`
+// (packages/http-api-projector/src/preset.ts) and CLI's `CliOpts.als`
+// (packages/cli-api-projector/src/cli.ts) hold to.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { describe, expect, it } from "bun:test";
@@ -99,7 +98,7 @@ describe("CreateMcpServerOptions.als — tools", () => {
         return { i, requestId: (JSON.parse(textOf(result)) as { requestId: string }).requestId };
       }),
     );
-    // Each call got its own init()-computed id, and no call observed another's.
+    // Three calls, three ids: none of them saw another's.
     const ids = new Set(results.map((r) => r.requestId));
     expect(ids.size).toBe(3);
   });
@@ -110,14 +109,12 @@ describe("CreateMcpServerOptions.als — tools", () => {
     let seenAfterNext: string | undefined;
 
     const observe: McpMiddleware = (next) => async (input, stores) => {
-      // Before calling `next`, ALS hasn't been entered yet — middleware runs
-      // OUTSIDE the store (ALS is the innermost wrapper, closer to the
-      // handler than middleware — see CreateMcpServerOptions.als).
+      // The store is not entered yet — it wraps the handler, which is further
+      // in than this.
       seenBeforeNext = storage.getStore()?.requestId;
       const result = await next(input, stores);
-      // After `next` settles, execution is back outside the store too —
-      // Node's AsyncLocalStorage does not propagate back out through an
-      // already-settled `await`.
+      // And it is gone again: a context does not follow execution back out
+      // through a settled `await`.
       seenAfterNext = storage.getStore()?.requestId;
       return result;
     };
@@ -130,7 +127,7 @@ describe("CreateMcpServerOptions.als — tools", () => {
       middleware: [observe],
     });
     const result = await client.callTool({ name: "whoami", arguments: {} });
-    // The handler itself — inside `next` — still saw the store.
+    // The handler, in between, saw it.
     expect(JSON.parse(textOf(result))).toEqual({ requestId: "req-mw" });
     expect(seenBeforeNext).toBeUndefined();
     expect(seenAfterNext).toBeUndefined();

@@ -1,45 +1,39 @@
-// packages/mcp-api-projector/src/server.ts — @rhi-zone/fractal-mcp-api-projector
+// Wires a Node tree into a running `@modelcontextprotocol/sdk` `Server`. One
+// call turns a tree into a live MCP server, the way `createFetch`
+// (http-api-projector/src/preset.ts) turns one into a live HTTP handler.
 //
-// OOTB preset: `createMcpServer(tree)` wires a Node tree into a running
-// `@modelcontextprotocol/sdk` `Server` — the same one-call DX leap that
-// `createFetch(tree)` (http-api-projector's preset.ts) provides for HTTP.
+// Built on the SDK's low-level `Server` rather than the high-level `McpServer`.
+// The high-level API describes a tool's input in Zod — a raw shape or a schema,
+// but Zod either way — and project.ts already derives real JSON Schema from
+// handler types. Using it would mean carrying a second description of the same
+// handlers to buy nothing.
 //
-// Uses the SDK's low-level `Server` (not the high-level `McpServer`)
-// because `projectTools` already produces raw JSON Schema `inputSchema`
-// per tool (derived-from-type via `SchemaMap`, see project.ts) — the
-// high-level `McpServer.registerTool` wants a Zod raw shape instead, which
-// would mean re-deriving a second schema representation for no benefit.
-// `Server` always registers `tools/list` and `tools/call`; when the tree
-// contains any leaf tagged `meta.mcp.as: "resource"`, it additionally
-// registers `resources/list`, `resources/templates/list`, and
-// `resources/read` (and advertises the `resources` capability — see
-// `hasResources` below); when the tree contains any leaf tagged
-// `meta.mcp.as: "prompt"`, it additionally registers `prompts/list` and
-// `prompts/get` (and advertises the `prompts` capability — see
-// `hasPrompts` below). Everything else (initialize handshake, transport
-// framing, protocol version negotiation) is left to the SDK.
+// `tools/list` and `tools/call` are always registered. The other two surfaces
+// register only when the tree has leaves for them: `resources/list`,
+// `resources/templates/list` and `resources/read` alongside a `resources`
+// capability when any leaf is marked `meta.mcp.as: "resource"`, and
+// `prompts/list`/`prompts/get` alongside a `prompts` capability when any leaf is
+// marked `meta.mcp.as: "prompt"`. So the advertised capabilities describe the
+// tree, unless `opts.capabilities` asks for more. The initialize handshake,
+// transport framing and protocol version negotiation stay with the SDK.
 //
-// Handler resolution: `projectTools`/`projectResources`/`projectPrompts`
-// each walk the tree ONCE and return both their flat descriptor array and a
-// dispatch table built during that same walk (project.ts's
-// `ProjectToolsResult` / `ProjectResourcesResult` / `ProjectPromptsResult`)
-// — no second tree walk per call, and no risk of the name/URI-construction
-// logic drifting between the list and the dispatch table. Fixed resources
-// dispatch by an exact `uri` map lookup; resource templates (URIs with
-// `{var}` placeholders, from fallback nodes) dispatch by trying each
-// compiled `RegExp` in turn and binding captured segments to named handler
-// input fields. Prompts dispatch by an exact `name` map lookup, same as tools.
+// Each of project.ts's three walks hands back both its descriptors and the
+// dispatch table built during that same walk, and this module dispatches
+// through those tables. Nothing re-walks the tree per call, and no name or URI
+// can be listed under one spelling and dispatched under another. Tools and
+// prompts resolve by exact name; fixed resources by exact URI; resource
+// templates by trying each compiled pattern in turn and binding the segments it
+// captures.
 //
-// Transport-agnostic by design: `createMcpServer` returns the `Server`
-// instance unconnected. The caller picks a transport
-// (`StdioServerTransport`, `SSEServerTransport`, `StreamableHTTPServerTransport`,
-// …) and calls `server.connect(transport)` — matching `createFetch`'s
-// stance of returning a plain callable and leaving `Bun.serve`/`Deno.serve`/
-// worker wiring to the caller.
+// The returned `Server` is not connected to anything. Picking a transport and
+// calling `server.connect(transport)` is the caller's — the same stance
+// `createFetch` takes in returning a plain callable and leaving `Bun.serve`,
+// `Deno.serve` or worker wiring alone. presets.ts packages the two common
+// choices for callers who would rather not make it.
 //
 // See:
-//   packages/mcp-api-projector/src/project.ts   — toTools/projectTools/projectResources (descriptors + dispatch tables)
-//   packages/http-api-projector/src/preset.ts   — sibling preset (createFetch, structural mirror)
+//   packages/mcp-api-projector/src/project.ts — the three walks, and the descriptors they build
+//   packages/http-api-projector/src/preset.ts — sibling preset (createFetch, structural mirror)
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import type {
@@ -92,21 +86,20 @@ import type {
 } from "@rhi-zone/fractal-api-tree";
 
 /**
- * MCP's own store-name fragment: an INERT, plain interface naming the stores
- * this projector builds and the shape each carries. Deliberately NOT a
- * `declare module` augmentation of api-tree's `StoreRegistry` — per
- * docs/design/typed-store-spec.md §3, a projector that augments core makes the
- * type surface depend on which packages are in the compilation rather than on
- * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
- * augmentation file (`interface StoreRegistry extends McpStores {}`); see
- * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
+ * The stores this projector builds, named and typed but not registered.
  *
- * Both members are OPTIONAL — per-request stores this projector builds when it
- * dispatches, and only ever ONE of the two per request (a tool/prompt call
- * builds `argument`, a resource read builds `uri-variable`; see
- * `assembleArgumentInput`/`assembleUriVariableInput`). `caller` is NOT declared
- * here: core declares it once (api-tree's `CoreStores`), shared across every
- * projector.
+ * A deployment registers them, once, in its own augmentation file
+ * (`interface StoreRegistry extends McpStores {}`). This package deliberately
+ * does not augment `StoreRegistry` itself: a projector that did would make the
+ * available store names depend on which packages happen to be in the
+ * compilation rather than on what the deployment actually composed
+ * (docs/design/typed-store-spec.md §3). `HttpStores` in
+ * http-api-projector/src/decode.ts is the same pattern worked through.
+ *
+ * Both members are optional because a request builds one or the other, never
+ * both: a tool or prompt call builds `argument`, a resource read builds
+ * `uri-variable`. `caller` is not here — core declares it once, for every
+ * projector, as `CoreStores`.
  */
 export interface McpStores {
   /** A tool call's or prompt's named arguments. */
@@ -116,12 +109,12 @@ export interface McpStores {
 }
 
 /**
- * The full per-request store bag an MCP dispatch builds and threads through
- * middleware: the shared `Stores` (core's `caller`, plus whatever service
- * stores the deployment registered) intersected with MCP's own fragment. The
- * intersection is what lets this package build and read `argument`/
- * `uri-variable` without its own ambient augmentation — see `HttpStoreBag`'s
- * doc.
+ * Everything a dispatch has to hand: the registry's shared stores — core's
+ * `caller`, plus whatever service stores the deployment registered — together
+ * with MCP's own two. Intersecting rather than augmenting is what lets this
+ * package build and read `argument` and `uri-variable` without registering
+ * anything globally; `HttpStoreBag` (http-api-projector/src/decode.ts) is
+ * assembled the same way.
  */
 export type McpStoreBag = ProjectorStores & McpStores;
 
@@ -133,23 +126,24 @@ import type { ProjectPromptsOptions, ProjectResourcesOptions, SchemaMap } from "
 // Rich content pass-through (tool call results, resource read results)
 // ============================================================================
 //
-// A handler's return value drives the MCP content type it becomes: a plain
-// value (string/number/object/array with no recognizable MCP content shape)
-// is wrapped as `{ type: "text", ... }` for backward compatibility, but a
-// value that already looks like MCP content (or an array of such values) is
-// passed through untouched — this is how a handler returns an image, audio,
-// or embedded resource instead of having everything flattened to JSON text.
+// What a handler returns decides the content type it becomes. A plain value —
+// a string, a number, an ordinary object or array — is wrapped as a text
+// block. A value already shaped like MCP content, or an array of such values,
+// is passed through as it stands. That second path is how a handler returns an
+// image, audio, or an embedded resource instead of watching everything flatten
+// into JSON text.
 
-/** MCP content-block `type` discriminator values recognized for pass-through. */
+/** The content-block discriminators eligible for pass-through. */
 const MCP_CONTENT_TYPES = new Set(["text", "image", "audio", "resource"]);
 
 /**
- * True when `value` is a plain object whose `type` field is one of the
- * recognized MCP content-block discriminators, with the fields that
- * discriminator requires present (and of the right basic shape) — not just
- * a coincidental `type: "text"` on an unrelated object. Used to decide
- * whether a handler's return value is already MCP content (pass through)
- * or a plain value (wrap as text).
+ * Whether a value is already an MCP content block: a plain object with a
+ * recognized `type`, and with the fields that particular type requires actually
+ * present and of the right kind.
+ *
+ * Checking the payload and not just the discriminator is what keeps a domain
+ * object that happens to have a `type: "text"` field from being mistaken for
+ * content and passed through unwrapped.
  */
 function isMcpContentBlock(value: unknown): value is ContentBlock {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -175,11 +169,12 @@ function isMcpContentBlock(value: unknown): value is ContentBlock {
 }
 
 /**
- * Decide the `content` array for a `tools/call` result from a handler's raw
- * return value: an already-MCP-shaped value (or array of them) passes
- * through as-is; anything else is wrapped as a single text block, matching
- * the previous always-JSON.stringify behavior (with a string value used
- * verbatim instead of being double-stringified).
+ * Build the `content` array of a `tools/call` result from whatever the handler
+ * returned.
+ *
+ * Content, or an array of content, passes through untouched. Anything else
+ * becomes a single text block — a string used as-is, so it is not quoted and
+ * escaped a second time, and any other value serialized as JSON.
  */
 export function toCallToolContent(result: unknown): ContentBlock[] {
   if (Array.isArray(result) && result.length > 0 && result.every(isMcpContentBlock)) {
@@ -191,16 +186,19 @@ export function toCallToolContent(result: unknown): ContentBlock[] {
   return [{ type: "text", text: typeof result === "string" ? result : JSON.stringify(result) }];
 }
 
-/** Resource content shape produced for a `resources/read` result. */
+/** One entry of a `resources/read` result: text or binary, never both. */
 type ResourceContentEntry =
   | { uri: string; mimeType: string; text: string }
   | { uri: string; mimeType: string; blob: string };
 
 /**
- * Decide the single `contents` entry for a `resources/read` result: if the
- * handler already returned `{ text }` or `{ blob }` (optionally with its own
- * `mimeType`), use those fields directly; otherwise fall back to
- * `JSON.stringify`-as-text, matching the previous always-JSON behavior.
+ * Build one `contents` entry of a `resources/read` result from whatever the
+ * handler returned.
+ *
+ * A handler that returned `{ text }` or `{ blob }` has already said how its
+ * content should be carried, and may override the MIME type declared on the
+ * resource while it is at it. Anything else is serialized as JSON text under
+ * the declared type.
  */
 export function toResourceContent(
   result: unknown,
@@ -228,24 +226,30 @@ export function toResourceContent(
 }
 
 // ============================================================================
-// Streaming — a handler returning an AsyncIterable (see
-// docs/design/middleware-and-caller-context.md's "Streaming and Progress"
-// section) is drained here instead of going through the plain-value path.
-// `StreamProgress` yields become `notifications/progress` (only when the
-// caller supplied a `progressToken` — a client that never asked for progress
-// has no token to correlate them against, so they're skipped, not queued);
-// `StreamChunk` yields and untagged yields are both collected as content via
-// `toCallToolContent`, matching HTTP's `streamAsSse` (route.ts) treating an
-// untagged yield as a chunk by default. The generator's return value (not a
-// yielded value) is the final result, appended the same way.
+// Streaming
 // ============================================================================
+//
+// A handler that returns an `AsyncIterable` is drained here rather than being
+// treated as a value (docs/design/middleware-and-caller-context.md, "Streaming
+// and Progress"). Each of the three surfaces has its own collector below,
+// because each accumulates into a different result shape, but all three read a
+// yield the same way.
+//
+// A `StreamProgress` yield becomes a `notifications/progress`, but only if the
+// request carried a `progressToken`. Without one there is nothing for the
+// client to correlate a notification against, so progress is dropped rather
+// than held.
+//
+// A `StreamChunk` yield contributes its `data`, and an untagged yield
+// contributes itself — HTTP's `streamAsSse` (route.ts) reads an untagged yield
+// as a chunk too. The generator's return value, distinct from anything it
+// yielded, is appended last.
 
 /**
- * True when `v` is an async iterable — a handler that returns one is
- * drained via `collectStreamedToolContent`/`collectStreamedMessages` instead
- * of going straight through `toCallToolContent`/plain-value handling.
- * Structural (`Symbol.asyncIterator` presence), mirroring HTTP's
- * `isAsyncIterable` (packages/http-api-projector/src/route.ts).
+ * Whether a value can be drained. Structural — the presence of
+ * `Symbol.asyncIterator` and nothing more, so any async iterable qualifies, not
+ * only an async generator. HTTP decides this the same way, in
+ * packages/http-api-projector/src/route.ts.
  */
 function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
   return (
@@ -256,13 +260,10 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
 }
 
 /**
- * Drain a tool handler's `AsyncIterable` return value into the `content`
- * array a `tools/call` result needs: `StreamProgress` yields become
- * `notifications/progress` sent via `extra.sendNotification` (only when the
- * request carried a `progressToken` in its `_meta`); `StreamChunk` yields and
- * untagged yields are both run through `toCallToolContent` and appended to
- * `content`; the generator's return value is run through the same
- * `toCallToolContent` and appended last, as the final result.
+ * Drain a tool handler's stream into the `content` array `tools/call` answers
+ * with, sending progress notifications along the way. Every yield that is not
+ * progress, and finally the return value, goes through `toCallToolContent`, so
+ * a handler can stream rich content and not only text.
  */
 async function collectStreamedToolContent(
   iterable: AsyncIterable<unknown>,
@@ -300,11 +301,9 @@ async function collectStreamedToolContent(
 }
 
 /**
- * Drain a resource-read handler's `AsyncIterable` return value into
- * additional `contents` entries for a `resources/read` result — each yielded
- * value (progress excluded — reported the same way as tools, via
- * `sendNotification`) and the final return value become one
- * `toResourceContent` entry apiece.
+ * Drain a resource handler's stream into the `contents` array `resources/read`
+ * answers with. Every yield that is not progress, and finally the return value,
+ * becomes one entry, each carrying the resource's own URI and MIME type.
  */
 async function collectStreamedResourceContents(
   iterable: AsyncIterable<unknown>,
@@ -345,12 +344,11 @@ async function collectStreamedResourceContents(
 }
 
 /**
- * Drain a prompt handler's `AsyncIterable` return value into the `messages`
- * array a `prompts/get` result needs — each yielded value (progress
- * excluded) and the final return value become one assistant text message
- * apiece, matching the plain-value fallback in the `GetPromptRequestSchema`
- * handler below (JSON.stringify-as-text) since a prompt yield has no
- * dedicated rich-content shape the way tool/resource content does.
+ * Drain a prompt handler's stream into the `messages` array `prompts/get`
+ * answers with. Every yield that is not progress, and finally the return value,
+ * becomes one assistant message carrying JSON text — MCP gives a prompt yield
+ * no richer content shape to aim at, and the non-streaming path below
+ * serializes a plain return value the same way.
  */
 async function collectStreamedMessages(
   iterable: AsyncIterable<unknown>,
@@ -396,33 +394,41 @@ async function collectStreamedMessages(
 }
 
 // ============================================================================
-// Structured error types — composable error-to-transport mapping
-//
-// A handler's `Result.err(E)` value is transport-agnostic (e.g.
-// `{ kind: "notFound", message: "Book not found" }`). `errorEncoder`
-// (`CreateMcpServerOptions.errorEncoder`) maps `E` to an `McpErrorResponse`
-// (error code + message) — mirrors HTTP's `HttpErrorEncoder`
-// (packages/http-api-projector/src/route.ts) and CLI's `CliErrorEncoder`
-// (packages/cli-api-projector/src/cli.ts). Returning `undefined` (including
-// when `errorEncoder` itself is omitted) falls back to the existing default:
-// an `isError` tool result with `Invalid input for tool "<name>": <JSON>`.
+// Error encoding
 // ============================================================================
+//
+// A handler's error value says nothing about any protocol —
+// `{ kind: "notFound", message: "Book not found" }` is as true over HTTP or a
+// CLI as it is here. `CreateMcpServerOptions.errorEncoder` is where a
+// deployment says what such a value means in MCP terms. HTTP and CLI take the
+// same value and answer the same question in their own vocabularies, through
+// `HttpErrorEncoder` (packages/http-api-projector/src/route.ts) and
+// `CliErrorEncoder` (packages/cli-api-projector/src/cli.ts).
+//
+// An encoder that declines to map a value returns `undefined`, and the error
+// falls through to the default `isError` result. So does every error when no
+// encoder is configured at all.
 
-/** An error encoder's MCP-specific target shape — error code + message. */
+/** What an MCP error encoder produces: a code and the message to carry it. */
 export type McpErrorResponse = {
   readonly code: number;
   readonly message: string;
 };
 
-/** `ErrorEncoder<E, McpErrorResponse>` — maps a handler's error value to an MCP error code/message. */
+/** An `ErrorEncoder` targeting MCP: handler error value in, code and message out. */
 export type McpErrorEncoder<E = unknown> = ErrorEncoder<E, McpErrorResponse>;
 
 /**
- * Pre-built `McpErrorEncoder`: maps error `kind` values to MCP error codes,
- * e.g. `mcpErrors({ notFound: ErrorCode.InvalidParams })`. The response
- * message defaults to the error value's own `JSON.stringify`, matching the
- * existing default error text. Internally a `composeErrorEncoders` over one
- * `matchKind` per mapping entry — first match wins (object key order).
+ * An encoder that maps error kinds to MCP error codes, for the common case
+ * where that mapping is all a deployment needs.
+ *
+ * ```ts
+ * errorEncoder: mcpErrors({ notFound: ErrorCode.InvalidParams })
+ * ```
+ *
+ * Kinds are tried in the order the object lists them, and the first match wins.
+ * A kind with no entry is left unencoded, so it falls through to the default
+ * error result. The message is the error value serialized as JSON.
  */
 export function mcpErrors<E = unknown>(mapping: Record<string, number>): McpErrorEncoder<E> {
   const encoders = Object.entries(mapping).map(([kind, code]) => matchKind<number>(kind, code));
@@ -434,7 +440,7 @@ export function mcpErrors<E = unknown>(mapping: Record<string, number>): McpErro
   };
 }
 
-/** Render an `McpErrorResponse` as a `CallToolResult`'s error content, for a named tool. */
+/** Render an encoded error as the failing tool call's result. */
 function encodeToolError(name: string, response: McpErrorResponse): CallToolResult {
   return {
     isError: true,
@@ -445,44 +451,42 @@ function encodeToolError(name: string, response: McpErrorResponse): CallToolResu
 }
 
 // ============================================================================
-// Sampling — MCP's `sampling/createMessage`, exposed to handlers via
-// `stores.caller.createMessage` (see `assembleInput` below).
-//
-// IMPORTANT: per the MCP spec, `sampling` is a CLIENT capability, not a
-// server one — `ClientCapabilitiesSchema` has a `sampling` field;
-// `ServerCapabilitiesSchema` does not (see the SDK's `types.d.ts`). The
-// SDK's own `Server.assertCapabilityForMethod`/`createMessage`
-// (`server/index.js`) gate the request on `this._clientCapabilities?.sampling`
-// — populated from what the CONNECTED CLIENT declared during `initialize`,
-// never from anything this server advertises. So `CreateMcpServerOptions
-// .sampling` intentionally does NOT add a `sampling` key to the
-// `capabilities` object passed to `new Server(...)` below — there is no such
-// key on `ServerCapabilities` to add (attempting it doesn't type-check).
-// What it DOES do: gate whether `stores.caller.createMessage` exists at all
-// — a deliberate opt-in, since not every MCP client implements sampling, and
-// a handler that reaches for it should fail loudly (missing field) rather
-// than silently getting a function that always rejects.
+// Sampling
 // ============================================================================
+//
+// `sampling/createMessage` lets a handler ask the connected client to run a
+// completion mid-execution. Handlers reach it through
+// `stores.caller.createMessage`, wired up in `callerStore` below.
+//
+// Sampling is a client capability in the MCP spec, not a server one:
+// `ClientCapabilitiesSchema` has a `sampling` field and
+// `ServerCapabilitiesSchema` has none. The SDK enforces it accordingly —
+// `Server.createMessage` asserts against `_clientCapabilities.sampling`, which
+// is populated from what the connected client declared during `initialize`.
+// Nothing a server advertises enters into it, and there is no
+// `ServerCapabilities` key to advertise it with.
+//
+// `CreateMcpServerOptions.sampling` therefore governs one thing: whether
+// `stores.caller.createMessage` exists at all. Making it opt-in means a handler
+// written against a capability the deployment never enabled fails on a missing
+// field, rather than holding a function that rejects on every call.
 
 /**
- * Opt-in configuration for `CreateMcpServerOptions.sampling` — currently no
- * fields; reserved so a later per-server sampling default (e.g. a default
- * `RequestOptions` applied to every `createMessage` call) can be added
- * without a breaking change to the option's shape. Pass `true` instead for
- * the common "just turn it on" case.
+ * Configuration for `CreateMcpServerOptions.sampling`. Empty today, and
+ * accepted so that a later per-server default — say, `RequestOptions` applied
+ * to every `createMessage` call — can arrive without changing the option's
+ * shape. Passing `true` has the same effect.
  */
 export type SamplingConfig = Record<string, never>;
 
 /**
- * The overloaded signature of `stores.caller.createMessage`, exposed to
- * tool/resource/prompt handlers when `CreateMcpServerOptions.sampling` is
- * enabled — mirrors the SDK's own `Server.createMessage` overloads
- * (`@modelcontextprotocol/sdk/server/index.js`) one-for-one, bound to this
- * server instance so a handler doesn't need a reference to the `Server`
- * itself. Calling it when the connected client hasn't declared `sampling`
- * support rejects at call time (see this module's "Sampling" doc above for
- * why that check is entirely client-declared, not something this option
- * changes on the server side).
+ * `stores.caller.createMessage` as a handler sees it: the SDK's own
+ * `Server.createMessage` overloads, bound to this server so a handler needs no
+ * reference to the `Server` itself.
+ *
+ * Its existence says the deployment enabled sampling, not that the call will
+ * succeed. A client that never declared sampling support makes the call reject,
+ * for the reason the "Sampling" section above gives.
  */
 export interface CreateMessageFn {
   (params: CreateMessageRequestParamsBase, options?: RequestOptions): Promise<CreateMessageResult>;
@@ -497,37 +501,33 @@ export interface CreateMessageFn {
 }
 
 // ============================================================================
-// Logging — MCP Tier 2: `notifications/message` (server → client log
-// messages) + `logging/setLevel` (client → server minimum-level negotiation),
-// exposed to handlers via `stores.caller.sendLog` (see `assembleInput`
-// below), the same opt-in-field pattern sampling's `createMessage` uses.
-//
-// Unlike `sampling`, `logging` IS a server capability
-// (`ServerCapabilitiesSchema.logging`, @modelcontextprotocol/sdk/types.js) —
-// so `CreateMcpServerOptions.logging` both adds `logging: {}` to the
-// capabilities object passed to `new Server(...)` below AND gates
-// `stores.caller.sendLog`.
-//
-// Log-level negotiation itself needs no code here: the SDK's own `Server`
-// constructor (@modelcontextprotocol/sdk/server/index.js) already registers
-// a `logging/setLevel` request handler whenever `capabilities.logging` is
-// set — it records the requesting session's minimum level in a private
-// `_loggingLevels` map and `Server.sendLoggingMessage` already consults that
-// map (`isMessageIgnored`) before emitting a notification. Declaring the
-// capability is therefore the entire integration; this module only adds the
-// handler-facing `sendLog` function on top.
+// Logging
 // ============================================================================
+//
+// MCP Tier 2 logging is two halves: `notifications/message`, which a server
+// sends, and `logging/setLevel`, by which a client sets the minimum level it
+// wants to receive. Handlers reach the sending half through
+// `stores.caller.sendLog`, the same opt-in-field arrangement sampling uses.
+//
+// Logging, unlike sampling, is a server capability, so
+// `CreateMcpServerOptions.logging` both advertises it and exposes `sendLog`.
+//
+// The negotiating half needs no code here at all. The SDK's `Server`
+// constructor registers a `logging/setLevel` handler as soon as
+// `capabilities.logging` is set, records each session's chosen minimum, and
+// consults it inside `sendLoggingMessage` before anything goes out. Declaring
+// the capability is the whole integration; this module adds only the
+// handler-facing function on top of it.
 
 /**
- * Opt-in configuration for `CreateMcpServerOptions.logging` — currently no
- * fields; reserved so a later per-server default (e.g. a default `logger`
- * name applied when a handler's `sendLog` call omits one) can be added
- * without a breaking change to the option's shape. Pass `true` instead for
- * the common "just turn it on" case. Mirrors `SamplingConfig`.
+ * Configuration for `CreateMcpServerOptions.logging`. Empty today, and accepted
+ * so that a later per-server default — say, a `logger` name used when a
+ * `sendLog` call omits one — can arrive without changing the option's shape.
+ * Passing `true` has the same effect. Mirrors `SamplingConfig`.
  */
 export type LoggingConfig = Record<string, never>;
 
-/** A single `notifications/message` payload — see `SendLogFn`. */
+/** One log message: its severity, its payload, and optionally the name of the logger it came from. */
 export type SendLogParams = {
   readonly level: LoggingLevel;
   readonly data: unknown;
@@ -535,46 +535,38 @@ export type SendLogParams = {
 };
 
 /**
- * `stores.caller.sendLog`, exposed to tool/resource/prompt handlers when
- * `CreateMcpServerOptions.logging` is enabled — emits a `notifications/message`
- * to the connected client at the given `level`, wired to this server's own
- * `Server.sendLoggingMessage` (@modelcontextprotocol/sdk/server/index.js) and
- * pre-bound to the requesting session (so a handler never needs to thread
- * `extra.sessionId` through itself). The SDK drops the notification
- * server-side when `level` is below whatever minimum the connected client
- * negotiated via `logging/setLevel` (or sends it unconditionally if the
- * client never negotiated a level) — see this module's "Logging" doc
- * section above.
+ * `stores.caller.sendLog` as a handler sees it: emit one `notifications/message`
+ * to the connected client, already bound to this server and to the session the
+ * request arrived on, so a handler never threads a session id anywhere.
+ *
+ * Whether the message actually goes out is the SDK's call, per the level that
+ * session negotiated — see the "Logging" section above.
  */
 export interface SendLogFn {
   (params: SendLogParams): Promise<void>;
 }
 
 // ============================================================================
-// Input assembly — shared pipeline (packages/api-tree/src/input.ts)
+// Input assembly
 // ============================================================================
+//
+// Every dispatch builds its stores, then runs the shared `assemble` pipeline
+// (packages/api-tree/src/input.ts) over them to produce the bag the handler is
+// called with.
 
 /**
- * Build the `caller` store for one request — shared verbatim by both
- * assembly paths below, which differ ONLY in which named store they put the
- * raw values under.
+ * Build one request's `caller` store, identically for all three surfaces.
  *
- * `extra` is the SDK's per-request `RequestHandlerExtra` (second argument to
- * every `setRequestHandler` callback below) — its `authInfo`/`sessionId`
- * populate the `caller` store: `caller.authInfo` returns the SDK's
- * `AuthInfo` object, `caller.sessionId` the session ID string. This
- * replaces the reverted `extra`-into-`McpMiddlewareContext` threading (commit
- * `027baa6`) — `extra` now flows through `stores.caller` like every other
- * projector's caller context; it is never exposed to middleware directly. See
- * docs/design/middleware-and-caller-context.md.
+ * Who is calling comes from the SDK's per-request `extra`: its `authInfo` and
+ * `sessionId` are what `caller.authInfo` and `caller.sessionId` return. `extra`
+ * itself goes no further — the `caller` store is the whole caller-context
+ * surface, here as in every other projector
+ * (docs/design/middleware-and-caller-context.md).
  *
- * `createMessage`, when passed (only when `CreateMcpServerOptions.sampling`
- * is enabled — see call sites in `createMcpServer`), is threaded onto
- * `caller` alongside `authInfo`/`sessionId` — see this module's "Sampling"
- * doc section and `CreateMessageFn`. `sendLog`, when passed (only when
- * `CreateMcpServerOptions.logging` is enabled), is threaded the same way,
- * pre-bound to this request's `extra.sessionId` — see this module's
- * "Logging" doc section and `SendLogFn`.
+ * What the caller can be asked to do comes from the two optional arguments,
+ * present only when the deployment enabled the corresponding option:
+ * `createMessage` for sampling, and `sendLog` for logging, the latter closed
+ * over this request's session so the handler need not know it has one.
  */
 function callerStore(
   extra: McpRequestExtra,
@@ -591,39 +583,34 @@ function callerStore(
   };
 }
 
-/** `paramNames` for one assembly: the union of the raw values' own keys and any name declared in `sourceMap` — so a param sourced purely from an override (not present in the raw values at all) still gets assembled. */
+/** Which parameters to assemble: everything the wire supplied, plus everything `sourceMap` named. A parameter sourced entirely from an override appears in no wire values at all, and would otherwise be missed. */
 const paramNamesFor = (
   values: Record<string, unknown>,
   sourceMap: SourceMap,
 ): readonly string[] => [...new Set([...Object.keys(values), ...Object.keys(sourceMap)])];
 
 // ----------------------------------------------------------------------------
-// Two assembly paths, one per store name — NOT one function taking the store
-// name as a parameter.
+// The two functions below differ only in which store the wire values land in,
+// and are two functions rather than one taking a store name because of what
+// that costs in types. A single function would have to build its stores with a
+// computed key, `{ [storeName]: values }`, which TypeScript will not check
+// against a literal member of `McpStoreBag` however the registry is declared;
+// it would need a cast, and the cast would erase the checking this whole
+// arrangement exists for (docs/design/typed-store-spec.md §5, §9(4)). Written
+// out separately, each builds an object literal with a literal key and checks
+// directly. Every call site already knows which one it wants, so the split
+// costs callers nothing.
 //
-// The single-function form necessarily built its stores object with a COMPUTED
-// key (`{ [storeName]: values, ... }`), which TypeScript cannot narrow to a
-// literal member of `McpStoreBag` no matter what the registry's members are
-// typed as — so it needed an `as Stores` cast that erased the whole check.
-// Splitting the two call shapes apart lets each build an object literal with a
-// LITERAL key, which checks against `McpStoreBag` directly, with no cast (see
-// docs/design/typed-store-spec.md §5's second bullet, §9(4)). Every call site
-// already passed a literal `"argument"` or `"uri-variable"`, so this costs the
-// callers nothing.
+// Both return the stores alongside the assembled input, because middleware sees
+// both — the assembled arguments, and the raw stores they were assembled from.
+// The handler sees only the input.
 //
-// Both mirror cli-api-projector's `buildInput`, and both return the `stores`
-// alongside the assembled `input` bag — `stores` is threaded into
-// `McpMiddleware` (see below), which sees both the assembled input AND the raw
-// pre-assembly stores; the handler itself only ever sees `input`.
-//
-// With an empty `sourceMap`, every param resolves from the store by its own
-// key — i.e. `input` reduces to `values` unchanged, matching prior behavior
-// (tool calls got `request.params.arguments` directly; resource template reads
-// got the regex-captured vars object directly; prompt calls got
-// `request.params.arguments` directly).
+// With no `sourceMap`, assembly is the identity: each parameter resolves from
+// the store under its own name, and the handler receives the wire values as
+// they arrived.
 // ----------------------------------------------------------------------------
 
-/** Assemble a tool call's or prompt's input bag — raw values land in the `argument` store. */
+/** Assemble a tool call's or a prompt's input. Its arguments become the `argument` store. */
 function assembleArgumentInput(
   values: Record<string, unknown>,
   sourceMap: SourceMap,
@@ -641,7 +628,7 @@ function assembleArgumentInput(
   };
 }
 
-/** Assemble a resource read's input bag — raw values land in the `uri-variable` store. */
+/** Assemble a resource read's input. The variables its URI captured become the `uri-variable` store. */
 function assembleUriVariableInput(
   values: Record<string, unknown>,
   sourceMap: SourceMap,
@@ -660,45 +647,38 @@ function assembleUriVariableInput(
 }
 
 // ============================================================================
-// Middleware — around-hooks wrapping the handler call
-//
-// Middleware is F => F, where F = (input, stores) => result — see
-// docs/design/middleware-and-caller-context.md. There is no separate context
-// bag: `input` is the assembled, validated domain arguments (same shape the
-// handler receives); `stores` is the raw pre-assembly stores built for input
-// assembly (see `assembleInput`), giving middleware access to whatever the
-// handler didn't declare. The handler itself is `(input) => result` — it
-// never receives `stores`; that's structural (see `withAls` and the
-// `(input, _stores) => handler(input)` base below), not a convention to
-// remember.
+// Middleware
 // ============================================================================
+//
+// A middleware wraps the call: `F => F`, where `F = (input, stores) => result`
+// (docs/design/middleware-and-caller-context.md). There is no context bag
+// besides those two arguments. `input` is the assembled domain arguments, the
+// same values the handler will be called with; `stores` is what they were
+// assembled from, which is how a middleware reaches anything the handler did
+// not declare — caller identity, an audit trail, a raw argument nobody typed.
+//
+// The handler stays `(input) => result` throughout. It cannot see `stores`,
+// because the base function below never passes them, which makes this a
+// property of the code rather than a rule to remember.
 
 /**
- * The SDK's per-request `RequestHandlerExtra` for this package's `Server`
- * (default `RequestT`/`NotificationT`, per `createMcpServer`'s use of the
- * SDK's low-level `Server` — see module doc above) — the second parameter
- * every `setRequestHandler` callback receives. Carries `authInfo`/`sessionId`,
- * consumed by `assembleInput` to populate the `caller` store; never threaded
- * to middleware directly (see `assembleInput`'s doc and
- * docs/design/middleware-and-caller-context.md).
+ * The per-request context the SDK passes every request handler, at the request
+ * and notification types this package's low-level `Server` uses. `callerStore`
+ * reads it; nothing else does.
  */
 type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 
 /**
- * An MCP middleware wraps the handler-invoking function `next` (itself
- * `F => F`, see module doc above). Middleware compose like HTTP layers
- * (`packages/http-api-projector/src/layers.ts`) and CLI middleware
- * (`packages/cli-api-projector/src/cli.ts`): the first entry in
- * `CreateMcpServerOptions.middleware` is the OUTERMOST wrapper.
+ * A middleware: given the function that would run the call, return one that
+ * runs it differently. Composition is onion-shaped, first entry outermost, as
+ * it is for HTTP layers (packages/http-api-projector/src/layers.ts) and CLI
+ * middleware (packages/cli-api-projector/src/cli.ts).
  */
 export type McpMiddleware = (
   next: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
 ) => (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>;
 
-/**
- * Compose `middleware` around `base`, first entry outermost. An empty array
- * returns `base` unchanged (identity — no wrapping overhead).
- */
+/** Wrap `base` in each middleware, first entry ending up outermost. An empty list returns `base` itself, unwrapped. */
 function composeMiddleware(
   middleware: readonly McpMiddleware[],
   base: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
@@ -711,44 +691,50 @@ function composeMiddleware(
 }
 
 // ============================================================================
-// ALS dispatch context — separate from McpMiddleware's (input, stores). ALS
-// is a side channel (see docs/design/middleware-and-caller-context.md); this
-// is dispatch metadata for `opts.als.init`, not a context bag threaded
-// through middleware.
+// ALS dispatch context
 // ============================================================================
+//
+// `AsyncLocalStorage` is a side channel, not part of the call signature
+// (docs/design/middleware-and-caller-context.md). What follows is the dispatch
+// metadata `opts.als.init` is handed to compute a store from — not a context
+// bag threaded through middleware, which sees `(input, stores)` and nothing
+// else.
 
-/** Dispatch context `CreateMcpServerOptions.als`'s `init` receives. */
+/** What the dispatch looks like from `opts.als.init`: which leaf, under which name, on which surface. */
 export type McpAlsContext = {
   readonly meta: LeafMeta;
+  /** The tool or prompt name, or the resource URI as requested. */
   readonly name: string;
   readonly requestType: "tool" | "resource" | "prompt";
 };
 
 export type CreateMcpServerOptions<T = unknown> = {
-  /** Server name, surfaced to MCP clients during the initialize handshake. */
+  /** Server name, given to clients during the initialize handshake. */
   readonly name: string;
-  /** Server version, surfaced alongside `name`. */
+  /** Server version, given alongside `name`. */
   readonly version: string;
-  /** Optional human-readable server description/title (SDK `Implementation` fields). */
+  /** Human-readable title, if the server wants one distinct from its name. */
   readonly title?: string;
+  /** Human-readable description of the server. */
   readonly description?: string;
-  /** Tool-name → derived input schema + JSDoc description (from codegen). Forwarded to `projectTools`. */
+  /** Derived schemas and descriptions, keyed by projected tool name. Forwarded to `projectTools`. */
   readonly schemas?: SchemaMap;
-  /** URI scheme for derived resource URIs (see `projectResources`). Forwarded as-is. */
+  /** Forwarded to `projectResources` — the URI scheme to derive resource URIs behind. */
   readonly resources?: ProjectResourcesOptions;
-  /** Prompt projection options (see `projectPrompts`). Forwarded as-is. */
+  /** Forwarded to `projectPrompts` — the derived schemas prompt arguments come from. */
   readonly prompts?: ProjectPromptsOptions;
   /**
-   * Additional `Node => Node` passes, applied in array order, to `tree`
-   * BEFORE `projectTools`/`projectResources`/`projectPrompts` build their
-   * dispatch maps — MCP's counterpart to HTTP's `PresetOptions.rewriters`
-   * (`packages/http-api-projector/src/preset.ts`). This is also where
-   * generated VALIDATION wires in, via `applyValidation(key, tree, "mcp")`
-   * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
-   * `validators` option (removed, phase 3): `applyValidation`'s call site
-   * must live in the CONSUMER's own entry file for codegen to anchor on it
-   * (see that module's doc comment), so `createMcpServer` itself can never
-   * own the call.
+   * Passes to run over `tree`, in order, before any projection walk sees it.
+   * MCP's counterpart to HTTP's `PresetOptions.rewriters`
+   * (packages/http-api-projector/src/preset.ts). Because MCP dispatches off the
+   * same `Node` shape it is handed — there is no projected route table in
+   * between, as there is for HTTP — a rewrite here is simply a rewrite of the
+   * tree.
+   *
+   * This is how generated validation is wired in. There is no separate
+   * `validators` option, because codegen anchors on the `applyValidation` call
+   * site itself, which has to live in the consumer's own entry file; a call
+   * `createMcpServer` made internally would be invisible to it.
    *
    * ```ts
    * import { applyValidation } from "./generated/apply-validation.ts"
@@ -759,163 +745,119 @@ export type CreateMcpServerOptions<T = unknown> = {
    * })
    * ```
    *
-   * The third argument, `"mcp"`, opts into wire-profile-driven staged
-   * decode+validate (`docs/design/wire-profiles-and-staged-validation.md`):
-   * MCP's wire is already-typed JSON (numbers are numbers, booleans are
-   * booleans), so the profile applied is identity + JSON-date coercion (the
-   * only thing JSON has no literal for) — no coercion of stringified
-   * numbers/booleans. A stringified number like `"42"` for a numeric field
-   * is a structured `ValidationError`, not silently accepted. This is now
-   * the ONLY validation path: there is no manual JSON-Schema fallback
-   * check — decode and validation run unconditionally on every leaf
-   * `applyValidation` wraps. Unlike HTTP's `HttpRoute` projection, MCP
-   * dispatches off the SAME `Node` shape it's given — there is no separate
-   * "projected" shape for `rewriters` to run after, so a rewrite here
-   * applies to `tree` itself, before any of the three projection walks. A
-   * tool with no matching generated-validator entry (an un-codegen'd leaf,
-   * or no `applyValidation` rewriter at all) gets NO validation — raw wire
-   * args reach the handler directly (the design's stated zero-setup
-   * tradeoff for a pre-codegen checkout).
+   * That third argument names the wire profile
+   * (docs/design/wire-profiles-and-staged-validation.md). MCP's wire is JSON
+   * that already carries its own types — a number arrives as a number — so the
+   * profile coerces nothing except dates, which JSON has no literal for.
+   * `"42"` where a number is expected is a validation error, not a value to be
+   * helpfully converted.
+   *
+   * Validation covers exactly the leaves a generated validator names. A leaf it
+   * does not name, or a tree with no `applyValidation` rewriter at all, reaches
+   * its handler with the wire values as they arrived: the design's stated
+   * tradeoff for a checkout where codegen has not been run.
    */
   readonly rewriters?: ReadonlyArray<(tree: Node) => Node>;
   /**
-   * Additional capabilities to advertise beyond `{ tools: {} }` (always
-   * included — this preset always registers tool handlers), `{ resources: {} }`
-   * (added automatically when the tree contains any resource leaves), and
-   * `{ prompts: {} }` (added automatically when the tree contains any prompt
-   * leaves).
+   * Capabilities to advertise on top of the ones derived from the tree. `tools`
+   * is always advertised; `resources` and `prompts` are advertised when the
+   * tree contains leaves of those kinds.
    */
   readonly capabilities?: ServerCapabilities;
   /**
-   * Wrap each tool/resource/prompt handler call so it runs inside its own
-   * `AsyncLocalStorage` context. `init` computes the per-invocation context
-   * value from MCP-specific dispatch context (see `McpAlsContext`). Mirrors
-   * HTTP's `PresetOptions.als` (`packages/http-api-projector/src/preset.ts`)
-   * and CLI's `CliOpts.als` (`packages/cli-api-projector/src/cli.ts`). ALS is
-   * the INNERMOST wrapper — closer to the handler than `opts.middleware` —
-   * so the store is active only while the dispatched handler (and anything
-   * it calls, transitively) runs; an `McpMiddleware`'s own code, before or
-   * after calling `next`, is NOT itself inside the ALS context — Node's
-   * `AsyncLocalStorage` doesn't propagate back out through an `await`'d call
-   * once it settles. A middleware that needs cross-cutting context should
-   * read it from `stores` (the second parameter every `McpMiddleware`
-   * receives), or read the ALS store from code it invokes synchronously
-   * inside `next`. Absent by default (no ALS wrapping).
+   * Run each handler inside an `AsyncLocalStorage` context, computed per
+   * invocation by `init` from the dispatch metadata in `McpAlsContext`.
+   * HTTP's `PresetOptions.als` (packages/http-api-projector/src/preset.ts) and
+   * CLI's `CliOpts.als` (packages/cli-api-projector/src/cli.ts) work the same
+   * way. Off by default.
+   *
+   * Middleware sees no store, before or after `next`, for two separate
+   * reasons. Before, because this is the innermost wrapper, nearer the handler
+   * than any middleware — that part is a choice. After, because a context does
+   * not follow execution back out of an `await` once the awaited call has
+   * settled — that part is `AsyncLocalStorage` itself, and no wrapping order
+   * would change it. Middleware needing cross-cutting context should read
+   * `stores`, or read the store from code it calls synchronously inside `next`.
    */
   readonly als?: AlsConfig<McpAlsContext, T>;
   /**
-   * Around-hooks wrapping each tool/resource/prompt handler call — `F => F`
-   * where `F = (input, stores) => result` (see
-   * docs/design/middleware-and-caller-context.md). Composes like an onion:
-   * the first entry in the array is the OUTERMOST wrapper, matching HTTP's
-   * layer composition (`packages/http-api-projector/src/layers.ts`) and
-   * CLI's middleware (`packages/cli-api-projector/src/cli.ts`). `stores` is
-   * the raw pre-assembly stores built for input assembly (see
-   * `assembleInput`) — the vehicle for cross-cutting concerns (caller
-   * identity, audit, ...); the handler itself never sees `stores`.
-   *
-   * When omitted (or empty), each handler is called directly — zero overhead.
+   * Middleware wrapping every handler call, first entry outermost. See
+   * `McpMiddleware` for the shape and the "Middleware" section above for what
+   * each argument carries. Omitted or empty, handlers are called directly.
    */
   readonly middleware?: readonly McpMiddleware[];
   /**
-   * Opt-in configuration for the structural sniffing this preset applies to
-   * a tool/resource/prompt handler's return value — `result` gates
-   * `Result`-shape (`{kind:"ok"|"err"}`) unwrapping (tools only — resources
-   * and prompts don't unwrap `Result` today), `streaming` gates
-   * `AsyncIterable` detection (and, transitively, `StreamEffect` tag
-   * interpretation on its yields — `collectStreamedToolContent`/
-   * `collectStreamedResourceContents`/`collectStreamedMessages`). Both
-   * default to `true` — existing behavior — when `detection` itself, or
-   * either field, is omitted. Disable one when a handler legitimately
-   * returns/yields data shaped like one of these DUs and it must NOT be
-   * reinterpreted as the transport protocol (see
-   * `docs/design/middleware-and-caller-context.md`'s "Streaming and
-   * Progress" section, and `DetectionOptions`'s own doc,
-   * `@rhi-zone/fractal-api-tree`). Mirrors HTTP's `PresetOptions.detection`
-   * (`packages/http-api-projector/src/preset.ts`) and CLI's
-   * `CliOpts.detection`.
+   * Which shapes to recognize in a handler's return value. `result` governs
+   * unwrapping a `Result` — tools only; resources and prompts pass one through
+   * as an ordinary value. `streaming` governs draining an `AsyncIterable`, and
+   * with it the reading of `StreamEffect` tags on what it yields. Both are on
+   * unless turned off.
+   *
+   * Turn one off when a handler legitimately returns or yields data shaped like
+   * one of those and it must not be read as protocol. HTTP's
+   * `PresetOptions.detection` and CLI's `CliOpts.detection` offer the same
+   * escape hatch; `DetectionOptions` in @rhi-zone/fractal-api-tree defines the
+   * shape.
    */
   readonly detection?: DetectionOptions;
   /**
-   * Maps a tool handler's `Result.err(E)` error value to an
-   * `McpErrorResponse` (error code + message) — see
-   * `McpErrorEncoder`/`mcpErrors` above. Called when `detection.result` is
-   * on (default `true`) and a tool handler returns `{kind:"err", error}`.
-   * Returning `undefined` (including when `errorEncoder` itself is omitted)
-   * falls back to the existing default: an `isError` tool result with
-   * `Invalid input for tool "<name>": <JSON>`. Compose several encoders with
-   * `composeErrorEncoders` (`@rhi-zone/fractal-api-tree`) — first match
-   * wins. Tools only, matching how `detection.result` itself only unwraps
-   * `Result` for tools, not resources/prompts. Mirrors HTTP's
-   * `PresetOptions.errorEncoder` (`packages/http-api-projector/src/preset.ts`)
-   * and CLI's `CliOpts.errorEncoder` (`packages/cli-api-projector/src/cli.ts`).
+   * What a tool handler's error value means in MCP terms — see `mcpErrors` for
+   * the common kind-to-code case, and `composeErrorEncoders`
+   * (@rhi-zone/fractal-api-tree) to combine several encoders.
+   *
+   * Consulted when a tool returns an err `Result` and `detection.result` is on.
+   * An error the encoder declines to map, or any error when no encoder is
+   * configured, produces the default `isError` result instead. Tools only,
+   * since only tools unwrap a `Result` in the first place. HTTP's
+   * `PresetOptions.errorEncoder` and CLI's `CliOpts.errorEncoder` are the same
+   * option in their own vocabularies.
    */
   readonly errorEncoder?: McpErrorEncoder;
   /**
-   * Opt-in: expose `createMessage` on `stores.caller` so tool/resource/
-   * prompt handlers can request LLM sampling from the connected client
-   * mid-execution (MCP's `sampling/createMessage`), wired to this server's
-   * own `Server.createMessage` (see `CreateMessageFn`). Pass `true` to
-   * enable with defaults, or a `SamplingConfig` object (currently no fields,
-   * reserved for future config) for the same effect today.
+   * Give handlers `stores.caller.createMessage`, so they can ask the connected
+   * client for a completion mid-execution. Pass `true`, or a `SamplingConfig`
+   * for the same effect and room to configure later.
    *
-   * Absent by default — `stores.caller` has no `createMessage` field unless
-   * this is set, so a handler can't reach for a capability the connected
-   * client might not even support without the integrator opting in first.
-   * Note this does NOT add anything to this server's advertised
-   * `ServerCapabilities`: per the MCP spec `sampling` is a CLIENT
-   * capability, asserted from what the connected client declared during
-   * `initialize` — see this module's "Sampling" doc section above
-   * `CreateMessageFn` for the full explanation.
+   * Off by default: a handler should not be able to reach for a capability the
+   * deployment never considered and the connected client may not implement.
+   * Enabling it advertises nothing, because sampling is a client capability —
+   * the "Sampling" section above has the detail.
    */
   readonly sampling?: boolean | SamplingConfig;
   /**
-   * Opt-in: MCP Tier 2 logging — advertises the `logging` server capability
-   * (`{ logging: {} }`, merged with any `opts.capabilities.logging` passed
-   * separately) and exposes `stores.caller.sendLog` so tool/resource/prompt
-   * handlers can emit `notifications/message` to the connected client (see
-   * `SendLogFn`). Pass `true` to enable with defaults, or a `LoggingConfig`
-   * object (currently no fields, reserved for future config) for the same
-   * effect today.
+   * Advertise the `logging` capability and give handlers
+   * `stores.caller.sendLog`, so they can emit log messages to the connected
+   * client. Pass `true`, or a `LoggingConfig` for the same effect and room to
+   * configure later. Anything passed as `capabilities.logging` is merged in.
    *
-   * Log-level negotiation (`logging/setLevel`) needs no separate wiring —
-   * declaring the capability is enough for the SDK's own `Server` to
-   * register that handler and honor it inside `sendLoggingMessage`; see this
-   * module's "Logging" doc section above `SendLogFn` for the full
-   * explanation.
-   *
-   * Absent by default — `stores.caller` has no `sendLog` field, and no
-   * `logging` capability is advertised, unless this is set.
+   * Off by default. Level negotiation comes free with the capability — see the
+   * "Logging" section above.
    */
   readonly logging?: boolean | LoggingConfig;
 };
 
 /**
- * Build an OOTB MCP `Server` from a Node tree: projects `tree` via
- * `projectTools` (project.ts) to get the flat `McpTool[]` + handler map,
- * registers `tools/list` and `tools/call` request handlers, and returns
- * the unconnected `Server` instance.
+ * Build an MCP `Server` from a Node tree: project the tree's tools, resources
+ * and prompts, register handlers for whichever of the three the tree actually
+ * uses, and return the server, unconnected.
  *
- * The caller chooses a transport and connects it:
+ * Choosing a transport and connecting it is the caller's:
  *
  * ```ts
  * const server = createMcpServer(tree, { name: "my-api", version: "1.0.0" })
  * await server.connect(new StdioServerTransport())
  * ```
  *
- * A handler that throws (sync or async) is caught and surfaced as an MCP
- * tool error result (`isError: true`) rather than crashing the request —
- * that is the protocol's own error-signaling channel, distinct from a
- * transport-level failure. A generated validator's rejection (see
- * `CreateMcpServerOptions.rewriters`) is surfaced the same way but via a
- * different mechanism — the wrapped handler returns an err Result rather
- * than throwing, so it's caught by a return-value check, not the try/catch.
+ * A handler that throws does not take the request down with it: the throw
+ * becomes an `isError` tool result, which is MCP's own way of reporting that an
+ * operation failed, as distinct from the transport failing. A generated
+ * validator's rejection ends up in the same place by a different route — it
+ * returns an err `Result` rather than throwing, and is caught by the
+ * return-value check rather than the try/catch.
  */
 export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOptions<T>): Server {
-  // Apply any consumer-supplied Node => Node rewriters BEFORE any projection
-  // walk — see `CreateMcpServerOptions.rewriters`. This is where generated
-  // validation wires in (`applyValidation`), same integration point HTTP's
-  // `PresetOptions.rewriters` provides.
+  // Rewriters run before anything reads the tree, so every projection walk and
+  // every dispatch table sees the same rewritten leaves.
   const workingTree = (opts.rewriters ?? []).reduce((t, rewrite) => rewrite(t), tree);
 
   const { tools, handlers } = projectTools(
@@ -933,17 +875,13 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
   const { prompts, handlers: promptHandlers } = projectPrompts(workingTree, opts.prompts ?? {});
   const hasPrompts = prompts.length > 0;
 
-  // Around-hooks wrapping each handler call — see CreateMcpServerOptions.middleware.
   const middleware = opts.middleware ?? [];
 
-  // Opt-in return-value detection — see CreateMcpServerOptions.detection.
   const detectResult = opts.detection?.result ?? true;
   const detectStreaming = opts.detection?.streaming ?? true;
 
-  // ALS wrapping (see CreateMcpServerOptions.als) — innermost, closer to the
-  // handler than `middleware`. Absent `opts.als` degrades to identity (no
-  // wrapping, zero overhead), matching `middleware`'s own zero-overhead
-  // no-op case.
+  // The innermost wrapper, closer to the handler than any middleware. Without
+  // `opts.als` it is the identity, so an unconfigured server wraps nothing.
   const withAls = (
     handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
     context: McpAlsContext,
@@ -957,9 +895,9 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
             : opts.als!.storage.run(store, () => handler(input));
         };
 
-  // Bridge a plain handler `(input) => result` into `F => F`'s base case
-  // `(input, stores) => handler(input)` — the handler never sees `stores`,
-  // structurally (see McpMiddleware's module doc above).
+  // The base of the middleware chain: it accepts `stores` and drops them, which
+  // is what keeps a handler's signature `(input) => result` no matter how much
+  // middleware sits above it.
   const toBase =
     (
       handler: (input: Record<string, unknown>) => unknown | Promise<unknown>,
@@ -980,28 +918,19 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       tools: { ...opts.capabilities?.tools },
       ...(hasResources ? { resources: { ...opts.capabilities?.resources } } : {}),
       ...(hasPrompts ? { prompts: { ...opts.capabilities?.prompts } } : {}),
-      // No `sampling` key here — see CreateMcpServerOptions.sampling's doc
-      // and this module's "Sampling" section above `CreateMessageFn`:
-      // `sampling` is a CLIENT capability in the MCP spec, not something a
-      // server advertises (`ServerCapabilitiesSchema` has no such field).
-      //
-      // `logging`, unlike `sampling`, IS a server capability — see
-      // CreateMcpServerOptions.logging's doc and this module's "Logging"
-      // section above `SendLogFn`. Declaring it here is also what makes the
-      // SDK's own `Server` constructor register the `logging/setLevel`
-      // handler (see server/index.js) — so this is the entire log-level
-      // negotiation wiring, not just capability advertisement.
+      // Sampling is absent here by design, being a client capability with no
+      // `ServerCapabilities` field to occupy. Logging has one, and declaring it
+      // does more than advertise: it is what makes the SDK register the
+      // `logging/setLevel` handler. Both sections above have the detail.
       ...(opts.logging === true || (typeof opts.logging === "object" && opts.logging !== null)
         ? { logging: { ...opts.capabilities?.logging } }
         : {}),
     },
   });
 
-  // Opt-in sampling (see CreateMcpServerOptions.sampling and this module's
-  // "Sampling" doc section) — gates whether `stores.caller.createMessage`
-  // exists at all; `true` and `{}` (a `SamplingConfig`, no fields yet) both
-  // enable it. Bound to `server.createMessage` so a handler never needs a
-  // reference to the `Server` instance itself.
+  // Bound to this server, so what lands on `stores.caller` is callable on its
+  // own and a handler never needs the `Server`. Left undefined when sampling is
+  // off, which is what makes the field absent rather than present and failing.
   const samplingEnabled =
     opts.sampling === true || (typeof opts.sampling === "object" && opts.sampling !== null);
   const createMessage: CreateMessageFn | undefined = samplingEnabled
@@ -1009,11 +938,8 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         server.createMessage(params, options)) as CreateMessageFn)
     : undefined;
 
-  // Opt-in logging (see CreateMcpServerOptions.logging and this module's
-  // "Logging" doc section) — gates whether `stores.caller.sendLog` exists at
-  // all. Bound to `server.sendLoggingMessage` so a handler never needs a
-  // reference to the `Server` instance itself; per-request session binding
-  // happens in `assembleInput`, not here.
+  // Bound to this server for the same reason as `createMessage` above. The
+  // session it sends on is bound later, per request, in `callerStore`.
   const loggingEnabled =
     opts.logging === true || (typeof opts.logging === "object" && opts.logging !== null);
   const sendLoggingMessage:
@@ -1050,27 +976,21 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
         let result = await callHandler(input, stores);
 
-        // Streaming: an async-iterable result (e.g. an async generator
-        // handler) is drained into progress notifications + collected content
-        // instead of going through Result-unwrapping/toCallToolContent below —
-        // checked first since neither a Result nor plain content is an async
-        // iterable, so there's no ambiguity (matches HTTP's `runRoute`,
-        // packages/http-api-projector/src/route.ts).
+        // Checked before the `Result` check because a stream is never also a
+        // `Result` or a content block, so there is no ambiguity to resolve —
+        // HTTP's `runRoute` (packages/http-api-projector/src/route.ts) orders
+        // these the same way.
         if (detectStreaming && isAsyncIterable(result)) {
           return { content: await collectStreamedToolContent(result, extra) };
         }
 
-        // Result unwrapping: applied whenever `detectResult` is on (matching
-        // HTTP's `runRoute`, packages/http-api-projector/src/route.ts) — any
-        // handler returning `{kind:"err", error}` gets a proper MCP tool
-        // error result, whether the `err` came from the handler itself or from
-        // a generated validator's rejection (`applyValidation` wraps the
-        // handler with `parse()`, which returns the same `Result` shape on
-        // failure). A `kind:"ok"` Result is unwrapped to its `.value` before
-        // becoming content, so an ordinary handler that happens to return this
-        // package's own `Result<T,E>` shape (see
-        // @rhi-zone/fractal-api-tree's `ok`/`err`) is treated the same way
-        // regardless of validator wiring.
+        // A `Result` is unwrapped wherever it came from: the handler's own
+        // `ok`/`err`, or a generated validator's `parse()`, which reports
+        // failure in exactly the same shape. An err becomes an MCP error
+        // result, an ok is unwrapped to its value before becoming content.
+        // Handler and validator failures are therefore indistinguishable to a
+        // client, which is the point — both are the operation declining, not
+        // the server breaking.
         if (detectResult && isResultShape(result)) {
           if (result.kind === "err") {
             const encoded = opts.errorEncoder?.(result.error);
@@ -1092,15 +1012,14 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           content: toCallToolContent(result),
         };
       } catch {
-        // A thrown error is never surfaced verbatim to the caller — matching
-        // HTTP's `runRoute` (route.ts), which already collapses a thrown
-        // error to a generic "internal server error" 500 rather than leaking
-        // `err.message`. A handler's thrown message can carry internals
-        // (stack frames, file paths, driver-specific text, ...) that weren't
-        // meant for an MCP client; a handler that WANTS to communicate a
-        // specific, client-facing failure should return an `err(...)` Result
-        // instead (see the Result-unwrapping check above), which IS surfaced
-        // verbatim — that is the intentional, opt-in error-reporting channel.
+        // A thrown message can carry stack frames, file paths, driver text —
+        // internals nobody chose to publish. None of it reaches the client;
+        // HTTP collapses a throw to a bare 500 for the same reason
+        // (packages/http-api-projector/src/route.ts).
+        //
+        // A handler with something to say to the client says it by returning
+        // `err(...)`, which is passed through as written. That is the
+        // deliberate channel; a throw is not one.
         return {
           isError: true,
           content: [{ type: "text", text: "internal error" }],
@@ -1120,7 +1039,8 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
       async (request, extra): Promise<ReadResourceResult> => {
         const { uri } = request.params;
 
-        // Fixed resources first (exact URI match), then templates (pattern match).
+        // Exact URIs first, then templates: a fixed resource whose URI a
+        // template also matches is still the more specific answer.
         const fixed = resourceHandlers.get(uri);
         if (fixed !== undefined) {
           const mimeType = resourcesByUri.get(uri)?.mimeType ?? "application/json";
@@ -1131,8 +1051,9 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
           };
           const base = toBase(withAls(fixed.handler, fixedContext));
           const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
-          // No URI-variables for a fixed resource — assembleInput still builds
-          // the `caller` store from `extra` so middleware sees it here too.
+          // A fixed URI captures nothing, so there are no variables to
+          // assemble from — but the store is still built, so middleware sees
+          // the caller here as it does everywhere else.
           const { input, stores } = assembleUriVariableInput(
             {},
             {},
@@ -1214,15 +1135,14 @@ export function createMcpServer<T = unknown>(tree: Node, opts: CreateMcpServerOp
         const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
         const result = await callHandler(input, stores);
 
-        // Streaming: collect all yields + the final return value into the
-        // messages array — see `collectStreamedMessages`'s doc.
+        // A streaming prompt's yields become the messages it answers with.
         if (detectStreaming && isAsyncIterable(result)) {
           return { messages: await collectStreamedMessages(result, extra) };
         }
 
-        // A handler may already return a well-formed GetPromptResult (has a
-        // `messages` array) — pass it through as-is. Otherwise wrap the plain
-        // return value as a single assistant text message.
+        // A handler that already built its own messages has said exactly what
+        // it wants sent, so it is sent. Anything else becomes one assistant
+        // message carrying the value as JSON.
         if (
           typeof result === "object" &&
           result !== null &&

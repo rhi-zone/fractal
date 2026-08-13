@@ -1,15 +1,14 @@
-// packages/mcp-api-projector/src/deployment-meta.test-support.ts
+// The one augmentation this package's tests need, standing in for the one a
+// real deployment would own.
 //
-// mcp-api-projector has no real deployment of its own (it's a projector
-// package), but its own tests author `meta.mcp` contributions — including
-// at BRANCH position (`meta.mcp.segment`) — to exercise its projection
-// walk against something closer to what a real deployment's tree looks
-// like. Per docs/design/meta-role-split-spec.md §2/§3: projectors never
-// augment core's SharedMeta/LeafMeta/BranchMeta themselves — only a
-// DEPLOYMENT's own file does, exactly once. This file is that one file for
-// this package's own test suite — the test-suite's stand-in "deployment."
-// Not a `.test.ts` file itself, so bun test skips it; imported for its
-// side effect (the `declare module` augmentation) by tests that need it.
+// Projectors never augment core's meta types themselves; a deployment does it,
+// once, in a file of its own (docs/design/meta-role-split-spec.md §2 and §3).
+// This projector has no deployment — but its tests author `meta.mcp` anyway,
+// including `meta.mcp.segment` at branch position, to exercise the walks
+// against trees shaped like real ones. This file is where they get to.
+//
+// Imported for the augmentation alone, and named so `bun test` does not mistake
+// it for a test file.
 
 import "@rhi-zone/fractal-api-tree/node";
 import type { McpBranchMeta, McpLeafMeta } from "./project.ts";

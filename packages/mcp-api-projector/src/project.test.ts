@@ -1,29 +1,26 @@
-// packages/mcp-api-projector/src/project.test.ts — MCP tool projection tests
+// project.ts — the three projection walks, in isolation from any server.
 
 import { describe, expect, it } from "bun:test";
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
 import { verbFromTags } from "@rhi-zone/fractal-http-api-projector/project";
 import { projectPrompts, projectResources, projectTools, toTools } from "./project.ts";
-// Side-effect import: this test suite's own "deployment" augmentation
-// (`LeafMeta extends McpLeafMeta`, `BranchMeta extends McpBranchMeta`) — see
-// that file's own doc comment. Needed for `meta.mcp.segment` below (a real,
-// spec-endorsed branch-position override) to type-check.
+// Registers `meta.mcp` on core's meta types for this suite — without it,
+// `meta.mcp.segment` on a branch below would not type-check. See that file.
 import "./deployment-meta.test-support.ts";
 
 // ============================================================================
-// 1. Cross-surface payoff: one meta.tags → MCP annotations + HTTP verb
+// 1. One authoring, two surfaces
 //
-// This is the core thesis test: the SAME meta.tags that drives HTTP verb
-// selection also drives MCP annotation hints. One authoring, two surfaces.
+// Each case here authors `meta.tags` once and then asserts on both what MCP
+// derives from it and what HTTP does — the payoff being that neither surface
+// was authored for separately.
 // ============================================================================
 
 describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", () => {
   it("readOnly:true → readOnlyHint:true (MCP) + GET (HTTP)", () => {
-    // Single authored node — meta.tags authored ONCE
     const leaf = op((_: unknown) => "result", { tags: { readOnly: true } });
     const n = api_({ get: leaf });
 
-    // MCP surface: readOnlyHint derives from meta.tags.readOnly
     const tools = toTools(n);
     expect(tools).toHaveLength(1);
     expect(tools[0]!.annotations?.readOnlyHint).toBe(true);
@@ -36,12 +33,12 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
     const leaf = op((_: unknown) => null, { tags: { destructive: true } });
     const n = api_({ delete: leaf });
 
-    // MCP surface: destructiveHint derives from meta.tags.destructive
     const tools = toTools(n);
     expect(tools[0]!.annotations?.destructiveHint).toBe(true);
 
-    // HTTP surface: same meta.tags → POST (destructive without idempotent = conservative)
-    expect(verbFromTags(leaf.meta)).toBe("POST"); // not GET — a mutating verb
+    // Destructive but not idempotent, so HTTP settles on POST rather than a
+    // verb that promises repeatability.
+    expect(verbFromTags(leaf.meta)).toBe("POST");
     expect(verbFromTags(leaf.meta)).not.toBe("GET");
   });
 
@@ -60,23 +57,20 @@ describe("cross-surface: same meta.tags → MCP annotation hints + HTTP verb", (
 });
 
 // ============================================================================
-// 2. Tags are read directly from the leaf's own meta — no ancestor inheritance
+// 2. A leaf reads its own tags and no ancestor's
 // ============================================================================
 
 describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
-  it("a node-level tag does NOT flow to leaf children with no own tags", () => {
-    // `tags` is a LEAF-only field under the SharedMeta/LeafMeta/BranchMeta
-    // split (docs/design/meta-role-split-spec.md §2) — api_()'s typed
-    // `opts.meta` no longer accepts it on a BRANCH at all, which is itself
-    // a stronger, compile-time version of "no ancestor inheritance." This
-    // test still exercises the RUNTIME behavior (a leaf reads only its own
-    // meta.tags, never an ancestor's) against a tree whose branch carries a
-    // `tags` key the typed constructor can't author — built via object
-    // spread over a real api_() result instead, the same shape a hand-built
-    // or legacy-computed tree could still produce.
+  it("a tag on a branch does not reach untagged leaves below it", () => {
+    // `tags` is leaf-only under the meta role split
+    // (docs/design/meta-role-split-spec.md §2), so `api_()` will not let a
+    // branch carry one — a stronger guarantee than this test asserts. What is
+    // tested here is the runtime behavior against a tree that carries one
+    // anyway, as a hand-built or legacy-computed tree still can. Hence the
+    // spread over a real `api_()` result.
     const catalog = api_({
-      list: op((_: unknown) => []), // no own tags — does NOT inherit
-      search: op((_: unknown) => []), // no own tags — does NOT inherit
+      list: op((_: unknown) => []),
+      search: op((_: unknown) => []),
     });
     const api = api_({
       catalog: { ...catalog, meta: { tags: { readOnly: true } } },
@@ -92,8 +86,7 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
     const leaf = op((_: unknown) => ({}), {
       tags: { readOnly: false, idempotent: true, destructive: true },
     });
-    // See the previous test's comment: `tags` on a branch is no longer
-    // constructible via api_()'s typed opts, built via object spread instead.
+    // Spread for the same reason as the previous test.
     const items = api_({ delete: leaf });
     const api = api_({
       items: { ...items, meta: { tags: { readOnly: true } } },
@@ -103,13 +96,13 @@ describe("leaf tags → MCP annotations (no ancestor inheritance)", () => {
     expect(tools[0]!.annotations?.destructiveHint).toBe(true);
     expect(tools[0]!.annotations?.idempotentHint).toBe(true);
 
-    // HTTP surface consistent: same leaf-only read → DELETE
+    // HTTP reads the same leaf-only tags and agrees.
     expect(verbFromTags(leaf.meta)).toBe("DELETE");
   });
 });
 
 // ============================================================================
-// 3. Unknown tags omit hints (three-valued semantics)
+// 3. An unset tag emits no hint
 // ============================================================================
 
 describe("unknown tags omit hints", () => {
@@ -135,10 +128,9 @@ describe("unknown tags omit hints", () => {
     const ann = tools[0]!.annotations!;
     expect(ann.readOnlyHint).toBe(true);
     expect(ann.openWorldHint).toBe(true);
-    // destructive and idempotent are unknown → must NOT appear
     expect("destructiveHint" in ann).toBe(false);
-    // idempotent is lifted to true by readOnly ⇒ idempotent implication
-    // (lattice rule: readOnly=true → idempotent=true when idempotent was undefined)
+    // Not authored, but not unknown either: the lattice derives it, since
+    // something read-only is necessarily repeatable.
     expect(ann.idempotentHint).toBe(true);
   });
 
@@ -147,7 +139,7 @@ describe("unknown tags omit hints", () => {
     const tools = toTools(n);
     const ann = tools[0]!.annotations!;
     expect(ann.destructiveHint).toBe(true);
-    // idempotent was never set and readOnly is not true → idempotent remains unknown → omitted
+    // Nothing authored it and no lattice rule reaches it, so it stays unknown.
     expect("idempotentHint" in ann).toBe(false);
   });
 });
@@ -289,13 +281,12 @@ describe("fallback-subtree leaves produce a tool", () => {
 });
 
 // ============================================================================
-// 6b. A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
-// api({...})) — the Node model explicitly allows this (api-tree/node.ts's
-// `fallback: { name, subtree: Node }`), and api-tree/tree.ts's `walkNodeType`
-// (aa28952) already had this exact gap for extraction. `projectTools`/
-// `projectResources`/`projectPrompts` all walked `fallback.subtree` as if it
-// were always a branch (`Object.entries(subtree.children ?? {})`), which
-// silently sees no children and omits the leaf entirely when it's bare.
+// 6b. A `fallback.subtree` that is a bare `op()` rather than an `api({...})`.
+//
+// The Node model allows either, and all three walks check for it: recursing
+// into a bare leaf as though it were a branch would find no children and drop
+// the leaf silently. api-tree's `walkNodeType` (aa28952) handles the same case
+// during extraction.
 // ============================================================================
 
 describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
@@ -649,7 +640,7 @@ describe("prompt arguments derived from schema", () => {
 });
 
 // ============================================================================
-// meta.tags.deprecated → deprecated flag on tools/resources/prompts
+// 10. meta.tags.deprecated, on all three surfaces
 // ============================================================================
 
 describe("meta.tags.deprecated surfaces on every leaf-derived surface", () => {
@@ -689,13 +680,12 @@ describe("meta.tags.deprecated surfaces on every leaf-derived surface", () => {
 });
 
 // ============================================================================
-// stream/page kind preservation — a handler's `stream`/`page` TypeRef kind,
-// lowered by type-ir's `toJsonSchema` to an `x-stream`/`x-page-style`-tagged
-// array schema (the only way either kind survives JSON Schema), used to be
-// silently dropped: `McpTool` had no `outputSchema` field at all, so nothing
-// consumed the derived `SchemaMap` entry's `outputSchema`. Mirrors
-// http-api-projector's `unwrapStreamSchema` (codegen.ts) and
-// json-rpc-api-projector's tag-derived `streaming` field (project.ts).
+// 11. Recovering a stream or page kind from a derived output schema
+//
+// JSON Schema cannot express either kind, so type-ir lowers both to a tagged
+// array schema. These cases cover reading the tag back off — into
+// `McpTool.streaming`, `.paginated` and `.pageStyle` — and the precedence
+// between the tag and an authored `meta.tags.streaming`.
 // ============================================================================
 
 describe("stream/page kind preservation from a derived output schema", () => {
@@ -709,7 +699,7 @@ describe("stream/page kind preservation from a derived output schema", () => {
     expect(tools[0]!.streaming).toBe(true);
   });
 
-  it("an x-stream-tagged output schema is NOT assigned verbatim to outputSchema (array fails the MCP spec's object-only constraint)", () => {
+  it("an x-stream-tagged output schema is not assigned to outputSchema, being an array where MCP requires an object", () => {
     const n = api_({ gen: op((_: unknown) => ({}), {}) });
     const { tools } = projectTools(n, {
       schemas: {
@@ -719,7 +709,7 @@ describe("stream/page kind preservation from a derived output schema", () => {
     expect(tools[0]!.outputSchema).toBeUndefined();
   });
 
-  it("an x-stream-tagged schema whose item schema IS object-shaped surfaces that item schema as outputSchema", () => {
+  it("an x-stream-tagged schema whose item schema is object-shaped surfaces that item schema as outputSchema", () => {
     const n = api_({ gen: op((_: unknown) => ({}), {}) });
     const itemSchema = { type: "object", properties: { chunk: { type: "string" } } };
     const { tools } = projectTools(n, {
