@@ -147,7 +147,7 @@
     },
     "06a3f5b48b3d153bdc739ca1a6b18e519a78f3991fcec6b180c92a03d03c7426": {
       "excerpt": "Dart style (https://dart.dev/effective-dart/style#identifiers): fields and",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "06da80fbc3db1d04b2c7f74cffcb8b8f9e525e53516998960005c83f16c24b66": {
       "excerpt": "Enable CORS. `true` for permissive defaults (`origin: \"*\"`), an options object t…",
@@ -311,7 +311,7 @@
     },
     "0d1c23ba23144c9f6692c2271758b56e7da8d480a5426fd83c9810292459f8df": {
       "excerpt": "built_value (https://pub.dev/packages/built_value) is Dart's older",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "0d1c6771b527bd10d38073e4da77bd789b8e009ca368f938edfdb8e864c276d2": {
       "excerpt": "============================================================================",
@@ -475,7 +475,7 @@
     },
     "125be8b2a4f965a5c8968132001b8e8aa99f234504004d7a83b2431be4aefeee": {
       "excerpt": "`fromJson` deserialization expression for one value read out of a",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "12a98c9acb377638986fb32f59e55e788766bc2921c5eea03e3363e16ab28376": {
       "excerpt": "Well-known types: https://protobuf.dev/reference/protobuf/google.protobuf/",
@@ -627,7 +627,7 @@
     },
     "17025587931784a24bd385419df0a702d8ae3ffab2194b778da4fa9c45bb2a15": {
       "excerpt": "Scalar/collection type name — https://dart.dev/language/built-in-types.",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "172ee64ab9d2c70e5717c915288f6161fa65b065413b72585adbedf456a35e44": {
       "excerpt": "Renders `meta.description` as a block comment. MSSQL's real column-comment",
@@ -879,7 +879,7 @@
     },
     "203ea730e10b762aacf2f9b99ee2b990df948c9250b9b1eefe8abe7472882301": {
       "excerpt": "Project a `TypeRef` to idiomatic Dart source. `name` names the top-level",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "2053dbbf6ec7135c4e994d3464c478db6f48d3ca21052c8f44915edc96e02c39": {
       "excerpt": "static",
@@ -1339,7 +1339,7 @@
     },
     "311386fcc2348f6cfb49036c22e61172f8ae939d16fc396b359b6a5fd180ebb0": {
       "excerpt": "Emit a data class: `final` fields, a `const`-free constructor with named",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "3130898e27bbed2fad0599c65b2aceed50439f38a73a74542a2760b11922ef0f": {
       "excerpt": "Named type declarations a `ref`-kind output TypeRef may target — needed to expan…",
@@ -1731,7 +1731,7 @@
     },
     "3e8b8a40c7c437e344b697f8c1a2eb29f0ee3be35baad275f40eda6b2dc82c95": {
       "excerpt": "Emit a freezed sealed-class union",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "3e9436b724ef0490f328da759183efbb3ca99253fb615ade90618a2509644ff1": {
       "excerpt": "============================================================================",
@@ -1923,7 +1923,7 @@
     },
     "46c0fe598a1be29c9b0e808d0e56291124db4458bdaa5d4085e903036952a681": {
       "excerpt": "Dart style (https://dart.dev/effective-dart/style#identifiers): fields and",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "46d6eeaa44ab9d99b0c06f3e9a27a2876800f90830b8dbe160a6599bcb484534": {
       "excerpt": "A single OpenAPI 3.1 path item method entry.",
@@ -2243,7 +2243,7 @@
     },
     "5215eb7ef77a90d6b45a4b89918b809d46142117676cfb0b891b9246bf8c5dc6": {
       "excerpt": "Dart's native async-sequence construct (https://dart.dev/language/streams)",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "521b044532bdfea33a094c8495b3c0e45e6b28f1afd665b571b74467d2ba279e": {
       "excerpt": "HEAD-as-GET (autoMethodLayer) also runs inside the ALS context",
@@ -2427,7 +2427,7 @@
     },
     "563c88090500707bf88e4af67ac58c1e1a868d586103c2845044192fd156ca7a": {
       "excerpt": "A class instance carries only nominal identity (see type-ir's",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "566d19211897c40de14b381bc95b1c962755fc8942bf4ea3f87619ff0c4eb916": {
       "excerpt": "A native PHP type expression (`type`) plus, when PHP's type system can't",
@@ -2447,7 +2447,7 @@
     },
     "56c1c1ac6ce935a25bfca127d7999d9e6a1a26250d73303db55f95f7cf8bd30c": {
       "excerpt": "Emit a freezed data class: `@freezed abstract class Foo with _$Foo` with a",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "56d6f32151ad8474f40d7b939c2161ee2bbf10023f4af1dbb3e13260ebdc6342": {
       "excerpt": "HTTP",
@@ -2479,7 +2479,7 @@
     },
     "577a116dfefa8b8e10410d3f529e107e7af873d6bc778307f246813e7f5ded90": {
       "excerpt": "One constructor-parameter block (doc comment + optional `@JsonKey` +",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "57a5fcd8bdc9414b6279804ced254983469dcca3aa7d5affb4162e6ba87a6331": {
       "excerpt": "https://protobuf.dev/programming-guides/proto3/#services — a service's RPCs",
@@ -2511,7 +2511,7 @@
     },
     "5895248ef3453a934052df47861b3aed7e01e04be8eddd394aa3a2df9c8f97b0": {
       "excerpt": "Dart style (https://dart.dev/effective-dart/style#identifiers): fields and",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "58f91e6a9e4c000d5cf2151b49fccf7bf980a8ceccf7da4a0c9cbd616ae0bea0": {
       "excerpt": "RFC 8927 §3.3.5 — properties form",
@@ -3155,7 +3155,7 @@
     },
     "71d2883063d79687f6990992b0fa25fdc31e43b7029825a14179672d70722a02": {
       "excerpt": "Emit a Dart 3 `sealed class` hierarchy",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "71df463fb27ab8b6ac4ff32c75fb20a6972713927ffa08c04fcfbaec687a71f4": {
       "excerpt": "Kinds whose Go rendering is already a nil-able reference type (slice, map,",
@@ -3807,7 +3807,7 @@
     },
     "8c0d795009cd7ca30be94cdff8de17b1692c10df8221999152592b26d2dd3a2d": {
       "excerpt": "Project a `TypeRef` to built_value-annotated Dart source. `name` names the",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "8c6bf1fca41bdab5daf31ee12c77fd193b0ddcd8e8684b44ef1b1ef130eec60a": {
       "excerpt": "`NonNullable` — a key present in the merged object always has a",
@@ -3879,7 +3879,7 @@
     },
     "8e7e4f52db8a0ff635a4b438889b08a3dd69108003374d1349d9753474ed6a8d": {
       "excerpt": "No native paginated-collection type — degrades to its element's List",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "8eb57b7425ac445ff0360c7418023b8cd17f9cc422aad26f0ae46f8acc89c105": {
       "excerpt": "Infers the JSON Schema `type` for an enum's members from their actual",
@@ -3955,7 +3955,7 @@
     },
     "905f60c9cb89a5c387329fd20a0eb1ca4494bcd07d86258719802c98085cf871": {
       "excerpt": "Dart has no service/interface-surface construct to target from a bare",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "9087a37b6834adf76d55c8584d43e0d496a01fcdcc3d93ce1f2dab13c6dff6b3": {
       "excerpt": "Cap'n Proto has no field-level streaming type (its streaming RPC support",
@@ -4175,7 +4175,7 @@
     },
     "98091553a5f32b01ba8db741c84f89af73f42a86671779ed3cd091dfa761861c": {
       "excerpt": "@JsonKey comes from freezed_annotation itself, no separate json_annotation impor…",
-      "approvedAt": "2026-08-13T07:10:51.091Z"
+      "approvedAt": "2026-08-13T07:12:10.631Z"
     },
     "98430eb8f9a15a71e852be8a20573ff03c043862a444c286b228de8d4c042ec7": {
       "excerpt": "deleted-then-diffed, nothing to check",
@@ -4199,7 +4199,7 @@
     },
     "9a0f87fcbf419e417ca57981c5169c5225b866dffce2ecd74ce9c128a34568c3": {
       "excerpt": "No intersection/mixin-of-two-arbitrary-types construct as a value type —",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "9a1ae9c14ec0b4884fd87b3af20b2be85ef6749b73821c7683b43918b2cf45f9": {
       "excerpt": "============================================================================",
@@ -4447,7 +4447,7 @@
     },
     "a3005ea8e284add9b58ca6d6d8a54f80d48bd2a7400bfcf620eeac604104ce00": {
       "excerpt": "Dart enums (https://dart.dev/language/enums) with a `value` slot carrying",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "a32fca187fc2625aeb5381f2be0cd7cf1c5d5d75412af34a54733a04c21eef76": {
       "excerpt": "Present iff an `http` extractor was provided — drop directly into `PresetOptions…",
@@ -4627,7 +4627,7 @@
     },
     "a93a25e842eee4201785a215d63424607a170a718a99cad68c6832b33b326778": {
       "excerpt": "Dart enums (https://dart.dev/language/enums) with a `value` slot carrying",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "a97459fb00b257fd7e2624fde56e050b3910d9bf2be852f4860e56fb925cc4ed": {
       "excerpt": "tooling/comment-approval/comments.ts",
@@ -4867,7 +4867,7 @@
     },
     "b3c6872d8edea70dc68dd2659d512638fae65127eec94b28edf1584458fc3f31": {
       "excerpt": "`toJson` serialization expression for a Dart field's value at `fieldExpr`.",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "b3eaf999f34955e80b07a0c5902855193125df2c345e48472bc0ca67a649f68e": {
       "excerpt": "Lower an `interface` TypeRef (a service's method surface — see",
@@ -4951,7 +4951,7 @@
     },
     "b81a91359fc054796f2353ec58c9b4fee92c2269a429ecd1901c16e3b8093e1a": {
       "excerpt": "Emit a built_value abstract class:",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "b832270761a99c83b1c02839edaa50c869d734abffdad631b7ca8d4f09c1db08": {
       "excerpt": "Kinds whose Go rendering is already a nil-able reference type (slice, map,",
@@ -4995,7 +4995,7 @@
     },
     "b97fc915f59f40b0274b795bfeb204ed50d3d7113ddf73ae79414c2e367e541e": {
       "excerpt": "A discriminant literal used as a Dart `switch`/`case` label: strings get",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "b9a0beb9e03f69be2e4eae5e907bc454d60ad5b55f8aeb6d4b8ad51ae72f2c4a": {
       "excerpt": "NSNumber unboxing accessor per raw scalar ObjC type — used to read a",
@@ -5199,7 +5199,7 @@
     },
     "c16629016ab0c7f1729d2e0e513cecad59944d0eb5710dea7c68572aee144b8d": {
       "excerpt": "No separator to split on: a name with no lowercase letters at all (e.g. a",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "c18d83daf7e520da66e5171e496fbe26d8fd585ce1e6a9b5fbfe18f74b1090ed": {
       "excerpt": "Segments of increasing length (\"a\", \"bb\", \"ccc\", ...) until the joined `/`-path …",
@@ -5419,7 +5419,7 @@
     },
     "cc9322d0518b9364006a1aa9b6e26459b18a247a70c5da27b04c62cca19cbf38": {
       "excerpt": "A type \"needs custom (de)serialization\" when its own or an element/value's",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "ccbad3570d1f5890d7a26aa67ab4694e4f970d40e4d537ceca5bb3fa7f903750": {
       "excerpt": "Derive operationId from meta.openapi.operationId, or from the codegen name",
@@ -5651,7 +5651,7 @@
     },
     "d50bf87e1ab3f832c4265430a08c088613fe46b376618d1527bf45318759ab9d": {
       "excerpt": "Scalar type name — identical to dart-freezed.ts's table (freezed and",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "d57982aa47f3ae340ccc395bdb1614a8ea3bdfa30454a6e807bd255c71dd33ee": {
       "excerpt": "Compose `middleware` around `base`, first entry outermost. An empty array return…",
@@ -5711,7 +5711,7 @@
     },
     "d8337efaff5dc472370f0c39cf5261f49b7bb522a22b835eca3b46bb8c586cf3": {
       "excerpt": "No first-class function-type syntax carrying a signature in a field",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "d83c47e9e236bdc6502039354110e72013069e27abd685bb684d7837301669eb": {
       "excerpt": "packages/graphql-api-projector/src/codegen.test.ts — generateGraphQLClient tests",
@@ -5931,7 +5931,7 @@
     },
     "dfbcdb730bbba5f035da77a4da6497014bf984b4c1e1a81904362b48e1cb007b": {
       "excerpt": "Emit a built_value union approximation. built_value predates Dart 3's",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "dfe89eb3649075c3e1778a680e259427e7c31404b3948a5b46bfdd5b650da681": {
       "excerpt": "~32 static routes (depths 1-4), ~15 dynamic routes (1-2 params), a few deep",
@@ -5947,7 +5947,7 @@
     },
     "e07cb02eb132b155b50351cc30d757584340dd99772dc496e50c083d21b337c8": {
       "excerpt": "Dart language tour: https://dart.dev/language — this projector emits",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "e0c4485a514459b2964397e69a4726ece3d0c21844013a852de35fa2d64825ad": {
       "excerpt": "============================================================================",
@@ -6275,7 +6275,7 @@
     },
     "ecca8352795b9120310311bfcb378c03fda04bf3dc2ce71c654e837c6a023051": {
       "excerpt": "Project a `TypeRef` to freezed-annotated Dart source. `name` names the",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "ecd012772e71c341eae8b6ae6b97981d1ea0835c1df64d4a396675823ff61198": {
       "excerpt": "============================================================================",
@@ -6383,7 +6383,7 @@
     },
     "f06bf7d2f3214fde7cea18a13dfe1e5b86445a25e22891e90f4aa5d241ec0f4b": {
       "excerpt": "Scalar/collection type name — https://dart.dev/language/built-in-types.",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "f0939572bb29f38b2dbbdf64fb95c65e32c468ee6690b96802120ccbb4b7ef35": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
@@ -6427,7 +6427,7 @@
     },
     "f19363b3222c1d057422a1b804e9bb1432d00852ba8296cb56c8475bb4e4e179": {
       "excerpt": "freezed (https://pub.dev/packages/freezed) is Dart's code-generation",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "f1a66d76aaa4dbe326d3d55484c96f66065c13a2bd53e32fbb9975b3132150f8": {
       "excerpt": "Value-semantic Foundation classes are conventionally `copy`d (defensive",
@@ -6507,7 +6507,7 @@
     },
     "f4465cc21dc1842078f37b91c97f0b064dba50722b9f265105386c52717045c6": {
       "excerpt": "One abstract-getter field declaration (doc comment + `Type get name;`) for",
-      "approvedAt": "2026-08-13T07:10:51.084Z"
+      "approvedAt": "2026-08-13T07:12:10.625Z"
     },
     "f45be07207fe70f388fe4398c42e0f6b2aa36161ab2f0826521960ea9d8b2eab": {
       "excerpt": "Every leaf/primitive kind's underlying Swift property type — ObjectMapper",
@@ -6519,7 +6519,7 @@
     },
     "f48459dfc59c6c7eed110194a0a3dc61f081b25951a91824740db2b56c876bcc": {
       "excerpt": "Dart enums (https://dart.dev/language/enums) with a `value` slot carrying",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "f492c726fe8172327696e0471ab3384b0bc9a6382f3853fae85d7fef7eb8b851": {
       "excerpt": "Starlight embeds <ApiExplorer/> (a React component) via",
@@ -6659,7 +6659,7 @@
     },
     "f96fd2eeffae06e99e36e97b444bf278581d37ece451f6f6ba9ee4315b1e232c": {
       "excerpt": "Dart 3 records (https://dart.dev/language/records) are positional-field",
-      "approvedAt": "2026-08-13T07:10:51.094Z"
+      "approvedAt": "2026-08-13T07:12:10.634Z"
     },
     "f9755febd30642dd6ea4b70f30b29db0880a96570c86c4be028efcf592693eb8": {
       "excerpt": "\"minimum\"/\"maximum\" are handled explicitly in withMeta (interacting with",
@@ -6703,7 +6703,7 @@
     },
     "faf76181b23bf6bb6b25eac00980afa667c983d5de1e38208cac000430cae11f": {
       "excerpt": "discriminator field is carried by unionKey, not duplicated as a constructor para…",
-      "approvedAt": "2026-08-13T07:10:51.091Z"
+      "approvedAt": "2026-08-13T07:12:10.631Z"
     },
     "fafadb288c125366597b9957c0a04e292587b09342dd5d6cc3f0934a955dea87": {
       "excerpt": "A dry-types type expression for `ref` — suitable for an `attribute`",
@@ -6827,7 +6827,7 @@
     },
     "ff10f0e6beae332ec068f146d4e8126415a20d5b2eed9dcb2c73a5bcc247675f": {
       "excerpt": "Emit a `const factory` block for a set of fields — shared by a plain",
-      "approvedAt": "2026-08-13T07:10:51.087Z"
+      "approvedAt": "2026-08-13T07:12:10.628Z"
     },
     "ff1500108037c8377a6f434a5e3829c150a41ae5f78149ce6ddc0e158fd58b3e": {
       "excerpt": "Given `closures` (as returned by `computeEntryClosures`) and one",
