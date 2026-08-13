@@ -200,8 +200,8 @@ function renderDocusaurusPage(page: RoutePage, opts: HttpRouteReferenceOpts): st
     "{/* This page embeds an `<ApiExplorer .../>` component for a live, in-page " +
       "request/response demo. It is not shipped by this projector — add " +
       `\`${opts.apiExplorerImport ?? "@rhi-zone/fractal-api-explorer"}\`'s ` +
-      "\`ApiExplorer\` to this Docusaurus site's global MDX components (same " +
-      "wiring the \`<TypeRef>\` note elsewhere in this doc set describes), and " +
+      "`ApiExplorer` to this Docusaurus site's global MDX components (same " +
+      "wiring the `<TypeRef>` note elsewhere in this doc set describes), and " +
       "wire a real `fetch` implementation site-wide via `ApiExplorerFetchProvider` " +
       "(e.g. `toDropInFetch(createFetch(tree))` for a docs build with no deployed " +
       "server yet) — see that package's fetch-context.tsx for why a fetch " +

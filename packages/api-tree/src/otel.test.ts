@@ -67,7 +67,7 @@ function makeFakeTracer(): { tracer: OtelTracer; spans: RecordedSpan[] } {
     const record: RecordedSpan = {
       name,
       options,
-      attributes: { ...(options.attributes ?? {}) },
+      attributes: { ...options.attributes },
       ended: false,
       exceptions: [],
     };

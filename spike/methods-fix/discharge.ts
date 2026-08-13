@@ -83,5 +83,3 @@ toFetch(discharged); // OK — Omit<{id},"id"> = {}
 //   because idLeaf's Q is {id:string} (no "slug" key).
 const wrong = param("slug", idLeaf);
 void wrong;
-
-export {};

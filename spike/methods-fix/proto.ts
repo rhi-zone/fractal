@@ -155,5 +155,3 @@ type _G2b = Expect<Equals<Rp3P, { id: string } & { slug: string }>>;
 const rNo = methodsA({ GET: () => json(1) });
 type RNoP = typeof rNo extends Reflected<any, infer P> ? P : never;
 type _G2_RNoP_isUnknown = Expect<Equals<RNoP, unknown>>;
-
-export {};

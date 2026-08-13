@@ -242,7 +242,7 @@ function applyEscapeHatches(base: TypeRef, metadata: Record<string, unknown>): T
  */
 export function fromJtd(jtd: Jtd): TypeRef {
   const metadata: Record<string, unknown> = {
-    ...((jtd.metadata as Record<string, unknown> | undefined) ?? {}),
+    ...(jtd.metadata as Record<string, unknown> | undefined),
   };
   const nullable = jtd.nullable === true;
 

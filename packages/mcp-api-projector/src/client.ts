@@ -194,7 +194,7 @@ function makePromptCaller(
     // GetPromptRequestSchema handler) has no server-side slug binding either.
     return client.getPrompt({
       name,
-      arguments: { ...slugValues, ...(args ?? {}) },
+      arguments: { ...slugValues, ...args },
     }) as Promise<GetPromptResult>;
   };
 }

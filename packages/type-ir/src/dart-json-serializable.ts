@@ -334,7 +334,7 @@ ${members};
 
   factory ${name}.fromJson(String json) => ${name}.values.firstWhere(
         (e) => e.value == json,
-        orElse: () => throw ArgumentError('Unknown ${name} value: \$json'),
+        orElse: () => throw ArgumentError('Unknown ${name} value: $json'),
       );
 
   String toJson() => value;

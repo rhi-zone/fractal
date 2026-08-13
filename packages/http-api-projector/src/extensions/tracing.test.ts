@@ -38,7 +38,7 @@ function makeFakeTracer(): { tracer: OtelTracer; spans: RecordedSpan[] } {
   function makeSpan(name: string, options: OtelSpanOptions): OtelSpan {
     const record: RecordedSpan = {
       name,
-      attributes: { ...(options.attributes ?? {}) },
+      attributes: { ...options.attributes },
       ended: false,
     };
     spans.push(record);
