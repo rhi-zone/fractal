@@ -1,10 +1,11 @@
-// spike/iron/negatives.ts — @ts-expect-error negatives proving the typed client
-// is non-degenerate. If the client were `any`, these would NOT error and tsgo
-// would report TS2578 "unused @ts-expect-error". Their silence is the proof.
+// @ts-expect-error negatives proving the typed client is non-degenerate: if
+// the client were `any`, these calls would type-check and tsgo would report
+// TS2578 "unused @ts-expect-error" — their silence is the proof.
 //
-// A deliberate MUTATION at the bottom (commented) can be uncommented to flip a
-// negative into a positive — it then SHOULD trigger TS2578, proving the
-// negatives are load-bearing (run.ts exercises this).
+// This file is typechecked as part of spike/iron/tsconfig.json. To confirm the
+// negatives are load-bearing rather than vacuously passing, flip any one
+// `@ts-expect-error` case into a real positive; the typecheck then fails with
+// TS2578 "unused @ts-expect-error".
 
 import { choice, route, path, lit, param, json } from "./http.ts";
 import { client } from "./client.ts";
@@ -55,13 +56,13 @@ const numCodec: StandardSchema<string, number> = {
 const c2 = client(
   choice(
     route("GET", path(lit("items"), param("id", numCodec)), async (ctx) => {
-      ctx.params.id satisfies number; // refined by codec, not string
+      ctx.params.id satisfies number; // refined by codec to number
       return json({ id: ctx.params.id });
     }),
   ),
 );
 async function codecChecks() {
-  // @ts-expect-error param is number now, not string
+  // @ts-expect-error param is now typed as number
   await c2["/items/{id}"].get({ params: { id: "1" } });
   await c2["/items/{id}"].get({ params: { id: 1 } });
 }

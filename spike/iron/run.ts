@@ -1,6 +1,6 @@
-// spike/iron/run.ts — runnable proof (bun run run.ts). Exercises the sample
-// 3 endpoints through the dispatcher, the in-process typed client (with a
-// parity assert: client result === server result), and the OpenAPI projection.
+// Runnable proof (bun run run.ts). Exercises the sample's 3 endpoints
+// through the dispatcher, the in-process typed client (with a parity assert:
+// client result === server result), and the OpenAPI projection.
 
 import { app } from "./sample.ts";
 import { toHandler } from "./http.ts";

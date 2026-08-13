@@ -1,26 +1,26 @@
-// spike/iron/http.ts — the HTTP conveniences, as FUNCTIONS over the one type.
+// HTTP conveniences as functions over a single type.
 //
-// `path` / `param` / `methods` / `choice` / `mount` / `validate` are ordinary
-// functions that take handlers and return a handler-with-`.meta`. They are NOT
-// types and NOT a fixed required set — just userland conveniences over the one
-// primitive (`Handler` from core.ts). A "route" is a handler; a "router" is a
-// handler (built by `choice`); a "segment match" is a handler.
+// `path`, `param`, `methods`, `choice`, `mount`, and `validate` are ordinary
+// functions that take handlers and return a handler carrying `.meta`. They are
+// not types, and not a fixed required set — userland conveniences over the one
+// primitive (`Handler` from core.ts). A route is a handler; a router is a
+// handler built by `choice`; a segment match is a handler.
 //
 // The handler's runtime arrow here is `(ctx: Ctx) => Promise<Reply>`: it reads
 // a request facet (method/segments/params/body), dispatches, and returns a
 // reply descriptor that the serve adapter renders. The `.meta` it carries is a
-// plain DATA tree mirroring the dispatch structure, walked by the projections.
+// plain data tree mirroring the dispatch structure, walked by the projections.
 //
 // This module is Bun-free. It uses only WHATWG `Request`/`Response` (the http
-// surface). The runtime touch (`Bun.serve`) lives in serve.ts.
+// surface); the runtime touch (`Bun.serve`) lives in serve.ts.
 
 import { type Handler, handler } from "./core.ts";
 import type { StandardSchema, InferOutput } from "@rhi-zone/fractal-api-tree";
 
 // ============================================================================
-// The request facet a handler reads, and the reply it returns. These are not
-// "framework types" in the iron sense — they are the T and U of the arrow, the
-// data a handler consumes/produces. The ONLY framework *type* remains Handler.
+// The request facet a handler reads, and the reply it returns: the T and U of
+// the arrow, the data a handler consumes and produces. Handler remains the
+// only framework type; Ctx and Reply are plain data shapes.
 // ============================================================================
 
 /** What a dispatch handler reads: the remaining path segments, the method, the
@@ -58,12 +58,12 @@ export function sse(value: ReadableStream, status = 200): Reply<ReadableStream> 
 }
 
 // ============================================================================
-// META — the inert DATA descriptor tree. This is the value of `M`, NOT a
-// framework type hierarchy. Each shape is a plain object literal a combinator
-// attaches. The projections (client/toOpenApi) walk these by their `tag`.
-// The TYPES below exist only to type the `M` slot of `Handler`; they describe
-// DATA, not handlers. (They are not `Route`/`Segment`/`Router`/`Node` — there
-// is no handler-shaped type among them; a handler stays `Handler`.)
+// Meta: the inert data-descriptor tree that is the value of `M`. Each shape is
+// a plain object literal a combinator attaches; the projections (client,
+// toOpenApi) walk these by their `tag`. The types below exist only to type the
+// `M` slot of `Handler` — they describe data, not handlers, and none of them
+// is handler-shaped (no `Route`/`Segment`/`Router`/`Node`; a handler stays
+// `Handler`).
 // ============================================================================
 
 // A param meta leaf carries the param name and decoded type T as a phantom.
@@ -101,8 +101,8 @@ interface PrefixMeta<Pre extends readonly unknown[], R> {
 // the output body type carried in EndMeta.__o, distributed over a reply union.
 type OutOf<R> = R extends Reply<infer T> ? T : never;
 
-// the params record folded from a segment tuple's `param` leaves (a single pass
-// over a short tuple — path depth ~2-4 — NOT over N routes).
+// the params record folded from a segment tuple's `param` leaves — a single
+// pass over a short tuple (path depth ~2-4), not over N routes.
 type ParamsOf<Segs extends readonly unknown[]> = {
   readonly [
     S in Extract<Segs[number], ParamMeta<string, unknown>> as S["name"]
@@ -110,8 +110,8 @@ type ParamsOf<Segs extends readonly unknown[]> = {
 };
 
 // ============================================================================
-// segment constructors — FUNCTIONS returning inert segment DATA (typed inline,
-// no exported segment TYPE). `path(...)` collects them into a tuple value.
+// Segment constructors: functions returning inert segment data, typed inline
+// with no exported segment type. `path(...)` collects them into a tuple value.
 // ============================================================================
 
 /** A literal segment value: `lit("users")` matches the path part "users". */
@@ -138,8 +138,9 @@ export function path<const Segs extends readonly (LitMeta<string> | ParamMeta<st
 }
 
 // ============================================================================
-// endpoint combinators — FUNCTIONS taking (method, path, handler) and returning
-// a handler-with-meta. Handler-last → clean inference; params fold from `path`.
+// Endpoint combinators: functions taking (method, path, handler) and returning
+// a handler with meta. Handler-last keeps inference clean; params fold from
+// the `path` structure.
 // ============================================================================
 
 /** `route(method, path, fn)` — an endpoint handler (no body). Matches when the
@@ -256,9 +257,10 @@ export function mount<const Pre extends readonly string[], U, MI>(
 }
 
 // ============================================================================
-// serve — a handler IS the app. `toHandler` turns it into a WHATWG fetch
-// handler, adding 404 / 405+Allow / auto-HEAD around the root handler. The root
-// handler does the matching; `toHandler` only frames the result as a Response.
+// Serve: a handler is the app. `toHandler` turns it into a WHATWG fetch
+// handler, adding 404, 405+Allow, and auto-HEAD around the root handler. The
+// root handler does the matching; `toHandler` only frames the result as a
+// Response.
 // ============================================================================
 
 /** Turn the root handler into `(Request) => Promise<Response>`. The handler is
@@ -319,7 +321,7 @@ function bodyFor(reply: Reply): BodyInit | null {
   }
 }
 
-// walk the meta DATA tree to find methods registered at a given path (for 405).
+// walk the meta data tree to find methods registered at a given path (for 405).
 function allowedMethods(meta: unknown, segments: readonly string[]): string[] {
   const out = new Set<string>();
   walk(meta, segments, out);
@@ -361,6 +363,6 @@ function segsMatch(
   return true;
 }
 
-// re-export the meta shape types for the projections (they are DATA-descriptor
-// types parameterising the `M` slot — not handler types).
+// re-export the meta shape types for the projections — data-descriptor types
+// parameterising the `M` slot, not handler types.
 export type { ParamMeta, LitMeta, EndMeta, ChoiceMeta, PrefixMeta };

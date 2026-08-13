@@ -1,16 +1,17 @@
-// spike/iron/client.ts — typed client projection. Walks the `.meta` DATA tree.
+// Typed client projection over the app's `.meta` data tree.
 //
 // client(app) → a typed surface keyed by structural path ("/users/{id}") then
 // by lowercased method, with call signatures derived from the meta tree:
 //   - path params (from a route's `param` segments) → typed `params`
 //   - validated body (from EndMeta.__i)             → typed `body`
 //   - handler output (from EndMeta.__o)             → typed return
-// In-process transport: each call builds a Request and feeds it to the SAME app
-// handler (server-identical results, one code path).
+// Transport is in-process: each call builds a Request and feeds it to the same
+// app handler that serves real requests, so client and server results are
+// identical through one code path.
 //
-// The client TYPE walks the meta tree. No `Route`/`Router` type is referenced —
-// only `Handler` (for the app) + the DATA-descriptor meta shapes. Zero casts in
-// the public type surface.
+// The client type walks the meta tree directly. No `Route`/`Router` type is
+// referenced — only `Handler` (for the app) and the data-descriptor meta
+// shapes. The public type surface has zero casts.
 
 import type { Handler } from "./core.ts";
 import {
@@ -50,11 +51,11 @@ type ParamsOf<Segs extends readonly unknown[]> = {
   ]: S extends ParamMeta<string, infer T> ? T : never;
 };
 
-// Walk the meta tree. The dominant fan-out — a `choice` of N endpoints — is a
-// SINGLE flat mapped type over the alt UNION (`Alts[number]`), keyed by each
-// alt's structural path, NOT a length-N recursive fold. This is the load-
-// bearing scale move: the cost is one mapped-type pass over N members, like a
-// flat route table — never an N-deep instantiation chain (which trips TS2589).
+// Walks the meta tree. A `choice` of N endpoints — the dominant fan-out —
+// resolves through one flat mapped type over the alt union (`Alts[number]`),
+// keyed by each alt's structural path. That mapped-type pass over N members,
+// like a flat route table, is what keeps instantiation depth bounded instead
+// of growing with route count, avoiding TS2589.
 type Walk<Meta, Pre extends string> =
   Meta extends ChoiceMeta<infer Alts>
     ? FlatChoice<Alts[number], Pre>
@@ -71,10 +72,11 @@ type EndEntry<Pre extends string, Segs extends readonly unknown[], M extends str
   };
 };
 
-// flat-map the choice alt UNION → one keyed record. A single mapped-type pass:
-// key each EndMeta alt by its structural path, value = its { method: sig }.
-// (A choice of plain endpoints — the dominant case — never recurses in N. A
-// nested prefix/choice alt recurses via Walk at bounded NESTING depth, not N.)
+// Flat-maps the choice alt union into one keyed record: a single mapped-type
+// pass keys each EndMeta alt by its structural path, with value
+// `{ method: sig }`. A choice of plain endpoints, the dominant case, costs one
+// pass over N alts; a nested prefix/choice alt recurses via `Walk`, bounded by
+// nesting depth rather than alt count.
 type FlatChoice<Alt, Pre extends string> = {
   readonly [
     A in Extract<Alt, EndMeta<readonly unknown[], string, unknown, unknown>> as AltKey<A, Pre>
@@ -100,7 +102,7 @@ type PreKey<Pre extends readonly unknown[], K extends string = ""> = Pre extends
 
 // the call signature for one endpoint: params (if any) + body (if any) → output.
 type HasKeys<T> = keyof T extends never ? false : true;
-// EndMeta.__o already carries the reply BODY type (not the Reply wrapper).
+// EndMeta.__o carries the reply body type, already unwrapped from `Reply`.
 type BodyOut<O> = Awaited<O>;
 type Args<P, I> = (HasKeys<P> extends true ? { readonly params: P } : Record<never, never>) &
   ([I] extends [never] ? Record<never, never> : { readonly body: I });
@@ -118,8 +120,9 @@ type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) exten
 export type Client<App> = App extends Handler<Ctx<unknown>, unknown, infer M> ? Walk<M, ""> : never;
 
 // ============================================================================
-// RUNTIME — mirror the type walk over the meta DATA, building the surface. Each
-// leaf method builds a Request and dispatches through the SAME app handler.
+// RUNTIME — mirrors the type walk over the meta data, building the surface.
+// Each leaf method builds a Request and dispatches through the same app
+// handler that serves real requests.
 // ============================================================================
 
 export function client<App extends Handler<Ctx<unknown>, Reply | null, unknown>>(

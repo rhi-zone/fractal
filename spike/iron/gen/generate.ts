@@ -1,11 +1,11 @@
-// spike/iron/gen/generate.ts — emit N-route apps in the IRON handler-only model,
-// using the SAME route plan as spike/scale + spike/composable (deterministic
-// get/post/put mix, :id params, ~1-in-4 mutating routes with a validated body)
-// so instantiation counts are directly comparable to the chained (A) and
-// composable-with-struct (D) variants.
+// Emits N-route apps in the iron handler-only model, using the same route
+// plan as spike/scale and spike/composable (deterministic get/post/put mix,
+// :id params, ~1-in-4 mutating routes with a validated body) so instantiation
+// counts are directly comparable to the chained (A) and composable-with-struct
+// (D) variants.
 //
-// Variant I — the iron model: `choice(route(method, path(lit, param), fn), ...)`
-// where the ONLY type is Handler. `client(app)` is derived and typed call-site
+// Variant I is the iron model: `choice(route(method, path(lit, param), fn), ...)`
+// where the only type is Handler. `client(app)` is derived, and typed call-site
 // probes spread across the span force the Walk<M> mapped type to instantiate.
 
 import { mkdirSync, writeFileSync } from "node:fs";

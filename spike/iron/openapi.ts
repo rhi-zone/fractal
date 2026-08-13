@@ -1,10 +1,11 @@
-// spike/iron/openapi.ts — OpenAPI projection. Walks the `.meta` DATA tree.
+// OpenAPI projection, built by walking the `.meta` data tree.
 //
-// toOpenApi(app) → an OpenAPI 3.1 document. Pure structural projection from the
-// meta tree: a route's `segs` → path template "/users/{id}", EndMeta → an
-// operation, param segments → path parameters, EndMeta.hasBody → requestBody,
-// PrefixMeta → a mounted prefix. No closures inspected — only the inert meta
-// DATA. References only `Handler` + the meta DATA-descriptor shapes.
+// toOpenApi(app) produces an OpenAPI 3.1 document as a pure structural
+// projection of the meta tree: a route's `segs` becomes a path template
+// ("/users/{id}"), EndMeta becomes an operation, param segments become path
+// parameters, EndMeta.hasBody becomes a requestBody, and PrefixMeta becomes a
+// mounted prefix. No closures are inspected, only the inert meta data;
+// this file references only `Handler` and the meta data-descriptor shapes.
 
 import type { Handler } from "./core.ts";
 import type { Ctx, Reply, ParamMeta, LitMeta, EndMeta, ChoiceMeta, PrefixMeta } from "./http.ts";

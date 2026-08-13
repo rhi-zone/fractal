@@ -1,7 +1,6 @@
-// spike/iron/sample.ts — the sample 3-endpoint snippet from
-// docs/design/vs-hono-elysia.md, written in the IRON model (handler is the only
-// type; combinators are functions). Judged honestly vs Hono/Elysia for
-// reads-clean.
+// Sample 3-endpoint snippet from docs/design/vs-hono-elysia.md, written in the
+// IRON model (handler is the only type; combinators are functions), compared
+// against Hono/Elysia for readability.
 //
 //   (a) GET  /users/:id              → a user or 404
 //   (b) POST /users {name,email}     → 201
@@ -20,7 +19,7 @@ const newUser: StandardSchema<unknown, { name: string; email: string }> = {
   "~standard": { version: 1, validate: (v) => ({ value: v as { name: string; email: string } }) },
 };
 
-// a reusable error->status table — a VALUE, applied per action (the fractal win)
+// A reusable error-to-status table, defined once as a value and applied per action.
 type UserError = { code: "USER_NOT_FOUND" | "ALREADY_INACTIVE"; id: string };
 const userErrorPolicy = (e: UserError) =>
   e.code === "USER_NOT_FOUND"
@@ -44,12 +43,12 @@ export const app = choice(
     const u: User = { id: "caller", name: ctx.input.name };
     return json(u, 201);
   }),
-  // (c) POST /users/:id/deactivate — domain Outcome mapped via the policy VALUE
+  // (c) POST /users/:id/deactivate — domain Outcome mapped through the error policy value
   route("POST", path(lit("users"), param("id"), lit("deactivate")), async (ctx) => {
     const r = deactivate(ctx.params.id);
     return r.ok ? json(r.user, 200) : userErrorPolicy(r);
   }),
 );
 
-// a path PREFIX is itself a handler-returning function; mount nests it.
+// A path prefix is itself a handler-returning function; mount nests it.
 export const v1 = mount(["v1"], app);

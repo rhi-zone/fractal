@@ -1,7 +1,7 @@
-// spike/iron/run-scale.ts — typecheck each generated iron variant×N in
-// ISOLATION via tsgo --extendedDiagnostics + wall-clock (best of RUNS after a
-// warm-up). Also runs STOCK tsc at the high end for the survival gate. Writes
-// CSV + md to logs/.
+// Typechecks each generated iron variant×N in isolation, via
+// tsgo --extendedDiagnostics plus wall-clock timing (best of several runs
+// after a warm-up run). Also runs stock tsc at the high end for the survival
+// gate. Writes CSV and markdown output to logs/.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -108,8 +108,9 @@ for (const v of VARIANTS) {
   }
 }
 
-// STOCK tsc survival gate — does the OLD stable compiler survive the iron model
-// at the high end? Run variant I at 600 and 900 with stock tsc 6.0.3.
+// Stock tsc survival gate: checks whether the older stable compiler survives
+// the iron model at the high end. Runs variant I at 600 and 900 with stock
+// tsc 6.0.3.
 const stock: { variant: string; n: number; ok: boolean; errors: number; wallMs: number }[] = [];
 for (const n of [600, 900]) {
   writeTc(`I-${n}.ts`);

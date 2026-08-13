@@ -1,6 +1,6 @@
-// spike/iron/serve.ts — the ONLY Bun touch. A handler IS the app; this binds
-// the WHATWG fetch handler from `toHandler` to Bun.serve. http.ts/core.ts are
-// Bun-free; this tiny adapter is the single runtime seam.
+// The only Bun touch in this module tree: a handler is the app, and this
+// binds the WHATWG fetch handler from `toHandler` to Bun.serve. http.ts and
+// core.ts are Bun-free; this tiny adapter is the single runtime seam.
 
 import type { Handler } from "./core.ts";
 import { type Ctx, type Reply, toHandler } from "./http.ts";
