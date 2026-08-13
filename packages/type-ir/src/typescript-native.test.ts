@@ -123,12 +123,6 @@ test("object with readonly optional field", () => {
 // hyphen, e.g. DOM's `Headers`/fetch multi-value-cookie surface exposing a
 // `"set-cookie"` member) rendered UNQUOTED — `set-cookie?: string[]` — is a
 // genuine syntax error (`TS1005`/parser "Unexpected -"), not a style nit.
-// Found via `the sibling codebase`'s `curriculum`/`hiring`/`kpis` slices once
-// `createExtractorProgram`'s multi-root batch form (this repo's fix for the
-// 16-slice codegen script's 20+GB memory blowup) changed the exact checker
-// traversal order into `Headers`'s structure enough to reach this field —
-// the bug was always latent, just never reached via the old per-file-Program
-// path for those specific slices.
 test("object field name that isn't a valid identifier renders as a quoted string key", () => {
   const ref = t(types.object({ "set-cookie": t(types.array(t(types.string))) }));
   expect(toTypeScript(ref)).toBe('{ "set-cookie": string[] }');
@@ -204,10 +198,7 @@ test("array of intersection uses Array<>", () => {
 // `types.intersection([types.function(...), types.function(...)])`) MUST be
 // parenthesized — TypeScript's own grammar requires it (`TS1387: Function
 // type notation must be parenthesized when used in an intersection type`),
-// not just a style preference. Confirmed via a real TS/DOM builtin's
-// overloaded method surface (`Response`, reachable now that the call-budget
-// circuit breaker lets extraction terminate INTO it) breaking codegen with
-// exactly this symptom before this fix.
+// not just a style preference.
 test("intersection of function-typed members parenthesizes each function member", () => {
   const ref = t(
     types.intersection([

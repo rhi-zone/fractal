@@ -45,6 +45,10 @@
       "excerpt": "One shared stub handler body — identical across all routes and architectures.",
       "approvedAt": "2026-08-13T07:11:03.688Z"
     },
+    "0119cd72620e2752d777f32944cbe72fab6bde39f2434ca92e30c2e890045c65": {
+      "excerpt": "Object/enum/interface shapes already emit a top-level class named `expr`",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "016f807d2918068bb747f0c83e94b9318cdb8bfa2294e7d65422ef30fd259383": {
       "excerpt": "OpenAPI's singular `meta.example` and JSON Schema's plural `meta.examples`",
       "approvedAt": "2026-08-13T07:10:43.801Z"
@@ -64,6 +68,10 @@
     "01c19533f0d888ea44ba45d2ca3d5a3609ccca56df41b2de3dcfae5d7b69d3ab": {
       "excerpt": "True when `newText` provably carries the exact same comments as `oldText`",
       "approvedAt": "2026-08-13T05:02:19.633Z"
+    },
+    "01c20b33e9469837922a3c9c7429d30cc109eab9cafd1d8246abdda7af32e437": {
+      "excerpt": "pydantic: source order preserved, nickname stays first.",
+      "approvedAt": "2026-08-13T07:15:21.665Z"
     },
     "01f2b171e66ee09a3b189fb754cc46a2f07c7f06475ed17537516a733576d4ae": {
       "excerpt": "============================================================================",
@@ -184,6 +192,10 @@
     "054646c74a34dce4c18bd8471bd340e4bc92ceb94f470739a2d10a76175ea46d": {
       "excerpt": "Nominal class identity, written by `json-schema.ts`'s `instance` projector.",
       "approvedAt": "2026-08-13T07:10:55.731Z"
+    },
+    "0559d5b1756659b1cf0541ae6f0bf0b3c8a97641959c12d74086e930f6b7bd35": {
+      "excerpt": "`attrs.field(metadata={...})` entries — attrs' own place for",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "0561034cec033d15402af91a24f99d4fb3e589f9f007e7a7400cd59a5a37ba9d": {
       "excerpt": "Dispatch context `CreateGraphQLServerOptions.als`'s `init` receives.",
@@ -613,6 +625,10 @@
       "excerpt": "Original tree is untouched",
       "approvedAt": "2026-08-13T05:06:32.673Z"
     },
+    "0e848058a2a2e27295efca325cbb17e9857eb6f30098622cd00ac4ffd05c34de": {
+      "excerpt": "Provenance keys (see index.ts's TypeRef doc comment) — not validation",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "0e9c5d52f7d79a558f191ef2afb3152e834bbd65dc48726f09b61de7ad2f964a": {
       "excerpt": "cents resolves to the explicit \"body\" store under HTTP ->",
       "approvedAt": "2026-08-13T07:10:02.235Z"
@@ -885,6 +901,10 @@
       "excerpt": "`nested` is `object` semantics (indexed as its own hidden document",
       "approvedAt": "2026-08-13T07:11:45.920Z"
     },
+    "13fb210182e33988576584820d8c2b42d186b129e883deec460cc6e8a3d8b1fc": {
+      "excerpt": "Convert a `TypeRef` to an attrs-flavored Python type *expression* (e.g.",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "1403f70ef6f8323fd679cd4947f3e2b30c91de2e1668eca52242391a7a4cbfc5": {
       "excerpt": "No native SwiftyJSON streaming/pagination-window construct — degrades",
       "approvedAt": "2026-08-13T07:10:46.701Z"
@@ -948,6 +968,10 @@
     "14e77505b7e25ad5af59c0eb42e95475ac269a6f0f671cc301410d218b8d182f": {
       "excerpt": "One `applyValidation(key, treeExpr, protocol?)` call site, resolved.",
       "approvedAt": "2026-08-13T07:12:18.664Z"
+    },
+    "151aecb8f3910d32e4452939945bb2156735daf6b1c874b149155c098d1e6e47": {
+      "excerpt": "No pagination convention in Python's standard vocabulary — degrades",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "151ca1e3893550d44b93bfc3d0fa1feb057d4ac357d72802479ea87b800680b7": {
       "excerpt": "Top-level entry point: `object` and `enum` TypeRefs (given a `name`) lower",
@@ -1417,6 +1441,10 @@
       "excerpt": "Trailing \"}\" belongs to the requestSchema={…} JSX-attribute wrapper,",
       "approvedAt": "2026-08-13T07:12:24.149Z"
     },
+    "1e575ad6817892d80d65eff5ce4085d969ac412a7f0d192b18630ec57697766b": {
+      "excerpt": "No native async-stream construct in the language itself; `AsyncIterator`",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "1e6fa53cce058ab38f1fad335f4b71bb2c04ba113f52254cc838d74b46547cb0": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.815Z"
@@ -1676,6 +1704,10 @@
     "24628d232ae1c2f2a5b3761cf84e2453d5e165995bc243ff2d7669786e9d8dca": {
       "excerpt": "draft 2020-12 §9.5: `readOnly` is a per-schema annotation, driven by",
       "approvedAt": "2026-08-13T07:10:55.717Z"
+    },
+    "247196c8695abce253c325100cc63b640e993a42a1e9b9fa5ba7cf94d24f403c": {
+      "excerpt": "Build the `Field(...)` keyword arguments implied by a TypeRef's `meta` —",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "2474949c6134c47ba222877f42a4fe50287c1badfc9812a3e82e83bac200e572": {
       "excerpt": "SwiftyJSON's `JSON.Type` enum (`.string`, `.number`, `.bool`, `.array`,",
@@ -2157,6 +2189,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.576Z"
     },
+    "2ed0e6f7b1d1fdd66764fdd03dcfdffe95e2f8adf155e3badfb61cce4d7ca3dd": {
+      "excerpt": "`nullable` already wrapped `rawType` in `Optional[...]` inside",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
+    },
     "2f00560022f92a1ee55ddbe66fbc0bf2d647db321a9ccda156884e1eda990f97": {
       "excerpt": "Fieldless / string-discriminant enum — matches wasm-bindgen's own",
       "approvedAt": "2026-08-13T07:11:58.700Z"
@@ -2521,6 +2557,10 @@
       "excerpt": "Every leaf path in `tree` that is neither covered by `forKey` nor tagged",
       "approvedAt": "2026-08-13T07:12:18.653Z"
     },
+    "3672f7a84a8a1d5efca6981d8a8ace0facd3d273e3e5a13b80fee4bc3b736b29": {
+      "excerpt": "`nullable` already wrapped `rawType` in `| None` inside toCattrsType",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
+    },
     "36855b516f83f7103455913037e7f9d3a22455dde395f991d9884975bb4b9ee7": {
       "excerpt": "ISO date the hash was added, for audit trail only — never read by the",
       "approvedAt": "2026-08-13T07:07:40.079Z"
@@ -2765,9 +2805,17 @@
       "excerpt": "Case E: unbalanced tree — 60 shallow (2-level) siblings vs. one 18-level chain.",
       "approvedAt": "2026-08-13T07:11:03.688Z"
     },
+    "3b556980dc50c5774b6c42bb1007d267e92d89b32fff0f004e05ce418a7c77c8": {
+      "excerpt": "No pagination convention in Python's standard vocabulary — degrades",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "3b57652ecc6dc2a4b66e39987769c9d2f501c879f8922b1f4ca6cc0e9c3f7f7f": {
       "excerpt": "Lower an `enum` TypeRef to a named `T::Enum` class",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "3b838cd35d250698f6fa406229ae0abf84e339603fe55ba81a8b7b44791f1c97": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "3b89046a2434b004af0cde214106797e3b4f5a26973f7eaae19e5e2e8130f954": {
       "excerpt": "Build an `applyValidation(key, tree, protocol?)` rewriter over a fixed",
@@ -2832,6 +2880,10 @@
     "3cc4b325976d570255640709299d5075eb2d4e8afeeeb4cb1f51e46b3e75990d": {
       "excerpt": "OAS 3.0.3 is draft-05-based and has no `const` keyword (a later JSON",
       "approvedAt": "2026-08-13T07:11:16.459Z"
+    },
+    "3cca6d8d180008babd82cb81bb61ea63955b483710cfdda992896522368a73b0": {
+      "excerpt": "Convert a `TypeRef` to a Pydantic-flavored Python type *expression* (e.g.",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "3d074b9a81a691babc225e4bb3280a9921a907236ceb52865d38a295515209dd": {
       "excerpt": "draft-07 §9.2.1.3 defines `oneOf` (exactly one variant matches) but no",
@@ -3025,6 +3077,14 @@
       "excerpt": "Both a TypeScript-like expression and the def's real JSON Schema (via",
       "approvedAt": "2026-08-13T07:10:43.813Z"
     },
+    "406d537b346f7ce42daae49c4028ef26fab111905843fd3e98ecc12f118bc574": {
+      "excerpt": "Guards against re-emitting the same nested class twice and against",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
+    "40b10606f8ee908eca97ae8dd4e5b66ab3aaad12c70897c5572ea8d4a46c75b9": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "40e6e5f34220479db4ba9a227dc0ccf3fd59061a1549663c6d1b332d5d2af525": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:13:35.363Z"
@@ -3052,6 +3112,10 @@
     "412f264c4b515b3c8291a205d6fb3d9a3aafaf1407a802bfa289d40758651a41": {
       "excerpt": "── Enums / literal unions ────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:14:16.143Z"
+    },
+    "414317671e0b616213cefebce0d4e372c13737d2a9e6a0a3d3271e6ca968636d": {
+      "excerpt": "attrs output has no cattrs converter; cattrs output does.",
+      "approvedAt": "2026-08-13T07:15:21.658Z"
     },
     "4143468630fd30c348d58195c57bea47ee5ed37c159b6b1950a1d3cf8e683345": {
       "excerpt": "One `toCrystal(ref, name)` declaration per registry entry, joined with",
@@ -3100,6 +3164,10 @@
     "41fd7980bc2382eba488c1629b00d3017695ff6b8ca3029810a2b48bbc1ed05d": {
       "excerpt": "The resolved tag set produced by `resolveTags`. Carries both the original",
       "approvedAt": "2026-08-13T07:13:35.662Z"
+    },
+    "422d4447a43e5a3c3b13ca7682e76504f642b73a1058037848d681e8664b41a2": {
+      "excerpt": "Unlike python-attrs.ts's generic advisory comment, this projector actually",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "422dfb08c48a32b0857ee62870ac924dffb993bce74f8996c4bbf715cecf862b": {
       "excerpt": "A page value enriched with auto-pagination: every field the server's",
@@ -3521,6 +3589,10 @@
       "excerpt": "`pattern` (regex) is intentionally skipped: T-SQL has no regex operator, and",
       "approvedAt": "2026-08-13T07:11:45.916Z"
     },
+    "4ab88edc98efc540b26cdb31ccdbfcc31b7689ed4c8420c0040152a32a623965": {
+      "excerpt": "Build the `attrs.validators.*` call expressions implied by a TypeRef's",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "4adece198686d2327bf75e71c92f151a5bcce2b09f69cf8d959c051fc2b647cf": {
       "excerpt": "`Dynamic` (gleam/dynamic) — see file header.",
       "approvedAt": "2026-08-13T07:12:41.871Z"
@@ -3641,6 +3713,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:13:35.662Z"
     },
+    "4d5d3df4fa790054107fac65026c2091bac92f937fcd11744cc5e5b47c5fa89c": {
+      "excerpt": "Render a `meta.default` value (JSON-ish: string/number/boolean/null/array/",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
+    },
     "4d749a856d8f11b0022ad61a63f16efc19d17256f7a4eee6833acdceba5f3a05": {
       "excerpt": "Swagger 2.0 §4.7.4 kept `allOf` from its draft-04 base (the only",
       "approvedAt": "2026-08-13T07:11:16.455Z"
@@ -3728,6 +3804,10 @@
     "4fdfe32e2dce292326ab003b2d1b67f3940e09e67cb28be59db49a02ddb1380e": {
       "excerpt": "PHP has no structural intersection-type construct for anything but",
       "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
+    "4fe2bafa9fc9e8981c047a23c4a5513f71d266627868c4d42df4de8df0f15386": {
+      "excerpt": "Render a `meta.default` value (JSON-ish: string/number/boolean/null/array/",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "4feb0bdac2788ec9fbed7bb74a6dbdd221ebc2fa9df4652673c315a94f04e981": {
       "excerpt": "Extensions composed into the generated client's fetch call, baked in at",
@@ -4065,6 +4145,10 @@
       "excerpt": "True when `T` has at least one required key. `{}` is assignable from (and",
       "approvedAt": "2026-08-13T05:12:43.183Z"
     },
+    "54c2546cae73b9d072a73ee826a7702558e458080a0357817b5c414e4b9c5c62": {
+      "excerpt": "Plain `Enum` (not Pydantic's `(str, Enum)`) — attrs carries no JSON-",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "54d05aca1468f0bde79f8c33c3e05ac096439552a67fd29beda85d2c2722a135": {
       "excerpt": "JSON-serializable fingerprint input for one leaf's derivation — profile",
       "approvedAt": "2026-08-13T07:12:18.664Z"
@@ -4108,6 +4192,10 @@
     "55716b594897e3f8736c3bab98395b370d9d6e671ec45a26dc3c0d05fd7e53f2": {
       "excerpt": "Simulate what typeRefFromType would have recorded for a self-recursive def.",
       "approvedAt": "2026-08-13T07:14:16.143Z"
+    },
+    "55a57f716cd4e69ba1a45d55f8a2616fa6879cce84a36312112a62d09a196bf7": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
     },
     "55aafcbbcc79128003e23e443e66cd07e9b2bc9e923e653725e22a700be609b2": {
       "excerpt": "GraphQL subscriptions (§ \"Subscription\") resolve to individual yielded",
@@ -4208,6 +4296,10 @@
     "57fcfc7ac90723c0fd5ad66c9003ec73820d2553027db72d8f26ed3b81685e06": {
       "excerpt": "draft-04 §5.1.1: exclusiveMinimum is a boolean modifier on `minimum`.",
       "approvedAt": "2026-08-13T07:10:55.724Z"
+    },
+    "5801bf4b842ff18cc1c7634b22b5d8a6c9c0956dec4bb54893f72644e572b11d": {
+      "excerpt": "Guards against re-emitting the same nested class twice and against",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "582725631369c923c7a49e516a3d264951b258a2a358ddd4c7659d1d205ff3de": {
       "excerpt": "OAS 3.0.3 §4.8.24.2: `readOnly` is a per-schema annotation, driven by",
@@ -4405,6 +4497,10 @@
       "excerpt": "Attach `getPage()`/`[Symbol.asyncIterator]` to a copy of `first` (the",
       "approvedAt": "2026-08-13T07:14:07.851Z"
     },
+    "5bb488f07d1c4cb039de5e5a8a43eed5ea1f97955a716ccc0db0fd9cbacb74c4": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
+    },
     "5bd7b807272547b34da05d5c910ba6c75bfdcdf721747feb491946526cda0718": {
       "excerpt": "packages/graphql-api-projector/src/index.ts — @rhi-zone/fractal-graphql-api-proj…",
       "approvedAt": "2026-08-13T07:11:09.591Z"
@@ -4468,6 +4564,10 @@
     "5d386a348701f336d44f52a9e7fc6ae4bc77255311cfa52d596e7df45c6855ee": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:12:23.516Z"
+    },
+    "5d69bf68817443bd11c18ce7ff36170e06c201ef6a8befbc2fa7b6f768136a7f": {
+      "excerpt": "Python `Enum` member names must be valid identifiers — sanitize a member",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "5d74b1a5ad454121e6687c0066fc64c8b4dcaf0404c0b7c6706e177b516874ae": {
       "excerpt": "ReScript function-type syntax: `(paramTypes) => returnType` — positional",
@@ -4893,6 +4993,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:13:35.371Z"
     },
+    "66047599c5289bc0e17b8e02d110a2e3bc5dfaa06c19e9a2964fcae1e935793a": {
+      "excerpt": "`method` has no explicit entry — falls back to `function`'s Callable[...]",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "660d2472a59d755cd873e9a29d70bc7fcd8e3c594ef0714683e1d0e646771537": {
       "excerpt": "Walk a Node tree and produce a flat array of JSON-RPC method descriptors,",
       "approvedAt": "2026-08-13T07:12:23.503Z"
@@ -4916,6 +5020,10 @@
     "6673a2c02c92fa7fac2d57eb4b8aacc0b7887c819d12e1f65c3577bd60c74081": {
       "excerpt": "`Js.Json.t` — ReScript's standard \"arbitrary JSON value\" type",
       "approvedAt": "2026-08-13T07:12:41.879Z"
+    },
+    "66875931792f364b1ec83a32640e5eb0fab777cdada6eacc506d2581d1706459": {
+      "excerpt": "Python dataclasses require every field with a default to come after",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
     },
     "66ab4e7e3291ab0d30d14d6ab605658e4426e66f53bc4bcb6e503d0ced79c66e": {
       "excerpt": "Resolve the `treeId` `buildPathMap` needs to line up with",
@@ -4944,6 +5052,10 @@
     "67fb9c061d322ef206849ffca1ac099267413689a6fde957d2110c9e19eb2362": {
       "excerpt": "The fully typed shape of `createDirectApi(tree)`, computed recursively",
       "approvedAt": "2026-08-13T05:06:32.668Z"
+    },
+    "68016127d1dabc3caf9989ae69991e0b9921295b90719a52fd57e11d103875eb": {
+      "excerpt": "A single non-mutable `default=...` kwarg is exactly what a plain",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "68171416f3e3d1986c829fef1153b13ad25ee951271d8e093d2da520c5544fd6": {
       "excerpt": "Build a plain query/mutation resolver for one `Dispatch` entry: assemble",
@@ -5024,6 +5136,10 @@
     "69c74006e62d9c9bea9ae59a75ed7c1d08966448fd4c2cee1952b3cde1bf91e8": {
       "excerpt": "Cap'n Proto schema language: https://capnproto.org/language.html",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "69e117875007271ff633a09f94251cfa0933cc5c90929f71fc2ec75813d1582c": {
+      "excerpt": "Per-field validator stub functions must exist at module scope before the",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "69e2f68e3b49dc65b77881cb518835d352db0f4cd5f2a53bd665b9d53efa17d8": {
       "excerpt": "`\"books_add\"` -> `\"BooksAdd\"` — base name for that op's `<Base>Input`/`<Base>Out…",
@@ -5425,6 +5541,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:14:07.861Z"
     },
+    "7233aac37bbb316ce402197c681e0b49c0ed5121a930f9ac306a0d2127cba263": {
+      "excerpt": "attrs: source order preserved, nickname stays first.",
+      "approvedAt": "2026-08-13T07:15:21.654Z"
+    },
     "723739938e37f145594ca68f9f5a39c573f62961be66c1f3ff117d5d8eb2db1f": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -5652,6 +5772,10 @@
     "76a5d7565ebda1d509424f7cafe3ea9dd55e40dbcd9dfd8040bb5a7b2ccd7135": {
       "excerpt": "The STRING form (phase B) names a base profile, not a decoder",
       "approvedAt": "2026-08-13T07:10:02.235Z"
+    },
+    "76bd56d893848508893c914ea61692800bd994d5bd3ede4f2f6a2b60e49fad14": {
+      "excerpt": "String-backed (`str, Enum`) rather than plain `Enum`, so a member",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "76c4ba9b24c0534d98c8950318c55c5fb74062aa41bece7ad384a59f3a278d7b": {
       "excerpt": "============================================================================",
@@ -6153,6 +6277,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:45.919Z"
     },
+    "82f9eaceaf7628a0694239ece167b64953fa8c6233086a4a4301897398567b42": {
+      "excerpt": "A discriminator stub is only synthesized for the top-level `ref` itself",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
+    },
     "83073dadf276578cbe116f15845c15a78a41068706ebce70ebba1f15e18bf7a0": {
       "excerpt": "`meta.graphql` open bag — per-projection overrides for GraphQL field",
       "approvedAt": "2026-08-13T07:08:35.589Z"
@@ -6417,6 +6545,10 @@
       "excerpt": "── POSITIVE ASSERTIONS ───────────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:13:35.374Z"
     },
+    "890ccd3b7a331fc707a0046411bc73c43e36c55d8546f293e975d81e846e7037": {
+      "excerpt": "Plain `Enum` (not Pydantic's `(str, Enum)`) — attrs/cattrs carry no",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
+    },
     "8920a3363a66aaeb810c5514637ab96208ec8717daafd92c7828a78babf7b339": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.586Z"
@@ -6449,6 +6581,10 @@
       "excerpt": "A GraphQL resolver-scoped middleware — wraps the handler-invoking function `next…",
       "approvedAt": "2026-08-13T07:08:38.040Z"
     },
+    "89b0fd471a72af69895b0546b44e3773552f1fb09c5869768029bbb38f939c61": {
+      "excerpt": "Names already emitted as a top-level declaration — guards against",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
+    },
     "89b79bbda2af24ae4fe9f484504726b5ef3593bb0422eaf598c61858033202bd": {
       "excerpt": "client.todos.GET() → Promise<Todo[]>",
       "approvedAt": "2026-08-13T07:13:35.374Z"
@@ -6460,6 +6596,10 @@
     "89c21e97c443daf913698fa36e4bbc8147258d08c24fb985a3118f51e29ac7cc": {
       "excerpt": "Drain a subscription handler's own `AsyncIterable` return value into the",
       "approvedAt": "2026-08-13T07:08:38.040Z"
+    },
+    "89d3390cf91e2a865c7762739c9519ea84980c8e6b0aa8d9f260ed4130ba661f": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "89d3d3880d4ee96a3dbbe2ec7ba8f1af36d6d441ed8d910d3052dba3836aee94": {
       "excerpt": "This is the fact that makes the design doc's \"one key/call can serve",
@@ -6476,6 +6616,10 @@
     "89ed2cb67b5555aecd94844786c8130d6c296e243459f6a61014e745021f3a54": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
       "approvedAt": "2026-08-13T07:11:58.696Z"
+    },
+    "8a715346251fc89ea3a264abce99d4dbd4f97e9fcce74e4369e5e84ac1f279d0": {
+      "excerpt": "`method` has no explicit entry — falls back to `function`'s Callable[...]",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "8ab0906b497f469849b800901bb101b7de2503cda155ecfc6d74fd9cea09c067": {
       "excerpt": "Lower one method/function TypeRef to a `JsonRpcMethod` descriptor.",
@@ -6512,6 +6656,10 @@
     "8b6602a289ca635f518f4c38a15daf51ed67be8491f1e01380e539a995ab50f8": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "8b6bb73cc820413e8917ee59d6b0811cdf52690439172bb4bfa1d7125fd04152": {
+      "excerpt": "`method` has no explicit entry — falls back to `function`'s Callable[...]",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
     },
     "8b9a78bdd016301b80dcd515c905e3e6e45aaa110989a129154bb1edc5654445": {
       "excerpt": "Same degrade as `function`, but carrying `x-method: true` instead of",
@@ -6649,6 +6797,10 @@
       "excerpt": "No native paginated-collection type — degrades to its element's List",
       "approvedAt": "2026-08-13T07:12:10.634Z"
     },
+    "8e82507d01da662ec3edb81099f56ba70af019f193b703cc6bb4d80c9e3d431a": {
+      "excerpt": "Names to import from `typing`, collected as they're used.",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
+    },
     "8eb57b7425ac445ff0360c7418023b8cd17f9cc422aad26f0ae46f8acc89c105": {
       "excerpt": "Infers the JSON Schema `type` for an enum's members from their actual",
       "approvedAt": "2026-08-13T07:10:55.717Z"
@@ -6752,6 +6904,10 @@
     "905f60c9cb89a5c387329fd20a0eb1ca4494bcd07d86258719802c98085cf871": {
       "excerpt": "Dart has no service/interface-surface construct to target from a bare",
       "approvedAt": "2026-08-13T07:12:10.634Z"
+    },
+    "90817af93961cdad127eda86599c884f9d51afbbea0b80595a8b46f2506d32dd": {
+      "excerpt": "Render a `TypeRef` as a standalone Python module: every nested",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "9087a37b6834adf76d55c8584d43e0d496a01fcdcc3d93ce1f2dab13c6dff6b3": {
       "excerpt": "Cap'n Proto has no field-level streaming type (its streaming RPC support",
@@ -6985,6 +7141,10 @@
       "excerpt": "TYPE_MESSAGE or TYPE_ENUM (or, from parseProtoText, any non-scalar",
       "approvedAt": "2026-08-13T07:10:47.064Z"
     },
+    "94f7c6c061275e36fd7a3676f0cb437a3e17380b79fd34f1cfc79851f05c11df": {
+      "excerpt": "Render a `TypeRef` as a standalone Python module: every nested",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
+    },
     "950f9ef7c82c97a5e980c0d6ef093c8c75448999117eb164652295577b1444bd": {
       "excerpt": "Native ReScript (https://rescript-lang.org/) type-declaration projector —",
       "approvedAt": "2026-08-13T07:12:41.879Z"
@@ -7057,6 +7217,10 @@
       "excerpt": "A field/record-component/parameter's rendering: primitive type when the",
       "approvedAt": "2026-08-13T07:09:42.437Z"
     },
+    "96a398ed155d4fde80f53c88e5f837607793048bbec64310802153e71f897a05": {
+      "excerpt": "`nullable` already wrapped `rawType` in `| None` inside toAttrsType",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "96ba1d5dca9fbeaa39899ea6b57ce32a976c32524358a243318b402975ee0414": {
       "excerpt": "Around-hooks wrapping each field's handler call — `F => F` where",
       "approvedAt": "2026-08-13T07:10:43.573Z"
@@ -7092,6 +7256,10 @@
     "973a4cfb2e586b4a82ecdafdec50fd5057cb7d9e158a0987a04f481357117c77": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:12:24.143Z"
+    },
+    "9741ab929b42f538b2417500b972b119a8d8b917e973a9531deeaa143f59b601": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
     },
     "97420bf753c9df3ad3f435028917374a584bcc23b6c9bbdb147b20a1ca45d5c3": {
       "excerpt": "Mirrors @opentelemetry/api's `SpanAttributeValue`.",
@@ -7152,6 +7320,10 @@
     "98bb63805c5f4adfe7bd83eceb79022e380daf0b0f831d45ba346b56ec2ee2e1": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "991ff511c0cee1699ca4e0dc61af4224a6d40e7f756eb0025482b4f4fa3021e4": {
+      "excerpt": "Convert a `TypeRef` to an attrs/cattrs-flavored Python type *expression*",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "99405526a7f1e0652cdb494cf7d7c5e0dc314e08784ffbc81d903000a9348a66": {
       "excerpt": "============================================================================",
@@ -7297,6 +7469,10 @@
       "excerpt": "The package name a caller's doc site should import `ApiExplorer` from",
       "approvedAt": "2026-08-13T07:12:24.148Z"
     },
+    "9ca632ff888954e67e108df1bdfabf4b45fcc6b574f5ef12f651201b32e6a0de": {
+      "excerpt": "`nullable` already wrapped `rawType` in `| None` inside toMsgspecType",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "9ca758bd51bf40b207c3e72115bcaa1b2d9a1c39e66e9a2949494d45ebb26e62": {
       "excerpt": "Sanitizes a `defs` entry name to a valid JS/TS identifier fragment (def",
       "approvedAt": "2026-08-13T07:14:58.575Z"
@@ -7373,9 +7549,17 @@
       "excerpt": "The Node model allows `fallback.subtree` to be a bare leaf (`op()`),",
       "approvedAt": "2026-08-13T07:12:45.645Z"
     },
+    "9df8d2133a7c4bbd55d41923fa1225af5f6536e8a0ebf81a90508e140e654e7a": {
+      "excerpt": "Render a `TypeRef` as a standalone Python module: every nested",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "9dfa0a2956cfa3c0b48beddc8e2cf013c219dc685a1cc3387a43cf6db84797b1": {
       "excerpt": "Serialized with keys sorted so re-running `approve` on an unchanged input",
       "approvedAt": "2026-08-13T07:07:40.079Z"
+    },
+    "9e0f61645aa57a3d887b06d6d4da7cc646665f3ac5a4ec6409fce9fc308d85bd": {
+      "excerpt": "attrs raises at class-definition time if a mandatory (no-default)",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
     },
     "9e1fa2a8ec247bd35e34f37a5c20a160e52fdc277a76027fff878d7be84489d6": {
       "excerpt": "Only the leading character is lowercased — a `name` split into a SINGLE",
@@ -7565,6 +7749,10 @@
       "excerpt": "No streaming construct crosses the wasm-bindgen ABI — materializes to",
       "approvedAt": "2026-08-13T07:11:58.700Z"
     },
+    "a244c40dc0be4fa084e277c11920905099f3d6adf78eac1f47f50d0270d91960": {
+      "excerpt": "No intersection construct in Python's type vocabulary; when every member",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "a246dc63244e9e7a6b93a63a89b8d207396b331a3c3ff6ce2e62b86dca0b317c": {
       "excerpt": "Parse GraphQL SDL type-system definitions into a `Record<string, TypeRef>`",
       "approvedAt": "2026-08-13T07:10:20.620Z"
@@ -7653,6 +7841,10 @@
       "excerpt": "ServiceStack.Text serializes an enum by its member name by default — no",
       "approvedAt": "2026-08-13T07:09:42.419Z"
     },
+    "a4d2e23a9b1ccc2a95696fe051ab74d2b2b31cd8886500441cd305f20e84723f": {
+      "excerpt": "Build the `msgspec.Meta(...)` kwargs implied by a TypeRef's `meta` — the",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "a4ea63ea9981e79f358ae544374901a527e70a4747101a844a12a566f251cc26": {
       "excerpt": "Unrecognized type name (future JTD revision, or a non-standard",
       "approvedAt": "2026-08-13T07:10:20.623Z"
@@ -7700,6 +7892,10 @@
     "a5994e2572bbba86a934a083194e535bc47f4c26b8ce60b54cdf98ffcd94c729": {
       "excerpt": "packages/graphql-api-projector/src/codegen.ts — @rhi-zone/fractal-graphql-api-pr…",
       "approvedAt": "2026-08-13T07:11:09.579Z"
+    },
+    "a5ce944c220e8b0307e754821989328b92a99e7b23ee701f413d33d30ef8b323": {
+      "excerpt": "Render a `meta.default` value (JSON-ish: string/number/boolean/null/array/",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "a61a0b3b981bd386c361e6bc4de53ea3a93bc5957909efd5fbaa55d12880997d": {
       "excerpt": "A table cell / inline-text value must not carry raw newlines (they would",
@@ -7893,6 +8089,10 @@
       "excerpt": "Proto3 has no doc-comment keyword of its own; `//` line comments (§ \"Language",
       "approvedAt": "2026-08-13T07:10:47.056Z"
     },
+    "a9a0cb02444b05b3bbfadf4bb00f1b8c2428778e2d89a84db4a81c947bc56baa": {
+      "excerpt": "Meta keys left over once every convention this projector knows how to",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "a9a11a8d4c276460cf0d4505a9c341df65e68eddf317af2655765935ec7a8670": {
       "excerpt": "Convert a `TypeRef` to a PHP type expression usable in a property/param/",
       "approvedAt": "2026-08-13T07:11:47.423Z"
@@ -7928,6 +8128,10 @@
     "aa55cf775484efc2d9ff8e898ed6243dcf0f99cee1e51cd9e99fa37562158a92": {
       "excerpt": "NEGATIVE A: validator output missing `email` — must be a compile error",
       "approvedAt": "2026-08-13T07:13:35.363Z"
+    },
+    "aa5ccfe61e82c3aaffb80ba5a1a5fc2e73fcab62ece1eff96c22610dbef129a2": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "aa73759dc4e46f87fea43b7c0691931a1ad0509dd7e01e63bba1ee85f16aaf5f": {
       "excerpt": "============================================================================",
@@ -7984,6 +8188,10 @@
     "ab806df7381d3694b7d00d20e746394d1b396faac59c1efc3c3896a76cf836c4": {
       "excerpt": "https://docs.superstructjs.org/api-reference/types#date — s.date()",
       "approvedAt": "2026-08-13T07:14:58.579Z"
+    },
+    "ab9450f24604110df13ea5af79a2e663f8de0264b169b18e638820412dd0dbb9": {
+      "excerpt": "No native async-stream construct in the language itself; `AsyncIterator`",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "abae2cbed9a35856c8cd416e5493f9642ed1f8283b8ec8b5c8faf6638693f9c1": {
       "excerpt": "A scalar/identifier/string/bool literal used as a default value or an",
@@ -8120,6 +8328,10 @@
     "ae5e2356d5d3259c57c3a1184acd556c48e00d245dd27e6c49bb277a9bdc339f": {
       "excerpt": "https://arktype.io/docs/expressions#brand — `.brand(name)` nominally tags a",
       "approvedAt": "2026-08-13T07:14:58.567Z"
+    },
+    "ae6c6b319c8a1f327e55f203c0755b3aa0db642bd6913f2ae8aa58ba1aaf70ad": {
+      "excerpt": "dataclass: nickname (optional) is pushed after name.",
+      "approvedAt": "2026-08-13T07:15:21.665Z"
     },
     "ae7ab5f242a5b2fa23ef61e0ef0e70e507978d718f39d91c60accc2ae064f964": {
       "excerpt": "Case F: nesting + branching — branches at 3 successive depths (500 leaves).",
@@ -8333,6 +8545,10 @@
       "excerpt": "`Retry-After`: either a delay in whole seconds, or an HTTP-date to wait until.",
       "approvedAt": "2026-08-13T07:14:07.843Z"
     },
+    "b44c50d1f5d43b0b167ee8b15ce84f9c978c63b294a55dd97e7633d65c317cc6": {
+      "excerpt": "Convert a `TypeRef` to a msgspec-flavored Python type *expression* (e.g.",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "b457243cac2a59c9e7614864623224d18091f865612cd1dd6374352e0f8c571b": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -8484,6 +8700,10 @@
     "b8b83d62a1e09b906159cce738d6fc4b2c355f236d595566083d6996d98d6e91": {
       "excerpt": "Single-table-inheritance layout: one CREATE TABLE for the whole union — a",
       "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
+    "b8c2489d5fda7b2eb0d5470f2fd3b7392a2ceaf8c20be2aca8c8b0e8b059a695": {
+      "excerpt": "Convert a `TypeRef` to a Python type *expression* (e.g. `list[str]`,",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
     },
     "b8eb308445fbebf3117fe1c18819e7a5747100490d81f2f289ec5d70d55d77cb": {
       "excerpt": "No context (field name) is available here to name an anonymous nested",
@@ -8785,6 +9005,10 @@
       "excerpt": "https://astro.build/config",
       "approvedAt": "2026-08-13T07:09:53.732Z"
     },
+    "befd5fa2441a1a98d4df9c4769ced4f8c8e2aa45589d3fcb507f4e0c2c73ccaa": {
+      "excerpt": "No pagination convention in Python's standard vocabulary — degrades",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
+    },
     "bf2e6ba6cf37b6570ca8b24a44f30a08e8389dab003fe485a57083bab911f6b0": {
       "excerpt": "`ts.SourceFile.imports` isn't declared on the public `SourceFile`",
       "approvedAt": "2026-08-13T07:10:02.228Z"
@@ -8965,6 +9189,10 @@
       "excerpt": "T::Enum convention: constants are SCREAMING_SNAKE_CASE identifiers bound to",
       "approvedAt": "2026-08-13T07:11:42.597Z"
     },
+    "c3cc9c7b30fc111da5eb8b6b1eac5e4d2d09989a83e636b942284c4265e338cc": {
+      "excerpt": "No intersection construct in Python's type vocabulary; when every member",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
+    },
     "c3ec794cf824df5a1ab7bb5cf9fd2d418e2d7ba6d03329ccc676a2908708c627": {
       "excerpt": "Trace an `applyValidation` call's SECOND argument back to the underlying",
       "approvedAt": "2026-08-13T07:12:18.664Z"
@@ -9001,6 +9229,10 @@
       "excerpt": "`TypeRef` identity -> the name it was hoisted under.",
       "approvedAt": "2026-08-13T07:12:41.879Z"
     },
+    "c49396adb2d3d8a9fd12360825538f8afb53b154693a680b28f30d05dd771c63": {
+      "excerpt": "Plain `Enum` (not Pydantic's `(str, Enum)`) — msgspec decodes any Enum",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "c497ab1600a9ec20cf4bc60ea6ddcb7f7220a462e1982b574521447d2ed923ab": {
       "excerpt": "`services`' synthesized request/response messages (see `toProtoService`)",
       "approvedAt": "2026-08-13T07:10:47.056Z"
@@ -9029,6 +9261,10 @@
       "excerpt": "How an optional/nullable field's type is rendered: \"nullable\" (default)",
       "approvedAt": "2026-08-13T07:09:42.427Z"
     },
+    "c54f2844ad57673a4a9e78686d662341235dfeabec0dc4b323435a28cd50bb49": {
+      "excerpt": "Meta keys left over once every convention this projector knows how to",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
+    },
     "c550226d91d0563267b31d163d64e3584863ebf529e34ae694967cec86bbc9d8": {
       "excerpt": "The property name a `createApplyValidation` result carries at the TYPE",
       "approvedAt": "2026-08-13T07:12:18.653Z"
@@ -9036,6 +9272,10 @@
     "c55138de8c9c45cac4884757e4935013ae87ea969bb57acfd5621f12775b96bf": {
       "excerpt": "No native pagination construct — degrades to `List<T>` of the page's",
       "approvedAt": "2026-08-13T07:09:42.441Z"
+    },
+    "c557e74829e3b458889e59f2bc9fb335c9f1988f55fdff7d6979a3e4001838cf": {
+      "excerpt": "Pydantic v2's native discriminated-union support: `meta.discriminator`",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "c55d6ecc3712b54f06d064cb0186b0501ff0bd705885d16d5380e5ff82396911": {
       "excerpt": "Upper bound (inclusive) of the range reserved for implementation-defined server …",
@@ -9064,6 +9304,10 @@
     "c613b8f0b6950fb829dbd7c66e51e56f6bc3f10e2060c47023acc6dba7cddf5a": {
       "excerpt": "Result of a runtime response decoder (see `ClientExtension.decodeResponse`",
       "approvedAt": "2026-08-13T07:14:07.834Z"
+    },
+    "c6262bb3eddbfe93532f59184ab7d98d21e1896e710d39dedd2507a5794b4b05": {
+      "excerpt": "Unlike python-dataclass.ts, this generator doesn't reshuffle fields to",
+      "approvedAt": "2026-08-13T07:15:21.654Z"
     },
     "c6314326909447ff5b0107d69ba94f307687f10889a7fe16f9d20a47b98176f9": {
       "excerpt": "============================================================================",
@@ -9441,6 +9685,10 @@
       "excerpt": "Tiered re-validation — see the warm-check-cost doc block above. Fast",
       "approvedAt": "2026-08-13T07:15:11.440Z"
     },
+    "cea8cb34e51ccdbd16ce5ed95e58628bec56d7f9a2791041b7b57197f6842fcf": {
+      "excerpt": "No intersection construct in Python's type vocabulary; when every member",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "cec9dbe62b97516c8b303ca72b98e09773ccbc109b27bf079138c7633d880666": {
       "excerpt": "Walk an `HttpRoute` tree into a `ClientTreeNode`. Two cases produce a",
       "approvedAt": "2026-08-13T07:13:30.110Z"
@@ -9509,6 +9757,10 @@
       "excerpt": "Convert an OpenAPI 3.0 (OAS 3.0.3, §4.8.24 Schema Object) schema into a",
       "approvedAt": "2026-08-13T07:11:16.455Z"
     },
+    "cf96fbead6999aa050ff930b3d6bd346da0b322db37dbdc40644e57b085e78fd": {
+      "excerpt": "Render a `TypeRef` as a standalone Python module: every nested",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
+    },
     "cfa97c361e94dda0d4f661cda36693dc8d171323cfd41ee866fd6efebf9096b2": {
       "excerpt": "m.kind === \"union\": a Cap'n Proto union always has exactly one active",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -9552,6 +9804,10 @@
     "d0b9b5e6173b9b2b501dc0b54c00100b4185fce906edf19d255b22cc6401bca5": {
       "excerpt": "packages/json-rpc-api-projector/src/project.test.ts — JSON-RPC method projection…",
       "approvedAt": "2026-08-13T07:12:23.507Z"
+    },
+    "d0c6e88e604a6a722dfa83f796d4d3bed1c2ca213f274988d27126ea74a4d946": {
+      "excerpt": "`nullable` already wrapped `rawType` in `| None` inside",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "d0ede11b3c608806461ae9092f49783fd8a985851e10535263e3a9462e1e5a69": {
       "excerpt": "OAS 3.0.3 §4.8.24.1: `nullable: true` is the substitute for JSON",
@@ -9896,6 +10152,10 @@
     "d8bc872bb235d8e58919c308ff5b1ffadecbd0cce2e39f944d7a1fc5f0dfe7ef": {
       "excerpt": "Verbatim port of route.ts's private `matchRoute` (route.ts:747).",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "d8bd953effd1da7e59c0302af800f79359f380a8f10070771d3d3b3b6e723feb": {
+      "excerpt": "Unlike python-dataclass.ts, Pydantic's generated __init__ takes a",
+      "approvedAt": "2026-08-13T07:15:21.665Z"
     },
     "d8c1352fcad41a4977c7af62a4f7c04cb23e785f57de508ef3a3924c1baba8e1": {
       "excerpt": "packages/api-tree/src/__fixtures__/apply-validation-duplicate-key.fixture.ts",
@@ -10380,6 +10640,14 @@
     "e2ad6e26e9ee84e2f7527fb80bf41751c8cd5c15cadfc03d3e89db47af6939ff": {
       "excerpt": "Read the flattened JSDoc comment text off a single node, if present.",
       "approvedAt": "2026-08-13T07:14:16.132Z"
+    },
+    "e2b371963999b4745abceaccf0fe6df8c26ba6cbf1806c39f59597028f029b59": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
+    "e2c3975ee234022618dc208502e517f8396c10a8f902d3920e20102cb8115c40": {
+      "excerpt": "No native async-stream construct in the language itself; `AsyncIterator`",
+      "approvedAt": "2026-08-13T07:15:21.660Z"
     },
     "e2db527d0e48adb1d2b86038c977f1872d3118e72db4207350fadbbd4a3b3c47": {
       "excerpt": "type-ir's datetime/date are the domain type `Date` (see kinds/date-time.ts),",
@@ -10957,6 +11225,10 @@
       "excerpt": "dry-types unions are built with the `|` operator",
       "approvedAt": "2026-08-13T07:11:42.588Z"
     },
+    "f0121f8e757691caaa5a92adb3dedef4896569d1d4a0b0844e3b637a7188d183": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "f02beda541480cb607054a4d01fae9efb10f02b74c4e87d2f3391fb776a79132": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:13:30.118Z"
@@ -11341,6 +11613,10 @@
       "excerpt": "packages/api-tree/src/direct.ts — @rhi-zone/fractal-api-tree",
       "approvedAt": "2026-08-13T05:06:32.668Z"
     },
+    "f6742e0c799a453e0fbd54779c2d57291672298fc57e8dc6b883316a95da4bdb": {
+      "excerpt": "Render a `TypeRef` as a standalone Python module: every nested",
+      "approvedAt": "2026-08-13T07:15:21.650Z"
+    },
     "f679e297dc0e7abacd4b1487b2fd0582942910dab27e45c7198715bf1065b343": {
       "excerpt": "Parse + validate one query document against `schema`; either its `DocumentNode`,…",
       "approvedAt": "2026-08-13T07:10:43.573Z"
@@ -11352,6 +11628,10 @@
     "f6b25a3f56466cfb5f2bffd4e336e3704898c1cb10fcd67c12915b7e068fdc9f": {
       "excerpt": "Top-level file ID: `@0xabc123...;`",
       "approvedAt": "2026-08-13T07:09:42.607Z"
+    },
+    "f6d2fb66d03cffa52a7e13dd028ceae04d6a9e45a2b8e613613f1176c3da3805": {
+      "excerpt": "Guards against re-emitting the same nested class twice and against",
+      "approvedAt": "2026-08-13T07:15:21.664Z"
     },
     "f6dae31a6591ba0c66faa478958f8e2f05b0ba3b772b51ed207bd1cc6acef741": {
       "excerpt": "double is scalar (§ \"Attributes\") — never carries `required`.",
@@ -11392,6 +11672,10 @@
     "f79a9056abe29fc193c01f5ccd19c0fadd274fdfedc68849b0644160c282590c": {
       "excerpt": "One 3-arg call site's leaf: its input `TypeRef`, the derived wire profile",
       "approvedAt": "2026-08-13T07:12:18.664Z"
+    },
+    "f7a615ef07914b50be5e036f9fb68d8b88dde7e815d07d2f8b6b4aaaba0e55a0": {
+      "excerpt": "Build the `attrs.validators.*` call expressions implied by a TypeRef's",
+      "approvedAt": "2026-08-13T07:15:21.657Z"
     },
     "f7b4b742489c83824d37ea4cba61303fc53c683970d967a8b4399e53ad524d9b": {
       "excerpt": "============================================================================",
@@ -11584,6 +11868,10 @@
     "fb94fff3cefb4c3104abfe40da55fb49526b1ba6d8803cd463483bf35642fd62": {
       "excerpt": "Project a `TypeRef` to standalone SwiftyJSON-flavored Swift source:",
       "approvedAt": "2026-08-13T07:10:46.701Z"
+    },
+    "fbc1001208891e6a39df2e4bc28b1ee9312b72ab2c592e42e1f14aad45f53e53": {
+      "excerpt": "No native async-stream construct in the language itself; `AsyncIterator`",
+      "approvedAt": "2026-08-13T07:15:21.662Z"
     },
     "fbe134660cb343c38f9a0c1abfda4c4fd9276df6950472534840ddc57ad4872b": {
       "excerpt": "Project a `TypeRefDocument` to a set of MkDocs-Material-compatible",

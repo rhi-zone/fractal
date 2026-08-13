@@ -217,13 +217,10 @@ export function toTypeScript(ref: TypeRef, defNames: ReadonlySet<string> = new S
  * grammar production (it extends as far right as it can) — a bare function
  * type as a union/intersection member is a genuine SYNTAX ERROR
  * (`TS1385`/`TS1387`: "Function type notation must be parenthesized when
- * used in a union/intersection type"), not just a style nit. Confirmed via
- * a real overloaded method (`functionRefFromSignatures`/
- * `methodRefFromSignatures` wrap ≥2 signatures as
- * `types.intersection([types.function(...), …])`) reached through a TS/DOM
- * builtin's method surface (`Response`) once the call-budget circuit
- * breaker (from-typescript.ts) let extraction terminate INTO it instead of
- * overflowing the stack first.
+ * used in a union/intersection type"), not just a style nit. This shape is
+ * produced by `functionRefFromSignatures`/`methodRefFromSignatures`
+ * (from-typescript.ts), which wrap ≥2 overloaded signatures as
+ * `types.intersection([types.function(...), …])`.
  *
  * Two more cases genuinely change MEANING (not just a syntax error) if left
  * unwrapped, both because `|` binds looser than `&`:
