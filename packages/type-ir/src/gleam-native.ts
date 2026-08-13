@@ -352,13 +352,13 @@ function buildEnum(name: string, ref: TypeRef): string {
  * own tagged-union renderers key off). Renders one constructor per variant,
  * named from the discriminant's literal value, carrying the variant's
  * remaining fields as labelled constructor fields — the discriminator field
- * itself is dropped, since the constructor tag already encodes it. Returns
- * `undefined` (via the caller falling through to the positional form) only
- * conceptually; this function always succeeds once called because
- * `toGleam`/`bareType` only reach it when `meta.discriminator` is a string —
- * a variant that doesn't fit the tagged shape falls back to a synthesized
- * `VariantN` name instead of aborting the whole union, so every union is
- * still representable. */
+ * itself is dropped, since the constructor tag already encodes it. Unlike
+ * elm-json.ts's analogous `renderTaggedUnion` (which returns `string |
+ * undefined` so its caller can fall through to the positional-union form),
+ * this function always succeeds: `toGleam`/`bareType` only call it once
+ * `meta.discriminator` is confirmed to be a string, and a variant that
+ * doesn't itself carry a literal-string value for that field falls back to a
+ * synthesized `VariantN` name rather than aborting the whole union. */
 function buildTaggedUnion(name: string, ref: TypeRef, decls: string[]): string {
   const shape = ref.shape as TypeShape & { kind: "union" };
   const discriminator = ref.meta.discriminator as string;
