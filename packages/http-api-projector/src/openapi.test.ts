@@ -209,21 +209,22 @@ describe("operationId", () => {
   });
 
   it("operationId for param child op includes param name (attribute-dispatch: GET /books/{bookId})", () => {
-    // With attribute-dispatch, read/replace/remove share /books/{bookId}
+    // read/replace/remove share /books/{bookId} via moveTo co-location, not
+    // attribute dispatch (header/query/contentType routing) — see
+    // examples/library-api/src/tree.ts's booksNode comment.
     const op = doc.paths["/books/{bookId}"]?.["get"];
     expect(op?.operationId).toBe("books.bookId.read");
   });
 
   // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
-  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
-  // `fallback: { name, subtree: Node }`). `nameLeaves`'s (openapi.ts)
-  // handler → codegen-name map recursed into a bare-leaf fallback.subtree as
-  // if it always had `children`, so the handler was never recorded — this
-  // handler's operationId silently degraded to the generic
-  // path-derived `nameFromPath` fallback ("widgets_widgetId_post", i.e.
+  // api({...})) is explicitly allowed by the Node model (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`). Regression test: `nameLeaves`
+  // (openapi.ts) used to assume every `fallback.subtree` had `children`, so
+  // a bare-leaf subtree's handler was never recorded in its codegen-name
+  // map — its operationId silently degraded to the generic path-derived
+  // `nameFromPath` fallback ("widgets_widgetId_post", i.e.
   // "widgets.widgetId.post", leaking the placeholder POST verb) instead of
-  // the real derived name. Same gap api-tree/tree.ts's `walkNodeType` had
-  // for extraction (aa28952).
+  // the real derived name.
   it("operationId for a bare op() fallback.subtree is derived from the fallback's own name, no leaked verb segment", async () => {
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const n = api_({
@@ -252,12 +253,12 @@ describe("meta.openapi overrides", () => {
   it("meta.openapi.operationId overrides inferred operationId", async () => {
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const { http } = await import("./verbs.ts");
-    // Verb comes from the http.get bundle's `{kind:"method"}` directive (read
-    // by applyMethods) — the HttpRoute pipeline resolves verbs from explicit
-    // method directives, not from tags alone (tags-only verb inference was
-    // an openapi/client-specific approximation of the retired direct
-    // dispatcher; it doesn't reflect what the live HTTP router actually does
-    // for a tags-only leaf, which stays POST — see verbFromTags in tags.ts).
+    // Verb comes from the http.get bundle's `http.method` field (set by
+    // `httpVerbBundle`, read by `applyMethods`) — the HttpRoute pipeline
+    // resolves verbs from this explicit flat key, not from tags alone.
+    // Tags-only verb inference (`verbFromTags`, tags.ts) is an
+    // openapi/client-specific approximation; the live HTTP router still
+    // defaults a tags-only leaf to POST.
     const n = api_({
       list: op((_: unknown) => [], http.get, {
         openapi: { operationId: "listAllItems", summary: "List every item" },

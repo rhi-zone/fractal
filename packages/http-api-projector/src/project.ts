@@ -18,26 +18,22 @@
 //   meta.http.middleware/handlerMiddleware — genuinely multiple/ordered,
 //                                plain arrays, append (concatenate)
 //
-// Before this migration, `meta.http.directives` was a single array of a
-// tagged-union `HttpDirective` value, resolved by a fold-by-`kind` switch at
-// READ time (`getHttpMeta`, below) — kept that way specifically because
-// `FoldMeta`/`MergeTwoMeta` (api-tree's node.ts) were assumed unable to merge
-// index-signature maps or bare functions without losing literal types or call
-// signatures. That assumption was re-verified (scratch `tsc` + `bun run`)
-// during this migration: flat scalar/map/array keys fold correctly through
-// the EXISTING `FoldMeta`/`MergeTwoMeta`/`mergeRecords` machinery (which also
-// surfaced and fixed a genuine runtime/type depth-cap parity gap — see
-// node.ts's `mergeRecords` doc comment) — so the RESOLVED shape (what
-// `getHttpMeta` used to compute) becomes the AUTHORED shape directly; there is
-// no more fold-by-`kind` step at read time, `getHttpMeta` is now a thin
-// pass-through (see its own doc comment below).
+// `meta.http.directives` — formerly a single array of tagged-union
+// `HttpDirective` values, folded by `kind` at read time (`getHttpMeta`,
+// below) — is superseded by the flat design above: `FoldMeta`/`MergeTwoMeta`
+// (api-tree's node.ts) fold flat scalar/map/array keys directly, including
+// index-signature maps and bare functions, through the existing
+// `FoldMeta`/`MergeTwoMeta`/`mergeRecords` machinery (see node.ts's
+// `mergeRecords` doc comment for the runtime/type depth-cap parity it
+// enforces). The resolved shape `getHttpMeta` used to compute by folding is
+// now the authored shape directly — there is no fold-by-`kind` step at read
+// time; `getHttpMeta` is a thin pass-through (see its own doc comment below).
 //
 // The `dispatch` marker (header/query/contentType attribute dispatch) and
-// the `segment`/`when`/`legacyPath` directives — read by a direct tree-walk
-// dispatcher that has since been retired in favor of the single `HttpRoute`
+// the `segment`/`when`/`legacyPath` directives belonged to a direct
+// tree-walk dispatcher, since retired in favor of the single `HttpRoute`
 // pipeline below (naiveTransform → rewriters → makeRouterFromRoute, see
-// route.ts) — were already DELETED (not given a typed home) before this
-// migration: verified read nowhere else in the tree (see docs/design/
+// route.ts); neither has a typed home here (see docs/design/
 // meta-role-split-spec.md §4/§9(6)). Attribute dispatch (header/query/
 // contentType-based routing at the same path+method) has no equivalent in the
 // new pipeline yet — it is an open design question, see TODO.md.
@@ -209,19 +205,15 @@ export interface HttpLeafMeta {
 }
 
 /**
- * Read `meta.http` off a leaf's meta — a thin, typed accessor, NOT a resolver.
- * Before the http-directive-dissolution migration, this function's job was to
- * fold an ARRAY of `HttpDirective` values (`meta.http.directives`) into this
- * exact shape, by `kind`, at READ time. That fold no longer exists: the flat
- * design means `op()`'s own `mergeMeta`/`FoldMeta` fold (api-tree's node.ts)
- * ALREADY produces this exact resolved shape the moment a leaf's meta
- * contributions compose — `meta.http` IS `HttpLeafMetaProperties` already, by
- * construction, not something this function computes from a lower-level
- * representation. Kept as a named function (rather than inlining `meta.http`
- * at every call site) purely for the stable read-site API every existing
- * caller (`extensions/pagination.ts`, `compile.ts`'s `collectRoutes`,
- * verbs.test.ts, …) already depends on, and for the `null`/non-object guard
- * a plain field read wouldn't give for free.
+ * Read `meta.http` off a leaf's meta — a thin, typed accessor, not a resolver.
+ * `op()`'s own `mergeMeta`/`FoldMeta` fold (api-tree's node.ts) already
+ * produces the resolved `HttpLeafMetaProperties` shape the moment a leaf's
+ * meta contributions compose, so this function computes nothing — `meta.http`
+ * IS that shape by construction. Kept as a named function, rather than
+ * inlining `meta.http` at each call site, for the stable read-site API
+ * existing callers (`extensions/pagination.ts`, `compile.ts`'s
+ * `collectRoutes`, verbs.test.ts, …) depend on, and for the `null`/non-object
+ * guard a plain field read wouldn't give for free.
  */
 export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
   const h = meta.http;

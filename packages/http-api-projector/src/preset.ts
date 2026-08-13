@@ -57,13 +57,12 @@
 // A), but STRICTLY: `identityProfile` is "already the right shape, no
 // coercion" (the same posture `check`/`errors`/`parse` assume for an
 // in-process, already-typed value), so a query numeric string like `"3"`
-// against an HTTP tree wired with the 2-arg form is an ENCODING ERROR, not a
-// silent coercion — this is a deliberate consequence of the retirement, not
-// an oversight: the OLD 2-arg path's universal, protocol-blind
-// string-coercion (`compileValidatorModule`'s now-deleted `parse()`, which
-// coerced ANY numeric string regardless of whether it plausibly came off a
-// wire) was exactly the "Problem" this whole design superseded. An HTTP tree
-// that needs wire-shaped coercion must spell the 3-arg form.
+// against an HTTP tree wired with the 2-arg form is an encoding error, not a
+// silent coercion. The now-deleted 2-arg path (`compileValidatorModule`'s old
+// `parse()`) coerced any numeric string regardless of whether it plausibly
+// came off a wire — the universal, protocol-blind coercion this design
+// replaces. An HTTP tree that needs wire-shaped coercion must use the 3-arg
+// form.
 //
 // A rejected leaf's generated `parse()`/wire decoder returns `Result.err(...)`,
 // which `runRoute` (route.ts) already encodes as a 400 with the structured
@@ -287,23 +286,21 @@ export type PresetOptions<T = unknown> = {
    * builds (`httpStores`, decode.ts) — landing the threading docs/design/
    * typed-store-spec.md §8 deferred and TODO.md tracked.
    *
-   * Deliberately ALWAYS optional here, not conditionally required via the
+   * Deliberately always optional here, not conditionally required via the
    * `HasRequiredKeys` technique `op()`/`api()` use for meta contributions
-   * (node.ts) — `StoreRegistry` declaration-merging is GLOBAL to a
+   * (node.ts): `StoreRegistry` declaration-merging is global to a
    * compilation, so a conditionally-required field on `PresetOptions` would
-   * force EVERY `createFetch` call across a deployment's ENTIRE tree of
+   * force every `createFetch` call across a deployment's entire tree of
    * mounted sub-apps to supply it, not just the ones whose handlers actually
-   * read it (verified directly: api-tree's own `auth.test.ts`/`context.test.ts`
-   * — which never touch service stores — failed to typecheck once this field
-   * was made conditionally required, purely because api-tree's own test
-   * fixture merges an unrelated required member into the same `ts.Program`).
-   * §4's "one registration object... checked once" is instead satisfied by
-   * the deployment's OWN single `const serviceStores: ServiceStores = {...}`
-   * assignment at its composition root (the spec's own §4 worked example) —
-   * THAT assignment is what's exhaustively checked against every required
-   * member; this field just consumes the already-verified result, and a
-   * deployment with several mounted trees passes the SAME verified value only
-   * into the ones that actually need it.
+   * read it — declaration merging applies process-wide, not per call site or
+   * per file. §4's "one registration object... checked once" is instead
+   * satisfied by the deployment's own single
+   * `const serviceStores: ServiceStores = {...}` assignment at its
+   * composition root (the spec's own §4 worked example) — that assignment is
+   * what's exhaustively checked against every required member; this field
+   * just consumes the already-verified result, and a deployment with several
+   * mounted trees passes the same verified value only into the ones that
+   * actually need it.
    */
   readonly serviceStores?: ServiceStores;
 };
