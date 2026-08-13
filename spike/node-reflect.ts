@@ -1,16 +1,14 @@
-// spike/node-reflect.ts
+// Type spike: FNode<P, Res> = { meta, handler } wrapper, named FNode to avoid
+// clashing with lib.dom's Node interface.
 //
-// TYPE SPIKE: FNode<P,Res> = { meta, handler } wrapper
-// (Named FNode to avoid clash with lib.dom's Node interface)
+// Wraps the composition unit as { meta, handler } to test whether this (a)
+// preserves the param-discharge type machinery and (b) makes the route
+// structure reflectable via the meta tree.
 //
-// Tests whether wrapping the composition unit as { meta, handler } (a) preserves
-// the verified param-discharge type machinery and (b) makes the route structure
-// reflectable via the meta tree.
+// Standalone: does not import the packages.
 //
-// Standalone — does NOT import the packages.
-//
-// Make this a module so top-level await is valid and lib.dom does not
-// bleed its 'Node' identifier into this file's scope.
+// Exports {} to make this a module, so top-level await is valid and lib.dom's
+// 'Node' identifier does not leak into this file's scope.
 export {};
 
 // ============================================================================
@@ -34,7 +32,8 @@ type Req<P extends Record<string, unknown> = Record<string, never>> = {
 };
 
 // ============================================================================
-// Handler — same as before
+// Handler — resolves to Res, or the Pass sentinel to fall through to
+// whatever combinator comes next
 // ============================================================================
 
 type Handler<P extends Record<string, unknown> = Record<string, never>, Res = unknown> = (
@@ -56,9 +55,9 @@ type AuthMeta = { kind: "auth"; security: string; child: Meta };
 type Meta = LeafMeta | ChoiceMeta | PathMeta | MethodsMeta | ParamMeta | TypedMeta | AuthMeta;
 
 // ============================================================================
-// FNode<P,Res> — THE composition unit (the shape under test)
+// FNode<P,Res> — the composition unit under test
 //
-// NOTE: 'Node' is reserved by lib.dom — use FNode throughout.
+// 'Node' is reserved by lib.dom; this file uses FNode throughout.
 // ============================================================================
 
 type FNode<P extends Record<string, unknown> = Record<string, never>, Res = unknown> = {
@@ -143,7 +142,7 @@ function methods<P extends Record<string, unknown>, Res>(
 }
 
 // -----------------------------------------------------------------------
-// param — CRITICAL: discharge must survive the FNode wrapper
+// param — discharge must survive the FNode wrapper
 // -----------------------------------------------------------------------
 
 function param<K extends string, C extends Record<K, string>, Res>(
@@ -202,11 +201,12 @@ function auth<P extends Record<string, unknown>, Res>(
 }
 
 // -----------------------------------------------------------------------
-// run: only accepts a fully-discharged FNode (P = {})
+// run: accepts only a fully-discharged FNode (P = {}).
 //
-// KEY QUESTION: does wrapping in {meta,handler} preserve the discharge
-// guard, or does TypeScript's structural subtyping let undischarged nodes
-// slip through?
+// Assertions D-I verify the discharge guard: TypeScript rejects an
+// undischarged FNode<P> where FNode<{}> is required. The {meta, handler}
+// wrapper checks assignability through the `handler` property's function
+// type, the same mechanism as a bare Handler<P,Res> function.
 // -----------------------------------------------------------------------
 
 async function run<Res>(
@@ -219,7 +219,7 @@ async function run<Res>(
 }
 
 // ============================================================================
-// ASSERTIONS A–I
+// Assertions A–I
 // ============================================================================
 
 console.log("=== Assertions A–I ===\n");
@@ -261,24 +261,14 @@ void run(nodeC, { path: [], method: "GET", query: {}, params: {} });
 console.log("C: path(choice(methods, param(methods))) → FNode<{}> compiles ✓");
 
 // -----------------------------------------------------------------------
-// D. DISCHARGE GUARD: run(FNode<{id:number}>) — does the wrapper preserve
-//    the guard that requires P={}?
+// D. Discharge guard: run(FNode<{id:number}>) is rejected when P={} is
+//    required.
 //
-//    EXPECTED: @ts-expect-error is consumed (error fires).
-//    FINDING: if tsgo reports "Unused '@ts-expect-error'", the guard is
-//    BROKEN — TypeScript's structural subtyping lets the undischarged
-//    FNode slip through because FNode is NOT a function type.
-//
-//    The bare-function model (Handler<P,Res> = (req:Req<P>)=>...) is
-//    CONTRAVARIANT in P — run(h: Handler<{},Res>) rejects Handler<{id:number}>
-//    because a function wanting {id:number} is NOT a function wanting {}.
-//    The object wrapper {meta,handler} makes the wrapper COVARIANT in
-//    the structural sense that TypeScript checks: FNode<{id:number}> has
-//    handler: Handler<{id:number}>, which IS assignable to
-//    handler: Handler<{}> via function-argument covariance in the object
-//    property position... actually this should still be contravariant.
-//
-//    Run tsgo and observe the actual verdict. Document outcome honestly.
+//    TypeScript checks the `handler` property's function type
+//    contravariantly in its parameter, the same as for a bare
+//    Handler<P,Res> function, so FNode<{id:number}> is rejected where
+//    FNode<{}> is required. Verified with tsgo: the ts-expect-error
+//    directive below is consumed.
 // -----------------------------------------------------------------------
 
 const leafD = leaf<{ id: number }, string>(async (req) => String(req.params.id));
@@ -352,7 +342,7 @@ void run(nodeI, { path: [], method: "GET", query: {}, params: {} });
 console.log("I: typed+param chain end-to-end compiles ✓");
 
 // ============================================================================
-// REFLECTION: walk(meta) → OpenAPI-ish fragment
+// Reflection: walk(meta) → OpenAPI-ish fragment
 // ============================================================================
 
 console.log("\n=== Reflection proof ===\n");

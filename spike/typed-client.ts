@@ -1,42 +1,35 @@
-// spike/typed-client.ts
+// Type spike: derive a nested, fully-typed client from a fractal Node route
+// tree (the same value that serves) — in-process, with no network layer.
 //
-// TYPED CLIENT SPIKE — derived from a fractal Node route tree (in-process Hyper unification)
+// Precondition: the packages' path() and methods() combinators are typed as
+//   path<P, Res>(table: Record<string, Node<P, Res>>): Node<P, Res>
+//   methods<P, Res>(table: Record<string, Node<P, Res>>): Node<P, Res>
+// with Node.meta typed as the wide `Meta` union. Literal child keys and child
+// types are not preserved at the type level, so the route structure is opaque
+// to the type system and a typed client cannot be derived from the packages'
+// Node type as written.
 //
-// Goal: from a Node tree (the same value that serves), derive a nested, fully-typed
-// client whose calls mirror the routes.
+// This spike uses tightened combinator signatures instead:
+//   TNode<P, Res, M extends TMeta> carries meta as a third type parameter.
+//   path/methods infer the literal table type T and store it in
+//   TPathMeta<T>/TMethodsMeta<T>.
+//   param carries its child meta M as TParamMeta<K, M>.
+//   body carries body type T as TBodyMeta<T, _>.
 //
-// KEY FINDING (type-precision precondition):
-//   The packages' path() and methods() combinators are typed as:
-//     path<P, Res>(table: Record<string, Node<P, Res>>): Node<P, Res>
-//     methods<P, Res>(table: Record<string, Node<P, Res>>): Node<P, Res>
-//   ...and Node.meta is typed as `Meta` (the wide union).
+// Path-param surfacing:
+//   path segments   → object properties:      client.todos
+//   param           → callable segment:        client.todosById("42") → sub-client
+//   methods verbs   → uppercase method props:  client.todos.GET() / .POST({...})
+//   body            → verb call takes a typed body arg: client.todos.POST({title:"x"})
+//   leaf            → () => Promise<Res>
+// Verbs are uppercase (GET/POST, not get/post) to mirror the fractal
+// methods() convention of uppercase verb keys.
 //
-//   LITERAL CHILD KEYS and CHILD TYPES are NOT preserved at the type level.
-//   The route structure is OPAQUE to the type system — a typed client CANNOT be
-//   derived from the packages' Node type as currently written.
+// At the leaf call, the client assembles a Req and invokes node.handler
+// in-process — no network; server and client are the same value.
 //
-//   This spike PROTOTYPES tightened combinator signatures:
-//     TNode<P, Res, M extends TMeta> — carries meta as a third type param.
-//     path/methods infer the literal table type T and store it in TPathMeta<T>/TMethodsMeta<T>.
-//     param carries its child meta M → TParamMeta<K, M>.
-//     body carries body type T → TBodyMeta<T, _>.
-//
-// PATH-PARAM SURFACING (chosen shape):
-//   path  segments → object properties:      client.todos
-//   param → callable segment:                client.todosById("42") → sub-client
-//   methods verbs → uppercase method props:  client.todos.GET() / .POST({...})
-//   body → verb call takes typed body arg:   client.todos.POST({title:"x"})
-//   leaf → () => Promise<Res>
-//
-//   Uppercase verbs (GET/POST) rather than lowercase (get/post): mirrors the
-//   fractal methods() convention where verb keys are uppercase strings.
-//
-// RUNTIME: HYPER UNIFICATION
-//   At the leaf call, the client assembles a Req and invokes node.handler IN-PROCESS.
-//   No network. Server and client are one value.
-//
-// CHOICE() LIMITATION: choice() collapses branches — literal keys are lost.
-//   Typed client is incompatible with choice(). See DESIGN NOTE at end.
+// choice() collapses branches, so literal keys are lost and a typed client
+// cannot be derived through it. See the design note at the end of this file.
 
 export {};
 
@@ -66,10 +59,10 @@ type Handler<P extends Record<string, unknown> = Record<string, never>, Res = un
 ) => Promise<Res | Pass>;
 
 // ============================================================================
-// TMeta — TIGHTENED meta types that preserve literal structure
+// TMeta — tightened meta types that preserve literal structure
 //
-// The key change vs. the packages: PathMeta and MethodsMeta carry the LITERAL
-// table type as a type parameter, not just Record<string, Meta>.
+// The key change vs. the packages: PathMeta and MethodsMeta carry the literal
+// table type as a type parameter, instead of the wider Record<string, Meta>.
 // ============================================================================
 
 type TLeafMeta<Res = unknown> = {
@@ -201,9 +194,10 @@ function body<T, P extends Record<string, unknown>, Res>(
       // parse can return T or Promise<T>; normalise:
       const parseResult = parse(rawBody);
       const parsed: T = (parseResult instanceof Promise ? await parseResult : parseResult) as T;
-      // Build enriched req without the body thunk field, then add typed body.
-      // Cast required: spread of `rest` (which has `body?: thunk`) overridden with
-      // `body: parsed` (type T) produces an intersection TypeScript can't simplify.
+      // Build enriched req by spreading req and overriding body with the typed value.
+      // Cast required: spreading `req` (whose `body` field is the optional thunk
+      // type) then overriding with `body: parsed` (type T) produces an
+      // intersection TypeScript can't simplify.
       const enriched = { ...req, body: parsed } as unknown as Req<P> & { body: T };
       return inner(enriched);
     },
@@ -211,25 +205,24 @@ function body<T, P extends Record<string, unknown>, Res>(
 }
 
 // ============================================================================
-// CLIENT TYPE DERIVATION
+// Client type derivation
 //
-// DESIGN CHALLENGE: recursive conditional types over generic TMeta.
+// Recursive conditional types over generic TMeta, with one constraint from
+// tsconfig's `noUncheckedIndexedAccess`: `Verbs[K]` in `{ [K in keyof Verbs]:
+// ... }` adds no `| undefined` when K is constrained to `keyof Verbs` (not a
+// plain string index), but if `Verbs` extends `Record<string, TNodeShape>`
+// (an open string index), TypeScript can still add `| undefined` to the
+// indexed access in conditional types.
 //
-// The critical insight: `noUncheckedIndexedAccess` is enabled in tsconfig.
-// With it, `Verbs[K]` in `{ [K in keyof Verbs]: ... }` does NOT add undefined
-// when K is constrained to `keyof Verbs` (not a plain string index). HOWEVER,
-// if `Verbs` extends `Record<string, TNodeShape>` (an open string index), TypeScript
-// may still add `| undefined` to the indexed access in conditional types.
+// `Verbs` is constrained as a concrete object type (not an open record) and
+// iterated via `keyof Verbs`. The `[K in keyof Verbs]: ...` form is a
+// homomorphic mapped type: it adds no `undefined` for literal keys when the
+// source type is a finite interface/type.
 //
-// SOLUTION: Use a NARROWED mapped type approach where we constrain `Verbs` as
-// a concrete object type (not an open record) by using `keyof Verbs` to iterate.
-// The `[K in keyof Verbs]: ...` form is a homomorphic mapped type — it does NOT
-// add undefined for literal keys when the source type is a finite interface/type.
-//
-// We also face the deferred-evaluation issue: if M remains abstract (e.g. TMeta),
-// TypeScript cannot evaluate `ClientOfMeta<M>` at definition sites. The key is
-// that `makeClient` must be called on a CONCRETE TNode with a specific M so the
-// conditional resolves at the call site.
+// If M remains abstract (e.g. TMeta), TypeScript cannot evaluate
+// `ClientOfMeta<M>` at definition sites — `makeClient` must be called on a
+// concrete TNode with a specific M so the conditional resolves at the call
+// site.
 // ============================================================================
 
 // ClientOfVerbNode: () => Promise<Res> for plain verbs, (body: T) => Promise<Res> for body verbs
@@ -240,10 +233,10 @@ type ClientOfVerbNode<N> =
       ? () => Promise<Res>
       : never;
 
-// MethodsClient<Verbs>: maps verb keys to their call signatures.
-// Using `& string` to avoid noUncheckedIndexedAccess adding | undefined.
-// The homomorphic mapped type `{ [K in keyof Verbs & string]: ... }` iterates
-// over literal keys and does NOT add | undefined when the type is concrete.
+// MethodsClient<Verbs>: maps verb keys to their call signatures. The `&
+// string` intersection avoids noUncheckedIndexedAccess adding | undefined:
+// the homomorphic mapped type `{ [K in keyof Verbs & string]: ... }` iterates
+// over literal keys and adds no | undefined when the type is concrete.
 type MethodsClient<Verbs extends Record<string, TNodeShape>> = {
   [K in keyof Verbs & string]: ClientOfVerbNode<Verbs[K]>;
 };
@@ -277,7 +270,7 @@ type ClientOfMeta<M extends TMeta> =
 type ClientOf<N> = N extends TNode<any, any, infer M> ? ClientOfMeta<M> : never;
 
 // ============================================================================
-// RUNTIME: makeClient
+// Runtime: makeClient
 // ============================================================================
 
 function makeClient<M extends TMeta>(
@@ -363,8 +356,9 @@ function makeClient<M extends TMeta>(
 
   if (meta.kind === "param") {
     const paramMeta = meta as TParamMeta<string, TMeta>;
-    // Use paramMeta.childNode (the actual child TNode with its handler), not a
-    // reconstructed fake node that would carry the param handler instead of the child's.
+    // paramMeta.childNode holds the actual child TNode with its handler.
+    // Reconstructing a node from paramMeta.child instead would carry the
+    // param's own handler rather than the child's.
     const childNode = paramMeta.childNode;
     return ((value: string) => {
       return makeClient(childNode, {
@@ -378,7 +372,7 @@ function makeClient<M extends TMeta>(
 }
 
 // ============================================================================
-// EXAMPLE TREE — mirrors examples/todo-api/src/app.ts (without choice())
+// Example tree — mirrors examples/todo-api/src/app.ts, without choice()
 //
 // Structure:
 //   /todos         GET  → list all todos
@@ -436,7 +430,7 @@ const appTree = path({
 });
 
 // ============================================================================
-// TYPE PROBE: infer the full client surface
+// Type probe: infer the full client surface
 //
 // type _ should expand to:
 // {
@@ -455,15 +449,15 @@ type AppClient = ClientOf<AppTree>;
 type _ = AppClient;
 
 // ============================================================================
-// BUILD THE CLIENT
+// Build the client
 // ============================================================================
 
 const client = makeClient(appTree);
 
-// ASSERTION: client has type AppClient
+// Type assertion: client has type AppClient
 const _clientTypeCheck: AppClient = client;
 
-// ── POSITIVE ASSERTIONS ───────────────────────────────────────────────────────
+// ── Positive assertions ────────────────────────────────────────────────────
 
 // client.todos.GET() → Promise<Todo[]>
 const todosResult: Promise<Todo[]> = client.todos.GET();
@@ -474,9 +468,9 @@ const todoByIdResult: Promise<Todo | null> = client.todosById("1").GET();
 // client.todos.POST({title: "new todo"}) → Promise<Todo>
 const createResult: Promise<Todo> = client.todos.POST({ title: "new todo" });
 
-// ── NEGATIVE ASSERTIONS (each @ts-expect-error should be consumed) ─────────────
+// ── Negative assertions (each @ts-expect-error should be consumed) ─────────
 //
-// These are COMPILE-TIME assertions only. The expressions are wrapped in
+// These are compile-time assertions only. The expressions are wrapped in
 // `false && (...)` so they are never executed at runtime.
 
 // NEG-1: Wrong body type to POST: number is not CreateInput
@@ -496,7 +490,7 @@ const _neg3 = false && client.todos.DELETE();
 const _neg4 = false && client.nonexistent;
 
 // ============================================================================
-// RUNTIME EXECUTION
+// Runtime execution
 // ============================================================================
 
 console.log("=== typed-client spike — in-process Hyper unification ===\n");
@@ -523,7 +517,7 @@ console.log("NEG-3 .todos.DELETE()  nonexistent verb — @ts-expect-error consum
 console.log("NEG-4 .nonexistent     nonexistent path — @ts-expect-error consumed");
 
 // ============================================================================
-// DESIGN NOTE: choice() and typed client
+// choice() and the typed client
 //
 // The example app uses choice() to merge route branches:
 //   choice(
@@ -536,25 +530,25 @@ console.log("NEG-4 .nonexistent     nonexistent path — @ts-expect-error consum
 //   choice<P, Res, Branches extends TMeta[]>(...ns): TNode<P, Res, TChoiceMeta<Branches>>
 //
 // The client derivation from TChoiceMeta<[M1, M2, M3]> would need to produce
-// the INTERSECTION of all branch surfaces — technically:
+// the intersection of all branch surfaces:
 //   ClientOfChoice<[M1, M2, M3]> = ClientOfMeta<M1> & ClientOfMeta<M2> & ClientOfMeta<M3>
 //
-// This breaks down because:
-//   1. Multiple branches can handle the same verb (GET /todos with/without ?limit),
-//      producing conflicting call signatures in the intersection.
-//   2. TypeScript does not easily simplify intersections of conditional types.
+// That breaks down for two reasons:
+//   1. Multiple branches can handle the same verb (GET /todos with/without
+//      ?limit), producing conflicting call signatures in the intersection.
+//   2. TypeScript does not simplify intersections of conditional types well.
 //
-// CONCLUSION: A typed client requires the tree to express routes without choice().
-// The route tree must use path/methods/param only. The example app would need
-// refactoring. This is a structural constraint, not a limitation of this spike.
+// A typed client therefore requires the tree to express routes without
+// choice() — path/methods/param only. Deriving one for the example app would
+// require refactoring it to drop choice().
 //
-// PACKAGES CHANGES NEEDED (summary):
+// Packages changes needed, summarized:
 //   1. Node gains M: Node<P, Res, M extends Meta = Meta> = { meta: M; handler: ... }
 //   2. path<T extends Record<string, TNode>>(table: T): TNode<{}, unknown, TPathMeta<T>>
 //   3. methods<P, Res, T extends Record<string, TNode<P, Res, any>>>(table: T): TNode<P, Res, TMethodsMeta<T>>
 //   4. param<K, C, Res, M>(name: K, child: TNode<C, Res, M>): TNode<Omit<C,K>, Res, TParamMeta<K, M>>
 //   5. body/validate: return TNode<P, Res, TBodyMeta<T, _>>
-//   6. choice() can keep its current type; it's simply not traversable by the typed client
+//   6. choice() can keep its current type; the typed client simply cannot traverse it.
 // ============================================================================
 
 console.log("\n=== DONE ===");
