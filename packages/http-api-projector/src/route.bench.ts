@@ -704,7 +704,7 @@ function insertRadix(node: RadixNode, path: string, method: string, handler: Han
     insertRadix(node.param.node, rest, method, handler);
     return;
   }
-  // literal chunk up to the next ':' (if any) is what we may share/split against existing children
+  // Literal chunk up to the next ':' (if any) — the part matched against existing children for a shared prefix to split on.
   const paramIdx = path.indexOf(":");
   const literal = paramIdx === -1 ? path : path.slice(0, paramIdx);
   const restAfterLiteral = paramIdx === -1 ? "" : path.slice(paramIdx);
@@ -865,8 +865,8 @@ function buildMethodDfa(routes: readonly RouteDef[]): MethodDfa {
   const allNodes = collectDfaNodes(root);
   const numStates = idCounter;
   const table = new Uint32Array((numStates + 1) * 128);
-  const paramNameOfState: (string | undefined)[] = new Array(numStates + 1);
-  const terminalOf: (Handler | undefined)[] = new Array(numStates + 1);
+  const paramNameOfState: (string | undefined)[] = Array.from({ length: numStates + 1 });
+  const terminalOf: (Handler | undefined)[] = Array.from({ length: numStates + 1 });
 
   for (const node of allNodes) {
     const row = node.id * 128;
@@ -1009,14 +1009,13 @@ function buildCompiledCharFn(
 
   let paramCounter = 0;
 
-  // Follow a run of unbranching single-literal-child nodes (no param, no
-  // terminal in between) and fold it into one string, so a long unbranching
-  // literal run (e.g. an 8k-char static route) compiles to ONE `startsWith`
+  // Follows a run of unbranching single-literal-child nodes (no param, no
+  // terminal in between) and folds it into one string, so a long unbranching
+  // literal run (e.g. an 8k-char static route) compiles to one `startsWith`
   // check instead of one nested `if` per character. Without this, codegen
-  // recursion depth (and the resulting generated source's AST nesting depth)
-  // scales with path length and blows V8's parser/call stack well before 8k
-  // chars — a real limitation of naive char-by-char codegen, worked around
-  // here the same way a real compiler would: batch the unambiguous run.
+  // recursion depth — and the generated source's AST nesting depth — scales
+  // with path length and exceeds V8's parser/call stack limits well before
+  // 8k chars.
   function chaseChunk(node: CharFnTrieNode): { chunk: string; target: CharFnTrieNode } {
     let chunk = "";
     let cur = node;
@@ -1240,16 +1239,15 @@ function timeOnce(fn: () => unknown, iterations: number): number {
   return end - start;
 }
 
-// JIT-hoisting fix: calling dispatch(sameStringLiteral, sameStringLiteral)
-// 500k times in a row lets the engine prove the arguments never change
-// across iterations — some of the compiled/no-branch architectures were
-// measured faster than they'd ever be in real traffic because of this.
-// Pre-generate VARIANT_COUNT distinct string objects with IDENTICAL content
-// per case (built via split/join so each is a fresh object, not an interned
-// re-use of the same one) and index into that array with a per-iteration
-// counter, so the call target is a runtime array read the engine can't
-// prove constant — the same fix applied uniformly to all 7 architectures,
-// not just one.
+// Calling dispatch(sameStringLiteral, sameStringLiteral) 500k times lets the
+// JIT prove the arguments never change across iterations, so some
+// compiled/no-branch architectures measured faster than real traffic would
+// ever see. Fix: pre-generate VARIANT_COUNT distinct string objects with
+// identical content per case (via split/join, so each is a fresh object
+// rather than an interned reuse of the same one) and index into that array
+// with a per-iteration counter, making the call target a runtime array read
+// the engine can't prove constant. Applied uniformly across all 7
+// architectures.
 const VARIANT_COUNT = 8;
 
 function makeVariants(s: string): string[] {
@@ -1327,30 +1325,24 @@ function forceGc(): void {
   }
 }
 
-// Measuring a SINGLE build's memory footprint via process.memoryUsage() was
-// tried first and rejected: verified experimentally (see scratch tests run
-// during development) that Bun/JSC's heapUsed counter only becomes visible in
-// ~10-30MB increments — a single ~700-route tree's allocation doesn't move it
-// at all, reading a flat 0 regardless of architecture. Typed arrays (the DFA
-// table's Uint32Array) additionally don't count against heapUsed under ANY
-// size — they show up under `external` instead, confirmed by allocating a
-// bare 20MB Uint32Array and observing heapUsed delta = 0, external delta = 0
-// too until several are retained simultaneously past the same threshold.
-// Fix: build N copies, retain all of them, force GC once more (with them
-// still referenced, so it's a real live-set measurement, not pre-collection
-// noise), then divide the delta by N. This is the same amortization trick
-// the timing benchmarks already use for build-cost — it works here for the
-// same reason: the fixed one-shot measurement floor is the problem, not the
-// technique. A FIXED batch size doesn't fit every architecture, though: a
-// batch of 50 was plenty to reveal the DFA table's (already-large) per-build
-// allocation but stayed at a flat 0 for every lean architecture (segment
-// trie, Map, regex, compiled fns) whose few-hundred-KB structures still
-// didn't clear the threshold at 50x. So the batch size is calibrated per
-// architecture instead: time one build, then pick a batch that fills a fixed
-// time budget — cheap builds get a big batch (pushes small structures well
-// past the visibility floor), the already-expensive DFA build gets a small
-// one (it doesn't need amplification, and 50x of an already-88ms build would
-// dominate this phase's runtime for no accuracy benefit).
+// process.memoryUsage().heapUsed reports deltas in ~10-30MB steps on
+// Bun/JSC, so a single build's allocation (a few hundred KB at most) never
+// registers — every architecture reads a flat 0. Typed arrays (e.g. the DFA
+// table's Uint32Array) don't count against heapUsed at any size either: a
+// bare 20MB Uint32Array shows a heapUsed delta of 0, and only shows up under
+// `external` once several are retained past the same threshold.
+//
+// Fix: build a batch of N copies, retain all of them, force GC once more
+// while they're still referenced (a true live-set measurement, not
+// pre-collection noise), then divide the delta by N — the same amortization
+// the timing benchmarks already use for build cost.
+//
+// A fixed batch size doesn't fit every architecture: a batch large enough to
+// reveal the DFA table's already-large per-build allocation leaves the
+// leaner architectures (segment trie, Map, regex, compiled fns) still at a
+// flat 0, while a batch that large for the DFA build would make it dominate
+// this phase's runtime for no accuracy benefit. So each architecture times
+// one build, then picks a batch size that fills a fixed time budget.
 const MEMORY_TIME_BUDGET_MS = 500;
 const MEMORY_MIN_BATCH = 5;
 const MEMORY_MAX_BATCH = 2000;
@@ -1381,7 +1373,7 @@ function measureBuildMemory(build: () => unknown): MemoryDelta {
     const before = process.memoryUsage();
     const built: unknown[] = [];
     for (let i = 0; i < batchSize; i++) built.push(build());
-    forceGc(); // scavenge/compact WHILE `built` is still referenced — this is what makes the live set visible
+    forceGc(); // runs while `built` is still referenced, so this measures the live set, not pre-collection garbage
     const after = process.memoryUsage();
     heapDeltas.push(Math.max(0, after.heapUsed - before.heapUsed) / batchSize);
     externalDeltas.push(Math.max(0, after.external - before.external) / batchSize);

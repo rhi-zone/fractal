@@ -1055,13 +1055,15 @@ describe("runRoute — per-route sources", () => {
 // ============================================================================
 // wrapValidators (Node-level, applied before naiveTransform) is deleted
 // (phase 3) — validation for HTTP dispatch is now `applyValidation`, applied
-// onto the PROJECTED `HttpRoute` via `createFetch`'s `rewriters` option; see
+// onto the PROJECTED `HttpRoute` via `createFetch`'s `rewriters` option. See
 // preset.test.ts's "OOTB preset — validation via applyValidation + rewriters"
 // describe block for the equivalent end-to-end coverage (valid/rejected
-// input, the unvalidated leaf passthrough, and the uncovered-leaf case —
-// `applyValidation` is permissive by default rather than loud like
-// `wrapValidators` was; `assertValidationCoverage`, api-tree/apply-validation.ts,
-// is the opt-in loud build-mode check).
+// input, the unvalidated leaf passthrough, and the uncovered-leaf case).
+// `applyValidation` is permissive by default, unlike `wrapValidators`;
+// `assertValidationCoverage` (api-tree/apply-validation.ts) is the opt-in
+// loud build-mode check.
+// ============================================================================
+
 // ============================================================================
 // runRoute — handler-level middleware (makeRouterFromRoute's second param).
 // Distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
