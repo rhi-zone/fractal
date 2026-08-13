@@ -14,7 +14,7 @@
 // here so it's reachable from the package root, alongside
 // the rest of the Node/Op/Meta model which stays on "./node.ts" until the
 // two modules are merged.
-export { api, mergeMeta, op } from "./node.ts"
+export { api, fallback, mergeMeta, op } from "./node.ts"
 
 // `createDirectApi` — the zero-protocol-overhead projection: a nested proxy
 // that calls tree handlers in-process (no HTTP, no serialization). See

@@ -694,3 +694,61 @@ export function api<
     & { readonly meta: Widen<M extends undefined ? BranchMeta : Simplify<M>> }
     & (F extends undefined ? object : { readonly fallback: F })
 }
+
+/**
+ * DX sugar for `Node["fallback"]`'s `{ name, subtree }` shape — the piece
+ * `api(children, opts)`'s own doc comment (above) documents but nothing
+ * constructs: every existing call site hand-writes the literal object
+ * (`api({}, { fallback: { name: "id", subtree: api({...}) } })`). `fallback()`
+ * is that missing constructor, meant to be passed straight into `api()`'s own
+ * `opts.fallback`:
+ *
+ * ```ts
+ * api({ list, add }, { fallback: fallback("bookId", { read, replace, remove }) })
+ * // Equivalent to:
+ * api({ list, add }, { fallback: { name: "bookId", subtree: api({ read, replace, remove }) } })
+ * ```
+ *
+ * Two call shapes, matched by structural overload (not a discriminant tag —
+ * `isNode` below already distinguishes a `Node` value, which always carries a
+ * required `meta` key, from a bare children map, which never does):
+ *
+ *   - `fallback(name, children)` — the common case: `children` is a plain
+ *     `Record<string, Node>` (the same shape `api()`'s own first positional
+ *     parameter takes), wrapped in a bare `api(children)` call for you. Covers
+ *     every fallback subtree that needs nothing beyond its own operations —
+ *     `library-api`'s `bookItemNode` (read/replace/remove/checkout, no branch
+ *     meta, no nested fallback) is exactly this shape.
+ *   - `fallback(name, subtree)` — the escape hatch: `subtree` is already a
+ *     built `Node` (typically an `api()` call site the caller wrote out in
+ *     full, e.g. one that also needs `opts.meta` or its own nested
+ *     `opts.fallback` for a second dynamic segment). Passed through unchanged
+ *     — `fallback()` only wraps the FIRST shape in `api()`, never re-wraps an
+ *     already-built subtree.
+ *
+ * Generic in `Name` (`const` — same literal-preserving technique `api()`'s
+ * own `F`/`M` use) so `fallback("bookId", ...).name` stays the literal
+ * `"bookId"`, not the widened `string` a bare `name: string` parameter would
+ * force — required for `fallback(...)`'s result to satisfy `api()`'s own
+ * `const F` inference the same way a hand-written `{ name: "bookId", ... }`
+ * literal already does.
+ */
+export function fallback<const Name extends string, S extends Node<any>>(
+  name: Name,
+  subtree: S,
+): { readonly name: Name; readonly subtree: S }
+export function fallback<
+  const Name extends string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  C extends Readonly<Record<string, Node<any>>>,
+>(
+  name: Name,
+  children: C,
+): { readonly name: Name; readonly subtree: ReturnType<typeof api<C>> }
+export function fallback(
+  name: string,
+  arg: Node | Readonly<Record<string, Node>>,
+): { readonly name: string; readonly subtree: Node } {
+  const subtree = isNode(arg) ? arg : api(arg as Record<string, Node>)
+  return { name, subtree }
+}

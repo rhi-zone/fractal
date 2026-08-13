@@ -10,7 +10,7 @@
 //
 // See docs/design/routing-and-transforms.md § DX — constructor sugar.
 
-import { api, op } from "@rhi-zone/fractal-api-tree"
+import { api, fallback, op } from "@rhi-zone/fractal-api-tree"
 import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "./verbs.ts"
 import { applyMethods, applyMoveTo, applyResponse, composeTransforms, naiveTransform } from "./route.ts"
@@ -52,6 +52,85 @@ export function crud(handlers: CrudHandlers): Node {
   if (handlers.update !== undefined) children.update = op(handlers.update, http.put)
   if (handlers.delete !== undefined) children.delete = op(handlers.delete, http.delete)
   return api(children)
+}
+
+// ============================================================================
+// restCrud() — convention constructor for the actual REST-shaped 5-op
+// resource (list/create at the collection root, get/update/delete co-located
+// onto the dynamic id segment via moveTo)
+// ============================================================================
+
+/** `restCrud()`'s own options. */
+export type RestCrudOptions = {
+  /**
+   * Name of the dynamic id segment's fallback param, e.g. `"bookId"` binds
+   * `input.bookId` for `get`/`update`/`delete`. Defaults to `"id"`.
+   */
+  readonly idParam?: string
+}
+
+/**
+ * Convention constructor, sibling to `crud()` above but producing the actual
+ * REST resource shape instead of `crud()`'s flat sibling-key shape:
+ *
+ * ```
+ * GET    /          — list
+ * POST   /          — create
+ * GET    /:id       — get
+ * PUT    /:id       — update
+ * DELETE /:id       — delete
+ * ```
+ *
+ * `crud()` stays exactly as-is (its flat `list`/`create`/`get`/`update`/
+ * `delete` sibling-key shape is a real, still-used convention for whoever
+ * wants it) — this is a genuinely different combinator, not a
+ * backwards-compatible upgrade to it.
+ *
+ * Built from three pieces, none of them new machinery:
+ *   - `list`/`create` are each authored as a CHILD of the resource node
+ *     carrying `http.moveTo("..")` — `applyMoveTo` (route.ts) resolves `".."`
+ *     relative to the child's own position, which is exactly the resource
+ *     node's own position, so both collapse onto the resource root itself as
+ *     two DISTINCT methods (`GET`, `POST`) on the SAME node — the identical
+ *     "child moves up onto its own parent" mechanic `library-api`'s
+ *     `readBook`/`replaceBook`/`removeBook` already use one level deeper (see
+ *     examples/library-api/src/tree.ts's own module doc for that motivating
+ *     example).
+ *   - `get`/`update`/`delete` are each authored the same way one level
+ *     deeper — as children of the id fallback's OWN subtree, each with
+ *     `http.moveTo("..")` — so they collapse onto the fallback subtree's own
+ *     root instead of getting their own `/get`, `/update`, `/delete`
+ *     sub-segments.
+ *   - `fallback()` (api-tree's node.ts) constructs the `{ name, subtree }`
+ *     shape for the id segment from that children map directly, instead of
+ *     this function hand-rolling the raw `{ name, subtree: api({...}) }`
+ *     literal itself.
+ *
+ * `opts.fallback` is only set when at least one of `get`/`update`/`delete` is
+ * provided — a `restCrud({ list, create })` call (no id-scoped operations at
+ * all) produces a resource with no fallback segment, matching `crud()`'s own
+ * "only wire what's provided" behavior for a partial handler set.
+ *
+ * ```ts
+ * api({ books: restCrud({ list: listBooks, create: addBook, get: getBook,
+ *   update: replaceBook, delete: removeBook }, { idParam: "bookId" }) })
+ * ```
+ */
+export function restCrud(handlers: CrudHandlers, opts: RestCrudOptions = {}): Node {
+  const idParam = opts.idParam ?? "id"
+
+  const rootChildren: Record<string, Node> = {}
+  if (handlers.list !== undefined) rootChildren.list = op(handlers.list, http.get, http.moveTo(".."))
+  if (handlers.create !== undefined) rootChildren.create = op(handlers.create, http.post, http.moveTo(".."))
+
+  const idChildren: Record<string, Node> = {}
+  if (handlers.get !== undefined) idChildren.get = op(handlers.get, http.get, http.moveTo(".."))
+  if (handlers.update !== undefined) idChildren.update = op(handlers.update, http.put, http.moveTo(".."))
+  if (handlers.delete !== undefined) idChildren.delete = op(handlers.delete, http.delete, http.moveTo(".."))
+
+  return Object.keys(idChildren).length > 0
+    ? api(rootChildren, { fallback: fallback(idParam, idChildren) })
+    : api(rootChildren)
 }
 
 // ============================================================================

@@ -14,7 +14,7 @@
 // exported `api` value's api() call and derives input schemas for inline
 // ops, including the `books` subtree below (also authored via api()).
 
-import { api as api_, op } from "@rhi-zone/fractal-api-tree/node"
+import { api as api_, fallback, op } from "@rhi-zone/fractal-api-tree/node"
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs"
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx"
 import { applyValidation } from "./generated/apply-validation.ts"
@@ -128,23 +128,6 @@ const checkoutNode = api_({
     ),
   })
 
-/**
- * The per-book subtree: read/replace/remove co-locate onto their parent
- * position (via each leaf's own `moveTo` directive, read by the HttpRoute
- * pipeline); checkout stays a branch. This node previously also carried a
- * `{ http: { dispatch: { kind: "method" } } }` marker — the retired direct
- * tree-walk dispatcher's own co-location signal — but that marker was
- * verified read nowhere (docs/design/meta-role-split-spec.md §4/§9(6):
- * `dispatch` handling is deleted, not given a typed home) even before this
- * split, so it's dropped here rather than carried forward as dead meta.
- */
-const bookItemNode = api_({
-    read: readBook,
-    replace: replaceBook,
-    remove: removeBook,
-    checkout: checkoutNode,
-  })
-
 // ============================================================================
 // Books — list/add ops, plus the per-book fallback subtree
 // ============================================================================
@@ -170,13 +153,31 @@ const addBook = op(
 
 /**
  * Books subtree: `list`/`add` are static children; the per-book fallback
- * (`fallback: { name, subtree }`) captures any other path segment as
- * `bookId` and continues into `bookItemNode` (read/replace/remove/checkout).
+ * captures any other path segment as `bookId` and continues into the
+ * read/replace/remove/checkout subtree — built inline via `fallback()`
+ * (api-tree's node.ts DX sugar for the `{ name, subtree }` shape) instead of
+ * hand-writing `{ name: "bookId", subtree: api_({...}) }` and a separate
+ * named `bookItemNode` constant. `read`/`replace`/`remove` still co-locate
+ * onto their parent position via each leaf's own `moveTo` directive (read by
+ * the HttpRoute pipeline); `checkout` stays a branch, unaffected by
+ * placement. This node previously also carried a
+ * `{ http: { dispatch: { kind: "method" } } }` marker — the retired direct
+ * tree-walk dispatcher's own co-location signal — but that marker was
+ * verified read nowhere (docs/design/meta-role-split-spec.md §4/§9(6):
+ * `dispatch` handling is deleted, not given a typed home) even before this
+ * split, so it's dropped here rather than carried forward as dead meta.
  */
 const booksNode = api_({
     list: listBooks,
     add: addBook,
-  }, { fallback: { name: "bookId", subtree: bookItemNode } })
+  }, {
+    fallback: fallback("bookId", {
+      read: readBook,
+      replace: replaceBook,
+      remove: removeBook,
+      checkout: checkoutNode,
+    }),
+  })
 
 // ============================================================================
 // API root

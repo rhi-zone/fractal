@@ -4,6 +4,7 @@ import { describe, expect, it } from "bun:test"
 import {
   op,
   api,
+  fallback,
   isNode,
   isLeaf,
   mergeMeta,
@@ -63,6 +64,41 @@ describe("fallback field on api()", () => {
     const n = api({ list: op(() => []) }, { fallback: { name: "id", subtree } })
     expect(n.children?.["list"]).toBeDefined()
     expect(n.fallback?.name).toBe("id")
+  })
+})
+
+// ============================================================================
+// 2a. fallback() — DX constructor for the { name, subtree } shape
+// ============================================================================
+
+describe("fallback()", () => {
+  it("fallback(name, children) wraps a bare children map in api() for you", () => {
+    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }))
+    const f = fallback("bookId", { get: getBook })
+    expect(f.name).toBe("bookId")
+    expect(isNode(f.subtree)).toBe(true)
+    expect(f.subtree.children?.["get"]).toBe(getBook)
+  })
+
+  it("fallback(name, children) result composes directly into api()'s opts.fallback", () => {
+    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }))
+    const n = api({}, { fallback: fallback("bookId", { get: getBook }) })
+    expect(n.fallback?.name).toBe("bookId")
+    expect(n.fallback?.subtree.children?.["get"]).toBe(getBook)
+  })
+
+  it("fallback(name, subtree) passes an already-built Node through unchanged", () => {
+    const prebuilt = api({ checkout: op((_: { invoiceId: string }) => ({})) })
+    const f = fallback("invoiceId", prebuilt)
+    expect(f.name).toBe("invoiceId")
+    expect(f.subtree).toBe(prebuilt)
+  })
+
+  it("equivalent to the hand-written { name, subtree: api(children) } shape", () => {
+    const getBook = op((input: { bookId: string }) => ({ id: input.bookId }))
+    const sugared = fallback("bookId", { get: getBook })
+    const handWritten = { name: "bookId" as const, subtree: api({ get: getBook }) }
+    expect(sugared).toEqual(handWritten)
   })
 })
 
