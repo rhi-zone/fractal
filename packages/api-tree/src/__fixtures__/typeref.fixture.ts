@@ -144,11 +144,12 @@ export class OverloadedMethodClass {
 
 /** Each overload returns a distinct `Result<T, string>` — the per-signature
  * `functionRefFromSignature` call independently lowers each return type, so
- * the two overloads' return shapes stay distinct rather than collapsing to
- * one. (`Result<T,E>` unwrapping to `T` is a return-type-of-the-op-itself
- * concern (`typeRefFromReturnType`'s syntax/structural paths) — a signature's
- * return type reached via plain `typeRefFromType` lowers the alias
- * structurally, same as any other field/param position.) */
+ * the two overloads' return shapes stay distinct rather than collapsing into
+ * one. Unwrapping `Result<T, E>` to `T` is a separate concern, handled by
+ * `typeRefFromReturnType`'s syntax/structural paths for an op's own return
+ * type; here, reached via plain `typeRefFromType` at a function-typed field,
+ * the alias lowers structurally instead, same as any other field/param
+ * position. */
 export function overloadedResultFn(a: string): Result<{ text: string }, string>;
 export function overloadedResultFn(a: number): Result<{ num: number }, string>;
 export function overloadedResultFn(
@@ -310,12 +311,12 @@ export interface BookIdParam {
 
 export const namedInterfaceParamFn = (_input: BookIdParam): void => {};
 
-/** A TS BUILTIN/GLOBAL utility type (`Record<K,V>`) used directly as a
- * handler's own parameter type — same NAMEABLE shape as `BookQuery`/
+/** A TS builtin/global utility type (`Record<K,V>`) used directly as a
+ * handler's own parameter type — same nameable shape as `BookQuery`/
  * `BookIdParam` above (`type.aliasSymbol.name === "Record"`), but its alias
  * declaration lives in TypeScript's own bundled `lib.es5.d.ts`, not this
- * fixture file — `typeProvenanceOf` (extract.ts) must recognize that and
- * carry NO `meta.typeName`/`meta.declarationFile`, same as a genuinely
+ * fixture file. `typeProvenanceOf` (extract.ts) must recognize that and
+ * carry no `meta.typeName`/`meta.declarationFile`, same as a genuinely
  * anonymous inline parameter type, so a codegen consumer never tries to
  * `import type { Record } from ".../lib.es5.d.ts"` (not a real module). */
 export const builtinNamedParamFn = (_input: Record<string, number>): void => {};
