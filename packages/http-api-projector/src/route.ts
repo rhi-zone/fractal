@@ -1,5 +1,3 @@
-// packages/http-api-projector/src/route.ts — @rhi-zone/fractal-http-api-projector
-//
 // The HTTP route tree — a SEPARATE type from the API tree (`Node`). The API
 // tree is organized by domain (children are operations); the route tree is
 // organized by protocol (path segments, HTTP methods). A transform pipeline
@@ -22,19 +20,15 @@
 //      an `HttpRoute` tree (no attribute dispatch, no match conditions —
 //      those remain the direct tree-walk dispatcher's domain; see project.ts).
 //
-// Dispatch (decode → handler → encode) is a fixed, linear pipeline rather
-// than an interceptable multi-stage one — the earlier stage-array
-// abstraction (reqTransforms/inputTransforms/validate/outputTransforms/
-// resTransforms, plus per-route `decode`/`encode` overrides) has been
-// removed. AOT-compiled validation runs via
+// Dispatch (decode → handler → encode) is a fixed, linear pipeline, not an
+// interceptable multi-stage one. AOT-compiled validation runs via
 // `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation(key,
 // projectedTree, "http")` — the recommended, wire-profile-driven 3-arg form
 // (see preset.ts's module doc for what it buys over the still-supported
 // 2-arg `applyValidation(key, projectedTree)` form) — wired onto the
 // already-projected `HttpRoute`, typically as a `preset.ts` `rewriters`
-// entry. The same leaf-handler wrap, `@rhi-zone/fractal-api-tree/build`'s
-// `wrapValidators`, can instead be applied at the `Node` level, before this
-// file's transforms run, for a tree shared with MCP/CLI.
+// entry. The same `applyValidation` call also applies at the `Node` level,
+// before this file's transforms run, for a tree shared with MCP/CLI.
 //
 // What remains here is `runRoute` (below): decode the request via `sources`
 // (per-route — each route has its own parameter names and source
@@ -485,11 +479,10 @@ export function applyMethods<R extends HttpRoute>(route: R): ApplyMethodsRoute<R
 // when multiple subtrees converge on the same target (the REST-resource
 // motivating example: get/update/delete all move to the same `*` position).
 //
-// [convention] When moveTo creates a NEW wildcard segment (no existing
+// [convention] When moveTo creates a new wildcard segment (no existing
 // `fallback` at that position), the fallback parameter name defaults to
-// `"param"` — the design doc leaves the wildcard's parameter name as coming
-// "from the node's own metadata," which is not yet wired up. Prefer an
-// already-present `fallback.name` at the target position when one exists.
+// `"param"`. An already-present `fallback.name` at the target position is
+// preferred over that default when one exists.
 // ============================================================================
 
 type PendingMove = { readonly targetPath: readonly string[]; readonly subtree: HttpRoute };
@@ -943,9 +936,9 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
 
 /**
  * Encode a `ResponseOverride` into a `Response` — the counterpart to
- * `jsonRouteResponse` for the override path. Historically every override
- * body was `JSON.stringify`'d regardless of shape, which broke binary
- * responses, streams, and anything already serialized by the handler. Now:
+ * `jsonRouteResponse` for the override path. The body's shape decides how it's
+ * encoded, so binary responses, streams, and handler-serialized bodies each
+ * get their own correct treatment instead of a blanket `JSON.stringify`:
  *
  *   - `body instanceof Response` — the handler built the whole response
  *     itself (its own headers/status/body); return it directly, `init` is
@@ -958,11 +951,11 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
  *   - `string` — ambiguous: could be a plain-text/HTML body the handler
  *     already serialized, or a `Node` handler's raw JSON-shaped output that
  *     happens to be typed as `string`. Disambiguated via `init.headers`: an
- *     EXPLICIT non-JSON Content-Type means the handler already serialized
- *     the body itself, so it passes through as-is; otherwise falls back to
- *     the original `JSON.stringify` behavior for backwards compatibility.
- *   - anything else (objects, numbers, arrays, …) — unchanged: JSON.stringify
- *     via `jsonRouteResponse`.
+ *     explicit non-JSON Content-Type means the handler already serialized
+ *     the body itself, so it passes through as-is; otherwise it's JSON-encoded,
+ *     same as any other body value.
+ *   - anything else (objects, numbers, arrays, …) — JSON-encoded via
+ *     `jsonRouteResponse`.
  */
 function encodeOverride(override: ResponseOverride): Response {
   const { body, init } = override;
@@ -1330,11 +1323,10 @@ export async function runRoute(
     // freshly-assembled input, after decode/transform and before the
     // handler ever sees it. A rejection short-circuits with a 422 carrying
     // the validator's own `issues`; the handler never runs (mirrors how an
-    // `applyValidation`/`wrapValidators`-wrapped handler's `err(...)` Result
-    // short-circuits below, but resolved HERE — before the handler is even
-    // called — since a
-    // Standard Schema validator isn't wired onto the handler itself, only
-    // declared on this route's `sources`). A genuine THROW out of
+    // `applyValidation`-wrapped handler's `err(...)` Result short-circuits
+    // below, but resolved here — before the handler is even called — since
+    // a Standard Schema validator isn't wired onto the handler itself, only
+    // declared on this route's `sources`). A genuine throw out of
     // `~standard.validate` (a broken validator, not an expected rejection)
     // falls through to this same try's catch block below, same as any other
     // unexpected handler-path failure.
@@ -1371,12 +1363,11 @@ export async function runRoute(
     // the success and error paths before encoding — a 400, not the catch
     // block's 500, since an err Result is an expected outcome the handler
     // chose to signal, not an unexpected failure. This is also how an
-    // `applyValidation`- or `wrapValidators`-wrapped handler
-    // (@rhi-zone/fractal-api-tree/apply-validation or /build) signals a
-    // validation rejection: it returns `err(validationErrors)` rather than
-    // throwing, so it lands here as a discriminated-union check on the
-    // return value, not a catch. The check is exact — typeof + kind
-    // — to avoid false-positives on user data that happens to have a `kind`
+    // `applyValidation`-wrapped handler (@rhi-zone/fractal-api-tree/apply-validation)
+    // signals a validation rejection: it returns `err(validationErrors)`
+    // rather than throwing, so it lands here as a discriminated-union check
+    // on the return value, not a catch. The check is exact — typeof + kind —
+    // to avoid false-positives on user data that happens to have a `kind`
     // field with an unrelated value.
     if (detectResult && isResultShape(output)) {
       if (output.kind === "err") {
@@ -1477,8 +1468,7 @@ export type SourceCoverageOptions = {
  *      is enough, mirroring `defaultDecode`'s bulk-slug fallback for that
  *      case. Always fine when it applies — "path" is always a known store,
  *      and any `sourceMap` override for this param is genuinely dead code at
- *      that point (exactly as it already was before moveTo's binding effect
- *      was removed), so it isn't checked.
+ *      that point, so it isn't checked.
  *   2. Otherwise, an explicit `sourceMap[param]` override, if present. When
  *      its store is `"path"`, its resolved key (`override.key ?? param`) must
  *      actually be present in this leaf's final `pathParams` — otherwise
@@ -1493,10 +1483,9 @@ export type SourceCoverageOptions = {
  *   4. Otherwise — not authored, not explicit-path-sourced (even if `param`
  *      happens to coincide with a live final `pathParams` name post-move) —
  *      falls through to the normal primary-store (query/body) convention,
- *      checked against `known` same as any other non-path field. This is the
- *      case that used to bind implicitly by name collision; it no longer
- *      does, and is correctly NOT an error either — it's just an ordinary
- *      query/body field now.
+ *      checked against `known` same as any other non-path field. A name
+ *      collision with a live `pathParams` entry does not bind this field
+ *      implicitly; it is an ordinary query/body field.
  *
  * Also flags a `sourceMap` entry for a param that is NOT in `paramNames`:
  * `assemble` only ever reads `paramNames`, so such an override is dead.

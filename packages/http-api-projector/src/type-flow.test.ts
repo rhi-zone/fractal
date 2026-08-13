@@ -14,7 +14,7 @@
 // through the pipeline instead of widening to the erased `Handler`.
 //
 // `applyMoveTo` is the one deliberate erasure boundary: `moveTo` reads a path
-// out of the open `meta` bag as a runtime string, so WHERE a subtree ends up
+// out of the open `meta` bag as a runtime string, so where a subtree ends up
 // is unknowable statically — see `applyMoveTo`'s doc comment in route.ts.
 
 import { describe, expect, expectTypeOf, it } from "bun:test";

@@ -1,14 +1,11 @@
-// packages/http-api-projector/src/project.test.ts — HttpRoute pipeline dispatch tests
-//
-// Covers what the retired direct tree-walk dispatcher's project.test.ts used
-// to cover, ported onto the HttpRoute pipeline (naiveTransform → rewriters →
-// makeRouter, see route.ts and docs/design/routing-and-transforms.md):
-// path dispatch, method dispatch (via `moveTo`), fallback/wildcard, and
-// 405+Allow (via autoMethodLayer). Attribute dispatch (header/query/
+// HttpRoute pipeline dispatch tests: path dispatch, method dispatch (via
+// `moveTo`), fallback/wildcard, and 405+Allow (via autoMethodLayer), all over
+// the naiveTransform → rewriters → makeRouter pipeline (see route.ts and
+// docs/design/routing-and-transforms.md). Attribute dispatch (header/query/
 // contentType-based routing at the same path+method) and the `legacyPath`
-// escape hatch are NOT covered here — they were retired along with the old
-// dispatcher and have no equivalent in the HttpRoute pipeline yet; see
-// TODO.md "Attribute dispatch is an open design question".
+// escape hatch are not covered here — they have no equivalent in the
+// HttpRoute pipeline yet; see TODO.md "Attribute dispatch is an open design
+// question".
 
 import { describe, expect, it } from "bun:test";
 import { api, op } from "@rhi-zone/fractal-api-tree/node";
@@ -178,11 +175,10 @@ describe("makeRouter — core router (no auto-method layer)", () => {
 });
 
 // ============================================================================
-// 4. Method dispatch via `moveTo` — several verbs converging on one path
-// (the retired dispatcher's `dispatch:{kind:"method"}` marker had no
-// HttpRoute-pipeline equivalent; the same co-location is expressed by moving
-// each leaf onto the same target with `moveTo`, see route.ts § applyMoveTo
-// and examples/library-api/src/tree.ts for a worked example)
+// 4. Method dispatch via `moveTo` — several verbs converging on one path.
+// Co-locating several leaves is expressed by moving each one onto the same
+// target with `moveTo`; see route.ts § applyMoveTo and
+// examples/library-api/src/tree.ts for a worked example.
 // ============================================================================
 
 describe("method dispatch — several leaves placed at the same path", () => {

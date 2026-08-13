@@ -4,12 +4,12 @@
 // body against its operation's OWN output schema — the schemas `SchemaMap`
 // already carries (see `@rhi-zone/fractal-api-tree/tree`'s
 // `extractToolSchemas`, and `codegen.ts`'s `SchemaMap` param) — instead of
-// trusting the server unconditionally. Deliberately a SIMPLE structural
-// check (type, required fields, enum membership, unexpected null), not a
-// full JSON Schema validator (no `format`, no `pattern`, no numeric
-// bounds) — enough to catch a server/client drifting apart (a renamed
-// field, a field that became optional, a type that changed) without
-// reimplementing a validator this package doesn't otherwise need.
+// trusting the server unconditionally. This is a structural check (type,
+// required fields, enum membership, unexpected null) rather than a full
+// JSON Schema validator: it has no `format`, no `pattern`, and no numeric
+// bounds. That's enough to catch a server/client drifting apart (a renamed
+// field, a field that became optional, a type that changed) without the
+// package reimplementing a validator it doesn't otherwise need.
 //
 // Two independent implementations of the same check, one per interpreter
 // (see ../extension.ts's module doc):
@@ -21,8 +21,8 @@
 //     once, same trick `buildHandlerNames` already uses for member names —
 //     see `client.ts`'s `buildCodegenNames`). `createClientFromRoute` has no
 //     `Node` to derive it from, so validation silently no-ops there (same
-//     degradation already documented for co-located member names) — this
-//     extension never GUESSES which schema applies from the URL alone.
+//     degradation already documented for co-located member names). Schema
+//     lookup depends entirely on `codegenName`, never on the request URL.
 //   - `codegen`'s `resultHelpers`/`wrapResult` hooks (extension.ts) emit one
 //     schema constant PER OPERATION (`__SCHEMA_<codegenName>`) plus the
 //     shared `__validate` helper, and wrap each operation's own

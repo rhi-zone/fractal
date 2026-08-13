@@ -1,4 +1,6 @@
-// packages/http-api-projector/src/webhook.test.ts — webhook layer tests
+// Tests for the webhook layers: signature verification (webhookSignatureLayer,
+// including timestamp binding) and replay prevention (replayPreventionLayer),
+// individually and composed.
 
 import { describe, expect, it } from "bun:test";
 import {

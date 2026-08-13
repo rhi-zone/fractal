@@ -192,7 +192,7 @@ describe("OOTB preset — directives: false", () => {
     const f = createFetch(api, { directives: false });
 
     // The `moveTo`-placed "users/list" and "users/create" paths are never
-    // created; the naive-transform baseline uses the node's OWN key
+    // created; the naive-transform baseline uses the node's own key
     // ("listUsers"/"createUser") and always POST.
     const moved = await f(new Request("http://localhost/users/list"));
     expect(moved.status).toBe(404);
@@ -203,7 +203,7 @@ describe("OOTB preset — directives: false", () => {
 });
 
 // ============================================================================
-// 6. validation — applyValidation, wired onto the PROJECTED tree via
+// 6. validation — applyValidation, wired onto the projected tree via
 // `rewriters` (see preset.ts's module doc — `createFetch` has no dedicated
 // `validators` option any more; `applyValidation`'s call site has to live in
 // the consumer's own file for codegen to anchor on it, so `rewriters` is the
@@ -519,7 +519,7 @@ describe("OOTB preset — middleware", () => {
   });
 
   it("a middleware that THROWS is caught and encoded — falls back to the existing 500 default when no thrownErrorEncoder is configured (maximal consistency: a middleware throw now produces the same encoded shape as a handler/handlerMiddleware throw, see route.ts's encodeThrownError)", async () => {
-    // `opts.middleware` wraps OUTSIDE the compiled router (createFetch's
+    // `opts.middleware` wraps outside the compiled router (createFetch's
     // composition chain, this module's own doc) — outside `runRoute`'s own
     // try/catch (route.ts). `createFetch` wraps this array's composed result
     // in its own try/catch, calling the same `encodeThrownError` helper
@@ -576,7 +576,7 @@ describe("OOTB preset — middleware", () => {
 });
 
 // ============================================================================
-// 12. handlerMiddleware — a SEPARATE option from `middleware` above. Wraps
+// 12. handlerMiddleware — a separate option from `middleware` above. Wraps
 // the handler call itself (inside runRoute), not the whole Fetch cycle.
 // ============================================================================
 

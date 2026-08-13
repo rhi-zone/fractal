@@ -11,7 +11,7 @@
 //   4. Extraction/codegen/OpenAPI stay clean over a layered tree — regression
 //      guard for the spec's own §6 `[verify]` findings.
 //   5. The `FoldMeta` array-shape hazard (§6/§7/§10.3) — a type-level test.
-//   6. Error semantics — a subtree layer's throw behaves IDENTICALLY to its
+//   6. Error semantics — a subtree layer's throw behaves identically to its
 //      global (`PresetOptions`) counterpart's throw (owner ruling, spec's
 //      open question 2 — see preset.test.ts's own baseline test for the
 //      global case this compares against).
@@ -58,7 +58,7 @@ function trackingMiddleware(name: string, log: string[]): (inner: Fetch) => Fetc
  * The raw-capture motivating case's shape (docs/decisions/
  * one-root-fractal-tree-2026-08-02.md §3.3/§7, quoted in the spec's §1): a
  * `webhooks` branch declares a `middleware` that must run for every leaf
- * under it, and a SIBLING branch (`other`) must be completely unaffected.
+ * under it, and a sibling branch (`other`) must be completely unaffected.
  */
 function webhooksFixture(log: string[]): HttpRoute {
   return httpRoute({
@@ -96,7 +96,7 @@ const compilers: readonly {
 
 describe("subtree-scoped middleware — applies only within its declaring subtree", () => {
   for (const { name, compile } of compilers) {
-    it(`${name}: webhooks middleware runs for every leaf UNDER webhooks, never for a sibling branch`, async () => {
+    it(`${name}: webhooks middleware runs for every leaf under webhooks, never for a sibling branch`, async () => {
       const log: string[] = [];
       const router = compile(webhooksFixture(log));
 
@@ -113,7 +113,7 @@ describe("subtree-scoped middleware — applies only within its declaring subtre
     });
   }
 
-  it("makeRouterFromRoute (route.ts's own dispatcher, an ALTERNATIVE to compile.ts's compilers) does NOT apply subtree middleware — a real, documented scope limit of this spec (§5 names only compile.ts's four built-in compilers), not a silent gap", async () => {
+  it("makeRouterFromRoute (route.ts's own dispatcher, an alternative to compile.ts's compilers) does not apply subtree middleware — a documented scope limit of this spec (§5 names only compile.ts's four built-in compilers)", async () => {
     const log: string[] = [];
     const router = makeRouterFromRoute(webhooksFixture(log));
     await router(new Request("http://x/webhooks/stripe", { method: "POST" }));
@@ -152,7 +152,7 @@ describe("nesting order — root outermost, leaf innermost, declaration order wi
     ]);
   });
 
-  it("a node's own middleware array composes in DECLARATION order, first entry outermost within that node's own contribution", async () => {
+  it("a node's own middleware array composes in declaration order, first entry outermost within that node's own contribution", async () => {
     const log: string[] = [];
     const tree = httpRoute({
       meta: {
@@ -169,7 +169,7 @@ describe("nesting order — root outermost, leaf innermost, declaration order wi
     expect(log).toEqual(["first:enter", "second:enter", "second:exit", "first:exit"]);
   });
 
-  it("op(fn, http.middleware(mw)) — a LEAF's own middleware runs exactly ONCE, not doubled by the leaf's own HttpRoute-position meta (regression guard: naiveTransform aliases a pure leaf's route-position meta and its POST-entry meta to the SAME object)", async () => {
+  it("op(fn, http.middleware(mw)) — a leaf's own middleware runs exactly once, not doubled by the leaf's own HttpRoute-position meta (regression guard: naiveTransform aliases a pure leaf's route-position meta and its POST-entry meta to the same object)", async () => {
     let calls = 0;
     const mw = (): ((inner: Fetch) => Fetch) => (inner) => async (req) => {
       calls++;
@@ -350,12 +350,12 @@ describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are p
     expect(typeof callable).toBe("function");
   });
 
-  it("[verify, made permanent] a BARE (non-array) function-valued meta member loses its call signature through FoldMeta when two op() contributions both set it — direct reproduction of the spec's own scratch finding against real op()/FoldMeta (node.ts), not a simplified stand-in. This is WHY middleware/handlerMiddleware are never authored this way", () => {
+  it("[verify, made permanent] a bare (non-array) function-valued meta member loses its call signature through FoldMeta when two op() contributions both set it — a direct reproduction of the spec's own scratch finding against real op()/FoldMeta (node.ts). This is why middleware/handlerMiddleware are never authored this way", () => {
     const fn1: (inner: Fetch) => Fetch = (inner) => inner;
     const fn2: (inner: Fetch) => Fetch = (inner) => inner;
-    // A hypothetical, NEVER-actually-exposed bare-field authoring shape —
-    // exactly the class of contribution `http.middleware()`/
-    // `http.handlerMiddleware()` deliberately do NOT produce.
+    // A hypothetical bare-field authoring shape, never actually exposed — the
+    // class of contribution `http.middleware()`/`http.handlerMiddleware()`
+    // avoid producing.
     const leaf = op(
       (input: unknown) => input,
       { http: { bareHazard: fn1 } },
@@ -379,8 +379,8 @@ describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are p
 // ============================================================================
 // 6. Error semantics — a subtree middleware/handlerMiddleware throw is caught
 // and encoded via `thrownErrorEncoder`, identically to a global
-// (`PresetOptions`) throw, rather than propagating uncaught — a deliberate
-// ruling, not incidental behavior. `toRouter` (compile.ts) catches a subtree
+// (`PresetOptions`) throw, per a deliberate ruling that both paths behave the
+// same way. `toRouter` (compile.ts) catches a subtree
 // `http.middleware()` throw where it composes `match.middleware` around
 // `runRoute`'s dispatch; `createFetch` (preset.ts) applies the analogous
 // catch around the global `PresetOptions.middleware` array, which wraps
@@ -391,7 +391,7 @@ describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are p
 // ============================================================================
 
 describe("error semantics — a subtree layer's throw matches its global counterpart's throw exactly", () => {
-  it("a subtree http.middleware() that throws IS caught and encoded — falls back to the existing 500 default when no thrownErrorEncoder is configured, identical to a global PresetOptions.middleware throw (preset.test.ts) and to a handlerMiddleware throw (next test)", async () => {
+  it("a subtree http.middleware() that throws is caught and encoded — falls back to the existing 500 default when no thrownErrorEncoder is configured, identical to a global PresetOptions.middleware throw (preset.test.ts) and to a handlerMiddleware throw (next test)", async () => {
     const throwingMw: (inner: Fetch) => Fetch = () => async () => {
       throw new Error("subtree middleware boom");
     };
@@ -428,7 +428,7 @@ describe("error semantics — a subtree layer's throw matches its global counter
     expect(await res.json()).toEqual({ kind: "explosive", message: "kaboom" });
   });
 
-  it("a subtree http.handlerMiddleware() that throws IS caught and encoded via thrownErrorEncoder — identical to a global PresetOptions.handlerMiddleware throw (both sit inside runRoute's try/catch)", async () => {
+  it("a subtree http.handlerMiddleware() that throws is caught and encoded via thrownErrorEncoder — identical to a global PresetOptions.handlerMiddleware throw (both sit inside runRoute's try/catch)", async () => {
     const throwingHmw: HttpHandlerMiddleware = () => () => {
       throw new Error("subtree handlerMiddleware boom");
     };

@@ -1,22 +1,20 @@
-// packages/http-api-projector/src/index.ts — @rhi-zone/fractal-http-api-projector
+// Package root entry point.
 //
-// Package root entry point. Re-exports the DX authoring surface: `http.*`
-// method bundles, `HttpMethods`/`Method`, `crud()`, and `httpProjection()`.
-// Also re-exports the OpenAPI projection (`toOpenApi`/`toOpenApiFromRoute`),
-// the route-level doc-page projector (`toDocusaurusRouteReference`/
-// `toStarlightRouteReference`, `./http-route-reference.ts` — one live-
-// component-embedding MDX page per route, built on top of an `OpenApiDoc`),
-// and the runtime HTTP client (`createClient`/`createClientFromRoute`,
-// `ClientError`) — all inherently HTTP concerns (see `openapi.ts`,
-// `http-route-reference.ts`, and `client.ts` module docs) merged into this
-// package rather than kept as separate projection packages. Lower-level
-// pieces (the direct tree-walk projector, the HttpRoute rewriter pipeline,
-// layers, the OOTB preset) stay reachable via their own subpath exports
-// (`./project`, `./route`, `./layers`, `./preset`, `./verbs`, `./adapter`,
-// `./openapi`, `./http-route-reference`, `./client`) —
-// this root re-exports the DX sugar described in
-// docs/design/routing-and-transforms.md § DX — constructor sugar, plus the
-// two HTTP-derived projections.
+// Re-exports the DX authoring surface: `http.*` method bundles,
+// `HttpMethods`/`Method`, `crud()`, and `httpProjection()`. It also
+// re-exports three HTTP-derived projections that live in this package: the
+// OpenAPI projection (`toOpenApi`/`toOpenApiFromRoute`), the route-level
+// doc-page projector (`toDocusaurusRouteReference`/`toStarlightRouteReference`,
+// `./http-route-reference.ts` — one live-component-embedding MDX page per
+// route, built on top of an `OpenApiDoc`), and the runtime HTTP client
+// (`createClient`/`createClientFromRoute`, `ClientError`).
+//
+// Lower-level pieces — the direct tree-walk projector, the HttpRoute
+// rewriter pipeline, layers, and the OOTB preset — stay reachable via their
+// own subpath exports (`./project`, `./route`, `./layers`, `./preset`,
+// `./verbs`, `./adapter`, `./openapi`, `./http-route-reference`, `./client`).
+// This root export is the DX sugar layer only, plus the two HTTP-derived
+// projections.
 
 export { http, httpVerbBundle } from "./verbs.ts";
 export type { HttpMethods, Method, SourceMapInput, VerbBundle } from "./verbs.ts";

@@ -18,25 +18,23 @@
 //   meta.http.middleware/handlerMiddleware — genuinely multiple/ordered,
 //                                plain arrays, append (concatenate)
 //
-// `meta.http.directives` — formerly a single array of tagged-union
-// `HttpDirective` values, folded by `kind` at read time (`getHttpMeta`,
-// below) — is superseded by the flat design above: `FoldMeta`/`MergeTwoMeta`
-// (api-tree's node.ts) fold flat scalar/map/array keys directly, including
-// index-signature maps and bare functions, through the existing
-// `FoldMeta`/`MergeTwoMeta`/`mergeRecords` machinery (see node.ts's
-// `mergeRecords` doc comment for the runtime/type depth-cap parity it
-// enforces). The resolved shape `getHttpMeta` used to compute by folding is
-// now the authored shape directly — there is no fold-by-`kind` step at read
-// time; `getHttpMeta` is a thin pass-through (see its own doc comment below).
+// The flat design above governs `meta.http.directives` too:
+// `FoldMeta`/`MergeTwoMeta` (api-tree's node.ts) fold flat scalar/map/array
+// keys directly, including index-signature maps and bare functions, through
+// the existing `FoldMeta`/`MergeTwoMeta`/`mergeRecords` machinery (see
+// node.ts's `mergeRecords` doc comment for the runtime/type depth-cap parity
+// it enforces). The resolved shape is the authored shape directly — there is
+// no fold-by-`kind` step at read time; `getHttpMeta` is a thin pass-through
+// (see its own doc comment below).
 //
 // The `dispatch` marker (header/query/contentType attribute dispatch) and
-// the `segment`/`when`/`legacyPath` directives belonged to a direct
-// tree-walk dispatcher, since retired in favor of the single `HttpRoute`
-// pipeline below (naiveTransform → rewriters → makeRouterFromRoute, see
-// route.ts); neither has a typed home here (see docs/design/
-// meta-role-split-spec.md §4/§9(6)). Attribute dispatch (header/query/
-// contentType-based routing at the same path+method) has no equivalent in the
-// new pipeline yet — it is an open design question, see TODO.md.
+// the `segment`/`when`/`legacyPath` directives have no typed home in this
+// module (see docs/design/meta-role-split-spec.md §4/§9(6)); that
+// functionality lives in the single `HttpRoute` pipeline below
+// (naiveTransform → rewriters → makeRouterFromRoute, see route.ts). Attribute
+// dispatch (header/query/contentType-based routing at the same path+method)
+// has no equivalent in the new pipeline yet — it is an open design question,
+// see TODO.md.
 //
 // This package performs NO `declare module` augmentation of api-tree's
 // `SharedMeta`/`LeafMeta`/`BranchMeta` — it exports its own `http`/`openapi`
@@ -102,17 +100,17 @@ export function toHttpRoutes(node: Node): HttpRoute {
 
 // ============================================================================
 // meta.http — role-split fragments (see docs/design/meta-role-split-spec.md
-// §2/§4). `HttpSharedMetaProperties`/`HttpLeafMetaProperties` are BOTH the
-// authoring shape AND the resolved shape now — the flat design collapses the
-// two (docs/design/wire-profiles-and-staged-validation.md's "Prerequisite:
-// meta unification" section: "the RESOLVED shape becomes the AUTHORED
-// shape"). A deployment that wants to require `http.method` on every op, for
-// instance, extends `LeafMeta` with `HttpLeafMeta` (below) and adds
-// `http: { method: string } & ...` on top.
+// §2/§4). `HttpSharedMetaProperties`/`HttpLeafMetaProperties` serve as both
+// the authoring shape and the resolved shape — the flat design collapses the
+// two into one (docs/design/wire-profiles-and-staged-validation.md's
+// "Prerequisite: meta unification" section: "the resolved shape becomes the
+// authored shape"). A deployment that wants to require `http.method` on
+// every op, for instance, extends `LeafMeta` with `HttpLeafMeta` (below) and
+// adds `http: { method: string } & ...` on top.
 // ============================================================================
 
 /**
- * `meta.http` fields valid at BOTH leaf and branch position — all flat
+ * `meta.http` fields valid at both leaf and branch position — all flat
  * scalar/array keys, folded by `mergeMeta`/`FoldMeta` (api-tree's node.ts)
  * the same way every other meta sub-bag is: shape determines fold semantics
  * (docs/design/wire-profiles-and-staged-validation.md's "The rule: fold
@@ -165,8 +163,8 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
    * `runRoute` (route.ts) runs it (via `runStandardSchema`, decode.ts) on the
    * assembled input, after decode and before the handler. Last-wins. See
    * decode.ts's own module doc for how this differs from type-ir's
-   * `fromStandardSchema` (shape ingestion) and api-tree's `wrapValidators`
-   * (AOT-compiled validators).
+   * `fromStandardSchema` (shape ingestion) and api-tree's `applyValidation`
+   * (codegen-derived validators wired directly onto a handler).
    */
   readonly validate?: StandardSchemaV1;
   /**

@@ -15,11 +15,11 @@
 // hand, same as any other codegen customization this package doesn't (and
 // can't) auto-derive.
 //
-// Span naming/attributes follow OTel's HTTP semantic conventions loosely
-// (`http.method`, `http.url`, `http.status_code`) — not a strict semconv
-// implementation (no `http.route` template extraction, no `server.address`
-// split out of the URL), enough to make the span useful without pulling in
-// a semconv package this project doesn't otherwise need.
+// Span naming and attributes follow OTel's HTTP semantic conventions loosely
+// (`http.method`, `http.url`, `http.status_code`), enough to make the span
+// useful without pulling in a semconv package this project doesn't
+// otherwise need. `http.route` template extraction and splitting
+// `server.address` out of the URL are out of scope.
 //
 // See:
 //   packages/http-api-projector/src/tracing.ts — server-side counterpart

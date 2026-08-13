@@ -1,4 +1,4 @@
-// packages/http-api-projector/src/route.test.ts — HttpRoute tree transform + rewriter tests
+// HttpRoute tree transform + rewriter tests.
 //
 // Covers the pipeline described in docs/design/routing-and-transforms.md:
 //   Node --naiveTransform--> HttpRoute --rewriters--> HttpRoute --makeRouter--> Fetch
@@ -46,9 +46,9 @@ describe("naiveTransform", () => {
         create: op(create),
       }),
     });
-    // Widened to the erased HttpRoute here — this assertion is exercising the
-    // branch-node shape generically (no methods key at all, at any depth),
-    // not the type-preservation naiveTransform now offers for leaves.
+    // Widened to the erased HttpRoute type here: this assertion exercises
+    // the branch-node shape generically (no methods key at all, at any
+    // depth), not the type-preservation naiveTransform offers for leaves.
     const route: HttpRoute = naiveTransform(api);
     expect(route.methods).toBeUndefined();
     expect(route.children?.users).toBeDefined();
@@ -292,7 +292,7 @@ describe("applyMoveTo", () => {
 });
 
 // ============================================================================
-// moveTo no longer affects input binding — a leaf's field↔store binding is a
+// moveTo does not affect input binding — a leaf's field↔store binding is a
 // pure function of its AUTHORED declarations (local pre-moveTo ancestor
 // fallback names, or an explicit `http.source()`/`meta.http.sourceMap`
 // entry), never of where moveTo happens to relocate it. See route.ts's
@@ -307,8 +307,8 @@ describe("applyMoveTo", () => {
  * `op()`-built leaf never triggers the per-param coverage check on its own.
  * This test-only helper attaches it after the fact (by handler identity),
  * standing in for whatever codegen step would normally declare it — the same
- * "wire onto the already-projected `HttpRoute`" layering `applyValidation`/
- * `wrapValidators` already use (see route.ts's module doc).
+ * "wire onto the already-projected `HttpRoute`" layering `applyValidation`
+ * already uses (see route.ts's module doc).
  */
 function withParamNames(
   route: HttpRoute,
@@ -422,10 +422,10 @@ describe("moveTo does not affect input binding", () => {
   });
 
   it("a field that only coincidentally matches a live pathParam name post-move falls through to query/body silently — no error, no path binding", async () => {
-    // `get`/`remove` (siblings of the fallback, not nested under it) get
+    // `get`/`remove` (siblings of the fallback, not nested under it) are
     // moved onto the same wildcard position as an unrelated resource whose
-    // slug also happens to be named "bookId" — the historical
-    // by-name-collision case this change removes.
+    // slug also happens to be named "bookId" — a coincidental name match,
+    // not an authored binding.
     const api = api_({
       books: api_(
         {
@@ -438,15 +438,15 @@ describe("moveTo does not affect input binding", () => {
     });
     const route = applyMethods(applyMoveTo(naiveTransform(api)));
     // No coverage problem — "bookId" isn't authored by `get`, and it has no
-    // explicit sourceMap, so it's an ordinary (optional) query field now.
+    // explicit sourceMap, so it's treated as an ordinary (optional) query field.
     expect(() => checkRouteSourceCoverage(route)).not.toThrow();
 
     const router = makeRouterFromRoute(route);
     const res = await router(new Request("http://localhost/books/actual-book-id"));
     expect(res.status).toBe(200);
-    // The path segment value ("actual-book-id") must NOT leak into `bookId`
-    // via the old by-name-collision path binding — it falls through to the
-    // query store, which has no "bookId" key on this request, so it's null.
+    // The path segment value ("actual-book-id") is not bound to `bookId`;
+    // `bookId` falls through to the query store, which has no "bookId" key
+    // on this request, so it resolves to null.
     expect(await res.json()).toEqual({ bookId: null });
   });
 });
@@ -533,9 +533,9 @@ describe("full pipeline — Node → toHttpRoutes → rewriters → makeRouter",
           ),
           // `get`/`remove` are authored as SIBLINGS of `books`' fallback
           // (not nested under it) — `moveTo` relocates them onto the
-          // fallback position, but moveTo is purely an address transform
-          // now: it does NOT grant them the `bookId` slug implicitly by
-          // landing on a same-named wildcard. They need an explicit
+          // fallback position. `moveTo` is purely an address transform: it
+          // relocates a node without implicitly binding the `bookId` slug
+          // from a same-named wildcard it lands on. They need an explicit
           // `http.source()` declaration, same as they would if authored at
           // any other non-nested position.
           get: op(
@@ -622,9 +622,9 @@ describe("httpRoute / isHttpRoute", () => {
 // ============================================================================
 // runRoute (via makeRouterFromRoute) — decode → handler → encode, no
 // interceptable stages. Covers default decode/encode, per-route `sources`,
-// Result unwrapping, response overrides, and error handling — everything
-// the retired Pipeline abstraction used to cover, minus the multi-stage
-// machinery nothing in this codebase actually used.
+// Result unwrapping, response overrides, and error handling: the full
+// behavior of this single-stage pipeline, with no multi-stage/interceptable
+// machinery, since nothing in this codebase needs one.
 // ============================================================================
 
 describe("runRoute — default decode/encode", () => {
@@ -1053,13 +1053,12 @@ describe("runRoute — per-route sources", () => {
 });
 
 // ============================================================================
-// wrapValidators (Node-level, applied before naiveTransform) is deleted
-// (phase 3) — validation for HTTP dispatch is now `applyValidation`, applied
-// onto the PROJECTED `HttpRoute` via `createFetch`'s `rewriters` option. See
-// preset.test.ts's "OOTB preset — validation via applyValidation + rewriters"
-// describe block for the equivalent end-to-end coverage (valid/rejected
-// input, the unvalidated leaf passthrough, and the uncovered-leaf case).
-// `applyValidation` is permissive by default, unlike `wrapValidators`;
+// Validation for HTTP dispatch runs through `applyValidation`, applied onto
+// the projected `HttpRoute` via `createFetch`'s `rewriters` option. See
+// preset.test.ts's "OOTB preset — validation via applyValidation +
+// rewriters" describe block for the equivalent end-to-end coverage
+// (valid/rejected input, the unvalidated leaf passthrough, and the
+// uncovered-leaf case). `applyValidation` is permissive by default;
 // `assertValidationCoverage` (api-tree/apply-validation.ts) is the opt-in
 // loud build-mode check.
 // ============================================================================

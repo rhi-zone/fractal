@@ -328,12 +328,12 @@ describe("timeout / AbortSignal support", () => {
 // ============================================================================
 // 8. createClient's return type — TypedClient<N, CallOptions>
 //
-// `createClient` used to return `AnyClient` (`Record<string, any>`); it now
-// returns `TypedClient<typeof api, CallOptions>` (packages/api-tree/src/typed-client.ts),
-// computed structurally from the library-api tree's own type. These are
-// type-only checks — `expectTypeOf` never runs the assertions, the type
-// checker evaluates them. Mirrors direct.test.ts's "DirectApi type safety"
-// block for the in-process analogue.
+// `createClient` returns `TypedClient<typeof api, CallOptions>`
+// (packages/api-tree/src/typed-client.ts), computed structurally from the
+// library-api tree's own type — not `AnyClient` (`Record<string, any>`).
+// These are type-only checks — `expectTypeOf` never runs the assertions, the
+// type checker evaluates them. Mirrors direct.test.ts's "DirectApi type
+// safety" block for the in-process analogue.
 // ============================================================================
 
 describe("createClient — TypedClient return type", () => {

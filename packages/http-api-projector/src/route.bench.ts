@@ -1,5 +1,3 @@
-// packages/http-api-projector/src/route.bench.ts — @rhi-zone/fractal-http-api-projector
-//
 // Benchmark: compare route-matching architectures on the same route tree.
 //
 //   1. Segment trie (current)   — route.ts's actual matching algorithm
@@ -9,6 +7,7 @@
 //   5. Character-level radix trie — walk raw chars, no split, no per-segment allocation
 //   6. Flat DFA transition table  — Uint32Array table[state*128+charCode] -> next state
 //   7. Compiled char-level function — new Function()-generated nested if/else on charCodeAt(i)
+//   8. Hybrid Map + compiled char-level fn — static routes via Map, dynamic routes via (7)
 //
 // Run: bun run packages/http-api-projector/src/route.bench.ts
 //
@@ -1012,10 +1011,10 @@ function buildCompiledCharFn(
   // Follows a run of unbranching single-literal-child nodes (no param, no
   // terminal in between) and folds it into one string, so a long unbranching
   // literal run (e.g. an 8k-char static route) compiles to one `startsWith`
-  // check instead of one nested `if` per character. Without this, codegen
-  // recursion depth — and the generated source's AST nesting depth — scales
-  // with path length and exceeds V8's parser/call stack limits well before
-  // 8k chars.
+  // check instead of one nested `if` per character. This keeps codegen
+  // recursion depth — and the generated source's AST nesting depth — bounded
+  // independent of path length, comfortably within V8's parser/call stack
+  // limits even at 8k+ chars.
   function chaseChunk(node: CharFnTrieNode): { chunk: string; target: CharFnTrieNode } {
     let chunk = "";
     let cur = node;

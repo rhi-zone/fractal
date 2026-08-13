@@ -21,15 +21,9 @@
 //     already the single, fully-resolved value `op()`'s own `mergeMeta` fold
 //     produces (last-wins; see node.ts's `MergeMetaValue`) — or `"POST"` when
 //     absent (`naiveTransform`'s own default for a bare leaf, before
-//     `applyMethods` would have renamed it). Before the http-directive-
-//     dissolution migration (docs/design/wire-profiles-and-staged-
-//     validation.md's "Prerequisite: meta unification" section), this walked
-//     a `meta.http.directives` TUPLE for the FIRST `{ kind: "method" }` entry
-//     (matching `applyMethods`'s own `.find()`, deliberately NOT
-//     `getHttpMeta`'s "last wins" parse, since no fold had happened yet at
-//     the type level) — the flat design needs no such tuple walk: the fold
-//     already happened, by construction, the moment `op()`'s contributions
-//     composed.
+//     `applyMethods` would have renamed it). No directive-tuple walk is
+//     needed: the fold already happened, by construction, the moment `op()`'s
+//     contributions composed.
 //
 // This type-level resolution only reproduces the PER-LEAF half of
 // `applyMoveTo` (route.ts): each leaf's OWN target path, computed from its
@@ -85,12 +79,10 @@ type Simplify<T> = { readonly [K in keyof T]: T[K] } & {};
  * instead of widening to `string`); `"POST"` otherwise, matching
  * `naiveTransform`'s own baseline for a bare leaf with no method set.
  *
- * No tuple walk needed (unlike the pre-http-directive-dissolution version
- * this replaces, docs/design/wire-profiles-and-staged-validation.md's
- * "Prerequisite: meta unification" section): `meta.http.method` is already
- * the single, fully-resolved last-wins value the moment `op()`'s own
- * `mergeMeta` fold (node.ts) composes a leaf's contributions — there is
- * nothing left for this type to scan or fold itself.
+ * No tuple walk needed: `meta.http.method` is already the single,
+ * fully-resolved last-wins value the moment `op()`'s own `mergeMeta` fold
+ * (node.ts) composes a leaf's contributions — there is nothing left for this
+ * type to scan or fold itself.
  */
 type ResolveMethod<M> = M extends { readonly http: infer H }
   ? H extends { readonly method: infer V extends string }
@@ -105,20 +97,19 @@ type ResolveMethod<M> = M extends { readonly http: infer H }
  * above applies here too — `meta.http.moveTo` is already the resolved,
  * last-wins value.
  *
- * Two-step (`M`'s own `http` key, THEN that value's `moveTo` key), both
- * written as REQUIRED-key patterns (no `?`, even though
- * `HttpLeafMetaProperties` declares both `http` and `moveTo` optional) —
- * deliberately: a structural conditional match against a REQUIRED-key
- * pattern only succeeds when the key is actually PRESENT in the checked
- * type, which is exactly the "does this leaf carry an `http` bag / a
- * `moveTo` within it at all" distinction needed. An OPTIONAL-key pattern
- * (`http?: {...}` or `moveTo?: infer P`) matches trivially against ANY
- * object type (an optional key is never required to be present) — verified
- * empirically (scratch `tsc`) to make the whole conditional vacuously true
- * and infer the constraint itself (`string`) rather than falling through to
- * this type's own fallback branch, which is why `ResolveMethod` above uses
- * the identical two-step required-key shape rather than a single optional
- * chain.
+ * Two-step (`M`'s own `http` key, then that value's `moveTo` key), both
+ * written as required-key patterns (no `?`, even though
+ * `HttpLeafMetaProperties` declares both `http` and `moveTo` optional): a
+ * structural conditional match against a required-key pattern only succeeds
+ * when the key is actually present in the checked type, which is exactly the
+ * "does this leaf carry an `http` bag / a `moveTo` within it at all"
+ * distinction needed. An optional-key pattern (`http?: {...}` or
+ * `moveTo?: infer P`) matches trivially against any object type, since an
+ * optional key is never required to be present — verified empirically
+ * (scratch `tsc`) to make the whole conditional vacuously true and infer the
+ * constraint itself (`string`) rather than falling through to this type's
+ * own fallback branch, which is why `ResolveMethod` above uses the identical
+ * two-step required-key shape rather than a single optional chain.
  */
 type ResolveMoveTo<M> = M extends { readonly http: infer H }
   ? H extends { readonly moveTo: infer P extends string }

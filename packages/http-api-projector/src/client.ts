@@ -671,8 +671,8 @@ function buildClientNode(
  * resolution, not just the POST default), independently of whether
  * `applyMoveTo` also ran; see the doc above for why `applyMethods` alone
  * already erases method-key precision. Only the return type is generic
- * here; the runtime proxy (`buildClientNode`) is unchanged and still built
- * dynamically regardless of what `R` resolves to.
+ * here; the runtime proxy (`buildClientNode`) is built dynamically
+ * regardless of what `R` resolves to.
  *
  * @param route - The (already rewritten) HttpRoute tree to project.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).
@@ -722,8 +722,8 @@ export function createClientFromRoute<R extends HttpRoute>(
  * @rhi-zone/fractal-api-tree's typed-client.ts): computed structurally from
  * `n`'s own type, so `client.books.bookId(id).read()` is typed all the way
  * down to the handler's real input/output — no `AnyClient`/`any` at the call
- * site. Only the return TYPE changed here; the runtime proxy (`buildClientNode`)
- * is unchanged and still built dynamically.
+ * site. Only the return type carries this precision; the runtime proxy
+ * (`buildClientNode`) is built dynamically and does not depend on it.
  *
  * @param n - The root node to project.
  * @param opts - Optional: baseUrl (default ""), fetch (default global fetch).

@@ -1,4 +1,5 @@
-// packages/http-api-projector/src/layers.test.ts — composable layer tests
+// Tests for the composable router layers: autoMethodLayer (HEAD/OPTIONS
+// derivation and 405+Allow) and corsLayer (CORS headers and preflight).
 
 import { describe, expect, it } from "bun:test";
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";

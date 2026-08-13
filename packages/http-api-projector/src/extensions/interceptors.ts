@@ -6,15 +6,13 @@
 // metrics, request/response transformation, etc., without writing a
 // `wrapFetch` from scratch.
 //
-// Runtime-only: hooks are arbitrary functions, and codegen emits SOURCE TEXT
-// (see extension.ts's `ClientExtensionCodegen`) — a function value has no
-// general textual representation codegen could embed. This is a genuine
-// design fork (not a shortcut): serializing hooks into generated source
-// would need either (a) restricting hooks to a serializable expression
-// language, or (b) requiring the user to author a source-code snippet
-// instead of a JS function, changing what "configuring an extension" means.
-// Left open — pick a direction only if/when a concrete codegen use case
-// needs it; documented as a next step, not implemented speculatively.
+// Runtime-only: hooks are arbitrary functions, and codegen emits source
+// text (see extension.ts's `ClientExtensionCodegen`) — a function value has
+// no general textual representation codegen could embed. Serializing hooks
+// into generated source would require either (a) restricting hooks to a
+// serializable expression language, or (b) requiring the user to author a
+// source-code snippet instead of a JS function, changing what "configuring
+// an extension" means.
 
 import type { ClientExtension, FetchImpl } from "../extension.ts";
 

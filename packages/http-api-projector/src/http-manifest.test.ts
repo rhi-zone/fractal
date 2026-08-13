@@ -1,4 +1,4 @@
-// packages/http-api-projector/src/http-manifest.test.ts — HttpManifest<N> type-level checks
+// HttpManifest<N> type-level checks.
 //
 // `HttpManifest<N>` is a pure type (see http-manifest.ts's module doc) —
 // these tests exercise the type only, via `expectTypeOf`, mirroring
@@ -122,14 +122,14 @@ describe("HttpManifest type safety", () => {
 
   it("moveTo's `*` wildcard reconciles against a co-located fallback's authored name, not the synthesized default", () => {
     // `read` sits directly under the fallback (name "bookId"), landing at
-    // "/books/:bookId" via `moveTo("..")`. `create` is a SEPARATE sibling
+    // "/books/:bookId" via `moveTo("..")`. `create` is a separate sibling
     // leaf, outside the fallback subtree, that converges on the exact same
     // position via a wildcard `moveTo("../*")` — synthesizing ":param" in
     // isolation, but that target position already has an authored fallback
-    // name ("bookId") in the whole tree. The two must merge into ONE path
-    // entry ("/books/:bookId") with sibling methods, matching what
-    // `applyMoveTo`/`insertAt` (route.ts) actually do at runtime — not
-    // split into "/books/:bookId" (GET) and "/books/:param" (POST).
+    // name ("bookId") in the whole tree. The two merge into one path entry
+    // ("/books/:bookId") with sibling methods, matching what
+    // `applyMoveTo`/`insertAt` (route.ts) actually do at runtime, rather
+    // than splitting into "/books/:bookId" (GET) and "/books/:param" (POST).
     const bookItem = api({
       read: op((input: { bookId: string }) => ({ id: input.bookId }), http.get, http.moveTo("..")),
     });

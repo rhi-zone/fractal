@@ -6,7 +6,7 @@
 // the handler and caches its result; every subsequent call with the same key
 // returns the cached result without running the handler again.
 //
-// Deliberately keyed off the HEADER'S PRESENCE, not `meta.tags.idempotent`
+// Deliberately keyed off the header's presence, not `meta.tags.idempotent`
 // (api-tree/src/tags.ts's `TAG_IDEMPOTENT`): `HttpHandlerMiddleware` (see
 // route.ts's module doc) is `(input, stores) => result` — it never receives
 // the matched leaf's `meta`, only the assembled input bag and the raw
@@ -15,7 +15,7 @@
 // asking for de-dupe regardless of whether the operation's own tags say
 // `idempotent` — this is the same convention `Idempotency-Key` uses in
 // practice (Stripe, and RFC draft-ietf-httpapi-idempotency-key-header): the
-// CLIENT opts in per-request, the server's job is to honor the header when
+// client opts in per-request, the server's job is to honor the header when
 // present, not to gate on a tag it can't see here. An operation that never
 // receives the header (a GET, or a client that doesn't send one) behaves
 // exactly as if this middleware weren't installed.
@@ -50,7 +50,7 @@ export type IdempotencyStore = {
 
 /**
  * Default `IdempotencyStore`: an in-process `Map`, so `idempotencyMiddleware()`
- * works out of the box with no external dependency. NOT suitable across
+ * works out of the box with no external dependency. Not suitable across
  * multiple processes/instances (each has its own `Map`) or across restarts
  * (cleared on process exit) — pass a shared store (Redis-backed, a database
  * table, ...) implementing the same `IdempotencyStore` interface for a
@@ -104,7 +104,7 @@ function headerValue(stores: HttpStoreBag, header: string): string | undefined {
 /**
  * `HttpHandlerMiddleware` that caches a handler's result per `Idempotency-Key`
  * header value: the first request bearing a given key runs the handler
- * normally and caches its result; every later request bearing the SAME key
+ * normally and caches its result; every later request bearing the same key
  * short-circuits `next` entirely, returning the cached result instead. A
  * request with no key (or an empty store) always runs `next` — this
  * middleware is a pure pass-through until a caller opts in via the header.

@@ -1,6 +1,6 @@
 // packages/http-api-projector/src/meta.ts — @rhi-zone/fractal-http-api-projector
 //
-// Package-level role-split meta fragments — the ONE public surface a
+// Package-level role-split meta fragments — the one public surface a
 // deployment extends `LeafMeta`/`SharedMeta` with to pick up this whole
 // package's meta shape (both the `http` namespace, owned by project.ts, and
 // the `openapi` namespace, owned by openapi.ts — merged into this package
@@ -20,13 +20,13 @@
 import type { HttpLeafMetaProperties, HttpSharedMetaProperties } from "./project.ts";
 import type { OpenApiLeafMetaProperties, OpenApiSharedMetaProperties } from "./openapi.ts";
 
-/** This package's `meta` fields valid at BOTH leaf and branch position — `http` (project.ts) + `openapi` (openapi.ts) namespaces combined. */
+/** This package's `meta` fields valid at both leaf and branch position — `http` (project.ts) + `openapi` (openapi.ts) namespaces combined. */
 export interface HttpSharedMeta {
   readonly http?: HttpSharedMetaProperties;
   readonly openapi?: OpenApiSharedMetaProperties;
 }
 
-/** This package's `meta` fields valid at LEAF (operation) position — `http` (project.ts) + `openapi` (openapi.ts) namespaces combined. */
+/** This package's `meta` fields valid at leaf (operation) position only — `http` (project.ts) + `openapi` (openapi.ts) namespaces combined. */
 export interface HttpLeafMeta {
   readonly http?: HttpLeafMetaProperties;
   readonly openapi?: OpenApiLeafMetaProperties;

@@ -1,19 +1,15 @@
-// packages/http-api-projector/src/openapi.ts — @rhi-zone/fractal-http-api-projector
+// OpenAPI 3.1 projection for `http-api-projector`. OpenAPI only ever
+// describes HTTP APIs, so it's an HTTP concern rather than a separate
+// projection package, and it's built directly on this package's own
+// `HttpRoute` tree rather than re-walking the raw `Node` tree.
 //
-// OpenAPI 3.1 projection — merged into http-api-projector (2026-07-18):
-// OpenAPI only ever describes HTTP APIs, so it's inherently an HTTP concern
-// rather than a separate projection package. Built directly on this
-// package's own `HttpRoute` tree instead of re-walking the raw `Node` tree.
-//
-// Previously this module re-derived verb/segment/path from `meta.http`
-// directives and `meta.tags` via its own self-contained tree walk (mirroring
-// the retired direct dispatcher). That duplicated exactly what the HttpRoute
-// pipeline (`naiveTransform` → `applyMethods`/`applyMoveTo`/`applyResponse`,
-// see packages/http-api-projector/src/route.ts) already computes: after the
-// rewriters run, the tree's structure IS the URL structure — children keys
-// are path segments, `fallback` is the wildcard segment, and `methods` is
-// already keyed by the resolved HTTP verb. Walking `HttpRoute` needs no
-// segment inference, no verb derivation, no dispatch-marker interpretation.
+// After the HttpRoute pipeline's rewriters run (`naiveTransform` →
+// `applyMethods`/`applyMoveTo`/`applyResponse`, see
+// packages/http-api-projector/src/route.ts), the tree's structure is the URL
+// structure: children keys are path segments, `fallback` is the wildcard
+// segment, and `methods` is already keyed by the resolved HTTP verb. Walking
+// `HttpRoute` therefore needs no segment inference, no verb derivation, and
+// no dispatch-marker interpretation of its own.
 //
 // Two entry points:
 //   - `toOpenApiFromRoute(route, opts)` — the core: walks an already-
@@ -23,10 +19,9 @@
 //     conventional dotted names (see `toOpenApi`).
 //   - `toOpenApi(node, opts)` — convenience: projects `node` via
 //     `httpProjection` (the standard rewriter pipeline) and also walks the
-//     raw `Node` tree once to build a handler → codegen-name map (the same
-//     underscore-joined name `extractToolSchemas` and the old tree-walk
-//     produced), so operationId/schema-lookup naming is unchanged from
-//     before this migration.
+//     raw `Node` tree once to build a handler → codegen-name map, using the
+//     same underscore-joined naming as `extractToolSchemas`, so operationId
+//     and schema-lookup naming match codegen's own conventions.
 //
 // See:
 //   packages/http-api-projector/src/route.ts    — HttpRoute, naiveTransform, rewriters
@@ -68,27 +63,26 @@ export type OpenApiOpts = {
   /**
    * Spec-level default security requirement (`OpenApiDoc.security`) — applies
    * to every operation that doesn't set its own `meta.openapi.security`. A
-   * plain document-level option (same footing as `title`/`version`), NOT
-   * read off any tree-authored `meta` value — `openapi.security` on `meta`
-   * means exactly one thing now, a per-operation requirement
+   * plain document-level option, on the same footing as `title`/`version`
+   * and not read off any tree-authored `meta` value: `openapi.security` on
+   * `meta` means exactly one thing, a per-operation requirement
    * (`HttpLeafMeta`); see docs/design/meta-role-split-spec.md §6 for why the
-   * prior root-position reading of the same key was removed rather than kept
-   * as a second meaning.
+   * spec-level default is kept as a separate option rather than a second
+   * meaning of that same key.
    */
   readonly defaultSecurity?: OpenApiSecurityRequirement[];
   /**
-   * `toOpenApi(n, { sourceFile })` only: the exporting binding name for `n` in
-   * `sourceFile` — the same `treeId` `extractRouteSchemas` (api-tree/tree.ts)
-   * prefixes every key with (`${treeId}/${path}`), and the same value a
-   * caller passes as `wrapValidators`' own initial `path` argument
-   * (build.ts) to line up with that prefix. Required only when `sourceFile`
-   * exports MORE than one tree — `toOpenApi` has no way to tell which export
-   * `n` (a plain runtime value with no reflection back to its binding) came
-   * from, so `resolveTreeId` throws rather than guessing when there's more
-   * than one candidate. Omit it for the common single-tree-per-file case:
-   * the sole `treeId` present in the extracted schema map is inferred
-   * automatically. Ignored when `opts.schemas` is supplied directly (no
-   * `sourceFile` auto-discovery happens, so there is no `treeId` to resolve).
+   * `toOpenApi(n, { sourceFile })` only: the exporting binding name for `n`
+   * in `sourceFile` — the same `treeId` `extractRouteSchemas`
+   * (api-tree/tree.ts) prefixes every key with (`${treeId}/${path}`).
+   * Required only when `sourceFile` exports more than one tree — `toOpenApi`
+   * has no way to tell which export `n` (a plain runtime value with no
+   * reflection back to its binding) came from, so `resolveTreeId` throws
+   * rather than guessing when there's more than one candidate. Omit it for
+   * the common single-tree-per-file case: the sole `treeId` present in the
+   * extracted schema map is inferred automatically. Ignored when
+   * `opts.schemas` is supplied directly (no `sourceFile` auto-discovery
+   * happens, so there is no `treeId` to resolve).
    */
   readonly treeId?: string;
 };
@@ -106,9 +100,9 @@ export type OpenApiSecurityScheme = Record<string, unknown>;
 
 /**
  * An OpenAPI 3.1 security requirement object — one entry per alternative
- * (OR); an entry naming multiple scheme keys requires ALL of them (AND). The
- * array value is the list of scopes for oauth2/openIdConnect schemes, `[]`
- * otherwise.
+ * (logical OR); an entry naming multiple scheme keys requires all of them
+ * (logical AND). The array value is the list of scopes for
+ * oauth2/openIdConnect schemes, `[]` otherwise.
  */
 export type OpenApiSecurityRequirement = Record<string, string[]>;
 
@@ -161,14 +155,12 @@ export type OpenApiDoc = {
   /**
    * Spec-level default security requirement — applies to every operation
    * that doesn't override it with its own `meta.openapi.security`. Sourced
-   * from `OpenApiOpts.defaultSecurity` (an explicit builder option), NOT
-   * from any tree-authored `meta` value — `openapi.security` on `meta` now
-   * means exactly one thing (a per-operation requirement, `HttpLeafMeta`);
-   * the spec-level default is a document-level choice, same footing as
-   * `title`/`version`/`servers`, not a value smuggled onto the root node's
-   * meta where it used to read exactly like a per-operation override that
-   * happened to be authored one level up (docs/design/meta-role-split-spec.md
-   * §6). Absent when the caller doesn't pass `defaultSecurity`.
+   * from `OpenApiOpts.defaultSecurity` (an explicit builder option), not
+   * from any tree-authored `meta` value: `openapi.security` on `meta` means
+   * exactly one thing, a per-operation requirement (`HttpLeafMeta`). The
+   * spec-level default is a document-level choice, on the same footing as
+   * `title`/`version`/`servers` (see docs/design/meta-role-split-spec.md §6).
+   * Absent when the caller doesn't pass `defaultSecurity`.
    */
   readonly security?: OpenApiSecurityRequirement[];
   /**
@@ -203,14 +195,13 @@ function pathParams(path: string): string[] {
 // ============================================================================
 // meta.openapi — role-split fragments (see
 // docs/design/meta-role-split-spec.md §2/§4/§6). `openapi.security` has
-// exactly ONE meaning now — a per-operation requirement, `HttpLeafMeta`-only
-// (§6): the prior ROOT-position "spec-level default" reading of the same
-// key was a dual-meaning defect, now fixed by moving that concern to
-// `OpenApiOpts.defaultSecurity` (a plain builder option, see `OpenApiDoc`
-// above) instead of a second meaning for the same tree-authored field.
+// exactly one meaning: a per-operation requirement, valid only on
+// `HttpLeafMeta` (§6). The spec-level default lives on the separate
+// `OpenApiOpts.defaultSecurity` builder option (see `OpenApiDoc` above),
+// so the same tree-authored field never carries two meanings.
 // ============================================================================
 
-/** `meta.openapi` fields valid at BOTH leaf and branch position. */
+/** `meta.openapi` fields valid at both leaf and branch position. */
 export interface OpenApiSharedMetaProperties {
   /**
    * Security scheme definitions — can be authored on any node in the tree;
@@ -226,7 +217,7 @@ export interface OpenApiSharedMeta {
   readonly openapi?: OpenApiSharedMetaProperties;
 }
 
-/** `meta.openapi` fields valid at LEAF (operation) position only — see `toOpenApi`. */
+/** `meta.openapi` fields valid at leaf (operation) position only — see `toOpenApi`. */
 export interface OpenApiLeafMetaProperties extends OpenApiSharedMetaProperties {
   readonly operationId?: string;
   readonly summary?: string;
@@ -277,15 +268,15 @@ function collectSecuritySchemes(
   route: HttpRoute,
   out: Record<string, OpenApiSecurityScheme>,
 ): void {
-  // `securitySchemes` is a SHARED-role field (read at both leaf and branch
-  // position, per docs/design/meta-role-split-spec.md §4) — `route.meta`/
-  // `entry.meta`'s own declared type (`HttpRoute`, route.ts) carries only
-  // this package's `http` namespace, not `openapi`, so the cast here is
-  // reading a field the expression's own static type doesn't declare, not
+  // `securitySchemes` is a shared-role field, read at both leaf and branch
+  // position (docs/design/meta-role-split-spec.md §4). `route.meta`'s and
+  // `entry.meta`'s declared type (`HttpRoute`, route.ts) carries only this
+  // package's `http` namespace, not `openapi`, so the cast here reads a
+  // field the expression's own static type doesn't declare rather than
   // widening past a real constraint (see route.ts's `RouteMeta`/
-  // `RouteLeafMeta` doc comment for why no OTHER cast in this file needs
-  // this — this is the one place `openapi` fields are read directly off an
-  // `HttpRoute` value rather than through `RouteEntry.meta`, below).
+  // `RouteLeafMeta` doc comment). This is the one place in the module that
+  // reads `openapi` fields directly off an `HttpRoute` value instead of
+  // through `RouteEntry.meta` (below).
   const nodeSchemes = getOpenApiSharedMeta(route.meta as OpenApiSharedMeta).securitySchemes;
   if (typeof nodeSchemes === "object" && nodeSchemes !== null) {
     Object.assign(out, nodeSchemes);
@@ -307,14 +298,13 @@ function collectSecuritySchemes(
 // ============================================================================
 // Internal: handler → codegen-name map, built from the raw Node tree
 //
-// Mirrors extractToolSchemas'/the pre-migration walkTree's underscore-joined
-// name construction, but keyed by handler IDENTITY rather than tree
-// position — because after `applyMoveTo` runs, a handler's position in the
-// final HttpRoute tree is no longer its authored tree position (e.g.
-// read/replace/remove co-locate onto their parent's fallback position). This
-// is what lets `toOpenApi(node, ...)` keep producing the same
-// `books.bookId.read`-style operationIds and codegen schema-map lookups as
-// before this migration, without the OpenAPI walk itself re-deriving path.
+// Mirrors extractToolSchemas' underscore-joined name construction, but keyed
+// by handler identity rather than tree position, because after
+// `applyMoveTo` runs, a handler's position in the final HttpRoute tree is no
+// longer its authored tree position (e.g. read/replace/remove co-locate onto
+// their parent's fallback position). This is what lets `toOpenApi(node, ...)`
+// produce conventional `books.bookId.read`-style operationIds and codegen
+// schema-map lookups without the OpenAPI walk itself re-deriving path.
 //
 // Degrades gracefully when a handler isn't found in the map (e.g. it was
 // re-wrapped by `applyResponse`, which produces a new function — response
@@ -369,17 +359,17 @@ function nameFromPath(path: string, verb: string): string {
 }
 
 // ============================================================================
-// buildPathMap — handler -> tree-relative "/"-joined PATH, for schema
-// correlation (as opposed to buildNameMap's underscore-joined codegen NAME,
-// used for operationId defaults) — see extractRouteSchemas's doc
-// (api-tree/tree.ts) for why these are two genuinely different keyings, not
-// a separator swap of the same string: a bare tool name is unique only
-// within one standalone tree; a tree path stays unique once several files'
-// trees are nested as branches under one composed root, because each
-// file's own path is still relative to ITS OWN subtree, and merging several
-// files' SchemaMaps (each produced by extractRouteSchemas) into one object
-// for a composed root's toOpenApi call only works if the correlation done
-// here uses that SAME path-keyed convention, not the name-keyed one.
+// buildPathMap — handler -> tree-relative "/"-joined path, for schema
+// correlation (as opposed to buildNameMap's underscore-joined codegen name,
+// used for operationId defaults). These are two genuinely different keyings,
+// not a separator swap of the same string — see extractRouteSchemas's doc
+// (api-tree/tree.ts): a bare tool name is unique only within one standalone
+// tree, while a tree path stays unique once several files' trees are nested
+// as branches under one composed root, because each file's own path is
+// still relative to its own subtree. Merging several files' SchemaMaps
+// (each produced by extractRouteSchemas) into one object for a composed
+// root's toOpenApi call only works if the correlation done here uses that
+// same path-keyed convention, not the name-keyed one.
 // ============================================================================
 
 function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string>): void {
@@ -394,10 +384,9 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
   }
   if (n.fallback !== undefined) {
     // `:name` (colon-prefixed), matching extractRouteTypeRefs's own
-    // fallback path segment (api-tree/tree.ts) — the SAME convention
-    // `wrapValidators`'s runtime `path.join("/")` lookup key already uses,
-    // deliberately different from buildNameMap's bare-name fallback segment
-    // (that one feeds operationId defaults, not schema/validator lookup).
+    // fallback path segment (api-tree/tree.ts) — the schema/validator-lookup
+    // convention, deliberately different from buildNameMap's bare-name
+    // fallback segment (that one feeds operationId defaults instead).
     const seg = [...prefix, `:${n.fallback.name}`];
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -412,8 +401,8 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
  * Build the handler → tree-relative "/"-joined path map for a `Node` tree —
  * see module doc above. `prefix` seeds the walk's accumulated path — pass
  * `[treeId]` to match `extractRouteSchemas`' `${treeId}/${path}` keying (see
- * `resolveTreeId`/`OpenApiOpts.treeId`); omitted (`[]`) reproduces the prior,
- * unprefixed behavior for a caller-supplied (non-auto-discovered) schema map.
+ * `resolveTreeId`/`OpenApiOpts.treeId`); omit it (`[]`) for the unprefixed
+ * convention a caller-supplied (non-auto-discovered) schema map uses.
  */
 function buildPathMap(n: Node, prefix: readonly string[] = []): Map<Handler, string> {
   const out = new Map<Handler, string>();
@@ -424,9 +413,9 @@ function buildPathMap(n: Node, prefix: readonly string[] = []): Map<Handler, str
 /**
  * Every distinct `treeId` prefix present in a `SchemaMap`'s own keys — a
  * `${treeId}/${path}` key's `treeId` is everything before the first `/`
- * (`treeId` is a JS binding name, so it never contains one itself). Used only
- * to INFER the sole `treeId` in the common single-tree-per-file case; see
- * `resolveTreeId`.
+ * (`treeId` is a JS binding name, so it never contains one itself). Used
+ * only to infer the sole `treeId` in the common single-tree-per-file case;
+ * see `resolveTreeId`.
  */
 function distinctTreeIds(schemas: SchemaMap): string[] {
   const ids = new Set<string>();
@@ -441,15 +430,14 @@ function distinctTreeIds(schemas: SchemaMap): string[] {
  * Resolve the `treeId` `buildPathMap` needs to line up with
  * `extractRouteSchemas`' `${treeId}/${path}` keying (tree.ts) — see
  * `OpenApiOpts.treeId`'s doc comment for the full rationale. An explicit
- * `treeId` always wins; otherwise inferred from `schemas`' own keys when
- * exactly one distinct prefix is present. More than one throws — silently
- * picking one (or trying every prefix and taking the first hit) would risk
- * correlating `n` against a DIFFERENT tree's schema, exactly the
- * silent-wrong-schema failure mode `extractRouteSchemas`' `treeId` prefix was
- * introduced to prevent (see that function's own doc comment). Returns
- * `undefined` (no prefix) when `schemas` is empty — nothing to correlate
- * against, so the existing `{ type: "object" }` placeholder degrade still
- * applies, unchanged.
+ * `treeId` always wins; otherwise it's inferred from `schemas`' own keys
+ * when exactly one distinct prefix is present. More than one throws —
+ * silently picking one (or trying every prefix and taking the first hit)
+ * would risk correlating `n` against a different tree's schema, the exact
+ * silent-wrong-schema failure mode `extractRouteSchemas`' `treeId` prefix
+ * was introduced to prevent (see that function's own doc comment). Returns
+ * `undefined` (no prefix) when `schemas` is empty, since there is nothing to
+ * correlate against and the `{ type: "object" }` placeholder degrade applies.
  */
 function resolveTreeId(schemas: SchemaMap, explicit: string | undefined): string | undefined {
   if (explicit !== undefined) return explicit;
@@ -474,7 +462,7 @@ export type RouteEntry = {
   /**
    * Tree-relative "/"-joined path (schema-map lookup key when the schema
    * map was built via `extractRouteSchemas`, api-tree/tree.ts) — see
-   * `buildPathMap`'s module doc for why this is a DIFFERENT key from
+   * `buildPathMap`'s module doc for why this is a different key from
    * `codenName`, not the same string with a different separator. Falls
    * back to a path-derived `"/"`-joined key (mirroring `nameFromPath`'s own
    * fallback shape) when `pathMap` is omitted or has no entry for a given
@@ -611,38 +599,33 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
   const names = buildNameMap(n);
 
   // Auto-discovery (`sourceFile`, no caller-supplied `schemas`) keys every
-  // entry `${treeId}/${path}` (extractRouteSchemas) — `buildPathMap` must be
-  // seeded with the SAME `treeId` or every lookup misses and silently
-  // degrades to the `{ type: "object" }` placeholder (TODO.md's "toOpenApi
-  // auto-discovery key mismatch" entry). Resolved here, once, so both the
-  // schema map and the path map `buildDoc` receives are already correlated
-  // — a caller-supplied `opts.schemas` skips this entirely (no `sourceFile`
-  // extraction to correlate against, `buildPathMap` stays unprefixed exactly
-  // as before this fix).
+  // entry `${treeId}/${path}` (extractRouteSchemas). `buildPathMap` must be
+  // seeded with the same `treeId`, or every lookup misses and silently
+  // degrades to the `{ type: "object" }` placeholder. Resolving it here,
+  // once, keeps the schema map and the path map `buildDoc` receives
+  // correlated to the same tree. A caller-supplied `opts.schemas` skips this
+  // entirely — there's no `sourceFile` extraction to correlate against, so
+  // `buildPathMap` stays unprefixed.
   let schemas: SchemaMap = opts.schemas ?? {};
   let treeId: string | undefined;
   if (Object.keys(schemas).length === 0 && opts.sourceFile !== undefined) {
-    // `webpackIgnore` (Rspack honors the webpack-prefixed spelling too, see
-    // the comment on buildDoc's identical import below) — found via
-    // examples/doc-site-verification's real `docusaurus build` pass
-    // (docs/design/mocked-fetch-backend.md's dated write-up): without this,
-    // a bundler eagerly resolves THIS dynamic import's whole target module
-    // graph (api-tree's tree.ts -> extract.ts -> type-ir's
+    // `webpackIgnore` (Rspack also honors the webpack-prefixed spelling, see
+    // the identical import's comment on buildDoc below) tells the bundler to
+    // leave this as a literal runtime `import()` instead of pre-bundling it.
+    // A bundler resolves a dynamic `import()`'s target module graph at build
+    // time regardless of whether the runtime branch guarding it ever
+    // executes, so every browser consumer of `createFetch`/
+    // `toOpenApiFromRoute` would otherwise need the full target graph
+    // bundled in (api-tree's tree.ts -> extract.ts -> type-ir's
     // from-typescript.ts, which imports the real `typescript` package and
-    // Node's `node:fs`/`node:path`) even though the import only actually
-    // fires when a caller passes `opts.sourceFile` — which `preset.ts`'s
-    // `createFetch`/`toDropInFetch` (documented as usable client-side for a
-    // doc-embedded live playground with no deployed server yet, per
-    // mocked-fetch-backend.md) never does. Bundlers resolve a dynamic
-    // `import()`'s target chunk at BUILD time regardless of whether the
-    // runtime branch guarding it ever executes, so without this comment
-    // *every* browser consumer of `createFetch`/`toOpenApiFromRoute` fails
-    // to bundle at all, not just ones that pass `sourceFile`. The magic
-    // comment tells the bundler to leave this as a literal runtime
-    // `import()` instead of pre-bundling it — correct here because
-    // `sourceFile` extraction is inherently Node-only (real filesystem +
-    // TypeScript compiler) and was never going to work in a browser bundle
-    // regardless; this only stops it from poisoning callers who never use it.
+    // Node's `node:fs`/`node:path`) even though the import only fires when a
+    // caller passes `opts.sourceFile` — which `preset.ts`'s `createFetch`/
+    // `toDropInFetch` (usable client-side for a doc-embedded live playground
+    // with no deployed server yet, per docs/design/mocked-fetch-backend.md)
+    // never does. `sourceFile` extraction is inherently Node-only (real
+    // filesystem + TypeScript compiler) and was never going to work in a
+    // browser bundle regardless; the marker only stops it from poisoning
+    // callers who never use it.
     const { extractRouteSchemas } = await import(
       /* webpackIgnore: true */ "@rhi-zone/fractal-api-tree/tree"
     );
@@ -704,10 +687,10 @@ async function buildDoc(
     const openApiMeta = getOpenApiMeta(meta);
     // Path-keyed lookup first (schemas built via extractRouteSchemas — the
     // convention that stays unique under composition, buildPathMap's module
-    // doc), falling back to the legacy name-keyed lookup (schemas built via
-    // extractToolSchemas, or hand-authored with that convention) — a pure
-    // fallback CHAIN, not a replacement, so every existing caller passing a
-    // name-keyed SchemaMap keeps resolving exactly as before.
+    // doc), falling back to the name-keyed lookup (schemas built via
+    // extractToolSchemas, or hand-authored with that convention). The two
+    // conventions form a fallback chain, so a name-keyed SchemaMap still
+    // resolves correctly.
     const toolSchema = schemas[schemaKey] ?? schemas[codenName];
 
     // Derive operationId from meta.openapi.operationId, or from the codegen name

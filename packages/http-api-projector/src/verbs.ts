@@ -234,12 +234,11 @@ export function paginated(options: NonNullable<HttpLeafMetaProperties["paginated
  * property this type exists for.
  *
  * `SourceMapInput`/`ResolvedSourceMap`/the shorthand-expansion runtime logic
- * used to be defined here; both are now shared machinery in api-tree's
- * input.ts (`SourceMapInput<Store>`/`ResolvedSourceMap<M>`/
- * `resolveSourceMap`), generalized for every protocol's own `source()`
- * helper — see that module's doc for the full rationale. This alias just
- * narrows the shared generic to `HttpStore`, preserving this package's
- * existing public `SourceMapInput` export shape.
+ * are shared machinery in api-tree's input.ts (`SourceMapInput<Store>`/
+ * `ResolvedSourceMap<M>`/`resolveSourceMap`), generalized for every
+ * protocol's own `source()` helper — see that module's doc for the full
+ * rationale. This alias just narrows the shared generic to `HttpStore`,
+ * preserving this package's public `SourceMapInput` export shape.
  */
 export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>;
 
@@ -266,12 +265,12 @@ export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>;
  * already the resolved map the moment `op()`'s fold completes, with no
  * read-time collection step. `naiveTransform` (route.ts) copies it into the
  * matched route's `sources.sourceMap`, which `defaultDecode` (route.ts) then
- * consults during request assembly. (Before the http-directive-dissolution
- * migration this composed as a directive-array entry instead; see docs/design/
+ * consults during request assembly. See docs/design/
  * wire-profiles-and-staged-validation.md's "Prerequisite: meta unification"
- * for the rationale, and node.ts's `mergeRecords`/`MergeMetaValue` doc
+ * for the rationale behind representing this as a key-merged map rather than
+ * a directive array, and node.ts's `mergeRecords`/`MergeMetaValue` doc
  * comments for how the depth-capped object merge resolves two literal-keyed
- * maps like `ResolvedSourceMap<M>`.)
+ * maps like `ResolvedSourceMap<M>`.
  *
  * String shorthand values are expanded to a full `ParamSource` HERE, eagerly,
  * at the value level — not left for `naiveTransform`/`assemble` (route.ts) to
@@ -315,9 +314,8 @@ export function source<const M extends SourceMapInput>(
  * bag; on failure the request short-circuits with a 422 response carrying
  * the validator's own `issues`, and the handler never runs.
  *
- * A route with no `http.validate()` call behaves exactly as before —
- * `sources.validate` is simply absent, and `runRoute` skips the validation
- * step entirely.
+ * A route with no `http.validate()` call has no `sources.validate`, and
+ * `runRoute` skips the validation step entirely.
  *
  * ```ts
  * import { z } from "zod"

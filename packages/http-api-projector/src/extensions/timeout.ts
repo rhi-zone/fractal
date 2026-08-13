@@ -8,14 +8,15 @@
 // `AbortSignal.timeout` is created per call to the wrapper, not once at
 // construction — a shared one would only ever fire on the first slow call).
 //
-// This is the extension form of the timeout behavior `client.ts` has always
-// had built into `ClientOptions.timeout`/`CallOptions.timeout` (see
-// client.ts's `resolveSignal`/`describeAbort`) — that per-call-overridable
-// fast path stays as-is (it's already tested, already the common case, and
-// needs `CallOptions` access that a `wrapFetch(req) => Response` hook
-// doesn't have). Use THIS extension when composing a custom extension list
-// (e.g. with `createClientFromRoute`, or in codegen output) that wants a
-// fixed timeout without threading `ClientOptions.timeout` through.
+// This is the extension form of the timeout behavior built into
+// `client.ts`'s `ClientOptions.timeout`/`CallOptions.timeout` (see
+// client.ts's `resolveSignal`/`describeAbort`). That per-call-overridable
+// fast path is the common case and is tested separately; it needs
+// `CallOptions` access that a `wrapFetch(req) => Response` hook doesn't
+// have, so it isn't expressed as an extension. Use THIS extension when
+// composing a custom extension list (e.g. with `createClientFromRoute`, or
+// in codegen output) that wants a fixed timeout without threading
+// `ClientOptions.timeout` through.
 
 import type { ClientExtension, FetchImpl } from "../extension.ts";
 

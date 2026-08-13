@@ -10,7 +10,7 @@
 //                          handler POST at its own path-segment key).
 //   2. rewriters          — user-supplied HttpRoute => HttpRoute passes,
 //                          applied last, right before router compilation.
-//                          This is also where generated VALIDATION wires in
+//                          This is also where generated validation wires in
 //                          (see below) — no dedicated preset option for it.
 //   3. router             — HttpRoute => CompiledRouter. Defaults to
 //                          `mapCharRouter` (compile.ts) — static routes in a
@@ -32,13 +32,13 @@
 //   6. corsLayer          — CORS preflight + origin headers.
 //
 // Validation — `applyValidation(key, projectedTree, protocol?)`
-// (@rhi-zone/fractal-api-tree/apply-validation), NOT a dedicated preset
-// option: `applyValidation`'s call site must live in the CONSUMER's own
+// (@rhi-zone/fractal-api-tree/apply-validation) is not a dedicated preset
+// option: `applyValidation`'s call site must live in the consumer's own
 // entry file for codegen to anchor on it (see that module's doc comment) —
 // `createFetch` itself can never own the call, since it would then be the
 // one calling `applyValidation`, not the user's file. Wire it in via
-// `rewriters`, applied to the already-projected `HttpRoute`. RECOMMENDED —
-// the 3-arg, wire-profile-driven form (docs/design/
+// `rewriters`, applied to the already-projected `HttpRoute`. The
+// recommended form is the 3-arg, wire-profile-driven one (docs/design/
 // wire-profiles-and-staged-validation.md):
 //
 //   import { applyValidation } from "./generated/apply-validation.ts"
@@ -54,24 +54,23 @@
 // arrives already typed with no coercion. Without it — the 2-arg
 // `applyValidation("books", routes)` form — validation still runs (codegen
 // treats an omitted protocol as sugar for `"identity"`, phase D's decision
-// A), but STRICTLY: `identityProfile` is "already the right shape, no
+// A), but strictly: `identityProfile` is "already the right shape, no
 // coercion" (the same posture `check`/`errors`/`parse` assume for an
 // in-process, already-typed value), so a query numeric string like `"3"`
 // against an HTTP tree wired with the 2-arg form is an encoding error, not a
-// silent coercion. The now-deleted 2-arg path (`compileValidatorModule`'s old
-// `parse()`) coerced any numeric string regardless of whether it plausibly
-// came off a wire — the universal, protocol-blind coercion this design
-// replaces. An HTTP tree that needs wire-shaped coercion must use the 3-arg
-// form.
+// silent coercion. This is deliberately different from a protocol-blind
+// universal coercion, which would coerce any numeric-looking string
+// regardless of whether it plausibly came off a wire — an HTTP tree that
+// needs wire-shaped coercion must use the 3-arg form instead.
 //
 // A rejected leaf's generated `parse()`/wire decoder returns `Result.err(...)`,
 // which `runRoute` (route.ts) already encodes as a 400 with the structured
 // errors — the same Result-unwrap path a plain handler's own `Result.err`
-// return takes, not a special case. Superseded by this: `createFetch`'s
-// former `validators`/`wrapValidators` option, which wrapped the `Node` tree
-// BEFORE projection — see docs/design/routing-and-transforms.md's "Dispatch
-// is not an interceptable multi-stage pipeline" section for the full
-// history.
+// return takes, not a special case. This is the sole validation integration
+// point — `createFetch` has no dedicated `validators` option — see
+// docs/design/routing-and-transforms.md's "Dispatch is not an interceptable
+// multi-stage pipeline" section for why validation isn't wired as a
+// pre-projection interceptor.
 //
 // To drop the auto-method layer and use core routing only:
 //   return mapCharRouter(httpProjection(node))
@@ -194,24 +193,24 @@ export type PresetOptions<T = unknown> = {
    * A throw from any entry here is caught by `createFetch` and run through
    * `opts.thrownErrorEncoder` (falling back to the existing 500 default,
    * same as a `handlerMiddleware` throw) — even though this array wraps
-   * OUTSIDE the compiled router entirely, before a route is even matched, so
+   * outside the compiled router entirely, before a route is even matched, so
    * there is no route-level `meta`/path context available to the encoder in
    * that case (only the raw error itself, same as every other
    * `thrownErrorEncoder` call). See `route.ts`'s `encodeThrownError`.
    */
   readonly middleware?: ReadonlyArray<(inner: Fetch) => Fetch>;
   /**
-   * Around-hooks wrapping the HANDLER call itself — a separate mechanism
+   * Around-hooks wrapping the handler call itself — a separate mechanism
    * from `opts.middleware` above (which wraps the whole `Fetch` request/
    * response cycle, before a route is even matched). `handlerMiddleware` is
    * `F => F` where `F = (input, stores) => result` (see
-   * docs/design/middleware-and-caller-context.md). It sits INSIDE `runRoute`
+   * docs/design/middleware-and-caller-context.md). It sits inside `runRoute`
    * (route.ts): after decode, before encode/Result-unwrapping, seeing both
    * the assembled input and the raw pre-assembly stores (`httpStores()`,
    * decode.ts) — the same handler-scoped hook CLI's `CliOpts.middleware` and
    * MCP's `CreateMcpServerOptions.middleware` already provide, now available
    * for HTTP too. The handler itself never receives `stores`. Composes like
-   * an onion: the first entry is the OUTERMOST wrapper, matching every other
+   * an onion: the first entry is the outermost wrapper, matching every other
    * middleware convention in this codebase. Threaded through to whichever
    * router compiler `opts.router` resolves to (every built-in compiler in
    * compile.ts accepts it as a second argument). Empty/absent by default
@@ -226,7 +225,7 @@ export type PresetOptions<T = unknown> = {
    * yields). Both default to `true` — existing behavior — when `detection`
    * itself, or either field, is omitted. Disable one when a handler
    * legitimately returns/yields data shaped like one of these DUs and it
-   * must NOT be reinterpreted as the transport protocol (see
+   * must not be reinterpreted as the transport protocol (see
    * `docs/design/middleware-and-caller-context.md`'s "Streaming and
    * Progress" section, and `DetectionOptions`'s own doc,
    * `@rhi-zone/fractal-api-tree`). `ResponseOverride` detection is never
@@ -249,7 +248,7 @@ export type PresetOptions<T = unknown> = {
    */
   readonly errorEncoder?: HttpErrorEncoder;
   /**
-   * Maps a THROWN error (caught in `runRoute`'s catch block, route.ts) to an
+   * Maps a thrown error (caught in `runRoute`'s catch block, route.ts) to an
    * `HttpErrorResponse` — the parallel hook to `errorEncoder` above, but for
    * consumers who throw for expected errors instead of returning
    * `Result.err`. Same `(error: unknown) => HttpErrorResponse | undefined`
@@ -277,14 +276,14 @@ export type PresetOptions<T = unknown> = {
   /**
    * The deployment's registered service-store values (docs/design/
    * typed-store-spec.md §4) — a deployment-provided, long-lived capability
-   * (a tabular-read adapter, a domain read-model, …) declared as a REQUIRED
+   * (a tabular-read adapter, a domain read-model, …) declared as a required
    * member on the merged `StoreRegistry` (api-tree's input.ts). `createFetch`
    * threads whatever is supplied here (default `{}`) through to whichever
    * router compiler `opts.router` resolves to (every built-in compiler
    * accepts it as a sixth argument, see `router`'s own doc above), which
    * merges it into the per-request `stores` bag each dispatched request
-   * builds (`httpStores`, decode.ts) — landing the threading docs/design/
-   * typed-store-spec.md §8 deferred and TODO.md tracked.
+   * builds (`httpStores`, decode.ts) — fulfilling the threading that
+   * docs/design/typed-store-spec.md §8 left deferred (tracked in TODO.md).
    *
    * Deliberately always optional here, not conditionally required via the
    * `HasRequiredKeys` technique `op()`/`api()` use for meta contributions
@@ -374,9 +373,9 @@ export function createFetch<T = unknown>(node: Node, opts: PresetOptions<T> = {}
   // sees every request after protocol handling but before the raw router
   // dispatch. First entry in the array is the outermost wrapper.
   //
-  // This wraps OUTSIDE `withContext` (the compiled router), which is itself
-  // OUTSIDE `runRoute`'s own try/catch (route.ts) — so a throw from one of
-  // these entries is the ONE remaining pre-decode throw source this package
+  // This wraps outside `withContext` (the compiled router), which is itself
+  // outside `runRoute`'s own try/catch (route.ts) — so a throw from one of
+  // these entries is the one remaining pre-decode throw source this package
   // can observe (`toRouter`, compile.ts, already catches a subtree
   // `http.middleware()` throw the same way). Caught here and encoded via
   // `encodeThrownError`, for maximal consistency with every other error

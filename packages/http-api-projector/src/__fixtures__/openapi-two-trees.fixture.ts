@@ -1,7 +1,7 @@
 // packages/http-api-projector/src/__fixtures__/openapi-two-trees.fixture.ts
 //
-// Two exported Node trees in ONE file, each with a top-level leaf named
-// "widgets" but a DIFFERENT input shape — regression fixture for
+// Two exported Node trees in one file, each with a top-level leaf named
+// "widgets" but a different input shape — regression fixture for
 // `toOpenApi(n, { sourceFile })`'s `treeId` disambiguation (openapi.ts's
 // `resolveTreeId`, TODO.md's "toOpenApi auto-discovery key mismatch" entry).
 // `extractRouteSchemas` keys these `"catalogTree/widgets"` and

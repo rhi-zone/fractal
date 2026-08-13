@@ -1,8 +1,8 @@
 // packages/http-api-projector/src/source-coverage.test.ts — wire-time source coverage
 //
-// The RUNTIME half of docs/design/typed-store-spec.md §6: the two resolution
+// The runtime half of docs/design/typed-store-spec.md §6: the two resolution
 // steps `op()`'s static check structurally cannot see (a path-param match,
-// which depends on where a leaf is MOUNTED; and the convention fallback, which
+// which depends on where a leaf is mounted; and the convention fallback, which
 // depends on the live request) are checked once when the route tree is built.
 //
 // The static half is covered by verbs.test.ts's own type-level block.
@@ -73,7 +73,7 @@ describe("findRouteSourceCoverageProblems", () => {
   it("resolves a path param from the path store, ahead of any override", () => {
     // `id` is bound by the fallback segment, so `assemble` reads it from
     // "path" and never consults the override — which means the override's
-    // bogus store is unreachable and must NOT be reported for `id`.
+    // bogus store is unreachable and must not be reported for `id`.
     const route = httpRoute({
       fallback: {
         name: "id",

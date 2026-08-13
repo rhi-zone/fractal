@@ -298,9 +298,8 @@ describe("http.moveTo", () => {
 // `meta.http.sourceMap` map (like moveTo/paginated, a flat key), NOT a
 // directive array — composing two http.source() calls key-merges their maps
 // directly at op()'s own FoldMeta fold (later call's keys win on overlap).
-// See verbs.ts's source() doc comment for the empirical verification this
-// relies on (scratch tsc + bun run, during the http-directive-dissolution
-// migration).
+// See verbs.ts's source() doc comment for the design rationale this test
+// verifies.
 // ============================================================================
 
 function sourceMapOf(n: ReturnType<typeof op>): Record<string, ParamSource> | undefined {

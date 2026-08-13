@@ -1,9 +1,6 @@
-// packages/http-api-projector/src/http-route-reference.test.ts
-//
-// Builds a REAL OpenApiDoc (via toOpenApi, over a real Node tree with real
-// handlers) and asserts on the actual generated MDX text — same "run the
-// real projection, inspect the real output" standard as openapi.test.ts,
-// not a hand-constructed OpenApiDoc literal standing in for one.
+// Builds an OpenApiDoc via toOpenApi over a real Node tree with real
+// handlers, and asserts on the actual generated MDX text — the same "run the
+// real projection, inspect the real output" standard as openapi.test.ts.
 
 import { describe, expect, it } from "bun:test";
 import { api, op } from "@rhi-zone/fractal-api-tree/node";

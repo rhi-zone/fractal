@@ -1,4 +1,4 @@
-// packages/http-api-projector/src/openapi.test.ts — OpenAPI 3.1 projection tests
+// OpenAPI 3.1 projection tests.
 //
 // Tests run against examples/library-api/src/tree.ts — the canonical
 // cross-surface fixture. Every test asserts a specific OpenAPI invariant.
@@ -218,13 +218,12 @@ describe("operationId", () => {
 
   // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
   // api({...})) is explicitly allowed by the Node model (api-tree/node.ts's
-  // `fallback: { name, subtree: Node }`). Regression test: `nameLeaves`
-  // (openapi.ts) used to assume every `fallback.subtree` had `children`, so
-  // a bare-leaf subtree's handler was never recorded in its codegen-name
-  // map — its operationId silently degraded to the generic path-derived
-  // `nameFromPath` fallback ("widgets_widgetId_post", i.e.
-  // "widgets.widgetId.post", leaking the placeholder POST verb) instead of
-  // the real derived name.
+  // `fallback: { name, subtree: Node }`). Regression coverage for
+  // `nameLeaves` (openapi.ts): a bare-leaf `fallback.subtree`'s handler must
+  // be recorded in the codegen-name map via the fallback's own name, or its
+  // operationId degrades to the generic path-derived `nameFromPath` fallback
+  // ("widgets_widgetId_post", i.e. "widgets.widgetId.post"), leaking the
+  // placeholder POST verb instead of the real derived name.
   it("operationId for a bare op() fallback.subtree is derived from the fallback's own name, no leaked verb segment", async () => {
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const n = api_({
@@ -358,18 +357,17 @@ describe("security", () => {
   });
 
   it("opts.defaultSecurity is emitted as the spec-level default", async () => {
-    // Root-position `meta.openapi.security` no longer means "spec-level
-    // default" — that dual meaning was removed (§6,
-    // docs/design/meta-role-split-spec.md): `openapi.security` on `meta` is
-    // per-operation only now, and the spec-level default is a plain builder
-    // option instead.
+    // `openapi.security` on `meta` is per-operation only (docs/design/
+    // meta-role-split-spec.md §6) — it does not also serve as the spec-level
+    // default; the spec-level default is a separate builder option
+    // (`defaultSecurity`).
     const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
     const n = api_({
       thing: op((_: unknown) => null, {}),
     });
     const d = await toOpenApi(n, { defaultSecurity: [{ bearer: [] }] });
     expect(d.security).toEqual([{ bearer: [] }]);
-    // Not duplicated onto the operation itself — that stays a per-op override.
+    // The spec-level default stays separate from any per-operation override.
     expect(d.paths["/thing"]?.["post"]?.security).toBeUndefined();
   });
 
@@ -670,13 +668,12 @@ describe("mergeOpenApiDocs", () => {
 
 describe("schema correlation under composition — path-keyed schemas resolve correctly where bare-name-keyed schemas would collide", () => {
   // Two "slices" that each independently declare a leaf literally named
-  // `list` at their own tree root — exactly the shape the sibling codebase's
-  // one-root-fractal-tree migration found colliding across 17 real slices
-  // (docs/decisions/one-root-fractal-tree-2026-08-02.md in the the sibling codebase
-  // repo): a naive merge of two `extractToolSchemas`-style (bare-name-keyed)
-  // SchemaMaps would have one slice's `list` schema silently clobber the
-  // other's. A path-keyed SchemaMap (the `extractRouteSchemas` shape) does
-  // not collide, because each slice's own branch position is part of the key.
+  // `list` at their own tree root. A naive merge of two `extractToolSchemas`-
+  // style (bare-name-keyed) SchemaMaps has one slice's `list` schema clobber
+  // the other's; a path-keyed SchemaMap (the `extractRouteSchemas` shape)
+  // does not collide, because each slice's own branch position is part of
+  // the key. See docs/decisions/one-root-fractal-tree-2026-08-02.md (the sibling codebase
+  // repo) for the migration that surfaced this collision across real slices.
   const sliceA = apiC({
     list: op(() => ({ from: "A" }), http.get),
   });
@@ -694,22 +691,20 @@ describe("schema correlation under composition — path-keyed schemas resolve co
     return (schema as Record<string, unknown> | undefined)?.["title"];
   }
 
-  it("bare-name-keyed schemas neither collide NOR correlate once composed — both leaves silently degrade to the placeholder schema", async () => {
-    // Simulates today's (pre-fix) merge story: two per-FILE-relative
-    // extractToolSchemas outputs (each independently keyed "list", relative
-    // to that file's OWN un-composed tree root) object-spread into one
-    // map — the spread itself already collapses to a single "list" entry
-    // (the sibling codebase found 17-of-141 such collisions across its real 17 files).
-    // Demonstrated here against the COMPOSED root's OWN correlation: neither
-    // `buildNameMap` ("a_list"/"b_list") nor `buildPathMap` ("a/list"/
-    // "b/list") ever produces bare "list" for a leaf nested under a branch,
-    // so a bare-name-keyed map doesn't even reach the wrong entry — it
-    // reaches NOTHING, silently degrading every composed leaf to the
-    // `{ type: "object" }` placeholder. This is the failure this spec's own
-    // note calls out ("silently drops 17 slices' worth of OpenAPI schema
-    // entries") — worse than a same-key collision, and exactly why merging
-    // has to happen on a key convention that a composed root actually
-    // produces (schemaKey / buildPathMap), not the bare per-file name.
+  it("bare-name-keyed schemas neither collide nor correlate once composed — both leaves silently degrade to the placeholder schema", async () => {
+    // Simulates an unfixed merge: two per-file-relative `extractToolSchemas`
+    // outputs (each independently keyed "list", relative to that file's own
+    // un-composed tree root) object-spread into one map. The spread already
+    // collapses to a single "list" entry before composition even happens.
+    // Against the composed root's own correlation, neither `buildNameMap`
+    // ("a_list"/"b_list") nor `buildPathMap` ("a/list"/"b/list") ever
+    // produces a bare "list" for a leaf nested under a branch, so a
+    // bare-name-keyed map doesn't reach the wrong entry — it reaches no
+    // entry at all, and every composed leaf silently degrades to the
+    // `{ type: "object" }` placeholder. This is worse than a same-key
+    // collision, and is why merging has to happen on a key convention a
+    // composed root actually produces (schemaKey / buildPathMap), not the
+    // bare per-file name.
     const bareNameKeyedSchemas = {
       list: {
         inputSchema: { type: "object" as const },
@@ -745,12 +740,10 @@ describe("schema correlation under composition — path-keyed schemas resolve co
 // ============================================================================
 // toOpenApi(n, { sourceFile }) — auto-discovery, treeId resolution
 //
-// TODO.md's "toOpenApi auto-discovery key mismatch" entry: extractRouteSchemas
-// keys every entry `${treeId}/${path}`, but buildPathMap used to build bare,
-// unprefixed keys — every auto-discovered schema silently missed and degraded
-// to the `{ type: "object" }` placeholder. Fixed by resolveTreeId (openapi.ts):
-// infer the sole treeId when a sourceFile exports exactly one tree, otherwise
-// require opts.treeId and throw loudly rather than guessing.
+// `extractRouteSchemas` keys every entry `${treeId}/${path}`. `resolveTreeId`
+// (openapi.ts) infers the sole treeId when `sourceFile` exports exactly one
+// tree; otherwise it requires `opts.treeId` and throws rather than guessing
+// which export the runtime `Node` value came from.
 // ============================================================================
 
 describe("toOpenApi(n, { sourceFile }) — auto-discovery treeId resolution", () => {

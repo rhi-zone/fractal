@@ -14,14 +14,14 @@
 // are ordinary `ClientExtension` values — there is no privileged internal
 // API a user-authored extension can't also use.
 //
-// Deliberately NOT a fixed hook enum (separate beforeRequest/afterResponse/
-// onError callback slots): that would force every extension to implement
-// every slot, and would force composition order to be "run all `before`
-// hooks, then fetch once, then run all `after` hooks" — which can't express
-// retry (needs to re-run the ENTIRE inner fetch, arbitrarily many times, not
-// just observe around a single call). Instead an extension wraps the
-// underlying fetch, the same middleware shape `layers.ts`'s
-// `autoMethodLayer`/`corsLayer` already use on the server side. A
+// An extension wraps the underlying fetch rather than implementing a fixed
+// hook enum (separate beforeRequest/afterResponse/onError callback slots) —
+// the same middleware shape `layers.ts`'s `autoMethodLayer`/`corsLayer`
+// already use on the server side. A fixed hook enum would force every
+// extension to implement every slot, and would force composition order to
+// be "run all `before` hooks, then fetch once, then run all `after` hooks"
+// — which can't express retry, since retry needs to re-run the entire inner
+// fetch arbitrarily many times, not just observe around a single call. A
 // beforeRequest/afterResponse interceptor is the degenerate case of a
 // wrapper that calls `inner` exactly once — see extensions/interceptors.ts.
 //

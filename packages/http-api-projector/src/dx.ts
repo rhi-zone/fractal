@@ -93,17 +93,17 @@ export type RestCrudOptions = {
  * backwards-compatible upgrade to it.
  *
  * Built from three pieces, none of them new machinery:
- *   - `list`/`create` are each authored as a CHILD of the resource node
+ *   - `list`/`create` are each authored as a child of the resource node
  *     carrying `http.moveTo("..")` — `applyMoveTo` (route.ts) resolves `".."`
  *     relative to the child's own position, which is exactly the resource
  *     node's own position, so both collapse onto the resource root itself as
- *     two DISTINCT methods (`GET`, `POST`) on the SAME node — the identical
+ *     two distinct methods (`GET`, `POST`) on the same node — the identical
  *     "child moves up onto its own parent" mechanic `library-api`'s
  *     `readBook`/`replaceBook`/`removeBook` already use one level deeper (see
  *     examples/library-api/src/tree.ts's own module doc for that motivating
  *     example).
  *   - `get`/`update`/`delete` are each authored the same way one level
- *     deeper — as children of the id fallback's OWN subtree, each with
+ *     deeper — as children of the id fallback's own subtree, each with
  *     `http.moveTo("..")` — so they collapse onto the fallback subtree's own
  *     root instead of getting their own `/get`, `/update`, `/delete`
  *     sub-segments.

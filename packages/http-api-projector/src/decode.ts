@@ -17,9 +17,9 @@
 // determined by matching param names against the routing-resolved slug names.
 //
 // The Store/Stores/ParamSource/SourceMap types and the `assemble` function
-// itself now live in @rhi-zone/fractal-api-tree's input.ts (this file was the
-// first well-factored version of that pipeline, since generalized so CLI and
-// MCP projectors can share it). Re-exported below for backward compat.
+// live in @rhi-zone/fractal-api-tree's input.ts, shared across the CLI, MCP,
+// and HTTP projectors. Re-exported below so callers can keep importing them
+// from this module.
 
 export type {
   Store,
@@ -155,13 +155,12 @@ export const BUILTIN_HTTP_STORE_NAMES = [
 // Body parsing — Content-Type-driven request body decode
 // ============================================================================
 //
-// `application/json` is the historical, still-default case. The rest
-// (multipart, url-encoded, text, binary) are additive: each Content-Type is
-// routed to the WHATWG API that already understands it (`req.formData()`,
-// `req.text()`, `req.arrayBuffer()`) rather than a hand-rolled parser — Bun
-// implements all three natively. No Content-Type (or a body-less request)
-// falls through to `undefined`, matching the historical "no body parsed"
-// state that `httpStores` already turns into an empty `body` store.
+// `application/json` is the default case. The rest (multipart, url-encoded,
+// text, binary) are additive: each Content-Type is routed to the WHATWG API
+// that already understands it (`req.formData()`, `req.text()`,
+// `req.arrayBuffer()`) rather than a hand-rolled parser — Bun implements all
+// three natively. No Content-Type (or a body-less request) falls through to
+// `undefined`; `httpStores` turns that into an empty `body` store.
 
 /**
  * Convert a `FormData` (from either `multipart/form-data` or
@@ -263,9 +262,10 @@ const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
  * five names are reserved, but spread order documents the intended precedence
  * regardless).
  *
- * Optional, defaulting to an empty object, so existing callers (this
- * package's own tests, other projectors' fixtures, any consumer not yet
- * passing it) keep compiling unchanged.
+ * Optional, defaulting to an empty object: a caller that doesn't pass
+ * `serviceStores` (this package's own tests, other projectors' fixtures, a
+ * consumer with no service stores registered) gets a per-request bag with no
+ * service stores merged in.
  *
  * The `as ServiceStores` cast on that default is load-bearing, not
  * decorative: `StoreRegistry` declaration-merging is global to whatever
@@ -352,10 +352,11 @@ export function primaryStoreForMethod(method: string): string {
 // This is a RUNTIME, per-route concern — distinct from
 // `@rhi-zone/fractal-type-ir`'s `fromStandardSchema` (ingests a Standard
 // Schema's shape into a `TypeRef`, e.g. for OpenAPI/docs generation) and from
-// `@rhi-zone/fractal-api-tree/build`'s `wrapValidators` (wires AOT-COMPILED,
-// codegen-derived validators onto `Node` handlers, shared across HTTP/MCP/CLI
-// dispatch). All three read a schema; only this one calls a Standard
-// Schema's own `~standard.validate` at request time.
+// `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation` (wires
+// codegen-derived validators directly onto a `Node` or `HttpRoute` handler,
+// shared across HTTP/MCP/CLI/GraphQL dispatch). All three read a schema;
+// only this one calls a Standard Schema's own `~standard.validate` at
+// request time.
 
 export type { StandardSchemaV1 } from "@standard-schema/spec";
 

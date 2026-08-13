@@ -1,7 +1,5 @@
-// packages/http-api-projector/src/codegen.ts — @rhi-zone/fractal-http-api-projector
-//
-// Client codegen — generates a STANDALONE typed TypeScript client directly
-// from an `HttpRoute` tree + `SchemaMap`. "Standalone" is load-bearing: the
+// Client codegen — generates a standalone, typed TypeScript client directly
+// from an `HttpRoute` tree + `SchemaMap`. Standalone is load-bearing: the
 // emitted source has zero imports from any fractal package (or anywhere
 // else) — it only depends on the global WHATWG `fetch`/`Request`/`URL`
 // surface, so a consumer can drop the generated file into any TypeScript
@@ -10,13 +8,14 @@
 // proxy — see client.ts's module doc, "TODO(client): typed client via
 // codegen from source".
 //
-// Previously this module took an `OpenApiDoc` (openapi.ts) and re-derived
-// path/verb/schema facts from it — a pointless round-trip, since `HttpRoute`
-// already carries paths (children keys), methods (the `methods` record), and
-// param captures (`fallback`), and `SchemaMap` already carries input/output
-// schemas per operation. This module now walks `HttpRoute` directly, mirroring
-// `client.ts`'s `buildClientNode` recursion (children → nested client object,
-// `fallback` → `(param) => subClient`, `methods` entries → leaf operations).
+// This module walks `HttpRoute` directly rather than re-deriving path/verb/
+// schema facts from an `OpenApiDoc`: `HttpRoute` already carries paths
+// (children keys), methods (the `methods` record), and param captures
+// (`fallback`), and `SchemaMap` already carries input/output schemas per
+// operation, so building from `HttpRoute` avoids a redundant round-trip
+// through the OpenAPI representation. The walk mirrors `client.ts`'s
+// `buildClientNode` recursion (children → nested client object, `fallback`
+// → `(param) => subClient`, `methods` entries → leaf operations).
 //
 // Two entry points, same split as openapi.ts/client.ts:
 //   - `generateClient(route, schemas?, options?)` — the core: walks an
@@ -40,10 +39,10 @@
 // those fields are already supplied via the nested `(param: string) =>` call
 // chain (e.g. `client.books.bookId(id).read()`), so re-listing them on the
 // operation's own `input` argument would be redundant and, for GET/HEAD,
-// would double-count them as query params. GET/HEAD operations now DO get an
-// `Input` type + parameter when the (stripped) schema has real fields — the
-// previous version unconditionally suppressed request input for every GET,
-// which lost real query-param types (e.g. `catalog.search({ q })`).
+// would double-count them as query params. GET/HEAD operations get an
+// `Input` type and parameter whenever the stripped schema still has real
+// fields, so real query-param types (e.g. `catalog.search({ q })`) are
+// preserved rather than suppressed outright.
 //
 // See:
 //   packages/http-api-projector/src/route.ts    — HttpRoute, naiveTransform, rewriters, httpProjection's pipeline
@@ -75,14 +74,14 @@ export type CodegenOptions = {
   readonly clientName?: string;
   /**
    * Extensions composed into the generated client's fetch call, baked in at
-   * GENERATION time (unlike the runtime client's `ClientOptions.extensions`,
+   * generation time (unlike the runtime client's `ClientOptions.extensions`,
    * which composes at construction time) — each extension's `codegen.wrap`
    * contributes an expression wrapping the emitted fetch call, and its
    * `codegen.helpers` (if any) are emitted once as top-level declarations.
    * Extensions without a `codegen` hook (e.g. `interceptors()`) are skipped
    * here — they're runtime-only, see extensions/interceptors.ts. Omitting
-   * `extensions` (or passing `[]`) produces output byte-for-byte identical
-   * to the pre-extension standalone client.
+   * `extensions` (or passing `[]`) leaves the fetch call and emitted output
+   * unmodified.
    */
   readonly extensions?: readonly ClientExtension[];
 };
@@ -242,7 +241,7 @@ type OperationEntry = {
   readonly responseSchema?: JsonSchema;
   /**
    * True when this operation's output is tagged `x-stream` (see
-   * `@rhi-zone/fractal-type-ir`'s `toJsonSchema`, `stream` kind) AND a
+   * `@rhi-zone/fractal-type-ir`'s `toJsonSchema`, `stream` kind) and a
    * streaming-aware codegen extension (`extensions/streaming.ts`) is
    * included — see `unwrapStreamSchema` below. Only then does emission
    * (`nodeTypeLiteral`/`nodeRuntimeLiteral`) use `AsyncIterable<T>` and the
@@ -340,13 +339,11 @@ function attachOperation(
   const codegenName = codegenNames?.get(entry.handler) ?? nameFromPath(path, verb);
   const toolSchema = schemas?.[codegenName];
   const requestSchema = stripPathParams(toolSchema?.inputSchema, pathParamNames);
-  // Unwrap `x-stream` only when `streamingEnabled`. Without a streaming-aware
-  // extension, `__request` still runs its default JSON/text decode against
-  // what will actually be an SSE-formatted response body — unwrapping the
-  // schema without also changing the runtime call would advertise a `T`
-  // output the client can't produce. So the operation stays `Promise<Array<T>>`
-  // (schemaToType's plain `array` branch, ignorant of `x-stream`), same as
-  // before this feature existed.
+  // Unwrapping happens only when `streamingEnabled`. Without a streaming-
+  // aware extension, `__request` decodes the response body as plain JSON or
+  // text rather than SSE, so the operation's output type stays
+  // `Promise<Array<T>>` (schemaToType's plain `array` branch, ignorant of
+  // `x-stream`) to match what the client actually produces.
   const { schema: outputSchema, isStream } = streamingEnabled
     ? unwrapStreamSchema(toolSchema?.outputSchema)
     : { schema: toolSchema?.outputSchema, isStream: false };
@@ -364,7 +361,7 @@ function attachOperation(
 
 /**
  * Walk an `HttpRoute` tree into a `ClientTreeNode`. Two cases produce a
- * NAMED operation attached directly to the current node (not a further-
+ * named operation attached directly to the current node (not a further-
  * nested branch):
  *   - a `route.children[seg]` position that is a single leaf method (the
  *     common case: an authored op with no sub-tree of its own) — the
@@ -372,7 +369,7 @@ function attachOperation(
  *     the old dotted-`operationId`-flattening convention (`"books.list"` ->
  *     `books: { list: ... }`), just derived structurally instead of by
  *     splitting a string.
- *   - `route.methods` present directly on the CURRENT position (the
+ *   - `route.methods` present directly on the current position (the
  *     co-located case: multiple HTTP verbs merged onto one position by
  *     `applyMoveTo`, e.g. GET/PUT/DELETE all at `/books/{bookId}`) — no
  *     tree key distinguishes these from each other, so the member name
@@ -586,7 +583,7 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
 }
 
 // ============================================================================
-// Internal: createClient runtime factory renderer — walks the SAME tree as
+// Internal: createClient runtime factory renderer — walks the same tree as
 // nodeTypeLiteral, producing the matching object literal. `streamingCall`
 // (from `findStreamingCall`, extension.ts) is threaded through so a
 // `streaming: true` operation can emit a call into the streaming extension's
@@ -699,11 +696,12 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
   const streamingCall = findStreamingCall(options.extensions);
 
   // Per-operation result helpers (e.g. `extensions/validation.ts`'s one
-  // schema constant per operation) need the FULL operation list up front, and
-  // MUST run before `nodeRuntimeLiteral` below: an extension's `resultHelpers`
-  // and `wrapResult` hooks share a closure (e.g. validation's "which
-  // operations actually have a schema" set), and `wrapResult` is only called
-  // correctly once `resultHelpers` has already populated it.
+  // schema constant per operation) need the full operation list up front,
+  // and this call must run before `nodeRuntimeLiteral` below: an extension's
+  // `resultHelpers` and `wrapResult` hooks share a closure (e.g.
+  // validation's "which operations actually have a schema" set), and
+  // `wrapResult` is only called correctly once `resultHelpers` has already
+  // populated it.
   const operationInfos: CodegenOperationInfo[] = entries.map((entry) => ({
     codegenName: entry.codegenName,
     ...(entry.responseSchema !== undefined ? { responseSchema: entry.responseSchema } : {}),
@@ -715,8 +713,8 @@ function render(root: ClientTreeNode, options: CodegenOptions): string {
   // Extensions are baked in at generation time: each contributes an
   // expression wrapping the base fetch impl (`expr`), plus any helper
   // declarations it depends on (`helpers`, emitted once, deduplicated).
-  // With no extensions this is a no-op — `expr` is exactly `options.fetch ?? fetch`
-  // and `helpers` is empty, so output is unchanged from the pre-extension shape.
+  // With no extensions, `expr` is exactly `options.fetch ?? fetch` and
+  // `helpers` is empty.
   const { expr: fetchExpr, helpers: extensionHelpers } = composeCodegenFetch(
     "options.fetch ?? fetch",
     options.extensions,
@@ -784,10 +782,10 @@ export class ClientError extends Error {
   }
 }
 
-// A fresh \`AbortSignal.timeout(ms)\` is created PER CALL (not once at client
-// construction) — its clock starts the moment it's created, so a shared one
+// A fresh \`AbortSignal.timeout(ms)\` is created per call, not once at client
+// construction — its clock starts the moment it's created, so a shared one
 // would only ever fire on the client's first slow call. Per-call
-// \`CallOptions\` fully override (not merge with) the client-level
+// \`CallOptions\` fully overrides (not merges with) the client-level
 // \`timeout\`/\`signal\`.
 function __resolveSignal(
   baseTimeout: number | undefined,

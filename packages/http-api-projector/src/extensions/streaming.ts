@@ -9,8 +9,8 @@
 //     `StreamProgress` effect, which is sent as `event: progress\ndata:
 //     <json-without-kind>\n\n` (a `StreamChunk`'s own `kind`/wrapper is
 //     already stripped server-side too — its `data` field is sent bare, so
-//     it's indistinguishable on the wire from an untagged yielded value,
-//     BY DESIGN: see route.ts's `streamAsSse` doc)
+//     it is intentionally indistinguishable on the wire from an untagged
+//     yielded value; see route.ts's `streamAsSse` doc)
 //   - the generator's return value (distinct from what it yields) → one
 //     final `event: done\ndata: <json>\n\n` frame before the stream closes
 //
@@ -100,7 +100,7 @@ async function* parseSseFrames(
     try {
       await reader.cancel();
     } catch {
-      // Already closed/errored — cancel() on a dead reader is a no-op we don't care about.
+      // cancel() on an already-closed/errored reader is a no-op.
     }
   }
 }

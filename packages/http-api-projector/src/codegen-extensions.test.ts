@@ -1,5 +1,3 @@
-// packages/http-api-projector/src/codegen-extensions.test.ts — @rhi-zone/fractal-http-api-projector
-//
 // Integration: `CodegenOptions.extensions` baked into generated source,
 // then eval'd and driven against a real Bun server (same eval methodology
 // as codegen.test.ts's "eval end-to-end" describe block) — proves

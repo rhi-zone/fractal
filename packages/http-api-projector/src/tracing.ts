@@ -8,11 +8,11 @@
 // otel`'s `parseTraceParent`) so a request traced by `tracing()` — or any
 // other W3C-Trace-Context-aware caller — links into the same trace.
 //
-// This is the REQUEST-level span (method, URL, status code — everything
-// only visible with the raw `Request`/`Response` in hand). The OPERATION-
+// This is the request-level span (method, URL, status code — everything
+// only visible with the raw `Request`/`Response` in hand). The operation-
 // level span (one per matched leaf, named after its tree path) comes from
 // `@rhi-zone/fractal-api-tree/otel`'s `wrapTracing`, applied to the tree
-// BEFORE it's handed to `createFetch` — same protocol-neutral mechanism
+// before it's handed to `createFetch` — same protocol-neutral mechanism
 // CLI/MCP/GraphQL use, see that module's doc. Used together, a traced
 // request nests as: `tracingLayer`'s request span → `wrapTracing`'s
 // operation span → the handler itself — same nesting a "gateway + RPC

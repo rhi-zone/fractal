@@ -3,11 +3,11 @@ import { verbFromTags } from "./tags.ts";
 import type { LeafMeta } from "@rhi-zone/fractal-api-tree/node";
 import type { HttpLeafMeta } from "./project.ts";
 
-// These tests deliberately feed malformed `meta.http` shapes (wrong type
-// for `http` itself, a `verb` value that isn't a string) to verify
-// verbFromTags's runtime defensive parsing still degrades gracefully — the
-// shape is invalid ON PURPOSE, so it's built as `unknown` and cast, bypassing
-// the compile-time `HttpLeafMeta` shape (see node.ts / project.ts).
+// These tests feed malformed `meta.http` shapes (wrong type for `http`
+// itself, a `verb` value that isn't a string) to verify verbFromTags's
+// runtime defensive parsing degrades gracefully. The shape is invalid by
+// design, built as `unknown` and cast, bypassing the compile-time
+// `HttpLeafMeta` shape (see node.ts / project.ts).
 function malformed(meta: unknown): LeafMeta & HttpLeafMeta {
   return meta as LeafMeta & HttpLeafMeta;
 }
