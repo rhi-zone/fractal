@@ -282,12 +282,10 @@ describe("createGraphQLClient — document construction", () => {
   });
 
   // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
-  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
-  // `fallback: { name, subtree: Node }`). `buildClientNode(subtree, ...)`
-  // on a bare leaf used to read `subtree.children` (undefined for a leaf)
-  // and return `{}` — an empty sub-client with nothing callable. Fixed to
-  // return the leaf's OWN caller directly (no extra property-access step
-  // beyond the fallback's own name).
+  // api({...})) — the Node model allows this (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`). The fallback capture function
+  // returns the leaf's own caller directly, with no extra property-access
+  // step beyond the fallback's own name.
   it("fallback.subtree as a bare op() leaf: the capture function returns the leaf's own caller directly", async () => {
     const localTree = api_({
       books: api_(

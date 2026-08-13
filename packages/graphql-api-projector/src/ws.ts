@@ -30,7 +30,7 @@
 // One graphql-ws connection is not one request — it lives for the life of
 // the socket and can carry many concurrent subscriptions (each identified
 // by the client-chosen `id` in its `subscribe` message). `createWsHandler`
-// therefore returns a FACTORY — `(conn) => connectionHandler` — invoked
+// therefore returns a factory — `(conn) => connectionHandler` — invoked
 // once per socket; each invocation closes over its own `acknowledged` flag
 // and `subscriptions: Map<id, AsyncIterator>` so connections never share
 // state. This is why the shape isn't a single stateless handler function:
@@ -436,9 +436,9 @@ export function handleBunWebSocket<Ws extends BunServerWebSocketLike = BunServer
 }
 
 // ── Node ─────────────────────────────────────────────────────────────────
-// No `handleNodeWebSocket` ships here — deliberately, to avoid adding the
-// `ws` package (or committing to Node's still-experimental built-in
-// `WebSocket` server support) as a dependency for a few lines of glue. Wire
+// No `handleNodeWebSocket` ships here — a Node binding needs either the
+// `ws` package or Node's still-experimental built-in `WebSocket` server
+// support, and the glue is a few lines the caller can write directly. Wire
 // `createWsHandler` up with the `ws` package like this:
 //
 // ```ts

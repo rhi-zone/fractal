@@ -1,8 +1,8 @@
 // packages/graphql-api-projector/src/codegen.ts — @rhi-zone/fractal-graphql-api-projector
 //
-// Client codegen — generates a STANDALONE typed TypeScript client directly
-// from a `Node` tree + a `FieldTypeMap`/`namedTypes` registry. "Standalone"
-// is load-bearing, matching http-api-projector's own codegen.ts: the emitted
+// Client codegen — generates a standalone typed TypeScript client directly
+// from a `Node` tree + a `FieldTypeMap`/`namedTypes` registry. Standalone
+// here matches http-api-projector's own codegen.ts: the emitted
 // source has zero imports from any fractal package (or anywhere else) — a
 // consumer can drop the generated file into any TypeScript project without
 // pulling fractal in as a dependency. This is the typed replacement for
@@ -20,7 +20,7 @@
 // tree actually resolves.
 //
 // ── What differs from the runtime proxy client ──────────────────────────────
-// `createGraphQLClient` (client.ts) computes a leaf's document/args ONCE at
+// `createGraphQLClient` (client.ts) computes a leaf's document/args once at
 // proxy-build time and merges captured (fallback) values with caller-supplied
 // `input` through a runtime `slugValues` bag. Codegen has strictly more
 // information at generation time: which arg names are captured (bound by an
@@ -37,7 +37,7 @@
 // JSON-Schema round-trip (unlike HTTP's `schemaToType`), since GraphQL's own
 // `FieldTypeMap` already carries real TypeRefs. `Input` is emitted (and the
 // operation's function gains an `input` parameter) only when the leaf has at
-// least one DECLARED argument (`argsFromInput(typeInfo?.input).length > 0`);
+// least one declared argument (`argsFromInput(typeInfo?.input).length > 0`);
 // a leaf whose only arguments are fallback-captured has no `input` parameter
 // at all — those values come from the closure chain, exactly mirroring HTTP
 // codegen's path-param stripping.
@@ -269,7 +269,7 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
 }
 
 // ============================================================================
-// Internal: createClient runtime factory renderer — walks the SAME tree as
+// Internal: createClient runtime factory renderer — walks the same tree as
 // nodeTypeLiteral, producing the matching object literal.
 // ============================================================================
 

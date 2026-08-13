@@ -10,7 +10,7 @@
 //      syntactically valid (untyped) client.
 //   3. Eval (end-to-end): write the generated source to a temp file, import
 //      it as a real module, and drive its `createClient` against a real
-//      `createGraphQLServer` built from the SAME tree/types — proving the
+//      `createGraphQLServer` built from the same tree/types — proving the
 //      emitted code is not just plausible-looking text but an actually-typed,
 //      actually-working client.
 

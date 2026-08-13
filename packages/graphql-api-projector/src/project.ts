@@ -1,6 +1,6 @@
 // packages/graphql-api-projector/src/project.ts — @rhi-zone/fractal-graphql-api-projector
 //
-// GraphQL projection: walks a Node tree ONCE and produces the three root
+// GraphQL projection: walks a Node tree once and produces the three root
 // operation-type field lists (Query/Mutation/Subscription), a dispatch table
 // (field name → handler + assembly facts), and the accumulated named-type
 // registry `schema.ts` hands to type-ir's `toGraphQLTypes` for SDL emission.
@@ -9,18 +9,18 @@
 // (`tags.ts`/`route.ts`'s `naiveTransform`) — same conventions, GraphQL shape.
 //
 // ── Field shape (settled design) ────────────────────────────────────────────
-// Query is NESTED: a branch node with any query-op descendants becomes a
+// Query is nested: a branch node with any query-op descendants becomes a
 // synthesized namespace object type (e.g. `type UsersQuery { list: ... }`),
 // and the root `Query` type gets one field per top-level branch/leaf —
 // graph-shaped, matching how GraphQL schemas are conventionally organized.
-// Mutation and Subscription are FLAT: every leaf's full tree path is
+// Mutation and Subscription are flat: every leaf's full tree path is
 // camelCase-joined into a single top-level field name (e.g. `usersCreate`),
 // preserving §6.2.2 serial top-level mutation execution — GraphQL only
-// guarantees serial execution for a SELECTION SET's direct fields, which
+// guarantees serial execution for a selection set's direct fields, which
 // nesting would defeat.
 //
 // ── Operation type (settled design) ─────────────────────────────────────────
-// Derived per-leaf from the SAME `meta.tags` lattice every other projector
+// Derived per-leaf from the same `meta.tags` lattice every other projector
 // reads (see api-tree/src/tags.ts's `resolveTags`) — no ancestor inheritance,
 // matching every other projector in this codebase:
 //   tags.streaming === true → Subscription
@@ -34,9 +34,9 @@
 // an `ID!` argument (named `fallback.name`) directly on every leaf field
 // beneath it, rather than on an intermediate namespace field the way HTTP
 // turns it into a `{param}` path segment or MCP into a `{var}` URI template.
-// This is a real consequence of GraphQL's shape (arguments, not paths), not
-// an arbitrary choice — see docs/design/router-model.md for the general
-// fallback semantics this projector is honoring. The captured value's type
+// This follows from GraphQL's shape — arguments, not paths — see
+// docs/design/router-model.md for the general fallback semantics this
+// projector is honoring. The captured value's type
 // defaults to the GraphQL `ID` scalar (non-null) — the conventional type for
 // an opaque path-like identifier — since the tree carries no static type for
 // it; a `meta.graphql` override on the fallback subtree's root could refine
@@ -64,7 +64,7 @@ import { toGraphQL } from "@rhi-zone/fractal-type-ir/graphql";
  * generation, split by role (docs/design/meta-role-split-spec.md §2/§4).
  * Standard keys are typed; any other key passes through untouched (open
  * bag, not a fixed schema — matches `McpLeafMeta`/HTTP's directive bag
- * conventions). No `GraphQLSharedMeta` — every currently-WIRED key here is
+ * conventions). No `GraphQLSharedMeta` — every currently-wired key here is
  * leaf-only; `namespace` is branch-only and, per its own field doc below,
  * declared but not yet read by any walk.
  */
@@ -96,15 +96,15 @@ export type GraphQLLeafMeta = {
 };
 
 /**
- * `meta.graphql` fields valid at BRANCH position only.
+ * `meta.graphql` fields valid at branch position only.
  *
  * `namespace` — this branch's contribution to the namespace path (Query
- * only) — is DECLARED here but currently UNWIRED: the leaf-centric Query
- * walk explicitly doesn't visit branch nodes to read it (a later-phase
- * refinement, see the walk's own comment further down this file). Kept
- * typed (not deleted) because, unlike http's dead directive kinds (§9(6),
- * verified read nowhere at all), this field is a documented, evidenced gap
- * awaiting implementation, not dead code.
+ * only) — is declared here but not yet wired: the leaf-centric Query walk
+ * doesn't visit branch nodes to read it (a later-phase refinement, see the
+ * walk's own comment further down this file). It stays typed rather than
+ * deleted: unlike http's dead directive kinds (§9(6), verified read nowhere
+ * at all), this field is a documented, evidenced gap awaiting
+ * implementation.
  */
 export type GraphQLBranchMetaProperties = {
   readonly namespace?: string;
@@ -138,7 +138,7 @@ export type FieldTypeInfo = {
 /**
  * Map of field lookup-key (the underscore-joined tree path produced by
  * `underscoreJoin` below, matching mcp-api-projector's `toTools` name
- * convention so ONE extractor pass, e.g. `@rhi-zone/fractal-api-tree/tree`'s
+ * convention so one extractor pass, e.g. `@rhi-zone/fractal-api-tree/tree`'s
  * `extractToolTypeRefs`, feeds both MCP and GraphQL) → derived TypeRefs.
  */
 export type FieldTypeMap = Readonly<Record<string, FieldTypeInfo>>;
@@ -207,7 +207,7 @@ export type ProjectGraphQLResult = {
    *   - Mutation/Subscription (flat): keyed by the exact top-level SDL field
    *     name — already globally unique, and exactly what graphql-js's own
    *     flat Mutation/Subscription resolver map is keyed by.
-   *   - Query (nested): keyed by the underscore-joined tree-path (the SAME
+   *   - Query (nested): keyed by the underscore-joined tree-path (the same
    *     key `FieldTypeMap` uses) — a bare field name repeats across
    *     namespaces (`users.list` and `orders.list` both render a field named
    *     "list"), so only the qualified path is collision-free.
@@ -227,10 +227,9 @@ function capitalize(s: string): string {
 
 /**
  * camelCase join — used for flat Mutation/Subscription field names. Exported
- * so client.ts derives the exact same flat field name this walk does (a
- * second independent computation of the SAME derivation, not a different
- * source of truth — same convention as mcp-api-projector's client/server
- * name-derivation pairing).
+ * so client.ts derives the exact same flat field name this walk does,
+ * computed independently from the same source rules — same convention as
+ * mcp-api-projector's client/server name-derivation pairing.
  */
 export function camelJoin(prefix: string, seg: string): string {
   return prefix.length === 0 ? seg : `${prefix}${capitalize(seg)}`;
@@ -297,9 +296,8 @@ function formatArgs(args: readonly Arg[]): string {
  * `tags: { streaming: true }`. An explicit `meta.tags.streaming` still wins.
  *
  * Exported so client.ts derives the exact same operation type this walk
- * does — a second independent computation of the SAME derivation, not a
- * different source of truth (same reasoning as `camelJoin`/`underscoreJoin`
- * above).
+ * does, computed independently from the same source rules (same reasoning
+ * as `camelJoin`/`underscoreJoin` above).
  */
 export function deriveOperationType(
   meta: LeafMeta & GraphQLLeafMeta,
@@ -438,9 +436,9 @@ function renderNamespace(
 
 /**
  * Synthesize an `object`-kind TypeRef whose fields are pre-rendered SDL
- * strings — NOT real type-ir field TypeRefs (this projector already resolved
+ * strings, not real type-ir field TypeRefs — this projector already resolved
  * each field's args/return to SDL text via `toGraphQL`, so there's nothing
- * left for type-ir's own field-rendering to do). Encoded as `ref`-kind
+ * left for type-ir's own field-rendering to do. Encoded as `ref`-kind
  * TypeRefs targeting a per-field placeholder name that `schema.ts` expands
  * directly from the `GraphQLField` list instead of through type-ir's object
  * renderer — see `schema.ts`'s `renderNamespaceType`, which reads
@@ -480,14 +478,14 @@ function walkLeaves(
   if (n.fallback !== undefined) {
     const captured = [...capturedArgs, { name: n.fallback.name, typeSDL: "ID!" }];
 
-    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
-    // not just a branch (`api({...})`) — recursing into it as a branch here
-    // (`Object.entries(subtree.children ?? {})`) would silently see no
-    // children and drop it entirely. Mirror the ordinary-leaf push above:
-    // when the subtree itself is a leaf, push it directly at the CURRENT
-    // `path` with `key = fallback.name` — no extra path segment beyond the
-    // fallback's own name (same convention api-tree/tree.ts's `walkNodeType`
-    // fix, aa28952, and the other projectors' identical fix use).
+    // `fallback.subtree` may be a bare leaf (`op()`) instead of a branch
+    // (`api({...})`); recursing into it as a branch here
+    // (`Object.entries(subtree.children ?? {})`) would see no children and
+    // drop it entirely. This mirrors the ordinary-leaf push above: when the
+    // subtree itself is a leaf, push it directly at the current `path` with
+    // `key = fallback.name` — no extra path segment beyond the fallback's
+    // own name, the same convention api-tree/tree.ts's `walkNodeType` and
+    // the other projectors' equivalent handling use.
     if (isLeaf(n.fallback.subtree)) {
       out.push({ path, key: n.fallback.name, node: n.fallback.subtree, capturedArgs: captured });
     } else {
@@ -524,16 +522,16 @@ export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): Proje
     if (operationType === "query") {
       // Namespace path: meta.graphql.namespace overrides a branch segment
       // the same way meta.mcp.segment/meta.http override theirs — but that
-      // override lives on the BRANCH node, which this leaf-centric walk
+      // override lives on the branch node, which this leaf-centric walk
       // doesn't visit directly, so only the plain tree-key path is used here
       // (branch-level `meta.graphql.namespace` is a later-phase refinement).
       const ns = namespaceAt(queryRoot, leaf.path);
       const fieldName = typeof gql.name === "string" ? gql.name : leaf.key;
       const field = buildField(fieldName, leaf.node, leaf.capturedArgs, typeInfo);
       ns.fields.set(fieldName, field);
-      // Dispatch key: the QUALIFIED tree-path key (same convention as
-      // `FieldTypeMap`'s lookup key), NOT the bare `fieldName` — a nested
-      // Query field name is only unique WITHIN its own synthesized namespace
+      // Dispatch key: the qualified tree-path key (same convention as
+      // `FieldTypeMap`'s lookup key), not the bare `fieldName` — a nested
+      // Query field name is only unique within its own synthesized namespace
       // type (e.g. `users.list` and `orders.list` both render a field named
       // "list", in different namespace types); a flat `fieldName` key would
       // silently collide. A later schema-wiring phase that builds the

@@ -3,10 +3,10 @@
 // Performance benchmarks for the GraphQL projector's execution hot path.
 // Mirrors http-api-projector's route.bench.ts in spirit (hand-rolled timer,
 // no test-framework bench runner — see note below) but the shape is
-// different: route.bench.ts COMPARES several route-matching architectures
+// different: route.bench.ts compares several route-matching architectures
 // against the same route tree, whereas this projector has exactly one
 // implementation of each stage, so this file measures that one
-// implementation across several DIMENSIONS instead:
+// implementation across several dimensions instead:
 //
 //   1. Schema build time      — createGraphQLServer over trees of 10/50/200 leaves
 //   2. SDL generation         — toSDL (projectGraphQL + toSchema) alone, same tree sizes
@@ -18,14 +18,11 @@
 //
 // Run: bun run packages/graphql-api-projector/src/resolve.bench.ts
 //
-// NOTE on tooling: the task that produced this file asked for `vitest bench`,
-// matching route.bench.ts's assumed style. Checked first: this monorepo has
-// no `vitest` devDependency anywhere (grepped every package.json + bun.lock)
-// and `npx vitest` isn't resolvable in this environment. route.bench.ts
-// itself doesn't use vitest either — it's a hand-rolled `performance.now()`
-// timer executed directly via `bun run` (see its own header comment: "no
-// Bun.bench... a small hand-rolled timer instead"). This file follows that
-// same actually-established convention rather than the assumed one.
+// Tooling note: this file uses a hand-rolled `performance.now()` timer run
+// directly via `bun run`, not `vitest bench` — this monorepo has no `vitest`
+// devDependency, and route.bench.ts establishes the same hand-rolled-timer
+// convention (see its own header comment: "no Bun.bench... a small
+// hand-rolled timer instead").
 
 import { api, op } from "@rhi-zone/fractal-api-tree/node";
 import type { Handler, Node } from "@rhi-zone/fractal-api-tree/node";
@@ -246,7 +243,7 @@ async function benchMutationExecution(server: GraphQLServer): Promise<void> {
 // ============================================================================
 // 5. Subscription setup — server.subscribe latency (parse + validate +
 // subscribe field's own `subscribe` resolver returning the async iterable,
-// WITHOUT draining any events off it — that's the one-time setup cost a
+// without draining any events off it — that's the one-time setup cost a
 // transport pays per new subscription connection).
 // ============================================================================
 

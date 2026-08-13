@@ -1,4 +1,7 @@
 // packages/graphql-api-projector/src/index.ts — @rhi-zone/fractal-graphql-api-projector
+// Public API surface: re-exports the tree projector, resolver, server, HTTP
+// preset, WebSocket handler, runtime client, codegen, and `source`/`graphql`
+// helper entry points.
 export type {
   Arg,
   Dispatch,

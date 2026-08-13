@@ -29,26 +29,26 @@
 //   - a leaf          → an async callable `(input?) => Promise<unknown>`
 //
 // ── Document construction (per leaf, computed once at proxy-build time) ─────
-// A leaf's query/mutation/subscription document has no runtime-dependent
-// STRUCTURE (only argument VALUES vary per call — see project.ts's own
-// design: a fallback contributes a statically-named `ID!` argument, not a
-// path segment with a runtime-dependent shape), so each leaf's document
-// string, argument list, and root-value unwrap path are all precomputed once
-// when the proxy is built — mirroring HTTP client's per-route precomputed
+// A leaf's query/mutation/subscription document has a fixed structure —
+// only argument values vary per call (see project.ts's own design: a
+// fallback contributes a statically-named `ID!` argument, not a path
+// segment with a runtime-dependent shape) — so each leaf's document string,
+// argument list, and root-value unwrap path are all precomputed once when
+// the proxy is built, mirroring HTTP client's per-route precomputed
 // verb+path and MCP client's per-tool precomputed name.
 //
 // Two things vary by operation type, matching project.ts's own field-shape
 // design (see that module's doc):
-//   - Mutation/Subscription (FLAT): the leaf's field is a single top-level
+//   - Mutation/Subscription (flat): the leaf's field is a single top-level
 //     field named by `camelJoin`-ing the full tree path; the document has no
 //     nesting beyond that one field.
-//   - Query (NESTED): the leaf's field lives inside a chain of namespace
-//     object fields, one per ancestor tree-path segment (INCLUDING any
-//     fallback-name segment — see project.ts's fallback module doc: a
+//   - Query (nested): the leaf's field lives inside a chain of namespace
+//     object fields, one per ancestor tree-path segment, including any
+//     fallback-name segment (see project.ts's fallback module doc). A
 //     fallback under a query leaf becomes both an outer namespace segment
-//     AND an `ID!` arg on the leaf field itself, a deliberate consequence of
-//     GraphQL having no path-segment construct, not something this client
-//     should second-guess).
+//     and an `ID!` arg on the leaf field itself — GraphQL has no
+//     path-segment construct, so the fallback's value has to reach the
+//     field through both channels.
 //
 // ── Selection set ────────────────────────────────────────────────────────
 // Derived from the leaf's declared output `TypeRef` (`opts.types[key].output`,
@@ -284,9 +284,9 @@ function makeFieldCaller(
   return async (input?: unknown): Promise<unknown> => {
     // Fallback-captured slug values seed the variable bag; caller-supplied
     // input fields win on name collision — same convention as MCP client's
-    // makeToolCaller merge (no server-side slug binding to lean on here
-    // either: a GraphQL field's args ARE its whole input, no path to bind
-    // against).
+    // makeToolCaller merge. A GraphQL field's args are its whole input (no
+    // separate path segment to bind slug values against), so this merge is
+    // the only place a fallback value reaches the request.
     const merged: Record<string, unknown> = {
       ...slugValues,
       ...((input ?? {}) as Record<string, unknown>),
@@ -375,15 +375,13 @@ function buildClientNode(
   if (node.fallback !== undefined) {
     const { name, subtree } = node.fallback;
 
-    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
-    // not just a branch (`api({...})`) — see api-tree/node.ts's doc and
-    // project.ts's identical fix to `walkLeaves` (mirrors api-tree/tree.ts's
-    // `walkNodeType` fix, aa28952). `buildClientNode(subtree, ...)` on a
-    // bare leaf would read `subtree.children` (undefined for a leaf) and
-    // return `{}` — an empty sub-client with nothing callable. When the
-    // subtree IS the leaf, the fallback function returns the leaf's OWN
-    // caller directly (no extra property-access step beyond the fallback's
-    // own name) instead of a one-off nested client object.
+    // `fallback.subtree` may be a bare leaf (`op()`) instead of a branch
+    // (`api({...})`) — see api-tree/node.ts's doc and project.ts's matching
+    // handling in `walkLeaves`. `buildClientNode(subtree, ...)` reads
+    // `subtree.children`, which is undefined for a leaf, so a bare-leaf
+    // subtree is handled separately here: the fallback function returns the
+    // leaf's own caller directly (no extra property-access step beyond the
+    // fallback's own name) instead of building a nested client object.
     out[name] = isLeaf(subtree)
       ? (value: string): ((input?: unknown) => Promise<unknown>) =>
           buildLeaf(
@@ -426,10 +424,10 @@ function buildClientNode(
  *                        document through `transport`
  *
  * Field-name/operation-type/argument derivation reuses the exact same logic
- * `projectGraphQL` (project.ts) uses to build the server side — a second,
- * independent computation of the SAME derivation, not a different source of
- * truth — so a client built from the same tree a `createGraphQLServer` was
- * built from always addresses the right field.
+ * `projectGraphQL` (project.ts) uses to build the server side, computed
+ * independently from the same source rules — so a client built from the
+ * same tree a `createGraphQLServer` was built from always addresses the
+ * right field.
  *
  * `opts.types`/`opts.namedTypes` should be the same `FieldTypeMap`/named-type
  * registry passed to `createGraphQLServer` — they drive argument GraphQL

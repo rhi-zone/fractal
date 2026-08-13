@@ -30,20 +30,20 @@ import type {
 import type { Dispatch } from "./project.ts";
 
 /**
- * GraphQL's own store-name fragment: an INERT, plain interface naming the one
- * store this projector builds and the shape it carries. Deliberately NOT a
- * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * GraphQL's own store-name fragment: an inert, plain interface naming the one
+ * store this projector builds and the shape it carries. It does not augment
+ * api-tree's `StoreRegistry` via `declare module` — per
  * docs/design/typed-store-spec.md §3, a projector that augments core makes the
  * type surface depend on which packages are in the compilation rather than on
- * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * what the deployment composes. A deployment composes this in, once, in its own
  * augmentation file (`interface StoreRegistry extends GraphQLStores {}`); see
  * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
  *
- * The member is OPTIONAL — a per-request store this projector builds when it
- * dispatches. The name deliberately MATCHES MCP's `argument` (see this module's
+ * The member is optional — a per-request store this projector builds when it
+ * dispatches. The name matches MCP's `argument` (see this module's
  * doc): the two fragments declare the same member with the same shape, so a
- * deployment composing both merges them without conflict. `caller` is NOT
- * declared here: core declares it once (api-tree's `CoreStores`).
+ * deployment composing both merges them without conflict. `caller` is
+ * declared once by core (api-tree's `CoreStores`), not here.
  */
 export interface GraphQLStores {
   /** A field's resolver `args` — already the flat named-value bag `assemble()` expects. */
@@ -124,7 +124,7 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
 
 /**
  * Assemble a field's handler input bag from its resolver `args` object via
- * the shared `assemble()` pipeline. `args` already IS the "argument" store's
+ * the shared `assemble()` pipeline. `args` already is the "argument" store's
  * raw values (see module doc) — `paramNames` is `entry.inputNames`, computed
  * once by `projectGraphQL` (captured-fallback names + declared-arg names, in
  * that order — see project.ts's `buildDispatch`).
@@ -143,7 +143,7 @@ function assembleGraphQLInput(
 // F = (input, stores) => result (see docs/design/middleware-and-caller-
 // context.md). Mirrors HTTP's HttpHandlerMiddleware and MCP's McpMiddleware —
 // same shape, GraphQL's own name for it. Composes like an onion: the first
-// entry in `ResolverOptions.middleware` is the OUTERMOST wrapper.
+// entry in `ResolverOptions.middleware` is the outermost wrapper.
 // ============================================================================
 
 /** A GraphQL resolver-scoped middleware — wraps the handler-invoking function `next`. */
@@ -212,7 +212,7 @@ export type SubscriptionFieldConfig = {
  * Run one field's assembled input through its handler, Result-unwrapping the
  * outcome. Shared by the query/mutation resolver and each value the
  * subscription's `subscribe` async-generator drains from the handler's own
- * `AsyncIterable` (a streaming handler's individual yields are NOT
+ * `AsyncIterable` (a streaming handler's individual yields are not
  * Result-wrapped in this codebase's convention — only the handler's own
  * direct return value is — so this only applies to the non-streaming call
  * shape).
@@ -294,7 +294,7 @@ async function* drainSubscription(iterable: AsyncIterable<unknown>): AsyncGenera
  * `Dispatch` entry. `subscribe` calls the handler (expected to return an
  * `AsyncIterable`, per `tags.streaming === true`'s contract — see
  * project.ts's module doc) and drains it via `drainSubscription`; `resolve`
- * is the identity function, since each drained value already IS the field's
+ * is the identity function, since each drained value already is the field's
  * final resolved value (no further Result-unwrapping per-event — see
  * `drainSubscription`'s doc).
  */

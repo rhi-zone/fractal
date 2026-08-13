@@ -68,7 +68,7 @@ function renderTypeEntry(name: string, ref: TypeRef): string {
  * requires the `Query` type to declare at least one field — an empty tree
  * (no query-tagged leaves) still needs a syntactically valid placeholder, so
  * `emptyPlaceholder` is emitted in that case. `Mutation`/`Subscription` are
- * OPTIONAL root types — an empty `fields` array means "omit the type/root
+ * optional root types — an empty `fields` array means "omit the type/root
  * operation entirely," signaled by returning `undefined`.
  */
 function renderRootType(

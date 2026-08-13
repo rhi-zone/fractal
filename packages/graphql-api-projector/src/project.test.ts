@@ -225,9 +225,8 @@ describe("fallback → named GraphQL argument", () => {
   // Guards the bare-leaf `fallback.subtree` case: the Node model allows
   // `fallback: { name, subtree: Node }` where `subtree` is itself a leaf
   // (`op()`), not wrapped in `api({...})`. Walking it as if it were always a
-  // branch (`Object.entries(subtree.children ?? {})`) would silently see no
-  // children and omit the leaf entirely — the same gap api-tree/tree.ts's
-  // `walkNodeType` had for extraction, fixed in aa28952.
+  // branch (`Object.entries(subtree.children ?? {})`) would see no children
+  // and omit the leaf entirely.
   it("a bare op() fallback.subtree becomes a query field nested under the branch namespace, no extra segment beyond the fallback's own name", () => {
     const n = api_({
       books: api_(

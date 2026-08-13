@@ -21,7 +21,7 @@
 //   - Mutation/Subscription (flat): `Dispatch` is keyed by the exact
 //     top-level SDL field name (see project.ts's `ProjectGraphQLResult.handlers`
 //     doc) — a direct `schema.getMutationType()!.getFields()[key]` lookup.
-//   - Query (nested): `Dispatch` is keyed by the underscore-joined TREE PATH,
+//   - Query (nested): `Dispatch` is keyed by the underscore-joined tree path,
 //     not the rendered field name (same doc) — this module reconstructs the
 //     namespace path (literal tree-key segments; branch-level
 //     `meta.graphql.namespace` overrides aren't visited by project.ts's
@@ -31,15 +31,15 @@
 //     `meta`, then walks down through the synthesized namespace
 //     `GraphQLObjectType`s (named `${PascalJoin(path)}Query`, matching
 //     project.ts's `renderNamespace`) to the target field. Every ancestor
-//     namespace-POINTER field (e.g. `Query.users` pointing at `UsersQuery`)
-//     gets a trivial passthrough resolver (`() => ({})`) — needed because the
-//     synthesized namespace return type is non-null, and graphql-js's default
-//     field resolver (`parentValue[fieldName]`) would otherwise read
-//     `undefined` off whatever placeholder value an ancestor field returned,
-//     producing a "Cannot return null for non-nullable field" execution
-//     error. Each LEAF field's own resolver never reads its `parent`
-//     argument (see resolve.ts's `createFieldResolver`), so the passthrough's
-//     actual return value is immaterial — it only needs to be non-null.
+//     namespace-pointer field (e.g. `Query.users` pointing at `UsersQuery`)
+//     gets a trivial passthrough resolver (`() => ({})`), because the
+//     synthesized namespace return type is non-null and graphql-js's default
+//     field resolver (`parentValue[fieldName]`) reads `undefined` off
+//     whatever placeholder value an ancestor field returned, producing a
+//     "Cannot return null for non-nullable field" execution error. Each leaf
+//     field's own resolver never reads its `parent` argument (see
+//     resolve.ts's `createFieldResolver`), so the passthrough's actual
+//     return value is immaterial — it only needs to be non-null.
 //
 // A dispatch entry with no matching schema field (shouldn't happen — the SDL
 // and the dispatch map are two views of the same `projectGraphQL` walk, see
@@ -54,7 +54,7 @@
 // wrapping needs no `stores` (unlike middleware), so it's simpler to apply as
 // a plain `Handler => Handler` transform here, mirroring MCP's
 // `withAls`/`toBase` split (mcp-api-projector/src/server.ts). ALS is the
-// INNERMOST wrapper — closer to the handler than `middleware` — same
+// innermost wrapper — closer to the handler than `middleware` — same
 // convention as every other projector (see
 // docs/design/middleware-and-caller-context.md).
 
@@ -118,13 +118,13 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * Additional `Node => Node` passes, applied in array order, to `tree`
    * BEFORE `projectGraphQL` runs — GraphQL's counterpart to HTTP's
    * `PresetOptions.rewriters` (`packages/http-api-projector/src/preset.ts`).
-   * This is also where generated VALIDATION wires in, via
+   * This is also where generated validation wires in, via
    * `applyValidation(key, tree, "graphql")`
    * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
-   * `validators` option (removed, phase 3): `applyValidation`'s call site
-   * must live in the CONSUMER's own entry file for codegen to anchor on it
-   * (see that module's doc comment), so `createGraphQLServer` itself can
-   * never own the call.
+   * `validators` option: `applyValidation`'s call site lives in the
+   * consumer's own entry file so codegen can anchor on it (see that
+   * module's doc comment), so `createGraphQLServer` itself never owns the
+   * call.
    *
    * ```ts
    * import { applyValidation } from "./generated/apply-validation.ts"
@@ -140,13 +140,12 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * coercion (the only thing JSON has no literal for) — no coercion of
    * stringified numbers/booleans. A stringified number like `"42"` for a
    * numeric field is a structured `ValidationError`, not silently accepted.
-   * This is now the ONLY validation path: there is no manual coercion
-   * fallback — decode and validation run unconditionally on every leaf
-   * `applyValidation` wraps. The 2-argument form (`applyValidation("books",
-   * t)`, omitting the protocol) is still supported and still fully
-   * functional — it's kept for an unrelated structural-sharing/defs
-   * capability the wire path doesn't yet support — but it doesn't get
-   * per-protocol wire semantics; prefer the 3-argument form for new code.
+   * This is the only validation path: there is no manual coercion fallback —
+   * decode and validation run unconditionally on every leaf `applyValidation`
+   * wraps. The 2-argument form (`applyValidation("books", t)`, omitting the
+   * protocol) is also supported, kept for an unrelated structural-sharing/
+   * defs capability the wire path doesn't yet support; it doesn't get
+   * per-protocol wire semantics, so prefer the 3-argument form for new code.
    *
    * Unlike HTTP's `HttpRoute` projection, GraphQL dispatches off the SAME
    * `Node` shape it's given — there is no separate "projected" shape for
@@ -169,7 +168,7 @@ export type CreateGraphQLServerOptions<T = unknown> = {
    * `AsyncLocalStorage` context. `init` computes the per-invocation context
    * value from GraphQL-specific dispatch context (`GraphQLAlsContext`).
    * Mirrors HTTP's `PresetOptions.als` and MCP's `CreateMcpServerOptions.als`.
-   * ALS is the INNERMOST wrapper — see module doc. Absent by default (no ALS
+   * ALS is the innermost wrapper — see module doc. Absent by default (no ALS
    * wrapping).
    */
   readonly als?: AlsConfig<GraphQLAlsContext, T>;
@@ -264,7 +263,7 @@ export function createGraphQLServer<T = unknown>(
   tree: Node,
   opts: CreateGraphQLServerOptions<T> = {},
 ): GraphQLServer {
-  // Apply any consumer-supplied Node => Node rewriters BEFORE any projection
+  // Apply any consumer-supplied Node => Node rewriters before any projection
   // walk — see CreateGraphQLServerOptions.rewriters. This is where generated
   // validation wires in (`applyValidation`), same integration point HTTP's
   // `PresetOptions.rewriters` provides.

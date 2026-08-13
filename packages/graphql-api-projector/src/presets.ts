@@ -26,7 +26,7 @@
 // adapters are transport-agnostic over any fetch-compatible handler, not
 // HTTP-projector-specific, so they work here with no new dependency).
 //
-// Subscriptions are NOT served by this preset — GraphQL-over-HTTP has no
+// Subscriptions aren't served by this preset — GraphQL-over-HTTP has no
 // standard subscription transport (the spec above is silent on it; the
 // de facto standard is `graphql-ws` over WebSocket). `createGraphQLServer`'s
 // `.subscribe()` already produces the `AsyncIterable<ExecutionResult>` a
