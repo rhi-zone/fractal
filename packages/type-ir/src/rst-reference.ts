@@ -467,7 +467,7 @@ function renderPage(name: string, ref: TypeRef): string {
  * `sphinx-reference.ts` for the Sphinx-flavored sibling target this file
  * deliberately does not import from or extend.
  */
-export function toDocutilsReference(
+export function toRstReference(
   doc: TypeRefDocument,
   options?: { basePath?: string },
 ): Map<string, string> {

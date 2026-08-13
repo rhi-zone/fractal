@@ -459,12 +459,12 @@ standalone helpers, same convention as the MkDocs projector.
 
 ```ts
 import {
-  toDocutilsReference,
+  toRstReference,
   renderTypeExpr,
   kebabCase,
-} from "@rhi-zone/fractal-type-ir/docutils-reference";
+} from "@rhi-zone/fractal-type-ir/rst-reference";
 
-const pages = toDocutilsReference({
+const pages = toRstReference({
   root: t(types.ref("User")),
   defs: { User: t(types.object({ id: t(types.integer) })) },
 });

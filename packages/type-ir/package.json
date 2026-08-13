@@ -139,9 +139,9 @@
       "types": "./dist/org-mode-reference.d.ts",
       "import": "./dist/org-mode-reference.js"
     },
-    "./docutils-reference": {
-      "types": "./dist/docutils-reference.d.ts",
-      "import": "./dist/docutils-reference.js"
+    "./rst-reference": {
+      "types": "./dist/rst-reference.d.ts",
+      "import": "./dist/rst-reference.js"
     },
     "./markdown-reference": {
       "types": "./dist/markdown-reference.d.ts",

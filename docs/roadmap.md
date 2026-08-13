@@ -876,7 +876,7 @@ the new `./markdown-reference` export, same shape as every sibling
 target's entry.
 
 **Docutils (plain reStructuredText) target, added (2026-08-13)**:
-`docutils-reference.ts` (`toDocutilsReference`) — confirmed today that
+`rst-reference.ts` (`toRstReference`) — confirmed today that
 `sphinx-reference.ts`'s own header comment already calls out `:ref:`,
 `.. code-block::`, and `.. deprecated::` as genuine Sphinx extensions, not
 core docutils/RST — the exact same vanilla-vs-flavored split already
@@ -909,12 +909,12 @@ syntax breakdown; summary of what changes relative to `sphinx-reference.ts`:
 Status against the same bars the other retrofitted targets clear:
 
 - **(A) Structural smoke test** — clears via `registry.test.ts`'s generic
-  loop plus `docutils-reference.test.ts`'s own RST-specific structural
+  loop plus `rst-reference.test.ts`'s own RST-specific structural
   assertions (the same title-underline/list-table checks
   `sphinx-reference.test.ts` runs, plus assertions that none of Sphinx's
   `:ref:`/`.. _label:`/`.. code-block::`/`.. deprecated::` syntax leaks in
   anywhere across its whole fixture's output).
-- **(B) Dedicated fixture + reviewed output** — `docutils-reference.test.ts`
+- **(B) Dedicated fixture + reviewed output** — `rst-reference.test.ts`
   has its own conference-CFP-flavored fixture (`Talk`/`Speaker`/`Track`/
   `ReviewEvent`/`ProgramCommittee`, distinct from every other target's
   fixture) exercising a nested object, an enum with a deprecation reason,
@@ -958,14 +958,14 @@ could not have caught either of these; only feeding the output to a real
    because it's exactly the kind of thing bar A's structural checks can't
    surface and only a real-tool bar-D pass does.
 
-Both findings are reflected in the committed `docutils-reference.ts` and
+Both findings are reflected in the committed `rst-reference.ts` and
 `flake.nix`, re-verified against a fresh `rst2html --report=2` run after
 each fix. The scratch directory used for the visual check (the dedicated
 fixture's five generated `.rst`/`.html` pages) was not committed, per the
 same not-persisted precedent `sphinx-reference.ts`'s own bar-D note set.
 
-Registered in `registry.ts` (`docutils-reference`) and given its own
-`packages/type-ir/` subpath export (`./docutils-reference`), same
+Registered in `registry.ts` (`rst-reference`) and given its own
+`packages/type-ir/` subpath export (`./rst-reference`), same
 convention as every other target.
 
 **Naming judgment call, flagged rather than assumed:** every doc-projector
@@ -984,6 +984,17 @@ reference.ts` is a counterpart to `mkdocs-reference.ts`). This is a
 grounded convention match, not a guess, but it's still a call the project
 owner should confirm or correct before it becomes precedent for whatever
 target ships next.
+
+**Resolved (2026-08-13): renamed to `rst-reference.ts` / `toRstReference`.**
+The project owner corrected the call above — `markdown-reference.ts` (the
+plain Markdown target introduced alongside this one, see below) is itself
+format-named, not tool-named, so the tool-name convention this paragraph
+described was never actually uniform across the whole doc-projector family.
+File and export renamed to match the format-naming sibling; every
+`docutils-reference`/`toDocutilsReference` mention elsewhere in this
+document and in `docs/reference/type-ir/doc-projectors.md` was updated to
+`rst-reference`/`toRstReference` accordingly. The tool identity itself
+(core docutils, not Sphinx) is unchanged — only the file/export name moved.
 
 **Org mode target, added (2026-08-13)**: `org-mode-reference.ts`
 (`toOrgModeReference`) — a genuinely new target with zero prior presence
@@ -1214,7 +1225,7 @@ numbering.
     here given the project's very early release stage), and its true
     standing will likely rise further once Material for MkDocs sunsets
     in November 2026.
-11. **docutils** (Python — **built**, `docutils-reference.ts` as of
+11. **docutils** (Python — **built**, `rst-reference.ts` as of
     2026-08-13; not one of the original 10 targets this research pass
     covered — see the "Docutils (plain reStructuredText) target, added"
     note above — appended here past the original 1-10 numbering rather

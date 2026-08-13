@@ -152,7 +152,7 @@ import { toMkdocsReference } from "./mkdocs-reference.ts";
 import { toMkdocsVanillaReference } from "./mkdocs-vanilla-reference.ts";
 import { toSphinxReference } from "./sphinx-reference.ts";
 import { toOrgModeReference } from "./org-mode-reference.ts";
-import { toDocutilsReference } from "./docutils-reference.ts";
+import { toRstReference } from "./rst-reference.ts";
 import { toMarkdownReference } from "./markdown-reference.ts";
 
 /** Name given to the root type when a document has no named definitions and
@@ -776,7 +776,7 @@ const projectorList: readonly Projector[] = [
   ),
   files("sphinx-reference", "./sphinx-reference", (doc) => toSphinxReference(doc)),
   files("org-mode-reference", "./org-mode-reference", (doc) => toOrgModeReference(doc)),
-  files("docutils-reference", "./docutils-reference", (doc) => toDocutilsReference(doc)),
+  files("rst-reference", "./rst-reference", (doc) => toRstReference(doc)),
   files("markdown-reference", "./markdown-reference", (doc) => toMarkdownReference(doc)),
 ];
 

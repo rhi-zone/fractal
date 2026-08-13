@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { t, types, typeRefDocument } from "./index.ts";
-import { kebabCase, renderTypeExpr, toDocutilsReference } from "./docutils-reference.ts";
+import { kebabCase, renderTypeExpr, toRstReference } from "./rst-reference.ts";
 
 // ============================================================================
 // Dedicated fixture — a small conference-talk-CFP-shaped API surface,
@@ -90,7 +90,7 @@ const doc = typeRefDocument(t(types.ref("Talk")), {
   ProgramCommittee: programCommittee,
 });
 
-const pages = toDocutilsReference(doc);
+const pages = toRstReference(doc);
 
 // ============================================================================
 // Bar A (structural smoke test, RST-specific) — same checks
@@ -126,7 +126,7 @@ function listTablesWellFormed(rst: string): boolean {
   return true;
 }
 
-describe("docutils-reference structural validity (bar A, RST-specific)", () => {
+describe("rst-reference structural validity (bar A, RST-specific)", () => {
   for (const [filename, content] of pages) {
     it(`${filename} has matching heading underline lengths`, () => {
       expect(headingUnderlinesMatch(content)).toBe(true);
@@ -177,7 +177,7 @@ describe("docutils-reference structural validity (bar A, RST-specific)", () => {
 // sphinx-reference.test.ts and mkdocs-vanilla-reference.test.ts.
 // ============================================================================
 
-describe("docutils-reference — object def (Talk)", () => {
+describe("rst-reference — object def (Talk)", () => {
   const rst = pages.get("talk.rst")!;
 
   it("opens with the page title and no cross-link label (core docutils has no per-file label graph)", () => {
@@ -219,14 +219,14 @@ describe("docutils-reference — object def (Talk)", () => {
   });
 });
 
-describe("docutils-reference — deprecated leaf field still renders its own value type correctly", () => {
+describe("rst-reference — deprecated leaf field still renders its own value type correctly", () => {
   it("legacyVoteCount still renders as integer despite being deprecated", () => {
     const rst = pages.get("talk.rst")!;
     expect(rst).toContain("   * - legacyVoteCount\n     - integer\n     - Yes");
   });
 });
 
-describe("docutils-reference — enum def (Track) with a def-level deprecation", () => {
+describe("rst-reference — enum def (Track) with a def-level deprecation", () => {
   const rst = pages.get("track.rst")!;
 
   it("has no per-file cross-link label", () => {
@@ -248,7 +248,7 @@ describe("docutils-reference — enum def (Track) with a def-level deprecation",
   });
 });
 
-describe("docutils-reference — union def (ReviewEvent)", () => {
+describe("rst-reference — union def (ReviewEvent)", () => {
   const rst = pages.get("review-event.rst")!;
 
   it("names the discriminator", () => {
@@ -265,7 +265,7 @@ describe("docutils-reference — union def (ReviewEvent)", () => {
   });
 });
 
-describe("docutils-reference — interface def (ProgramCommittee)", () => {
+describe("rst-reference — interface def (ProgramCommittee)", () => {
   const rst = pages.get("program-committee.rst")!;
 
   it("renders a Methods list-table instead of a Fields table", () => {
@@ -279,7 +279,7 @@ describe("docutils-reference — interface def (ProgramCommittee)", () => {
   });
 });
 
-describe("docutils-reference — cross-page link/filename agreement", () => {
+describe("rst-reference — cross-page link/filename agreement", () => {
   it("every hyperlink reference target used anywhere matches a real emitted filename", () => {
     const emittedFilenames = new Set(pages.keys());
     const linkTargets = new Set<string>();
@@ -294,9 +294,9 @@ describe("docutils-reference — cross-page link/filename agreement", () => {
   });
 });
 
-describe("docutils-reference — options.basePath", () => {
+describe("rst-reference — options.basePath", () => {
   it("prefixes every returned filename", () => {
-    const prefixed = toDocutilsReference(doc, { basePath: "reference/" });
+    const prefixed = toRstReference(doc, { basePath: "reference/" });
     expect([...prefixed.keys()].every((k) => k.startsWith("reference/"))).toBe(true);
     expect(prefixed.has("reference/talk.rst")).toBe(true);
   });
@@ -307,8 +307,8 @@ describe("docutils-reference — options.basePath", () => {
 // their own page layout, same convention every other doc projector follows.
 // ============================================================================
 
-describe("docutils-reference — exported helpers", () => {
-  it("kebabCase matches the filenames toDocutilsReference actually produces", () => {
+describe("rst-reference — exported helpers", () => {
+  it("kebabCase matches the filenames toRstReference actually produces", () => {
     expect(kebabCase("ReviewEvent")).toBe("review-event");
     expect(pages.has(`${kebabCase("ReviewEvent")}.rst`)).toBe(true);
   });
