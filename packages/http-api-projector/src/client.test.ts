@@ -221,14 +221,14 @@ describe("createClientFromRoute", () => {
       fetch: createFetch(api),
     });
 
-    // Non-null assertions below: `route` is statically the plain, erased
-    // `HttpRoute` (httpProjection's own declared return type includes
+    // Non-null assertions below: `route`'s static type is the plain, erased
+    // `HttpRoute` (httpProjection's declared return type includes
     // `applyMoveTo`, which is deliberately non-generic — see client.ts's
     // `AnyClient`/`RouteClient` doc), so `createClientFromRoute` returns the
-    // sound-but-unnamed `AnyClient` here, whose index signature (like every
-    // other index signature in this codebase, under `noUncheckedIndexedAccess`)
-    // types each key as possibly absent — same convention as `route.methods![...]!`
-    // elsewhere in this package.
+    // sound-but-unnamed `AnyClient` here. Its index signature, like every
+    // other index signature in this codebase under `noUncheckedIndexedAccess`,
+    // types each key as possibly absent — same convention as
+    // `route.methods![...]!` elsewhere in this package.
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     await client.books!.add!({ title: "Route Test", author: "Someone", genre: "Test" });
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
