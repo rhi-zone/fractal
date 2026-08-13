@@ -24,6 +24,12 @@ jobs:
       - name: Install dependencies
         run: nix develop --command bun install
 
+      - name: Format check
+        run: nix develop --command bun run format:check
+
+      - name: Lint
+        run: nix develop --command bun run lint
+
       - name: Typecheck
         run: nix develop --command bun run typecheck
 

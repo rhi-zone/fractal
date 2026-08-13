@@ -24,11 +24,16 @@
     "test": "tooling/check-workspace.sh && bun run --filter '*' test",
     "build:packages": "tooling/check-workspace.sh && tsc -b tsconfig.build.json",
     "comments:check": "bun tooling/comment-approval/cli.ts check",
-    "comments:approve": "bun tooling/comment-approval/cli.ts approve"
+    "comments:approve": "bun tooling/comment-approval/cli.ts approve",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint ."
   },
   "devDependencies": {
     "@typescript/native-preview": "latest",
     "bun-types": "^1.3.14",
+    "oxfmt": "^0.63.0",
+    "oxlint": "^1.78.0",
     "typescript": "^6.0.3"
   }
 }
