@@ -1,97 +1,89 @@
 {
   "version": 1,
   "approved": {
+    "01c19533f0d888ea44ba45d2ca3d5a3609ccca56df41b2de3dcfae5d7b69d3ab": {
+      "excerpt": "True when `newText` provably carries the exact same comments as `oldText`",
+      "approvedAt": "2026-08-13T05:02:19.633Z"
+    },
     "029b65219108706a3b9989ea213eba686df36a29523949381ae8f14b64428167": {
       "excerpt": "tooling/comment-approval/cli.ts",
-      "approvedAt": "2026-08-13T02:28:47.400Z"
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
     "04d248575329dbc8dd6084341a390aef5d1d858e76f8e98ccad6d6dce8aad81a": {
       "excerpt": "Raw source text of the comment, including its `//`/`/*`/`*​/` delimiters.",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "10ce5e0c2aac4295120efbbb04195f129fb19dbe1aef18090121b35c99145f5b": {
       "excerpt": "Group consecutive \"line\" ranges at the same column, one source line",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
+    },
+    "17d8635385d0fd2d9620f3139ce98e3f3b832e19ce70f9b6c6b9b6ff6a3caf42": {
+      "excerpt": "`file`'s content as of `ref`, or `undefined` if it didn't exist there yet",
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
     "1ee6fb9a8d3fa0dc5bde7128b74e4f1f957458cf0b803be466f7ec679fb497ee": {
       "excerpt": "Strips comment delimiters and normalizes incidental formatting that",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "2054529553b2f434c4b79ec7aa952b981c751f26c7c3040a0f1f0dc864f7d74a": {
       "excerpt": "1-based line the comment starts on, for human-facing reports only — never",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "2509c3c70676a80e011a50273ded0487acc0afbb8ae37263b9016da0743502fc": {
       "excerpt": "sha256 hex digest of `normalized`. This is the identity `manifest.ts` tracks.",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
-    "36855b516f83f7103455913037e7f9d3a22455dde395f991d9884975bb4b9ee7": {
-      "excerpt": "ISO date the hash was added, for audit trail only — never read by the",
-      "approvedAt": "2026-08-13T02:28:47.403Z"
-    },
-    "48466105c9b81acdfc8448e6b542964e860c7bd2bf3ddfeb9577544a176165d6": {
-      "excerpt": "tooling/comment-approval/manifest.ts",
-      "approvedAt": "2026-08-13T02:28:47.403Z"
+    "364fa1b3aa3bc6d1fa56b9b9d084a14ad453b444a0742f8a741f220ee340b8bd": {
+      "excerpt": "`baseRef`, when given, is the git ref `files` were diffed against",
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
     "4fcb0928d2026dd1975059b3057de7706dbaa7f171b4f19081a75502db323ef1": {
       "excerpt": "0-based",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "58328003cbf6cfc983e09d89ad1ab8d41b76bd3d06c24bb37f988ba7c4b580c7": {
       "excerpt": "Delimiter-stripped, reindentation-normalized text — see normalizeComment.",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
-    "74115146792dfbf30a313f0834f93714e5e1d85a146ca1df9e0c44e416517661": {
-      "excerpt": "tooling/comment-approval/comments.test.ts — @rhi-zone/fractal (tooling, not a wo…",
-      "approvedAt": "2026-08-13T02:28:47.401Z"
+    "8f42f80f2b8ef78c0448b549b745836a27c380982de9805fd84aaa213ced3c77": {
+      "excerpt": "Set only for diff-relative scopes (`--staged`, `--diff-base`) — see",
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
-    "83271c40bb5ff1cee4cc5e722901b00fcd9b8d90bfb1ba82ef1bc783448c1174": {
-      "excerpt": "First ~80 chars of the normalized comment, purely for a human skimming",
-      "approvedAt": "2026-08-13T02:28:47.403Z"
+    "8fe480c1032a7337a0a58bc6de16aa8720f0d405cae287521341396702b56f0d": {
+      "excerpt": "setParentNodes",
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "8ffdbe6eed9f96ad95672125c5738beb212759712c07c6b772d855cf93268f42": {
       "excerpt": "1-based",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "92d0064c31f175460bbd7f6506ab75d4422a16f3ac91a5880c4177f385848161": {
       "excerpt": "Files that differ between `base` and the working tree — deliberately",
-      "approvedAt": "2026-08-13T02:28:47.400Z"
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
     "98430eb8f9a15a71e852be8a20573ff03c043862a444c286b228de8d4c042ec7": {
       "excerpt": "deleted-then-diffed, nothing to check",
-      "approvedAt": "2026-08-13T02:28:47.400Z"
-    },
-    "9dfa0a2956cfa3c0b48beddc8e2cf013c219dc685a1cc3387a43cf6db84797b1": {
-      "excerpt": "Serialized with keys sorted so re-running `approve` on an unchanged input",
-      "approvedAt": "2026-08-13T02:28:47.403Z"
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
     "a85a948091cc8cc7d4bdbb5c50ab52f9306a55c8f8b391a886d26df9746abfe1": {
       "excerpt": "Directories never worth scanning: dependency trees, build output, VCS/tool",
-      "approvedAt": "2026-08-13T02:28:47.400Z"
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     },
     "a97459fb00b257fd7e2624fde56e050b3910d9bf2be852f4860e56fb925cc4ed": {
       "excerpt": "tooling/comment-approval/comments.ts",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "b8f6a6d381bbdd4680d40a797e86b88d56c266e68f8615e2c88c5e01a3384728": {
       "excerpt": "Extracts every `//` and `/* *​/` comment from `sourceText`, in source",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
-    },
-    "d160424bf5400a75bad0e93c1dd991add1a08ade68ee401f5afeb77e925e25b7": {
-      "excerpt": "tooling/comment-approval/manifest.test.ts — @rhi-zone/fractal (tooling, not a wo…",
-      "approvedAt": "2026-08-13T02:28:47.402Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "d7a0d708df671afc8b772350f4fb406253bacf6402a1974ffd69c28ade814c71": {
       "excerpt": "File extensions this tool considers source — matches the languages the",
-      "approvedAt": "2026-08-13T02:27:49.610Z"
-    },
-    "de0c862d430f9f94d670f96c4f6c39a3d955e99bcc0f2eea2a29e31ff76f85db": {
-      "excerpt": "Returns a NEW manifest with every comment's hash added (or refreshed —",
-      "approvedAt": "2026-08-13T02:28:47.403Z"
+      "approvedAt": "2026-08-13T05:02:19.633Z"
     },
     "df6d70a6dfe20d424da5707e59c55752f9dd42820d03d95969dabfd913a5b1cc": {
       "excerpt": "Suggest approving exactly the affected files, by name — never a blanket",
-      "approvedAt": "2026-08-13T02:28:47.400Z"
+      "approvedAt": "2026-08-13T05:02:19.630Z"
     }
   }
 }

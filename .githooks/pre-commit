@@ -14,13 +14,19 @@
 # hook usable from day one despite the existing codebase's large unapproved
 # backlog (intentionally left unapproved, not bootstrapped away — see the
 # README's bootstrap-strategy section) — a commit that never touches a given
-# file is never blocked by that file's pre-existing comments. Any comment in
-# a file you DO touch gets checked, not just the lines your diff changed:
-# whole-file scope is simple and matches lint-staged-style tooling
-# elsewhere, at the cost of occasionally asking you to also approve an
-# unrelated pre-existing comment that merely happens to share a file with
-# your change (approve it or leave it — this hook doesn't require you to
-# fix it, only to have looked at it).
+# file is never blocked by that file's pre-existing comments. A file whose
+# diff against HEAD provably couldn't have added/removed/reworded a comment
+# (same multiset of comment hashes before and after — a pure reformat,
+# rename, or logic-only edit elsewhere in the file) is skipped outright, no
+# review demanded; otherwise every comment in the file gets checked, not
+# just the lines your diff changed (whole-file scope for any file whose
+# diff DOES plausibly touch comment-relevant content — matches lint-staged-
+# style tooling elsewhere, at the cost of occasionally asking you to also
+# approve an unrelated pre-existing comment that merely happens to share a
+# file with your change; approve it or leave it — this hook doesn't require
+# you to fix it, only to have looked at it). See README's "Provably
+# comment-invariant diffs skip the file entirely" section for the precise
+# rule.
 #
 # No --no-verify escape hatch is sanctioned (CLAUDE.md: "No --no-verify. Fix
 # the issue or fix the hook.") — the remediation path is fast on purpose:

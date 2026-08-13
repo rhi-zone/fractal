@@ -52,7 +52,10 @@ the precise rules and `comments.test.ts` for the cases this is checked against.
 {
   "version": 1,
   "approved": {
-    "<sha256 hex>": { "excerpt": "first ~80 chars, for humans skimming a diff", "approvedAt": "<ISO date>" }
+    "<sha256 hex>": {
+      "excerpt": "first ~80 chars, for humans skimming a diff",
+      "approvedAt": "<ISO date>"
+    }
   }
 }
 ```
@@ -62,6 +65,39 @@ byte-identical file — the manifest is meant to be read in diffs (`git diff` on
 shows exactly which comments got approved in a change, hash-and-excerpt visible without
 needing to also read the source). `excerpt`/`approvedAt` are audit trail only; the check
 logic only ever looks at the hash keys.
+
+## What "approved" means — the quality bar
+
+Approving a hash is an attestation, so it needs a concrete bar, not just "I looked at it."
+A comment clears the bar when it reads like something that belongs in generated
+documentation: production docs-site grade, self-contained (understandable without also
+knowing the PR discussion or the author's train of thought that produced it), and written
+as a statement of what's true, not as reasoning-out-loud or a defense against imagined
+pushback. Concretely:
+
+- **Not rambly or chain-of-thought-flavored** — a comment that walks through "first I
+  tried X, but then Y, so instead Z" is documenting the author's process, not the code;
+  keep the conclusion, drop the journey (unless the rejected alternative itself is the
+  useful part — see below).
+- **Not schizophrenic** — no arguing with itself, no contradicting an earlier sentence in
+  the same comment, no multiple voices litigating a decision the comment should just state
+  the outcome of.
+- **Not defensive** — not written to pre-empt a reviewer's objection or justify the
+  author's choice against a criticism nobody in the comment has actually raised; state
+  what the code does and why, not "before you ask, this is fine because...".
+- **Self-contained** — readable cold, without needing the commit message, the PR thread, or
+  surrounding conversational context to parse.
+
+None of this bans explaining a real tradeoff or a rejected alternative — "we don't do X
+here because it breaks Y" is exactly the kind of thing a good comment should say, and is
+also exactly what a docs site would say. The bar is about voice and shape (settled,
+declarative, self-contained), not about forbidding rationale.
+
+This is the standard `approve` is meant to apply per comment — not automated by this tool
+(judging prose quality isn't something the hash-matching logic here attempts), so it's on
+whoever runs `approve` to hold the line rather than rubber-stamping. Recorded here as the
+actual criteria for whenever the pre-existing backlog gets reviewed against it, not
+something this doc landing implies has happened yet.
 
 ## CLI
 
@@ -124,6 +160,36 @@ A whole-repo report is still available on demand (`check --all`, or the CI job's
 if invoked without `--diff-base`) for anyone who wants current backlog size/visibility —
 this is explicitly NOT wired into any blocking gate; it's a status view, not a recurring
 gate.
+
+## Provably comment-invariant diffs skip the file entirely
+
+File-scoped still has a sharp edge: "the file appears in a diff" and "the diff could
+plausibly contain a new or reworded comment" are not the same condition, and the original
+design conflated them — any touch to a file, including a change that couldn't possibly
+have added or edited a comment (a pure whitespace/formatter reflow, a rename, a logic-only
+edit elsewhere in the file), demanded review of that file's ENTIRE pre-existing backlog.
+That's a real cost with no matching benefit: reviewing content the diff never touched,
+gated on unrelated code changes rather than on comment changes.
+
+**Refined trigger: does the diff plausibly touch approval-relevant content, not merely
+"was the file touched at all."** For diff-relative scopes (`--staged` against `HEAD`,
+`--diff-base <ref>`), `findUnapproved` (`cli.ts`) fetches each file's content as of the
+base ref and compares its multiset of normalized-comment hashes against the current
+content's (`commentsUnchanged` in `comments.ts`) — multiset, not set, so dropping one of
+two byte-identical comments still counts as a change. If the two multisets match exactly,
+no comment could have been added, removed, or reworded by this diff, so the file is
+skipped outright: nothing new to stand behind, nothing to review. If they differ at all,
+the existing whole-file behavior is unchanged — every comment in the file still needs
+approval, same as before this refinement, since something about the diff DID plausibly
+touch comment-relevant content and the incremental-backlog-reduction rationale (see above)
+still applies.
+
+This is a general principle, not a carve-out for any particular kind of mechanical change
+(a formatter, specifically, was rejected as a special case) — it applies uniformly to any
+diff a hash comparison can prove didn't touch comments, whatever produced that diff.
+`--all` and an explicit file list keep the unconditional full-check behavior: neither is
+diff-relative in the first place (there's no "before" state to compare against), so there's
+nothing for this refinement to key off.
 
 ## Wiring
 

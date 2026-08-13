@@ -24,22 +24,22 @@
 // string/template/regex literal (never trivia in the first place — it's
 // part of the literal).
 
-import ts from "typescript"
+import ts from "typescript";
 
-export type CommentKind = "line" | "block"
+export type CommentKind = "line" | "block";
 
 export interface ExtractedComment {
-  readonly kind: CommentKind
+  readonly kind: CommentKind;
   /** Raw source text of the comment, including its `//`/`/*`/`*​/` delimiters. */
-  readonly raw: string
+  readonly raw: string;
   /** Delimiter-stripped, reindentation-normalized text — see normalizeComment. */
-  readonly normalized: string
+  readonly normalized: string;
   /** sha256 hex digest of `normalized`. This is the identity `manifest.ts` tracks. */
-  readonly hash: string
+  readonly hash: string;
   /** 1-based line the comment starts on, for human-facing reports only — never
    *  part of identity (comments moving around must not invalidate approval,
    *  per the whole point of hashing content instead of position). */
-  readonly line: number
+  readonly line: number;
 }
 
 /** File extensions this tool considers source — matches the languages the
@@ -47,10 +47,19 @@ export interface ExtractedComment {
  *  is out of scope: those don't have `//`/`/* *​/`-style comments in the
  *  first place, or (for `.sh`) use a wholly different comment syntax this
  *  scanner doesn't understand. */
-export const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"] as const
+export const SOURCE_EXTENSIONS = [
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mts",
+  ".cts",
+  ".mjs",
+  ".cjs",
+] as const;
 
 export function isSourceFile(fileName: string): boolean {
-  return SOURCE_EXTENSIONS.some((ext) => fileName.endsWith(ext))
+  return SOURCE_EXTENSIONS.some((ext) => fileName.endsWith(ext));
 }
 
 /** Strips comment delimiters and normalizes incidental formatting that
@@ -73,39 +82,81 @@ export function isSourceFile(fileName: string): boolean {
  *  lines in the middle of a comment — those are content, and a change there
  *  is exactly the kind of change that should force re-approval. */
 export function normalizeComment(raw: string, kind: CommentKind): string {
-  let lines: string[]
+  let lines: string[];
   if (kind === "line") {
-    lines = raw.split("\n").map((line) => line.replace(/^\s*\/\/\s?/, "").trim())
+    lines = raw.split("\n").map((line) => line.replace(/^\s*\/\/\s?/, "").trim());
   } else {
-    const body = raw.replace(/^\/\*/, "").replace(/\*\/$/, "")
-    lines = body.split("\n").map((line) => line.replace(/^\s*\*\s?/, "").trim())
+    const body = raw.replace(/^\/\*/, "").replace(/\*\/$/, "");
+    lines = body.split("\n").map((line) => line.replace(/^\s*\*\s?/, "").trim());
   }
 
-  while (lines.length > 0 && lines[0] === "") lines.shift()
-  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
+  while (lines.length > 0 && lines[0] === "") lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 
-  return lines.join("\n")
+  return lines.join("\n");
 }
 
 export async function hashText(text: string): Promise<string> {
-  const hasher = new Bun.CryptoHasher("sha256")
-  hasher.update(text)
-  return hasher.digest("hex")
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(text);
+  return hasher.digest("hex");
+}
+
+/** True when `newText` provably carries the exact same comments as `oldText`
+ *  — same multiset of normalized-comment hashes, order and position
+ *  irrelevant (identity is content-hash-based, same as approval itself; see
+ *  `ExtractedComment.hash`'s own doc comment). A pure reformat (whitespace,
+ *  reindentation, statement punctuation, code moved around) leaves this
+ *  true; adding, removing, or rewording even one comment makes it false.
+ *  Multiset, not set: dropping one of two byte-identical comments changes
+ *  the count and must be caught, so this compares sorted hash ARRAYS, not
+ *  `Set`s.
+ *
+ *  This is what lets a caller (cli.ts's `findUnapproved`) skip asking a
+ *  human to re-review a file's entire pre-existing comment backlog just
+ *  because the file appears in a diff for an unrelated reason — the trigger
+ *  for "does this file need backlog review" should be "did the diff
+ *  plausibly touch comment-relevant content," not "was the file touched at
+ *  all." A diff that's provably comment-invariant (this function returning
+ *  true) can't have introduced or reworded a comment, so there is nothing
+ *  new to stand behind — reviewing the backlog anyway would be reviewing
+ *  content the diff never touched, on a schedule set by unrelated code
+ *  changes rather than by comment changes. If the diff DOES touch comments
+ *  (this returns false) the existing whole-file backlog-review behavior is
+ *  unchanged — that's still the intentional, incremental "you touched
+ *  something comment-relevant here, so look at what's here" design (see
+ *  README's "scoped to touched FILES" section), just precisely re-targeted
+ *  at diffs that could actually contain a new/changed comment instead of at
+ *  every diff regardless of shape. */
+export async function commentsUnchanged(
+  oldText: string,
+  newText: string,
+  fileName = "file.ts",
+): Promise<boolean> {
+  const [oldComments, newComments] = await Promise.all([
+    extractComments(oldText, fileName),
+    extractComments(newText, fileName),
+  ]);
+  const oldHashes = oldComments.map((c) => c.hash).sort();
+  const newHashes = newComments.map((c) => c.hash).sort();
+  if (oldHashes.length !== newHashes.length) return false;
+  return oldHashes.every((hash, i) => hash === newHashes[i]);
 }
 
 function scriptKindFor(fileName: string): ts.ScriptKind {
-  if (fileName.endsWith(".tsx")) return ts.ScriptKind.TSX
-  if (fileName.endsWith(".jsx")) return ts.ScriptKind.JSX
-  if (fileName.endsWith(".js") || fileName.endsWith(".mjs") || fileName.endsWith(".cjs")) return ts.ScriptKind.JS
-  return ts.ScriptKind.TS
+  if (fileName.endsWith(".tsx")) return ts.ScriptKind.TSX;
+  if (fileName.endsWith(".jsx")) return ts.ScriptKind.JSX;
+  if (fileName.endsWith(".js") || fileName.endsWith(".mjs") || fileName.endsWith(".cjs"))
+    return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
 }
 
 interface RawRange {
-  readonly kind: CommentKind
-  readonly pos: number
-  readonly end: number
-  readonly line: number // 1-based
-  readonly column: number // 0-based
+  readonly kind: CommentKind;
+  readonly pos: number;
+  readonly end: number;
+  readonly line: number; // 1-based
+  readonly column: number; // 0-based
 }
 
 /** Extracts every `//` and `/* *​/` comment from `sourceText`, in source
@@ -139,66 +190,81 @@ interface RawRange {
  *  (`const x = 1 // hi`, typically far to the right) from accidentally
  *  swallowing a following standalone `//` paragraph that starts at the
  *  code's own indentation. */
-export async function extractComments(sourceText: string, fileName = "file.ts"): Promise<ExtractedComment[]> {
-  const sourceFile = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, /* setParentNodes */ false, scriptKindFor(fileName))
+export async function extractComments(
+  sourceText: string,
+  fileName = "file.ts",
+): Promise<ExtractedComment[]> {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ false,
+    scriptKindFor(fileName),
+  );
 
-  const seen = new Set<string>()
-  const rawRanges: RawRange[] = []
+  const seen = new Set<string>();
+  const rawRanges: RawRange[] = [];
 
   function addRanges(found: readonly ts.CommentRange[] | undefined) {
-    if (!found) return
+    if (!found) return;
     for (const range of found) {
-      const key = `${range.pos}:${range.end}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const { line, character } = ts.getLineAndCharacterOfPosition(sourceFile, range.pos)
+      const key = `${range.pos}:${range.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const { line, character } = ts.getLineAndCharacterOfPosition(sourceFile, range.pos);
       rawRanges.push({
         kind: range.kind === ts.SyntaxKind.SingleLineCommentTrivia ? "line" : "block",
         pos: range.pos,
         end: range.end,
         line: line + 1,
         column: character,
-      })
+      });
     }
   }
 
   function visit(node: ts.Node) {
-    addRanges(ts.getLeadingCommentRanges(sourceText, node.getFullStart()))
-    addRanges(ts.getTrailingCommentRanges(sourceText, node.getEnd()))
-    ts.forEachChild(node, visit)
+    addRanges(ts.getLeadingCommentRanges(sourceText, node.getFullStart()));
+    addRanges(ts.getTrailingCommentRanges(sourceText, node.getEnd()));
+    ts.forEachChild(node, visit);
   }
 
-  visit(sourceFile)
-  addRanges(ts.getLeadingCommentRanges(sourceText, sourceFile.endOfFileToken.getFullStart()))
-  addRanges(ts.getTrailingCommentRanges(sourceText, sourceFile.endOfFileToken.getFullStart()))
-  rawRanges.sort((a, b) => a.pos - b.pos)
+  visit(sourceFile);
+  addRanges(ts.getLeadingCommentRanges(sourceText, sourceFile.endOfFileToken.getFullStart()));
+  addRanges(ts.getTrailingCommentRanges(sourceText, sourceFile.endOfFileToken.getFullStart()));
+  rawRanges.sort((a, b) => a.pos - b.pos);
 
   // Group consecutive "line" ranges at the same column, one source line
   // apart, into a single logical comment (see doc comment above).
-  const groups: RawRange[][] = []
+  const groups: RawRange[][] = [];
   for (const range of rawRanges) {
-    const prevGroup = groups[groups.length - 1]
-    const prev = prevGroup?.[prevGroup.length - 1]
-    if (prev && prev.kind === "line" && range.kind === "line" && range.line === prev.line + 1 && range.column === prev.column) {
-      prevGroup!.push(range)
+    const prevGroup = groups[groups.length - 1];
+    const prev = prevGroup?.[prevGroup.length - 1];
+    if (
+      prev &&
+      prev.kind === "line" &&
+      range.kind === "line" &&
+      range.line === prev.line + 1 &&
+      range.column === prev.column
+    ) {
+      prevGroup!.push(range);
     } else {
-      groups.push([range])
+      groups.push([range]);
     }
   }
 
-  const out: ExtractedComment[] = []
+  const out: ExtractedComment[] = [];
   for (const group of groups) {
-    const kind = group[0]!.kind
-    const raw = group.map((r) => sourceText.slice(r.pos, r.end)).join("\n")
-    const normalized = normalizeComment(raw, kind)
+    const kind = group[0]!.kind;
+    const raw = group.map((r) => sourceText.slice(r.pos, r.end)).join("\n");
+    const normalized = normalizeComment(raw, kind);
     out.push({
       kind,
       raw,
       normalized,
       hash: await hashText(normalized),
       line: group[0]!.line,
-    })
+    });
   }
 
-  return out
+  return out;
 }
