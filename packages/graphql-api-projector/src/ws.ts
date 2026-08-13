@@ -118,9 +118,9 @@ export type GraphQLWsHandlerOptions = {
   /**
    * Milliseconds to wait for a `connection_init` message before closing the
    * socket with `4408 Connection initialisation timeout`. Defaults to 3000,
-   * matching the reference `graphql-ws` server's own default. Pass `0` (or
-   * a falsy value is NOT the same as disabling — pass `Infinity`) to
-   * disable the timeout entirely.
+   * matching the reference `graphql-ws` server's own default. Pass
+   * `Infinity` to disable the timeout entirely — `0` is not equivalent; it
+   * times out immediately.
    */
   readonly connectionInitWaitTimeout?: number;
   /**

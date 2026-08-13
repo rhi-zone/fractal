@@ -1,6 +1,10 @@
 {
   "version": 1,
   "approved": {
+    "0047d97a7e1090a1561922ff8647bc248e454a8ed68fe000b0e8248376a91585": {
+      "excerpt": "PHP 8.1 backed enum (https://www.php.net/manual/en/language.enumerations.backed.…",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
     "005859ffd07a27bfc03f3399edf2e2a280a273a7c4918d5893ac65be0b929fcf": {
       "excerpt": "── Node ─────────────────────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:10:43.581Z"
@@ -129,6 +133,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:35.593Z"
     },
+    "069b95780f60db4f71109bdc206b031e796a57ef415fd6aee4fb520bb786e1a9": {
+      "excerpt": "Overridden (not inherited from the postgres spread) so the fallback",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "06a3f5b48b3d153bdc739ca1a6b18e519a78f3991fcec6b180c92a03d03c7426": {
       "excerpt": "Dart style (https://dart.dev/effective-dart/style#identifiers): fields and",
       "approvedAt": "2026-08-13T07:10:51.087Z"
@@ -225,6 +233,10 @@
       "excerpt": "The original tags bag is untouched",
       "approvedAt": "2026-08-13T05:06:32.673Z"
     },
+    "0b059113f7d32db19a974ba35d203bf269c25fc350aed42cc71195bc093d9d66": {
+      "excerpt": "PHP 8.1 backed enum (https://www.php.net/manual/en/language.enumerations.backed.…",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "0b2003cd6f339c572fece2ed03a284c7b59eeacea0381102f7da73511b19c052": {
       "excerpt": "`x-declaration-file` alongside `x-class-name` so `fromJsonSchema` can",
       "approvedAt": "2026-08-13T07:10:55.717Z"
@@ -252,6 +264,10 @@
     "0c22f18d9970f3337ea71e3280d464a18ee32f750d5f62169e3091ba93a67d71": {
       "excerpt": "Cap'n Proto has no callable-type construct — degrades honestly to",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "0c3b94a4dfc8cdeb510bafff35342761b1b5b9c1c456227b248475cf90fdf3b8": {
+      "excerpt": "Top-level entry point: an `object` TypeRef becomes a `toPhpClass` readonly",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
     },
     "0c4d30301b6049ad1d6fed54d164a7dd3126722e8b0f4546ff60073ba78f2134": {
       "excerpt": "CORS response headers for `req`, or `{}` when CORS is disabled or the request's …",
@@ -413,6 +429,10 @@
       "excerpt": "Group consecutive \"line\" ranges at the same column, one source line",
       "approvedAt": "2026-08-13T05:02:19.633Z"
     },
+    "10eab7a8e7b77db7f8c47a41f8ccff1c350c5d9755fef17cadaa71936886e51e": {
+      "excerpt": "Discriminated (`meta.discriminator`) union -> an abstract base class",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "1172293894d1e9ff19d887a08862c48a7647b0bc80e95c5de17abd49b3fe1b06": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.581Z"
@@ -469,6 +489,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "138898fd7c5eb248476aabfc006305cb7563189626802fb3689881caecb31aee": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "138b6c10e67ba8d8ea4e5b910f26a8e5fa53f5fd1a907dd744e34bed1cdf0f74": {
       "excerpt": "Spec-level default security requirement (`OpenApiDoc.security`) — applies",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -476,6 +500,10 @@
     "139c0ffa3547ec14f1e54cfd116b23936215aa23e497ed9d08103087117a74ce": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
+    },
+    "13c2f389a1f872f8c4d14500915146bc69d642c6d427e52e5a9cf1dc89f50e39": {
+      "excerpt": "`nested` is `object` semantics (indexed as its own hidden document",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "1403f70ef6f8323fd679cd4947f3e2b30c91de2e1668eca52242391a7a4cbfc5": {
       "excerpt": "No native SwiftyJSON streaming/pagination-window construct — degrades",
@@ -492,6 +520,10 @@
     "141724c56f7d11647f24604cbd03b91eb5a5f0b7da5379dba1bd176878853c9f": {
       "excerpt": "`readOnly` (already lifted verbatim into meta.readOnly by extractMeta's",
       "approvedAt": "2026-08-13T07:10:55.731Z"
+    },
+    "141e4f4abd8c2ddf6ed35f77514ebf46f6ff4fa2bd9ffa2144dde7c9d102d5c6": {
+      "excerpt": "SQL has no intersection/mixin column type — lossy fallback: resolve the",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "144b35995089a7cb2f67bba15d09ec472cedeaa16b479e1691b79da1792ada8e": {
       "excerpt": "Literal chunk up to the next ':' (if any) — the part matched against existing ch…",
@@ -516,6 +548,10 @@
     "15bfb6bcdb96e09a48b26e7622ab4b22b32e8bf434b8acdecf9299e380e00620": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.586Z"
+    },
+    "15c0c43c032fb46418d3f355861432be3e2271d13b245c09139d69cf99cee83a": {
+      "excerpt": "MSSQL's length function is `LEN`, not `LENGTH` (T-SQL, unlike ANSI SQL/Postgres/…",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "161041eadd02335b4725763ae7664434594b569d35f9c81b5aefaa4f8dceeecb": {
       "excerpt": "No C# equivalent to `never` — degrades to `object`, flagged via comment",
@@ -553,9 +589,17 @@
       "excerpt": "examples/library-api/src/client.test.ts",
       "approvedAt": "2026-08-13T07:08:47.718Z"
     },
+    "16da68c2e0b0b0ca34e604b91260af77580ff8b3583b2f65d184eb369436c602": {
+      "excerpt": "Resolves a union variant's name for both the discriminator-column merge",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "17025587931784a24bd385419df0a702d8ae3ffab2194b778da4fa9c45bb2a15": {
       "excerpt": "Scalar/collection type name — https://dart.dev/language/built-in-types.",
       "approvedAt": "2026-08-13T07:10:51.094Z"
+    },
+    "172ee64ab9d2c70e5717c915288f6161fa65b065413b72585adbedf456a35e44": {
+      "excerpt": "Renders `meta.description` as a block comment. MSSQL's real column-comment",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "177ae6aa1e9410cfc739b35bae50b19621ef5c38a484036baa4097e7e582d5ce": {
       "excerpt": "A `stream` return type maps to proto3's `stream` RPC keyword (see the",
@@ -661,6 +705,10 @@
       "excerpt": "Every leaf in the real `api` tree happens to have a generated entry",
       "approvedAt": "2026-08-13T07:08:47.728Z"
     },
+    "1b610fd16a2dcc01b80499cb842008e04666dd750e2ee38b8785fa6ee67d8760": {
+      "excerpt": "Invalid JSON was received by the server.",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "1bdec8996a0ae2da1a740fb192815e778531f7bad271f6374fbcd18fd83bd69c": {
       "excerpt": "Build a `{ subscribe, resolve }` field config for a subscription",
       "approvedAt": "2026-08-13T07:08:38.040Z"
@@ -668,6 +716,10 @@
     "1be174c20a1d664c007d7c8ab3764859cdbf7818bee6a4d649cc21a50abc9655": {
       "excerpt": "Top-level entry point: `object` and `enum` TypeRefs (given a `name`) lower",
       "approvedAt": "2026-08-13T07:11:42.597Z"
+    },
+    "1c61e2d46d30f492f40daba28b6b680000158c3faa034bc3c402c393e874fe78": {
+      "excerpt": "PHP's `?T` nullable shorthand only applies to a single type; a union",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "1c652c42023b94f71a701f4c6cdd741afe555e14de10814f4e1d5329a17ef7b0": {
       "excerpt": "Path parameters: extracted from the computed path",
@@ -684,6 +736,10 @@
     "1d4abf280490996485163d96e8fb811f47dd42965817f75a014b3e36785e754b": {
       "excerpt": "Named type declarations referenced by any supplied `FieldTypeInfo`. Forwarded to…",
       "approvedAt": "2026-08-13T07:10:43.573Z"
+    },
+    "1d4f77a34f56f1643e8f92a101be82802b582075060bfaac74f7ab8bf890caca": {
+      "excerpt": "The standard JSON-RPC 2.0 error object schema: `{ code, message, data? }`",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "1d58aa2e31713c365643dbb28f314df17481ac866d8d39acedf37832d524f285": {
       "excerpt": "Force eager evaluation of a mapped/intersection type into a single plain",
@@ -721,6 +777,10 @@
       "excerpt": "No native calendar-only Date-vs-DateTime split matters here (see",
       "approvedAt": "2026-08-13T07:11:42.597Z"
     },
+    "1ed9d3a52d4d103ad98c1b180fb79180f50c7bd23fd18b18d2fa1db01f6bc65a": {
+      "excerpt": "Top-level entry point: an `object` TypeRef becomes a `toJmsClass` readonly",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
+    },
     "1ee6fb9a8d3fa0dc5bde7128b74e4f1f957458cf0b803be466f7ec679fb497ee": {
       "excerpt": "Strips comment delimiters and normalizes incidental formatting that",
       "approvedAt": "2026-08-13T05:02:19.633Z"
@@ -752,6 +812,10 @@
     "20892ca7f285eea66b1caab22ad082b9c670837b36ee2ecf49450fd70e65f7bb": {
       "excerpt": "Schema definitions, directive definitions, extensions, and",
       "approvedAt": "2026-08-13T07:10:20.620Z"
+    },
+    "20cf486b1383361516f1c72d78c44afabee9f2ec516487cc0652a019fe3b22c3": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "20ddd599f18dc8347af20194312efb930dc6ccd517447bc8667fc4b0718a0c45": {
       "excerpt": "An anonymous union (§ \"Unions\": https://capnproto.org/language.html#unions)",
@@ -816,6 +880,10 @@
     "230ba3f283884343230a07e12f27161a064fed8a8509651b279acfc10610fe3a": {
       "excerpt": "Proto3 has no doc-comment keyword (§ \"Language Specification\"); `//` line",
       "approvedAt": "2026-08-13T07:10:47.056Z"
+    },
+    "2345ae0ffc9649c75b6ebb99c95f475702da9eb37f7592fac17f0cfba0f6afb2": {
+      "excerpt": "No native async-stream construct — degrades to `iterable` (PHP's",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "239e90e42c8219cd9c364fb8ed03b4b00b5526a33aef70d848a73f16e9247e87": {
       "excerpt": "`get`/`remove` (siblings of the fallback, not nested under it) get",
@@ -1073,6 +1141,10 @@
       "excerpt": "typeref.fixture.ts: `import type { CursorPage, OffsetPage, Page } from \"../page.…",
       "approvedAt": "2026-08-13T07:10:02.230Z"
     },
+    "2cc89d0232acb056f9993be5ad97356433d184850e2916a39a7e4ce825be501d": {
+      "excerpt": "CQL type expression -> TypeRef. `knownUdts` lets a bare name that matches",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "2d496896dc206600996d56d0f7b198fe00d4550337ddfe89056b944564f7dff7": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -1197,6 +1269,10 @@
       "excerpt": "A declaration hoisted out while lowering a table field whose type has no",
       "approvedAt": "2026-08-13T07:09:56.017Z"
     },
+    "3353bf4eacdd985d5c50f51c5fdcea9b44344735f9bb2d5fea2ae6038143ba3f": {
+      "excerpt": "MySQL has no native BOOLEAN (TINYINT(1) is the conventional stand-in), no native",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "3362eaa560a3c104af11df960c0a722e5ef977689634233a64d7931eb2ec156f": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:38.036Z"
@@ -1229,6 +1305,10 @@
       "excerpt": "Tokenize `.fbs` source. `//` and `///` line comments (flatbuffers.dev has no",
       "approvedAt": "2026-08-13T07:09:56.025Z"
     },
+    "34b8163f808e6efdf6bd49c014e3643c87a640c7c96ada30c42474e501e6ec71": {
+      "excerpt": "Reads `meta.serializationGroups: string[]` — an out-of-band hint (same",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "34ca84584092d5005dcb6c13445014f90ec4b19149bd4448242c9626d79313b3": {
       "excerpt": "Resolve the synthesized namespace `GraphQLObjectType` at `path` — the root `Quer…",
       "approvedAt": "2026-08-13T07:10:43.573Z"
@@ -1244,6 +1324,10 @@
     "34e5de7ae2986facdc2b3f4b5981f8276e9006746aebb0d6bf0bac0ad1c55555": {
       "excerpt": "Numbered subsections, not a tabbed UI — plain MkDocs has no tabs",
       "approvedAt": "2026-08-13T07:10:43.815Z"
+    },
+    "35030417a6e7bd50ea9b0d60e00cd6c27037d2d556071addcb93d1d1208b0626": {
+      "excerpt": "discriminator field itself is not re-declared as a constructor property.",
+      "approvedAt": "2026-08-13T07:11:47.433Z"
     },
     "3527dd5a2c9899a5aa0b404010922ed7b110585b6d77600208a1e76549600345": {
       "excerpt": "toCapnpStruct promotes an object field to a named nested struct + a ref",
@@ -1288,6 +1372,10 @@
     "37167306098b0b3e7aec124d3650397559edfe55443de94b1ec18fb1ed23639a": {
       "excerpt": "`kind` uses `enum` rather than `literal` here — a single-value",
       "approvedAt": "2026-08-13T07:11:16.459Z"
+    },
+    "375db845663d3859ebcfd5242a625c6a771e8ae518291a0baf0eb45b043a22aa": {
+      "excerpt": "Table-per-variant layout — see `tablePerVariantSqlLayout` in sql.ts.",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "3763bd6cda31ade0da34e1e830cbba0ff371ad9647670b74b3ef2879d8cf2cf8": {
       "excerpt": "Root `Query` type fields — top-level branches/leaves only; nested namespace fiel…",
@@ -1337,6 +1425,10 @@
       "excerpt": "An inline (unnamed) object has no Java equivalent expressible as a type",
       "approvedAt": "2026-08-13T07:09:42.432Z"
     },
+    "394d1fcf2c6dba8072179693bb18912944cb7e735cbc3f40e260c4f2c13a3235": {
+      "excerpt": "A column stores a materialized value, not an ongoing async sequence —",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "3959c4e333a66a6c234fff3a8afdd5e6eb9303a61adfa7be1b2abcfffb19bef4": {
       "excerpt": "e0 (string) is non-scalar and keeps `required`; e1 (int32) is scalar",
       "approvedAt": "2026-08-13T07:09:56.021Z"
@@ -1349,6 +1441,10 @@
       "excerpt": "Even if you don't use internationalization, you can use this field to set",
       "approvedAt": "2026-08-13T07:09:53.729Z"
     },
+    "39c2da434f2278cd351076017302bf73917b4d076a1eeabca219985862989df0": {
+      "excerpt": "Dialect-appropriate rendering of `meta.description` — MySQL's native inline",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "39f747736251803c2098abcb54bfc56dd2253b0b62ac0c0b0b6ceff6b837ad35": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:02.233Z"
@@ -1360,6 +1456,14 @@
     "3a9f166f12c8d2cc891807ec33b9e4d4445dd308a0b646a5eb675b45678475c2": {
       "excerpt": "Build one shared context store plus per-projector `als` configs, from one",
       "approvedAt": "2026-08-13T07:10:02.219Z"
+    },
+    "3aa6effe3f832a6529cb4e2014930a4e64a369df990936ab8c251f3db8ca58d7": {
+      "excerpt": "No fixed-width float16 kind exists in the core vocabulary yet — same",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
+    "3ac817377b5a93fb1f3199639c6995a834c9d0344ba59a6b90902e0e8bd42389": {
+      "excerpt": "Postgres: `~` is the native POSIX regex match operator. SQLite has no native",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "3ac862172dd81d00892a21bb39787bbfdd37891fe18a4590695114e6426ea6c5": {
       "excerpt": "============================================================================",
@@ -1393,6 +1497,10 @@
       "excerpt": "Produce a leaf node: a Node carrying a handler and merged meta.",
       "approvedAt": "2026-08-13T05:12:43.183Z"
     },
+    "3bbb248cafc2982a1e72673edebad78548b5f460f3c3c1917521512aa36d713f": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "3bf570f45a5d59140eccbb0c05d68fcfda76b449d2ac434b82a40af7efa22707": {
       "excerpt": "One `(path, method)` leaf produced by walking an `HttpRoute` tree — see `listRou…",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -1408,6 +1516,10 @@
     "3c78425d844f05d261a2757a983d2f9c7eb504bc845a45e5e45fb69b6683f51c": {
       "excerpt": "Kotlin built-in types: https://kotlinlang.org/docs/basic-types.html. Named",
       "approvedAt": "2026-08-13T07:09:42.438Z"
+    },
+    "3c81f5de07b2c5deb24cbf4430a5b2f7d755a8c56cb12fb33076c8ef3acd2999": {
+      "excerpt": "PHP 8.0 union types — native, so no PHPDoc needed UNLESS a member itself",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "3cc4b325976d570255640709299d5075eb2d4e8afeeeb4cb1f51e46b3e75990d": {
       "excerpt": "OAS 3.0.3 is draft-05-based and has no `const` keyword (a later JSON",
@@ -1511,7 +1623,7 @@
     },
     "4157e81e9aa6d9dd8625e7fbd76d2c87f2c2c93970a5a0e46ed4e36894af08d7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T05:06:32.683Z"
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "41b1adf08e7baff78f27ac78d7238183c437fd7626bcf5e887650e15fc179fd3": {
       "excerpt": "ALS wrapping (see CreateGraphQLServerOptions.als) — innermost, closer to",
@@ -1541,6 +1653,10 @@
       "excerpt": "\"optional\" is consumed by the object handler (properties/optionalProperties",
       "approvedAt": "2026-08-13T07:10:20.621Z"
     },
+    "42add6eda78af3eb8b62abf853bed86e1888c5179285215a252293c9c5bc3a22": {
+      "excerpt": "Table-per-variant layout: one CREATE TABLE per variant, each with its own",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "42cb663f315a3cc0f57ff238ae9b1557dc2add509b4cbf6327fcf6411cf13181": {
       "excerpt": "Declares `id` as path-sourced, but the live ancestor slug at",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -1565,9 +1681,17 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.582Z"
     },
+    "43877ec19440f4100a294385a17134197a9b80a0a9a2bcd772e54dcc184da3b1": {
+      "excerpt": "No field-level construct for a method surface — degrades to `object`,",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "439e05dc1d34662b92eb308837dc72bfbc2db21500c33c99114ea6731f630897": {
       "excerpt": "The `<- map[...]` mapping line for one field, or a degrade comment for a",
       "approvedAt": "2026-08-13T07:10:46.698Z"
+    },
+    "439ebc5483f8342ba0a7c353945fb80fc284e3d8908f9f3131a65abc13f211cb": {
+      "excerpt": "Loose runtime check: true when `v` looks like a `TypeRef` (has a `.shape`). Used…",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "43c4c5433fe83d5a7c56b1f5ffa2ce91cc3769507a5b9f512fb655d933c6c7c3": {
       "excerpt": "============================================================================",
@@ -1605,6 +1729,10 @@
       "excerpt": "Proto3 enums (§ \"Enum\"): the first defined value's number must be 0.",
       "approvedAt": "2026-08-13T07:10:47.056Z"
     },
+    "4588d4d8cb661edce35e895336d1c7a2bd0f0c1fdcf03ad32e24ea34525dac32": {
+      "excerpt": "One method's full JSON-RPC signature — params/result/error schemas plus",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "459be94829cfce529fb910ec2c3a358103cf777d116669f35b259f23e94fb0d7": {
       "excerpt": "Parse `.capnp` schema text into its struct/enum declaration tree, without",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -1621,6 +1749,10 @@
       "excerpt": "JSON Schema has no class-identity concept and `instance` carries no field",
       "approvedAt": "2026-08-13T07:10:55.717Z"
     },
+    "46ad7d2752449a1cebb0aa066bcfa5aa973d597e7e131910e6a823b4a0e55660": {
+      "excerpt": "Bare identifier not one of CQL's native keywords: a UDT reference",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "46be1cd492b62fb5fa9d7b46d11677a9c8f07a8c683ea03a927d3127c05344d0": {
       "excerpt": "The Node model allows `fallback.subtree` to be a bare leaf (`op()`),",
       "approvedAt": "2026-08-13T07:08:35.589Z"
@@ -1636,6 +1768,10 @@
     "46ea906906f247145f467a0931a87397c17b83b8570175cac3999f2b1139e138": {
       "excerpt": "Classic POJO: private final fields + a `@JsonbCreator`-annotated",
       "approvedAt": "2026-08-13T07:09:42.432Z"
+    },
+    "4700b4e2645c1ddc06dfd56e87f0fadbfe7cba50edd002c0499a89ab05a4b762": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "475238009ac5f51e19124443321abf40828bd12c43ff7d6299efc2deeb57b521": {
       "excerpt": "Kotlin enum entries conventionally read SCREAMING_SNAKE_CASE",
@@ -1681,6 +1817,10 @@
       "excerpt": "Fallback name derived purely from path + verb, for handlers absent from a name m…",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "48c24faf356f81c0a78fcb12dbf2f027ba67506dcf6d627bd8c9d00fc7ffd3ba": {
+      "excerpt": "Functions aren't persistable column data — same opaque fallback as the",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "492822a0014c22536fa4ec6ec53ee3a329b07297f8d83146953a1d8db93eb7d1": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -1697,9 +1837,21 @@
       "excerpt": "packages/graphql-api-projector/src/ws.test.ts — createWsHandler (graphql-ws prot…",
       "approvedAt": "2026-08-13T07:10:43.583Z"
     },
+    "49cbd733e5b264047d5f802e4de157594dbd7c8dc642e12937afd5fd70d46676": {
+      "excerpt": "An inline/anonymous object (no name to hang a class declaration off of —",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
+    },
     "49d6820de90ea6ba1e616bfc195d8e74f5e10bf03a1b5429d7de2fb96d1ca936": {
       "excerpt": "A class instance carries only nominal identity (see type-ir's",
       "approvedAt": "2026-08-13T07:10:46.705Z"
+    },
+    "4a1184f8fcc2897452d35ecd281bee026595685a3b3385777b24214ba8ffabb0": {
+      "excerpt": "Everything a union layout needs to render DDL for a union-rooted TypeRef,",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
+    "4a2c884d4c6778b7c4efa6631bc368f703916d2b43f8331459e630bf5c4b5d56": {
+      "excerpt": "Resolves a TypeRef to its MSSQL column type string (no nullability/default/const…",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "4a53d4a0e49b4ae15e039d0e7120ebe859aee618fc01d0aceca8927f68cd33e8": {
       "excerpt": "Union/enum/intersection/function renderings contain literal `|`/`&`",
@@ -1712,6 +1864,10 @@
     "4a6e7202d0c98c31dfbf898a95efe930aae8e3083acce534a579ad6d09f2712a": {
       "excerpt": "`T`, or the merge-identity `object` when `T` is `undefined` — lets `FoldMetaList…",
       "approvedAt": "2026-08-13T05:12:43.183Z"
+    },
+    "4aaad08463305ecde5f9484ba8b930aac8e67959eebb28f5af368cb24981d34b": {
+      "excerpt": "`pattern` (regex) is intentionally skipped: T-SQL has no regex operator, and",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "4b19ee57a1def097e2d7751c854be4a93bf3a6c24d72b6859cc388a38f668987": {
       "excerpt": "Reads `meta.deprecated` into the `Deprecated` shape struct/field/interface",
@@ -1728,6 +1884,10 @@
     "4b62985bc2192224fa6c4f8c380fc1f8fd35333c0a20b495789523ce240b0cfc": {
       "excerpt": "Cap'n Proto has no doc-comment keyword (§ \"Language Reference\"); `#` line",
       "approvedAt": "2026-08-13T07:09:42.597Z"
+    },
+    "4b7cdd080c8f4345eebfd79d1eea0fbd2b27e1710e454b2e7d95fdf43963d136": {
+      "excerpt": "`meta.discriminator`, when the union is a tagged/discriminated union —",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "4b8318e58fab5d1322e6d9e4cbb5d9f43abe019ab8732a91e1984f6e92a03e79": {
       "excerpt": "draft-07 §6.2/§6.3: exclusiveMinimum/exclusiveMaximum are numbers (since",
@@ -1817,6 +1977,10 @@
       "excerpt": "0-based",
       "approvedAt": "2026-08-13T05:02:19.633Z"
     },
+    "4fdfe32e2dce292326ab003b2d1b67f3940e09e67cb28be59db49a02ddb1380e": {
+      "excerpt": "PHP has no structural intersection-type construct for anything but",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
     "5018d66ce892ce0a376854d6a654f95771e59a21d1ca0af488226f2421e8b4f6": {
       "excerpt": "True when every union variant is (or descends from) `object` and they all",
       "approvedAt": "2026-08-13T07:09:42.441Z"
@@ -1832,6 +1996,10 @@
     "5068501c33d4db2026e3edad9aedd46b622f3ab0343f6801f12971abba6e9f87": {
       "excerpt": "True when `n` is a leaf node (carries a handler).",
       "approvedAt": "2026-08-13T05:12:43.183Z"
+    },
+    "50ad2bba38b510903b438912e80c14399fbfc458dc813bd9756be56759f62993": {
+      "excerpt": "A bare (unnamed) enum TypeRef has nowhere to hang a PHP 8.1 backed-enum",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
     },
     "50ad2f4b2baf2bc71bd35baf12875e3239c5d282672965baafc5b63d10b334fa": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -1905,9 +2073,17 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:12:43.183Z"
     },
+    "52a2bfce9649e746cce52330c59f768783aa5daca8cdd591852e9ebd61a4ced5": {
+      "excerpt": "MSSQL has no intersection/mixin column type — lossy fallback: resolve the",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "52baa15cc341307a091b2493f8c6d4e6ec2a125f2782dbb33902dac0d621b3a1": {
       "excerpt": "Annotation keywords shared verbatim by both OAS versions' Schema Object",
       "approvedAt": "2026-08-13T07:11:16.455Z"
+    },
+    "52c514d61d79753c53bf8fd908fd9e162ce038ef2143ca865e8bbafa83e83979": {
+      "excerpt": "No `type` on a field with `properties`/`enabled` is ES's implicit",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "52cd6ddf0ad6e01a8d7b3ff274a20a67891122cd936abf49df27234efa536cbc": {
       "excerpt": "============================================================================",
@@ -1973,6 +2149,10 @@
       "excerpt": "An RBS type expression for `ref` — suitable for an `attr_reader`,",
       "approvedAt": "2026-08-13T07:11:42.591Z"
     },
+    "54378c04e3cf8369b9321fc1a177e57b81f8f3dc4d3eb1c2e61c8da5292de1b5": {
+      "excerpt": "A column stores a materialized value, not an ongoing async sequence —",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "54417d9f61a803630a9c57fc75f1e0c50ea7a9ad803e01925eb8f776335ed7bb": {
       "excerpt": "Table fields are optional by default.",
       "approvedAt": "2026-08-13T07:09:56.027Z"
@@ -1980,6 +2160,10 @@
     "5470cbefff968d124d8926cb66e863c6423dd20cfef669aa28469100489b13a3": {
       "excerpt": "True when every union variant is (or descends from) `object` and they all",
       "approvedAt": "2026-08-13T07:09:42.438Z"
+    },
+    "54731a0a4949377300a4ddc379ac5a3f5c43ded10c3701499b47cadf40f036a7": {
+      "excerpt": "A bare (unnamed) enum TypeRef has nowhere to hang a PHP 8.1 backed-enum",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "5496d4f7ddcf21827b0615436411178e77ac348b420acf9bf7029bcd2ba0c8be": {
       "excerpt": "True when `T` has at least one required key. `{}` is assignable from (and",
@@ -1997,6 +2181,10 @@
       "excerpt": "Lossy spot: toFlatBuffersTable emits `(required)` only when the source",
       "approvedAt": "2026-08-13T07:09:56.027Z"
     },
+    "554b68366f2c7875cb3b62da36cb4c9f518c4e44ff9511823b8843fbb0fe8f6c": {
+      "excerpt": "Extract the parenthesized text starting at `text[openIdx]` (must be `(`),",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "556b0b4bd7bb33bddf2c47419dd6455a3787a5812c35e35e9c7c29c2a8bb1d02": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.810Z"
@@ -2012,6 +2200,10 @@
     "563c88090500707bf88e4af67ac58c1e1a868d586103c2845044192fd156ca7a": {
       "excerpt": "A class instance carries only nominal identity (see type-ir's",
       "approvedAt": "2026-08-13T07:10:51.094Z"
+    },
+    "566d19211897c40de14b381bc95b1c962755fc8942bf4ea3f87619ff0c4eb916": {
+      "excerpt": "A native PHP type expression (`type`) plus, when PHP's type system can't",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
     },
     "56a375343da4e8a863f815dc0ce227a9a12ff9c1430453dc6e5f4fcb6c71cc5a": {
       "excerpt": "cents resolves to the explicit \"query\" store -> WireOf<number,\"query\">",
@@ -2069,6 +2261,10 @@
       "excerpt": "Delimiter-stripped, reindentation-normalized text — see normalizeComment.",
       "approvedAt": "2026-08-13T05:02:19.633Z"
     },
+    "5850c4120ec3a67adf7e9b707ffd6429c11a68533275bc08a992397a9883560e": {
+      "excerpt": "Renders `meta.description` as dialect-appropriate SQL. MySQL has a native inline",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "5879fc758a6cae8fc7c41ddc49d5210d07bf871c68d2d0420a9525834d628b3b": {
       "excerpt": "Spec-level default security requirement — applies to every operation",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -2088,6 +2284,10 @@
     "5905823583a5a6f161745b222bb175440861bb8ba15ce6e4a8bc19d9d8621428": {
       "excerpt": "Replace with your project's social card",
       "approvedAt": "2026-08-13T07:09:53.729Z"
+    },
+    "59446fe1a5dbf29c15ad88e35c08ba855e7a84dc625c75896b0cd4005870480f": {
+      "excerpt": "A union-lowering strategy: given a union's name/discriminator/variants and",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "5947e5c2fb5be66f84b01bf9e8c81e41885a66ec132487856e1a1dc8e286a365": {
       "excerpt": "Emit a full `.rbs` `class` declaration: one `attr_reader` per field plus a",
@@ -2124,6 +2324,10 @@
     "5ae28d4b8bf057558cedf96f96373cc5e5209f03f02a983c80bf9b8590e76796": {
       "excerpt": "packages/api-tree/src/build.ts — @rhi-zone/fractal-api-tree",
       "approvedAt": "2026-08-13T07:10:02.240Z"
+    },
+    "5ae594fdc6be4fc70049eac33d677e177e0d931e652b691587402324082c5487": {
+      "excerpt": "An inline/anonymous object (no name to hang a class declaration off of —",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "5b0353f0350b0f314f2108b61f7b4b549ba6c5737f8ac6e7c724bb72eac7cbd1": {
       "excerpt": "`leaf` is authored NESTED under `books`' fallback (so it authors",
@@ -2177,6 +2381,10 @@
       "excerpt": "Run one field's assembled input through its handler, Result-unwrapping the",
       "approvedAt": "2026-08-13T07:08:38.040Z"
     },
+    "5d2886e61d832604466fa574f6a0ca944faa9ad5c691030cb90af23ec1a555d1": {
+      "excerpt": "PHP 8.2 `readonly class` with constructor-promoted properties, each tagged",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "5d89ac3e957043c65e6d6a1531ae1cb62adb502510342b22d2accdd448fc063a": {
       "excerpt": "JSpecify (https://jspecify.dev/) is the JSR-305 successor endorsed by",
       "approvedAt": "2026-08-13T07:09:42.437Z"
@@ -2188,6 +2396,10 @@
     "5da3b65dbc7bf8d17b008910d08a02862b4d4cd89aa684bb28aa5964f44134e2": {
       "excerpt": "Unrecognized character (whitespace variant, stray symbol) — skip rather",
       "approvedAt": "2026-08-13T07:09:42.607Z"
+    },
+    "5dd5da41ff37ed0c74a9164f8308becc09d4e8349813d6ab3eb029dceb1535db": {
+      "excerpt": "A class instance carries only nominal identity (className/source), never fields",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "5de6b55c8be82a0343e2c81580490e6afc184539c41e2f598c7bcecbd02caa4d": {
       "excerpt": "============================================================================",
@@ -2465,6 +2677,10 @@
       "excerpt": "XML doc-comment convention (https://learn.microsoft.com/dotnet/csharp/language-r…",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "68b9e0a7e9c82391ca6056266148e67f13f86bcd16b3db900141130ee1498070": {
+      "excerpt": "integer -> int, number -> float: distinct PHP types, kept as-is",
+      "approvedAt": "2026-08-13T07:11:47.430Z"
+    },
     "6908ec8e039cc3f331e7a1ea70e42f046b630b054d6f9184678804c053012336": {
       "excerpt": "A valid bare JS identifier, or a quoted string literal key otherwise.",
       "approvedAt": "2026-08-13T07:11:09.579Z"
@@ -2485,6 +2701,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:09:56.025Z"
     },
+    "69979a08262efdca22aa060e5083daf8559d2c85b694f191dd580230e066c08e": {
+      "excerpt": "Convert a `TypeRef` to a PHP type expression usable in a property/param/",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "69c74006e62d9c9bea9ae59a75ed7c1d08966448fd4c2cee1952b3cde1bf91e8": {
       "excerpt": "Cap'n Proto schema language: https://capnproto.org/language.html",
       "approvedAt": "2026-08-13T07:09:42.597Z"
@@ -2497,6 +2717,10 @@
       "excerpt": "https://kotlinlang.org/docs/enum-classes.html + Gson's `@SerializedName`",
       "approvedAt": "2026-08-13T07:09:42.438Z"
     },
+    "6a1b2b77a7547310b1e017566930170070e4c77407f720075f47a7c47862bcb2": {
+      "excerpt": "`toSymfonyClass` always renders `final readonly class {vName}\\n{` as",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "6a8303d34d03475f1e8fe9cee243596b10a366c68a2eea77c87b4ae009bc5dfa": {
       "excerpt": "Guards the bare-leaf `fallback.subtree` case: the Node model allows",
       "approvedAt": "2026-08-13T07:08:35.593Z"
@@ -2504,6 +2728,10 @@
     "6aaaef19ddff3a7418dc978255e021b9e3ce8e65449a56ce1ca603d9e2e182fe": {
       "excerpt": "packages/graphql-api-projector/src/schema.test.ts — SDL assembly tests",
       "approvedAt": "2026-08-13T07:11:09.588Z"
+    },
+    "6ae226178178970df1247e6be69565fc08284a8831fc5dca24324b7f7e5c97e7": {
+      "excerpt": "FOREIGN KEY target, mirrored from `meta.references` (from-sql.ts's own",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "6ae2b2f393e5b58ddbf5e96886053e4f5926e904368492a6b5191e3b02243ad7": {
       "excerpt": "Resolve a type name (possibly dotted, e.g. `Outer.Inner`) against the flat",
@@ -2649,6 +2877,10 @@
       "excerpt": "Present iff an `mcp` extractor was provided — drop directly into `CreateMcpServe…",
       "approvedAt": "2026-08-13T07:10:02.219Z"
     },
+    "71679ac66ef7d4b8fccd16056c3695ff29903b69e4e95e34e222bd7a2f28bf5e": {
+      "excerpt": "Builds a full MSSQL column definition, including nullability, default, IDENTITY",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "71971f58e81946d904d5d6e14257a0a27dee1661f4fecb40d6fee4565177cda5": {
       "excerpt": "Render a TypeRef as a standalone C# source file: a `using`-alias for a",
       "approvedAt": "2026-08-13T07:09:42.419Z"
@@ -2705,9 +2937,17 @@
       "excerpt": "https://kotlinlang.org/docs/sealed-classes.html +",
       "approvedAt": "2026-08-13T07:09:42.440Z"
     },
+    "7338a54e3f6002ca50b0c48e28916228f7b33bd80cf36776dbe450a68d243622": {
+      "excerpt": "Assigned after construction (not inline) so the closure captures the fully",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "739a67238c7e595b07eae4c6c3f7cbfaebc80b906d80e64e569c1f4601d3d2f1": {
       "excerpt": "\"record\" (Java 16+ — https://openjdk.org/jeps/395 — an immutable data",
       "approvedAt": "2026-08-13T07:09:42.432Z"
+    },
+    "73a8d29d4ea1a5658e8b550d1a7513830b449e0b0bad743be9c1e1757dbcc1ac": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "73b15ce54d461796181cc10e8da6ce2fac111e96f4b6be3098fc2f63e19bece5": {
       "excerpt": "JTD's union equivalent (§3.3.7, discriminator form) requires a tag field",
@@ -2720,6 +2960,10 @@
     "74219ce52d91a84233f30c388f08a476aad10f02134da715d3afc3c0e21fe101": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:47.728Z"
+    },
+    "743ebb33d06e54ed5afe812719d57fd319a2a2e33523c299ccbd2a4b9044fc1c": {
+      "excerpt": "Reads `meta.references` (from-sql.ts's `{ table, column? }` FK-target",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "744ed4235333754659e153573074c9605cfc4ffe621d44b5224a586a7e02bb48": {
       "excerpt": "'a'..'z', cycling",
@@ -2773,6 +3017,10 @@
       "excerpt": "Set for TYPE_MESSAGE/TYPE_ENUM — the referenced type's name, optionally",
       "approvedAt": "2026-08-13T07:10:47.064Z"
     },
+    "75d3b763d6ac9703d12b11c58f035e2a2dd13ef091cf2f00ea6114b8cd80250e": {
+      "excerpt": "Functions aren't persistable column data — same opaque-fallback treatment",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "7627a4a5226e8d3f048f8ce0e34f904b1549bb255fb12960b03be2f386949703": {
       "excerpt": "`catalog/search`'s generated schema is `{ q?: string }` — every value a",
       "approvedAt": "2026-08-13T07:08:47.728Z"
@@ -2809,6 +3057,10 @@
       "excerpt": "Kinds that produce their own named declaration (record/enum/abstract",
       "approvedAt": "2026-08-13T07:09:42.419Z"
     },
+    "77404950f0a5e679cfc48534f20b62888a43f6379f1faf40d650fce60935a347": {
+      "excerpt": "PHP's `?T` nullable shorthand only applies to a single type; a union",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
     "77516eec1883eaa8887122bd39d3752d3bc2a34ec16ffd9d33324732e9e36371": {
       "excerpt": "`meta.openapi` fields valid at LEAF (operation) position only — see `toOpenApi`.",
       "approvedAt": "2026-08-13T05:06:32.683Z"
@@ -2824,6 +3076,10 @@
     "77afa1d37d21405b4330421af9b1cafcad251f9b2e8911465b538504a1c8a449": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.700Z"
+    },
+    "77b9ccf9fd11a3a8f4bf95540546503842350286d2f8f4a1519f9ddbe617196d": {
+      "excerpt": "PHP has no native binary-string type — `string` is byte-oriented already",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "782be5c06ffc82c02f9b264bf243b8a28c5048ef6279624c964c5cd982278120": {
       "excerpt": "Sorbet's `T.proc` builder is the closest native callable-type construct",
@@ -2861,6 +3117,10 @@
       "excerpt": "packages/api-tree/src/direct.test.ts — createDirectApi (zero-protocol-overhead p…",
       "approvedAt": "2026-08-13T07:10:02.233Z"
     },
+    "7acc0be66b9c0bcfc5c55cd90fd6f17c945f2cdb76eb6ffa419775c58a7ae1a8": {
+      "excerpt": "The union's own table/type name (`toCreateTable`'s `tableName`).",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "7b03fee0f51f76e264019711016be0cbcea6ce211e65288743614e375b09d0a0": {
       "excerpt": "Top-level entry point: render `ref` as the full contents of a `.rbs`",
       "approvedAt": "2026-08-13T07:11:42.591Z"
@@ -2872,6 +3132,10 @@
     "7b28adbd0fba3a979587762617a96f1e40134a999aac05d71289efe1e1d5af24": {
       "excerpt": "`OPTIONS` preflight response — 204 + the standard CORS preflight headers.",
       "approvedAt": "2026-08-13T07:11:09.589Z"
+    },
+    "7b3c88d7c9c37a198eb7702273084489e01a2e0ca4c76f7a98c5f7c6738bbd27": {
+      "excerpt": "Discriminated (`meta.discriminator`) union -> an abstract base class",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
     },
     "7b560e28409bd3764143fe07ed63a8d92c0803dfc2b928e4b116b8f9303119fe": {
       "excerpt": "A service surface (`interface`) has no dry-types value-type equivalent —",
@@ -2965,6 +3229,10 @@
       "excerpt": "Agnostic description text — read by every projector (cli, mcp, graphql,",
       "approvedAt": "2026-08-13T05:12:43.183Z"
     },
+    "7eab847fef5471c1cb6518b419902b3e2ec453fa43a71e73d80f770e3a531a8a": {
+      "excerpt": "A non-object variant (e.g. a plain `union([string(), integer()])`",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "7f003a89ba99a8af621105c0ec30219c2cf95cce9ddf3baf28b83690d7ec0be6": {
       "excerpt": "`toDataClass` always ends its own class body with a bare \")\" line",
       "approvedAt": "2026-08-13T07:09:42.440Z"
@@ -2984,6 +3252,10 @@
     "80520fba2021c67040ea7739c2178a8818f98d8aa397741ee6069f3a349f776e": {
       "excerpt": "Swagger 2.0 has no streaming/async-sequence vocabulary — degrades to the",
       "approvedAt": "2026-08-13T07:11:16.450Z"
+    },
+    "809aaafbb90d0c30a2ccbe023b3f25d28c05224b52268b188be8d8a5182cc0df": {
+      "excerpt": "Lower bound (inclusive) of the range reserved for implementation-defined server …",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "80b8de602a62753b13ac63187fc9077d960b749b3bb3311c193dc66a5ceb99ce": {
       "excerpt": "Message, enum, or unresolved — all become a `ref` (an unresolved name",
@@ -3020,6 +3292,10 @@
     "82e43073ee2ca24a6b261636c3328432db20057afe008bb1cf2208d97269cfa3": {
       "excerpt": "https://kotlinlang.org/docs/data-classes.html + kotlinx.serialization's",
       "approvedAt": "2026-08-13T07:09:42.441Z"
+    },
+    "82f2ceba63ddb02079c0553955036471f053be88c7fe0a1380f45addb61d1e48": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "83073dadf276578cbe116f15845c15a78a41068706ebce70ebba1f15e18bf7a0": {
       "excerpt": "`meta.graphql` open bag — per-projection overrides for GraphQL field",
@@ -3061,6 +3337,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:35.589Z"
     },
+    "8461e36aa5b3b8c9ade4b621fd0f99b9d86fc2b2bdb88ae41fcd5f175dc4ef35": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "846895693fe79af5c0b45675d0893a617af68de19b1566a08b8ff9d8e99eab7c": {
       "excerpt": "Cap'n Proto interfaces (§ \"Interfaces\": https://capnproto.org/language.html#inte…",
       "approvedAt": "2026-08-13T07:09:42.597Z"
@@ -3081,6 +3361,14 @@
       "excerpt": "C# has no literal types outside `enum`/`const` — degrades to the",
       "approvedAt": "2026-08-13T07:09:42.423Z"
     },
+    "856572b961e684a8b8131f38416ecf4ab87888dde350deacc417fd635ece37cc": {
+      "excerpt": "Reuses the projector's own dialect-aware type mapping (`toSqlDdl` bound",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
+    "858bd3f9ede20256f22b9b58567a027926d0fcf8268150ef3799b298b8696769": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "86154ec3e148d2e0b0e96b21d8ea018fb90b76487b5e7f3577a7205184db0f80": {
       "excerpt": "Render one field's SDL declaration line — shared by root-type and",
       "approvedAt": "2026-08-13T07:11:09.587Z"
@@ -3096,6 +3384,10 @@
     "86c38821d22c0532affdd83b2c4327d980f1fa0ca930d9241179637db118c921": {
       "excerpt": "draft-04 has no `const` (introduced draft-06) — use a single-member enum.",
       "approvedAt": "2026-08-13T07:10:55.724Z"
+    },
+    "86d684c5ab776ba41260dc444638b3ce8e3f1334371d26b5db0fc9cc74e4d702": {
+      "excerpt": "PHP has no structural intersection-type construct for anything but",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
     },
     "86f8a020142b07bb5e8c4a2076b42e588bfd07ef232d31dc82e0c8ba97969364": {
       "excerpt": "============================================================================",
@@ -3133,6 +3425,10 @@
       "excerpt": "Java has no structural tuple type. Rendered as a reference to a",
       "approvedAt": "2026-08-13T07:09:42.437Z"
     },
+    "882c5a0ab46f6aeb172a114fdd200deb29e11fb6d84fbf9055ab552fa6a713c8": {
+      "excerpt": "Convert a `TypeRef` to a PHP type expression usable in a property/param/",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
     "888b94e1eedf50a7e93ca870dc1db70e3eb21327d2d7e8c859ebbef6ac2b3ee2": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:38.036Z"
@@ -3140,6 +3436,10 @@
     "88989a4484a300e78179c2229ac7f86617efa3c461107a3252a25fc4b9910960": {
       "excerpt": "No non-lossy field-position fallback for a bare `Int`/`Float` — type-ir's",
       "approvedAt": "2026-08-13T07:10:20.620Z"
+    },
+    "88c16ddd179e31d18c3457adcb96cdfcd574ec9e17c81b66160695e104fef7b5": {
+      "excerpt": "packages/type-ir/src/json-rpc.ts — @rhi-zone/fractal-type-ir",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "88f0cdadf4211138526152c1aee43d7ebfa06550e4baebeae1415c4dca3292cb": {
       "excerpt": "--- Case C: many dynamic segments — 4 `:param` captures in one path.",
@@ -3176,6 +3476,10 @@
     "89e3dfd65f7fb4e2a3928ae26970aa47252700fa979af9347926abd80eff0e0a": {
       "excerpt": "RFC 8927 §3.3.6 — values form (string-keyed map)",
       "approvedAt": "2026-08-13T07:10:20.621Z"
+    },
+    "8ab0906b497f469849b800901bb101b7de2503cda155ecfc6d74fd9cea09c067": {
+      "excerpt": "Lower one method/function TypeRef to a `JsonRpcMethod` descriptor.",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "8ae27b0149c3b1b8033cdf1b2666089afeefb3fd073c525396c71a6a998e8aef": {
       "excerpt": "No map built-in (§ \"Language Reference\"): the canonical workaround is",
@@ -3229,6 +3533,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.590Z"
     },
+    "8d8c8d3bcce337178cc6dd862d3445d1f8f2b4eb49d967aa519d6eb2ccac1072": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "8dcc308d52a5b141014c9074b9ff94afd8cee487d6882d81d671bb73f7f76cd8": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:47.728Z"
@@ -3260,6 +3568,10 @@
     "8e3271038d7d0c7a7ed3235de859426853b0b3e75197bb72042bb6c4ff3fd8cd": {
       "excerpt": "Options for toOpenApi / toOpenApiFromRoute.",
       "approvedAt": "2026-08-13T05:06:32.683Z"
+    },
+    "8e3303603203d5801ee089b73ccea0c3cf83b66e6c499588b45dd703b52db745": {
+      "excerpt": "packages/type-ir/src/from-cql.ts — @rhi-zone/fractal-type-ir/from-cql",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "8e5600c038796fd7bcd6885f72c8645fe9790ae1cacdfb92a53e1f044e999e05": {
       "excerpt": "OAS 3.0.3 §4.8.24 (Schema Object, \"Composition and Inheritance\") + §4.8.24.1",
@@ -3329,6 +3641,10 @@
       "excerpt": "The synthetic map-entry message is not a user-facing def.",
       "approvedAt": "2026-08-13T07:10:47.066Z"
     },
+    "9043c5e0af92ec9673568f9af7b54bfb3201e9a07f9d5edb3fb4b7c27272a6e5": {
+      "excerpt": "CHECK constraint clauses, each containing the `{name}` placeholder — see",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "9048fa710a0ad871c1fbe9ad2531f7ef11dad2f7bdcc06c1923d18f376800487": {
       "excerpt": "No context (field name) is available here to name an anonymous nested",
       "approvedAt": "2026-08-13T07:11:42.588Z"
@@ -3348,6 +3664,10 @@
     "90b0fa4524288092bc1e62e88ede945c4d43c64669e91774cd08f3531a606945": {
       "excerpt": "Fallback part — accumulate the fallback name into Slugs for the subtree",
       "approvedAt": "2026-08-13T05:06:32.679Z"
+    },
+    "90bb2c6839b7b42e898fe1126d9f04017903ab88d10f9447d0c0f6935f144e7e": {
+      "excerpt": "Name-agnostic column parts — the MSSQL analogue of sql.ts's `SqlColumn`. Split o…",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "90f1e05ead70a713d0df38a150b1a94122a84564d06a7e8c7ff413de352f5342": {
       "excerpt": "Well-known types: https://protobuf.dev/reference/protobuf/google.protobuf/",
@@ -3413,6 +3733,10 @@
       "excerpt": "examples/doc-site-verification/starlight/generate.ts — run with `bun run generat…",
       "approvedAt": "2026-08-13T07:09:53.732Z"
     },
+    "93cfd658fba79563c3df0ac2d0d896e017e7887f1a3124caa208352905f5644e": {
+      "excerpt": "An inline/anonymous object (no name to hang a class declaration off of —",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
     "93e50889c2da84a71c5cf16a66ffea2d22af0e3b19f4c40dc6f212bdabe58e8c": {
       "excerpt": "Top-level declaration entry point — `toKotlin(ref, name)` emits a",
       "approvedAt": "2026-08-13T07:09:42.441Z"
@@ -3429,9 +3753,17 @@
       "excerpt": "GraphQL unions are always named (§ \"Unions\") — an inline reference needs",
       "approvedAt": "2026-08-13T07:10:20.614Z"
     },
+    "9471042036fd8b8d69ac6f6ebe7e04585d6ba7d16c4e6a32ef6285cc672f8aec": {
+      "excerpt": "PHP 8.0 union types (https://www.php.net/manual/en/language.types.declarations.p…",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
+    },
     "948d06d2015589e523a42c3cb1a752a0e4afba195e3050d3fde65d3b08b06fd0": {
       "excerpt": "Full field type: base type + repeated wrapping + meta. Exported standalone",
       "approvedAt": "2026-08-13T07:10:47.064Z"
+    },
+    "94c94e7d5d6f05fdfaacc4581ae482f3cbbb3bb65c7edb000dd0eca9a296f77b": {
+      "excerpt": "Converts an Elasticsearch index mapping (the `mappings` value of an index",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "94e772298dc39e3cca39631fc4ede2faafb37b7aad9af7b6dbf91b916588f322": {
       "excerpt": "TYPE_MESSAGE or TYPE_ENUM (or, from parseProtoText, any non-scalar",
@@ -3440,6 +3772,10 @@
     "954494cc842ec56f7cd74c3d0f426ff0f651a12ae184912b6ad2c3e66e074c88": {
       "excerpt": "No intersection/mixin construct (§ \"Tables\") — lossy: falls back to the",
       "approvedAt": "2026-08-13T07:09:56.017Z"
+    },
+    "955475918528846da0406050d0d49d20e07d5ed22520700be5431eb9aa8bcfcb": {
+      "excerpt": "Builds CHECK constraint clause templates from the same open-metadata constraint",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "9581cd6d739803e15db3334482066cd2759294cbf0fd2c49bbd4186da0550944": {
       "excerpt": "`Types::String.enum(...)` is dry-types' native closed-set-of-values",
@@ -3456,6 +3792,10 @@
     "95fe32c831a56e7ccd1f3d10663d2b34f2911bdd700a9b5bb91af944b67fbf3d": {
       "excerpt": "Proto3 forbids the `optional`/`repeated` labels inside a oneof",
       "approvedAt": "2026-08-13T07:10:47.056Z"
+    },
+    "96046433a87aade2ab333b61cfb06018213c3fa54986221007a71928809bd940": {
+      "excerpt": "`enabled: false` — ES stores the field but never indexes or parses its",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "9613642b427fbff5c2eca11f11f291c6959479e2009d12247693f72f4d074b14": {
       "excerpt": "============================================================================",
@@ -3480,6 +3820,10 @@
     "96c25bf58645a7cfb4a8b20590162785627559d66e59f68796fda80f00656133": {
       "excerpt": "OAS 3.0.3 §4.8.24.2 Properties table: readOnly/writeOnly are booleans,",
       "approvedAt": "2026-08-13T07:11:16.453Z"
+    },
+    "96e57ec0662143eb7b964a0fef97881a5849b06bf2b82255c5a386e923dea251": {
+      "excerpt": "Base-table-per-variant layout — see `baseTablePerVariantSqlLayout` in",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "9702545450adc545fcadcbfb02254a175a960de3861fc8bcb5d3c0b3315904a7": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
@@ -3565,6 +3909,10 @@
       "excerpt": "examples/doc-site-verification/starlight/src/fetch-setup-client.ts",
       "approvedAt": "2026-08-13T07:09:53.731Z"
     },
+    "9bcc503ed37c621c42e99b737ce8a4e4e6669c772ddfe0a40679b102524cfc1e": {
+      "excerpt": "Unrecognized/future ES field type — degrade to unknown rather than",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
     "9c51d1a9061baacf02c26edbd0c96a47cd916dbed31b1b44a13d0369ebbd6168": {
       "excerpt": "A Sorbet type expression for `ref` — suitable for a `sig` param/return",
       "approvedAt": "2026-08-13T07:11:42.597Z"
@@ -3645,6 +3993,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.590Z"
     },
+    "9fe0ef65d77689721921397166095c7f5949e016ee0b2b22f55476e909758c8e": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
+    },
     "a011f5f292600c230dffdd26b2de52de1532950c28173b7bb000ca56b606d205": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:09.590Z"
@@ -3657,6 +4009,10 @@
       "excerpt": "Options for `createResolver`.",
       "approvedAt": "2026-08-13T07:08:38.040Z"
     },
+    "a0ce44226ea7b98856251dd7b5e900a573e723a1ec1076217faa9732b5cbcfea": {
+      "excerpt": "The `mappings` value of an ES index definition — a mapping is itself",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
     "a0db39a4f7c48f62d1bd9d48afda3c45b8e6bfdd9493ee13a3d1f6527bfeb597": {
       "excerpt": "Widened to the erased HttpRoute here — this assertion is exercising the",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -3664,6 +4020,10 @@
     "a1134d2c36cb4b9e18b56fdae5a921fefc4bd4e612de7e9d6f22535d95899027": {
       "excerpt": "https://kotlinlang.org/docs/data-classes.html +",
       "approvedAt": "2026-08-13T07:09:42.440Z"
+    },
+    "a12d8b5dbdf071ddf87f7712d0793221e15f7dba827f64ac69fa8271e84c3eea": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "a138cde3cfb61f6104bf9d4fb759296c5975bc1ddfd821ea04db2217f5f6bad5": {
       "excerpt": "packages/http-api-projector/src/openapi.ts — @rhi-zone/fractal-http-api-projecto…",
@@ -3773,6 +4133,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:38.033Z"
     },
+    "a58e9a86d790281cd6b2a73b873ee3a1a5303f33871f2294bc4044c4364ade22": {
+      "excerpt": "Resolves a union variant's name — see `variantName` in sql.ts for the full",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "a5949d8d37e9a0cb9ef00b01857f69d8f113a78f851e4929ff5bbd8caac670c1": {
       "excerpt": "Mirrors json-schema.ts's `passthroughKeys` — the reverse direction extracts",
       "approvedAt": "2026-08-13T07:10:55.731Z"
@@ -3797,6 +4161,14 @@
       "excerpt": "examples/library-api/scripts/generate-client.ts",
       "approvedAt": "2026-08-13T07:08:47.730Z"
     },
+    "a6897321826d3c6b2735002f69a2d3681271003f8fb8dad559225270259aaf88": {
+      "excerpt": "Uses the `{name}` placeholder convention (see `buildMssqlChecks` above) rather t…",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
+    "a6998aff430f904139ac72fb3326b6f36b18bc7605e41df24bdd5b03805035a3": {
+      "excerpt": "Entry point for a TypeRef whose root may be `object` OR `union` (unlike",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
+    },
     "a6b8267a25b11a5146003bbc63adc5a9d7492d8ccf07b2e1692eed4b3c731ede": {
       "excerpt": "The discriminant field itself is structural noise once it's encoded",
       "approvedAt": "2026-08-13T07:09:42.438Z"
@@ -3817,6 +4189,10 @@
       "excerpt": "`:name` (colon-prefixed), matching extractRouteTypeRefs's own",
       "approvedAt": "2026-08-13T05:06:32.683Z"
     },
+    "a73686a5971428356f26c2b83542fa6cbfe811b0ccdbaff0860dc7487e856db3": {
+      "excerpt": "Fields present on EVERY object variant (excluding the discriminator",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "a795b2544eea4970a45f5f4b9337f4b101aaebcbe2aa6200ada3e18052166ec0": {
       "excerpt": "Convert `.fbs` schema text into a flat `Record<string, TypeRef>`: every",
       "approvedAt": "2026-08-13T07:09:56.025Z"
@@ -3824,6 +4200,10 @@
     "a7a48c6781739d2ef44adafc917cbc77f2d7ceba329c16a5345a891983158e82": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "a7da26290855b3cf5956f01e6b2cc7e4764293e47bf52a1304855d5e890d1daa": {
+      "excerpt": "A bare (unnamed) enum TypeRef has nowhere to hang a PHP 8.1 backed-enum",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
     },
     "a8177254e7e6865842f9baa0f4f45cb0f032f7082feb9b4f7f18de73d4bc998c": {
       "excerpt": "root, \"list\" leaf, fallback subtree branch, and its \"get\" leaf",
@@ -3849,6 +4229,10 @@
       "excerpt": "Wrap each field's handler call so it runs inside its own",
       "approvedAt": "2026-08-13T07:10:43.573Z"
     },
+    "a9129323d21da8feb5e2f2c54ff2bc964c87daa16be09e951dc54bd899fabf46": {
+      "excerpt": "Convert one or more CQL `CREATE TABLE`/`CREATE TYPE` DDL statements into a",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "a923aa1c3a409beae090202f2b80973d5b4c146cfe0ec097c78f145946002e13": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.816Z"
@@ -3868,6 +4252,10 @@
     "a988069b1899be9ecb1f4f57af15c88038a2e5dfe5fe0ec6f5d09d1737b121be": {
       "excerpt": "Proto3 has no doc-comment keyword of its own; `//` line comments (§ \"Language",
       "approvedAt": "2026-08-13T07:10:47.056Z"
+    },
+    "a9a11a8d4c276460cf0d4505a9c341df65e68eddf317af2655765935ec7a8670": {
+      "excerpt": "Convert a `TypeRef` to a PHP type expression usable in a property/param/",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
     },
     "a9a96ad66cd1bcd3fb287c09ef10f22e9d766d1b97b573a7ff903bcd892b3dbc": {
       "excerpt": "Underscore-joined tree-path → derived input/output TypeRefs (from codegen). Forw…",
@@ -3892,6 +4280,10 @@
     "aa8f79cb744ea6661c5b660bfdf8935fc40c89bbe44648a749a376797fede0dd": {
       "excerpt": "Same wrapper-table hoisting as the union-field case above, but at",
       "approvedAt": "2026-08-13T07:09:56.021Z"
+    },
+    "aaa403b42782f7d2f0b9e6566acf62989fb6540e64217885b9eb4a14073d2256": {
+      "excerpt": "A single field definition inside an ES mapping's `properties`. Every key",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "aac7c89eda5283ee67f1c0691840ccd1204808957cb7629755e4c246588bda74": {
       "excerpt": "Structural mirror of cli-api-projector's `CliAlsContext`.",
@@ -3925,6 +4317,10 @@
       "excerpt": "An unrelated leaf moving elsewhere in the tree must not affect",
       "approvedAt": "2026-08-13T07:11:03.700Z"
     },
+    "ac3e3f33cdf19167393ac166b7628976e0177a1521eb9903b1e95e6a688ef2e0": {
+      "excerpt": "JMS's own compact `#[Type(...)]` type-hint string — narrower than the",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
+    },
     "acd69cc16337d72b334b3ac442bb47ddd2d608c3ad0ed5d077f24eefa98f4808": {
       "excerpt": "Swagger 2.0 §2.2/§4.7.4: schemas referenced via `#/definitions/Name` live in",
       "approvedAt": "2026-08-13T07:11:16.450Z"
@@ -3936,6 +4332,10 @@
     "ad05b4c8cca0b05b6fd7daf0efdd8dd0d233400883e8f984c2371dc28b0eecda": {
       "excerpt": "Best-effort conversion for a TypeRef used in *field/argument type position*",
       "approvedAt": "2026-08-13T07:10:20.614Z"
+    },
+    "ad1bfae6041a77b0af16c0d8d8a86c9e024cdfa21102e1f5a3d84cbf26fc19aa": {
+      "excerpt": "CHECK constraint clauses derived from open metadata (minimum/maximum/minLength/",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "ad6933d83a7f0a3282adadbbe5a81602884c13a1fe4befc112c80bbd7774c778": {
       "excerpt": "Follows a run of unbranching single-literal-child nodes (no param, no",
@@ -4029,6 +4429,10 @@
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.583Z"
     },
+    "b159e3f4c95eaaec2c2c284d539f02c637c472bd356580b86fee57fa1d56c8cc": {
+      "excerpt": "Base-table-per-variant layout: one shared base CREATE TABLE — primary key,",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "b1a43b7a13ffa84bac5273c3f53a77628b93a8130edf15ae2bf1ea6039e199f0": {
       "excerpt": "JTD has no callable-type form — degrade to the empty form (accepts",
       "approvedAt": "2026-08-13T07:10:20.621Z"
@@ -4064,6 +4468,10 @@
     "b3c6872d8edea70dc68dd2659d512638fae65127eec94b28edf1584458fc3f31": {
       "excerpt": "`toJson` serialization expression for a Dart field's value at `fieldExpr`.",
       "approvedAt": "2026-08-13T07:10:51.094Z"
+    },
+    "b3eaf999f34955e80b07a0c5902855193125df2c345e48472bc0ca67a649f68e": {
+      "excerpt": "Lower an `interface` TypeRef (a service's method surface — see",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "b4256873b4eb49694d4bd3275ae9cbfaa9799925b9a74cc44b81df40e7394a11": {
       "excerpt": "post bundles no idempotent tag — hint should be absent or false",
@@ -4105,6 +4513,10 @@
       "excerpt": "`void`/`unknown` have no dedicated dry-types construct — both degrade to",
       "approvedAt": "2026-08-13T07:11:42.588Z"
     },
+    "b63ba5fc411522f0f3b963299bdccf80502e2d163cb4efcf8a9cba9cfc704172": {
+      "excerpt": "The method does not exist / is not available.",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "b648b30fb727478957a719e7a57f9ab59a3c041ed95e10e8190b9a64b94d8915": {
       "excerpt": "Direct-dependency memo, shared across every entry's BFS below — a file",
       "approvedAt": "2026-08-13T07:10:02.228Z"
@@ -4144,6 +4556,10 @@
     "b85759680cb4684741d07c97afa7df68150fba3d73e59cc1c8e0db382a51ed8a": {
       "excerpt": "draft-07 has no streaming/async-sequence vocabulary either — same",
       "approvedAt": "2026-08-13T07:10:55.727Z"
+    },
+    "b8b83d62a1e09b906159cce738d6fc4b2c355f236d595566083d6996d98d6e91": {
+      "excerpt": "Single-table-inheritance layout: one CREATE TABLE for the whole union — a",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "b8eb308445fbebf3117fe1c18819e7a5747100490d81f2f289ec5d70d55d77cb": {
       "excerpt": "No context (field name) is available here to name an anonymous nested",
@@ -4273,6 +4689,10 @@
       "excerpt": "Convert a `protobufjs` map field into its `ProtoFieldDescriptor` plus the",
       "approvedAt": "2026-08-13T07:10:47.064Z"
     },
+    "bd2b77710bc1ed70bad72f09ff747e3a7f92d93302ebe8f37d0097fe96ce6bab": {
+      "excerpt": "Not a native ES mapping keyword — ES mappings carry no notion of an",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
     "bd4375a0ca0a5d965296dc42c90f40fab7c8b420d868194965aa58ed46ff16b3": {
       "excerpt": "Cap'n Proto enumerants are assigned sequential ordinals by declaration",
       "approvedAt": "2026-08-13T07:09:42.607Z"
@@ -4288,6 +4708,10 @@
     "bdc35b626a019a10e13d756297469347ca2560b2a003664777c73e5333b57e2c": {
       "excerpt": "True for a plain mergeable object — not null, not an array.",
       "approvedAt": "2026-08-13T05:06:32.668Z"
+    },
+    "be4988d30ef1e455564d7f85be78d554fc76a83c8332582167f1e700444811e9": {
+      "excerpt": "PHP 8.2 `readonly class` (https://www.php.net/manual/en/language.oop5.basic.php#…",
+      "approvedAt": "2026-08-13T07:11:47.428Z"
     },
     "be6a1612cce5cb535ceb14996a5052c407ba33fa3278c873169f1f83e0086955": {
       "excerpt": "Same merge order/precedence as project.ts's buildField/buildDispatch:",
@@ -4328,6 +4752,10 @@
     "c0110b7cdaf64db62e9bc79621eef4e0f1405c85945202a4af2929c1e9219122": {
       "excerpt": "Per-projector `als` config — the exact shape `PresetOptions.als` /",
       "approvedAt": "2026-08-13T07:10:02.219Z"
+    },
+    "c07f11944edb4afddf066368052ff9cc0e3036d1e2231c48065d3af43a7bdcf8": {
+      "excerpt": "packages/type-ir/src/from-elasticsearch.ts — @rhi-zone/fractal-type-ir/from-elas…",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "c0ba2fb7bc3d287e63cd1849b2234c712ea396eab5d2ebabc01a477448c7203d": {
       "excerpt": "https://kotlinlang.org/docs/sealed-classes.html — Gson has no",
@@ -4417,6 +4845,14 @@
       "excerpt": "No native pagination construct — degrades to `List<T>` of the page's",
       "approvedAt": "2026-08-13T07:09:42.441Z"
     },
+    "c55d6ecc3712b54f06d064cb0186b0501ff0bd705885d16d5380e5ff82396911": {
+      "excerpt": "Upper bound (inclusive) of the range reserved for implementation-defined server …",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
+    "c5778e3bc9e555386b9fbb0a9205ae4b36330226c078529ab91801b34c671585": {
+      "excerpt": "The JSON sent is not a valid Request object.",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "c645acc027d65e68cd4d2fb538dd5a3ef52cbe7838618b252b1aa2a59b99b3b6": {
       "excerpt": "One rendered inline-type fragment: literal MDX/markdown text, or a",
       "approvedAt": "2026-08-13T07:10:43.801Z"
@@ -4441,6 +4877,10 @@
       "excerpt": "consume ';'",
       "approvedAt": "2026-08-13T07:09:42.607Z"
     },
+    "c76d7c43380b4a3a16292255efcb60a6cae7c10a74cb6a41b16726add59ff036": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "c7981f6690b0e766994a47a032f3731a75ad40d8620132a552d8cec5291676fb": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:11:03.688Z"
@@ -4456,6 +4896,10 @@
     "c7e130a08b1a94658be8f6e8f3b1ffbc3a3045631d7d956f0c45aaefbb05feb3": {
       "excerpt": "ObjectMapper's built-in transforms don't include a Date parser out of",
       "approvedAt": "2026-08-13T07:10:46.698Z"
+    },
+    "c86eb14926fa58387d7082ebba8a29d71d650a558b911921388b6ca2a1b807ae": {
+      "excerpt": "True when the method's return type was a `stream` TypeRef — its result",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "c87d6dd8bf53368dfda1335178f07f001cd2ad77ebcd872577808b53a7ca0dbe": {
       "excerpt": "Render a `meta.default`/literal value (JSON-ish: string/number/boolean/",
@@ -4485,6 +4929,10 @@
       "excerpt": "Per-field derived facts: real input/output TypeRefs + JSDoc description.",
       "approvedAt": "2026-08-13T07:08:35.589Z"
     },
+    "c9b782b37d453bbea36759fd24a806f8587fedaafa241644b7b9805af7c7bb28": {
+      "excerpt": "Each variant paired with its resolved name: the literal value of its",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "c9c405f04b09b15349bedbc1ba68cdbbdc4c6ba85b1bd157e3ff1b3dc04783c1": {
       "excerpt": "`contributions` is validated (by the parameter's own conditional type,",
       "approvedAt": "2026-08-13T05:12:43.183Z"
@@ -4504,6 +4952,14 @@
     "cafe1eff6b3c46e3fa80945a9447d43ea1bad7a0cf46bdc555819ee2a1d566ea": {
       "excerpt": "Group numbers are assigned left-to-right by OPENING paren position in",
       "approvedAt": "2026-08-13T07:11:03.688Z"
+    },
+    "cb89233e4b6340b3d2f2b2b0e9b2acf3ef3a33da4a644c88a74606805c932cc8": {
+      "excerpt": "Invalid method parameter(s).",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
+    "cba0e40b048ee4f2f3480d3a656b292a2d19dffff3456273d1ed13b3e846febe": {
+      "excerpt": "Build the by-name params object schema (see module doc's \"Params\" section)",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "cc08b6e711dd20eda48d7eff92344b65856bf4b8810258a44de9533cc567f685": {
       "excerpt": "`mapping` has no forward-projector consumer yet (toOpenApi30 only",
@@ -4601,6 +5057,10 @@
       "excerpt": "m.kind === \"union\": a Cap'n Proto union always has exactly one active",
       "approvedAt": "2026-08-13T07:09:42.607Z"
     },
+    "cfae77264311f848069032e27dc1a56ef9333fa44e31e8ab39fe1bcaa8937a65": {
+      "excerpt": "Top-level entry point: an `object` TypeRef becomes a `toSymfonyClass`",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "cfe0e8bbe7228fe2d29160f56d4af03e2f5c62c0d9dca271fa6c190156b89dc0": {
       "excerpt": "`projectGraphQL`'s full result.",
       "approvedAt": "2026-08-13T07:08:35.589Z"
@@ -4629,6 +5089,10 @@
       "excerpt": "OAS 3.0.3 §4.8.24.1: `nullable: true` is the substitute for JSON",
       "approvedAt": "2026-08-13T07:11:16.455Z"
     },
+    "d1299289e3cf1003e41963cf7ac3332fe22f05ab1744c41db4bbdb78a3d3e8b1": {
+      "excerpt": "PHP 8.1 enum case names must be valid identifiers — member strings (often",
+      "approvedAt": "2026-08-13T07:11:47.432Z"
+    },
     "d1405324bb94808b9869e85c44bc94a5a0ca367c726d62ef42d80e50915568c8": {
       "excerpt": "FieldOptions.deprecated (descriptor.proto): renders as the `[deprecated = true]`",
       "approvedAt": "2026-08-13T07:10:47.056Z"
@@ -4648,6 +5112,10 @@
     "d20b0a2690bcba4ef6b431a52fd51baa481c4a5b8ee80a5eee1bf0a53e9834bc": {
       "excerpt": "Nested objects need field-name context to be named; `buildTable` special-cases",
       "approvedAt": "2026-08-13T07:09:56.017Z"
+    },
+    "d21bc146e6efb46a14c2cf375e713fca00b9bdc2de981f5695cae301798d0b9c": {
+      "excerpt": "PHP 8.1 backed enum (https://www.php.net/manual/en/language.enumerations.backed.…",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
     },
     "d24480ed16c407cbced6f9553cb29f830d228afc1230b4ae3330b0f6a94e2c54": {
       "excerpt": "service name — discarded, out of scope (see doc comment)",
@@ -4745,6 +5213,10 @@
       "excerpt": "draft-07 §10: readOnly/writeOnly are draft-07 additions; examples arrives",
       "approvedAt": "2026-08-13T07:10:55.727Z"
     },
+    "d79973297d5d3caca3f2ac352bc983544855df55013629c11da292015a27e748": {
+      "excerpt": "`toJmsClass` always renders `final readonly class {vName}\\n{` right",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
+    },
     "d7a0d708df671afc8b772350f4fb406253bacf6402a1974ffd69c28ade814c71": {
       "excerpt": "File extensions this tool considers source — matches the languages the",
       "approvedAt": "2026-08-13T05:02:19.633Z"
@@ -4752,6 +5224,10 @@
     "d7a5fdb12076f45c9effe2db272d103649c0ac9d914080d3d4da017f2a757b02": {
       "excerpt": "Strip any degrade comment (`/* never */`, `/* interface */`, …) — valid",
       "approvedAt": "2026-08-13T07:09:42.423Z"
+    },
+    "d7c8c9fe056710d5f71d8d4fe92c2e6479b27debdba7361ecabaf1ec9e24b3db": {
+      "excerpt": "`[keyspace.]name` -> bare `name` (this module's map is keyed by",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "d81a7410660fc8e445a42362627bb9017eb8127a81372a192c0f18d5d7346392": {
       "excerpt": "`metadata.format` values jtd.ts's string handlers stamp onto an otherwise",
@@ -4797,6 +5273,10 @@
       "excerpt": "See the 3.0 test above for why `kind` uses `enum` rather than `literal`.",
       "approvedAt": "2026-08-13T07:11:16.459Z"
     },
+    "d95ee964e3e2183b1fce0151de5926bd3391771d442007c7546a136f9cccefb1": {
+      "excerpt": "Parse `PRIMARY KEY (...)`'s inner clause into partition-key + clustering-",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "d965b8ac44e0fe487bcf10ff34326e094aaad39fbecbfb9b47e7e280ff54e429": {
       "excerpt": "OAS 3.0 has no streaming/async-sequence vocabulary — degrades to the same",
       "approvedAt": "2026-08-13T07:11:16.453Z"
@@ -4836,6 +5316,10 @@
     "daf50420e34c73dba082c84d4e62dff4c3983c7bec879b37e973746af5b71c2d": {
       "excerpt": "The full per-request store bag a GraphQL field dispatch builds and threads",
       "approvedAt": "2026-08-13T07:08:38.040Z"
+    },
+    "db3057a2de09d0cc56be3cb86a0ad43fc2a9cbca34e6ae1577f21dc0acb9b73d": {
+      "excerpt": "Multi-fields (`fields`) and a handful of ES-specific knobs that have no",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "db9c4dc88100b0fe235f3456866446a05a92f1067ef0f2fc71f1d203cdf23c83": {
       "excerpt": "Swagger 2.0 has no `oneOf`/`anyOf` (only `allOf` survived from its",
@@ -4881,9 +5365,17 @@
       "excerpt": "Dispatch key: the QUALIFIED tree-path key (same convention as",
       "approvedAt": "2026-08-13T07:08:35.589Z"
     },
+    "ddca3a27cac70c08ace465ffbc595a5048caf404b566710f11e106a89fa76d4d": {
+      "excerpt": "Resolves the dialect-appropriate string column type via `toColumn` itself",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "de0c862d430f9f94d670f96c4f6c39a3d955e99bcc0f2eea2a29e31ff76f85db": {
       "excerpt": "Returns a NEW manifest with every comment's hash added (or refreshed —",
       "approvedAt": "2026-08-13T07:07:40.079Z"
+    },
+    "de15801fba678cd1fde189b2c974c81b55188573dbeee3611094fe8c4ad52e72": {
+      "excerpt": "ES integer widths -> type-ir's fixed-width int kinds.",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
     },
     "de3c1d899af6fdffc08414e35fefa6cd102a2d8f0acdd31e5b5fde71180ccb93": {
       "excerpt": "============================================================================",
@@ -4920,6 +5412,10 @@
     "ded2e8ac3487a084d9f8ae3fb62f337e5f87a437430d7dffd252a14fc1e69b43": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:08:35.593Z"
+    },
+    "df3694d237615e241089475d76fbbf85dd6d6aa17f56fa15e3777d0d74c029d1": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "df5b50bb489e91a19014f1d1ea61fd160e24b9c33720ef534eaa950bb9718838": {
       "excerpt": "Individual oneof member fields don't ALSO appear as top-level fields.",
@@ -4976,6 +5472,10 @@
     "e11191dcd3eb21d6507a5cd30f02b70fff6e2d88675de9967ba7e92eb54debd5": {
       "excerpt": "GraphQL has no mixin/intersection construct (§ \"Type System\") — this",
       "approvedAt": "2026-08-13T07:10:20.614Z"
+    },
+    "e137b7bb81b3d39d81beef35d38307767baf250a551730ab817756923fb0e28b": {
+      "excerpt": "Single-table-inheritance layout — see `singleTableInheritanceSqlLayout` in sql.t…",
+      "approvedAt": "2026-08-13T07:11:45.916Z"
     },
     "e14a0d9ce54e0f5f5335a8350c00a515dc92bfc104bfc3fb0b685766d357872e": {
       "excerpt": "Get a single book by ID. GET /books/{bookId} (fallback subtree is a bare leaf — …",
@@ -5057,6 +5557,10 @@
       "excerpt": "No temporal type in FlatBuffers; datetime/date (type-ir's `Date` domain",
       "approvedAt": "2026-08-13T07:09:56.017Z"
     },
+    "e445d4328e146aadf029a3e355b5b8d8d53fb2a6cb380f3f550f11f2edf477f5": {
+      "excerpt": "Build the result schema from a method/function TypeRef's `returnType` —",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
+    },
     "e496069f39dc92c47aebb6b1899faaba794aba9bcd018d38eff38cd49917c13b": {
       "excerpt": "Lower a registry of top-level TypeRefs (as would back a whole .fbs file) to",
       "approvedAt": "2026-08-13T07:09:56.017Z"
@@ -5112,6 +5616,10 @@
     "e669bab4195b2631e12120909e3bc535aba9e672e507ba9a883ac12dae3bb374": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:10:20.623Z"
+    },
+    "e6910f65322a30e751a05257dca02864325abdf6881c5fdbd50667b9891bc760": {
+      "excerpt": "Strategy for lowering a union-rooted TypeRef to DDL — a function, not an",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "e6d3d822448ce4c9f922ef281167c9efc8480490f0a9286ccaa420f1acbecff7": {
       "excerpt": "`files` currently ships raw source (with test-file globs excluded by",
@@ -5381,6 +5889,10 @@
       "excerpt": "Mirrors openapi30.ts's/openapi20.ts's own `passthroughKeys` (the forward",
       "approvedAt": "2026-08-13T07:11:16.455Z"
     },
+    "f168673e6cca074ac07bb315d6bfe1abf0db99bd09c99e9d96cdeb2daf158bce": {
+      "excerpt": "Parse a CQL type expression (`text`, `list<int>`, `frozen<map<text, int>>`,",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "f16c8c5ca0e1df251e117a5373869d037150503bd51f303a1bda7898d797d01e": {
       "excerpt": "`sources.paramNames` is codegen-derived (see `findRouteSourceCoverageProblems`'s",
       "approvedAt": "2026-08-13T07:11:03.700Z"
@@ -5408,6 +5920,10 @@
     "f212e37224274e35455dcd1e1f6993a45cad807b5f96c62323455902bae56ddc": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T05:06:32.673Z"
+    },
+    "f2287b173cf991f523afb4206fadf814a23cd535f0950a7ca6c21f123420874f": {
+      "excerpt": "PHP 8.2 `readonly class` tagged `#[ExclusionPolicy('all')]` with",
+      "approvedAt": "2026-08-13T07:11:47.423Z"
     },
     "f23395f0c45d9400ad02c7aa544afa0a52c1b190c74fe2a587a702fc0d7d02d4": {
       "excerpt": "draft 2020-12 §6.2.3/6.2.4 (numeric form, since draft-06 — see json-schema-04.ts",
@@ -5469,6 +5985,10 @@
       "excerpt": "Every leaf/primitive kind's underlying Swift property type — ObjectMapper",
       "approvedAt": "2026-08-13T07:10:46.698Z"
     },
+    "f47047b085524b866d1a32c1479a3b272ba1f2dd310c3791aa47f1096467d4ce": {
+      "excerpt": "Converts a single field definition (one entry of a `properties` map, or",
+      "approvedAt": "2026-08-13T07:11:45.920Z"
+    },
     "f48459dfc59c6c7eed110194a0a3dc61f081b25951a91824740db2b56c876bcc": {
       "excerpt": "Dart enums (https://dart.dev/language/enums) with a `value` slot carrying",
       "approvedAt": "2026-08-13T07:10:51.087Z"
@@ -5484,6 +6004,10 @@
     "f4d75af9b8c668efe1bc38a20a89dce1a5146039ea2f491f6f698ce8ccba35c6": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T07:10:43.816Z"
+    },
+    "f4e38cbe25c06a4e58759ec61cdaf37feea70dd48bac169f9cff51160a535055": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
     },
     "f4e84b78162c54f9991832315507a0991137d91e7e4835e6bac2f6b7455a426c": {
       "excerpt": "examples/doc-site-verification/docusaurus/src/fixture-tree.ts",
@@ -5581,6 +6105,10 @@
       "excerpt": "@ts-expect-error — \"database\" is not a registered GraphQLStoreName.",
       "approvedAt": "2026-08-13T07:11:09.591Z"
     },
+    "f9194d2e5530d7ee2b092d4c8c46e71fcade6a16ce6df68f0cc616ba8099ffce": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-13T07:11:45.919Z"
+    },
     "f946f7e0af0d9484eed63089cde45a0968c6e6129520b6c689deb19b4e1b51bf": {
       "excerpt": "Same fidelity as mkdocs-reference.ts's `fieldRow`: the deprecation",
       "approvedAt": "2026-08-13T07:10:43.810Z"
@@ -5644,6 +6172,10 @@
     "fb2a61199e04dfa15ab04e4cfd513b741925ef268ea421ef6e11a815d83bc091": {
       "excerpt": "Top-level declaration for a named type — a record/class for `object`, a",
       "approvedAt": "2026-08-13T07:09:42.437Z"
+    },
+    "fb3b7851b8ab016b4bc2bc63b046d2a3e41ea6761e5b06a7644dac1c0941c858": {
+      "excerpt": "Builds CHECK constraint clause templates from the same open-metadata constraint",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
     },
     "fb4437db70b127c1fbd2384207d1e9f2db1432ec2d40219fa23e130a426ba51a": {
       "excerpt": "Pre-built `GraphQLErrorEncoder`: maps error `kind` values to",
@@ -5721,6 +6253,10 @@
       "excerpt": "`graphql.*` authoring namespace — mirrors `http.*` (http-api-projector/src/verbs…",
       "approvedAt": "2026-08-13T07:11:09.591Z"
     },
+    "febaf2e47de0956349f908b9472720b137890248b0c6f5930ba4ca70afabfedd": {
+      "excerpt": "A non-object variant has no fields to spread beyond the FK — same",
+      "approvedAt": "2026-08-13T07:11:45.912Z"
+    },
     "fec617c1a71eb20801ee930f18b573e63ab9b53c44379f3106a854f8eadc1369": {
       "excerpt": "Assemble a field's handler input bag from its resolver `args` object via",
       "approvedAt": "2026-08-13T07:08:38.040Z"
@@ -5760,6 +6296,10 @@
     "ff85915877786a77286d10602a5fc0b977cbebb12b9e0e6c01fc0479003ad4cb": {
       "excerpt": "Name a union variant — prefers the variant's own `meta.typeName` (a named",
       "approvedAt": "2026-08-13T07:09:42.423Z"
+    },
+    "ffabb07a6e1ee03dbda6e3be6d2a3240f683bf2b766ef02575bf88b4e36625b5": {
+      "excerpt": "Internal JSON-RPC error.",
+      "approvedAt": "2026-08-13T07:11:45.921Z"
     },
     "ffe1bff168c48c5db6505729c04f5c7c27d36454699a576afe11f0e50edb3d21": {
       "excerpt": "One artifact kind's build function — `buildWireApplyValidationModuleSource`",

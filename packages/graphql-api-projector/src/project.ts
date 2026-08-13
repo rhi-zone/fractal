@@ -136,9 +136,9 @@ export type FieldTypeInfo = {
 };
 
 /**
- * Map of field lookup-key (see `fieldKey` below — the underscore-joined tree
- * path, matching mcp-api-projector's `toTools` name convention so ONE
- * extractor pass, e.g. `@rhi-zone/fractal-api-tree/tree`'s
+ * Map of field lookup-key (the underscore-joined tree path produced by
+ * `underscoreJoin` below, matching mcp-api-projector's `toTools` name
+ * convention so ONE extractor pass, e.g. `@rhi-zone/fractal-api-tree/tree`'s
  * `extractToolTypeRefs`, feeds both MCP and GraphQL) → derived TypeRefs.
  */
 export type FieldTypeMap = Readonly<Record<string, FieldTypeInfo>>;
