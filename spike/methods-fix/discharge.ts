@@ -1,12 +1,10 @@
-// spike/methods-fix/discharge.ts
-//
-// DISCHARGE soundness probes against candidate `methods` (Candidate A from
+// Discharge soundness probes against candidate `methods` (Candidate A from
 // proto.ts, re-declared minimally here with param/toFetch).
 //
-//   (3a) undischarged param obligation => `toFetch` REJECTS (compile error)
-//   (3b) wrong-name `param` => REJECTED
-//   (3c) discharged route => `toFetch` ACCEPTS
-//   (3d) no-param handler works as Handler<{}>
+//   (3a) an undischarged param obligation makes `toFetch` reject (compile error)
+//   (3b) a wrong-name `param` is rejected
+//   (3c) a discharged route is accepted by `toFetch`
+//   (3d) a no-param handler works as Handler<{}>
 
 export type Handler<P = {}> = (
   req: Request & { params: P },
@@ -46,12 +44,12 @@ type ParamsOf<T> = UnionToIntersection<
   }[keyof T]
 >;
 
-// Candidate A `methods`.
+// Candidate A for `methods`.
 declare function methods<const T extends Partial<Record<Method, Handler<any>>>>(
   table: T,
 ): Reflected<MethodsMeta<Extract<keyof T, string>, MethodsIO<T>>, ParamsOf<T>>;
 
-// `param` — discharges via Omit (mirrors core).
+// `param` discharges via Omit (mirrors core).
 declare function param<const N extends string, M, Q extends Record<N, string>>(
   name: N,
   inner: Reflected<M, Q>,
@@ -61,24 +59,24 @@ declare function toFetch(app: Handler<{}>): (req: Request) => Promise<Response>;
 
 declare function json(x: unknown): Response;
 
-// ---- (3d) no-param handler is Handler<{}> ----
+// (3d) a no-param handler is Handler<{}>.
 const leafNoParam = methods({ GET: () => json(1) });
-toFetch(leafNoParam); // OK
+toFetch(leafNoParam); // Accepted.
 
-// ---- a leaf that DECLARES it needs {id} ----
+// A leaf that declares it needs {id}.
 const idLeaf = methods({
   GET: (req: Request & { params: { id: string } }) => json(req.params.id),
 });
 
-// ---- (3a) undischarged: feeding idLeaf straight to toFetch must FAIL ----
+// (3a) undischarged: feeding idLeaf straight to toFetch fails.
 // @ts-expect-error — {id} obligation not discharged; not assignable to Handler<{}>.
 toFetch(idLeaf);
 
-// ---- (3c) discharged via param("id", …): ACCEPTS ----
+// (3c) discharged via param("id", …): accepted.
 const discharged = param("id", idLeaf);
-toFetch(discharged); // OK — Omit<{id},"id"> = {}
+toFetch(discharged); // Omit<{id},"id"> = {}.
 
-// ---- (3b) wrong-name param => REJECTED ----
+// (3b) wrong-name param is rejected.
 // @ts-expect-error — "slug" does not satisfy Q extends Record<"slug", string>
 //   because idLeaf's Q is {id:string} (no "slug" key).
 const wrong = param("slug", idLeaf);

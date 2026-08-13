@@ -1,6 +1,6 @@
-// spike/scale/run.ts — typecheck each generated variant×N in ISOLATION and
-// record tsgo --extendedDiagnostics (Types, Instantiations, Memory, Check time)
-// plus wall-clock (best of K runs, after one warm-up). Writes a CSV + a markdown
+// Typechecks each generated variant x N in isolation and records tsgo
+// --extendedDiagnostics (Types, Instantiations, Memory, Check time) plus
+// wall-clock (best of K runs, after one warm-up). Writes a CSV and a markdown
 // table to logs/. tsgo is the nix-provided primary; pass `--tsc` to also run
 // stock tsc 6.0.3 for cross-validation on a subset.
 
@@ -27,7 +27,7 @@ interface Metric {
   memoryK?: number;
   checkMs?: number;
   totalMs?: number;
-  wallMs: number; // best of RUNS, ms
+  wallMs: number; // Best of RUNS runs, in ms.
 }
 
 function writeTc(file: string) {
@@ -80,7 +80,7 @@ for (const v of VARIANTS) {
   for (const n of Ns) {
     const file = `${v}-${n}.ts`;
     writeTc(file);
-    // warm-up (paging the deps, JIT) — not counted
+    // Warm-up run (pages in deps, JIT) — excluded from the timed results.
     for (let i = 0; i < WARMUP; i++) runOnce();
     let best = Number.POSITIVE_INFINITY;
     let lastOut = "";
@@ -109,7 +109,7 @@ for (const v of VARIANTS) {
   }
 }
 
-// CSV
+// Per-run metrics as CSV.
 const csv = ["variant,n,ok,errors,types,instantiations,memoryK,checkMs,totalMs,wallMs"];
 for (const m of results) {
   csv.push(
@@ -129,7 +129,7 @@ for (const m of results) {
 }
 writeFileSync(join(LOGS, "results.csv"), csv.join("\n") + "\n");
 
-// Markdown table grouped by metric
+// Renders one markdown table for a given metric, with a column per variant.
 function table(metric: keyof Metric, label: string) {
   const lines: string[] = [];
   lines.push(`### ${label}`);

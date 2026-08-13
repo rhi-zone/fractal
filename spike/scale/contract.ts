@@ -1,21 +1,21 @@
-// spike/scale/contract.ts — DECOUPLED typed-client prototypes.
+// Two prototypes for deriving a typed client without the router threading a
+// growing `Routes` tuple on every chained call:
 //
-// Two ways to derive a typed client WITHOUT the router threading a growing
-// `Routes` tuple on every chained call:
-//
-//   C1  ClientOfContract<typeof contract>  — map a declared contract OBJECT
+//   C1  ClientOfContract<typeof contract> maps a declared contract object
 //       (tRPC-style). The object's type is inferred once at the literal; the
-//       mapped type walks its keys. No per-call accumulation.
+//       mapped type walks its keys, with no per-call accumulation.
 //
-//   C2  buildClient([defineRoute(...), ...]) — opt-in accumulation. Each route
-//       is an independent descriptor; the tuple is formed ONLY at this one call.
+//   C2  buildClient([defineRoute(...), ...]) accumulates opt-in: each route
+//       is an independent descriptor, and the tuple is formed only at this
+//       one call.
 //
 // Both reuse fractal-api-tree's per-route type machinery (PathParams, BodyOf-style
 // output recovery) so the derived client matches the coupled one's ergonomics.
 
 import type { PathParams, StandardSchema } from "@rhi-zone/fractal-api-tree";
 
-// Recover a validated node's phantom input/output, else a plain handler's return.
+// Recovers a validated node's phantom input/output, falling back to a plain
+// handler's return type.
 type NodeInput<H> = H extends { readonly meta: { readonly __input?: infer I } }
   ? [I] extends [undefined]
     ? never
@@ -31,7 +31,7 @@ type NodeOutput<H> = H extends { readonly meta: { readonly __output?: infer O } 
     ? Awaited<R>
     : unknown;
 
-// Unwrap a phantom-typed Response (`json<T>` carries `__body`) to its domain T.
+// Unwraps a phantom-typed Response (`json<T>` carries `__body`) to its domain T.
 type BodyOf<O> = [O] extends [never]
   ? never
   : O extends { readonly __body?: infer T }
@@ -52,9 +52,7 @@ type CallSig<P extends string, I, O> = keyof CallArgs<P, I> extends never
   ? () => Promise<BodyOf<O>>
   : (args: CallArgs<P, I>) => Promise<BodyOf<O>>;
 
-// ---------------------------------------------------------------------------
 // C1 — contract object:  { "/users/:id": { get: handler, post: node } }
-// ---------------------------------------------------------------------------
 
 /** A contract object: pattern -> method (lowercase) -> handler/node. */
 export type Contract = {
@@ -63,9 +61,9 @@ export type Contract = {
   };
 };
 
-/** Map a contract object's type to the typed client surface. The pattern key is
+/** Maps a contract object's type to the typed client surface. The pattern key is
  *  a string literal `P`; the per-method handler's input/output are recovered.
- *  No accumulation: this is one mapped type over the object's own keys. */
+ *  This is a single mapped type over the object's own keys, with no accumulation. */
 export type ClientOfContract<C> = {
   readonly [P in Extract<keyof C, string>]: {
     readonly [M in Extract<keyof C[P], string>]: CallSig<
@@ -76,9 +74,7 @@ export type ClientOfContract<C> = {
   };
 };
 
-// ---------------------------------------------------------------------------
 // C2 — opt-in accumulation via defineRoute + buildClient
-// ---------------------------------------------------------------------------
 
 /** An independent route descriptor (no chained router involved). */
 export interface RouteDesc<M extends string, P extends string, I, O> {
@@ -88,7 +84,7 @@ export interface RouteDesc<M extends string, P extends string, I, O> {
   readonly __output?: O;
 }
 
-/** Build one route descriptor, recovering input/output from the handler/node. */
+/** Builds one route descriptor, recovering input/output from the handler/node. */
 export function defineRoute<M extends string, P extends string, H>(
   method: M,
   pattern: P,
@@ -109,12 +105,12 @@ export type ClientOfDescs<T extends readonly RouteDesc<string, string, unknown, 
   };
 };
 
-/** Accumulate the tuple ONLY here, then expose the typed client. */
+/** Accumulates the route tuple at this single call site and exposes the typed client. */
 export function buildClient<const T extends readonly RouteDesc<string, string, unknown, unknown>[]>(
   _routes: T,
 ): ClientOfDescs<T> {
   return new Proxy({}, {}) as ClientOfDescs<T>;
 }
 
-// silence unused-import lint for StandardSchema (re-exported convenience)
+// Re-exported for callers' convenience.
 export type { StandardSchema };

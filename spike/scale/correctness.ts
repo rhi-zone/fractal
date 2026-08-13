@@ -1,8 +1,8 @@
-// spike/scale/correctness.ts — prove the derived clients are REAL (not `any`):
-// positive call-sites type, and negative ones fail (@ts-expect-error fires).
-// Covers A (coupled), C1 (contract object), C2 (opt-in). If any @ts-expect-error
-// does NOT error, tsc reports TS2578 "Unused '@ts-expect-error'" → the client is
-// degenerate and the measurement would be meaningless.
+// Proves the derived clients are real typed surfaces, not `any`: positive
+// call-sites type-check, and negative ones fail (@ts-expect-error fires).
+// Covers A (coupled), C1 (contract object), C2 (opt-in). If an @ts-expect-error
+// does not error, tsc reports TS2578 "Unused '@ts-expect-error'", meaning the
+// client is degenerate and the measurement would be meaningless.
 
 import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema } from "@rhi-zone/fractal-api-tree";
@@ -17,7 +17,7 @@ const bodySchema: StandardSchema<unknown, Body> = {
   "~standard": { version: 1, validate: (v) => ({ value: v as Body }) },
 };
 
-// ---- A (coupled) ----------------------------------------------------------
+// A (coupled)
 const app = httpRouter()
   .get("/users/:id", async (ctx) => json({ id: ctx.params.id, name: "x" }))
   .post("/users", withValidation(async (b: Body) => json({ id: 1, ...b }), bodySchema) as never)
@@ -43,7 +43,7 @@ async function aChecks() {
   a["/nope"].get();
 }
 
-// ---- C1 (contract object) -------------------------------------------------
+// C1 (contract object)
 const contract = {
   "/users/:id": {
     get: async (ctx: { params: { id: string } }) => json({ id: ctx.params.id, name: "x" }),
@@ -68,7 +68,7 @@ async function c1Checks() {
   c1["/nope"].get();
 }
 
-// ---- C2 (opt-in accumulation) --------------------------------------------
+// C2 (opt-in accumulation)
 const r0 = defineRoute("GET", "/users/:id", async (ctx: { params: { id: string } }) =>
   json({ id: ctx.params.id, name: "x" }),
 );

@@ -1,16 +1,17 @@
-// spike/scale/gen/generate.ts — emit fractal apps with N routes for compile-cost
-// measurement. Four variants per N:
+// Emits fractal apps with N routes for compile-cost measurement, in four
+// variants per N:
 //
-//   A  — current COUPLED router: chained builder accumulates the Routes tuple,
-//        plus client(app) derivation + typed call-sites (forces ClientOf).
-//   B  — PER-ROUTE typing only: same N handlers, each ctx.params/body/return
-//        typed locally, but NO whole-app client / no consumption of the
-//        accumulation tuple. Isolates per-route cost from accumulation cost.
-//   C1 — DECOUPLED, contract-object: one object literal { "/p": { get: h } }
-//        whose type is inferred once; a tRPC-style ClientOf maps the object.
-//        No chained accumulation.
-//   C2 — DECOUPLED, opt-in accumulation: routes are independent RouteSpec-shaped
-//        consts; buildClient([...]) accumulates ONLY at that one call site.
+//   A  — the current coupled router: a chained builder accumulates the Routes
+//        tuple, plus client(app) derivation and typed call-sites (forcing
+//        ClientOf).
+//   B  — per-route typing only: the same N handlers, each with ctx.params/body/
+//        return typed locally, but no whole-app client and no consumption of
+//        the accumulation tuple. Isolates per-route cost from accumulation cost.
+//   C1 — decoupled, contract-object: one object literal { "/p": { get: h } }
+//        whose type is inferred once; a tRPC-style ClientOf maps the object,
+//        with no chained accumulation.
+//   C2 — decoupled, opt-in accumulation: routes are independent RouteSpec-shaped
+//        consts; buildClient([...]) accumulates only at that one call site.
 //
 // Routes are a deterministic mix of get/post/put with :id params and a few
 // withValidation bodies. Patterns are unique per route so ClientOf keys distinctly.
@@ -27,7 +28,7 @@ interface Route {
   readonly verb: Verb;
   readonly resource: string;
   readonly hasParam: boolean;
-  readonly hasBody: boolean; // post/put may carry a validated body
+  readonly hasBody: boolean; // post/put routes may carry a validated body.
   readonly pattern: string;
 }
 
@@ -37,7 +38,7 @@ function plan(n: number): Route[] {
     const verb: Verb = i % 3 === 0 ? "get" : i % 3 === 1 ? "post" : "put";
     const resource = `res${i}`;
     const hasParam = i % 2 === 0;
-    // ~1 in 4 mutating routes carry a validated body
+    // Roughly 1 in 4 mutating routes carries a validated body.
     const hasBody = verb !== "get" && i % 4 === 1;
     const pattern = hasParam ? `/${resource}/:id` : `/${resource}`;
     routes.push({ i, verb, resource, hasParam, hasBody, pattern });
@@ -46,10 +47,10 @@ function plan(n: number): Route[] {
 }
 
 // A tiny inline Standard-Schema validator so withValidation has a real schema
-// without pulling in zod (keeps the measurement about fractal, not zod).
+// without pulling in zod, keeping the measurement about fractal's cost, not zod's.
 const SCHEMA_HELPER = `
-// Minimal Standard-Schema validator (no zod — isolate fractal's cost).
-interface Body${"" /* keep generic name stable */} { readonly name: string; readonly qty: number }
+// Minimal Standard-Schema validator (no zod, to isolate fractal's cost).
+interface Body${"" /* Generic name kept stable across variants. */} { readonly name: string; readonly qty: number }
 const bodySchema: StandardSchema<unknown, Body> = {
   "~standard": {
     version: 1,
@@ -61,9 +62,7 @@ const bodySchema: StandardSchema<unknown, Body> = {
 }
 `;
 
-// ---------------------------------------------------------------------------
 // Variant A — coupled chained builder + client + typed call-sites
-// ---------------------------------------------------------------------------
 function variantA(routes: Route[]): string {
   const lines: string[] = [];
   lines.push(
@@ -75,7 +74,7 @@ function variantA(routes: Route[]): string {
   lines.push(`const app = httpRouter()`);
   for (const r of routes) {
     if (r.hasBody) {
-      // withValidation node → routeNode so __input/__output accumulate
+      // A withValidation node goes through routeNode so __input/__output accumulate.
       lines.push(
         `  .routeNode("${r.verb.toUpperCase()}", "${r.pattern}", withValidation(` +
           `async (b: Body) => json({ id: ${r.i}, name: b.name, qty: b.qty }), bodySchema))`,
@@ -101,22 +100,20 @@ function variantA(routes: Route[]): string {
     if (r.hasBody) args.push(`body: { name: "x", qty: 1 }`);
     const argObj = args.length ? `{ ${args.join(", ")} }` : ``;
     lines.push(`const r${idx} = api["${key}"].${r.verb}(${argObj})`);
-    // touch the awaited result so output inference is forced
+    // Touches the awaited result so output inference is forced.
     lines.push(`void r${idx}.then((v) => v)`);
   }
   return lines.join("\n") + "\n";
 }
 
-// ---------------------------------------------------------------------------
-// Variant B — per-route typing only, NO accumulation consumed
+// Variant B — per-route typing only, with no accumulation consumed.
 //
-// We still register on the chained builder (so each handler's ctx.params / body
-// / return is typed exactly as in A), but we NEVER read the Routes tuple: no
-// client(app), no ClientOf, no RoutesOf. To make sure the accumulation tuple is
-// not even retained on the final type, we annotate `app` to a Routes-erased
-// HttpRouter shape so the huge tuple is discarded at the binding. This isolates
-// the cost of typing N handlers from the cost of accumulating + mapping N specs.
-// ---------------------------------------------------------------------------
+// Handlers still register on the chained builder (so each handler's
+// ctx.params/body/return is typed exactly as in A), but the Routes tuple is
+// never read: no client(app), no ClientOf, no RoutesOf. `app` is annotated to
+// a Routes-erased HttpRouter shape so the accumulation tuple is discarded at
+// the binding rather than retained on the final type. This isolates the cost
+// of typing N handlers from the cost of accumulating and mapping N specs.
 function variantB(routes: Route[]): string {
   const lines: string[] = [];
   lines.push(`import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"`);
@@ -124,8 +121,8 @@ function variantB(routes: Route[]): string {
     `import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree"`,
   );
   lines.push(SCHEMA_HELPER);
-  // Each handler typed locally and standalone — no builder, no tuple at all.
-  // This is the purest isolation of per-route typing cost.
+  // Each handler is typed locally and standalone, with no builder and no
+  // tuple — the purest isolation of per-route typing cost.
   lines.push(`type Ctx<P extends string> = RoutingCtx & { params: PathParams<P> } & {`);
   lines.push(
     `  query: URLSearchParams; headers: Headers; body: () => Promise<unknown>; request: Request`,
@@ -143,9 +140,10 @@ function variantB(routes: Route[]): string {
       );
     }
   }
-  // Touch every handler so each is type-checked (params/body/return inferred)
-  // but NEVER feed them through the chained builder — so the accumulation tuple
-  // is never formed. This is the pure per-route typing cost, no whole-app tuple.
+  // Touches every handler so each is type-checked (params/body/return inferred),
+  // without feeding them through the chained builder, so the accumulation tuple
+  // is never formed. This measures the pure per-route typing cost, with no
+  // whole-app tuple.
   lines.push(``);
   lines.push(`void [`);
   lines.push(routes.map((r) => `  h${r.i},`).join("\n"));
@@ -153,11 +151,9 @@ function variantB(routes: Route[]): string {
   return lines.join("\n") + "\n";
 }
 
-// ---------------------------------------------------------------------------
-// Variant C1 — decoupled CONTRACT OBJECT (tRPC-style). One object literal whose
-// type is inferred once; a local ClientOf maps the object type. No chained
-// accumulation, no growing tuple. Handlers are still per-route typed.
-// ---------------------------------------------------------------------------
+// Variant C1 — decoupled contract object (tRPC-style). One object literal whose
+// type is inferred once; a local ClientOf maps the object type, with no chained
+// accumulation and no growing tuple. Handlers are still per-route typed.
 function variantC1(routes: Route[]): string {
   const lines: string[] = [];
   lines.push(`import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"`);
@@ -173,7 +169,7 @@ function variantC1(routes: Route[]): string {
   lines.push(`}`);
   lines.push(``);
   lines.push(`const contract = {`);
-  // group by pattern so each pattern key holds its methods
+  // Groups by pattern so each pattern key holds its methods.
   const byPattern = new Map<string, Route[]>();
   for (const r of routes) {
     const arr = byPattern.get(r.pattern) ?? [];
@@ -213,11 +209,9 @@ function variantC1(routes: Route[]): string {
   return lines.join("\n") + "\n";
 }
 
-// ---------------------------------------------------------------------------
-// Variant C2 — decoupled OPT-IN accumulation. Each route is an independent
+// Variant C2 — decoupled, opt-in accumulation. Each route is an independent
 // const of a RouteSpec-shaped descriptor; buildClient([...]) accumulates the
-// tuple ONLY at that one call site (the router itself never threads a tuple).
-// ---------------------------------------------------------------------------
+// tuple only at that one call site, and the router itself never threads a tuple.
 function variantC2(routes: Route[]): string {
   const lines: string[] = [];
   lines.push(`import { json, withValidation } from "@rhi-zone/fractal-http-api-projector"`);
@@ -262,7 +256,7 @@ function variantC2(routes: Route[]): string {
   return lines.join("\n") + "\n";
 }
 
-// Sample ~8 indices spread across the route span for typed call-site probes.
+// Samples roughly 8 indices spread across the route span for typed call-site probes.
 function sampleIndices(n: number): number[] {
   if (n <= 8) return Array.from({ length: n }, (_, i) => i);
   const k = 8;
@@ -270,8 +264,6 @@ function sampleIndices(n: number): number[] {
   for (let j = 0; j < k; j++) out.push(Math.floor((j * (n - 1)) / (k - 1)));
   return [...new Set(out)];
 }
-
-// ---------------------------------------------------------------------------
 
 const Ns = [10, 100, 300, 600, 900];
 
