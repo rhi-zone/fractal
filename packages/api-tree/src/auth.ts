@@ -86,8 +86,7 @@ export function authLayer<TUser>(
 }
 
 /**
- * Per-adapter, per-request memoization for `AuthAdapter.resolve` — the fix
- * for the double-resolution `authMiddleware` used to document here.
+ * Per-adapter, per-request memoization for `AuthAdapter.resolve`.
  * `authMiddleware`'s guard runs as the OUTERMOST layer (see
  * `createFetch`/`preset.ts`: `opts.middleware` wraps around `opts.als`'s
  * `withALS`), so when both `authMiddleware(auth)` and `authLayer(auth)` are
@@ -117,10 +116,9 @@ export function authLayer<TUser>(
  * Resolve-failure semantics are unchanged by this cache: a rejected
  * `resolve` promise is cached and re-delivered identically to every
  * awaiter, matching what already happens for any promise awaited from
- * multiple places — and since `authMiddleware` throwing during its own
- * (first) call already short-circuits before `inner(req)` is reached today,
- * a failing `resolve` still only ever produces the ONE code path it did
- * before this cache existed.
+ * multiple places, and `authMiddleware` throwing during its own (first)
+ * call already short-circuits before `inner(req)` is reached — so a failing
+ * `resolve` still only ever produces one code path.
  */
 function resolveCached<TUser>(adapter: AuthAdapter<TUser>, req: Request): Promise<TUser | null> {
   let perAdapter = resolveCache.get(adapter as AuthAdapter<unknown>);

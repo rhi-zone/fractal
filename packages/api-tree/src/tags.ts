@@ -29,11 +29,10 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
  * `readOnly`: The operation produces no observable side-effects on persistent
  * state; calling it any number of times is equivalent to calling it once.
  *
- * NOTE: `readOnly` is the canonical, final name for this tag. `safe` (used by
- * an earlier draft of the canonical tag-set document) was rejected as too
- * ambiguous — "safe" conflates "no side effects" with other unrelated senses
- * of safety (type safety, memory safety, safe-to-retry). This is not
- * provisional; no further rename is planned.
+ * `readOnly` is the canonical name for this tag; an earlier draft of the
+ * canonical tag-set document used `safe`, rejected as too ambiguous — "safe"
+ * conflates "no side effects" with other unrelated senses of safety (type
+ * safety, memory safety, safe-to-retry).
  *
  * Implies `idempotent`. Mutually exclusive with `destructive`.
  */
