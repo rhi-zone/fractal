@@ -25,21 +25,21 @@
 // which TypeScript preserves back to the original arrow/function-expression
 // node regardless of how many identifiers it was threaded through.
 //
-// `fallback.name` no longer needs an AST fallback: `api()`'s fallback type
-// parameter `F` is a `const` type parameter (TS 5.0+; see node.ts's doc
-// comment), which keeps TS from widening the inferred literal, so
-// `checker.getTypeOfSymbolAtLocation` on the resolved `fallback.name`
-// property yields the literal (e.g. `"bookId"`) directly — read via the
-// property symbol's own type, no AST needed.
+// `fallback.name` is read entirely off the resolved TYPE, no AST needed:
+// `api()`'s fallback type parameter `F` is a `const` type parameter (TS
+// 5.0+; see node.ts's doc comment), which keeps TS from widening the
+// inferred literal, so `checker.getTypeOfSymbolAtLocation` on the resolved
+// `fallback.name` property yields the literal (e.g. `"bookId"`) directly via
+// the property symbol's own type.
 //
 // Everything — which children exist, which are leaves vs. branches, each
 // leaf's real input/output types, whether a branch has a fallback at all,
-// and now the fallback's own name — comes from the checker, not from
-// matching `op(...)`/`api(...)` call shapes or following identifier chains
-// through the AST.
+// and the fallback's own name — comes from the checker, not from matching
+// `op(...)`/`api(...)` call shapes or following identifier chains through
+// the AST.
 //
-// meta.mcp.name (leaf) is now mirrored here (see `mcpMetaOverride` below) — a
-// leaf's `meta.mcp.name` replaces the underscore-joined default entirely,
+// meta.mcp.name (leaf) is mirrored here too (see `mcpMetaOverride` below) —
+// a leaf's `meta.mcp.name` replaces the underscore-joined default entirely,
 // matching packages/mcp-api-projector/src/project.ts's `projectTools` walk.
 // Read off the resolved TYPE the same way `fallbackNameLiteral` reads a
 // fallback's `name`: `op()`'s meta contributions are a `const`-inferred tuple
@@ -48,16 +48,16 @@
 // something in the entry file's import graph has declaration-merged it onto
 // `Meta` (mcp-api-projector's `project.ts` does this); absent that,
 // `mcpMetaOverride` returns `undefined` and this walker falls back to its
-// prior tree-position-derived naming, same as it always has.
+// tree-position-derived naming.
 //
-// meta.mcp.segment (branch) is now mirrored too: `api()`'s `opts.meta`
+// meta.mcp.segment (branch) is mirrored the same way: `api()`'s `opts.meta`
 // parameter (node.ts) is a `const` type parameter (`M`), matching how
 // `children`/`fallback` already preserve literal types — so the literal
 // `"products"` in `api(children, { meta: { mcp: { segment: "products" } }
 // })` survives into the resolved TYPE, and `mcpMetaOverride` below reads it
-// the same way it already reads a leaf's `meta.mcp.name`. See
-// extract.test.ts's "meta.mcp overrides reflected in the reconstructed name"
-// describe block for the executable record.
+// the same way it reads a leaf's `meta.mcp.name`. See extract.test.ts's
+// "meta.mcp overrides reflected in the reconstructed name" describe block
+// for the executable record.
 
 import ts from "typescript";
 import type { TypeRef } from "@rhi-zone/fractal-type-ir";
@@ -114,8 +114,8 @@ function functionNodeOfHandler(handlerType: ts.Type, checker: ts.TypeChecker): t
 }
 
 /**
- * Read a fallback's `name` string literal off its resolved TYPE. Works now
- * that `api()`'s `F` is a `const` type parameter (node.ts), which defeats
+ * Read a fallback's `name` string literal off its resolved TYPE. This works
+ * because `api()`'s `F` is a `const` type parameter (node.ts), which defeats
  * literal-widening during inference — so the property's own type is the
  * string-literal type itself, not the widened `string`. Returns `undefined`
  * if it isn't a literal (e.g. a caller passed a non-literal `string`
@@ -716,7 +716,7 @@ export function extractToolSchemas(
  * across up to 7 unrelated slices). A caller merging several files' schema
  * maps into one for a composed root should call THIS function per file and
  * merge the results — each file's own keys are already path-relative to
- * that file's own tree root (now `treeId`-prefixed too), so no additional
+ * that file's own tree root and `treeId`-prefixed, so no additional
  * per-file prefixing is needed as long as the composed root's `toOpenApi`
  * call correlates schemas via the SAME path-keyed mechanism (see
  * `openapi.ts`'s `buildPathMap`) rather than the underscore-joined

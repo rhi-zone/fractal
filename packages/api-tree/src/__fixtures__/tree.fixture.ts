@@ -4,9 +4,9 @@
 // (parsed via the compiler API for its leaf handler input types + JSDoc) and the
 // runtime tree fed to toTools. Not a test file (no `.test.ts`), so bun test skips it.
 //
-// In the new node model, leaf nodes (callables) are stored in `children` as
-// `op(fn, meta?)` calls. The codegen walker recognises `op(...)` children as
-// leaves and extracts their input schemas.
+// Leaf nodes (callables) are stored in `children` as `op(fn, meta?)` calls.
+// The codegen walker recognises `op(...)` children as leaves and extracts
+// their input schemas.
 
 import { api, op } from "../node.ts";
 // (a) Direct import from core's package root.

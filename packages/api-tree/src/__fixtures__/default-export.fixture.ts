@@ -2,12 +2,12 @@
 //
 // A bare `export default api(...)` — the tree expression exported directly
 // as default, no function wrapper, no variable binding. Parses as a
-// ts.ExportAssignment, a shape forEachTreeCandidate (tree.ts) didn't
-// recognize until this fixture's regression fix: previously matched neither
-// the `export const` nor the `export function` branch, so the loop silently
-// skipped it — no error, no warning, leaves just absent from walkTree /
-// extractRouteSchemas / extractRouteTypeRefs / extractToolSchemas /
-// extractToolTypeRefs / hasTreeExport.
+// ts.ExportAssignment, a shape distinct from both the `export const` and
+// `export function` branches forEachTreeCandidate (tree.ts) otherwise
+// recognizes. Regression coverage for that case: unhandled, the loop
+// silently skips this export — no error, no warning — leaving it absent
+// from walkTree / extractRouteSchemas / extractRouteTypeRefs /
+// extractToolSchemas / extractToolTypeRefs / hasTreeExport.
 //
 // Not a test file (no `.test.ts`), so bun test skips it.
 
