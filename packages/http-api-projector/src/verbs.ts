@@ -74,18 +74,15 @@ export type Method = keyof HttpMethods;
  * just `string`. Defaults to `string` so a bare `VerbBundle` reference (no
  * type argument) keeps working wherever one already appeared.
  *
- * Deliberately a plain, self-contained object literal type — NOT `LeafMeta &
- * {...}` — the EXACT variant this bundle constructs, never the open
- * `HttpLeafMetaProperties`/DU-shaped surface (docs/design/
- * wire-profiles-and-staged-validation.md's "Exact-variant hygiene"): a
+ * Deliberately a plain, self-contained object literal type — not `LeafMeta &
+ * {...}` — matching the exact variant this bundle constructs rather than the
+ * open `HttpLeafMetaProperties`/DU-shaped surface (see docs/design/
+ * wire-profiles-and-staged-validation.md's "Exact-variant hygiene"). A
  * producer typed against the wide, all-optional properties interface would
- * widen `V`'s literal to `string` at the call site, and would let a
- * `sourceMap`/`middleware` field the bundle never actually sets phantom-
- * contribute an index-signature-erased shape into `op()`'s own static source-
- * coverage check (`UncoveredSourceParams`, api-tree's input.ts) — the same
- * hazard this type's own predecessor doc comment (kept in spirit, updated for
- * the flat shape) already worked around for the now-retired directive-tuple
- * encoding.
+ * widen `V`'s literal to `string` at the call site, and would let an unset
+ * `sourceMap`/`middleware` field phantom-contribute an index-signature-erased
+ * shape into `op()`'s static source-coverage check (`UncoveredSourceParams`,
+ * api-tree's input.ts).
  */
 export type VerbBundle<V extends string = string> = {
   readonly http: { readonly verb: V; readonly method: V };
@@ -265,23 +262,16 @@ export type SourceMapInput = ApiTreeSourceMapInput<HttpStore>;
  * //   }
  * ```
  *
- * Before the http-directive-dissolution migration (docs/design/
- * wire-profiles-and-staged-validation.md's "Prerequisite: meta unification"
- * section), this composed as a directive-ARRAY entry instead, specifically to
- * dodge a suspected TypeScript limitation merging two open `Record<string,
- * ParamSource>` index-signature objects at the type level. That limitation
- * does not apply to a LITERAL-keyed map like `ResolvedSourceMap<M>` (this
- * function's own return type, below): `FoldMeta`/`MergeTwoMeta`'s existing
- * depth-capped object merge (node.ts) already resolves two literal-keyed maps
- * correctly — verified empirically (scratch `tsc` + `bun run`) during this
- * migration, which also surfaced and fixed a genuine (if previously
- * unexercised) runtime/type parity gap in `mergeRecords`'s own recursion depth
- * — see node.ts's `mergeRecords`/`MergeMetaValue` doc comments for the full
- * finding. `getHttpMeta` (project.ts) no longer resolves an array at read
- * time at all — `meta.http.sourceMap` IS the resolved map the moment `op()`'s
- * fold completes; `naiveTransform` (route.ts) reads it straight into the
+ * `getHttpMeta` (project.ts) reads `meta.http.sourceMap` directly — it's
+ * already the resolved map the moment `op()`'s fold completes, with no
+ * read-time collection step. `naiveTransform` (route.ts) copies it into the
  * matched route's `sources.sourceMap`, which `defaultDecode` (route.ts) then
- * consults during request assembly.
+ * consults during request assembly. (Before the http-directive-dissolution
+ * migration this composed as a directive-array entry instead; see docs/design/
+ * wire-profiles-and-staged-validation.md's "Prerequisite: meta unification"
+ * for the rationale, and node.ts's `mergeRecords`/`MergeMetaValue` doc
+ * comments for how the depth-capped object merge resolves two literal-keyed
+ * maps like `ResolvedSourceMap<M>`.)
  *
  * String shorthand values are expanded to a full `ParamSource` HERE, eagerly,
  * at the value level — not left for `naiveTransform`/`assemble` (route.ts) to
@@ -360,15 +350,15 @@ export function validate(schema: StandardSchemaV1): {
  * point `PresetOptions.middleware` already runs at, narrowed to a subtree
  * instead of every request.
  *
- * Returns a bare `{ http: { middleware: fns } }` contribution — a plain
- * ARRAY under a flat key, not a directive-per-argument encoding. This is
- * still load-bearing, not incidental: `MergeMetaValue`'s array branch
- * (node.ts) concatenates two `middleware` arrays without recursing into their
- * elements, so a function VALUE living inside the array is never merged as an
- * object and keeps its call signature — exactly the hazard a BARE
- * (non-array) function-valued field would hit (two contributions both
- * setting the same bare key strip its call signature through `FoldMeta`'s
- * object-merge branch; see the regression test in subtree-layers.test.ts).
+ * Returns a bare `{ http: { middleware: fns } }` contribution — a plain array
+ * under a flat key, not a directive-per-argument encoding. This is
+ * load-bearing: `MergeMetaValue`'s array branch (node.ts) concatenates two
+ * `middleware` arrays without recursing into their elements, so a function
+ * value inside the array is never merged as an object and keeps its call
+ * signature. A bare (non-array) function-valued field wouldn't have this
+ * property — two contributions setting the same bare key would strip its
+ * call signature via `FoldMeta`'s object-merge branch instead (see the
+ * regression test in subtree-layers.test.ts).
  * `http.middleware(a, b)` on ONE call already produces one array
  * (`[a, b]`); composing two SEPARATE `middleware()` contributions
  * concatenates their arrays the same way (`[a]` ++ `[b]` = `[a, b]`) — either

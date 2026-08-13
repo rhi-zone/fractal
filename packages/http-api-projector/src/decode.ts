@@ -55,9 +55,9 @@ import type { StandardSchemaV1 } from "@standard-schema/spec";
  * ```
  *
  * Every member is OPTIONAL: these are per-request stores this projector builds
- * when it dispatches, and a compilation that also merges CLI's or MCP's
- * fragment doesn't mean an HTTP request populates those (nor a CLI invocation
- * these) — see `Stores`' doc in api-tree's input.ts.
+ * when it dispatches. A compilation that also merges CLI's or MCP's fragment
+ * doesn't mean an HTTP request populates CLI's/MCP's stores, or vice versa —
+ * see `Stores`' doc in api-tree's input.ts.
  *
  * `caller` is NOT declared here: core declares it once (api-tree's
  * `CoreStores`), shared across every projector, because every projector
@@ -84,11 +84,12 @@ export interface HttpStores {
  * where no deployment has merged `HttpStores` into `StoreRegistry` (this
  * package's own typecheck, for instance), `Stores` alone doesn't name them.
  *
- * `Stores` (not `ProjectorStores`) — service-store threading has landed
- * (docs/design/typed-store-spec.md §8, was DEFERRED): `httpStores()` below
- * takes the registered `ServiceStores` value and spreads it into the bag it
- * builds, so a per-request bag genuinely has every required service store in
- * hand by the time a handler/middleware reads it, same as `path`/`query`/etc.
+ * `Stores` (not `ProjectorStores`) because service-store threading
+ * (docs/design/typed-store-spec.md §8) is in effect here: `httpStores()`
+ * below takes the registered `ServiceStores` value and spreads it into the
+ * bag it builds, so a per-request bag has every required service store in
+ * hand by the time a handler/middleware reads it — the same as
+ * `path`/`query`/etc.
  */
 export type HttpStoreBag = Stores & HttpStores;
 
@@ -262,24 +263,25 @@ const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
  * five names are reserved, but spread order documents the intended precedence
  * regardless).
  *
- * Optional, defaulting to an empty object — every EXISTING caller (this
- * package's own tests, other projectors' fixtures, any consumer not yet on
- * the threaded option) that never supplies it keeps compiling unchanged. The
- * default's `as ServiceStores` cast (not a plain `{}`) is load-bearing, NOT
- * decorative: `StoreRegistry` declaration-merging is GLOBAL to whatever
- * `ts.Program` a compilation builds — api-tree's own test suite merges a
- * REQUIRED `tabularSource` member via its `deployment-store.fixture.ts` (a
- * stand-in "deployment," imported transitively into the same Program this
- * package's source is type-checked under whenever api-tree's own typecheck
- * runs), so `ServiceStores` resolves to a required-member type THERE even
- * though this file itself supplies nothing for it. `{}` alone would fail
- * against that required member; `{} as ServiceStores` is sound BECAUSE this
- * default is genuinely never reached with a required member actually
- * missing in practice — real enforcement lives at `PresetOptions.
- * serviceStores` (the single registration site, typed-store-spec.md §4), not
- * here. Same shape of escape hatch `assemble()`'s own `byName` cast is
- * (input.ts) — internal plumbing below the one enforced site needs a wider
- * type than a call site that IS checked.
+ * Optional, defaulting to an empty object, so existing callers (this
+ * package's own tests, other projectors' fixtures, any consumer not yet
+ * passing it) keep compiling unchanged.
+ *
+ * The `as ServiceStores` cast on that default is load-bearing, not
+ * decorative: `StoreRegistry` declaration-merging is global to whatever
+ * `ts.Program` a compilation builds. api-tree's own test suite merges a
+ * required `tabularSource` member via `deployment-store.fixture.ts` (a
+ * stand-in deployment, pulled transitively into the same Program this
+ * package is type-checked under during api-tree's own typecheck), so in
+ * that Program `ServiceStores` resolves to a type with a required member —
+ * even though this file supplies nothing for it. A plain `{}` would fail
+ * against that required member; `{} as ServiceStores` is sound because this
+ * default is never reached when a required member is actually missing in
+ * practice — real enforcement lives at `PresetOptions.serviceStores` (the
+ * single registration site, typed-store-spec.md §4), not here. It's the
+ * same kind of escape hatch as `assemble()`'s own `byName` cast in
+ * input.ts: internal plumbing below the one enforced site needs a wider
+ * type than a call site that's actually checked.
  */
 export function httpStores(
   req: Request,

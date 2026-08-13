@@ -16,17 +16,16 @@
 //      open question 2 — see preset.test.ts's own baseline test for the
 //      global case this compares against).
 //
-// Leaf-position contributions are attached the real way (`op(fn, http.get,
-// middleware(mw))`) — `op()`'s meta-contribution check is vacuous against
-// core's (unaugmented) `LeafMeta`, since it declares no required keys, so
-// this typechecks without a deployment-level `declare module` merge.
-// Branch-position contributions are attached by constructing the `HttpRoute`
-// tree directly via `httpRoute()` (route.ts) — `api()`'s `opts.meta` is
-// typed `M extends BranchMeta` (core's, unaugmented), which genuinely can't
-// accept an `http` field without that same deployment-level merge; every
-// existing branch-level meta test in this package (route.test.ts,
-// compile.test.ts) already follows this same `httpRoute()`-direct pattern
-// for exactly this reason.
+// Leaf-position contributions use the real authoring path, `op(fn, http.get,
+// middleware(mw))` — this typechecks without a deployment-level `declare
+// module` merge because `op()`'s meta-contribution check is vacuous against
+// core's unaugmented `LeafMeta` (it declares no required keys). Branch-
+// position contributions can't take that shortcut: `api()`'s `opts.meta` is
+// typed `M extends BranchMeta` (also core's, unaugmented), which rejects an
+// `http` field without that same merge — so branch-level contributions here
+// construct the `HttpRoute` tree directly via `httpRoute()` (route.ts), the
+// same pattern every other branch-level meta test in this package
+// (route.test.ts, compile.test.ts) uses for the same reason.
 
 import { describe, expect, expectTypeOf, it } from "bun:test";
 import { op } from "@rhi-zone/fractal-api-tree/node";
@@ -294,9 +293,9 @@ describe("middleware (dispatch-around) vs handlerMiddleware (handler-around) —
 });
 
 // ============================================================================
-// 4. Extraction/codegen/OpenAPI stay clean over a layered tree — regression
-// guard for the spec's own §6 `[verify]` findings (empirically re-confirmed
-// here, permanently, rather than trusted from the spec's scratch session).
+// 4. Extraction/codegen/OpenAPI stay clean over a layered tree — a permanent
+// regression guard for the spec's own §6 `[verify]` findings, superseding
+// the spec's scratch-session verification.
 // ============================================================================
 
 describe("OpenAPI / listRoutes over a layered tree — no leakage, route surface unchanged (spec §6/§7)", () => {
@@ -366,32 +365,29 @@ describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are p
     type Bad = typeof leaf.meta.http extends { readonly bareHazard: infer F } ? F : never;
     // @ts-expect-error — `Bad` is NOT assignable to `(inner: Fetch) => Fetch`.
     // `MergeTwoMeta`'s mapped-type merge (`Omit`/`Pick` over `keyof`,
-    // api-tree's node.ts) strips the call signature for a bare
-    // function-valued key two contributions both set — `keyof` a plain
-    // function type is empty, so the merge reduces the folded member toward
-    // `{}` (a function structurally satisfies `extends object`, so
-    // `MergeMetaValue` takes the OBJECT-merge branch, not the
-    // array-concatenation branch that keeps `middleware`/`handlerMiddleware`
-    // safe).
+    // api-tree's node.ts) strips the call signature for a bare function-valued
+    // key that two contributions both set. A function structurally satisfies
+    // `extends object`, so `MergeMetaValue` takes the object-merge branch
+    // (not the array-concatenation branch that keeps `middleware`/
+    // `handlerMiddleware` safe) — and `keyof` a plain function type is empty,
+    // so the merge reduces the folded member toward `{}`.
     const check: (inner: Fetch) => Fetch = null as unknown as Bad;
     void check;
   });
 });
 
 // ============================================================================
-// 6. Error semantics — MAXIMAL CONSISTENCY (owner ruling, revisited
-// 2026-08-02, supersedes the "propagates uncaught" ruling this block
-// originally verified): a middleware throw — subtree-scoped or global — is
-// now caught and encoded via `thrownErrorEncoder`, IDENTICALLY to a
-// handlerMiddleware throw, instead of propagating uncaught. `toRouter`
-// (compile.ts) catches a subtree `http.middleware()` throw right where it
-// composes `match.middleware` around `runRoute`'s dispatch; `createFetch`
-// (preset.ts) does the analogous catch around the GLOBAL
-// `PresetOptions.middleware` array, which wraps OUTSIDE the compiled router
-// entirely (see preset.test.ts's own middleware-throw tests for that
-// baseline). Both funnel through the same `encodeThrownError` helper
-// (route.ts) `runRoute`'s own catch block uses for a handlerMiddleware
-// throw — one fallback-to-500 path, not three independent re-derivations.
+// 6. Error semantics — a subtree middleware/handlerMiddleware throw is caught
+// and encoded via `thrownErrorEncoder`, identically to a global
+// (`PresetOptions`) throw, rather than propagating uncaught — a deliberate
+// ruling, not incidental behavior. `toRouter` (compile.ts) catches a subtree
+// `http.middleware()` throw where it composes `match.middleware` around
+// `runRoute`'s dispatch; `createFetch` (preset.ts) applies the analogous
+// catch around the global `PresetOptions.middleware` array, which wraps
+// outside the compiled router entirely (see preset.test.ts's
+// middleware-throw tests for that baseline). Both paths funnel through the
+// same `encodeThrownError` helper (route.ts) that `runRoute`'s own catch
+// block uses for a handlerMiddleware throw.
 // ============================================================================
 
 describe("error semantics — a subtree layer's throw matches its global counterpart's throw exactly", () => {
