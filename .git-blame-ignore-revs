@@ -18,3 +18,6 @@
 
 # style: reformat entire codebase with oxfmt (defaults, incl. semi: true)
 957c62ce08f46f435a6da199599e20780c150b30
+
+# style: fix 5 files oxfmt hadn't converged on in the initial reformat pass
+2678fa97a67b94b1206962e4b86ad4713f718391
