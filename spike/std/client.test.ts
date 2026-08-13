@@ -1,9 +1,9 @@
-// spike/std/client.test.ts — the meta-app + typed client + validation, end to
-// end. Builds the SAME shape of app as app.ts but from the meta-carrying
-// combinators (meta.ts), derives a typed client (client.ts), and runs real
-// requests through the in-process transport. Type-level assertions (`satisfies`
-// for positives, negative compile-error directives) prove body/param typing and
-// that wrong calls don't compile.
+// The meta-app, typed client, and validation, end to end. Builds the same
+// shape of app as app.ts but from the meta-carrying combinators (meta.ts),
+// derives a typed client (client.ts), and runs real requests through the
+// in-process transport. Type-level assertions (`satisfies` for positives,
+// negative compile-error directives) prove body/param typing and that wrong
+// calls don't compile.
 //
 // Run with: bun spike/std/client.test.ts
 
@@ -25,7 +25,7 @@ function ok(cond: unknown, msg: string): asserts cond {
   passed++;
 }
 
-// --- a hand-rolled Standard Schema fixture (rule 4: no concrete validator dep)
+// --- a hand-rolled Standard Schema fixture (no concrete validator dependency) ----
 interface NewUser {
   readonly name: string;
 }
@@ -56,13 +56,14 @@ const usersCollection = methods({
   ),
 });
 
-// /users/{id} : GET the item. The id is read DIRECTLY off the request inside the
-// GET handler (rule 4); `param` only advances the URL + records the position.
+// /users/{id} : GET the item. The id is read directly off the request inside
+// the GET handler; `param` only advances the URL and records the position —
+// it does not capture the value into a context object.
 const userItem = param(
   "id",
   methods({
-    // the id is read DIRECTLY off the Request (rule 4) via `paramValue`, where
-    // `param` stashed it after advancing the URL past the segment (rule 5).
+    // the id is read directly off the Request via `paramValue`, where `param`
+    // stashed it after advancing the URL past the segment.
     GET: (req) => {
       const id = paramValue(req, "id");
       const user = users.find((u) => u.id === id);
@@ -84,7 +85,7 @@ const fetch = toFetch(appMeta);
 const BASE = "http://x";
 
 // ============================================================================
-// RUNTIME assertions — the meta-app behaves byte-identically to app.ts's shape.
+// Runtime assertions — the meta-app behaves byte-identically to app.ts's shape.
 // ============================================================================
 {
   const res = await fetch(new Request(BASE + "/users"));
@@ -93,7 +94,7 @@ const BASE = "http://x";
   ok(Array.isArray(body) && body.length === 2, "GET /users -> 2 users");
 }
 {
-  // POST with a VALID body → 201
+  // POST with a valid body → 201
   const res = await fetch(
     new Request(BASE + "/users", {
       method: "POST",
@@ -106,7 +107,7 @@ const BASE = "http://x";
   ok(body.created === true && body.name === "grace", "POST /users -> created grace");
 }
 {
-  // POST with an INVALID body → 400 from `validated`
+  // POST with an invalid body → 400 from `validated`
   const res = await fetch(
     new Request(BASE + "/users", {
       method: "POST",
@@ -134,8 +135,8 @@ const BASE = "http://x";
 }
 
 // ============================================================================
-// CLIENT runtime — derive a typed client and call it; in-process transport runs
-// the SAME app handler, so results match the server exactly.
+// Client runtime — derive a typed client and call it; in-process transport
+// runs the same app handler, so results match the server exactly.
 // ============================================================================
 const api = client(appMeta);
 {
@@ -159,20 +160,20 @@ const api = client(appMeta);
 }
 
 // ============================================================================
-// TYPE-LEVEL assertions — prove the client surface is REAL, not `any`.
-// `expectType`-style: `satisfies` for positives, `@ts-expect-error` for negatives.
-// If a negative does NOT error, tsc reports TS2578 (unused @ts-expect-error) and
-// the typecheck fails → the proof would be a no-op.
+// Type-level assertions — prove the client surface is real, not `any`.
+// `expectType`-style: `satisfies` for positives, `@ts-expect-error` for
+// negatives. If a negative does not error, tsc reports TS2578 (unused
+// @ts-expect-error) and the typecheck fails, so the proof would be a no-op.
 // ============================================================================
 async function _typeChecks() {
-  // (1) request body type is inferred FROM the validator (NewUser).
+  // (1) request body type is inferred from the validator (NewUser).
   const created = await api["/users"].post({ body: { name: "x" } });
   created satisfies { created: true; name: string };
 
   // @ts-expect-error — body must match the validator's output (name: string).
   await api["/users"].post({ body: { wrong: 1 } });
 
-  // @ts-expect-error — body is REQUIRED on the validated POST.
+  // @ts-expect-error — body is required on the validated POST.
   await api["/users"].post();
 
   // (2) path params are typed: id is a string, and required.

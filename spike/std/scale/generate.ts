@@ -1,10 +1,10 @@
-// spike/std/scale/generate.ts — emit std-model apps with N routes, deriving a
-// typed client from FLAT `.meta`, for compile-cost measurement. Mirrors
-// spike/scale's methodology (docs/design/scale.md) but for the std typed client
-// (meta.ts + client.ts), to prove it scales ~linearly where the chained-builder
-// baseline (variant A there) is quadratic and crashes stock tsc.
+// Emits std-model apps with N routes, deriving a typed client from flat
+// `.meta`, for compile-cost measurement. Mirrors spike/scale's methodology
+// (docs/design/scale.md) but for the std typed client (meta.ts + client.ts),
+// to show it scales roughly linearly where the chained-builder baseline
+// (variant A there) is quadratic and crashes stock tsc.
 //
-// Each app is one big `path({...})` of N resources. A deterministic mix:
+// Each app is one big `path({...})` of N resources, with a deterministic mix:
 //   - ~1/3 GET-only collections (typed return)
 //   - ~1/3 GET + POST (POST carries a `validated(schema)` body → typed body)
 //   - ~1/3 a `param("id", methods({GET}))` dynamic route (typed params)
@@ -73,7 +73,7 @@ function emitApp(routes: Res[]): string {
   lines.push(``);
   lines.push(`export const api = client(app);`);
 
-  // typed call-site probes across the span (start/middle/end) force ClientOf to
+  // typed call-site probes across the span (start/middle/end) force Client to
   // instantiate keys throughout the table — the spike/scale probe scheme.
   const probes = sampleIndices(routes.length);
   for (const idx of probes) {

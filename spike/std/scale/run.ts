@@ -1,8 +1,9 @@
-// spike/std/scale/run.ts — typecheck each generated std-N app in ISOLATION and
-// record tsgo --extendedDiagnostics (Types, Instantiations, Memory, Check time)
-// + wall-clock (best of RUNS after a warm-up). Also cross-validates with stock
-// tsc 6.0.3 (bunx tsc) at every N to prove it SURVIVES (the chained baseline
-// crashes stock tsc between N=300 and N=600). Writes logs/results.csv + table.md.
+// Typechecks each generated std-N app in isolation and records tsgo
+// `--extendedDiagnostics` (Types, Instantiations, Memory, Check time) plus
+// wall-clock (best of several runs after a warm-up). Also cross-validates with
+// stock tsc 6.0.3 (bunx tsc) at every N to show it survives — the chained
+// baseline crashes stock tsc between N=300 and N=600. Writes logs/results.csv
+// and logs/table.md.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";

@@ -1,20 +1,20 @@
-// spike/std — the web-framework model where the ONLY framework type is the
-// handler, and it is literally the web standard:
+// The web-framework model where the only framework type is the handler, and
+// it is literally the web standard:
 //
 //   (req: Request) => Response | undefined | Promise<Response | undefined>
 //
 // `Request`/`Response` are the WHATWG globals. `undefined` means "not mine —
 // pass to the next handler". Combinators are plain functions returning a
-// Handler. "How much path is consumed" lives in the Request's own URL: we
-// rewrite the URL (advance past consumed segments) when descending, so there
+// Handler. How much path is consumed lives in the Request's own URL:
+// descending rewrites the URL (advancing past consumed segments), so there
 // is no ctx object, no router type, no side channel.
 
 // `Handler<P>` is parameterized by its captured path params. The params ride as
-// a TYPED FIELD on the standard `Request` (itty-router-style runtime, iron-style
-// typing — NO separate Ctx wrapper). `P` defaults to `{}` so a paramless handler
-// is just `Handler`. Because `Request & { params: P }` is a SUBtype of `Request`,
+// a typed field on the standard `Request` (itty-router-style runtime, iron-style
+// typing — no separate Ctx wrapper). `P` defaults to `{}` so a paramless handler
+// is just `Handler`. Because `Request & { params: P }` is a subtype of `Request`,
 // a plain `(req: Request) => Response` is contravariantly assignable to `Handler`
-// AND to any `Handler<P>` — a plain web handler IS a Handler (requirement 1).
+// and to any `Handler<P>` — a plain web handler is a Handler.
 export type Handler<P = {}> = (
   req: Request & { params: P },
 ) => Response | undefined | Promise<Response | undefined>;
@@ -23,13 +23,13 @@ export type Handler<P = {}> = (
 export type ReqWithParams<P> = Request & { params: P };
 
 /** Attach (or re-attach) a `params` own-property to a Request, in place. Returns
- *  the SAME Request, retyped — it stays a real Request (json()/headers/method). */
+ *  the same Request, retyped — it stays a real Request (json()/headers/method). */
 function withParams<P>(req: Request, params: P): ReqWithParams<P> {
   (req as ReqWithParams<P>).params = params;
   return req as ReqWithParams<P>;
 }
 
-// Closed verb union: a typo like "GETT" is a COMPILE ERROR in `methods`.
+// Closed verb union: a typo like "GETT" is a compile error in `methods`.
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
 
 // --- path consumption, read straight off the Request's URL -----------------
@@ -40,8 +40,9 @@ export function segments(req: Request): string[] {
 }
 
 /** Clone `req` with its pathname replaced by `segs` (method/headers/body kept).
- *  `new Request(url, req)` drops custom own-properties, so we re-attach `params`
- *  (carried from the source Request, defaulting to `{}`) to keep it a typed Req. */
+ *  `new Request(url, req)` drops custom own-properties, so `params` is
+ *  re-attached (carried from the source Request, defaulting to `{}`) to keep
+ *  it a typed Req. */
 function withSegments<P>(req: Request, segs: string[]): ReqWithParams<P> {
   const url = new URL(req.url);
   url.pathname = "/" + segs.join("/");
@@ -53,9 +54,9 @@ function withSegments<P>(req: Request, segs: string[]): ReqWithParams<P> {
  * The URL-advancing primitive, exposed for dynamic segments. A handler that
  * reads a dynamic value (e.g. an id via `segments(req)[0]`) calls `rest(req)`
  * to get a Request advanced past that one segment, then delegates the remaining
- * path to an inner handler. This is NOT a param/capture combinator: it carries
- * no value, takes no pattern, and reads nothing — it only advances the URL
- * (rule 5), while the id is still read directly off the Request (rule 4).
+ * path to an inner handler. This is not a param/capture combinator: it carries
+ * no value, takes no pattern, and reads nothing — it only advances the URL,
+ * while the id is still read directly off the Request.
  */
 export function rest<P>(req: ReqWithParams<P>): ReqWithParams<P> {
   return withSegments(req, segments(req).slice(1));
@@ -88,16 +89,16 @@ export function mount<P = {}>(prefix: string, inner: Handler<P>): Handler<P> {
 }
 
 /**
- * Capture a dynamic path segment as a TYPED param and DISCHARGE it. `param(name,
+ * Capture a dynamic path segment as a typed param and discharge it. `param(name,
  * child)` reads the first remaining segment, binds it into `req.params[name]`,
  * advances the URL past it, and delegates to `child`. The child is parameterized
  * by `Q` (its full captured-param object, which must include `name`); the result
  * is `Handler<Omit<Q, name>>` — the captured key is removed from the obligation.
  *
- * The signature infers the child's WHOLE param object `Q` and removes `K` via
- * `Omit` (rather than `Handler<P & Record<K,string>> -> Handler<P>`, which fails
+ * The signature infers the child's whole param object `Q` and removes `K` via
+ * `Omit`, rather than `Handler<P & Record<K,string>> -> Handler<P>`, which fails
  * inference: TS cannot split a `P & Record<K,string>` intersection back into `P`,
- * so it binds `P` to the whole thing and discharges nothing). `Omit` is the
+ * so it binds `P` to the whole thing and discharges nothing. `Omit` is the
  * minimal fix and composes: `param("id", param("postId", gc))` discharges both.
  */
 export function param<K extends string, Q extends Record<K, string>>(
@@ -116,7 +117,7 @@ export function param<K extends string, Q extends Record<K, string>>(
 }
 
 /**
- * Method dispatch. Only fires when the path is FULLY consumed.
+ * Method dispatch. Only fires when the path is fully consumed.
  *   - segment remaining          -> undefined (not mine)
  *   - consumed + method in table -> call it
  *   - consumed + method missing  -> 405 with `Allow` header
@@ -186,9 +187,9 @@ export function notFound(body = "Not Found"): Response {
 // --- the one adapter -------------------------------------------------------
 
 /** Run `app`; a final `undefined` becomes a 404. Runtime-agnostic. The root only
- *  accepts a FULLY-DISCHARGED `Handler<{}>`: an app that reads `req.params.id`
- *  without a `param("id", …)` discharging it is `Handler<{id:string}>` and FAILS
- *  to compile here (requirement 4). Initializes `params` to `{}` for the root. */
+ *  accepts a fully-discharged `Handler<{}>`: an app that reads `req.params.id`
+ *  without a `param("id", …)` discharging it is `Handler<{id:string}>` and fails
+ *  to compile here. Initializes `params` to `{}` for the root. */
 export function toFetch(app: Handler<{}>): (req: Request) => Promise<Response> {
   return async (req) => (await app(withParams(req, {}))) ?? notFound();
 }

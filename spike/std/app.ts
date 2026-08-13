@@ -17,13 +17,10 @@ const usersCollection: Handler = methods({
   POST: () => json({ created: true }, { status: 201 }),
 });
 
-// GET /users/:id  — the id is read DIRECTLY off the request (no params arg, no
+// GET /users/:id  — the id is read directly off the request (no params arg, no
 // capture combinator). The inner `methods` requires the path to be fully
-// consumed, so we capture the id with segments(req)[0] *before* advancing past
-// it with rest(req).
-//
-// Note: the id is read BEFORE `rest` advances, and the GET closure closes over
-// it. This is the "read params directly off the Request" pattern.
+// consumed, so segments(req)[0] captures the id before rest(req) advances past
+// it; the GET closure below closes over that captured id.
 const userItem: Handler = (req) => {
   const id = segments(req)[0]; // read the dynamic segment off the Request
   if (id === undefined) return undefined;
@@ -35,9 +32,9 @@ const userItem: Handler = (req) => {
   })(rest(req)); // advance past the id so methods sees an empty path
 };
 
-// GET /users/:id/posts  — nested resource. We read the id, advance past it,
-// then `path({ posts })` consumes the literal "posts" segment, after which the
-// inner `methods` sees an empty path.
+// GET /users/:id/posts  — nested resource. The id is read, the URL advanced
+// past it, then `path({ posts })` consumes the literal "posts" segment, after
+// which the inner `methods` sees an empty path.
 const userPosts: Handler = (req) => {
   const id = segments(req)[0];
   if (id === undefined) return undefined;

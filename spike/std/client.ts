@@ -1,17 +1,17 @@
-// spike/std/client.ts — the typed client, derived FLAT from `.meta`.
+// The typed client, derived flat from `.meta`.
 //
-// `Client<App>` walks the app's `.meta` DATA tree and produces a path-keyed
+// `Client<App>` walks the app's `.meta` data tree and produces a path-keyed
 // callable surface:  client["/users/{id}"].get({ params })  /  .post({ body }).
 //
-// SCALE MOVE (ported verbatim-in-spirit from spike/iron/client.ts): the dominant
-// fan-out — a `path(record)` of N resources or a `choice(...)` of N endpoints —
-// is handled by a SINGLE flat mapped type over the record's KEYS / the alt
-// UNION, NOT an N-deep recursive instantiation chain. Recursion depth = path
-// NESTING depth (~2-4), never route COUNT. This is what keeps tsc at ~linear and
-// stops the TS2589 / quadratic blow-up that sinks Hono `hc` / Eden treaty.
+// Ported in spirit from spike/iron/client.ts: the dominant fan-out — a
+// `path(record)` of N resources or a `choice(...)` of N endpoints — is handled
+// by a single flat mapped type over the record's keys or the alt union, not an
+// N-deep recursive instantiation chain. Recursion depth equals path nesting
+// depth (~2-4), never route count, which keeps tsc roughly linear and avoids
+// the TS2589 / quadratic blow-up that affects Hono `hc` and Eden treaty.
 //
-// No Route/Router/Node type is referenced — only `Handler` (for the app) and the
-// DATA-descriptor meta shapes from meta.ts.
+// Only `Handler` (for the app) and the data-descriptor meta shapes from meta.ts
+// are referenced — no Route/Router/Node type.
 
 import type { Handler } from "./std.ts";
 import type {
@@ -24,14 +24,14 @@ import type {
 } from "./meta.ts";
 
 // ============================================================================
-// TYPE-LEVEL walk → a flat record of { "/path" : { method : sig } }.
+// Type-level walk → a flat record of { "/path" : { method : sig } }.
 //
 //  - MethodsMeta  → one entry at the accumulated key, one prop per verb.
-//  - PathMeta     → FLAT map over the record's keys (NOT recursive in N); each
-//                   key appends a literal segment and walks its inner meta.
+//  - PathMeta     → a flat map over the record's keys (not recursive in N);
+//                   each key appends a literal segment and walks its inner meta.
 //  - PrefixMeta   → append the literal prefix, walk inner.
 //  - ParamMeta    → append "/{name}", record the param type, walk inner.
-//  - ChoiceMeta   → FLAT map over the alt UNION (Alts[number]); merge entries.
+//  - ChoiceMeta   → a flat map over the alt union (Alts[number]); merge entries.
 // ============================================================================
 
 type NormKey<K extends string> = K extends "" ? "/" : K;
@@ -60,17 +60,18 @@ type MethodsEntry<
   readonly [Key in Pre as NormKey<Key>]: VerbRec<Verbs, IO, P>;
 };
 
-// FLAT map over a path record's KEYS — ONE mapped-type pass with `as` key-
-// remapping (the iron move), NOT an N-way union+intersection. This is the load-
-// bearing scale decision: the dominant shape — a `path` of N resources, each a
-// `methods` leaf or a `param→methods` route — maps 1 record key → 1 structural
-// key in a single mapped type, exactly like a flat route table. We compute each
-// entry's KEY and VALUE locally (EntryKey/EntryVal) so the pass never forms a
-// length-N intersection (which is what makes UnionToIntersection-of-N quadratic).
+// A flat map over a path record's keys — one mapped-type pass with `as` key-
+// remapping (the iron move), not an N-way union+intersection. This is the
+// load-bearing scale decision: the dominant shape — a `path` of N resources,
+// each a `methods` leaf or a `param→methods` route — maps one record key to
+// one structural key in a single mapped type, exactly like a flat route table.
+// Each entry's key and value are computed locally (EntryKey/EntryVal) so the
+// pass never forms a length-N intersection, which is what makes
+// UnionToIntersection-of-N quadratic.
 //
-// Nested children (a `path`/`choice` UNDER a key, which split one key into many)
-// are the only case that recurses+intersects — and nesting DEPTH, not route
-// COUNT, bounds that. A flat app pays zero intersection cost.
+// Nested children (a `path`/`choice` under a key, which split one key into
+// many) are the only case that recurses and intersects — and nesting depth,
+// not route count, bounds that. A flat app pays zero intersection cost.
 type FlatPath<R extends Record<string, unknown>, Pre extends string, P> = {
   readonly [K in keyof R & string as EntryKey<R[K], `${Pre}/${K}`>]: EntryVal<R[K], P>;
 } & NestedPath<R, Pre, P>;
@@ -107,9 +108,10 @@ type NestedPath<R extends Record<string, unknown>, Pre extends string, P> = Unio
   }[keyof R & string]
 >;
 
-// FLAT map over the choice alt UNION — one mapped-type pass over `Alts[number]`,
-// keyed by each alt. THE load-bearing move: a choice of N endpoints is a single
-// distribution over the union, NOT an N-deep recursive fold (which trips TS2589).
+// A flat map over the choice alt union — one mapped-type pass over
+// `Alts[number]`, keyed by each alt. This is the load-bearing move: a choice
+// of N endpoints is a single distribution over the union, not an N-deep
+// recursive fold, which is what trips TS2589.
 type FlatChoice<Alt, Pre extends string, P> = UnionToIntersection<
   Alt extends unknown ? Walk<Alt, Pre, P> : never
 >;
@@ -142,9 +144,10 @@ export type Client<App> =
   App extends Reflected<infer M> ? Walk<M, "", Record<never, never>> : never;
 
 // ============================================================================
-// RUNTIME — mirror the type walk over the meta DATA, building the surface. Each
-// leaf method builds a Request and dispatches through the SAME app handler
-// (in-process transport): server-identical results, one code path, no network.
+// Runtime — mirrors the type walk over the meta data, building the surface.
+// Each leaf method builds a Request and dispatches through the same app
+// handler (in-process transport): server-identical results, one code path,
+// no network.
 // ============================================================================
 
 /** A transport: given a synthesized Request, return a Response. The in-process
@@ -152,7 +155,7 @@ export type Client<App> =
  *  remote server with the identical typed surface. */
 export type Transport = (req: Request) => Promise<Response>;
 
-/** In-process transport: run the SAME app handler in memory; a final `undefined`
+/** In-process transport: runs the same app handler in memory; a final `undefined`
  *  becomes a 404 (mirrors `toFetch`). */
 export function inProcess(app: Handler<{}>): Transport {
   return async (req) => {

@@ -1,17 +1,18 @@
-// spike/std/meta.ts — the inert `.meta` descriptor for the std model, plus
-// the meta-carrying variants of the combinators. ADDITIVE: it re-exports the
-// runtime from std.ts unchanged and only BOLTS an inert `.meta` onto the
-// handlers it returns. Runtime behaviour is byte-identical to std.ts — every
+// The inert `.meta` descriptor for the std model, plus the meta-carrying
+// variants of the combinators. It is additive: it re-exports the runtime from
+// std.ts unchanged and only attaches an inert `.meta` property to the
+// handlers it returns. Runtime behavior is byte-identical to std.ts — every
 // combinator here delegates to the std.ts implementation and only attaches a
 // data property the runtime never reads.
 //
-// The ONLY framework type is still `Handler`. The meta types below describe
-// DATA (segments, verbs, dynamic positions, input/output phantoms). They
-// parameterise an optional `.meta` slot — they are NOT a Route/Router/Node/Ctx
-// runtime hierarchy. `M exists ONLY because reflection needs walkable structure.`
+// The only framework type is still `Handler`. The meta types below describe
+// data (segments, verbs, dynamic positions, input/output phantoms) and
+// parameterize an optional `.meta` slot — they are not a Route/Router/Node/Ctx
+// runtime hierarchy; `M` exists only because reflection needs walkable
+// structure.
 //
 // Shapes ported from spike/iron/http.ts (EndMeta/ChoiceMeta/PrefixMeta/param/
-// lit) and adapted to std's RECORD-based combinators (`path(record)` /
+// lit) and adapted to std's record-based combinators (`path(record)` /
 // `methods(record)` instead of iron's `route(method, segs, fn)`).
 
 import {
@@ -25,7 +26,7 @@ import {
 } from "./std.ts";
 
 // ============================================================================
-// A Handler that ALSO carries inert reflection data. The runtime arrow is the
+// A Handler that also carries inert reflection data. The runtime arrow is the
 // exact std `Handler`; `meta` is bolted on as a property, read only by type-
 // level projections (Client<App>) and the runtime client walker — never by the
 // dispatch path. `M = undefined` for a handler with no reflection need.
@@ -34,8 +35,8 @@ import {
 export type Reflected<M, P = {}> = Handler<P> & { readonly meta: M };
 
 /** Attach `meta` to an existing std Handler, producing a Reflected handler. The
- *  handler IS the std handler; `meta` is a bolted-on property. `P` is the handler's
- *  captured-param obligation, threaded so `param` can discharge it (rule 3). */
+ *  handler is the std handler; `meta` is a bolted-on property. `P` is the handler's
+ *  captured-param obligation, threaded through so `param` can discharge it. */
 function withMeta<M, P = {}>(h: Handler<P>, meta: M): Reflected<M, P> {
   const r = h as Reflected<M, P> & { meta: M };
   (r as { meta: M }).meta = meta;
@@ -43,8 +44,8 @@ function withMeta<M, P = {}>(h: Handler<P>, meta: M): Reflected<M, P> {
 }
 
 // ============================================================================
-// Standard Schema — TYPES ONLY (rule 4). We do NOT depend on the concrete
-// `@standard-schema/spec` package; we mirror its `~standard` shape so any
+// Standard Schema — types only. This does not depend on the concrete
+// `@standard-schema/spec` package; it mirrors its `~standard` shape so any
 // conforming validator (zod/valibot/arktype/…) plugs in, and tests use a hand-
 // rolled fixture. `Output` is the validated type the client body is typed as.
 // ============================================================================
@@ -67,9 +68,9 @@ export interface StandardSchemaV1<Input = unknown, Output = Input> {
 export type InferOutput<S> = S extends StandardSchemaV1<unknown, infer O> ? O : never;
 
 // ============================================================================
-// META — the inert DATA descriptor shapes. Each is a plain object literal a
-// combinator attaches; the projections walk them by `tag`. (No handler-shaped
-// type among them — a handler stays `Handler`.)
+// Meta — the inert data descriptor shapes. Each is a plain object literal a
+// combinator attaches; the projections walk them by `tag`. No handler-shaped
+// type is among them — a handler stays `Handler`.
 // ============================================================================
 
 /** A literal path segment (consumed by `path`/`mount`). */
@@ -113,9 +114,9 @@ export interface ChoiceMeta<Ms extends readonly unknown[]> {
 }
 
 // ============================================================================
-// COMBINATORS — meta-carrying. Each delegates to the std.ts runtime (identical
-// behaviour) and bolts on the structural meta. Drop-in replacements for the
-// bare std combinators when you want a typed client.
+// Combinators — meta-carrying. Each delegates to the std.ts runtime (identical
+// behavior) and bolts on the structural meta; drop-in replacements for the
+// bare std combinators for a typed client.
 // ============================================================================
 
 /** `methods(table)` with an inert verb-set meta. Runtime = std `methods`. */
@@ -133,7 +134,7 @@ export function methods<
 // Per-verb input/output from the handlers in a methods table. A handler may be
 // a plain `Handler` (output unknown) or a `Validated<I,O>`-tagged handler whose
 // phantom carries the typed body I and output O. Extracted in a single pass over
-// the table's KEYS (≤7 verbs) — never over N routes.
+// the table's keys (≤7 verbs), never over N routes.
 type MethodsIO<T> = {
   readonly [K in Extract<keyof T, string>]: T[K] extends ValidatedHandler<infer I, infer O>
     ? { i: I; o: O }
@@ -168,7 +169,7 @@ export function mount<const Pre extends string, M, P = {}>(
 }
 
 /** `choice(...alts)` with an inert tuple-of-alt-metas. Runtime = std `choice`.
- *  This is what lets the client see THROUGH choice (the iron flat-union move):
+ *  This is what lets the client see through choice (the iron flat-union move):
  *  the meta keeps every alt's structure rather than collapsing to one handler. */
 export function choice<
   P = {},
@@ -184,12 +185,12 @@ export function choice<
 }
 
 /**
- * `param(name, inner)` — a DYNAMIC segment. std reads the id directly off the
- * Request (rule 4); this combinator only advances the URL past the segment
- * (rule 5, via `rest`) and records the position + decoded type in `.meta` so the
- * typed client can require a `params` arg. It is NOT a capture/value combinator:
- * it binds no value into a ctx (there is no ctx) — the inner handler still reads
- * the value with `segments(req)[0]` if it wants it.
+ * `param(name, inner)` — a dynamic segment. std reads the id directly off the
+ * Request; this combinator only advances the URL past the segment (via `rest`)
+ * and records the position and decoded type in `.meta` so the typed client can
+ * require a `params` arg. It is not a capture/value combinator: it binds no
+ * value into a ctx (there is no ctx) — the inner handler still reads the value
+ * with `segments(req)[0]` if needed.
  *
  * Overloads: bare `param("id")` → `{id: string}`; `param("id", codec)` →
  * `{id: InferOutput<codec>}` (the codec is type-only here — std doesn't decode).
@@ -210,8 +211,8 @@ export function param(
 ): Reflected<ParamMeta<string, unknown, unknown>, Record<string, string>> {
   const inner = (arg3 ?? arg2) as Reflected<unknown, Record<string, string>>;
   // Runtime: delegate to std's `param`, which reads the dynamic segment off the
-  // Request, BINDS it into `req.params[name]`, advances the URL past it, and
-  // delegates to `inner`. The captured value is read off `req.params` (rule 4)
+  // Request, binds it into `req.params[name]`, advances the URL past it, and
+  // delegates to `inner`. The captured value is read off `req.params`
   // — the Request stays the only side channel (no ctx object). `paramValue` is
   // the convenience accessor over `req.params`.
   const h = paramRT(name, inner);
@@ -222,7 +223,7 @@ export function param(
 }
 
 // ============================================================================
-// Validation — ORTHOGONAL, opt-in (rule 4). `validated(schema, fn)` wraps a
+// Validation — orthogonal, opt-in. `validated(schema, fn)` wraps a
 // body-consuming handler: it validates `await req.json()` against a Standard
 // Schema, renders 400 on failure, and attaches the input type to `.meta` so the
 // client's request body is typed. Stays a plain std `Handler`.
@@ -230,10 +231,11 @@ export function param(
 
 // Phantom-tagged handler variants the methods-meta extractor reads. They are
 // `Handler` at runtime (identical dispatch); the extra phantom carriers hold the
-// typed body/output for the client and are never present at runtime. A REQUIRED
+// typed body/output for the client and are never present at runtime. A required
 // brand symbol (not just optional `__i`/`__o`) lets the meta extractor's
-// conditional types discriminate these from a PLAIN `Handler` exactly — an
-// optional-only phantom would be matched by any handler (every prop optional).
+// conditional types discriminate these from a plain `Handler` exactly — an
+// optional-only phantom would be matched by any handler, since every prop
+// would be optional.
 declare const VALIDATED: unique symbol;
 declare const RETURNS: unique symbol;
 export type ValidatedHandler<I, O> = Handler & {
