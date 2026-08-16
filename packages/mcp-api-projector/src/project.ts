@@ -55,6 +55,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import { assertUniqueName } from "@rhi-zone/fractal-api-tree/tree";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import type { SourceMap } from "@rhi-zone/fractal-api-tree";
@@ -349,45 +350,23 @@ export type McpBranchMeta = {
   readonly mcp?: McpBranchMetaProperties;
 };
 
-/**
- * Record `segments` as the path that produced `name`, throwing when a
- * DIFFERENT path already claimed the same `name` — instead of letting the
- * second-visited leaf silently overwrite the first in the descriptor list
- * and dispatch table (`out.push`/`handlers.set`, both keyed by `name`).
- *
- * Names here are built by joining tree-position segments with "_" (tools,
- * prompts) or "/" behind a URI scheme (resources) — see `projectTools`'s doc
- * comment. Neither join escapes its delimiter, so an authored segment key or
- * a `meta.mcp.name`/`meta.mcp.segment`/`meta.mcp.uri` override that itself
- * contains the delimiter can coincide with two DIFFERENT nested segments'
- * own join (e.g. a leaf literally named "users_list" collides with branch
- * "users" -> leaf "list"). `@rhi-zone/fractal-api-tree`'s `tree.ts` guards
- * the identical unescaped join the same way, via its own `assignUniqueName`
- * — this is that same fix, mirrored here because `extractToolSchemas`'s
- * derived name and this file's runtime-projected name are supposed to be the
- * same string for the same tree (this file's own doc comment, "meta.mcp.name
- * ... replaces the derived tool name").
- */
-function assertUniqueProjectedName(
-  used: Map<string, readonly string[]>,
-  kind: string,
-  name: string,
-  segments: readonly string[],
-): void {
-  const priorSegments = used.get(name);
-  if (priorSegments !== undefined) {
-    throw new Error(
-      `two tree positions produced the same ${kind} "${name}": ` +
-        `[${priorSegments.join(" -> ")}] collides with [${segments.join(" -> ")}]. ` +
-        `The joined name has no escaping for its delimiter inside an authored ` +
-        `segment key or a meta.mcp override, so two different tree positions can ` +
-        `derive the same string. Disambiguate one of them with an explicit ` +
-        `meta.mcp.name/meta.mcp.uri (on the leaf) or meta.mcp.segment (on an ` +
-        `ancestor branch).`,
-    );
-  }
-  used.set(name, segments);
-}
+// Name/URI-collision guarding for the walks below (`projectTools`,
+// `projectResources`, `projectPrompts`) uses `@rhi-zone/fractal-api-tree/tree`'s
+// `assertUniqueName` rather than a copy defined here: names are built by
+// joining tree-position segments with "_" (tools, prompts) or "/" behind a
+// URI scheme (resources) — see `projectTools`'s doc comment — and neither
+// join escapes its delimiter, so an authored segment key or a
+// `meta.mcp.name`/`meta.mcp.segment`/`meta.mcp.uri` override that itself
+// contains the delimiter can coincide with two DIFFERENT nested segments' own
+// join (e.g. a leaf literally named "users_list" collides with branch "users"
+// -> leaf "list"). `tree.ts`'s type-level walk (`extractToolSchemas`/
+// `extractToolTypeRefs`) guards the identical unescaped join for the identical
+// reason — `extractToolSchemas`'s derived name and this file's
+// runtime-projected name are supposed to be the same string for the same tree
+// (this file's own doc comment, "meta.mcp.name ... replaces the derived tool
+// name") — so one shared implementation lives there (mcp-api-projector
+// already depends on api-tree, never the reverse) instead of two copies of
+// the same collision-tracking logic diverging over time.
 
 /**
  * Read the `mcp` bag off a node's meta, or an empty bag when there is none.
@@ -446,7 +425,7 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
   // further. `descriptionFallback` is whichever of those two the description
   // falls back to when no other source supplies one. `segments` is the raw
   // (unjoined) tree-position path to this leaf, used only to name both sides
-  // of a name collision in `assertUniqueProjectedName`'s error.
+  // of a name collision in `assertUniqueName`'s error.
   const buildTool = (
     child: Node,
     name: string,
@@ -460,7 +439,14 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
     if (mcp.as !== undefined && mcp.as !== "tool") return undefined;
 
     const resolvedName = typeof mcp.name === "string" ? mcp.name : name;
-    assertUniqueProjectedName(usedNames, "tool name", resolvedName, segments);
+    assertUniqueName(
+      usedNames,
+      "tool name",
+      resolvedName,
+      segments,
+      "Disambiguate one of them with an explicit meta.mcp.name (on the leaf) " +
+        "or meta.mcp.segment (on an ancestor branch).",
+    );
 
     // Keyed by the resolved name, so a `meta.mcp.name` override and its
     // derived schema stay together.
@@ -729,7 +715,7 @@ export function projectResources(
   // mechanisms (exact `handlers` lookup vs. trying each `templateHandlers`
   // pattern in turn), so a fixed URI and a template's `uriTemplate` never
   // actually contend for the same dispatch slot — tracked as two separate
-  // collision sets rather than one shared with `assertUniqueProjectedName`.
+  // collision sets rather than one shared with `assertUniqueName`.
   const usedUris = new Map<string, readonly string[]>();
   const usedUriTemplates = new Map<string, readonly string[]>();
 
@@ -771,7 +757,14 @@ export function projectResources(
     const streaming = resolved.streaming;
 
     if (hasFallback) {
-      assertUniqueProjectedName(usedUriTemplates, "resource template URI", uri, leafSegments);
+      assertUniqueName(
+        usedUriTemplates,
+        "resource template URI",
+        uri,
+        leafSegments,
+        "Disambiguate one of them with an explicit meta.mcp.uri (on the leaf) " +
+          "or meta.mcp.segment (on an ancestor branch).",
+      );
       const { pattern, paramNames } = compileUriTemplate(uri);
       templateHandlers.push({
         uriTemplate: uri,
@@ -794,7 +787,14 @@ export function projectResources(
       };
     }
 
-    assertUniqueProjectedName(usedUris, "resource URI", uri, leafSegments);
+    assertUniqueName(
+      usedUris,
+      "resource URI",
+      uri,
+      leafSegments,
+      "Disambiguate one of them with an explicit meta.mcp.uri (on the leaf) " +
+        "or meta.mcp.segment (on an ancestor branch).",
+    );
     handlers.set(uri, { handler: child.handler as Handler, meta: child.meta });
     return {
       resource: {
@@ -954,7 +954,7 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
   // name is already resolved, serving the same two callers `buildTool` does.
   // `segments` is the raw (unjoined) tree-position path to this leaf, used
   // only to name both sides of a name collision in
-  // `assertUniqueProjectedName`'s error.
+  // `assertUniqueName`'s error.
   const buildPrompt = (
     child: Node,
     name: string,
@@ -968,7 +968,14 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
     if (mcp.as !== "prompt") return undefined;
 
     const resolvedName = typeof mcp.name === "string" ? mcp.name : name;
-    assertUniqueProjectedName(usedNames, "prompt name", resolvedName, segments);
+    assertUniqueName(
+      usedNames,
+      "prompt name",
+      resolvedName,
+      segments,
+      "Disambiguate one of them with an explicit meta.mcp.name (on the leaf) " +
+        "or meta.mcp.segment (on an ancestor branch).",
+    );
 
     // Keyed by the resolved name, so a `meta.mcp.name` override and its
     // derived schema stay together.

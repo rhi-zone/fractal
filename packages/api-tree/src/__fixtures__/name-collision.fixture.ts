@@ -1,5 +1,5 @@
 // One tree whose underscore-joined tool name collides across two DIFFERENT
-// tree positions — regression fixture for `assignUniqueName` (tree.ts). The
+// tree positions — regression fixture for `assertUniqueName` (tree.ts). The
 // leaf key "books_get" derives the exact same name as branch "books" ->
 // leaf "get", because `join`'s "_" delimiter is unescaped. Before the fix,
 // extractToolSchemas/extractToolTypeRefs silently let whichever leaf was

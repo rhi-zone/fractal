@@ -353,7 +353,7 @@ describe("two trees in one file with a colliding leaf path — treeId disambigua
 // 3a-name-collision. One tree whose underscore-joined tool name collides
 // across two DIFFERENT tree positions ("books_get" the leaf key vs.
 // "books" -> "get" the nested leaf) — regression coverage for
-// `assignUniqueName` (tree.ts). Unlike 3a-collision above (fixed by
+// `assertUniqueName` (tree.ts). Unlike 3a-collision above (fixed by
 // prefixing every route path with its owning treeId), the underscore-joined
 // tool name is deliberately unprefixed within one tree (`walkTree`'s doc
 // comment), so the collision itself has to be caught and reported instead.

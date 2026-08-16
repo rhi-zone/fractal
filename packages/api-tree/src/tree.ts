@@ -96,49 +96,65 @@ const join = (prefix: string, seg: string): string =>
   prefix.length > 0 ? `${prefix}_${seg}` : seg;
 
 /**
- * Record `value` at `out[name]`, throwing when a DIFFERENT tree position
- * already claimed the same `name` — rather than silently letting the
- * second-processed leaf overwrite the first, the way a bare `out[name] =
- * value` would.
+ * Throw when a DIFFERENT tree position already claimed the same `name` —
+ * rather than silently letting the second-processed leaf overwrite the first
+ * wherever the caller subsequently uses `name` as a map/dispatch-table key.
+ * Registers `path` under `name` in `used` and returns normally otherwise.
  *
- * `join`'s "_" delimiter is unescaped: nothing stops an authored segment key
- * or a `meta.mcp.name`/`meta.mcp.segment` override from itself containing
- * "_", so a leaf literally named `"books_get"` derives the identical name to
- * branch `"books"` → leaf `"get"`. That's not a hypothetical — it's the same
- * class of silent-collision bug `extractRouteSchemas`'s doc comment already
- * calls out for the "/"-joined route-path keying (fixed there by prefixing
- * every path with its owning `treeId`, which the underscore-joined tool name
- * deliberately does NOT do — see `walkTree`'s doc comment, "a tool name is
- * scoped by convention to ONE standalone tree already"). Because there is no
- * such prefix to lean on here, the name collision itself has to be caught
- * instead.
+ * `join`'s "_" delimiter is unescaped (as is mcp-api-projector's own "_"/"/"
+ * join, `project.ts`'s `projectTools`/`projectResources`/`projectPrompts`):
+ * nothing stops an authored segment key or a `meta.mcp.name`/
+ * `meta.mcp.segment`/`meta.mcp.uri` override from itself containing the
+ * delimiter, so a leaf literally named `"books_get"` derives the identical
+ * name to branch `"books"` → leaf `"get"`. That's not a hypothetical — it's
+ * the same class of silent-collision bug `extractRouteSchemas`'s doc comment
+ * already calls out for the "/"-joined route-path keying (fixed there by
+ * prefixing every path with its owning `treeId`, which the underscore-joined
+ * tool name deliberately does NOT do — see `walkTree`'s doc comment, "a tool
+ * name is scoped by convention to ONE standalone tree already"). Because
+ * there is no such prefix to lean on here, the name collision itself has to
+ * be caught instead.
  *
- * `paths` tracks each name's ORIGINATING leaf path (the raw segment array
- * `onLeaf` also receives), purely so the thrown error can point at both
- * colliding positions concretely rather than just repeating the name they
- * collided on.
+ * Shared between this file's type-level walk (`extractToolSchemas`/
+ * `extractToolTypeRefs`, below) and mcp-api-projector's runtime walk
+ * (`project.ts`) — the two derive names from the identical tree-position
+ * scheme (mirrored 1:1, see `project.ts`'s module doc comment), so the
+ * collision and the fix are the same in both places; this lives here (not
+ * duplicated in mcp-api-projector) because mcp-api-projector already depends
+ * on this package, never the reverse.
+ *
+ * Deliberately does NOT write the derived value anywhere — only checks and
+ * registers — because callers disagree on where that goes: this file writes
+ * into a flat `out[name] = value` map immediately after calling this (see
+ * `extractToolSchemas`/`extractToolTypeRefs` below), while mcp-api-projector's
+ * `projectTools`/`projectPrompts` register a dispatch-table entry AND push a
+ * descriptor onto an array, and `projectResources` splits fixed URIs and
+ * templates into two entirely separate tables. `used` tracks each name's
+ * ORIGINATING leaf path so the thrown error can point at both colliding
+ * positions concretely rather than just repeating the name they collided on.
+ * `kind` (e.g. `"derived name"`, `"tool name"`, `"resource URI"`) and
+ * `disambiguation` (a caller-supplied hint naming the actual `meta.mcp.*` key
+ * that resolves the collision at this call site) let one message read right
+ * across every caller instead of hardcoding one caller's vocabulary.
  */
-function assignUniqueName<T>(
-  out: Record<string, T>,
-  paths: Map<string, readonly string[]>,
+export function assertUniqueName(
+  used: Map<string, readonly string[]>,
+  kind: string,
   name: string,
   path: readonly string[],
-  value: T,
+  disambiguation: string,
 ): void {
-  const priorPath = paths.get(name);
+  const priorPath = used.get(name);
   if (priorPath !== undefined) {
     throw new Error(
-      `two tree positions produced the same derived name "${name}": ` +
+      `two tree positions produced the same ${kind} "${name}": ` +
         `[${priorPath.join(" -> ")}] collides with [${path.join(" -> ")}]. ` +
-        `The underscore-joined name has no escaping for "_" inside an authored ` +
-        `segment key or meta.mcp.name/meta.mcp.segment value, so two different ` +
-        `tree positions can derive the same string. Disambiguate one of them with ` +
-        `an explicit meta.mcp.name (on the leaf) or meta.mcp.segment (on an ` +
-        `ancestor branch).`,
+        `The joined name has no escaping for its delimiter inside an authored ` +
+        `segment key or a meta.mcp override, so two different tree positions ` +
+        `can derive the same string. ${disambiguation}`,
     );
   }
-  paths.set(name, path);
-  out[name] = value;
+  used.set(name, path);
 }
 
 /** True when a property symbol resolved off a type is REQUIRED (not optional). */
@@ -704,7 +720,7 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * tree in a source file. Mirrors toTools' name construction.
  *
  * Throws when two different tree positions derive the same name (see
- * `assignUniqueName`, above, for why the underscore-joined scheme allows
+ * `assertUniqueName`, above, for why the underscore-joined scheme allows
  * that) rather than letting the second one silently overwrite the first.
  *
  * Passing `options.program` reuses a pre-built `ts.Program` (e.g. from
@@ -728,11 +744,19 @@ export function extractToolSchemas(
     entryFile,
     (name, path, fn, descriptionSource, checker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
-      assignUniqueName<ToolSchema>(out, paths, name, path, {
+      assertUniqueName(
+        paths,
+        "derived name",
+        name,
+        path,
+        "Disambiguate one of them with an explicit meta.mcp.name (on the leaf) " +
+          "or meta.mcp.segment (on an ancestor branch).",
+      );
+      out[name] = {
         inputSchema: schemaFromFunctionNode(fn, checker),
         outputSchema: schemaFromReturnType(fn, checker),
         ...(description !== undefined ? { description } : {}),
-      });
+      };
     },
     options?.program,
   );
@@ -817,7 +841,7 @@ export type TypeRefMapWithDefs = {
  * JSON Schema.
  *
  * Throws on a same-name collision between two different tree positions — see
- * `extractToolSchemas`'s doc comment and `assignUniqueName`, above.
+ * `extractToolSchemas`'s doc comment and `assertUniqueName`, above.
  *
  * Passing `options.shouldShare` (default omitted — plain `TypeRefMap`, exact
  * prior behavior, no sharing) opts into structural sharing across every
@@ -849,11 +873,19 @@ export function extractToolTypeRefs(
     entryFile,
     (name, path, fn, descriptionSource, checker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
-      assignUniqueName<ToolTypeInfo>(out, paths, name, path, {
+      assertUniqueName(
+        paths,
+        "derived name",
+        name,
+        path,
+        "Disambiguate one of them with an explicit meta.mcp.name (on the leaf) " +
+          "or meta.mcp.segment (on an ancestor branch).",
+      );
+      out[name] = {
         input: typeRefFromFunctionNode(fn, checker, registry),
         output: typeRefFromReturnType(fn, checker, registry),
         ...(description !== undefined ? { description } : {}),
-      });
+      };
     },
     options?.program,
   );

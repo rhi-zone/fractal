@@ -202,7 +202,7 @@ describe("name namespacing from tree position", () => {
 // 4a. Same-name collision between two DIFFERENT tree positions throws,
 // instead of the second-visited leaf silently overwriting the first —
 // regression coverage mirroring @rhi-zone/fractal-api-tree's
-// `assignUniqueName` (tree.ts), since the underscore-join here has the exact
+// `assertUniqueName` (tree.ts), since the underscore-join here has the exact
 // same unescaped delimiter.
 // ============================================================================
 
