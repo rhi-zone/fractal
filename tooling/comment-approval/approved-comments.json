@@ -1679,7 +1679,7 @@
     },
     "110a5b46b8c588a7d3f3cce99fe566fb7141ba918d0585e1d33b24c6638525e7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "110f9cc7bc2d418c8b4ad472b2a2b3eb9558c9c4b7a6f9e78154ef57a387ea0a": {
       "excerpt": "Chunk effect: a handler yields this to emit one piece of streamed data.",
@@ -2827,7 +2827,7 @@
     },
     "1c81e1a8988f1d8d6d97a3273a7a6575d9bc238180dd5f615a6dcb258533b70e": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "1c88e90d510d3e7a3729474f49117d8012e0d7d1736a873b9b631c8793f78080": {
       "excerpt": "A 2-arg call — `protocol` omitted — resolves against `validators[key]`",
@@ -3127,7 +3127,7 @@
     },
     "1f9e126a065a2a3655b3c56db13b25eb1954bc2ac19872a1437c35f96d9fd38e": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "1fa0926af19678e3e2c47385e863fa6a1c11ffca286b88832f291c6dfeafd335": {
       "excerpt": "'' inside a '...'-quoted string is an escaped quote, not the end.",
@@ -3279,7 +3279,7 @@
     },
     "216796ed1484ce2d0274300849a96c14cdf580513033a1408b1021f0df222271": {
       "excerpt": "A leaf key that itself contains \"_\" (the schemaKeyFor join delimiter) no",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "2169319532e37d8471247f5184526bd47a8373d53f2138034f0c761b841ef4f7": {
       "excerpt": "`const` for a field marked `readonly` — Sorbet's T::Props distinguishes",
@@ -3697,6 +3697,10 @@
       "excerpt": "unknown/undefined — anything goes",
       "approvedAt": "2026-08-13T07:43:20.205Z"
     },
+    "2606a0cac45bf5e0e42a8ec7acd7b0c2990ba655223bf7ea58ef8f325dc05ced": {
+      "excerpt": "Tree A: branch \"a\" -> leaf \"b c\" (one child segment containing a",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
+    },
     "2606b920df3b48c66d89f23fdeb540383398c48190492fc3a652f7e4fd338a24": {
       "excerpt": "Passes to run over `tree`, in order, before any projection walk sees it.",
       "approvedAt": "2026-08-13T08:46:58.818Z"
@@ -3991,7 +3995,7 @@
     },
     "29e8ed7b2be52df4753bbf64f11671ae56131548e1ae78fb11f79f821319964f": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "29e947faba37c99e547d2c73370b1572b2665afc56579407069040e5e8ae19e7": {
       "excerpt": "Build an MCP `Server` from a Node tree: project the tree's tools, resources",
@@ -4683,7 +4687,7 @@
     },
     "31a3b9b010081a8ef64f2e09ee04a240ca856e244e321078463cb4fd3910e5a4": {
       "excerpt": "Escape a value for embedding inside a double-quoted bash string.",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "31b4bc0c65b54def44527a11ef4b8d70f7adf709d9cc61d5d5eedbd6a0201f60": {
       "excerpt": "Build the `attrs.validators.*` call expressions implied by a TypeRef's",
@@ -4788,6 +4792,10 @@
     "32e3a95e4a32c385d45b0d4732f066932b304baa837154eb249f3b4050f0a933": {
       "excerpt": "`AsyncIterable<T>` is TypeScript's own native construct for an",
       "approvedAt": "2026-08-13T08:04:03.727Z"
+    },
+    "32ee098a4b061f205df9c9da1d78df0e412fc7d8031015dcb99f61df0b83a1ff": {
+      "excerpt": "The `for c in ${STATICS[\"$path\"]}; do ... done` match loop that",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "32f6b7ad3b0fdabc81472581bafa9581bac622de79c8e21d77d499e57a3168e5": {
       "excerpt": "packages/http-framework-projector/src/fastify.ts — @rhi-zone/fractal-http-framew…",
@@ -6855,7 +6863,7 @@
     },
     "480a7943a79967890ab8eb5857e3235d0575d91f9d76b2ec6b754cd27fd10748": {
       "excerpt": "Strip the trailing `complete -F ...` registration line — the `complete`",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "480b7a4c063768b6268fe759423fb852d35874f1ce160760eff0aa652ea5fe19": {
       "excerpt": "outer key = the string key passed to `applyValidation(key, tree)`.",
@@ -7463,7 +7471,7 @@
     },
     "4e3ac52ccc840264a0a06130c5f7811e3e04d5d0b81681298d8145f4b7c3863f": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "4e51552b3a2a9509cc7e9ae90f1a9f5e346522e5fd16693655b37a67f3938c6f": {
       "excerpt": "Reasonable defaults for a build-time (not editor/language-service)",
@@ -7648,6 +7656,10 @@
     "50702708d0fdac2c94e14646acdbbb218435a8c39f5eecf89b7819ca81936e17": {
       "excerpt": "Base URL path/verb params resolve against; defaults to same-origin",
       "approvedAt": "2026-08-13T07:51:27.448Z"
+    },
+    "507d8bdc9e454298b69e6fc4abbbb83fec66bd12acaadef8302e759360f01f01": {
+      "excerpt": "`LevelInfo.key` below (space-joined argv path, distinct from",
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "50a146110d2b13fab87c6f89206f2f123426cac3df52dac8bc99d60b81d7c666": {
       "excerpt": "Meta carried by a leaf node (an `op()` result).",
@@ -7891,7 +7903,7 @@
     },
     "52cbf17413774ab848a2d52aab6516cbf96cc62a1044b00299ec725ca41e1aab": {
       "excerpt": "\"read\"/\"replace\"/\"remove\"/\"checkout\" live under the books/{bookId}",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "52d4cef2a36d3e68dc218115a8bc0fe09986c1cbb35cc8f5f52d3dde89edcadb": {
       "excerpt": "`projectMethods`'s full result: the flat descriptor array plus the name -> handl…",
@@ -8284,6 +8296,10 @@
     "563c88090500707bf88e4af67ac58c1e1a868d586103c2845044192fd156ca7a": {
       "excerpt": "A class instance carries only nominal identity (see type-ir's",
       "approvedAt": "2026-08-13T08:04:03.668Z"
+    },
+    "5657bd82f949b0bb74de64a5caf0b4ae2ddbd7ecfc67907a2038437b1b8785b4": {
+      "excerpt": "Mirrors completions.ts's own (unexported) `bashEscape` — the generated",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "5662f5962f5406d33418989ae8174f45e69610d27388c17d00590149cb9318ec": {
       "excerpt": "POST with an invalid body → 400 from `validated`",
@@ -9133,6 +9149,10 @@
       "excerpt": "Type-only — `layers.ts` doesn't import this file, so this edge is plain",
       "approvedAt": "2026-08-13T08:03:36.762Z"
     },
+    "5f22e79c9c2f9ff7f1597cd02cff8d524dc7b50044c9a6f4c4f5427b6fe1fe2f": {
+      "excerpt": "`path` is `local` to `_cli_completions`, so it can't be inspected",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
+    },
     "5f2e6638f86a873dbcba13d123d0b6fc02b5a3356e94840e821816e2222a1715": {
       "excerpt": "The fully-defaulted strategy, so custom stages can read the same knobs the defau…",
       "approvedAt": "2026-08-13T07:53:40.842Z"
@@ -9575,7 +9595,7 @@
     },
     "63d436455c8ad41ea8fe6e5cc564e0e8595790f0e26bedc670686c41a3bd62f6": {
       "excerpt": "Same underscore-joined convention extractToolSchemas uses (see",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "63d59bcd9f80616f0acd8f21e8f80802266d080c997a926e82f0daf0caa9fd5e": {
       "excerpt": "Tests for the statistics helpers (stats.ts) that back inference-eval.ts's",
@@ -9683,7 +9703,7 @@
     },
     "6581855499966fc334eb641b633302dd01a8826a08f8b5de986eca32c988b2a5": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "658f4cf03613b0fd322ed001ddb01e68b714f1a43a5741514577a6fcecc7d658": {
       "excerpt": "Must land on a multiple of 5.",
@@ -10003,7 +10023,7 @@
     },
     "68a334b7325863cd14b11b0e346bbcbed25b13234a2b536cce84203de715d226": {
       "excerpt": "Build the bash completion function body (everything between the",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "68a510104ad6a40687a865369f4968b0ad24ba27d3b7fb25451f1d50f3d29970": {
       "excerpt": "Serve a fetch handler on Node via node:http.",
@@ -10967,7 +10987,7 @@
     },
     "7253afba5a20179fc6ae559319541ef31214699d374a726acbe332f2f55c5c88": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "7256deead265e9ad0a9528ffc31fcc2703f54c1667fc4791da5a1c5e114def00": {
       "excerpt": "Client codegen — generates a standalone, typed TypeScript client directly",
@@ -11823,7 +11843,7 @@
     },
     "7ab751f735879bb3643a676ca76deaf6fd9eadfd7cca453796d80173a8578d69": {
       "excerpt": "True when `meta.cli.hidden === true`.",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "7abc6e1708ce7070d1e64151e2c79cf5c2af707bc8ee03e34a824ff78f302fc6": {
       "excerpt": "============================================================================",
@@ -12103,7 +12123,7 @@
     },
     "7d8eda3b0ec64c4746d74a1801d2413908d4468428db400a86b678a8ff0e0c88": {
       "excerpt": "Generate a zsh completion script. zsh's native completion system",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "7d94584bdefbe2d60b74d2b23079a5b045644eb0eccd3a4ec2a1eb19dd136356": {
       "excerpt": "Unify two TypeRefs: find the tightest type that accepts values from both.",
@@ -13243,7 +13263,7 @@
     },
     "8aa1b020abcc700d998fbbec867e0df72a62bf0d9d54f5f1c4e105fbceaf542a": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "8ab0906b497f469849b800901bb101b7de2503cda155ecfc6d74fd9cea09c067": {
       "excerpt": "Lower one method/function TypeRef to a `JsonRpcMethod` descriptor.",
@@ -14161,6 +14181,10 @@
       "excerpt": "`JsonSchema.type` has no \"null\" variant — a nullable field is",
       "approvedAt": "2026-08-13T08:03:36.816Z"
     },
+    "92ff6aebd1b54783f77fe8764e575fecf39fe154e7a19beed8a432434eff116e": {
+      "excerpt": "Sanity: `expectedKey` (what TS computed) is the same string",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
+    },
     "93076069c3331571b77f0a53fa4a7757f17eb703ca14febfac607769f8ed01f1": {
       "excerpt": "Among positions found in both, how often did the inferred kind match.",
       "approvedAt": "2026-08-13T07:48:24.363Z"
@@ -14323,7 +14347,7 @@
     },
     "94a57a7d49451782b61b086c46d2d7f53bd27b1b3f873c488e8382aeb6cce68e": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "94bae453da1b64c1ec2d886f9560298152c9472476497d367be47ae4549bdfc8": {
       "excerpt": "{ kind: \"object\", fields: { next: { kind: \"ref\", target: \"Self\" } } }",
@@ -14591,7 +14615,7 @@
     },
     "977b109dce17e4736c0f3bc8f8221c09b19c10404d495fb5e4bb25670c40c1ea": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "978f43b38d33278a1f1e53eead74ff9622e2b6aff631958f8c6d694f5d6cf477": {
       "excerpt": "`x-declaration-file` carries `declarationFile` alongside `x-class-name`,",
@@ -14603,7 +14627,7 @@
     },
     "9793505ed748b7742b37c13f886741ca90b1737d4d49a50c56fa62e4988fe33e": {
       "excerpt": "Generate a bash completion script (`complete -F ... programName`, source it or d…",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "97973350411cf9175717317802995634c058f9f5a926009a568c3a45d58d3601": {
       "excerpt": "============================================================================",
@@ -14679,7 +14703,7 @@
     },
     "9885840ff39b2818ff9462eb58e4363b889c2cc10edee0bf384aefe8cdf58b74": {
       "excerpt": "Generate a fish completion script.",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "9887cf2efda12ae15fa8530aae6c9acf276d6fa856eb6ff2b08ca8f2ca1995d8": {
       "excerpt": "dynamic (1-2 params)",
@@ -15264,6 +15288,10 @@
     "9ee62969b92f9e87bd973970f3c28ec4cbaf29f497d44138c4f36719fe4068ea": {
       "excerpt": "The C-target convention for referencing an opaque resource by pointer:",
       "approvedAt": "2026-08-13T07:56:55.962Z"
+    },
+    "9eee76ed0e103e99c2a7bf92ad205296267549cbe6c714932fef25aaa692d560": {
+      "excerpt": "path is either the root sentinel (replaced outright — the sentinel",
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "9ef4c6565258d2bdce8a39274bc29d3c20ab5b7ec8a24188b2dfc25047ed5f2a": {
       "excerpt": "List branch children",
@@ -16099,7 +16127,7 @@
     },
     "a7a1febc73222b1ee94e1d26641a787eac78fe3c2c4025ec9f7c982ae6cb1af3": {
       "excerpt": "One entry per tree position reachable in the completion script:",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "a7a48c6781739d2ef44adafc917cbc77f2d7ceba329c16a5345a891983158e82": {
       "excerpt": "============================================================================",
@@ -17579,7 +17607,7 @@
     },
     "b7173a871d4f40bc2ac53ff86fbba82a30c968d2cd734c178d642d349c8c8be0": {
       "excerpt": "Static shell completion generation for the CLI projector.",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "b725ccc26f7e5ba63098c8161a4a5eb6780dfd49455a92004481d7485507a512": {
       "excerpt": "Recursive TypeRef tree — fc.memo controls depth",
@@ -18269,6 +18297,10 @@
       "excerpt": "Type-equality utility.",
       "approvedAt": "2026-08-13T07:56:54.067Z"
     },
+    "be60b20a5eda58d2896ba035cf048d99eb8ed7d52e96e0453fd8f644060efd91": {
+      "excerpt": "Unlike a space, a literal backslash inside a segment doesn't get",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
+    },
     "be6a1612cce5cb535ceb14996a5052c407ba33fa3278c873169f1f83e0086955": {
       "excerpt": "Same merge order/precedence as project.ts's buildField/buildDispatch:",
       "approvedAt": "2026-08-16T08:16:31.878Z"
@@ -18547,7 +18579,7 @@
     },
     "c13bbdc1d1f80ed7609d627e4259f420aa4e0e0cb8d5d3112aa1a02b72078c32": {
       "excerpt": "A `fallback.subtree` that is itself a bare op() leaf (not wrapped in",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "c142a1f5a34e7143e95eb5b8f15a2e3d5e95907b3bb2cd4b30f1a8afff2b7429": {
       "excerpt": "`T extends Searchable` — a named-interface constraint.",
@@ -19755,7 +19787,7 @@
     },
     "ce167ac0fb1bcb67263af94b2f426f88dd170b227c9c760428755c6fcdc5bbec": {
       "excerpt": "Sanitize a program name into a valid bash/zsh function-name fragment.",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "ce1d3a4c7c3f83811e6855102107e84dea07b48651ea98243998da8522648694": {
       "excerpt": "============================================================================",
@@ -19783,7 +19815,7 @@
     },
     "ce4b8865695e04bfaef29f88933fa2e72264bfb855f8a3047ab800dcf1ff77ae": {
       "excerpt": "Escape a value for embedding inside a single-quoted fish string.",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "ce4e73466b9699ee2cb3154a98cad8213f44364084a47ceb957f1cb6e7d5e51b": {
       "excerpt": "(a) / (b-no-rename): direct \"Result\" name with ≥ 2 type arguments.",
@@ -20259,7 +20291,7 @@
     },
     "d272153ee82f20666ad96be3a5ab75c9d48cde5c63422c681aef74aca7abf1e2": {
       "excerpt": "Exercises the generated function directly under a real bash by",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "d27bbaf6a5fd7464ff3c4a046193a31d2d3e33194ee4d1a91da739edd34c05d9": {
       "excerpt": "True when `meta` is a v3 record whose toolchain identity (format version,",
@@ -20363,7 +20395,7 @@
     },
     "d34bb9328f24c8c1d42f2e71dd5cf522cfa1eff99301e0692aa608357f0353de": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "d35802de89fa878a1f79bc07f03fe4e3e1124942b5ce8c444b73a7494791afd9": {
       "excerpt": "`#[derive(Clone)]` is required for `getter_with_clone` (wasm-bindgen's",
@@ -20895,7 +20927,7 @@
     },
     "d8e668862098d370d83b56c26e22fa842d133475f573cca0141cebbbeafb7314": {
       "excerpt": "Shell completion generation. Uses examples/library-api/src/tree.ts (the",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "d8f07bc19a6ba768b0bc10dd5dd1927a64772f6234d7db81540e28b9365c6289": {
       "excerpt": "============================================================================",
@@ -21643,11 +21675,11 @@
     },
     "e0b7e4a163f1b30ce4dc62a3287221ff60321946fff992bce5bdfbde76c75ab1": {
       "excerpt": "No spurious branch-level entries for \"widgets *\" (empty statics/no",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "e0b88bf8377afc59b1640426e127cafdc302d21acb87aac6bdd8ed89ae19615b": {
       "excerpt": "\"books * \" is the position right after the (unknowable) bookId slug —",
-      "approvedAt": "2026-08-16T08:06:08.770Z"
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "e0bd3df09fce12dd2a460517cdb4f8060beaa9525995af4d0132c64513590b7a": {
       "excerpt": "Extracts every `//` and `/* *​/` comment from `sourceText`, in source",
@@ -23091,7 +23123,7 @@
     },
     "ef49882626286227777a087d05b28347bc6fd71add4edb2f6ac9fa7de971bd6d": {
       "excerpt": "`completions` is a reserved top-level command (see cli.ts's runCli) —",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "ef50a77f938049df5b4c00e7e6fb17d13d9e5fc33a35ed5f8dd812959ef63261": {
       "excerpt": "A dispatch entry: the leaf's handler plus what `resolve.ts` needs to assemble it…",
@@ -23789,6 +23821,10 @@
       "excerpt": "Paired bootstrap significance test: given two equal-length series of",
       "approvedAt": "2026-08-13T08:04:03.789Z"
     },
+    "f5b33a845d5995d1158ff4d19faf2ffdfe376da23260ac4041179406fb25c321": {
+      "excerpt": "Regression coverage for the escape-join port into the generated bash's",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
+    },
     "f5b3fa9c4ae45cf434cf64af3f406e0202597795ef94719831cd06df7474c1e3": {
       "excerpt": "The precise client shape `buildClientNode` computes for a route tree of",
       "approvedAt": "2026-08-13T08:03:36.783Z"
@@ -24117,6 +24153,10 @@
       "excerpt": "Tuple type — must not fall through to the object branch.",
       "approvedAt": "2026-08-13T08:14:47.649Z"
     },
+    "f8f1da25448a9f461dbdd79fd29b12e6f005b16fc3e1a35525f46d80f48df1d9": {
+      "excerpt": "the injectivity property itself",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
+    },
     "f8fcbd449558ca333a4c0b288c8b48d7335b3c038a7147d7b479c5c8283f20d2": {
       "excerpt": "\"wire-hooks-none\" was codegen'd with NO hookFields for `price` (see the",
       "approvedAt": "2026-08-13T08:14:47.633Z"
@@ -24275,7 +24315,7 @@
     },
     "faab140015cdafda1c20e66fd8465b043c1cc1bafccaae0c3a83b130cfa65fa4": {
       "excerpt": "`fallback.subtree` may be a bare leaf (`op()`) rather than a branch",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "faacb4d8b2f6e6b67a16cdd6ecc537a31cd41824888fb70b554cb4eec32a9fa0": {
       "excerpt": "Renders every registry entry as a top-level declaration, preceded by the",
@@ -24432,6 +24472,10 @@
     "fc678ed7eb11f4729ff177c146ec6adc6386979625a8d7b481e42eaa8813c94c": {
       "excerpt": "`streaming`: The operation yields a sequence of items over time rather than",
       "approvedAt": "2026-08-13T08:14:47.642Z"
+    },
+    "fc81b08ad3d89b25ab5abcc37f637513d2e3a144e4b83f8e3149b50aaa1bee6c": {
+      "excerpt": "And each script's key for the OTHER tree's shape is absent — proves",
+      "approvedAt": "2026-08-16T09:01:49.253Z"
     },
     "fc83bb09fccf4e11e50bfe8f811e546ee91c4123e6bfdb832e445df81749ccb8": {
       "excerpt": "`a` beats `b` by a fixed margin (with a little noise) on every one",
@@ -24591,7 +24635,7 @@
     },
     "fdd354656d5ca7d8cafa6743c08fe517a8de002fadfe866737914c4de718e7a3": {
       "excerpt": "Sentinel `LevelInfo.key` for the tree root, standing in for the empty",
-      "approvedAt": "2026-08-16T08:06:08.767Z"
+      "approvedAt": "2026-08-16T09:01:49.258Z"
     },
     "fddf3e88451881d8bf7b23c87092b3f32a008d309018862a8c46c04cab3f2a85": {
       "excerpt": "============================================================================",

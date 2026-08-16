@@ -12,8 +12,21 @@ import {
 } from "./completions.ts";
 import { runCli, CliError } from "./cli.ts";
 import { api, op } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import { api as libraryApi } from "../../../examples/library-api/src/tree.ts";
+
+// Mirrors completions.ts's own (unexported) `bashEscape` — the generated
+// script embeds every STATICS/FLAGS/HAS_FALLBACK/ENUMS key inside a
+// double-quoted bash string literal, so a key containing "\" (which
+// `escapeJoin` produces whenever a segment contains the space delimiter or a
+// literal backslash) is escaped AGAIN for that embedding, on top of
+// `escapeJoin`'s own escaping. Assertions below that check generated source
+// text for a raw `escapeJoin`-produced key need this same double-escape to
+// match what's actually emitted.
+function bashSourceEscape(s: string): string {
+  return s.replace(/(["\\$`])/g, "\\$1");
+}
 
 // ============================================================================
 // isShellName
@@ -222,6 +235,170 @@ describe("generateBashCompletion", () => {
     const stdout = await new Response(proc.stdout).text();
     await proc.exited;
     expect(stdout.trim()).toBe("green");
+  });
+
+  // Regression coverage for the escape-join port into the generated bash's
+  // own `path="$path $word"` reconstruction (buildBashFunctionLines' `esc=`
+  // lines) — see completions.ts's doc comment above that reconstruction for
+  // the collision this closes and why the fix has two sides (TS-side
+  // `escapeJoin` and a hand-ported bash equivalent) that must agree.
+  describe("escape-joined level keys (space/backslash collision)", () => {
+    it("STATICS/FLAGS keys differ for two trees that would collide under a plain (unescaped) space-join", () => {
+      // Tree A: branch "a" -> leaf "b c" (one child segment containing a
+      // literal space). Tree B: branch "a b" -> leaf "c" (the space sits in
+      // the FIRST segment instead). A bare `[...path, childKey].join(" ")`
+      // produces "a b c" for BOTH — the exact collision escapeJoin exists to
+      // rule out (see path.ts's module doc comment). escapeJoin must keep
+      // them distinct.
+      const treeA = api({ a: api({ "b c": op((input: { x: string }) => input) }) });
+      const treeB = api({ "a b": api({ c: op((input: { y: string }) => input) }) });
+      const schemasA: SchemaMap = {
+        [escapeJoin(["a", "b c"], "_").replace(/-/g, "_")]: {
+          inputSchema: { type: "object", properties: { x: { type: "string" } } },
+        },
+      };
+      const schemasB: SchemaMap = {
+        [escapeJoin(["a b", "c"], "_").replace(/-/g, "_")]: {
+          inputSchema: { type: "object", properties: { y: { type: "string" } } },
+        },
+      };
+      const scriptA = generateBashCompletion(treeA, schemasA, "cli");
+      const scriptB = generateBashCompletion(treeB, schemasB, "cli");
+
+      const keyA = escapeJoin(["a", "b c"], " ");
+      const keyB = escapeJoin(["a b", "c"], " ");
+      expect(keyA).not.toBe(keyB); // the injectivity property itself
+      expect(keyA).toBe("a b\\ c");
+      expect(keyB).toBe("a\\ b c");
+      expect(scriptA).toContain(`FLAGS["${bashSourceEscape(keyA)}"]="--x"`);
+      expect(scriptB).toContain(`FLAGS["${bashSourceEscape(keyB)}"]="--y"`);
+      // And each script's key for the OTHER tree's shape is absent — proves
+      // the two positions really do land in different table slots, not just
+      // that both keys happen to appear somewhere.
+      expect(scriptA).not.toContain(`FLAGS["${bashSourceEscape(keyB)}"]`);
+      expect(scriptB).not.toContain(`FLAGS["${bashSourceEscape(keyA)}"]`);
+    });
+
+    it("the generated bash's own word-escaping (the `esc=` lines) matches escapeJoin's escapeSegment byte-for-byte, for words containing spaces and backslashes", async () => {
+      // The `for c in ${STATICS["$path"]}; do ... done` match loop that
+      // precedes the `esc=` lines can only ever match a candidate word that
+      // doesn't itself contain a space (bash word-splits STATICS' own
+      // space-separated value first — a separate, pre-existing limitation
+      // of this generator's `compgen -W`-based design, orthogonal to the
+      // key-escaping fix here). So a full end-to-end
+      // COMP_WORDS-drives-a-space-containing-ancestor-segment test isn't
+      // possible against this generator's architecture. What IS directly
+      // testable, and is exactly what the escaping fix's correctness rests
+      // on: the two `esc=` lines, run under real bash on arbitrary input
+      // words (including ones containing spaces/backslashes), reproduce
+      // `escapeJoin([word], " ")` (a single-segment escapeJoin call is
+      // exactly `escapeSegment(word, " ")` — see path.ts) byte-for-byte.
+      const escSnippet = `
+        esc=\${word//\\\\/\\\\\\\\}
+        esc=\${esc// /\\\\ }
+      `;
+      const words = [
+        "plain",
+        "with space",
+        "back\\slash",
+        "both\\ combo",
+        "trailing\\",
+        " leading",
+        "double\\\\slash",
+        "  multi   space  ",
+      ];
+      for (const word of words) {
+        const proc = Bun.spawn({
+          cmd: ["bash", "-c", `word=$1\n${escSnippet}\nprintf '%s' "$esc"`, "--", word],
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        const stdout = await new Response(proc.stdout).text();
+        const stderr = await new Response(proc.stderr).text();
+        await proc.exited;
+        expect(stderr).toBe("");
+        expect(stdout).toBe(escapeJoin([word], " "));
+      }
+    });
+
+    it("path reconstruction through a backslash-containing branch name resolves to the same key TS computed, end to end", async () => {
+      // Unlike a space, a literal backslash inside a segment doesn't get
+      // word-split by bash's default IFS, so THIS collision-prone case (a
+      // subcommand segment containing "\") can be driven end to end through
+      // real COMP_WORDS, exercising the full while-loop path reconstruction
+      // (STATICS match -> esc= -> path="$path $esc") rather than just the
+      // escaping snippet in isolation.
+      const tree = api({
+        "back\\slash": api({ leaf: op((input: { z: string }) => input) }),
+      });
+      const schemaKey = escapeJoin(["back\\slash", "leaf"], "_").replace(/-/g, "_");
+      const schemas: SchemaMap = {
+        [schemaKey]: {
+          inputSchema: { type: "object", properties: { z: { type: "string" } } },
+        },
+      };
+      const script = generateBashCompletion(tree, schemas, "cli");
+      const expectedKey = escapeJoin(["back\\slash", "leaf"], " ");
+      expect(script).toContain(`FLAGS["${bashSourceEscape(expectedKey)}"]="--z"`);
+
+      const funcOnly = script
+        .split("\n")
+        .filter((l) => !l.startsWith("complete -F"))
+        .join("\n");
+      // `path` is `local` to `_cli_completions`, so it can't be inspected
+      // directly after the function returns — instead, drive the function
+      // to the point of completing "--z" and check COMPREPLY: that value is
+      // read out of `FLAGS["$path"]`, so it comes back correct if and only
+      // if the bash-reconstructed `$path` equals the same key
+      // `escapeJoin`/`schemaKeyFor` used on the TS side to populate that
+      // table slot in the first place. Same `compgen` stub as the
+      // "syntactically well-formed" test above (the real builtin needs an
+      // interactive/readline-enabled bash build, not guaranteed here).
+      const compgenStub = `
+        compgen() {
+          local words="" cur=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              -W) words="$2"; shift 2 ;;
+              --) cur="$2"; shift 2 ;;
+              *) shift ;;
+            esac
+          done
+          for w in $words; do
+            case "$w" in
+              "$cur"*) echo "$w" ;;
+            esac
+          done
+        }
+      `;
+      const proc = Bun.spawn({
+        cmd: [
+          "bash",
+          "-c",
+          `
+          ${compgenStub}
+          ${funcOnly}
+          COMP_WORDS=(cli "back\\\\slash" leaf --z)
+          COMP_CWORD=3
+          COMPREPLY=()
+          _cli_completions
+          echo "\${COMPREPLY[*]}"
+        `,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      await proc.exited;
+      expect(stderr).toBe("");
+      // Sanity: `expectedKey` (what TS computed) is the same string
+      // completions.ts's own doc comment claims the bash side reconstructs
+      // — this equality holding, plus a correct COMPREPLY below, is exactly
+      // the "both sides agree" property under test.
+      expect(expectedKey).toBe("back\\\\slash leaf");
+      expect(stdout.trim()).toBe("--z");
+    });
   });
 });
 

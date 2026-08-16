@@ -20,7 +20,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import type { Node } from "@rhi-zone/fractal-api-tree/node";
-import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
+import { escapeJoin, unescapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import { getCliMeta } from "./cli.ts";
 import type { CliLeafMeta } from "./cli.ts";
@@ -95,23 +95,29 @@ function schemaKeyFor(schemaPath: readonly string[]): string {
 const ROOT_KEY = "__root__";
 
 // `LevelInfo.key` below (space-joined argv path, distinct from
-// `schemaKeyFor`'s underscore-joined SchemaMap lookup key above) is
-// DELIBERATELY NOT run through `escapeJoin`, unlike every other join site
-// this investigation converted. Reason: this key isn't only synthesized
-// once in TypeScript and used as an opaque map key — the GENERATED bash
-// script (`buildBashFunctionLines`, below) independently RECONSTRUCTS the
-// identical key at completion time by literally concatenating matched argv
-// words with a bare space (`path="$path $word"`), with no access to
-// `escapeJoin`'s logic. Escaping the TS-side key without also teaching the
-// generated bash to escape its own reconstruction the same way would make
-// the two diverge for any subcommand segment containing a literal space or
-// backslash — a worse regression (broken completion) than the collision
-// this fix closes elsewhere (two DIFFERENT subcommand paths only collide
-// here if one segment literally contains a space, which the shell's own
-// argv tokenization already makes awkward to type in the first place). Left
-// as a flagged, deliberately-deferred gap rather than guessed at — fixing
-// it for real means porting the escaping scheme into the generated bash
-// source itself.
+// `schemaKeyFor`'s underscore-joined SchemaMap lookup key above) IS now run
+// through `escapeJoin`, like every other join site this investigation
+// converted — but this one needs a matching change on the other side of the
+// wire. This key isn't only synthesized once in TypeScript and used as an
+// opaque map key: the GENERATED bash script (`buildBashFunctionLines`,
+// below) independently RECONSTRUCTS the identical key at completion time by
+// concatenating matched argv words (`path="$path $word"`), with no access
+// to `escapeJoin`'s TypeScript implementation. So the bash reconstruction
+// (see the `while` loop in `buildBashFunctionLines`) now ALSO applies
+// `escapeJoin`'s exact escaping scheme — backslash-double the word, then
+// backslash-escape the space delimiter within it — to each matched word
+// before appending it to `$path`, byte-for-byte matching `escapeSegment`
+// (./path.ts). Both sides are covered by completions.test.ts: one test
+// shells out to real bash to drive the generated completion function
+// end-to-end through a segment containing a literal backslash (a segment
+// containing a literal space can never be typed as a single matchable argv
+// word here in the first place — `STATICS["$path"]`'s own value is a
+// space-separated list, so `for c in ${STATICS["$path"]}` word-splits it;
+// that's a separate, pre-existing limitation of this generator's
+// `compgen -W`-based design, not something this escaping fix changes), and
+// another test runs the `esc=` lines themselves under real bash against
+// space- and backslash-containing input and checks the output matches
+// `escapeJoin` byte-for-byte.
 
 
 function buildLevels(
@@ -135,7 +141,7 @@ function buildLevels(
   if (path.length === 0) statics.push("completions");
 
   levels.push({
-    key: path.length === 0 ? ROOT_KEY : path.join(" "),
+    key: path.length === 0 ? ROOT_KEY : escapeJoin(path, " "),
     statics,
     hasFallback: n.fallback !== undefined,
     isLeaf: false,
@@ -155,7 +161,7 @@ function buildLevels(
           : { name: field },
       );
       levels.push({
-        key: childPath.join(" "),
+        key: escapeJoin(childPath, " "),
         statics: [],
         hasFallback: false,
         isLeaf: true,
@@ -185,7 +191,7 @@ function buildLevels(
           : { name: field },
       );
       levels.push({
-        key: fallbackPath.join(" "),
+        key: escapeJoin(fallbackPath, " "),
         statics: [],
         hasFallback: false,
         isLeaf: true,
@@ -226,7 +232,7 @@ function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string
 
   const lines: string[] = [];
   lines.push("_" + funcName + "() {");
-  lines.push("  local cur word path i matched c prevword");
+  lines.push("  local cur word path i matched c prevword esc");
   lines.push("  declare -A STATICS");
   for (const l of branchLevels) {
     lines.push(
@@ -269,10 +275,21 @@ function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string
   lines.push('    for c in ${STATICS["$path"]}; do');
   lines.push('      if [ "$c" = "$word" ]; then');
   // path is either the root sentinel (replaced outright — the sentinel
-  // isn't a real prefix) or a real space-joined prefix (appended to),
-  // matching how buildLevels joins non-root keys with plain spaces.
+  // isn't a real prefix) or a real escape-joined prefix (appended to),
+  // matching how buildLevels now joins non-root keys via `escapeJoin(path,
+  // " ")` (./path.ts) instead of a bare `.join(" ")`. `$word` is escaped the
+  // same way `escapeSegment` escapes a segment before that join — backslash
+  // first (so an already-escaped backslash isn't re-interpreted as part of
+  // a delimiter escape), then the space delimiter — so the key this loop
+  // builds incrementally, one matched word at a time, is byte-identical to
+  // what `escapeJoin` computes over the same segments in one shot. See this
+  // function's own doc comment above for why this reconstruction has to
+  // happen here at all, and completions.test.ts for a test that shells out
+  // to real bash to prove the two sides agree.
+  lines.push("        esc=${word//\\\\/\\\\\\\\}");
+  lines.push("        esc=${esc// /\\\\ }");
   lines.push(
-    '        if [ "$path" = "' + ROOT_KEY + '" ]; then path="$word"; else path="$path $word"; fi',
+    '        if [ "$path" = "' + ROOT_KEY + '" ]; then path="$esc"; else path="$path $esc"; fi',
   );
   lines.push("        matched=1");
   lines.push("        break");
@@ -378,7 +395,7 @@ export function generateFishCompletion(
   ];
 
   for (const l of levels) {
-    const ancestorWords = l.key === ROOT_KEY ? [] : l.key.split(" ");
+    const ancestorWords = l.key === ROOT_KEY ? [] : unescapeJoin(l.key, " ");
     const condition =
       ancestorWords.length > 0
         ? "__fish_seen_subcommand_from " +
