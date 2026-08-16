@@ -199,33 +199,39 @@ describe("name namespacing from tree position", () => {
 });
 
 // ============================================================================
-// 4a. Same-name collision between two DIFFERENT tree positions throws,
-// instead of the second-visited leaf silently overwriting the first —
-// regression coverage mirroring @rhi-zone/fractal-api-tree's
-// `assertUniqueName` (tree.ts), since the underscore-join here has the exact
-// same unescaped delimiter.
+// 4a. A leaf key/segment that itself contains the join delimiter no longer
+// collides with a genuinely different, deeper tree position — regression
+// coverage for `escapeJoin` (@rhi-zone/fractal-api-tree/path), which this
+// walk now calls exactly once per leaf instead of unescaped-joining one
+// level at a time. Before escapeJoin, this was a real collision that
+// `assertUniqueName` caught and threw on; now the join is injective, so both
+// positions survive as two genuinely distinct names.
 // ============================================================================
 
-describe("same-name collision between two tree positions throws instead of silently overwriting", () => {
-  it("a leaf literally named 'users_list' collides with branch 'users' -> leaf 'list'", () => {
+describe("a segment containing the join delimiter no longer collides with a deeper tree position", () => {
+  it("a leaf literally named 'users_list' and branch 'users' -> leaf 'list' derive two distinct tool names", () => {
     const api = api_({
       users_list: op((_: unknown) => ({ flat: true })),
       users: api_({ list: op((_: unknown) => ({ nested: true })) }),
     });
-    expect(() => toTools(api)).toThrow(/two tree positions produced the same tool name "users_list"/);
+    const tools = toTools(api);
+    expect(tools.map((t) => t.name).sort()).toEqual(["users\\_list", "users_list"]);
+    // The nested leaf's ancestor-joined name is byte-identical to the
+    // pre-escaping join (neither "users" nor "list" contains the delimiter).
+    const nested = tools.find((t) => t.name === "users_list")!;
+    expect(nested.description).toBe("list");
   });
 
-  it("projectPrompts throws the same way for a colliding prompt name", () => {
+  it("projectPrompts derives the same two distinct names for a colliding prompt key", () => {
     const api = api_({
       users_list: op((_: unknown) => ({}), { mcp: { as: "prompt" } }),
       users: api_({ list: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) }),
     });
-    expect(() => projectPrompts(api)).toThrow(
-      /two tree positions produced the same prompt name "users_list"/,
-    );
+    const { prompts } = projectPrompts(api);
+    expect(prompts.map((p) => p.name).sort()).toEqual(["users\\_list", "users_list"]);
   });
 
-  it("a colliding meta.mcp.segment override on one branch is caught just like an authored key", () => {
+  it("a meta.mcp.segment override that reproduces an authored key's own name still derives two distinct names", () => {
     const api = api_({
       users_list: op((_: unknown) => ({})),
       usersNode: api_(
@@ -233,7 +239,8 @@ describe("same-name collision between two tree positions throws instead of silen
         { meta: { mcp: { segment: "users" } } },
       ),
     });
-    expect(() => toTools(api)).toThrow(/two tree positions produced the same tool name "users_list"/);
+    const tools = toTools(api);
+    expect(tools.map((t) => t.name).sort()).toEqual(["users\\_list", "users_list"]);
   });
 
   it("non-colliding trees are entirely unaffected — same names as before, no throw", () => {
@@ -242,6 +249,33 @@ describe("same-name collision between two tree positions throws instead of silen
     });
     const tools = toTools(api);
     expect(tools.map((t) => t.name).sort()).toEqual(["users_create", "users_list"]);
+  });
+});
+
+// ============================================================================
+// 4b. An AUTHORED meta.mcp.name/meta.mcp.uri override still bypasses the
+// join entirely (it supplies a final string outright), so it remains a real
+// collision source escaping can't cover — `assertUniqueName` still throws
+// for this case. See project.ts's "Name/URI-collision guarding" module note.
+// ============================================================================
+
+describe("an authored meta.mcp.name override colliding with another leaf's name still throws", () => {
+  it("two leaves given the identical meta.mcp.name still collide", () => {
+    const api = api_({
+      a: op((_: unknown) => ({}), { mcp: { name: "shared" } }),
+      b: op((_: unknown) => ({}), { mcp: { name: "shared" } }),
+    });
+    expect(() => toTools(api)).toThrow(/two tree positions produced the same tool name "shared"/);
+  });
+
+  it("an override colliding with another leaf's ordinary derived name still throws", () => {
+    const api = api_({
+      users: api_({ list: op((_: unknown) => ({})) }),
+      other: op((_: unknown) => ({}), { mcp: { name: "users_list" } }),
+    });
+    expect(() => toTools(api)).toThrow(
+      /two tree positions produced the same tool name "users_list"/,
+    );
   });
 });
 
@@ -463,13 +497,28 @@ describe("resource URI derivation from tree position", () => {
     expect(resources[0]!.uri).toBe("myapp://config");
   });
 
-  it("a colliding derived URI throws instead of silently overwriting the first resource's dispatch entry", () => {
+  it("a segment containing the '/' join delimiter no longer collides with a deeper tree position", () => {
+    // Before escapeJoin (@rhi-zone/fractal-api-tree/path), both of these
+    // derived to the identical "resource://users/list" URI; now the leaf
+    // key's own "/" gets escaped and the two positions derive distinct URIs.
     const api = api_({
       "users/list": op((_: unknown) => ({}), { mcp: { as: "resource" } }),
       users: api_({ list: op((_: unknown) => ({}), { mcp: { as: "resource" } }) }),
     });
+    const { resources } = projectResources(api);
+    expect(resources.map((r) => r.uri).sort()).toEqual([
+      "resource://users/list",
+      "resource://users\\/list",
+    ]);
+  });
+
+  it("an authored meta.mcp.uri override colliding with another resource's derived URI still throws", () => {
+    const api = api_({
+      a: op((_: unknown) => ({}), { mcp: { as: "resource", uri: "resource://shared" } }),
+      b: op((_: unknown) => ({}), { mcp: { as: "resource", uri: "resource://shared" } }),
+    });
     expect(() => projectResources(api)).toThrow(
-      /two tree positions produced the same resource URI "resource:\/\/users\/list"/,
+      /two tree positions produced the same resource URI "resource:\/\/shared"/,
     );
   });
 

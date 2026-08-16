@@ -54,6 +54,7 @@
 //                                                across projections
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import { assertUniqueName } from "@rhi-zone/fractal-api-tree/tree";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
@@ -352,16 +353,20 @@ export type McpBranchMeta = {
 
 // Name/URI-collision guarding for the walks below (`projectTools`,
 // `projectResources`, `projectPrompts`) uses `@rhi-zone/fractal-api-tree/tree`'s
-// `assertUniqueName` rather than a copy defined here: names are built by
-// joining tree-position segments with "_" (tools, prompts) or "/" behind a
-// URI scheme (resources) — see `projectTools`'s doc comment — and neither
-// join escapes its delimiter, so an authored segment key or a
-// `meta.mcp.name`/`meta.mcp.segment`/`meta.mcp.uri` override that itself
-// contains the delimiter can coincide with two DIFFERENT nested segments' own
-// join (e.g. a leaf literally named "users_list" collides with branch "users"
-// -> leaf "list"). `tree.ts`'s type-level walk (`extractToolSchemas`/
-// `extractToolTypeRefs`) guards the identical unescaped join for the identical
-// reason — `extractToolSchemas`'s derived name and this file's
+// `assertUniqueName` rather than a copy defined here — names are built by
+// calling `@rhi-zone/fractal-api-tree/path`'s `escapeJoin` exactly once at
+// each leaf, over the full name-segment array (with "_" for tools/prompts, or
+// "/" behind a URI scheme for resources — see `projectTools`'s doc comment),
+// which makes two DIFFERENT tree positions' DERIVED names provably unable to
+// collide (escapeJoin escapes the delimiter within each segment before
+// joining; see path.test.ts's round-trip property). What escaping cannot
+// cover — because it bypasses the join entirely — is an AUTHORED
+// `meta.mcp.name`/`meta.mcp.uri` override supplying a final string outright:
+// nothing stops one leaf's override from being authored to equal another
+// leaf's derived (or also-overridden) name. `assertUniqueName` is kept for
+// exactly that residual case. `tree.ts`'s type-level walk (`extractToolSchemas`/
+// `extractToolTypeRefs`) guards the identical override-collision case for the
+// identical reason — `extractToolSchemas`'s derived name and this file's
 // runtime-projected name are supposed to be the same string for the same tree
 // (this file's own doc comment, "meta.mcp.name ... replaces the derived tool
 // name") — so one shared implementation lives there (mcp-api-projector
@@ -515,25 +520,28 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
     };
   };
 
-  const walk = (n: Node, prefix: string, segments: readonly string[]): McpTool[] => {
+  // `nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`)
+  // is the name-scoped segment array — tree keys with `meta.mcp.segment`
+  // overrides folded in — joined via `escapeJoin` exactly once, at each leaf,
+  // instead of unescaped-joined one level at a time on the way down.
+  const walk = (n: Node, nameSegments: readonly string[], segments: readonly string[]): McpTool[] => {
     const out: McpTool[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const name = prefix.length > 0 ? `${prefix}_${key}` : key;
+        const name = escapeJoin([...nameSegments, key], "_");
         const tool = buildTool(child, name, key, [...segments, key]);
         if (tool !== undefined) out.push(tool);
       } else {
         const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
         const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
-        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg;
-        out.push(...walk(child, seg, [...segments, key]));
+        out.push(...walk(child, [...nameSegments, rawSeg], [...segments, key]));
       }
     }
 
     if (n.fallback !== undefined) {
       // A fallback contributes its own name as the next segment.
-      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
+      const fallbackNameSegments = [...nameSegments, n.fallback.name];
       const fallbackSegments = [...segments, `:${n.fallback.name}`];
 
       // `fallback.subtree` may be a bare `op()` rather than an `api({...})` —
@@ -543,17 +551,18 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
       // segment beyond the fallback's own name. Extraction resolves the same
       // case the same way, in api-tree/tree.ts's `walkNodeType` (aa28952).
       if (isLeaf(n.fallback.subtree)) {
+        const seg = escapeJoin(fallbackNameSegments, "_");
         const tool = buildTool(n.fallback.subtree, seg, n.fallback.name, fallbackSegments);
         if (tool !== undefined) out.push(tool);
       } else {
-        out.push(...walk(n.fallback.subtree, seg, fallbackSegments));
+        out.push(...walk(n.fallback.subtree, fallbackNameSegments, fallbackSegments));
       }
     }
 
     return out;
   };
 
-  const tools = walk(n, "", []);
+  const tools = walk(n, [], []);
   return { tools, handlers };
 }
 
@@ -736,7 +745,7 @@ export function projectResources(
     // one of the other two.
     if (mcp.as !== "resource") return undefined;
 
-    const derivedUri = `${scheme}${leafSegments.join("/")}`;
+    const derivedUri = `${scheme}${escapeJoin(leafSegments, "/")}`;
     const uri = typeof mcp.uri === "string" ? mcp.uri : derivedUri;
 
     const name = typeof mcp.name === "string" ? mcp.name : defaultKey;
@@ -1014,39 +1023,41 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
     };
   };
 
-  const walk = (n: Node, prefix: string, segments: readonly string[]): McpPrompt[] => {
+  // Same name-segment-array-carried-to-a-single-escapeJoin-call scheme as
+  // `projectTools`' walk — see that function's matching comment.
+  const walk = (n: Node, nameSegments: readonly string[], segments: readonly string[]): McpPrompt[] => {
     const out: McpPrompt[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const name = prefix.length > 0 ? `${prefix}_${key}` : key;
+        const name = escapeJoin([...nameSegments, key], "_");
         const prompt = buildPrompt(child, name, key, [...segments, key]);
         if (prompt !== undefined) out.push(prompt);
       } else {
         const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
         const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
-        const seg = prefix.length > 0 ? `${prefix}_${rawSeg}` : rawSeg;
-        out.push(...walk(child, seg, [...segments, key]));
+        out.push(...walk(child, [...nameSegments, rawSeg], [...segments, key]));
       }
     }
 
     if (n.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
+      const fallbackNameSegments = [...nameSegments, n.fallback.name];
       const fallbackSegments = [...segments, `:${n.fallback.name}`];
 
       // A bare-leaf `fallback.subtree` needs building directly, for the reason
       // spelled out in `projectTools`' matching branch.
       if (isLeaf(n.fallback.subtree)) {
+        const seg = escapeJoin(fallbackNameSegments, "_");
         const prompt = buildPrompt(n.fallback.subtree, seg, n.fallback.name, fallbackSegments);
         if (prompt !== undefined) out.push(prompt);
       } else {
-        out.push(...walk(n.fallback.subtree, seg, fallbackSegments));
+        out.push(...walk(n.fallback.subtree, fallbackNameSegments, fallbackSegments));
       }
     }
 
     return out;
   };
 
-  const prompts = walk(n, "", []);
+  const prompts = walk(n, [], []);
   return { prompts, handlers };
 }
