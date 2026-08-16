@@ -48,6 +48,10 @@
       "types": "./dist/tree.d.ts",
       "import": "./dist/tree.js"
     },
+    "./path": {
+      "types": "./dist/path.d.ts",
+      "import": "./dist/path.js"
+    },
     "./extract": {
       "types": "./dist/extract.d.ts",
       "import": "./dist/extract.js"
@@ -110,6 +114,7 @@
     "@rhi-zone/fractal-graphql-api-projector": "workspace:*",
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
+    "fast-check": "^4.9.0",
     "typescript": "^6.0.3"
   },
   "engines": {

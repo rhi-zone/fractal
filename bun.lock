@@ -55,6 +55,7 @@
         "@rhi-zone/fractal-graphql-api-projector": "workspace:*",
         "@rhi-zone/fractal-http-api-projector": "workspace:*",
         "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
+        "fast-check": "^4.9.0",
         "typescript": "^6.0.3",
       },
     },
@@ -119,6 +120,9 @@
       "dependencies": {
         "@rhi-zone/fractal-api-tree": "workspace:*",
         "@standard-schema/spec": "^1.1.0",
+      },
+      "devDependencies": {
+        "typescript": "^6.0.3",
       },
     },
     "packages/http-framework-projector": {

@@ -556,7 +556,7 @@ export function extractWireApplyValidationTypeRefs(
     const leaves: Record<string, WireApplyValidationLeaf> = {};
     walkNodeType(
       site.nodeType,
-      "",
+      [],
       [],
       site.loc,
       checker,

@@ -321,7 +321,7 @@ function buildSkeletonRoute(
   readonly memberNames: Map<Handler, string>;
 } {
   const root = freshDraft();
-  walkNodeType(nodeType, "", [], loc, checker, (name, path, _fn, _descriptionSource, _checker, leafNodeType) => {
+  walkNodeType(nodeType, [], [], loc, checker, (name, path, _fn, _descriptionSource, _checker, leafNodeType) => {
     const method = readMetaStringLiteral(leafNodeType, "http", "method", loc, checker);
     const moveTo = readMetaStringLiteral(leafNodeType, "http", "moveTo", loc, checker);
     plant(root, path, { name, path, method, moveTo });

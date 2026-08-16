@@ -71,6 +71,7 @@ import {
   type JsonSchema,
   type ShouldShare,
 } from "./extract.ts";
+import { escapeJoin } from "./path.ts";
 
 /** Per-tool derived facts: real input schema + JSDoc-derived description. */
 export type ToolSchema = {
@@ -92,28 +93,30 @@ export type ToolTypeInfo = {
 /** Map of MCP tool name → derived TypeRefs/description. */
 export type TypeRefMap = Record<string, ToolTypeInfo>;
 
-const join = (prefix: string, seg: string): string =>
-  prefix.length > 0 ? `${prefix}_${seg}` : seg;
-
 /**
  * Throw when a DIFFERENT tree position already claimed the same `name` —
  * rather than silently letting the second-processed leaf overwrite the first
  * wherever the caller subsequently uses `name` as a map/dispatch-table key.
  * Registers `path` under `name` in `used` and returns normally otherwise.
  *
- * `join`'s "_" delimiter is unescaped (as is mcp-api-projector's own "_"/"/"
- * join, `project.ts`'s `projectTools`/`projectResources`/`projectPrompts`):
- * nothing stops an authored segment key or a `meta.mcp.name`/
- * `meta.mcp.segment`/`meta.mcp.uri` override from itself containing the
- * delimiter, so a leaf literally named `"books_get"` derives the identical
- * name to branch `"books"` → leaf `"get"`. That's not a hypothetical — it's
- * the same class of silent-collision bug `extractRouteSchemas`'s doc comment
- * already calls out for the "/"-joined route-path keying (fixed there by
- * prefixing every path with its owning `treeId`, which the underscore-joined
- * tool name deliberately does NOT do — see `walkTree`'s doc comment, "a tool
- * name is scoped by convention to ONE standalone tree already"). Because
- * there is no such prefix to lean on here, the name collision itself has to
- * be caught instead.
+ * As of the escape-aware join (`escapeJoin`, ./path.ts — every DERIVED name
+ * in this walk is built by calling it exactly once, at the leaf, over the
+ * full name-segment array), two purely tree-position-DERIVED names can no
+ * longer collide: `escapeJoin` is injective (see path.test.ts's round-trip
+ * property), so two different segment arrays always join to two different
+ * strings. What escaping does NOT — and structurally cannot — cover is an
+ * AUTHORED override: `meta.mcp.name` (leaf) / `meta.mcp.segment` (branch,
+ * folded into the segment array before it's escaped — still covered) /
+ * `meta.mcp.uri` (leaf, replaces the URI wholesale) supply a final string
+ * outright, bypassing the join entirely, so nothing stops one leaf's
+ * `meta.mcp.name` from being authored to equal another leaf's derived (or
+ * also-overridden) name — e.g. two leaves both given `meta.mcp.name:
+ * "books_get"`, or one leaf overridden to the exact string another leaf's
+ * ordinary tree-position join already produces. This guard's remaining job
+ * is exactly that: catching an authored-override collision, not a join
+ * collision (which is now structurally impossible) — see this function's
+ * call sites below and in mcp-api-projector's project.ts for where the
+ * override path still reaches this check.
  *
  * Shared between this file's type-level walk (`extractToolSchemas`/
  * `extractToolTypeRefs`, below) and mcp-api-projector's runtime walk
@@ -445,10 +448,20 @@ export type OnLeaf = (
  * `key` argument, not a `treeId` path prefix, is what scopes one tree). The
  * export adds no behavior here: `walkTree` below still calls it exactly as
  * before.
+ *
+ * `nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`)
+ * is the name-scoped segment array — tree keys with `meta.mcp.segment`
+ * overrides folded in, but WITHOUT `path`'s `treeId` seed (a tool name is
+ * scoped to one standalone tree by convention; see `walkTree`'s own doc
+ * comment) — carried alongside `path` (the raw, override-free tree-position
+ * array `extractRouteSchemas`/`extractRouteTypeRefs` key off) all the way
+ * down to each leaf, where `escapeJoin` (./path.ts) is called exactly ONCE
+ * to produce the underscore-joined name, instead of re-joining (unescaped,
+ * one level at a time) at every branch on the way down.
  */
 export function walkNodeType(
   nodeType: ts.Type,
-  prefix: string,
+  nameSegments: readonly string[],
   path: readonly string[],
   loc: ts.Node,
   checker: ts.TypeChecker,
@@ -469,22 +482,25 @@ export function walkNodeType(
         const fn = functionNodeOfHandler(handlerType, checker);
         if (!fn) continue;
         const descriptionSource = childDecl ?? fn;
-        // meta.mcp.name wins outright (no prefix applied) — else the usual
-        // underscore-joined default, matching project.ts's own leaf-name ternary.
+        // meta.mcp.name wins outright (no prefix applied, and NOT run through
+        // escapeJoin — see assertUniqueName's doc comment for why an override
+        // is still a residual collision source) — else the escape-joined
+        // default, matching project.ts's own leaf-name ternary.
         const nameOverride = mcpMetaOverride(childType, "name", loc, checker);
-        const name = nameOverride ?? join(prefix, childKey);
+        const name = nameOverride ?? escapeJoin([...nameSegments, childKey], "_");
         onLeaf(name, [...path, childKey], fn, descriptionSource, checker, childType);
         continue;
       }
 
       // Branch: api(...) — children is required on api()'s return type.
       // meta.mcp.segment overrides this child's own contribution to the
-      // prefix (the route `path` array is unaffected either way — mcp.segment
-      // is an MCP-tool-naming concern only, matching project.ts's `rawSeg`).
+      // name-segment array (the route `path` array is unaffected either way —
+      // mcp.segment is an MCP-tool-naming concern only, matching project.ts's
+      // `rawSeg`).
       const segmentOverride = mcpMetaOverride(childType, "segment", loc, checker);
       walkNodeType(
         childType,
-        join(prefix, segmentOverride ?? childKey),
+        [...nameSegments, segmentOverride ?? childKey],
         [...path, childKey],
         loc,
         checker,
@@ -502,6 +518,7 @@ export function walkNodeType(
       if (subtreeProp) {
         const subtreeType = checker.getTypeOfSymbolAtLocation(subtreeProp, loc);
         const subtreePath = [...path, `:${fallbackName}`];
+        const subtreeNameSegments = [...nameSegments, fallbackName];
 
         // The Node model explicitly allows `fallback.subtree` to be a bare
         // leaf (`op()`), not just a branch (`api({...})`) — build.ts's
@@ -520,11 +537,11 @@ export function walkNodeType(
           if (fn) {
             const descriptionSource = subtreeProp.declarations?.[0] ?? fn;
             const nameOverride = mcpMetaOverride(subtreeType, "name", loc, checker);
-            const name = nameOverride ?? join(prefix, fallbackName);
+            const name = nameOverride ?? escapeJoin(subtreeNameSegments, "_");
             onLeaf(name, subtreePath, fn, descriptionSource, checker, subtreeType);
           }
         } else {
-          walkNodeType(subtreeType, join(prefix, fallbackName), subtreePath, loc, checker, onLeaf);
+          walkNodeType(subtreeType, subtreeNameSegments, subtreePath, loc, checker, onLeaf);
         }
       }
     }
@@ -669,13 +686,13 @@ export function forEachTreeCandidate(
  * each one via `walkNodeType`.
  *
  * Each candidate's own `treeId` (its exported binding name, from
- * `forEachTreeCandidate`) seeds `path` — NOT `prefix` — so it flows into the
- * raw path-segment array `onLeaf` receives (and therefore into
- * `extractRouteTypeRefs`/`extractRouteSchemas`'s `path.join("/")` keys)
- * without touching the underscore-joined MCP tool `name` (`prefix` still
- * starts at `""`) — a tool name is scoped by convention to ONE standalone
- * tree already (`extractToolSchemas`'s own doc comment), so it stays
- * unprefixed by design.
+ * `forEachTreeCandidate`) seeds `path` — NOT `nameSegments` — so it flows
+ * into the raw path-segment array `onLeaf` receives (and therefore into
+ * `extractRouteTypeRefs`/`extractRouteSchemas`'s `escapeJoin(path, "/")`
+ * keys) without touching the underscore-joined MCP tool `name`
+ * (`nameSegments` still starts at `[]`) — a tool name is scoped by
+ * convention to ONE standalone tree already (`extractToolSchemas`'s own doc
+ * comment), so it stays unprefixed by design.
  */
 function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
   const program = sharedProgram ?? createExtractorProgram(entryFile);
@@ -684,7 +701,7 @@ function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program)
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`);
 
   forEachTreeCandidate(source, checker, (nodeType, loc, treeId) =>
-    walkNodeType(nodeType, "", [treeId], loc, checker, onLeaf),
+    walkNodeType(nodeType, [], [treeId], loc, checker, onLeaf),
   );
 }
 
@@ -812,7 +829,7 @@ export function extractRouteSchemas(
     entryFile,
     (_name, path, fn, descriptionSource, checker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
-      out[path.join("/")] = {
+      out[escapeJoin(path, "/")] = {
         inputSchema: schemaFromFunctionNode(fn, checker),
         outputSchema: schemaFromReturnType(fn, checker),
         ...(description !== undefined ? { description } : {}),
@@ -927,7 +944,7 @@ export function extractRouteTypeRefs(
     entryFile,
     (_name, path, fn, descriptionSource, checker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
-      const key = path.join("/");
+      const key = escapeJoin(path, "/");
       out[key] = {
         input: typeRefFromFunctionNode(fn, checker, registry),
         output: typeRefFromReturnType(fn, checker, registry),

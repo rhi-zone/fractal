@@ -350,36 +350,40 @@ describe("two trees in one file with a colliding leaf path — treeId disambigua
 });
 
 // ============================================================================
-// 3a-name-collision. One tree whose underscore-joined tool name collides
-// across two DIFFERENT tree positions ("books_get" the leaf key vs.
-// "books" -> "get" the nested leaf) — regression coverage for
-// `assertUniqueName` (tree.ts). Unlike 3a-collision above (fixed by
-// prefixing every route path with its owning treeId), the underscore-joined
-// tool name is deliberately unprefixed within one tree (`walkTree`'s doc
-// comment), so the collision itself has to be caught and reported instead.
+// 3a-name-collision. A tree with a leaf key that ITSELF contains the "_"
+// join delimiter ("books_get") alongside a nested leaf whose ancestor-joined
+// name would, under the OLD unescaped join, produce the identical string
+// ("books" -> "get"). Before escapeJoin (./path.ts), this was a genuine
+// collision that `assertUniqueName` caught and threw on; now the join is
+// injective, so the two positions derive two genuinely DIFFERENT names —
+// the flat leaf's own key gets its embedded delimiter escaped
+// ("books\_get"), while the nested leaf's ancestor-join is byte-identical to
+// before ("books_get", no escaping needed since neither segment contains the
+// delimiter). Regression coverage for `escapeJoin` doing its job at the one
+// real call site this investigation started from.
 // ============================================================================
 
-describe("extractToolSchemas / extractToolTypeRefs throw on a same-name collision within one tree", () => {
+describe("extractToolSchemas / extractToolTypeRefs: a segment containing the join delimiter no longer collides with a deeper tree position", () => {
   const NAME_COLLISION_FIXTURE = `${import.meta.dir}/__fixtures__/name-collision.fixture.ts`;
 
-  it("extractToolSchemas throws a clear, actionable error instead of silently overwriting", () => {
-    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(
-      /two tree positions produced the same derived name "books_get"/,
-    );
-    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(/meta\.mcp\.name/);
-    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(/meta\.mcp\.segment/);
+  it("extractToolSchemas derives two distinct names instead of throwing or colliding", () => {
+    const schemas = extractToolSchemas(NAME_COLLISION_FIXTURE);
+    expect(Object.keys(schemas).sort()).toEqual(["books\\_get", "books_get"]);
+    // Each name keeps its OWN schema — no overwrite happened.
+    const props = schemas["books\\_get"]!.inputSchema.properties as Record<string, unknown>;
+    expect(Object.keys(props)).toEqual(["flat"]);
+    const nestedProps = schemas["books_get"]!.inputSchema.properties as Record<string, unknown>;
+    expect(Object.keys(nestedProps)).toEqual(["nested"]);
   });
 
-  it("extractToolTypeRefs throws the same way", () => {
-    expect(() => extractToolTypeRefs(NAME_COLLISION_FIXTURE)).toThrow(
-      /two tree positions produced the same derived name "books_get"/,
-    );
+  it("extractToolTypeRefs derives the same two distinct names", () => {
+    const types = extractToolTypeRefs(NAME_COLLISION_FIXTURE);
+    expect(Object.keys(types).sort()).toEqual(["books\\_get", "books_get"]);
   });
 
-  it("the error names both colliding paths", () => {
-    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(
-      /\[tree -> books_get\].*\[tree -> books -> get\]|\[tree -> books -> get\].*\[tree -> books_get\]/s,
-    );
+  it("the nested leaf's ancestor-joined name is byte-identical to the pre-escaping join (no segment here contains the delimiter)", () => {
+    const schemas = extractToolSchemas(NAME_COLLISION_FIXTURE);
+    expect(schemas["books_get"]).toBeDefined();
   });
 });
 
