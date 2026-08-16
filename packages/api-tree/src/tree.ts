@@ -693,16 +693,53 @@ export function forEachTreeCandidate(
  * (`nameSegments` still starts at `[]`) — a tool name is scoped by
  * convention to ONE standalone tree already (`extractToolSchemas`'s own doc
  * comment), so it stays unprefixed by design.
+ *
+ * `treeId`, when given, walks ONLY the candidate whose own exported-binding
+ * id matches — every other candidate in the file is skipped entirely (not
+ * just excluded from the output; its leaves are never visited, so it can't
+ * contribute a name collision either). This is `extractToolSchemas`'s/
+ * `extractToolTypeRefs`'s own escape hatch for a file that exports more than
+ * one tree: those two functions' name-keyed output is only meaningful for
+ * ONE standalone tree (see their doc comments), so given no `treeId` they
+ * still walk every candidate (unchanged default), but a multi-tree file's
+ * candidates legitimately colliding on name (e.g. two pipeline stages of the
+ * SAME logical tree — a raw `Node` and its `applyValidation`-wrapped copy,
+ * both structurally identical) needs the caller to name which one it means,
+ * mirroring `codegen-source.ts`'s `generateClientFromSource`'s own
+ * `options.treeId` resolution (find-by-id, or auto-resolve when there's
+ * exactly one candidate, else a loud error listing every candidate found).
  */
-function walkTree(entryFile: string, onLeaf: OnLeaf, sharedProgram?: ts.Program): void {
+function walkTree(
+  entryFile: string,
+  onLeaf: OnLeaf,
+  sharedProgram?: ts.Program,
+  treeId?: string,
+): void {
   const program = sharedProgram ?? createExtractorProgram(entryFile);
   const checker = program.getTypeChecker();
   const source = program.getSourceFile(entryFile);
   if (!source) throw new Error(`walkTree: source not found: ${entryFile}`);
 
-  forEachTreeCandidate(source, checker, (nodeType, loc, treeId) =>
-    walkNodeType(nodeType, [], [treeId], loc, checker, onLeaf),
-  );
+  if (treeId === undefined) {
+    forEachTreeCandidate(source, checker, (nodeType, loc, candidateId) =>
+      walkNodeType(nodeType, [], [candidateId], loc, checker, onLeaf),
+    );
+    return;
+  }
+
+  const ids: string[] = [];
+  let matched = false;
+  forEachTreeCandidate(source, checker, (nodeType, loc, candidateId) => {
+    ids.push(candidateId);
+    if (candidateId !== treeId) return;
+    matched = true;
+    walkNodeType(nodeType, [], [candidateId], loc, checker, onLeaf);
+  });
+  if (!matched) {
+    throw new Error(
+      `walkTree: no tree named "${treeId}" in ${entryFile} (found: ${ids.join(", ")})`,
+    );
+  }
 }
 
 /**
@@ -750,10 +787,22 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * `schema-build.ts`'s `buildSchemaModuleSource`) reuses the SAME shared
  * Program instead of paying a second multi-GB `ts.Program` build just for
  * schemas.
+ *
+ * Passing `options.treeId` scopes the walk to ONE exported candidate (its own
+ * binding name — `forEachTreeCandidate`'s `treeId`) instead of every
+ * candidate the file exports — see `walkTree`'s doc comment for why a
+ * multi-tree file needs this: a bare tool NAME is only unique within one
+ * standalone tree by convention (this function's own module doc comment,
+ * above), so two DIFFERENT candidates in the same file that happen to be
+ * structurally identical (e.g. a raw tree and its `applyValidation`-wrapped
+ * copy, both exported for different downstream consumers) legitimately
+ * derive the same names and would otherwise trip `assertUniqueName` even
+ * though neither is a real naming mistake. Omitted, behavior is unchanged —
+ * every candidate is walked, as before.
  */
 export function extractToolSchemas(
   entryFile: string,
-  options?: { program?: ts.Program },
+  options?: { program?: ts.Program; treeId?: string },
 ): SchemaMap {
   const out: SchemaMap = {};
   const paths = new Map<string, readonly string[]>();
@@ -776,6 +825,7 @@ export function extractToolSchemas(
       };
     },
     options?.program,
+    options?.treeId,
   );
   return out;
 }
@@ -870,18 +920,22 @@ export type TypeRefMapWithDefs = {
  * `createExtractorProgram`'s multi-root form) instead of building a fresh
  * single-root one over `entryFile` — see that function's doc comment for why
  * this matters for batch extraction across many entry files in one process.
+ *
+ * Passing `options.treeId` scopes the walk to ONE exported candidate — see
+ * `extractToolSchemas`'s doc comment for the multi-tree-file rationale (same
+ * name-keyed-output constraint applies here identically).
  */
 export function extractToolTypeRefs(
   entryFile: string,
-  options?: { program?: ts.Program },
+  options?: { program?: ts.Program; treeId?: string },
 ): TypeRefMap;
 export function extractToolTypeRefs(
   entryFile: string,
-  options: { shouldShare: ShouldShare; program?: ts.Program },
+  options: { shouldShare: ShouldShare; program?: ts.Program; treeId?: string },
 ): TypeRefMapWithDefs;
 export function extractToolTypeRefs(
   entryFile: string,
-  options?: { shouldShare?: ShouldShare; program?: ts.Program },
+  options?: { shouldShare?: ShouldShare; program?: ts.Program; treeId?: string },
 ): TypeRefMap | TypeRefMapWithDefs {
   const registry = options?.shouldShare ? createSharingRegistry() : undefined;
   const out: TypeRefMap = {};
@@ -905,6 +959,7 @@ export function extractToolTypeRefs(
       };
     },
     options?.program,
+    options?.treeId,
   );
   if (!options?.shouldShare || !registry) return out;
   return finalizeWithDefs(out, registry, options.shouldShare);

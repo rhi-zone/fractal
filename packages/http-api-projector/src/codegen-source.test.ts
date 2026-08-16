@@ -21,7 +21,11 @@ const treePath = new URL("../../../examples/library-api/src/tree.ts", import.met
 
 describe("generateClientFromSource — identical output to generateClientFromNode", () => {
   it("produces byte-identical source for the library-api fixture", () => {
-    const schemas = extractToolSchemas(treePath);
+    // tree.ts exports 3 candidate trees (`api`, `validatedApi`,
+    // `httpRoutes`); `api` and `validatedApi` are structurally identical (the
+    // latter is the former wrapped by `applyValidation`), so an unscoped
+    // extraction would trip `assertUniqueName` on their shared leaf names.
+    const schemas = extractToolSchemas(treePath, { treeId: "api" });
     const fromNode = generateClientFromNode(api, schemas, { clientName: "Client" });
     const fromSource = generateClientFromSource(treePath, { treeId: "api", clientName: "Client" });
     expect(fromSource).toBe(fromNode);

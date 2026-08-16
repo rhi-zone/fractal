@@ -35,7 +35,12 @@ import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
 import { http } from "./verbs.ts";
 
 const treePath = new URL("../../../examples/library-api/src/tree.ts", import.meta.url).pathname;
-const schemas = extractToolSchemas(treePath);
+// tree.ts exports 3 candidate trees (`api`, `validatedApi`, `httpRoutes`);
+// `api` and `validatedApi` are structurally identical (the latter is the
+// former wrapped by `applyValidation`), so an unscoped extraction would trip
+// `assertUniqueName` on their shared leaf names. `treeId: "api"` scopes this
+// to the raw tree, matching `generateClientFromNode(api, schemas, ...)` below.
+const schemas = extractToolSchemas(treePath, { treeId: "api" });
 
 let source: string;
 

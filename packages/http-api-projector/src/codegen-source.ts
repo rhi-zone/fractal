@@ -182,7 +182,13 @@ export function generateClientFromSource(
     checker,
   );
   const projected = composeTransforms(applyMethods, applyMoveTo, applyResponse)(route);
-  const schemas = extractToolSchemas(entryFilePath, { program });
+  // Scoped to the SAME candidate `chosen` above already resolved — an
+  // unscoped call would walk every exported tree in `entryFilePath` again,
+  // which throws on a multi-tree file whose candidates happen to derive the
+  // same tool names (e.g. a raw tree and its `applyValidation`-wrapped
+  // copy) even though `chosen` already disambiguated which one this client
+  // is for.
+  const schemas = extractToolSchemas(entryFilePath, { program, treeId: chosen.treeId });
 
   return generateClientWithNames(projected, codegenNames, memberNames, schemas, options);
 }

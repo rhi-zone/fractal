@@ -15,8 +15,14 @@ import { http } from "./verbs.ts";
 
 const treePath = new URL("../../../examples/library-api/src/tree.ts", import.meta.url).pathname;
 
-// Pre-compute schema map once for the suite
-const schemas = extractToolSchemas(treePath);
+// Pre-compute schema map once for the suite. tree.ts exports 3 candidate
+// trees (`api`, `validatedApi`, `httpRoutes` — see that file's module doc):
+// `api` and `validatedApi` are structurally identical (the latter is the
+// former wrapped by `applyValidation`), so an unscoped extraction would trip
+// `assertUniqueName` on their shared leaf names. `treeId: "api"` scopes this
+// suite's schema map to the raw tree, which is what `toOpenApi(api, ...)`
+// below is actually keyed against.
+const schemas = extractToolSchemas(treePath, { treeId: "api" });
 
 // Build the doc once for structural tests (no codegen schemas)
 let doc: OpenApiDoc;

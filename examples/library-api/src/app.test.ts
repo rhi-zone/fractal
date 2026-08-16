@@ -1,5 +1,3 @@
-// examples/library-api/src/app.test.ts
-//
 // End-to-end tests for the library-api on the new fractal model.
 // Exercises the whole stack: HTTP (createFetch) + MCP (toTools) + codegen
 // (extractToolSchemas). Each assertion proves a specific new-model invariant.
@@ -198,7 +196,11 @@ describe("library-api — MCP tools", () => {
   });
 
   it("catalog_search has real codegen-derived inputSchema (not placeholder)", () => {
-    const schemas = extractToolSchemas(treePath);
+    // tree.ts exports 3 candidate trees (`api`, `validatedApi`,
+    // `httpRoutes`); `api` and `validatedApi` are structurally identical (the
+    // latter is the former wrapped by `applyValidation`), so an unscoped
+    // extraction would trip `assertUniqueName` on their shared leaf names.
+    const schemas = extractToolSchemas(treePath, { treeId: "api" });
     const tools = toTools(api, { schemas });
     const t = tools.find((t) => t.name === "catalog_search");
     // Real schema has properties.q; the placeholder { type: "object" } does not
@@ -209,7 +211,11 @@ describe("library-api — MCP tools", () => {
   });
 
   it("catalog_genres has real codegen-derived inputSchema (not placeholder)", () => {
-    const schemas = extractToolSchemas(treePath);
+    // tree.ts exports 3 candidate trees (`api`, `validatedApi`,
+    // `httpRoutes`); `api` and `validatedApi` are structurally identical (the
+    // latter is the former wrapped by `applyValidation`), so an unscoped
+    // extraction would trip `assertUniqueName` on their shared leaf names.
+    const schemas = extractToolSchemas(treePath, { treeId: "api" });
     const tools = toTools(api, { schemas });
     const t = tools.find((t) => t.name === "catalog_genres");
     // Real schema has properties.prefix
@@ -221,7 +227,7 @@ describe("library-api — MCP tools", () => {
 });
 
 // ============================================================================
-// Verb-helper bundles: one helper → HTTP verb AND MCP hint
+// Verb-helper bundles: one helper → HTTP verb and MCP hint
 // ============================================================================
 
 describe("library-api — verb-helper bundles (http.*)", () => {
@@ -244,17 +250,17 @@ describe("library-api — verb-helper bundles (http.*)", () => {
   it("http.post on start: MCP tool has no idempotentHint (plain mutation)", () => {
     const tools = toTools(api);
     const t = tools.find((t) => t.name === "books_bookId_checkout_start");
-    // post bundles no idempotent tag — hint should be absent or false
+    // post bundles carry no idempotent tag; the hint is absent or false
     expect(t?.annotations?.idempotentHint).toBeFalsy();
   });
 
-  // mergeMeta-not-spread proof: op(fn, http.put, { tags: { destructive: false } })
-  // keeps idempotent:true from bundle AND applies destructive:false from extra
+  // op(fn, http.put, { tags: { destructive: false } }) deep-merges: the bundle's
+  // idempotent:true is preserved alongside the extra tags' destructive:false
   it("op(fn, http.put, extra-tags) deep-merges: bundle's idempotent preserved + extra applied", () => {
     const n = op((_: unknown) => {}, http.put, { tags: { destructive: false } });
     const nodeTags = (n.meta.tags ?? {}) as Tags;
     const resolved = resolveTags(nodeTags);
-    // idempotent:true from http.put bundle is NOT clobbered by the extra contribution
+    // idempotent:true from the http.put bundle survives the extra contribution
     expect(resolved.idempotent).toBe(true);
     // destructive:false from extra contribution is applied
     expect(resolved.destructive).toBe(false);
@@ -284,14 +290,12 @@ describe("library-api — verb-helper bundles (http.*)", () => {
 // Codegen validators — `applyValidation("books", api, "http")` wiring
 // (tree.ts's `validatedApi`/`httpRoutes`, wired via
 // generated/apply-validation.ts, see src/generated/apply-validation.ts and
-// package.json's `codegen` script (`build` — phase D retired the separate
-// `build-wire` subcommand once `build` itself became the only mechanism) —
-// see docs/design/wire-profiles-and-staged-validation.md, phases C and D).
-// Applied to
-// the raw `Node` before HttpRoute projection ever runs (see tree.ts's own doc
+// package.json's `codegen` script (`build`) — see
+// docs/design/wire-profiles-and-staged-validation.md). Applied to the raw
+// `Node` before HttpRoute projection ever runs (see tree.ts's own doc
 // comment for why this still keys correctly for HTTP despite
 // `read`/`replace`/`remove`'s `moveTo` relocation) — HTTP is the only
-// protocol this tree is actually DISPATCHED over in this example (MCP's own
+// protocol this tree is actually dispatched over in this example (MCP's own
 // use of `api`, below, is schema-extraction via `toTools`, not a running MCP
 // server), so there is only one protocol's key ("http") to claim.
 // ============================================================================
@@ -301,27 +305,25 @@ describe("library-api — codegen-generated validators", () => {
     const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler;
     const originalHandler = api.children?.catalog?.children?.search?.handler;
     expect(handler).toBeDefined();
-    // "wrapped" is verified by handler identity, not a brand-check API —
-    // `isApplyValidationWrapped` (and the sniff sites it existed to support)
-    // is deleted per phase C; decode+validation now run unconditionally on
-    // every leaf `applyValidation` covers.
+    // Verified by handler identity: decode + validation run unconditionally
+    // on every leaf `applyValidation` covers.
     expect(handler).not.toBe(originalHandler);
   });
 
   it("a leaf tagged unvalidated, with no matching generated validator entry, is left untouched", () => {
-    // Every leaf in the real `api` tree happens to have a generated entry
-    // (see generated/apply-validation.ts) — this proves the pass-through
+    // Every leaf in the real `api` tree has a generated entry (see
+    // generated/apply-validation.ts), so this exercises the pass-through
     // case on a synthetic tree instead, mirroring the "widgets"/"other" split
-    // preset.test.ts exercises for createFetch's own applyValidation wiring.
-    // Unlike the retired `wrapValidators`, `applyValidation` itself is
-    // PERMISSIVE by default (an uncovered leaf just passes through
-    // unwrapped) — the tag here is illustrative, not load-bearing for this
-    // test; `assertValidationCoverage` is the opt-in loud check.
-    // A fresh `createApplyValidation` (not the generated singleton — that
+    // preset.test.ts uses for createFetch's own applyValidation wiring.
+    // `applyValidation` is permissive by default: an uncovered leaf passes
+    // through unwrapped, and `assertValidationCoverage` is the opt-in loud
+    // check for that case, not exercised here — the `unvalidated` tag on
+    // the fixture leaf is illustrative only. This uses a fresh
+    // `createApplyValidation` instance, not the generated singleton (that
     // one already consumed key "books" in tree.ts, and a key can only be
-    // used once per created function) over the SAME `wireValidatorsByKey.books`
-    // map, so this exercises the real generated data without re-using the
-    // shared instance.
+    // used once per created function), over the same
+    // `wireValidatorsByKey.books` map, so it exercises the real generated
+    // data.
     const unwrapped = (input: unknown) => input;
     const fixture = api_({ other: op(unwrapped, { tags: { unvalidated: true } }) });
     const applyValidation = createApplyValidation({}, { books: wireValidatorsByKey.books });
@@ -331,11 +333,10 @@ describe("library-api — codegen-generated validators", () => {
 
   // `catalog/search`'s generated schema is `{ q?: string }` — every value a
   // real HTTP GET query string can produce for `q` is already a string
-  // (WHATWG `URLSearchParams` never yields anything else), so a genuine
-  // type-mismatch can't be produced by an actual HTTP request to this route.
-  // This calls the wired handler directly with a malformed bag, proving
-  // codegen + wiring really do reject bad input rather than only ever pass
-  // through.
+  // (WHATWG `URLSearchParams` never yields anything else), so an actual HTTP
+  // request to this route can't produce a type-mismatch. This calls the
+  // wired handler directly with a malformed bag instead, confirming codegen
+  // + wiring reject bad input rather than only ever passing it through.
   it("wired handler rejects a wrong-typed bag (q as a number, not a string)", async () => {
     const handler = httpRoutes.children?.catalog?.children?.search?.methods?.GET?.handler;
     expect(handler).toBeDefined();
@@ -473,7 +474,7 @@ describe("library-api — createFetch preset options against the real tree", () 
     // `createFetch` has no dedicated validation option (see http-api-
     // projector's preset.ts module doc) — the tree passed in is already
     // `applyValidation`-wrapped (`validatedApi`, tree.ts), the same
-    // Node-level wiring MCP/CLI share, applied BEFORE it ever reaches
+    // Node-level wiring MCP/CLI share, applied before it ever reaches
     // `createFetch`.
     const combined = createFetch(validatedApi, {
       cors: true,
