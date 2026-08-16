@@ -148,6 +148,41 @@ describe("nested Query vs flat Mutation/Subscription", () => {
 });
 
 // ============================================================================
+// 2a. Query `FieldTypeMap`/dispatch lookup key: a leaf key containing "_"
+// (the escape-joined delimiter) no longer collides with a genuinely
+// different, deeper tree position — regression coverage for `escapeJoin`
+// (@rhi-zone/fractal-api-tree/path), which the Query-field lookup key
+// (`lookupKey`, project.ts) now calls exactly once per leaf instead of
+// folding `underscoreJoin` one step at a time.
+// ============================================================================
+
+describe("Query lookup key: a segment containing '_' no longer collides with a deeper tree position", () => {
+  it("a Query leaf literally named 'users_list' and branch 'users' -> leaf 'list' get two distinct FieldTypeMap entries", () => {
+    const n = api_({
+      users_list: op((_: unknown) => ({ flat: true }), { tags: { readOnly: true } }),
+      users: api_({ list: op((_: unknown) => ({ nested: true }), { tags: { readOnly: true } }) }),
+    });
+    const typesMap: FieldTypeMap = {
+      "users\\_list": { description: "flat leaf" },
+      users_list: { description: "nested leaf" },
+    };
+    const result = projectGraphQL(n, { types: typesMap });
+    // Both dispatch entries survive independently — no silent overwrite.
+    expect(result.handlers.size).toBe(2);
+    expect(result.handlers.has("users\\_list")).toBe(true);
+    expect(result.handlers.has("users_list")).toBe(true);
+    // Each field picked up its OWN description from the correctly-keyed
+    // FieldTypeMap entry.
+    const rootField = result.queryFields.find((f) => f.name === "users_list");
+    expect(rootField?.description).toBe("flat leaf");
+    const nestedField = (
+      result.types.UsersQuery!.meta.graphqlFields as { name: string; description?: string }[]
+    ).find((f) => f.name === "list");
+    expect(nestedField?.description).toBe("nested leaf");
+  });
+});
+
+// ============================================================================
 // 3. Fallback (wildcard capture) → named argument
 // ============================================================================
 

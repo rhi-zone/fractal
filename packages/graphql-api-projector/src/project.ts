@@ -48,6 +48,7 @@
 // tool call's `arguments` is.
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
@@ -230,15 +231,38 @@ function capitalize(s: string): string {
  * so client.ts derives the exact same flat field name this walk does,
  * computed independently from the same source rules — same convention as
  * mcp-api-projector's client/server name-derivation pairing.
+ *
+ * UNLIKE every other join site this investigation converted to
+ * `escapeJoin` (@rhi-zone/fractal-api-tree/path), `camelJoin`'s OUTPUT is
+ * itself a real GraphQL SDL field name — it must stay a syntactically valid
+ * GraphQL/JS identifier (`/^[_A-Za-z][_0-9A-Za-z]*$/`), so backslash-escaping
+ * (which introduces a "\" character) cannot be applied here without changing
+ * what a camelCase-joined field name is allowed to look like at all — an
+ * open design question (not resolved by this investigation, flagged rather
+ * than guessed at): whether the collision this leaves unfixed (e.g. tree key
+ * "usersCreate" vs. branch "users" -> leaf "create", both camelJoin-ing to
+ * "usersCreate") should be caught with an assertUniqueName-style throw
+ * instead of silently colliding (this file currently has neither), or left
+ * as an accepted authoring constraint (don't name a leaf key literally in
+ * the camelCase shape a nested path would already produce).
  */
 export function camelJoin(prefix: string, seg: string): string {
   return prefix.length === 0 ? seg : `${prefix}${capitalize(seg)}`;
 }
 
 /**
- * underscore join — the lookup key into `FieldTypeMap`, matching
- * mcp-api-projector's `toTools` name convention. Exported for the same
- * reason as `camelJoin` above.
+ * Underscore-join a `(prefix, seg)` pair — the single-step building block
+ * `[...path, key].reduce(underscoreJoin, "")` used to fold over, kept
+ * exported for source compatibility. The actual `FieldTypeMap`/dispatch
+ * lookup-key convention this walk (and codegen.ts's/client.ts's independent
+ * mirrors) now uses is `escapeJoin(segments, "_")`
+ * (@rhi-zone/fractal-api-tree/path) called ONCE over the full segment array,
+ * NOT this function folded incrementally — a `.reduce(underscoreJoin, "")`
+ * fold can never be made collision-safe by escaping only within each step,
+ * since by the time step 2 runs, step 1's unescaped `prefix + "_" + seg` is
+ * already committed to the accumulator. A caller building its own
+ * `FieldTypeMap` externally (to match this convention) should call
+ * `escapeJoin` directly instead of folding over this function.
  */
 export function underscoreJoin(prefix: string, seg: string): string {
   return prefix.length === 0 ? seg : `${prefix}_${seg}`;
@@ -515,7 +539,7 @@ export function projectGraphQL(n: Node, opts: ProjectGraphQLOptions = {}): Proje
 
   for (const leaf of leaves) {
     const gql = getGraphQLMeta(leaf.node.meta as GraphQLLeafMeta);
-    const lookupKey = [...leaf.path, leaf.key].reduce(underscoreJoin, "");
+    const lookupKey = escapeJoin([...leaf.path, leaf.key], "_");
     const typeInfo = typeMap[lookupKey];
     const operationType = deriveOperationType(leaf.node.meta, typeInfo?.output);
 

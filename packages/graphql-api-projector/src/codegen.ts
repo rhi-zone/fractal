@@ -12,12 +12,17 @@
 //
 // Reuses client.ts's exact document-assembly logic (`buildDocument`,
 // `selectionSetFor`) and project.ts's exact naming/derivation logic
-// (`argsFromInput`, `camelJoin`, `deriveOperationType`, `getGraphQLMeta`,
-// `underscoreJoin`) rather than reimplementing them — a leaf's field name,
-// operation type, argument list, and GraphQL document text must never drift
-// between the runtime proxy client and this codegen path, since both need to
-// address the exact same field a `createGraphQLServer` built from the same
-// tree actually resolves.
+// (`argsFromInput`, `camelJoin`, `deriveOperationType`, `getGraphQLMeta`)
+// rather than reimplementing them — a leaf's field name, operation type,
+// argument list, and GraphQL document text must never drift between the
+// runtime proxy client and this codegen path, since both need to address the
+// exact same field a `createGraphQLServer` built from the same tree actually
+// resolves. The `FieldTypeMap` lookup key (`lookupKey`, below) is computed
+// via @rhi-zone/fractal-api-tree/path's `escapeJoin` directly (not folded
+// via project.ts's `underscoreJoin`, which can't be made collision-safe one
+// step at a time — see that function's own doc comment) — still the exact
+// same convention `project.ts`'s own walk uses, just computed the
+// collision-safe way.
 //
 // ── What differs from the runtime proxy client ──────────────────────────────
 // `createGraphQLClient` (client.ts) computes a leaf's document/args once at
@@ -50,16 +55,11 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 import { toTypeScript } from "@rhi-zone/fractal-type-ir/typescript-native";
 import { buildDocument, selectionSetFor } from "./client.ts";
-import {
-  argsFromInput,
-  camelJoin,
-  deriveOperationType,
-  getGraphQLMeta,
-  underscoreJoin,
-} from "./project.ts";
+import { argsFromInput, camelJoin, deriveOperationType, getGraphQLMeta } from "./project.ts";
 import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts";
 
 // ============================================================================
@@ -177,7 +177,7 @@ function buildLeafEntry(
   namedTypes: Readonly<Record<string, TypeRef>>,
 ): OperationEntry {
   const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta);
-  const lookupKey = [...path, key].reduce(underscoreJoin, "");
+  const lookupKey = escapeJoin([...path, key], "_");
   const typeInfo = types[lookupKey];
   const operationType = deriveOperationType(child.meta, typeInfo?.output);
 

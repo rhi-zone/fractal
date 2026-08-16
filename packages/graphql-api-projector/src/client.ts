@@ -7,10 +7,13 @@
 // Built directly on the raw `Node` tree (not the projected `ProjectGraphQLResult`),
 // because field-name/operation-type/arg derivation is exactly project.ts's own
 // walk — reusing that logic (`deriveOperationType`, `camelJoin`,
-// `underscoreJoin`, `argsFromInput`, all exported from project.ts for this
-// reason) rather than re-deriving it is what keeps the client's constructed
-// documents from drifting out of sync with what `createGraphQLServer`
-// (server.ts) actually wires resolvers for.
+// `argsFromInput`, all exported from project.ts for this reason) rather than
+// re-deriving it is what keeps the client's constructed documents from
+// drifting out of sync with what `createGraphQLServer` (server.ts) actually
+// wires resolvers for. The `FieldTypeMap` lookup key is computed via
+// @rhi-zone/fractal-api-tree/path's `escapeJoin` directly — see codegen.ts's
+// matching note for why (not project.ts's `underscoreJoin`, which can't be
+// made collision-safe folded one step at a time).
 //
 // ── Transport abstraction ────────────────────────────────────────────────
 // `GraphQLTransport = (query, variables?) => Promise<{data?, errors?}>` — the
@@ -70,14 +73,9 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import type { TypeRef, TypeShape } from "@rhi-zone/fractal-type-ir";
-import {
-  argsFromInput,
-  camelJoin,
-  deriveOperationType,
-  getGraphQLMeta,
-  underscoreJoin,
-} from "./project.ts";
+import { argsFromInput, camelJoin, deriveOperationType, getGraphQLMeta } from "./project.ts";
 import type { Arg, FieldTypeMap, GraphQLLeafMeta, OperationType } from "./project.ts";
 
 // ============================================================================
@@ -321,7 +319,7 @@ function buildLeaf(
   opts: ResolvedOptions,
 ): (input?: unknown) => Promise<unknown> {
   const gql = getGraphQLMeta(child.meta as GraphQLLeafMeta);
-  const lookupKey = [...path, key].reduce(underscoreJoin, "");
+  const lookupKey = escapeJoin([...path, key], "_");
   const typeInfo = opts.types[lookupKey];
   const operationType = deriveOperationType(child.meta, typeInfo?.output);
 
