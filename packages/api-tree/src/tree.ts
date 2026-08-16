@@ -95,6 +95,52 @@ export type TypeRefMap = Record<string, ToolTypeInfo>;
 const join = (prefix: string, seg: string): string =>
   prefix.length > 0 ? `${prefix}_${seg}` : seg;
 
+/**
+ * Record `value` at `out[name]`, throwing when a DIFFERENT tree position
+ * already claimed the same `name` — rather than silently letting the
+ * second-processed leaf overwrite the first, the way a bare `out[name] =
+ * value` would.
+ *
+ * `join`'s "_" delimiter is unescaped: nothing stops an authored segment key
+ * or a `meta.mcp.name`/`meta.mcp.segment` override from itself containing
+ * "_", so a leaf literally named `"books_get"` derives the identical name to
+ * branch `"books"` → leaf `"get"`. That's not a hypothetical — it's the same
+ * class of silent-collision bug `extractRouteSchemas`'s doc comment already
+ * calls out for the "/"-joined route-path keying (fixed there by prefixing
+ * every path with its owning `treeId`, which the underscore-joined tool name
+ * deliberately does NOT do — see `walkTree`'s doc comment, "a tool name is
+ * scoped by convention to ONE standalone tree already"). Because there is no
+ * such prefix to lean on here, the name collision itself has to be caught
+ * instead.
+ *
+ * `paths` tracks each name's ORIGINATING leaf path (the raw segment array
+ * `onLeaf` also receives), purely so the thrown error can point at both
+ * colliding positions concretely rather than just repeating the name they
+ * collided on.
+ */
+function assignUniqueName<T>(
+  out: Record<string, T>,
+  paths: Map<string, readonly string[]>,
+  name: string,
+  path: readonly string[],
+  value: T,
+): void {
+  const priorPath = paths.get(name);
+  if (priorPath !== undefined) {
+    throw new Error(
+      `two tree positions produced the same derived name "${name}": ` +
+        `[${priorPath.join(" -> ")}] collides with [${path.join(" -> ")}]. ` +
+        `The underscore-joined name has no escaping for "_" inside an authored ` +
+        `segment key or meta.mcp.name/meta.mcp.segment value, so two different ` +
+        `tree positions can derive the same string. Disambiguate one of them with ` +
+        `an explicit meta.mcp.name (on the leaf) or meta.mcp.segment (on an ` +
+        `ancestor branch).`,
+    );
+  }
+  paths.set(name, path);
+  out[name] = value;
+}
+
 /** True when a property symbol resolved off a type is REQUIRED (not optional). */
 function isRequiredProperty(prop: ts.Symbol): boolean {
   return (prop.flags & ts.SymbolFlags.Optional) === 0;
@@ -657,6 +703,10 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * Extract the tool-name → schema map for every exported `api(children, opts?)`
  * tree in a source file. Mirrors toTools' name construction.
  *
+ * Throws when two different tree positions derive the same name (see
+ * `assignUniqueName`, above, for why the underscore-joined scheme allows
+ * that) rather than letting the second one silently overwrite the first.
+ *
  * Passing `options.program` reuses a pre-built `ts.Program` (e.g. from
  * `createExtractorProgram`'s multi-root form) instead of building a fresh
  * single-root one over `entryFile` — same rationale, and same parameter
@@ -673,15 +723,16 @@ export function extractToolSchemas(
   options?: { program?: ts.Program },
 ): SchemaMap {
   const out: SchemaMap = {};
+  const paths = new Map<string, readonly string[]>();
   walkTree(
     entryFile,
-    (name, _path, fn, descriptionSource, checker) => {
+    (name, path, fn, descriptionSource, checker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
-      out[name] = {
+      assignUniqueName<ToolSchema>(out, paths, name, path, {
         inputSchema: schemaFromFunctionNode(fn, checker),
         outputSchema: schemaFromReturnType(fn, checker),
         ...(description !== undefined ? { description } : {}),
-      };
+      });
     },
     options?.program,
   );
@@ -765,6 +816,9 @@ export type TypeRefMapWithDefs = {
  * `extractToolSchemas`, but yields TypeRefs (pre-projection) instead of
  * JSON Schema.
  *
+ * Throws on a same-name collision between two different tree positions — see
+ * `extractToolSchemas`'s doc comment and `assignUniqueName`, above.
+ *
  * Passing `options.shouldShare` (default omitted — plain `TypeRefMap`, exact
  * prior behavior, no sharing) opts into structural sharing across every
  * leaf's input/output TypeRefs: the return shape becomes
@@ -790,15 +844,16 @@ export function extractToolTypeRefs(
 ): TypeRefMap | TypeRefMapWithDefs {
   const registry = options?.shouldShare ? createSharingRegistry() : undefined;
   const out: TypeRefMap = {};
+  const paths = new Map<string, readonly string[]>();
   walkTree(
     entryFile,
-    (name, _path, fn, descriptionSource, checker) => {
+    (name, path, fn, descriptionSource, checker) => {
       const description = extractJsDoc(descriptionSource) ?? extractJsDoc(fn);
-      out[name] = {
+      assignUniqueName<ToolTypeInfo>(out, paths, name, path, {
         input: typeRefFromFunctionNode(fn, checker, registry),
         output: typeRefFromReturnType(fn, checker, registry),
         ...(description !== undefined ? { description } : {}),
-      };
+      });
     },
     options?.program,
   );

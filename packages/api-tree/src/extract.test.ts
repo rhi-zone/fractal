@@ -350,6 +350,40 @@ describe("two trees in one file with a colliding leaf path — treeId disambigua
 });
 
 // ============================================================================
+// 3a-name-collision. One tree whose underscore-joined tool name collides
+// across two DIFFERENT tree positions ("books_get" the leaf key vs.
+// "books" -> "get" the nested leaf) — regression coverage for
+// `assignUniqueName` (tree.ts). Unlike 3a-collision above (fixed by
+// prefixing every route path with its owning treeId), the underscore-joined
+// tool name is deliberately unprefixed within one tree (`walkTree`'s doc
+// comment), so the collision itself has to be caught and reported instead.
+// ============================================================================
+
+describe("extractToolSchemas / extractToolTypeRefs throw on a same-name collision within one tree", () => {
+  const NAME_COLLISION_FIXTURE = `${import.meta.dir}/__fixtures__/name-collision.fixture.ts`;
+
+  it("extractToolSchemas throws a clear, actionable error instead of silently overwriting", () => {
+    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(
+      /two tree positions produced the same derived name "books_get"/,
+    );
+    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(/meta\.mcp\.name/);
+    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(/meta\.mcp\.segment/);
+  });
+
+  it("extractToolTypeRefs throws the same way", () => {
+    expect(() => extractToolTypeRefs(NAME_COLLISION_FIXTURE)).toThrow(
+      /two tree positions produced the same derived name "books_get"/,
+    );
+  });
+
+  it("the error names both colliding paths", () => {
+    expect(() => extractToolSchemas(NAME_COLLISION_FIXTURE)).toThrow(
+      /\[tree -> books_get\].*\[tree -> books -> get\]|\[tree -> books -> get\].*\[tree -> books_get\]/s,
+    );
+  });
+});
+
+// ============================================================================
 // 3b. meta.mcp.name / meta.mcp.segment overrides reflected in the
 // reconstructed name (tree.ts) — must agree with mcp-api-projector's actual
 // runtime `projectTools` walk, since they're supposed to be the same name.

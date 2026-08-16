@@ -199,6 +199,53 @@ describe("name namespacing from tree position", () => {
 });
 
 // ============================================================================
+// 4a. Same-name collision between two DIFFERENT tree positions throws,
+// instead of the second-visited leaf silently overwriting the first —
+// regression coverage mirroring @rhi-zone/fractal-api-tree's
+// `assignUniqueName` (tree.ts), since the underscore-join here has the exact
+// same unescaped delimiter.
+// ============================================================================
+
+describe("same-name collision between two tree positions throws instead of silently overwriting", () => {
+  it("a leaf literally named 'users_list' collides with branch 'users' -> leaf 'list'", () => {
+    const api = api_({
+      users_list: op((_: unknown) => ({ flat: true })),
+      users: api_({ list: op((_: unknown) => ({ nested: true })) }),
+    });
+    expect(() => toTools(api)).toThrow(/two tree positions produced the same tool name "users_list"/);
+  });
+
+  it("projectPrompts throws the same way for a colliding prompt name", () => {
+    const api = api_({
+      users_list: op((_: unknown) => ({}), { mcp: { as: "prompt" } }),
+      users: api_({ list: op((_: unknown) => ({}), { mcp: { as: "prompt" } }) }),
+    });
+    expect(() => projectPrompts(api)).toThrow(
+      /two tree positions produced the same prompt name "users_list"/,
+    );
+  });
+
+  it("a colliding meta.mcp.segment override on one branch is caught just like an authored key", () => {
+    const api = api_({
+      users_list: op((_: unknown) => ({})),
+      usersNode: api_(
+        { list: op((_: unknown) => ({})) },
+        { meta: { mcp: { segment: "users" } } },
+      ),
+    });
+    expect(() => toTools(api)).toThrow(/two tree positions produced the same tool name "users_list"/);
+  });
+
+  it("non-colliding trees are entirely unaffected — same names as before, no throw", () => {
+    const api = api_({
+      users: api_({ list: op((_: unknown) => []), create: op((_: unknown) => ({})) }),
+    });
+    const tools = toTools(api);
+    expect(tools.map((t) => t.name).sort()).toEqual(["users_create", "users_list"]);
+  });
+});
+
+// ============================================================================
 // 5. meta.mcp per-projection overrides
 // ============================================================================
 
@@ -414,6 +461,30 @@ describe("resource URI derivation from tree position", () => {
     const n = api_({ config: op((_: unknown) => ({}), { mcp: { as: "resource" } }) });
     const { resources } = projectResources(n, { scheme: "myapp://" });
     expect(resources[0]!.uri).toBe("myapp://config");
+  });
+
+  it("a colliding derived URI throws instead of silently overwriting the first resource's dispatch entry", () => {
+    const api = api_({
+      "users/list": op((_: unknown) => ({}), { mcp: { as: "resource" } }),
+      users: api_({ list: op((_: unknown) => ({}), { mcp: { as: "resource" } }) }),
+    });
+    expect(() => projectResources(api)).toThrow(
+      /two tree positions produced the same resource URI "resource:\/\/users\/list"/,
+    );
+  });
+
+  it("non-colliding resource URIs are entirely unaffected — no throw", () => {
+    const api = api_({
+      users: api_({
+        list: op((_: unknown) => [], { mcp: { as: "resource" } }),
+        create: op((_: unknown) => ({}), { mcp: { as: "resource" } }),
+      }),
+    });
+    const { resources } = projectResources(api);
+    expect(resources.map((r) => r.uri).sort()).toEqual([
+      "resource://users/create",
+      "resource://users/list",
+    ]);
   });
 });
 
