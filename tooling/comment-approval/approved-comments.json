@@ -1083,7 +1083,7 @@
     },
     "0c05a0214ab34b90bb14cf7588567194a00a732003b01d896ca32ed95ddf4492": {
       "excerpt": "Description text override.",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "0c07f56418576dd72f18cb561a23fbe87b8819dba27c3ea78cb9363337f6a725": {
       "excerpt": "Ruby/dry-types projector — a second Ruby target alongside ruby-sorbet.ts,",
@@ -1319,7 +1319,7 @@
     },
     "0e4224483b8dc8138fbdd809d6720168d70d0affa45022a224d1ed0bf149cd1b": {
       "excerpt": "Safely extract the open `meta.jsonrpc` bag. Accepts the intersection of",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "0e43b81cd7592093c6ddfa582e8680cf1fd46d509129af9fb6db5b05338a6697": {
       "excerpt": "One tree whose underscore-joined tool name collides across two DIFFERENT",
@@ -1735,7 +1735,7 @@
     },
     "124b05c40cb471a30ee946838cdcbfd1faf3aedab6ca56891411f541f72305e5": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T07:59:24.008Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "125be8b2a4f965a5c8968132001b8e8aa99f234504004d7a83b2431be4aefeee": {
       "excerpt": "`fromJson` deserialization expression for one value read out of a",
@@ -2099,7 +2099,7 @@
     },
     "161decef0482a72f3d9821c3556c5b80e05cc59895c8880557b4da19d699821d": {
       "excerpt": "`meta.jsonrpc` fields valid at BRANCH position only.",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "16251f035dfcfa93d9f5fc25af37d1c386733633e62747d937d5a8d3264943e4": {
       "excerpt": "process.memoryUsage().heapUsed reports deltas in ~10-30MB steps on",
@@ -2279,7 +2279,7 @@
     },
     "17c7a754466de8754b3e0eb719f90126cf2189e049f2933b2aef54e149df3fa3": {
       "excerpt": "Method-name -> derived params/result schema + description (from codegen).",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "17c7bc5e33ab81a78469e7dfa3d9805189d8810e369f6dbcb177056488da8443": {
       "excerpt": "shape-match a segment tuple against path parts (lit must equal; param is free).",
@@ -3719,7 +3719,7 @@
     },
     "27de4c842557c4f97340940f1adbbca38597d402f6d9b9ca066036eaf46ee7cd": {
       "excerpt": "A dispatch entry: the leaf's handler plus its `meta.jsonrpc.sourceMap` (empty wh…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "27e21935e464551670d07324b41c4c80d7509e67cbd7088feda23dcefe4b7516": {
       "excerpt": "Fingerprint of the SET of shared/recursive def names in scope for this",
@@ -5987,7 +5987,7 @@
     },
     "4157e81e9aa6d9dd8625e7fbd76d2c87f2c2c93970a5a0e46ed4e36894af08d7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T07:59:24.008Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "41675dc9bfd21f493bea1779d15c08c2ef28eeeda96774085c81bcf25a97e173": {
       "excerpt": "Compose several `ErrorEncoder`s into one: tries each in order, returning",
@@ -6731,7 +6731,7 @@
     },
     "48c292eb30c5c936913daeabe2d94053cd95e6ae4946cd23c8e230a06820a8b5": {
       "excerpt": "Options for `projectMethods`/`toMethods`.",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "48c8029ba3d8f39328060ab0b234904d1bc9f3097d2cac25c61815d28303fcfe": {
       "excerpt": "`api()`'s `opts.meta` parameter is a `const` type parameter (`M`,",
@@ -7495,7 +7495,7 @@
     },
     "51948b9da377e7b61404e8a3424765c24b21b5c83a98fb79adc558520839d00f": {
       "excerpt": "Wraps `JsonRpcLeafMetaProperties` under the `jsonrpc` key — extend `LeafMeta` wi…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "51982f8c6aee7568b6f860e32c2545acbf3660da83c3892e83d02d021d4bac36": {
       "excerpt": "Single-signature function, named the same shape as the overloaded one",
@@ -7655,7 +7655,7 @@
     },
     "52d4cef2a36d3e68dc218115a8bc0fe09986c1cbb35cc8f5f52d3dde89edcadb": {
       "excerpt": "`projectMethods`'s full result: the flat descriptor array plus the name -> handl…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "52d5bef4cb7d8cb248f8699dbdc5a9b981ce358ee84b4ff5d1ad9c77cd36c9cd": {
       "excerpt": "Renders a union as a Java 17+ sealed interface (https://openjdk.org/jeps/409)",
@@ -8365,6 +8365,10 @@
       "excerpt": "Refinement-tagged field nested inside an object.",
       "approvedAt": "2026-08-13T08:14:47.649Z"
     },
+    "59ac065878a0323e2fbbf44292608bb54d28c1a710f6cf7f087bb729dbc61674": {
+      "excerpt": "`nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`)",
+      "approvedAt": "2026-08-16T08:00:53.570Z"
+    },
     "59b54bd51da9ef61f114f6b4adaffd4e61a4c1b75b7e71c60e0b55ac89762e4b": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:04:03.786Z"
@@ -8743,7 +8747,11 @@
     },
     "5dcbfd94b7911c3dbae8d26c95437fdefca4825b549e0332e47e081040cb8c1d": {
       "excerpt": "Full method-name override (dot-prefix ignored when set).",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
+    },
+    "5dd1091f505d9acf0939680405248110f1d173008a5ff85bc78a677ff7b1a568": {
+      "excerpt": "Both handlers survive independently — no silent dispatch overwrite.",
+      "approvedAt": "2026-08-16T08:00:53.574Z"
     },
     "5dd5da41ff37ed0c74a9164f8308becc09d4e8349813d6ab3eb029dceb1535db": {
       "excerpt": "A class instance carries only nominal identity (className/source), never fields",
@@ -10319,7 +10327,7 @@
     },
     "6ed0f1b30d73ce54569c1399dfba62c4656b6f12ccb5fe8cef2ccde346880e9d": {
       "excerpt": "Derive the three-valued readOnly/destructive/idempotent fields from a Tags bag (…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "6ed285968e61bc91d3f2794f233fc3923c5a88baaa045d8cff683936a7d51b07": {
       "excerpt": "Create a widget.",
@@ -10451,7 +10459,7 @@
     },
     "7072779251282d4ab7791c54c8090a813d83f8a683b67a1ecfdce5bee1e565a3": {
       "excerpt": "Side-effect import: this test suite's own \"deployment\" augmentation",
-      "approvedAt": "2026-08-13T07:55:47.191Z"
+      "approvedAt": "2026-08-16T08:00:53.574Z"
     },
     "70853851d4fed5f17be178487824ffe8266d4cf99feb366da715c487ad9c84ca": {
       "excerpt": "Project a whole `TypeRefDocument` (see type-ir/src/index.ts) to a",
@@ -11152,6 +11160,10 @@
     "774deb74745f49facde7a03a49618481b4376879042f094f15e3eef24cf0a647": {
       "excerpt": "packages/http-framework-projector/src/__fixtures__/fastify-tree.ts",
       "approvedAt": "2026-08-13T07:51:27.469Z"
+    },
+    "775160bbdd8b30d2153ae88b97586d538c542a66d88322c225d33a6f98b8d050": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-16T08:00:53.574Z"
     },
     "775fa38c2b10ee532f038a9cce91a5a5984a21f9f0fbee98550fc94a774da5fd": {
       "excerpt": "Drain a resource handler's stream into the `contents` array `resources/read`",
@@ -12315,7 +12327,7 @@
     },
     "83d4e374a24bcffe7b746fb21d6915161bdfdcb14441f241a8e521c9e7ee49ad": {
       "excerpt": "`meta.jsonrpc` fields valid at LEAF position only.",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "83d928a344c8db7e6d2c012381344423446e334b382fefa2893b177938b336c5": {
       "excerpt": "Recursively merge two record-like values with precedence: `value` wins",
@@ -12339,7 +12351,7 @@
     },
     "841f1f9b6c69bd32191d6b51caa7cca7817c3c599e69e06b47e2b47ec2f5e893": {
       "excerpt": "Walk a Node tree and produce a flat array of JSON-RPC method descriptors. See `p…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "8425d90dd9de50ddabc9d2b20886cc37e260d3e3e647848c7ffcaed7d30f27d0": {
       "excerpt": "============================================================================",
@@ -12947,7 +12959,7 @@
     },
     "8b4abe0c558252213854ca6026a3732673ab16a4f99321a72fa58a9d03c566be": {
       "excerpt": "Walk a Node tree and produce a flat array of JSON-RPC method descriptors,",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "8b5f637eb5905b5eace94a3a76b7ed58d996419e3b31bf9e6a6255a7183a0162": {
       "excerpt": "`meta.optional` (may be absent from the wire) and `meta.nullable` (present",
@@ -13103,7 +13115,7 @@
     },
     "8cfb75ad766f25bc6660a9cc11960e8fcac45be92f8be1b2486fbb935e0fb7ee": {
       "excerpt": "True when the method's handler returns an `AsyncIterable` — its",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "8d0492f15a297f8b3ceafdbf9e12cc01ed114ef0cfac9ccc254e01f5dd752843": {
       "excerpt": "The erased-but-sound client shape: every property is itself an",
@@ -13719,7 +13731,7 @@
     },
     "929b13f8b1319cef5af47860e45a3370feedab353e301613f021d28be558a457": {
       "excerpt": "Lifecycle flag — see `McpTool.deprecated`'s doc (mcp-api-projector/src/project.t…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "929c03625506cc567091d29de255b8c70433cbfdc607e1b2bc773fac4d3d9b0c": {
       "excerpt": "── Generic type parameters — extract constraint bounds ───────────────────",
@@ -14015,7 +14027,7 @@
     },
     "95c4a104fbb2b11d1017abf14a51a5f4a1143ce220f295a01da0d058e5510efa": {
       "excerpt": "packages/json-rpc-api-projector/src/project.ts — @rhi-zone/fractal-json-rpc-api-…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "95cda3fb7e7f7e587a97ba6dcc8330945c8138fc232b571fc4aaa1c098302c9b": {
       "excerpt": "Resolve a top-level `type X = …` alias or `class X …` to its ts.Type.",
@@ -14971,7 +14983,7 @@
     },
     "a0e8c1f18524d55b311ece6ac73e5c9ceb4425d59f3ab329885d30b4bd8c261b": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:55:47.191Z"
+      "approvedAt": "2026-08-16T08:00:53.574Z"
     },
     "a0ee7b8f9ea6afb9d77a74c465ba3018fcc23f5daa11c65c64bac2d11e98a1da": {
       "excerpt": "`defaultStages` reads the fully-defaulted strategy, so it is built after",
@@ -14999,7 +15011,7 @@
     },
     "a128b0015fe30d3e097b3471ef6e45591d4e9cd0200e2a45afd1d8e9b8610a9c": {
       "excerpt": "Build one JsonRpcMethod (+ register its dispatch handler) for a leaf",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "a12d8b5dbdf071ddf87f7712d0793221e15f7dba827f64ac69fa8271e84c3eea": {
       "excerpt": "============================================================================",
@@ -15015,7 +15027,7 @@
     },
     "a138c10042f8a4165004bf619b5ede3e1b7cbea83d26ef4634df2b3fe47aff04": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "a139674b7f6ead8212e3f9d4476028bc86781f025a4ff9af33f60fb28ff63b24": {
       "excerpt": "EC curve name (e.g. `\"P-256\"`), present when `kty === \"EC\"`.",
@@ -15175,7 +15187,7 @@
     },
     "a2a0d694cf1e0c9e05a73f5747e9eb75b2fad03ecc664db8710d254931bddcde": {
       "excerpt": "JSON Schema, kept as an open bag — same convention as every other projector's sc…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "a2a46724bc86c53a72693e1692d931591de063dfc6307853942fa7cc14c8427e": {
       "excerpt": "Attach (or re-attach) a `params` own-property to a Request, in place. Returns",
@@ -15483,7 +15495,7 @@
     },
     "a653b047ab7d04f8e072e07afd9dea9f347471e0912d526f128de7aad8282dff": {
       "excerpt": "The Node model allows `fallback.subtree` to be a bare leaf (`op()`),",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "a65432bbfa72ed414fd089033e94b9f9e42999f5645649a36054123838a9be4d": {
       "excerpt": "An OpenAPI 3.1 security requirement object — one entry per alternative",
@@ -15735,7 +15747,7 @@
     },
     "a8a3696ccfe2645d86e22b8a5e405a60ceb58af70cb5e016112d4251328751d1": {
       "excerpt": "`tags` is a leaf-only field under the SharedMeta/LeafMeta/BranchMeta",
-      "approvedAt": "2026-08-13T07:55:47.191Z"
+      "approvedAt": "2026-08-16T08:00:53.574Z"
     },
     "a8a4a53faac25709fc30ce26931160cc1e85f42ffd24569259d16fd56e7522e8": {
       "excerpt": "Mirrored into the lowercase `meta.readonly` convention alongside the",
@@ -16995,7 +17007,7 @@
     },
     "b636ce1f662104d92b9f0070b84cdd950c9b95dee461749f9809bf850ff91668": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "b63ba5fc411522f0f3b963299bdccf80502e2d163cb4efcf8a9cba9cfc704172": {
       "excerpt": "The method does not exist / is not available.",
@@ -17971,7 +17983,7 @@
     },
     "c0f965515d1700ddb47f42c16e358ec8b78e58723448534937ca7e969ac0bb22": {
       "excerpt": "Per-param source overrides for this leaf's input assembly (see `packages/api-tre…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "c0f9de4cb6e16dc9ee0fd2fc56439ce3abe4ef99de4d4588c2d6f6ef8b9edbcd": {
       "excerpt": "See `TAG_UNVALIDATED`'s doc comment above — read directly by",
@@ -18583,7 +18595,7 @@
     },
     "c7e34ccc10b850b15d1e2d8e8b03e773b6e9c876a5efda2eabe57e38b3056a18": {
       "excerpt": "Derived-from-type facts for one method, keyed by its dot-joined name. Same shape…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "c7ec22e665bd6767c400c853dab229428e4a8c86b82a28675c1f142db61a209b": {
       "excerpt": "A fallback subtree that is a bare `op()` leaf, not `api({...})` — the",
@@ -19287,7 +19299,7 @@
     },
     "cef275d12739f56c526d139da07454d70a657ed645838ec789584f8f76526360": {
       "excerpt": "This node's own contribution to the dot-joined method-name prefix.",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "cef59180f8b5df88ea5f89a031e243e567b5bc71d1426bf5f2a2379459ca19c7": {
       "excerpt": "`toX(ref, name?)` family — ref first, one declaration per call. Multi-def",
@@ -19495,7 +19507,7 @@
     },
     "d0b9b5e6173b9b2b501dc0b54c00100b4185fce906edf19d255b22cc6401bca5": {
       "excerpt": "packages/json-rpc-api-projector/src/project.test.ts — JSON-RPC method projection…",
-      "approvedAt": "2026-08-13T07:55:47.191Z"
+      "approvedAt": "2026-08-16T08:00:53.574Z"
     },
     "d0c6e88e604a6a722dfa83f796d4d3bed1c2ca213f274988d27126ea74a4d946": {
       "excerpt": "`nullable` already wrapped `rawType` in `| None` inside",
@@ -20431,7 +20443,7 @@
     },
     "da538a350d7fa2b96cd11f62b1626d78a81a56b4c729a78fe4895fd476c553d0": {
       "excerpt": "Map of method name -> derived schema/description (from codegen).",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "da5f8e8db59a9884eab1d1eaf3451d0368093ec9b6c283cb59a0c43df937d1e0": {
       "excerpt": "-1 -> int8 [-128,127], 300 -> uint16 [0,65535] -> need [-128,65535] -> int32",
@@ -20651,7 +20663,7 @@
     },
     "dca0af8e7e4a5036dabe1877dc7717df34ac3f99aae439d3d09e8730d7f97335": {
       "excerpt": "One method's full JSON-RPC descriptor — one per leaf node in the Node",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "dca23ad17a6f589cc8449a524222e60cad500cc11b0c4107607870d561094919": {
       "excerpt": "no TLD dot",
@@ -20919,7 +20931,7 @@
     },
     "df7494410a3d76d9c0a6851da32b90b602323e645d57c9f25193ba3930cc11a0": {
       "excerpt": "`meta.jsonrpc` open bag — per-projection overrides for JSON-RPC method",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "df7e940f72aa93cbcb6d70cc35124b0767c7a0e353043c7c24b660ea9be7b952": {
       "excerpt": "\"/\"",
@@ -21315,7 +21327,7 @@
     },
     "e38e1fc69af605e709d1a2c03ca8622f117daec40573a24939f866d50e25e5be": {
       "excerpt": "Narrows the JSON-RPC error envelope's `data` field for this method (see `jsonRpc…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "e38eedb6fa79054dbf2bbf7c4bb6ae549ee1bd5cd983325eefe31f89e18ce981": {
       "excerpt": "`fallback.subtree` may be a bare leaf (`op()`) instead of a branch",
@@ -22835,7 +22847,7 @@
     },
     "f34ab6b71e9f9c2077c7813b098ca35b78b720a563a8a6f9946509dabead9c76": {
       "excerpt": "Wraps `JsonRpcBranchMetaProperties` under the `jsonrpc` key — extend `BranchMeta…",
-      "approvedAt": "2026-08-13T07:55:47.193Z"
+      "approvedAt": "2026-08-16T08:00:53.570Z"
     },
     "f352b214767bfb073b1ad22b91a3dd758500aba718da9a6363114b5312755b71": {
       "excerpt": "Shared/recursive `defs` a `shouldShare` extraction produced (empty",

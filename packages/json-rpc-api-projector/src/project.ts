@@ -51,6 +51,7 @@
 
 import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc";
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
@@ -257,41 +258,48 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
     };
   };
 
-  const walk = (n: Node, prefix: string): JsonRpcMethod[] => {
+  // `nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`)
+  // is the name-scoped segment array — tree keys with `meta.jsonrpc.segment`
+  // overrides folded in — joined via `escapeJoin` (@rhi-zone/fractal-api-tree/
+  // path) exactly once, at each leaf, instead of unescaped-joining one level
+  // at a time on the way down. Without this, a leaf key/segment/override that
+  // itself contains "." (the delimiter) could derive the identical method
+  // name as a genuinely different, deeper tree position — see api-tree's
+  // path.ts and this fix's sibling in mcp-api-projector/project.ts.
+  const walk = (n: Node, nameSegments: readonly string[]): JsonRpcMethod[] => {
     const out: JsonRpcMethod[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
       if (isLeaf(child)) {
-        const name = prefix.length > 0 ? `${prefix}.${key}` : key;
+        const name = escapeJoin([...nameSegments, key], ".");
         out.push(buildMethod(child, name, key));
       } else {
         const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta);
         const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key;
-        const seg = prefix.length > 0 ? `${prefix}.${rawSeg}` : rawSeg;
-        out.push(...walk(child, seg));
+        out.push(...walk(child, [...nameSegments, rawSeg]));
       }
     }
 
     if (n.fallback !== undefined) {
-      const seg = prefix.length > 0 ? `${prefix}.${n.fallback.name}` : n.fallback.name;
-
       // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
       // not just a branch (`api({...})`) — walking it as a branch here
       // (`Object.entries(subtree.children ?? {})`) would silently see no
       // children and omit it entirely. Mirror extraction: when the subtree
       // itself is a leaf, build its method directly at `seg` (no extra
       // segment beyond the fallback's own name).
+      const fallbackNameSegments = [...nameSegments, n.fallback.name];
       if (isLeaf(n.fallback.subtree)) {
+        const seg = escapeJoin(fallbackNameSegments, ".");
         out.push(buildMethod(n.fallback.subtree, seg, n.fallback.name));
       } else {
-        out.push(...walk(n.fallback.subtree, seg));
+        out.push(...walk(n.fallback.subtree, fallbackNameSegments));
       }
     }
 
     return out;
   };
 
-  const methods = walk(n, "");
+  const methods = walk(n, []);
   return { methods, handlers };
 }
 

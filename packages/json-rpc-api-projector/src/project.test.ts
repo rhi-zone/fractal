@@ -62,6 +62,30 @@ describe("naming: dot-separated method names from tree position", () => {
 });
 
 // ============================================================================
+// A leaf key that itself contains "." (the dot-join delimiter) no longer
+// collides with a genuinely different, deeper tree position — regression
+// coverage for `escapeJoin` (@rhi-zone/fractal-api-tree/path), which
+// `projectMethods`' walk now calls exactly once per leaf. Before escapeJoin,
+// this would have silently produced the identical "users.list" method name
+// for both positions, with the second-visited one overwriting the first in
+// the `handlers` dispatch map.
+// ============================================================================
+
+describe("a segment containing the '.' join delimiter no longer collides with a deeper tree position", () => {
+  it("a leaf literally named 'users.list' and branch 'users' -> leaf 'list' derive two distinct method names", () => {
+    const tree = api_({
+      "users.list": op((_: unknown) => ({ flat: true })),
+      users: api_({ list: op((_: unknown) => ({ nested: true })) }),
+    });
+    const methods = toMethods(tree);
+    expect(methods.map((m) => m.name).sort()).toEqual(["users.list", "users\\.list"]);
+    // Both handlers survive independently — no silent dispatch overwrite.
+    const { handlers } = projectMethods(tree);
+    expect(handlers.size).toBe(2);
+  });
+});
+
+// ============================================================================
 // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
 // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
 // `fallback: { name, subtree: Node }`), and `projectMethods` walked
