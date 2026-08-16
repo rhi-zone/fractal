@@ -45,6 +45,7 @@
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Handler, LeafMeta, Node, SharedMeta } from "@rhi-zone/fractal-api-tree/node";
@@ -701,7 +702,12 @@ function buildLeafHelp(
 
   // Derive flags from schema — schemaPath uses fallback.name (e.g. "bookId"),
   // not the runtime slug value, matching extractToolSchemas' key convention.
-  const schemaName = resolved.schemaPath.join("_").replace(/-/g, "_");
+  // escape-joined (@rhi-zone/fractal-api-tree/path) so a schema-path segment
+  // containing "_" can't derive the same lookup key as a different, deeper
+  // tree position — same fix as completions.ts's `schemaKeyFor`, and the
+  // trailing dash normalization is preserved unchanged (see that function's
+  // doc comment for why it's safe to apply after escaping).
+  const schemaName = escapeJoin(resolved.schemaPath, "_").replace(/-/g, "_");
   const toolSchema = schemas[schemaName];
 
   lines.push("Options:");

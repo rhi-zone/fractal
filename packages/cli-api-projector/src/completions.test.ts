@@ -1,5 +1,3 @@
-// packages/cli-api-projector/src/completions.test.ts — @rhi-zone/fractal-cli-api-projector
-//
 // Shell completion generation. Uses examples/library-api/src/tree.ts (the
 // same fixture cli.test.ts uses) plus small synthetic trees for
 // schema/enum-specific assertions.
@@ -81,14 +79,41 @@ describe("generateBashCompletion", () => {
     expect(script).toContain('FLAGS["widgets create"]="--name --qty"');
   });
 
+  // A leaf key that itself contains "_" (the schemaKeyFor join delimiter) no
+  // longer derives the same SchemaMap lookup key as a genuinely different,
+  // deeper tree position — regression coverage for `escapeJoin`
+  // (@rhi-zone/fractal-api-tree/path), which `schemaKeyFor` now calls.
+  // Before escapeJoin, both "widgets_create" (the flat leaf key) and branch
+  // "widgets" -> leaf "create" would look up the identical "widgets_create"
+  // schema key; now the flat leaf's own key is escaped and each leaf gets
+  // its own flags from its own schema entry.
+  it("a leaf key containing '_' derives a distinct (escaped) schema lookup key from a deeper same-named position", () => {
+    const tree = api({
+      widgets_create: op((input: { flat: boolean }) => input),
+      widgets: api({ create: op((input: { name: string; qty: number }) => input) }),
+    });
+    const schemas: SchemaMap = {
+      "widgets\\_create": {
+        inputSchema: { type: "object", properties: { flat: { type: "boolean" } } },
+      },
+      widgets_create: {
+        inputSchema: {
+          type: "object",
+          properties: { name: { type: "string" }, qty: { type: "number" } },
+        },
+      },
+    };
+    const script = generateBashCompletion(tree, schemas, "cli");
+    expect(script).toContain('FLAGS["widgets_create"]="--flat"');
+    expect(script).toContain('FLAGS["widgets create"]="--name --qty"');
+  });
+
   // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
-  // api({...})) — the Node model explicitly allows this (api-tree/node.ts's
-  // `fallback: { name, subtree: Node }`). `buildLevels`'s fallback branch
-  // recursed into `n.fallback.subtree` unconditionally, which for a bare
-  // leaf sees no `children` and pushed a spurious empty BRANCH level
-  // instead of the leaf's own `isLeaf: true` level — completion at "widgets
-  // *" proposed nothing instead of the leaf's flags. Same gap
-  // api-tree/tree.ts's `walkNodeType` had for extraction (aa28952).
+  // api({...})) — the Node model allows this (api-tree/node.ts's
+  // `fallback: { name, subtree: Node }`). A bare leaf has no `children` to
+  // enumerate, so `buildLevels` must push it as its own `isLeaf: true` level
+  // rather than an empty branch level; otherwise completion at "widgets *"
+  // would propose nothing instead of the leaf's flags.
   it("a bare op() fallback.subtree is completed as a leaf (its own flags), not a dead-end branch", () => {
     const tree = api({
       widgets: api(
@@ -134,9 +159,9 @@ describe("generateBashCompletion", () => {
   });
 
   it("is syntactically well-formed enough to source and drive with fake COMP_WORDS", async () => {
-    // Exercises the generated function directly under a real bash — the
-    // strongest available check that the generated script is not just
-    // string soup but actually behaves as a bash completion function.
+    // Exercises the generated function directly under a real bash by
+    // sourcing it and driving it with fake COMP_WORDS — verifies the
+    // generated script behaves as a working bash completion function.
     const tree = api({
       widgets: api({ create: op((input: { color: string }) => input) }),
     });
@@ -150,11 +175,11 @@ describe("generateBashCompletion", () => {
     };
     const script = generateBashCompletion(tree, schemas, "cli");
     // Strip the trailing `complete -F ...` registration line — the `complete`
-    // builtin requires an interactive/readline-enabled bash build, which
-    // isn't guaranteed in a test sandbox; the function body itself is what's
-    // under test. `compgen` is in the same boat, so it's stubbed below with
-    // just enough behavior to cover the `-W wordlist -- prefix` form the
-    // generated script actually uses.
+    // builtin requires an interactive/readline-enabled bash build, not
+    // guaranteed in a test sandbox, and the function body is what's under
+    // test here. `compgen` has the same requirement, so it's stubbed below
+    // with just enough behavior to cover the `-W wordlist -- prefix` form
+    // the generated script uses.
     const funcOnly = script
       .split("\n")
       .filter((l) => !l.startsWith("complete -F"))

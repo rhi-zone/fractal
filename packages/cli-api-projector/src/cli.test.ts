@@ -1,5 +1,3 @@
-// packages/cli-api-projector/src/cli.test.ts — @rhi-zone/fractal-cli-api-projector
-//
 // Tests using examples/library-api/src/tree.ts as the fixture tree.
 //
 // All tests inject a mock CliIO so nothing touches process.stdout/stderr.
@@ -100,7 +98,7 @@ describe("CLI projection — library-api fixture", () => {
     await expect(runCli(api, ["nonexistent", "op"], mock.io)).rejects.toBeInstanceOf(CliError);
   });
 
-  // 2. readOnly op runs WITHOUT calling io.confirm
+  // 2. readOnly op runs without calling io.confirm
   it("books list (readOnly) — does NOT call confirm", async () => {
     const mock = makeMockIO(false);
     await runCli(api, ["books", "list"], mock.io);
@@ -113,7 +111,7 @@ describe("CLI projection — library-api fixture", () => {
     expect(mock.confirmCalled).toBe(false);
   });
 
-  // 3. destructive op DOES call io.confirm; --yes skips it
+  // 3. destructive op calls io.confirm; --yes skips it
   it("books <id> remove (destructive) — calls confirm when no --yes", async () => {
     // First add a book
     const addMock = makeMockIO(true);
@@ -331,14 +329,15 @@ describe("meta.tags.deprecated surfaces in CLI help text", () => {
 
 // ============================================================================
 // fallback.subtree as a bare op() leaf (not wrapped in api({...})) — the
-// Node model explicitly allows this (api-tree/node.ts's `fallback: { name,
-// subtree: Node }`). Two independent gaps of the same shape existed here:
-//   - `walkCliCommands` (listing/introspection) walked `fallback.subtree` as
-//     if it were always a branch, silently omitting a bare leaf.
-//   - `resolveLeaf` (dispatch, private) never even checked `n.fallback` at
-//     the TERMINAL argv segment — a bare-leaf fallback subtree (no further
-//     subcommand beyond the captured slug) was an unconditional dead end.
-// Same gap api-tree/tree.ts's `walkNodeType` had for extraction (aa28952).
+// Node model allows this (api-tree/node.ts's `fallback: { name, subtree:
+// Node }`). Covers both:
+//   - `walkCliCommands` (listing/introspection) listing a bare-leaf fallback
+//     subtree correctly, rather than treating `fallback.subtree` as always
+//     a branch.
+//   - `resolveLeaf` (dispatch, private) resolving a bare-leaf fallback
+//     subtree at the terminal argv segment (no further subcommand beyond
+//     the captured slug).
+// Same case api-tree/tree.ts's `walkNodeType` handles for extraction.
 // ============================================================================
 
 describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
@@ -379,5 +378,46 @@ describe("fallback.subtree as a bare op() leaf (not wrapped in api())", () => {
     await runCli(tree, ["widgets", "w-1"], mock.io);
     const result = JSON.parse(mock.out.join("")) as { id: string; kind: string };
     expect(result).toEqual({ id: "w-1", kind: "widget" });
+  });
+});
+
+// ============================================================================
+// A leaf-help schema lookup key that itself contains "_" (buildLeafHelp's own
+// escape-joined convention, same as completions.ts's schemaKeyFor) no longer
+// derives the same SchemaMap key as a genuinely different, deeper tree
+// position — regression coverage for `escapeJoin` (@rhi-zone/fractal-api-tree/
+// path).
+// ============================================================================
+
+describe("buildLeafHelp: a leaf key containing '_' derives a distinct (escaped) schema lookup key", () => {
+  it("--help on the flat leaf shows its OWN flags, not the nested leaf's", async () => {
+    const { api: api_, op } = await import("@rhi-zone/fractal-api-tree/node");
+    const tree = api_({
+      widgets_create: op((input: { flat: boolean }) => input),
+      widgets: api_({ create: op((input: { name: string }) => input) }),
+    });
+    const schemas = {
+      "widgets\\_create": {
+        inputSchema: {
+          type: "object" as const,
+          properties: { flat: { type: "boolean" as const } },
+        },
+      },
+      widgets_create: {
+        inputSchema: {
+          type: "object" as const,
+          properties: { name: { type: "string" as const } },
+        },
+      },
+    };
+    const mock = makeMockIO();
+    await runCli(tree, ["widgets_create", "--help"], mock.io, { schemas });
+    expect(mock.out.join("")).toContain("--flat");
+    expect(mock.out.join("")).not.toContain("--name");
+
+    const mockNested = makeMockIO();
+    await runCli(tree, ["widgets", "create", "--help"], mockNested.io, { schemas });
+    expect(mockNested.out.join("")).toContain("--name");
+    expect(mockNested.out.join("")).not.toContain("--flat");
   });
 });

@@ -1,28 +1,26 @@
-// packages/cli-api-projector/src/completions.ts — @rhi-zone/fractal-cli-api-projector
-//
 // Static shell completion generation for the CLI projector.
 //
 // "Static" is the operative word: everything emitted here is baked in at
 // generation time from the Node tree's own shape (branch/leaf names) plus
-// `SchemaMap` (flag names + enum values from JSON Schema, same source
+// `SchemaMap` (flag names + enum values from JSON Schema, the same source
 // cli.ts's help text and type coercion read). There is no dynamic
 // invocation of the CLI at completion time — the generated script is a
 // self-contained artifact.
 //
 // Fallback (wildcard-capture) subtrees are a genuine limitation: the slug
 // value at that position can't be enumerated (it's arbitrary user data), so
-// completion for the *value itself* is never offered. What CAN still be
-// completed is everything AFTER the slug (e.g. `books <bookId> re<TAB>` →
-// `read`/`replace`/`remove`) — bash/zsh do this (they track a `*`
-// placeholder through the fallback position); fish's generator skips
-// fallback subtrees entirely (see generateFishCompletion's doc comment) to
-// keep the fish output simple and correct rather than approximating.
+// completion for the value itself is never offered. Completion for
+// everything after the slug (e.g. `books <bookId> re<TAB>` →
+// `read`/`replace`/`remove`) still works in bash/zsh, which track a `*`
+// placeholder through the fallback position; fish's generator skips
+// fallback subtrees entirely (see generateFishCompletion's doc comment).
 //
 // See:
 //   packages/cli-api-projector/src/cli.ts — walkCliCommands, getCliMeta, resolveLeaf
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import { getCliMeta } from "./cli.ts";
 import type { CliLeafMeta } from "./cli.ts";
@@ -71,21 +69,50 @@ type LevelInfo = {
   readonly flags: readonly FlagInfo[];
 };
 
-/** Same underscore-joined convention extractToolSchemas uses (see packages/api-tree/src/tree.ts). */
+/**
+ * Same underscore-joined convention extractToolSchemas uses (see
+ * packages/api-tree/src/tree.ts) — escape-joined via
+ * @rhi-zone/fractal-api-tree/path's `escapeJoin` so a schema-path segment
+ * containing "_" can't derive the same lookup key as a genuinely different,
+ * deeper tree position (the same fix applied at every other join site — see
+ * that module's doc comment). The trailing dash-to-underscore normalization
+ * predates this fix and is unrelated to it (preserved as-is): it runs AFTER
+ * escaping, so it can't undo an escape sequence (which only ever contains
+ * "\" and the delimiter, never "-").
+ */
 function schemaKeyFor(schemaPath: readonly string[]): string {
-  return schemaPath.join("_").replace(/-/g, "_");
+  return escapeJoin(schemaPath, "_").replace(/-/g, "_");
 }
 
 /**
  * Sentinel `LevelInfo.key` for the tree root, standing in for the empty
- * (zero-segment) path. Plain `""` would work as a JS map key, but this key
- * doubles as a bash/zsh associative-array subscript at generation time
- * (buildBashFunctionLines), and bash rejects an empty-string subscript
- * outright ("bad array subscript") — so every path key, root included, must
- * be a non-empty token. Chosen to be a string no real subcommand name would
- * plausibly collide with.
+ * (zero-segment) path. This key doubles as a bash/zsh associative-array
+ * subscript at generation time (buildBashFunctionLines), and bash rejects
+ * an empty-string subscript ("bad array subscript"), so every path key,
+ * root included, is a non-empty token. Chosen to be a string no real
+ * subcommand name would plausibly collide with.
  */
 const ROOT_KEY = "__root__";
+
+// `LevelInfo.key` below (space-joined argv path, distinct from
+// `schemaKeyFor`'s underscore-joined SchemaMap lookup key above) is
+// DELIBERATELY NOT run through `escapeJoin`, unlike every other join site
+// this investigation converted. Reason: this key isn't only synthesized
+// once in TypeScript and used as an opaque map key — the GENERATED bash
+// script (`buildBashFunctionLines`, below) independently RECONSTRUCTS the
+// identical key at completion time by literally concatenating matched argv
+// words with a bare space (`path="$path $word"`), with no access to
+// `escapeJoin`'s logic. Escaping the TS-side key without also teaching the
+// generated bash to escape its own reconstruction the same way would make
+// the two diverge for any subcommand segment containing a literal space or
+// backslash — a worse regression (broken completion) than the collision
+// this fix closes elsewhere (two DIFFERENT subcommand paths only collide
+// here if one segment literally contains a space, which the shell's own
+// argv tokenization already makes awkward to type in the first place). Left
+// as a flagged, deliberately-deferred gap rather than guessed at — fixing
+// it for real means porting the escaping scheme into the generated bash
+// source itself.
+
 
 function buildLevels(
   n: Node,
@@ -144,14 +171,11 @@ function buildLevels(
     const fallbackPath = [...path, "*"];
     const fallbackSchemaPath = [...schemaPath, n.fallback.name];
 
-    // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
-    // not just a branch (`api({...})`) — recursing into it unconditionally
-    // would push a spurious empty BRANCH level (no children to enumerate)
-    // instead of the leaf's own flags, so completion at that position would
-    // silently propose nothing. Mirror the ordinary-leaf branch above: when
-    // the subtree itself is a leaf, push its `isLeaf: true` level directly
-    // (same convention api-tree/tree.ts's `walkNodeType` fix, aa28952, and
-    // the other projectors' identical fix use).
+    // `fallback.subtree` may be a bare leaf (`op()`) rather than a branch
+    // (`api({...})`). A bare leaf has no `children` to enumerate, so it is
+    // pushed as its own `isLeaf: true` level directly, mirroring the
+    // ordinary-leaf branch above — the same convention used by
+    // api-tree/tree.ts's `walkNodeType` and the other projectors.
     if (isLeaf(subtree)) {
       const toolSchema = schemas[schemaKeyFor(fallbackSchemaPath)];
       const props = toolSchema?.inputSchema.properties ?? {};
@@ -190,10 +214,10 @@ function bashEscape(s: string): string {
 }
 
 /**
- * Build the bash completion FUNCTION BODY (everything between the `_prog_completions()
- * { ... }` braces) as a flat list of lines. Shared verbatim by generateBashCompletion
- * and generateZshCompletion (zsh loads it via bashcompinit — see that function's doc
- * comment).
+ * Build the bash completion function body (everything between the
+ * `_prog_completions() { ... }` braces) as a flat list of lines. Shared
+ * verbatim by generateBashCompletion and generateZshCompletion (zsh loads
+ * it via bashcompinit — see that function's doc comment).
  */
 function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string): string[] {
   const levels = buildLevels(root, schemas);
@@ -294,11 +318,10 @@ export function generateBashCompletion(
 
 /**
  * Generate a zsh completion script. zsh's native completion system
- * (`compdef`/`_arguments`) is a different (richer, but much larger) API; to
- * keep this generator static and simple, zsh output instead loads
- * `bashcompinit` and reuses the exact bash function body — a well-worn,
- * legitimate zsh compatibility path (`man zshcompsys` — "Backward
- * Compatibility"), not a hack specific to this generator.
+ * (`compdef`/`_arguments`) is a different, much larger API; to keep this
+ * generator static and simple, zsh output instead loads `bashcompinit` and
+ * reuses the bash function body verbatim — a documented zsh compatibility
+ * path (`man zshcompsys` — "Backward Compatibility").
  */
 export function generateZshCompletion(root: Node, schemas: SchemaMap, programName: string): string {
   const funcName = sanitizeIdent(programName) + "_completions";
@@ -330,16 +353,15 @@ function fishEscape(s: string): string {
 /**
  * Generate a fish completion script.
  *
- * Fish's condition primitive (`__fish_seen_subcommand_from`) checks
- * PRESENCE anywhere on the command line, not exact position — there's no
- * lightweight fish equivalent of the bash version's associative-array path
- * walk without hand-rolling one in fish script. To keep this generator
- * simple and correct (per the "keep it simple" scope for this feature),
- * fish output only covers STATIC subtrees: branch and leaf positions
+ * Fish's condition primitive (`__fish_seen_subcommand_from`) checks whether
+ * a word occurs anywhere on the command line, not at an exact position —
+ * there is no lightweight fish equivalent of the bash version's
+ * associative-array path walk without hand-rolling one in fish script. Fish
+ * output therefore covers only static subtrees: branch and leaf positions
  * reachable without crossing a fallback (wildcard-capture) segment.
  * Fallback-nested commands (e.g. `books <bookId> read`) still work when
- * typed by hand — they just don't tab-complete under fish. bash/zsh (above)
- * do not have this limitation.
+ * typed by hand — they just don't tab-complete under fish, unlike bash and
+ * zsh (above).
  */
 export function generateFishCompletion(
   root: Node,
