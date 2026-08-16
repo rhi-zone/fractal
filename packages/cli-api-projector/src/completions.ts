@@ -109,15 +109,37 @@ const ROOT_KEY = "__root__";
 // before appending it to `$path`, byte-for-byte matching `escapeSegment`
 // (./path.ts). Both sides are covered by completions.test.ts: one test
 // shells out to real bash to drive the generated completion function
-// end-to-end through a segment containing a literal backslash (a segment
-// containing a literal space can never be typed as a single matchable argv
-// word here in the first place — `STATICS["$path"]`'s own value is a
-// space-separated list, so `for c in ${STATICS["$path"]}` word-splits it;
-// that's a separate, pre-existing limitation of this generator's
-// `compgen -W`-based design, not something this escaping fix changes), and
-// another test runs the `esc=` lines themselves under real bash against
-// space- and backslash-containing input and checks the output matches
-// `escapeJoin` byte-for-byte.
+// end-to-end through a segment containing a literal backslash, and another
+// test runs the `esc=` lines themselves under real bash against space- and
+// backslash-containing input and checks the output matches `escapeJoin`
+// byte-for-byte.
+//
+// A DIFFERENT, previously pre-existing limitation lived one level down from
+// this: `STATICS`/`FLAGS`/`ENUMS` each store a *candidate list* (not a path
+// key) as a single string for `compgen -W`, and `compgen -W`'s own wordlist
+// splitting — like the `for c in ${STATICS["$path"]}` match loop above —
+// runs on `$IFS`. When that list was space-joined, a single candidate
+// containing a literal space (e.g. a subcommand segment authored as `"release
+// notes"`) was indistinguishable from two separate candidates — no key
+// escaping fixes this, because the key was never the problem; the *value*
+// was. Fixed by switching every candidate-list join from space to a real
+// newline and scoping `IFS=$'\n'` for the whole function body (see the `local
+// IFS` line below): newline is one of bash's three "IFS whitespace"
+// characters (space/tab/newline), so runs of it still collapse and
+// leading/trailing occurrences still strip exactly like the default
+// space-based splitting did — the only behavior change is that an embedded
+// *space* inside a candidate no longer splits it. Verified against a real
+// `compgen` builtin (not the test-suite's hand-rolled stub, which doesn't
+// model `-W`'s own IFS-based splitting) that this holds through both the
+// wordlist-splitting step and prefix-matching a `$cur` that itself extends
+// past the embedded space (`bash.1`'s `compgen -W` entry: "Split the
+// wordlist using the characters in the IFS special variable as
+// delimiters..."). A candidate containing a literal *newline* remains
+// unhandled (the newline would now collide with the delimiter the same way
+// a space used to) — accepted as out of scope, since no source of a
+// candidate here (subcommand/flag/enum-value names) plausibly contains one,
+// and a raw newline can't be typed as part of a single shell word at an
+// interactive prompt in the first place.
 
 
 function buildLevels(
@@ -233,10 +255,19 @@ function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string
   const lines: string[] = [];
   lines.push("_" + funcName + "() {");
   lines.push("  local cur word path i matched c prevword esc");
+  // Every STATICS/FLAGS/ENUMS value below is a newline-joined candidate
+  // list, not space-joined — see this function's module-level doc comment
+  // (above, near ROOT_KEY) for why. Scoping IFS to just "\n" (dropping the
+  // default's space and tab) is what makes both `compgen -W`'s own wordlist
+  // split AND the `for c in ${STATICS["$path"]}` match loop below treat an
+  // embedded space inside a single candidate as part of that candidate
+  // instead of a separator, while still splitting on the real (newline)
+  // delimiter between candidates.
+  lines.push("  local IFS=$'\\n'");
   lines.push("  declare -A STATICS");
   for (const l of branchLevels) {
     lines.push(
-      '  STATICS["' + bashEscape(l.key) + '"]="' + l.statics.map(bashEscape).join(" ") + '"',
+      '  STATICS["' + bashEscape(l.key) + '"]="' + l.statics.map(bashEscape).join("\n") + '"',
     );
   }
   lines.push("  declare -A HAS_FALLBACK");
@@ -247,7 +278,7 @@ function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string
   for (const l of leafLevels) {
     const flagWords = l.flags.map((f) => "--" + f.name);
     lines.push(
-      '  FLAGS["' + bashEscape(l.key) + '"]="' + flagWords.map(bashEscape).join(" ") + '"',
+      '  FLAGS["' + bashEscape(l.key) + '"]="' + flagWords.map(bashEscape).join("\n") + '"',
     );
   }
   lines.push("  declare -A ENUMS");
@@ -256,7 +287,11 @@ function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string
       if (f.enumValues !== undefined && f.enumValues.length > 0) {
         const enumKey = l.key + "|--" + f.name;
         lines.push(
-          '  ENUMS["' + bashEscape(enumKey) + '"]="' + f.enumValues.map(bashEscape).join(" ") + '"',
+          '  ENUMS["' +
+            bashEscape(enumKey) +
+            '"]="' +
+            f.enumValues.map(bashEscape).join("\n") +
+            '"',
         );
       }
     }
@@ -307,7 +342,13 @@ function buildBashFunctionLines(root: Node, schemas: SchemaMap, funcName: string
   lines.push('  elif [[ "$cur" == --* ]]; then');
   lines.push('    COMPREPLY=($(compgen -W "${FLAGS["$path"]}" -- "$cur"))');
   lines.push("  else");
-  lines.push('    COMPREPLY=($(compgen -W "${STATICS["$path"]} ${FLAGS["$path"]}" -- "$cur"))');
+  // Joined with a real newline (matching every other candidate-list join in
+  // this function), not a space — under this function's IFS=$'\n' scoping a
+  // literal space is no longer a separator, so a plain space here would glue
+  // the last STATICS candidate and the first FLAGS candidate into one bogus
+  // combined word instead of keeping them distinct.
+  lines.push('    COMPREPLY=($(compgen -W "${STATICS["$path"]}');
+  lines.push('${FLAGS["$path"]}" -- "$cur"))');
   lines.push("  fi");
   lines.push("}");
   return lines;

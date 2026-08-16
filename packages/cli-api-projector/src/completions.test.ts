@@ -53,13 +53,15 @@ describe("isShellName", () => {
 describe("generateBashCompletion", () => {
   it("lists top-level static subcommands, including the reserved 'completions' command", () => {
     const script = generateBashCompletion(libraryApi, {}, "cli");
-    expect(script).toContain('STATICS["__root__"]="books catalog completions"');
+    // Candidate lists are newline- (not space-) joined — see completions.ts's
+    // doc comment on buildBashFunctionLines' `local IFS=$'\n'` line for why.
+    expect(script).toContain('STATICS["__root__"]="books\ncatalog\ncompletions"');
   });
 
   it("lists a branch's own children", () => {
     const script = generateBashCompletion(libraryApi, {}, "cli");
-    expect(script).toContain('STATICS["books"]="list add"');
-    expect(script).toContain('STATICS["catalog"]="search genres"');
+    expect(script).toContain('STATICS["books"]="list\nadd"');
+    expect(script).toContain('STATICS["catalog"]="search\ngenres"');
   });
 
   it("marks a fallback-bearing node and threads completion past the wildcard segment", () => {
@@ -67,8 +69,8 @@ describe("generateBashCompletion", () => {
     expect(script).toContain('HAS_FALLBACK["books"]=1');
     // "books * " is the position right after the (unknowable) bookId slug —
     // read/replace/remove/checkout must still be completable there.
-    expect(script).toContain('STATICS["books *"]="read replace remove checkout"');
-    expect(script).toContain('STATICS["books * checkout"]="start reserve"');
+    expect(script).toContain('STATICS["books *"]="read\nreplace\nremove\ncheckout"');
+    expect(script).toContain('STATICS["books * checkout"]="start\nreserve"');
   });
 
   it("emits a complete -F registration for the program name", () => {
@@ -89,7 +91,7 @@ describe("generateBashCompletion", () => {
       },
     };
     const script = generateBashCompletion(tree, schemas, "cli");
-    expect(script).toContain('FLAGS["widgets create"]="--name --qty"');
+    expect(script).toContain('FLAGS["widgets create"]="--name\n--qty"');
   });
 
   // A leaf key that itself contains "_" (the schemaKeyFor join delimiter) no
@@ -118,7 +120,7 @@ describe("generateBashCompletion", () => {
     };
     const script = generateBashCompletion(tree, schemas, "cli");
     expect(script).toContain('FLAGS["widgets_create"]="--flat"');
-    expect(script).toContain('FLAGS["widgets create"]="--name --qty"');
+    expect(script).toContain('FLAGS["widgets create"]="--name\n--qty"');
   });
 
   // A `fallback.subtree` that is itself a bare op() leaf (not wrapped in
@@ -149,7 +151,7 @@ describe("generateBashCompletion", () => {
     };
     const script = generateBashCompletion(tree, schemas, "cli");
     expect(script).toContain('HAS_FALLBACK["widgets"]=1');
-    expect(script).toContain('FLAGS["widgets *"]="--widgetId --qty"');
+    expect(script).toContain('FLAGS["widgets *"]="--widgetId\n--qty"');
     // No spurious branch-level entries for "widgets *" (empty statics/no
     // fallback marker — a leaf level, not a dead-end group).
     expect(script).not.toContain('HAS_FALLBACK["widgets *"]');
@@ -168,7 +170,7 @@ describe("generateBashCompletion", () => {
       },
     };
     const script = generateBashCompletion(tree, schemas, "cli");
-    expect(script).toContain('ENUMS["widgets create|--color"]="red green blue"');
+    expect(script).toContain('ENUMS["widgets create|--color"]="red\ngreen\nblue"');
   });
 
   it("is syntactically well-formed enough to source and drive with fake COMP_WORDS", async () => {
@@ -400,6 +402,147 @@ describe("generateBashCompletion", () => {
       expect(stdout.trim()).toBe("--z");
     });
   });
+
+  // Regression coverage for the OTHER (candidate-value, not path-key)
+  // space-splitting limitation this fix closes — see completions.ts's doc
+  // comment above `buildBashFunctionLines`'s `local IFS=$'\n'` line. Unlike
+  // the escape-joined-key tests above (which exercise the `for c in
+  // ${STATICS["$path"]}` MATCH loop and `esc=` reconstruction), these drive
+  // `compgen -W` itself — the actual site that used to be unable to tell "one
+  // candidate containing a space" from "two separate candidates". Same
+  // `compgen` stub as the tests above (the real builtin needs an
+  // interactive/readline-enabled bash build, not guaranteed here); the stub
+  // deliberately does NOT declare its own `local IFS`, so it inherits
+  // `_cli_completions`'s `local IFS=$'\n'` by bash's ordinary dynamic
+  // scoping — exactly mirroring how the real `compgen -W` builtin is
+  // documented to split its wordlist argument using the CALLER's current
+  // `$IFS` (`bash(1)`, compgen's `-W` entry).
+  describe("candidate lists with a space-containing entry (newline-joined STATICS/FLAGS/ENUMS)", () => {
+    const SEP = "\x1f"; // sentinel between COMPREPLY elements, distinct from any real candidate byte
+
+    async function driveCompletion(
+      script: string,
+      compWords: readonly string[],
+      compCword: number,
+    ): Promise<string[]> {
+      const funcOnly = script
+        .split("\n")
+        .filter((l) => !l.startsWith("complete -F"))
+        .join("\n");
+      const compgenStub = `
+        compgen() {
+          local words="" cur=""
+          while [ $# -gt 0 ]; do
+            case "$1" in
+              -W) words="$2"; shift 2 ;;
+              --) cur="$2"; shift 2 ;;
+              *) shift ;;
+            esac
+          done
+          for w in $words; do
+            case "$w" in
+              "$cur"*) echo "$w" ;;
+            esac
+          done
+        }
+      `;
+      const compWordsLiteral = compWords.map((w) => JSON.stringify(w)).join(" ");
+      const proc = Bun.spawn({
+        cmd: [
+          "bash",
+          "-c",
+          `
+          ${compgenStub}
+          ${funcOnly}
+          COMP_WORDS=(${compWordsLiteral})
+          COMP_CWORD=${compCword}
+          COMPREPLY=()
+          _cli_completions
+          printf '%s${SEP}' "\${COMPREPLY[@]}"
+        `,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      await proc.exited;
+      expect(stderr).toBe("");
+      const parts = stdout.split(SEP);
+      parts.pop(); // trailing empty segment after the last separator
+      return parts;
+    }
+
+    it("generates newline- (not space-) joined STATICS/FLAGS/ENUMS source literals", () => {
+      const tree = api({
+        "release notes": api({ show: op((input: { format: string }) => input) }),
+        plain: op((input: Record<string, never>) => input),
+      });
+      const schemas: SchemaMap = {
+        // schemaKeyFor's join delimiter is "_", not " " — a segment
+        // containing a literal space (as opposed to an underscore or
+        // backslash) passes through unescaped. See schemaKeyFor's doc
+        // comment in completions.ts.
+        "release notes_show": {
+          inputSchema: {
+            type: "object",
+            properties: { format: { type: "string", enum: ["short", "long form"] } },
+          },
+        },
+      };
+      const script = generateBashCompletion(tree, schemas, "cli");
+      expect(script).toContain('STATICS["__root__"]="release notes\nplain\ncompletions"');
+      expect(script).toContain('STATICS["release\\\\ notes"]="show"');
+      expect(script).toContain(
+        'ENUMS["release\\\\ notes show|--format"]="short\nlong form"',
+      );
+      expect(script).toContain("local IFS=$'\\n'");
+    });
+
+    it("offers a subcommand segment containing a literal space as ONE completion candidate, not two", async () => {
+      const tree = api({
+        "release notes": api({ show: op((input: Record<string, never>) => input) }),
+        plain: op((input: Record<string, never>) => input),
+      });
+      const script = generateBashCompletion(tree, {}, "cli");
+      const parts = await driveCompletion(script, ["cli", "re"], 1);
+      expect(parts).toEqual(["release notes"]);
+    });
+
+    it("threads completion past a space-containing segment once it's typed as a single (quoted) argv word", async () => {
+      const tree = api({
+        "release notes": api({ show: op((input: Record<string, never>) => input) }),
+      });
+      const script = generateBashCompletion(tree, {}, "cli");
+      // COMP_WORDS[1] is the single argv word a real terminal would produce
+      // after the user types `cli "release notes" <TAB>` — proves the
+      // STATICS match loop recognizes the space-containing candidate as one
+      // word (not two) and advances `$path` into its "show" child level.
+      const parts = await driveCompletion(script, ["cli", "release notes", ""], 2);
+      expect(parts).toEqual(["show"]);
+    });
+
+    it("offers a space-containing enum value as ONE completion candidate", async () => {
+      const tree = api({
+        widgets: api({ create: op((input: { size: string }) => input) }),
+      });
+      const schemas: SchemaMap = {
+        widgets_create: {
+          inputSchema: {
+            type: "object",
+            properties: { size: { type: "string", enum: ["small", "extra large"] } },
+          },
+        },
+      };
+      const script = generateBashCompletion(tree, schemas, "cli");
+      const parts = await driveCompletion(
+        script,
+        ["cli", "widgets", "create", "--size", "ex"],
+        4,
+      );
+      expect(parts).toEqual(["extra large"]);
+    });
+  });
 });
 
 // ============================================================================
@@ -411,7 +554,7 @@ describe("generateZshCompletion", () => {
     const script = generateZshCompletion(libraryApi, {}, "cli");
     expect(script.startsWith("#compdef cli")).toBe(true);
     expect(script).toContain("autoload -U +X bashcompinit && bashcompinit");
-    expect(script).toContain('STATICS["books"]="list add"');
+    expect(script).toContain('STATICS["books"]="list\nadd"');
     expect(script).toContain("complete -F _cli_completions cli");
   });
 });
