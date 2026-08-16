@@ -31,6 +31,7 @@
 
 import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
+import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import { httpProjection } from "./dx.ts";
@@ -312,18 +313,24 @@ function collectSecuritySchemes(
 // never correctness of path/verb): callers fall back to a path-derived name.
 // ============================================================================
 
-function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
+// `nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`) is
+// joined via `escapeJoin` (@rhi-zone/fractal-api-tree/path) exactly once, at
+// each leaf, instead of unescaped-joining prefix + "_" + segment one level at
+// a time — without this, a leaf key/fallback-name containing "_" could derive
+// the identical codegen name as a genuinely different, deeper tree position
+// (the same fix applied at api-tree/tree.ts and every other join site).
+function nameLeaves(n: Node, nameSegments: readonly string[], out: Map<Handler, string>): void {
   for (const [key, child] of Object.entries(n.children ?? {})) {
-    const seg = prefix.length > 0 ? `${prefix}_${key}` : key;
+    const seg = [...nameSegments, key];
     if (isLeaf(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(child.handler!, seg);
+      out.set(child.handler!, escapeJoin(seg, "_"));
     } else {
       nameLeaves(child, seg, out);
     }
   }
   if (n.fallback !== undefined) {
-    const seg = prefix.length > 0 ? `${prefix}_${n.fallback.name}` : n.fallback.name;
+    const seg = [...nameSegments, n.fallback.name];
 
     // Same bare-leaf `fallback.subtree` case as client.ts's
     // `collectHandlerNames`/`collectCodegenNames` — key it directly at `seg`
@@ -331,7 +338,7 @@ function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
     // recursing into a leaf's nonexistent `children`.
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(n.fallback.subtree.handler!, seg);
+      out.set(n.fallback.subtree.handler!, escapeJoin(seg, "_"));
     } else {
       nameLeaves(n.fallback.subtree, seg, out);
     }
@@ -341,7 +348,7 @@ function nameLeaves(n: Node, prefix: string, out: Map<Handler, string>): void {
 /** Build the handler → codegen-name map for a Node tree — see module doc above. */
 function buildNameMap(n: Node): Map<Handler, string> {
   const out = new Map<Handler, string>();
-  nameLeaves(n, "", out);
+  nameLeaves(n, [], out);
   return out;
 }
 
@@ -377,7 +384,7 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
     const seg = [...prefix, key];
     if (isLeaf(child)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(child.handler!, seg.join("/"));
+      out.set(child.handler!, escapeJoin(seg, "/"));
     } else {
       pathLeaves(child, seg, out);
     }
@@ -390,7 +397,7 @@ function pathLeaves(n: Node, prefix: readonly string[], out: Map<Handler, string
     const seg = [...prefix, `:${n.fallback.name}`];
     if (isLeaf(n.fallback.subtree)) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      out.set(n.fallback.subtree.handler!, seg.join("/"));
+      out.set(n.fallback.subtree.handler!, escapeJoin(seg, "/"));
     } else {
       pathLeaves(n.fallback.subtree, seg, out);
     }

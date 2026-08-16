@@ -263,7 +263,7 @@
     },
     "02b58a2af9fc4d1683420b7726537cdb20c12dff203be00b5a596d5f36ebf6dc": {
       "excerpt": "Project a `Node` tree to an OpenAPI 3.1 document object. Internally",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "02b837dce05b7776f7c9fb8c91eda1ea237c2a4deb7bb1db7aacadca0f16a9f6": {
       "excerpt": "uniform[0,1)",
@@ -439,7 +439,7 @@
     },
     "0494a78f9e48e715158b904f9506e6e382f71ce2d440f89c738668d494442c70": {
       "excerpt": "Per-operation security requirement — set on a method entry's own meta.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "04a5c2757a0e0c27e063851ce5b759c95f8d5ed34481586633bed683343f8127": {
       "excerpt": "============================================================================",
@@ -1031,7 +1031,7 @@
     },
     "0b4add8211493caa22f2068b332b2de2635c21bce39c5acda2e2c79b7a439d41": {
       "excerpt": "Path-keyed lookup first (schemas built via extractRouteSchemas — the",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "0b4fa1ea23ac66f0aed00e4e5ccd345d6aaee0d5248c2a459cf9c451e7b627a2": {
       "excerpt": "Check that the value is a valid inhabitant of the inferred TypeRef.",
@@ -1079,7 +1079,7 @@
     },
     "0bce078bcfa68d1ec734c1e41b0f5aab28353fe3877f40579f9a22987b1436a6": {
       "excerpt": "Document version (info.version). Defaults to \"0.1.0\".",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "0bd3f9d3253bc73bf1fa5937dd5d1de2f7df265636d7c8e359cbb74e4f4bd38c": {
       "excerpt": "No leakage after all four have run.",
@@ -1127,7 +1127,7 @@
     },
     "0c1aa987ba4391d3f4ed25753ee211f46df2180a96f144b7f7ffca3b86082746": {
       "excerpt": "`webpackIgnore` (Rspack also honors the webpack-prefixed spelling, see",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "0c280304e5b916e4146b1360ae33140f67700516c9fbcb2961d693205a458216": {
       "excerpt": "True when `node` is reference-equal to one of `ancestors` — i.e.",
@@ -1259,7 +1259,7 @@
     },
     "0d49bbcc6c1aec6369a23ff50cb6314afb1d8545501b41f6146db4f99916097f": {
       "excerpt": "Security schemes: merged from every node in the tree (see",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "0d8d3beae290551dbebf1c61a208ca4f91177fdce4a50cfacc7c32a40d846d64": {
       "excerpt": "============================================================================",
@@ -1379,7 +1379,7 @@
     },
     "0e69773970c74e5a4ea0cbde00fb2b8767ea7f66cfdd96988aee3ea02cfd4dce": {
       "excerpt": "Enumerate every `(path, method)` leaf of an already-projected `HttpRoute`",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "0e6a6530a026db7f813cf25f632eab9e6ae3b240c2e111c0a01db41f41001725": {
       "excerpt": "Query (nested) — reconstruct namespace path + field name from the",
@@ -1699,7 +1699,7 @@
     },
     "112daff0c6961bec33da134bb3c2fcbc21275067459e5f8200c2847468dadb19": {
       "excerpt": "Spec-level default security requirement — applies to every operation",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "11412daf95253f8cb6d495b18f263ecafe654c42df68d907771b47e8562995af": {
       "excerpt": "============================================================================",
@@ -1755,7 +1755,7 @@
     },
     "11aaa47bbccabeea414a1fab15b65754e52018fc530b0c502f01862f48ac73e4": {
       "excerpt": "Pre-computed schema map (from extractToolSchemas). Takes precedence over",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "11cb15265da6afff7c990a58372265a65b001514f4b2cb9f79dc8536dddd54a0": {
       "excerpt": "generateClient's degraded naming (no Node) keys schema lookups as",
@@ -2799,7 +2799,7 @@
     },
     "1c652c42023b94f71a701f4c6cdd741afe555e14de10814f4e1d5329a17ef7b0": {
       "excerpt": "Path parameters: extracted from the computed path",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "1c6aff0abe7d49000383e58b538627de60a50e00dd8ed3b35f435ba7d789f077": {
       "excerpt": "`interface`'s methods have no data-field analogue (see index.ts's",
@@ -3919,7 +3919,7 @@
     },
     "28d63102d3d07e83c45a66c3d6ef46124bc03ed94f20cc3e9ec8cafb8d853cf2": {
       "excerpt": "An OpenAPI 3.1 path parameter.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "28d8eebda9a18a06bf5cf05c926dbb2cab3022bb4cbd826e0f3fd65c8e72129b": {
       "excerpt": "Structural lowering still happens underneath the provenance metadata —",
@@ -3931,7 +3931,7 @@
     },
     "28ff4345e90327d1403622fea6634cd6cace4a6784bec7e3bb3686abb7f2f5f8": {
       "excerpt": "Auto-discovery (`sourceFile`, no caller-supplied `schemas`) keys every",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "2907c1d26ec810d5b9a619ddf1109d57765f6a3e25d9255d4468bd587ea40629": {
       "excerpt": "dry-types' `.default(...)` combinator takes a plain value for immutable",
@@ -5103,7 +5103,7 @@
     },
     "359ca5aa9b615519208ad72573b8fd44cd25b7c08b936013e18fc2af571e93ec": {
       "excerpt": "`meta.openapi` fields valid at leaf (operation) position only — see `toOpenApi`.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "35af8b04a9b8a91cec12513b62dd3f85278850ae04be37217780583a6a032ad3": {
       "excerpt": "path not fully consumed",
@@ -5115,7 +5115,7 @@
     },
     "35d7e00e699162de00572dc15e7948444ed0a77f1f79671da0aa885b0ce6b4ce": {
       "excerpt": "Resolve the `treeId` `buildPathMap` needs to line up with",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "35e113b71451b047fb8e4d95f2f707848e54c455b52bbac57c0e1f248a7c8d67": {
       "excerpt": "============================================================================",
@@ -5607,7 +5607,7 @@
     },
     "3bf570f45a5d59140eccbb0c05d68fcfda76b449d2ac434b82a40af7efa22707": {
       "excerpt": "One `(path, method)` leaf produced by walking an `HttpRoute` tree — see `listRou…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "3c0143e16ca8ed455916a6bfb80858f778fd272c19cc48a0e44f3a7a56b02ffe": {
       "excerpt": "============================================================================",
@@ -5811,7 +5811,7 @@
     },
     "3e1fe191da848edad363b2434a50f4d4965f1cf70ab4aab23b68da8148258022": {
       "excerpt": "Spec-level default security: an explicit builder option now, not read",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "3e25b77a7e9783d2081f09f88ec4f3e50dd05c0efe35c5fefa9e89c831ebf564": {
       "excerpt": "============================================================================",
@@ -5919,7 +5919,7 @@
     },
     "3eef7f7a3634ec12b6ecdc59a1739dccb8868ec76413bf51fc52018da2d67fa0": {
       "excerpt": "A JSON-Schema-compatible object (open bag — OpenAPI 3.1 allows any $schema).",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "3ef7fe397300d493449a3aa522c850a69dd587b052ddd222a90522d7b30b795a": {
       "excerpt": "ArkType's string DSL validates data shapes, not callable values — there's",
@@ -6159,7 +6159,7 @@
     },
     "4157e81e9aa6d9dd8625e7fbd76d2c87f2c2c93970a5a0e46ed4e36894af08d7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-16T08:00:53.570Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "41675dc9bfd21f493bea1779d15c08c2ef28eeeda96774085c81bcf25a97e173": {
       "excerpt": "Compose several `ErrorEncoder`s into one: tries each in order, returning",
@@ -6507,7 +6507,7 @@
     },
     "44762537defbbba3e4390138576850b29e0562fdb51c561305869799a6dc176c": {
       "excerpt": "The method entry's own meta bag.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "447788594ff4340520a617cad53bce12423769756433090df43e53d8de95354d": {
       "excerpt": "No streaming construct in a plain data type — materializes to Vec<T>,",
@@ -6659,7 +6659,7 @@
     },
     "46575cc931b4738824fa71e72907548ddd9efed1cc75bd83a398649e924a0df3": {
       "excerpt": "deprecated: meta.openapi.deprecated (per-projection override) wins when",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "465ca21b2f1ca1f02ac306025b7f49f394933b71cae0d621be6c3a348dcfa1cb": {
       "excerpt": "The descriptors `tools/list` answers with, and the table `tools/call` dispatches…",
@@ -6689,6 +6689,10 @@
       "excerpt": "Bare identifier not one of CQL's native keywords: a UDT reference",
       "approvedAt": "2026-08-13T08:04:03.700Z"
     },
+    "46b066c496a48b25d39b4b54f9a1e76a507193267c8e6e678c770b93553ca400": {
+      "excerpt": "Regression coverage for `escapeJoin` (@rhi-zone/fractal-api-tree/path) at",
+      "approvedAt": "2026-08-16T08:13:33.543Z"
+    },
     "46b47ef62804f15bb9af48b58628ef44c1c8996fd47610ba27f46aac1234ee79": {
       "excerpt": "Spawns the actual CLI entry point (`bun src/cli.ts ...`) rather than",
       "approvedAt": "2026-08-13T08:14:47.615Z"
@@ -6711,7 +6715,7 @@
     },
     "46d6eeaa44ab9d99b0c06f3e9a27a2876800f90830b8dbe160a6599bcb484534": {
       "excerpt": "A single OpenAPI 3.1 path item method entry.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "46de53a2e83449fea28e667768da09c4f1facf82943e59272cbd7aaffdff10b7": {
       "excerpt": "Prior Tier-2 state for one wire-path entry. `defNamesFingerprint` tracks",
@@ -6771,7 +6775,7 @@
     },
     "4756098d0da298e450dfdb2883b7c1009dc78cb01ab376c805834fd54775a506": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "475d19698012caef9f8633caab7a1c509634db141c60de963590b1af9158939e": {
       "excerpt": "(c) POST /users/1/deactivate → 200",
@@ -6907,7 +6911,7 @@
     },
     "48a70c0577ae6773330f2fa0d3788925061aefaab332de415b780ec3def729e0": {
       "excerpt": "Fallback name derived purely from path + verb, for handlers absent from a name m…",
-      "approvedAt": "2026-08-16T07:02:17.760Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "48a73c6b62adbbe7dbb1d6e5a512df64d31742122ab730733e13555cf3e4b9df": {
       "excerpt": "`deprecated`: The operation is slated for removal; callers should migrate",
@@ -6983,7 +6987,7 @@
     },
     "4982b171d37b9049e9136b309bbffe6dfca7b24b15674334097721a0bfce7af0": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "49967bae239da4f3393b54c4155181490f51b9827733db9b54ee7037c4d2bd2a": {
       "excerpt": "`Js.Dict.t<V>` — ReScript's standard string-keyed dictionary",
@@ -7515,7 +7519,7 @@
     },
     "4f1e388c9e3f4d1437af7ebc72a1ad17f2faca23adb474429a7968404ce1b1db": {
       "excerpt": "Merge multiple OpenAPI documents (each produced by `toOpenApi`/",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "4f36627545c6b60627997b33c4644acc75910f86f01df05a7266a1a15c094bf7": {
       "excerpt": "The both-and route node:",
@@ -8359,7 +8363,7 @@
     },
     "57427d6ec2a456854b79976123611a5de750cfce5dbef8fc1d293f655bdc059b": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "57478a7432251ac4ddf3d57c37deb333d24319dbf58f7f1530862c8175969bde": {
       "excerpt": "No tagged-union construct — lossy, degrades to `id`.",
@@ -8799,7 +8803,7 @@
     },
     "5ba918c2446c659162a227778ffcd34e34139c8e89426ec00ca2083e3ddc3448": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "5baacbd8d4fa4a187cc07e9699af7c9e247284aa5af5c2ee6de525c46211bbea": {
       "excerpt": "Attach `getPage()`/`[Symbol.asyncIterator]` to a copy of `first` (the",
@@ -8863,7 +8867,7 @@
     },
     "5c7af8da47fc5f8f411ba1dadc9713587e154206c9d843664be3ea14ab89b617": {
       "excerpt": "Same bare-leaf `fallback.subtree` case as client.ts's",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "5c872c812ae5a7ea3d4df24ba9cb714245e193633a2734939c4159368f2b9561": {
       "excerpt": "`Handler` is the single framework type. There is no `Route`, `Segment`,",
@@ -9523,7 +9527,7 @@
     },
     "6365e65a16fa3f3367115e9127d3c0dc8a9bd5be8e368826e3378a24d1a58390": {
       "excerpt": "Resolve schema map: caller-supplied > sourceFile > empty. The",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6368035ca403b36526bd2250018200a4cce8f9d7ed45aec4020679225a8397ba": {
       "excerpt": "Convert a protobuf `FileDescriptorProto`-shaped JSON value into a",
@@ -9807,7 +9811,7 @@
     },
     "66abb5044abd0094cd07430af2e342ca76a7efdb2a8bdaca0c4c1d8908803bc4": {
       "excerpt": "Project an already-projected `HttpRoute` tree to an OpenAPI 3.1 document",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "66bfca519bf46bf7b082e77307c63cfde2a4bcff1deaa440eaf36fe55935a7cb": {
       "excerpt": "GraphQL has no tuple construct (§ \"Type System\") — degrades to a list of",
@@ -10323,7 +10327,7 @@
     },
     "6c0b071ad78e66a65b4170f5a72aa63ccbd48debb72e66aba27a835574d42d46": {
       "excerpt": "HTTP method, in whatever case the route tree's `methods` keys use (uppercase for…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6c1b764fdc39d8395736eeec7dccfb865f50f4a29fe9829c5ea3c289b281bbc5": {
       "excerpt": "Installs the site-wide mocked fetch before any page's islands",
@@ -10343,7 +10347,7 @@
     },
     "6c371f9953f1153aac71d1d1a1c6bd43115f06410e69d2bc3b32f85e8de66836": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6c3bad9283da827ce3be7976429f96f2ef635ed1d5e31e3ec6ad0ce0d7182547": {
       "excerpt": "Render a `TypeRef`'s structure as markdown-ready `Part[]`, resolving",
@@ -10451,7 +10455,7 @@
     },
     "6d0f896f1a047f2f504e5466376890acf2e772159f3a61009eb3210147a0e7ae": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6d19748ae83102ad225867195bf53b0acceb245c8a58d6f59994948d230a4dce": {
       "excerpt": "Stands in for a generated validator: `id` must be a string of digits, and become…",
@@ -10563,7 +10567,7 @@
     },
     "6e5ede359659feb5b0317c38577e8d743144be3a58be7386a358343ce9ec5266": {
       "excerpt": "Extract param names from path segments like /books/{bookId}/details → [\"bookId\"]…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6e7c745b34653d31ef9a9b66bff3a7b00f409b9c694153354da708dcf70a3a7a": {
       "excerpt": "A `ref` target's own declaration isn't visible from here — assumed to",
@@ -10623,7 +10627,7 @@
     },
     "6eeede5df73c9d4ac413f648e3efc4821763c0b0f5438d0104a18f267893af89": {
       "excerpt": "Present only when at least one node in the tree carries",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6ef1075ab641f1775ec25c5da3f3b17aaf53c88bd6ef7f52cdbe8672adfc702b": {
       "excerpt": "`method` has no explicit entry here for the *standalone* case — falls",
@@ -10699,7 +10703,7 @@
     },
     "6fb5982587c6d3be45bcb8c8eb890fa7b2dd0d0d191cbdf30d5f9d2f9965dd16": {
       "excerpt": "200 response schema from codegen output",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "6fbe72f6db12d5269a56d742bfd16170ac0e96e0fcd54f50966b6178b6173794": {
       "excerpt": "self (1) + a (1) + b (1)",
@@ -11215,7 +11219,7 @@
     },
     "74b9f7948c0ef9802a363c727ce02a16b509d5d65115fb645df1575f69609a01": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "74cf61272b782e4aacfa730a1ff39b862aa8348f32d01b15e8d63de509e3d7be": {
       "excerpt": "packages/http-api-projector/src/extensions/pagination.ts — @rhi-zone/fractal-htt…",
@@ -11399,7 +11403,7 @@
     },
     "76969a1c41b71c3120b496c58695b603076d44f765e628832f2e2e3206cd998d": {
       "excerpt": "requestBody: for non-GET methods that have a non-empty inputSchema",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "76a5d7565ebda1d509424f7cafe3ea9dd55e40dbcd9dfd8040bb5a7b2ccd7135": {
       "excerpt": "The STRING form (phase B) names a base profile, not a decoder",
@@ -11435,7 +11439,7 @@
     },
     "76e4c46a277afff20d3e75f68cc1107584a15c09753d783ef23d7273a3e742ad": {
       "excerpt": "OpenAPI 3.1 projection for `http-api-projector`. OpenAPI only ever",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "76eddedd94cde64e03c6ff76ce4675b2bc1f5eac98a3d7251b7e7487450f8603": {
       "excerpt": "============================================================================",
@@ -11871,7 +11875,7 @@
     },
     "7b5e3a577a944cd6047895821c6cabc4926874a64790f4026c9a69f851217d31": {
       "excerpt": "Underscore-joined name (default operationId source) — see `nameFromPath`.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "7b66f65769b656c256bd80f0eeccd5edda4a5f3e3503fb0685ce57ee18919cb1": {
       "excerpt": "Opt-in return-value detection — see CliOpts.detection. Both default to",
@@ -12139,7 +12143,7 @@
     },
     "7e20bfa240947ab924e83d6024e896b25cbdc60ff9beb8170b7a30d38f53c021": {
       "excerpt": "`:name` (colon-prefixed), matching extractRouteTypeRefs's own",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "7e2af5dd09ff3c694d96dbc934c495e98c7da18492b399c3ce8d7ce69fbbfd37": {
       "excerpt": "catalog_search returns Book[] — codegen should emit type: \"array\"",
@@ -12511,7 +12515,7 @@
     },
     "829d944b70fcb6a6ce74868b9cd588ce09ee413363093479aa39c588255056b3": {
       "excerpt": "Build the handler → codegen-name map for a Node tree — see module doc above.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "82a9797eba98680290f319ca4fdf006caa94181a4785947100efc6aba2f17352": {
       "excerpt": "Add two books via client",
@@ -12747,7 +12751,7 @@
     },
     "84b53e239fba17b847dcf5f7fee3753714ac3ed33514e6d6a9f9285319425624": {
       "excerpt": "`meta.openapi` fields valid at both leaf and branch position.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "84e108a824686d9d8557789e6f0c7a979fc6fcc14035c9bde3a9644bd2d5fa58": {
       "excerpt": "Each overload returns a distinct `Result<T, string>` — the per-signature",
@@ -13599,11 +13603,11 @@
     },
     "8e3271038d7d0c7a7ed3235de859426853b0b3e75197bb72042bb6c4ff3fd8cd": {
       "excerpt": "Options for toOpenApi / toOpenApiFromRoute.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "8e3d7b37db695cff9e59abb1fc5c6df18775200b484a751009a43561433cbbc3": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "8e3e89d07b1e0bfde6fa7a0ce74d6679e211763f58cc68cdd9fc40604e72ace5": {
       "excerpt": "Lower-level entry point shared by `generateClientFromNode` above and",
@@ -14111,7 +14115,7 @@
     },
     "92c94f14a540d95aae26dcbc17262841d860161f96f97f93a91bc2beb75c756d": {
       "excerpt": "Every distinct `treeId` prefix present in a `SchemaMap`'s own keys — a",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "92d3a965ac0c6a3b1c35c91ef0c28f154f60eb5a11ed38667fbbac89d8f69671": {
       "excerpt": "`--ignoreConfig`: TypeScript 6 errors (TS5112) when a tsconfig.json is",
@@ -14191,7 +14195,7 @@
     },
     "93a4229467dc96f4759957def371dd375a8576374c9d7c2ef3f902df8a786cc3": {
       "excerpt": "Wraps `OpenApiLeafMetaProperties` under the `openapi` key — combined into `HttpL…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "93a6ecad7de4f3f33be9fc47ab9379885ede30470784cc7eeaedc51cc0a48544": {
       "excerpt": "============================================================================",
@@ -14224,6 +14228,10 @@
     "93e50889c2da84a71c5cf16a66ffea2d22af0e3b19f4c40dc6f212bdabe58e8c": {
       "excerpt": "Top-level declaration entry point — `toKotlin(ref, name)` emits a",
       "approvedAt": "2026-08-13T08:04:03.726Z"
+    },
+    "93e61a425edb946879ff83cef6bf695fda62df749c3a9a86a276c9d3e9d55780": {
+      "excerpt": "operationId further maps \"_\" -> \".\" (codenName.replace(/_/g, \".\")) on",
+      "approvedAt": "2026-08-16T08:13:33.543Z"
     },
     "93e69c43bd499172fc56b87ee83c609fcf414da0d6181a2216fa17cac07101ec": {
       "excerpt": "============================================================================",
@@ -14387,7 +14395,7 @@
     },
     "95bbae3c357c0ab02012af72a53e36e7d10410ca13f764f10425a484c7fa2060": {
       "excerpt": "Wraps `OpenApiSharedMetaProperties` under the `openapi` key — combined into `Htt…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "95c4a104fbb2b11d1017abf14a51a5f4a1143ce220f295a01da0d058e5510efa": {
       "excerpt": "packages/json-rpc-api-projector/src/project.ts — @rhi-zone/fractal-json-rpc-api-…",
@@ -15079,7 +15087,7 @@
     },
     "9d499eeb522eaf88a3ea7ef0e4e7abe049706ef7a86670c6d66400eae056cd6d": {
       "excerpt": "See the identical import's doc comment in `toOpenApi` above — same",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "9d574da8479c30fc78e4c956c93c624382ffe809cd195e4d25665183e167bb93": {
       "excerpt": "A literal path segment.",
@@ -15711,7 +15719,7 @@
     },
     "a3ecd4f19b9eb13993e36f4e4c5dcc803a2a3993a438cb94ba82aff61647bac7": {
       "excerpt": "Fallback \"/\"-joined path+verb key, for handlers absent from a `pathMap` — mirror…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "a3f7b58fe1735e574636fcbc0c5361d125f1cd39928f2fadbfd8423ec518718d": {
       "excerpt": "Monadic bind: run `f` on the success value, short-circuit on error. The",
@@ -15783,7 +15791,7 @@
     },
     "a4ff35538f8cdc4c5ae960f6ed29cad8385fc0c8d2be1e40ea4a1c08ca96ad5c": {
       "excerpt": "HTTP path string, e.g. `/books/{bookId}/details`.",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "a4fffb6aa181fa3d4a13b5ce32385a642c15f8ab99cbd5e84566b5289a982d40": {
       "excerpt": "A kind is \"stringlike\"/\"numericlike\" if it (or an ancestor) is \"string\" /",
@@ -15919,7 +15927,7 @@
     },
     "a65432bbfa72ed414fd089033e94b9f9e42999f5645649a36054123838a9be4d": {
       "excerpt": "An OpenAPI 3.1 security requirement object — one entry per alternative",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "a6620e0fe492afa86a2eb7fa87e29fc2e083972bc63ec3df2c6a932ef2f27ecb": {
       "excerpt": "packages/api-tree/src/__fixtures__/apply-validation.fixture.ts",
@@ -16019,7 +16027,7 @@
     },
     "a75868abf1fdc3894d03022e00b4f95f375b109a7a000e8bbb77fd8aa2387cb7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "a75b2b73a9e3a991ec941c52fe7115aaf132bfcc8e2c1d6b45384ebe355ad888": {
       "excerpt": "============================================================================",
@@ -17047,7 +17055,7 @@
     },
     "b123f88aa18020944e2fed60313499c0ce5ccf6f62477f98def09731b8a972b0": {
       "excerpt": "An OpenAPI 3.1 security scheme object (`components/securitySchemes/<name>`)",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "b1257fedff79e759173ecf9cf52bee5a11912dc7dec01f5c220a3c1343814d01": {
       "excerpt": "See `isAsyncIterableExpr`'s doc comment above — elements aren't checked.",
@@ -17371,7 +17379,7 @@
     },
     "b522bf503cd40bf90948d49c6c2f23f59b30e916d38950ea8e6fbe502826291f": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "b526ace5219d121429269d16516e311e52d8777bf920ad891b2acfc2bc716d15": {
       "excerpt": "============================================================================",
@@ -17519,7 +17527,7 @@
     },
     "b690e53d3bf1a0a730d4f2b3ed4466e024eb02f1f0798676d0e355807e5687b9": {
       "excerpt": "`toOpenApi(n, { sourceFile })` only: the exporting binding name for `n`",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "b695992bb2d8bca6efbbea2964462e893d994e344fe978b33f4643ec614e6231": {
       "excerpt": "See `isAsyncIterable`'s doc — elements aren't (can't be, without",
@@ -17567,7 +17575,7 @@
     },
     "b740a50847c775ba751191821a1139edbd317c2d63c57e5182bc3d907be4e0b5": {
       "excerpt": "Path to the source file for codegen schema extraction. When provided,",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "b74476a11e09bec25a4247123f02786470d0894d52bec33de590e6197da054d5": {
       "excerpt": "Runtime verification (bun) for the composable router model: three endpoint",
@@ -17915,7 +17923,7 @@
     },
     "bb1ce96a425f3dc02a17e469bd83e3a92ee9d73b31a40682e9dea566fc78aa77": {
       "excerpt": "An OpenAPI 3.1 document (partial — the fields this projection emits).",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "bb242892aa25b3ee419d309209e3c0b4dca64b623b86ab514eabe90dbc42dc3c": {
       "excerpt": "client.todosById(\"1\").GET() → Promise<Todo | null>",
@@ -18811,7 +18819,7 @@
     },
     "c4f30acda81b1a3bc1ccbc8b0d61fe38a753b1d2d06223ea1d60b67835a2ee05": {
       "excerpt": "Public alias kept for the exported \"resolved per-operation openapi meta\" shape —…",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "c4f8da2591c60394cc5fb64b40e6b445f97f46afbeb242c7e2725caafa9f786d": {
       "excerpt": "`Pattern` tag over `string`.",
@@ -19067,7 +19075,7 @@
     },
     "c7b50a985dc0533a85dabb422c1c367862b5cf7a094b57eedaaa6e6523b9bac8": {
       "excerpt": "webpackIgnore: true",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "c7bd27d214ae45eb9af41477c8bd0910cad9ddc36be27d462379a08e0e4548e1": {
       "excerpt": "kind:\"err\" branch must have `error` (E) — guards against accidental matches",
@@ -19215,7 +19223,7 @@
     },
     "c9991a270bf373faceafd8cf2712be50887e155f6cc88f31f6f53bc388827ad5": {
       "excerpt": "Spec-level default security requirement (`OpenApiDoc.security`) — applies",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "c99d70e5e6bdbe84b6a5248d5ab4ee78018b405815a17b28bb3deffa11669018": {
       "excerpt": "============================================================================",
@@ -19423,7 +19431,7 @@
     },
     "cb272b0203bbba073b43f5e24125227e7f71cdf7286366245efe07ea65f9a1b5": {
       "excerpt": "`securitySchemes` is a shared-role field, read at both leaf and branch",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "cb2b735b6f1cc5bcdf3ab78a74dc6763799b89c7e27a7cae5b2c8d65b5b40aef": {
       "excerpt": "============================================================================",
@@ -19583,7 +19591,7 @@
     },
     "ccbad3570d1f5890d7a26aa67ab4694e4f970d40e4d537ceca5bb3fa7f903750": {
       "excerpt": "Derive operationId from meta.openapi.operationId, or from the codegen name",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "ccbb8365f7760d476ed971f6be2738c3f5d4196bd2969291540b6491ad6153d3": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -20155,7 +20163,7 @@
     },
     "d1b707786025fe99acfbe61bb441b99f2a872e0de4f6103a95cac84f73a76fb4": {
       "excerpt": "Build the handler → tree-relative \"/\"-joined path map for a `Node` tree —",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "d1baa411db0450120668868d3a625ed635c657e59df3f12e128abce4c7aca0eb": {
       "excerpt": "============================================================================",
@@ -21155,7 +21163,7 @@
     },
     "db9429a60f894a05eff4005c9daa5801a561fb1aae0a161975f53ecc0eb5e888": {
       "excerpt": "Tree-relative \"/\"-joined path (schema-map lookup key when the schema",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "db95d153326a4eecd6f8d8a166f644e5ad71c95e4fa8d7770939656aa0cf84b6": {
       "excerpt": "identical key sets in every sample — growthRatio 0, so dict detection",
@@ -21825,6 +21833,10 @@
       "excerpt": "A Node tree exercising structural sharing (Address reused across three",
       "approvedAt": "2026-08-13T08:14:47.650Z"
     },
+    "e2d3ecd756a317b55999074309352ddd9442a45da0160e1eed13cac07d96ac05": {
+      "excerpt": "`pathLeaves`/`buildPathMap` (the \"/\"-joined schema-correlation key,",
+      "approvedAt": "2026-08-16T08:13:33.543Z"
+    },
     "e2d6e15af95089d6381be4b4fc8351374d3e9d5d8314f116f2906b3a97a1d453": {
       "excerpt": "What a tool handler's error value means in MCP terms — see `mcpErrors` for",
       "approvedAt": "2026-08-13T08:46:58.818Z"
@@ -21923,7 +21935,7 @@
     },
     "e38dea14a1916b2445a12425aca3b97fc2cc05cc8febe6c1fff0c92808619f58": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "e38e1fc69af605e709d1a2c03ca8622f117daec40573a24939f866d50e25e5be": {
       "excerpt": "Narrows the JSON-RPC error envelope's `data` field for this method (see `jsonRpc…",
@@ -22136,6 +22148,10 @@
     "e5e8041706908b8b1cbb2d4a31a75d5c378134a0d7502cc9da6e1cf510f88e28": {
       "excerpt": "Render the def's own top-level shape section (fields/methods/members/",
       "approvedAt": "2026-08-13T08:04:03.786Z"
+    },
+    "e5eedabefa8138bfefbc15fac00af1dd8b3fb405bd1aaad594525a49802070b8": {
+      "excerpt": "Byte-identical to the pre-escaping join: neither \"widgets\" nor \"list\"",
+      "approvedAt": "2026-08-16T08:13:33.543Z"
     },
     "e5f15a39e6527644ad01ee459f6cccff90e9451e83a0658c357fcd9b2a867074": {
       "excerpt": "The resolved type of the `Node` tree the second argument traces back to.",
@@ -22375,7 +22391,7 @@
     },
     "e860b7f173961a121481b9ba91f2f49da57504cf852eb068311a397bd95d2e9c": {
       "excerpt": "Document title (info.title). Defaults to \"API\".",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "e862f46a1d6c339c65d2d65dca3924375685983e98d0fe46795d48492bf7f666": {
       "excerpt": "Java has no literal type — degrades to the literal value's own runtime",
@@ -22396,6 +22412,10 @@
     "e87166a2ce739266f984372149ecc408f2052dcc08138d0fb5e0774d6bb83777": {
       "excerpt": "applyValidation runtime tests.",
       "approvedAt": "2026-08-13T08:14:47.622Z"
+    },
+    "e87573890c5450e9b6092fbf6e2d078a56e58bc546f0d779e1d3bb6772c1b120": {
+      "excerpt": "`nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`) is",
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "e879f266094ec1dfc9f7a5115f1c8eec00fb3ea50ff1b40a06f1cd2ebf81c2a9": {
       "excerpt": "Aliases never enter the canonical listing.",
@@ -22635,7 +22655,7 @@
     },
     "eb0469d9894d128e16fab51945646838ee6a9e227f430c0594ff6d80fb88eb9d": {
       "excerpt": "eslint-disable-next-line @typescript-eslint/no-non-null-assertion",
-      "approvedAt": "2026-08-16T07:02:17.760Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "eb0d17c53c9730c177617634945da4b846a5c682a2f2e3e735d2a756280395e5": {
       "excerpt": "Join `segments` on `delimiter`, backslash-escaping the delimiter and the",
@@ -23831,7 +23851,7 @@
     },
     "f66782aeabb278433f55a894d04d29b04f7b4f91322cadf22674235fa34799eb": {
       "excerpt": "Security scheme definitions — can be authored on any node in the tree;",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "f668ee0f764c58f5c25ecef46274e32e598b722db0e14ea0402338d3dccf072f": {
       "excerpt": "── Combined brand + refinement intersections (any combination of base,",
@@ -24631,7 +24651,7 @@
     },
     "fed8958b5ed2f57f923668245e2314a5743f6c35ffa0fa4f4383151c81087abb": {
       "excerpt": "Build operation, merging any passthrough keys from meta.openapi",
-      "approvedAt": "2026-08-13T08:03:36.789Z"
+      "approvedAt": "2026-08-16T08:13:33.540Z"
     },
     "fedad306cf58093cc710e557b9fea8f5005146402dd67d56e2f70c183fbd5cf2": {
       "excerpt": "JSON Schema has no callable-type vocabulary — degrade honestly to an",
