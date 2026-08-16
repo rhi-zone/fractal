@@ -81,6 +81,10 @@
       "types": "./dist/codegen.d.ts",
       "import": "./dist/codegen.js"
     },
+    "./codegen-source": {
+      "types": "./dist/codegen-source.d.ts",
+      "import": "./dist/codegen-source.js"
+    },
     "./http-manifest": {
       "types": "./dist/http-manifest.d.ts",
       "import": "./dist/http-manifest.js"
@@ -137,6 +141,9 @@
   "dependencies": {
     "@rhi-zone/fractal-api-tree": "workspace:*",
     "@standard-schema/spec": "^1.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=20"

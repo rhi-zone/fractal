@@ -537,8 +537,17 @@ function returnExpressionOfFactoryBody(body: ts.Block): ts.Expression | undefine
  * `default`, which isn't valid JS anyway. `export =` (`stmt.isExportEquals`
  * true, a TS-only construct distinct from a plain default export) is not
  * handled here and stays unrecognized.
+ *
+ * Exported (alongside `walkNodeType`/`readMetaStringLiteral`) so a caller
+ * that needs its own per-tree-root walk — e.g. `http-api-projector`'s static
+ * client-codegen entry point, which reconstructs a route skeleton directly
+ * from each exported tree's resolved TYPE rather than a live `Node` — can
+ * enumerate the same candidates `walkTree`/`extractToolSchemas` do, with the
+ * same export-recognition and `treeId` derivation, instead of re-deriving
+ * this AST scan itself. Adds no behavior here: `walkTree` below still calls
+ * it exactly as before.
  */
-function forEachTreeCandidate(
+export function forEachTreeCandidate(
   source: ts.SourceFile,
   checker: ts.TypeChecker,
   visit: (nodeType: ts.Type, loc: ts.Node, treeId: string) => void,

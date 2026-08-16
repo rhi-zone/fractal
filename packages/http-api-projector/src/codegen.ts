@@ -31,6 +31,17 @@
 //     authored names and codegen-name schema lookups match `extractToolSchemas`
 //     exactly, unaffected by `applyMoveTo`.
 //
+// A third entry point, `generateClientFromSource(entryFilePath, options)`
+// (codegen-source.ts, same package, separate file so this one stays free of
+// the TypeScript-compiler-API dependency), reaches the same full-fidelity
+// naming as `generateClientFromNode` WITHOUT a runtime import of the tree —
+// it reconstructs a route skeleton straight from each exported tree's
+// resolved TYPE (`walkNodeType`/`readMetaStringLiteral`, api-tree's
+// tree.ts), the same static machinery `extractToolSchemas` already uses. It
+// shares this file's `generateClientWithNames` (below) with
+// `generateClientFromNode` — same `buildTree`/`render` tail, different
+// source for the route + name maps.
+//
 // Per-operation `<Base>Input`/`<Base>Output` type aliases are emitted from
 // the looked-up `ToolSchema`'s `inputSchema`/`outputSchema` via `schemaToType`
 // — a small JSON-Schema-subset -> TS-type-string converter (see its own doc
@@ -137,6 +148,27 @@ export function generateClientFromNode(
   const route = httpProjection(node);
   const codegenNames = buildCodegenNameMap(node);
   const memberNames = buildMemberNameMap(node);
+  return generateClientWithNames(route, codegenNames, memberNames, schemas, options);
+}
+
+/**
+ * Lower-level entry point shared by `generateClientFromNode` above and
+ * `codegen-source.ts`'s `generateClientFromSource` (the static-analysis
+ * path — no live `Node`/`Handler` values, so it builds its own
+ * `codegenNames`/`memberNames` maps keyed by SYNTHETIC per-leaf handler
+ * placeholders minted while it reconstructs the route skeleton, rather than
+ * real handler identity). Exists purely to share this tail (the
+ * `streamingEnabled` derivation + `buildTree` + `render` sequence) between
+ * both callers instead of duplicating it — no behavior of its own beyond
+ * what `generateClientFromNode` already did inline.
+ */
+export function generateClientWithNames(
+  route: HttpRoute,
+  codegenNames: ReadonlyMap<Handler, string> | undefined,
+  memberNames: ReadonlyMap<Handler, string> | undefined,
+  schemas?: SchemaMap,
+  options: CodegenOptions = {},
+): string {
   const streamingEnabled = findStreamingCall(options.extensions) !== undefined;
   return render(
     buildTree(route, "", new Set(), schemas, codegenNames, memberNames, streamingEnabled),

@@ -258,13 +258,38 @@ _Open threads from a previous session. Treat as starting context, not instructio
   useful change if the ~550-600ms/run cost is judged worth addressing without
   going as far as a watch loop.
 
+  **RESOLVED (2026-08-16), the runtime-import wrinkle specifically:**
+  client codegen no longer touches a live `Node` at all. A new entry point,
+  `generateClientFromSource(entryFilePath, options)`
+  (`packages/http-api-projector/src/codegen-source.ts`), reconstructs the
+  `HttpRoute` skeleton straight from the entry file's resolved TYPE
+  (`walkNodeType`/`readMetaStringLiteral`/`forEachTreeCandidate`,
+  api-tree's tree.ts — the same static machinery `extractToolSchemas`
+  itself already uses) and runs it through the real
+  `applyMethods`/`applyMoveTo`/`applyResponse` pipeline (route.ts)
+  unmodified; `generate-client.ts` now calls it instead of
+  `generateClientFromNode`, and no longer has an
+  `import { api } from "../src/tree.ts"` at all. Proven byte-identical to
+  the old `generateClientFromNode(api, schemas)` output for the
+  library-api fixture (`codegen-source.test.ts`). `generateClientFromNode`
+  itself is kept (still has real callers — its own direct test coverage),
+  not deleted.
+  This removes the specific blocker the "reuse depth" section above
+  identified (the live `api` object `generateClientFromNode` needed
+  directly, which the `applyValidation`/schema builders never had to deal
+  with) — `generateClientFromSource` fits `api-tree/src/cli.ts`'s
+  `ArtifactBuilder = (entryFile, outFile, program: ts.Program) => string`
+  shape the same way the `applyValidation`/JSON-Schema builders already do,
+  so a watch loop reusing `runWatch` is no longer blocked by an
+  un-refreshable runtime import.
+
   **Still open, and still not something to guess through**: (1) whether
   ~550-600ms per manual rerun clears the bar for wanting a watch loop at all
   — a UX-pain judgment call, not a technical one; (2) if yes, where the loop
-  should live given the runtime-import wrinkle above — extend `api-tree`'s
-  CLI (new cross-package coupling), duplicate the pattern elsewhere, or
-  refactor client codegen first to remove the runtime import. This entry
-  remains parked for that owner call.
+  should live — `api-tree`'s CLI (now a mechanically straightforward
+  extension, per the paragraph above) vs. `http-api-projector` vs.
+  `examples/library-api` is still a placement call, not a technical
+  blocker. This entry remains parked for that owner call.
 
 ---
 
