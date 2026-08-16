@@ -118,7 +118,15 @@ type OperationEntry = {
 
 type ClientTreeNode = {
   readonly children: Map<string, ClientTreeNode>;
-  param?: { readonly name: string; readonly subtree: ClientTreeNode };
+  // A fallback position is either a container of further operations
+  // (`subtree`) or, when `fallback.subtree` is itself a bare `op()` leaf
+  // (Node model explicitly allows this — see api-tree/node.ts and client.ts's
+  // buildClientNode doc), IS the operation directly (`operation`) — no
+  // further tree position to descend into.
+  param?: { readonly name: string } & (
+    | { readonly subtree: ClientTreeNode }
+    | { readonly operation: OperationEntry }
+  );
   readonly operations: Map<string, OperationEntry>;
 };
 
@@ -146,16 +154,15 @@ function buildTree(
 
   if (node.fallback !== undefined) {
     const { name, subtree } = node.fallback;
-    out.param = {
-      name,
-      subtree: buildTree(
-        subtree,
-        [...path, name],
-        [...capturedArgs, { name, typeSDL: "ID!" }],
-        types,
-        namedTypes,
-      ),
-    };
+    const nextCapturedArgs = [...capturedArgs, { name, typeSDL: "ID!" }];
+    // `fallback.subtree` may be a bare leaf (`op()`) instead of a branch
+    // (`api({...})`) — mirrors client.ts's buildClientNode handling of the
+    // same shape. A bare-leaf subtree has no `children` to walk (it isn't a
+    // container), so it's built as an OperationEntry directly instead of
+    // recursing into buildTree, which would silently see an empty tree.
+    out.param = isLeaf(subtree)
+      ? { name, operation: buildLeafEntry(subtree, path, name, nextCapturedArgs, types, namedTypes) }
+      : { name, subtree: buildTree(subtree, [...path, name], nextCapturedArgs, types, namedTypes) };
   }
 
   return out;
@@ -244,6 +251,13 @@ function typeBaseName(lookupKey: string): string {
 // Internal: Client type renderer
 // ============================================================================
 
+/** `(input: FooInput) => Promise<FooOutput>` — a single operation's call-signature type, shared between a normal member entry and a bare-leaf fallback param. */
+function operationTypeSig(entry: OperationEntry): string {
+  const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown";
+  const sig = entry.hasInput ? `(input: ${entry.baseName}Input)` : `()`;
+  return `${sig} => Promise<${outputType}>`;
+}
+
 function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
   const nextIndent = indent + "  ";
   const lines: string[] = [];
@@ -253,16 +267,16 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
   }
 
   if (node.param !== undefined) {
-    const { name, subtree } = node.param;
-    lines.push(
-      `${nextIndent}readonly ${safeKey(name)}: (${name}: string) => ${nodeTypeLiteral(subtree, nextIndent)}`,
-    );
+    const { name } = node.param;
+    const paramType =
+      "subtree" in node.param
+        ? nodeTypeLiteral(node.param.subtree, nextIndent)
+        : operationTypeSig(node.param.operation);
+    lines.push(`${nextIndent}readonly ${safeKey(name)}: (${name}: string) => ${paramType}`);
   }
 
   for (const [memberName, entry] of node.operations) {
-    const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown";
-    const sig = entry.hasInput ? `(input: ${entry.baseName}Input)` : `()`;
-    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${sig} => Promise<${outputType}>`);
+    lines.push(`${nextIndent}readonly ${safeKey(memberName)}: ${operationTypeSig(entry)}`);
   }
 
   return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
@@ -273,6 +287,28 @@ function nodeTypeLiteral(node: ClientTreeNode, indent: string): string {
 // nodeTypeLiteral, producing the matching object literal.
 // ============================================================================
 
+/** `(input: FooInput): Promise<FooOutput> => __call(...)` — a single operation's call implementation, shared between a normal member entry and a bare-leaf fallback param. */
+function operationRuntimeLiteral(entry: OperationEntry): string {
+  const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown";
+  const params = entry.hasInput ? `input: ${entry.baseName}Input` : ``;
+  const variablesLit =
+    entry.args.length === 0
+      ? "{}"
+      : `{ ${entry.args
+          .map((a) =>
+            entry.capturedNames.has(a.name)
+              ? `${safeKey(a.name)}: ${a.name}`
+              : `${safeKey(a.name)}: ${propAccess("input", a.name)}`,
+          )
+          .join(", ")} }`;
+  const pathLit = JSON.stringify(entry.path);
+  return (
+    `(${params}): Promise<${outputType}> => ` +
+    `__call(transport, ${entry.baseName}Document, ${variablesLit}, ${pathLit}, ` +
+    `${JSON.stringify(entry.fieldName)}, ${JSON.stringify(entry.operationType)}) as Promise<${outputType}>`
+  );
+}
+
 function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
   const nextIndent = indent + "  ";
   const lines: string[] = [];
@@ -282,31 +318,16 @@ function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
   }
 
   if (node.param !== undefined) {
-    const { name, subtree } = node.param;
-    lines.push(
-      `${nextIndent}${safeKey(name)}: (${name}: string) => (${nodeRuntimeLiteral(subtree, nextIndent)}),`,
-    );
+    const { name } = node.param;
+    const paramBody =
+      "subtree" in node.param
+        ? `(${nodeRuntimeLiteral(node.param.subtree, nextIndent)})`
+        : operationRuntimeLiteral(node.param.operation);
+    lines.push(`${nextIndent}${safeKey(name)}: (${name}: string) => ${paramBody},`);
   }
 
   for (const [memberName, entry] of node.operations) {
-    const outputType = entry.outputTypeRef !== undefined ? `${entry.baseName}Output` : "unknown";
-    const params = entry.hasInput ? `input: ${entry.baseName}Input` : ``;
-    const variablesLit =
-      entry.args.length === 0
-        ? "{}"
-        : `{ ${entry.args
-            .map((a) =>
-              entry.capturedNames.has(a.name)
-                ? `${safeKey(a.name)}: ${a.name}`
-                : `${safeKey(a.name)}: ${propAccess("input", a.name)}`,
-            )
-            .join(", ")} }`;
-    const pathLit = JSON.stringify(entry.path);
-    lines.push(
-      `${nextIndent}${safeKey(memberName)}: (${params}): Promise<${outputType}> => ` +
-        `__call(transport, ${entry.baseName}Document, ${variablesLit}, ${pathLit}, ` +
-        `${JSON.stringify(entry.fieldName)}, ${JSON.stringify(entry.operationType)}) as Promise<${outputType}>,`,
-    );
+    lines.push(`${nextIndent}${safeKey(memberName)}: ${operationRuntimeLiteral(entry)},`);
   }
 
   return lines.length === 0 ? "{}" : `{\n${lines.join("\n")}\n${indent}}`;
@@ -319,7 +340,10 @@ function nodeRuntimeLiteral(node: ClientTreeNode, indent: string): string {
 function collectOperations(node: ClientTreeNode, out: OperationEntry[] = []): OperationEntry[] {
   for (const entry of node.operations.values()) out.push(entry);
   for (const child of node.children.values()) collectOperations(child, out);
-  if (node.param !== undefined) collectOperations(node.param.subtree, out);
+  if (node.param !== undefined) {
+    if ("subtree" in node.param) collectOperations(node.param.subtree, out);
+    else out.push(node.param.operation);
+  }
   return out;
 }
 

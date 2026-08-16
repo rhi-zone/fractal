@@ -169,6 +169,99 @@ describe("generateGraphQLClient — structure", () => {
 // 2. Degrade: no types/namedTypes
 // ============================================================================
 
+// ============================================================================
+// Bare-leaf fallback.subtree — TODO.md-tracked bug (found 2026-08-01, fixed
+// 2026-08-16). `fallback.subtree` may itself be a bare `op()` leaf instead of
+// a branch (`api({...})`) — the Node model explicitly allows this (see
+// api-tree/node.ts and client.ts's buildClientNode, which already handles the
+// shape at runtime). Before the fix, codegen's `buildTree` always treated
+// `fallback.subtree` as a branch and read its (nonexistent) `.children`,
+// silently producing an empty `{}` client-type member and a no-op runtime
+// factory instead of a working leaf caller.
+// ============================================================================
+
+describe("generateGraphQLClient — bare-leaf fallback.subtree", () => {
+  const bareLeafTree = api_({
+    books: api_(
+      {},
+      {
+        fallback: {
+          name: "bookId",
+          subtree: op((input: { bookId: string }) => ({ id: input.bookId }), {
+            tags: { readOnly: true },
+          }),
+        },
+      },
+    ),
+  });
+
+  const bareLeafTypes: FieldTypeMap = {
+    books_bookId: {
+      input: t(types.object({ bookId: t(types.string) })),
+      output: t(types.ref("Book")),
+    },
+  };
+  const bareLeafNamedTypes = {
+    Book: t(types.object({ id: t(types.string) }), { typeName: "Book" }),
+  };
+
+  const bareLeafSource = generateGraphQLClient(bareLeafTree, {
+    types: bareLeafTypes,
+    namedTypes: bareLeafNamedTypes,
+    clientName: "Client",
+  });
+
+  it("emits a real call signature for the fallback param, not an empty object type", () => {
+    // Before the fix this matched `readonly bookId: (bookId: string) => {}`
+    // — an empty object type, since buildTree read `subtree.children` off a
+    // leaf (undefined) and produced a childless ClientTreeNode.
+    expect(bareLeafSource).toMatch(
+      /readonly bookId: \(bookId: string\) => \(input: BooksBookIdInput\) => Promise<BooksBookIdOutput>/,
+    );
+    expect(bareLeafSource).not.toMatch(/readonly bookId: \(bookId: string\) => \{\}/);
+  });
+
+  it("generated createClient's bookId member is directly callable end-to-end", async () => {
+    const server = createGraphQLServer(bareLeafTree, {
+      types: bareLeafTypes,
+      namedTypes: bareLeafNamedTypes,
+    });
+
+    const tmpDir = await mkdtemp(join(tmpdir(), "fractal-graphql-codegen-bareleaf-"));
+    try {
+      const modulePath = join(tmpDir, "client.ts");
+      await writeFile(modulePath, bareLeafSource, "utf8");
+      const mod = (await import(pathToFileURL(modulePath).href)) as {
+        createClient: (transport: unknown) => {
+          readonly books: {
+            readonly bookId: (bookId: string) => (input: { bookId: string }) => Promise<{
+              id: string;
+            }>;
+          };
+        };
+      };
+
+      const transport = async (query: string, variables?: Record<string, unknown>) => {
+        const result = await server.execute(query, variables);
+        return {
+          data: result.data,
+          ...(result.errors !== undefined ? { errors: result.errors } : {}),
+        };
+      };
+      const client = mod.createClient(transport);
+
+      // Before the fix, `client.books.bookId` was `() => ({})` (a caller
+      // returning an empty object, not a leaf caller function).
+      const caller = client.books.bookId("b-1");
+      expect(typeof caller).toBe("function");
+      const result = await caller({ bookId: "b-1" });
+      expect(result).toEqual({ id: "b-1" });
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("generateGraphQLClient — degraded (no types/namedTypes)", () => {
   it("still produces a complete, valid client with unknown input/output", () => {
     const untyped = generateGraphQLClient(tree);

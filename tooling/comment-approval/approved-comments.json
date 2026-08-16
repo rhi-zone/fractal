@@ -1183,7 +1183,7 @@
     },
     "0d3829369755ea0371b901b5422bd47e597e8f63817b2ed5ac3cd4dc994fd22f": {
       "excerpt": "Walk a `Node` tree into a `ClientTreeNode`, computing each leaf's",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "0d42376a7b2a51dd61a5c439bd8250ab8a4ef0ee51abcf147b13261e7cc60979": {
       "excerpt": "Module -> a ReScript `module Name = { ... }` block grouping the",
@@ -1479,7 +1479,7 @@
     },
     "0fab3d5bb23bbf3dd36a6e59ecb74762f871bfcc456315d5fb92fc5196b786c6": {
       "excerpt": "Underscore-joined tree-path → derived input/output TypeRefs — the same `FieldTyp…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "0fb7fe8f8bbee89be4889898dfd471ff688108a2ec5c6105b192c8117c8dbd45": {
       "excerpt": "No applyMethods run — the naive default POST entry is left untouched.",
@@ -2319,7 +2319,7 @@
     },
     "185e4bb06c6b790ec539e07b69461da20feb27c43a0cfa8ad70e5dfcd58be644": {
       "excerpt": "Two distinct leaves could in principle share a base name only if",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "185ed8ecfd5fb6c4d6d14a01debef7c8c4dc5e7e13724daac28ffd5bbda0e010": {
       "excerpt": "Render an `enum` TypeRef as a Crystal `enum` declaration — members",
@@ -2515,7 +2515,7 @@
     },
     "1a74ea409148be166c4127f15dfae07675b4da03ccc77ed97df5abf43013846f": {
       "excerpt": "Subset of `args` names sourced from an ancestor fallback's closure parameter, no…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "1a8f406f4f437a4eef6c798f9cceb9835eb04fe75e3b78936b17764e48d343df": {
       "excerpt": "packages/graphql-api-projector/src/ws.ts — @rhi-zone/fractal-graphql-api-project…",
@@ -3459,7 +3459,7 @@
     },
     "25625ea6f68cd0b40c64835405e95dd4644812e2e2d591c3347b218c90bc932e": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.772Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "256806e516bba0a2b54a2d40cfbda127f2f04de68465f41e59581f2885069fbf": {
       "excerpt": "Inverse of `deepPartial` — recurses into nested object fields (and object",
@@ -3531,7 +3531,7 @@
     },
     "2609cb3546d5af02a8a05c7e4330d206b6a9f6e525ef1413d18c9bc0073cef06": {
       "excerpt": "Query-nesting path (ancestor tree path, incl. fallback-name segments) — `[]` for…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "260ba5aab646699fac113010d78deb9d2979e5aa5beec6b069f7ceaa2a652dba": {
       "excerpt": "============================================================================",
@@ -3603,7 +3603,7 @@
     },
     "27057a70a00c5c860d975ce498bb8ffec74cb56c33ac5cbb67c817206d0220ee": {
       "excerpt": "packages/graphql-api-projector/src/codegen.ts — @rhi-zone/fractal-graphql-api-pr…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "27213135ac8b5386890c9b9d4f6605d856a88a55f3acefc965fddd6e746bd172": {
       "excerpt": "Merge two object TypeRefs — extension fields override base fields with the",
@@ -4197,6 +4197,10 @@
       "excerpt": "The class's method surface, if any, is its other half (see",
       "approvedAt": "2026-08-13T07:51:11.417Z"
     },
+    "2e4cca8782cf007683e552e13b743c4e3bd4a07327e14c800caffd0dd4a8e023": {
+      "excerpt": "============================================================================",
+      "approvedAt": "2026-08-16T06:32:07.303Z"
+    },
     "2e57e5341060d65ce25a712ba3b381f3542d6df9b07014871ee7a8412055393b": {
       "excerpt": "Render a `meta.default`/literal value (JSON-ish: string/number/boolean/",
       "approvedAt": "2026-08-13T08:04:03.773Z"
@@ -4379,7 +4383,7 @@
     },
     "30b47d9a746eb47e064bde7f187ed0c51c428cbbe560b0eb5c1947f85e68109e": {
       "excerpt": "packages/graphql-api-projector/src/codegen.test.ts — generateGraphQLClient tests",
-      "approvedAt": "2026-08-13T07:49:07.405Z"
+      "approvedAt": "2026-08-16T06:32:07.303Z"
     },
     "30b5b246111ae416b378a5be88ba12c0e1015cfefa30d789c5e9d69e2ac93326": {
       "excerpt": "A resource at one concrete URI, listable and readable as-is.",
@@ -4435,7 +4439,7 @@
     },
     "3130898e27bbed2fad0599c65b2aceed50439f38a73a74542a2760b11922ef0f": {
       "excerpt": "Named type declarations a `ref`-kind output TypeRef may target — needed to expan…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "31326a1a3af9f1b0661439c6b802720d61138d54fa9e23eea05724097b5439d8": {
       "excerpt": "No pagination convention in Python's standard vocabulary — falls back",
@@ -6143,7 +6147,7 @@
     },
     "437e0ce6e6b8d66b2ed2a2bf6ccf7675675d6c58d25a5062ceda9d9224d3a96f": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:51:27.462Z"
+      "approvedAt": "2026-08-16T06:32:07.303Z"
     },
     "43877ec19440f4100a294385a17134197a9b80a0a9a2bcd772e54dcc184da3b1": {
       "excerpt": "No field-level construct for a method surface — degrades to `object`,",
@@ -6680,6 +6684,10 @@
     "49602e096569d445c7f9527b879ba9e17331a867547ac5e1c262c06c549768a3": {
       "excerpt": "============================================================================",
       "approvedAt": "2026-08-13T08:03:36.766Z"
+    },
+    "497a33466229284298212542a1ac3dd796c6bb1c002a93331944fb5c65e8ac22": {
+      "excerpt": "A fallback position is either a container of further operations",
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "4982b171d37b9049e9136b309bbffe6dfca7b24b15674334097721a0bfce7af0": {
       "excerpt": "============================================================================",
@@ -7391,7 +7399,7 @@
     },
     "51b3931b2a31d44b3ade8a816a38502e6ec1b73703e749fa6e25e53dd81e1f48": {
       "excerpt": "Full ordered arg list (captured-fallback first, then declared) — same order `pro…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "51d382de1a894886198fdea6ac35e974e41151e38861919496f19fc043685d07": {
       "excerpt": "Per-tool derived facts as TypeRefs (pre-projection).",
@@ -7987,7 +7995,7 @@
     },
     "56faacb60c7146c4d4d58110c33b40e9a0b0781ae7feefddd472744977241115": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.405Z"
+      "approvedAt": "2026-08-16T06:32:07.303Z"
     },
     "56fff1b5d23604b1172fc30bfebb98e636f5b28cc8606bb7cca6eb3657794e1c": {
       "excerpt": "Lossy spot: toFlatBuffersTable emits `(required)` only when the source",
@@ -8673,6 +8681,10 @@
       "excerpt": "draft-04 §5.5.3 `allOf`: every listed schema must validate — the faithful",
       "approvedAt": "2026-08-13T08:04:03.606Z"
     },
+    "5ea5d848126776d3133c7aced8182e64ecaca99203fb2715b38aad2d4a6a23fe": {
+      "excerpt": "`(input: FooInput): Promise<FooOutput> => __call(...)` — a single operation's ca…",
+      "approvedAt": "2026-08-16T06:32:07.309Z"
+    },
     "5eb26cb76c13780d4c8199208b6b0d6966fa18f0ead56756ccf506143f8d1138": {
       "excerpt": "---------------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:43:20.205Z"
@@ -9031,7 +9043,7 @@
     },
     "626e7685f5c10ae5d25f022ea966ba58759076b46b4492bcc9dbc8a8d4c4e8b6": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.772Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "628fb1e9d1903ddb8b8c6e8deaacef6b4753326875cd6a84e6e8570b65623ab0": {
       "excerpt": "server, tmpDir, and the module are already set up by the previous test",
@@ -9595,7 +9607,7 @@
     },
     "6908ec8e039cc3f331e7a1ea70e42f046b630b054d6f9184678804c053012336": {
       "excerpt": "A valid bare JS identifier, or a quoted string literal key otherwise.",
-      "approvedAt": "2026-08-13T08:03:36.772Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "69124c02d3bc8208ac68c94d2a4a33d9f6df587a59d63843fabfb169ad5263b2": {
       "excerpt": "TypeRef -> C++17/20 struct/enum-class declarations with glaze",
@@ -9604,6 +9616,10 @@
     "692697741bf020044c1317e0d7fa0260f61a47eacc514f1ccbe62405e72df12d": {
       "excerpt": "── Primitives ────────────────────────────────────────────────────────────",
       "approvedAt": "2026-08-13T07:51:11.417Z"
+    },
+    "69299c1d2c6bd236114b08d8b179fd69bf12f5fe8256dea4ec7c37ceda767b4d": {
+      "excerpt": "`(input: FooInput) => Promise<FooOutput>` — a single operation's call-signature …",
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "692d45e4dabf6c75c286ceec5266eaa67504f1c995de623b944920915528d653": {
       "excerpt": "Swift type + SwiftyJSON accessor pair for every leaf/primitive kind this",
@@ -9655,7 +9671,7 @@
     },
     "69e2f68e3b49dc65b77881cb518835d352db0f4cd5f2a53bd665b9d53efa17d8": {
       "excerpt": "`\"books_add\"` -> `\"BooksAdd\"` — base name for that op's `<Base>Input`/`<Base>Out…",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "69ea8a27102d115a21c3e502161a94fe0bf8da0bbf71f83d453b396aa29ad21d": {
       "excerpt": "https://kotlinlang.org/docs/enum-classes.html + Gson's `@SerializedName`",
@@ -10035,7 +10051,7 @@
     },
     "6da0c8c5fb14f4104668cd559ab62cdb3ccd7c443a14fb896f50f3a618395a0b": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "6da59834b5b2b695ed105c5df92588c9d1b2e258b4dba958f376be782d06b873": {
       "excerpt": "Cached variants — Tier 1 (cache.ts's `checkCache`) gates whether a",
@@ -10483,7 +10499,7 @@
     },
     "7250056a463bc013e79e8e9c6dbd772769e94a1f39b27a8f5b3b4c61030deaf0": {
       "excerpt": "Generate standalone TypeScript client source from a `Node` tree. The",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "7256deead265e9ad0a9528ffc31fcc2703f54c1667fc4791da5a1c5e114def00": {
       "excerpt": "Client codegen — generates a standalone, typed TypeScript client directly",
@@ -10723,7 +10739,7 @@
     },
     "74b31892deadef1025dc4f4f6b448903990a5a385f6ceada294f5f828aaf9fa7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "74b3a7cdc39d6e3d5fa1bc24b2e728250f5f7799944bba403072290717d75ec0": {
       "excerpt": "ClientOfVerbNode: maps a verb node to its callable signature.",
@@ -12385,6 +12401,10 @@
       "excerpt": "-----------------------------------------------------------------------",
       "approvedAt": "2026-08-13T07:55:26.267Z"
     },
+    "8731fcc6b9b8b4693e9d00cac09a083911596005e1fdfe3beb4d401755aceefd": {
+      "excerpt": "Before the fix this matched `readonly bookId: (bookId: string) => {}`",
+      "approvedAt": "2026-08-16T06:32:07.303Z"
+    },
     "8733a60cf9669fa85ddee4ea0e6a3af4a1b08c1f74d9fc8be57688ea7de74016": {
       "excerpt": "Recovers a validated node's phantom input/output, falling back to a plain",
       "approvedAt": "2026-08-13T07:56:54.059Z"
@@ -12743,7 +12763,7 @@
     },
     "8b26fa018785274167131f94d68996b57b0dcf325bc94efa83e7e34b92940ff7": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "8b27a3898b9783fca3015546964b78283529d571966296e201667900b8497071": {
       "excerpt": "Degrade target for kinds this projector has no native construct for",
@@ -13003,7 +13023,7 @@
     },
     "8ddcf3c4a2b1aa38dbacf93d7a1330c2c4559bdb3798e75bc57d0a5d602e2add": {
       "excerpt": "Name of the emitted `Client` type and factory return type. Defaults to \"Client\".",
-      "approvedAt": "2026-08-13T08:03:36.772Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "8df25b10b148fbf5aef8ee00448890715975807276497acb96fb360dc35cdb88": {
       "excerpt": "Yup validator code projector. Emits Yup schema source text, not runtime schemas.",
@@ -15231,7 +15251,7 @@
     },
     "a62ab7c68a18f6e26c5737f5932b1097e51f140c135282344b9945caefa14744": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.816Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "a62ec4757811bc29b2264d027c81d0194d41293ede88a51d0950ef8eb0267e69": {
       "excerpt": "If one variant has > 90% of the values, the other is likely dirty",
@@ -16919,7 +16939,7 @@
     },
     "b851d4341c438e00b4c0d848d46be3bd0b2d81af5137ca12ba2a9de63752e617": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T08:03:36.772Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "b851f6db34ce9fbd7b7ed61923068376a922169eb1471bc1e2e86beaee67576e": {
       "excerpt": "A single boolean literal.",
@@ -17499,7 +17519,7 @@
     },
     "be7bccdaedf743bc77cbd3d9a427ddc3dd694dc16fe9b3da7fd7e94e38e72285": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.405Z"
+      "approvedAt": "2026-08-16T06:32:07.303Z"
     },
     "be84d16bfa4008b5d2b9b01ff8d757e0e61ad13bca29cdb6b2448733fd345095": {
       "excerpt": "============================================================================",
@@ -20453,6 +20473,10 @@
       "excerpt": "`meta.http` fields valid at LEAF (operation) position only — same flat, shape-fo…",
       "approvedAt": "2026-08-13T08:03:36.794Z"
     },
+    "dde8710665f9de4fc46ba37045c2061c045983d264991fda9e2c6456931aa19c": {
+      "excerpt": "Before the fix, `client.books.bookId` was `() => ({})` (a caller",
+      "approvedAt": "2026-08-16T06:32:07.303Z"
+    },
     "ddeadc3c8643dab9c56a4a0d51d6bdd81d22b7a5152797a716cbf816650a010a": {
       "excerpt": "client.todos.POST({title: \"new todo\"}) → Promise<Todo>",
       "approvedAt": "2026-08-13T07:55:26.272Z"
@@ -21000,6 +21024,10 @@
     "e38e1fc69af605e709d1a2c03ca8622f117daec40573a24939f866d50e25e5be": {
       "excerpt": "Narrows the JSON-RPC error envelope's `data` field for this method (see `jsonRpc…",
       "approvedAt": "2026-08-13T07:55:47.193Z"
+    },
+    "e38eedb6fa79054dbf2bbf7c4bb6ae549ee1bd5cd983325eefe31f89e18ce981": {
+      "excerpt": "`fallback.subtree` may be a bare leaf (`op()`) instead of a branch",
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "e392583ac6f7f9f56b608dbc057733f7dfe0acc748a3cb6fa20d4245bee446b2": {
       "excerpt": "Nested objects need field-name context to be named (see the module doc",
@@ -21795,7 +21823,7 @@
     },
     "ec5e470d7c27a68b7abcc24d903854893bae5195b2c3bb220719f315e594f363": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.405Z"
+      "approvedAt": "2026-08-16T06:32:07.303Z"
     },
     "ec7bb07df39563728370c97d115513df48d8abb08cc9bbaa364604fb73e59bdd": {
       "excerpt": "---------------------------------------------------------------------------",
@@ -22751,7 +22779,7 @@
     },
     "f5aa1f3073e7f4a78ab336df85d27477ded4ce29af0f918c631075ad9c4b8ce2": {
       "excerpt": "Same merge order/precedence as project.ts's buildField/buildDispatch and",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "f5aac375e2f934369dc5733d571395673ede28ba1982111597694ad918fd1280": {
       "excerpt": "Paired bootstrap significance test: given two equal-length series of",
@@ -22935,7 +22963,7 @@
     },
     "f75bd88370d865bcd2238fbaea9270a015496467077d953df715ac5b83472311": {
       "excerpt": "A bare property-access expression, or bracket notation when `key` isn't a valid …",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "f787a6338463324392fcfc5527996c55bea993dd29ddf5fce09fc3fdd48885e3": {
       "excerpt": "A class instance carries only nominal identity (className/source), never",
@@ -23263,7 +23291,7 @@
     },
     "fb24e9e95d334cee18fd90d367e78336a57b3f7f442f4b614392cec9c7c17a1a": {
       "excerpt": "============================================================================",
-      "approvedAt": "2026-08-13T07:49:07.403Z"
+      "approvedAt": "2026-08-16T06:32:07.309Z"
     },
     "fb2872af84f9d00cb53276ab3c09899af50c4771a63f0e753159602144231d9f": {
       "excerpt": "Renders a complete named declaration for `ref` under `name` — a record",
