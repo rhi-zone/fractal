@@ -32,14 +32,32 @@
 //      single-entry Program costs, while the sum of N independent
 //      single-entry Programs' file counts is ~N times that — this is the
 //      literal mechanism the memory blowup is made of, and it can't flake.
-//   2. Measured (informative, generous threshold, forced GC before each
-//      reading via `Bun.gc(true)`): actual heapUsed comparison between the
-//      "16 independent Programs in one process" path (the pre-fix shape —
-//      still what happens today if a caller omits the `program` parameter,
-//      e.g. a one-off single-file extraction) and the "one shared Program"
-//      path (the fix). Real memory measurement is inherently noisier than
-//      (1), so the threshold leaves wide margin — the point is to catch a
-//      gross regression, not to pin an exact number.
+//   2. Measured (real memory comparison, deliberately NOT `heapUsed`): the
+//      "16 independent Programs in one process, all still reachable" shape
+//      (the pre-fix path — still what happens today if a caller omits the
+//      `program` parameter — modeled here as the worst case where nothing
+//      has been GC'd yet, i.e. GC hasn't caught up) versus the "one shared
+//      Program covering the same roots" shape (the fix). Measured via
+//      `process.memoryUsage().heapTotal` (the VM's actual committed heap
+//      size) after an explicit `Bun.gc(true)`, not `.heapUsed`.
+//
+//      This split was forced by a real finding, not a style preference: on
+//      Bun 1.3.9, `.heapUsed` does not reliably fall back down after
+//      `Bun.gc(true)` even when the objects it counted are provably
+//      unreachable and fully collected — confirmed with a minimal repro
+//      (allocate ~600MB of plain objects, drop the reference, force GC:
+//      `.heapTotal` correctly shrinks back near baseline, `.heapUsed` stays
+//      pinned at its prior high-water mark indefinitely, surviving further
+//      forced GCs). That made the original version of this test (which read
+//      `.heapUsed`) fail nondeterministically — independently of anything
+//      `createExtractorProgram` does — roughly 30-40% of runs, because the
+//      the pre-GC-drop "peak" sample and the post-GC "final" reading were
+//      being compared against a metric that only ever goes up. `.heapTotal`
+//      does not have this problem: across dozens of local repro runs it
+//      separates the two shapes by ~8x with no overlap (independent-and-
+//      retained ~850MB vs. shared ~104MB for this fixture), instead of the
+//      `.heapUsed`-based version's readings landing anywhere from a 2.6x
+//      apparent win down to a dead heat purely on GC-scheduling luck.
 
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -60,10 +78,12 @@ function mb(n: number): string {
   return (n / 1024 / 1024).toFixed(1);
 }
 
-function forceGcHeapUsed(): number {
+/** Forces a full GC, then reads `heapTotal` (the VM's committed heap size) —
+ * deliberately not `heapUsed`; see the file header for why. */
+function forceGcHeapTotal(): number {
   const bunGc = (globalThis as { Bun?: { gc?: (force: boolean) => void } }).Bun?.gc;
   if (typeof bunGc === "function") bunGc(true);
-  return process.memoryUsage().heapUsed;
+  return process.memoryUsage().heapTotal;
 }
 
 /** Build a synthetic fixture tree: one large `shared.ts` (many exported
@@ -125,20 +145,30 @@ describe("createExtractorProgram — memory-shape regression (batch vs per-call)
     }
   });
 
-  it("measured: building one shared Program for the whole batch uses far less peak heap than building one independent Program per entry, in the same process", () => {
+  it("measured: one shared Program for the whole batch commits far less heap than N independent Programs held live at once", () => {
     const { dir, entryFiles } = writeSyntheticFixture();
     try {
-      // Pre-fix shape: exactly what codegen-fractal-validators.ts did before
-      // this fix — loop, build a fresh Program per entry, keep going. No
-      // manual GC between iterations (this is how the real script ran).
-      const heapBefore = forceGcHeapUsed();
-      let independentPeak = heapBefore;
+      // Pre-fix shape, worst case: what codegen-fractal-validators.ts did
+      // before this fix — a fresh Program per entry, kept going — modeled
+      // here as all N still being reachable at once (the worst case of "GC
+      // hasn't caught up yet", which is the actual incident: garbage piling
+      // up faster than the GC reclaimed it). Explicitly retaining them
+      // trades away the "did GC race in time" question (unreliable — see
+      // file header) for a deterministic bound on that same scenario.
+      const independentPrograms: unknown[] = [];
       for (const entry of entryFiles) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-expressions -- force full parse+bind, then let it go out of scope like the real loop does
-        createExtractorProgram(entry).getTypeChecker();
-        independentPeak = Math.max(independentPeak, process.memoryUsage().heapUsed);
+        const program = createExtractorProgram(entry);
+        program.getTypeChecker();
+        independentPrograms.push(program);
       }
-      const independentFinal = forceGcHeapUsed();
+      const independentHeapTotal = forceGcHeapTotal();
+
+      // Drop the references and confirm the VM actually gives the memory
+      // back before building the fix's shape — otherwise a false "win"
+      // below could just be measurement noise rather than the shared
+      // Program genuinely costing less.
+      independentPrograms.length = 0;
+      const releasedHeapTotal = forceGcHeapTotal();
 
       // Fix shape: one shared Program, built once, reused (conceptually —
       // here just built once, since there's nothing left to reuse it for
@@ -146,20 +176,21 @@ describe("createExtractorProgram — memory-shape regression (batch vs per-call)
       // build.test.ts's "program shared across two different entry files").
       const sharedProgram = createExtractorProgram(entryFiles);
       sharedProgram.getTypeChecker();
-      const sharedFinal = forceGcHeapUsed();
+      const sharedHeapTotal = forceGcHeapTotal();
 
       console.log(
-        `[memory-shape] independent(${ENTRY_COUNT}x): peak=${mb(independentPeak)}MB final-after-gc=${mb(independentFinal)}MB` +
-          ` | shared(1x, ${ENTRY_COUNT} roots): final-after-gc=${mb(sharedFinal)}MB`,
+        `[memory-shape] independent(${ENTRY_COUNT}x, retained)=${mb(independentHeapTotal)}MB` +
+          ` | released=${mb(releasedHeapTotal)}MB` +
+          ` | shared(1x, ${ENTRY_COUNT} roots)=${mb(sharedHeapTotal)}MB`,
       );
 
-      // Generous margin (real memory measurement, not the deterministic
-      // file-count check above): the shared-Program path should retain
-      // meaningfully less than the peak the independent-Program loop hit
-      // along the way. This is the actual "bad vs less-bad" demonstration
-      // the fix was made for — not a tight bound (GC/allocator timing is
-      // inherently noisy), just a floor under further regression.
-      expect(sharedFinal).toBeLessThan(independentPeak * 0.9);
+      // The shared-Program path should cost meaningfully less than holding
+      // all N independent Programs live at once — this is the actual "bad
+      // vs less-bad" demonstration the fix was made for. Not a tight bound
+      // (allocator behavior varies by machine/Bun version), just a floor
+      // under further regression; locally this separates by ~8x with no
+      // overlap across dozens of runs, so 2x leaves ample margin.
+      expect(sharedHeapTotal).toBeLessThan(independentHeapTotal / 2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

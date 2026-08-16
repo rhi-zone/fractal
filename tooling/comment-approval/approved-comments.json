@@ -2299,7 +2299,7 @@
     },
     "18473e2baf5cd0e3dcdec26f4e38b6e6f5ab8132207d9abd4349e7983f0b1312": {
       "excerpt": "Fix shape: one shared Program, built once, reused (conceptually —",
-      "approvedAt": "2026-08-13T08:04:03.777Z"
+      "approvedAt": "2026-08-16T06:41:24.812Z"
     },
     "184a453c58f770bfae938c1e8bbdd74efb4d8df060e08076ba7725ddd8d7a39b": {
       "excerpt": "--- the one adapter -------------------------------------------------------",
@@ -4087,7 +4087,7 @@
     },
     "2d306c886e2fc78c882ea07c08595f5aacf91d0a3aecba5e5e5c9d26db7f6326": {
       "excerpt": "The union of all 12 entries' imports is just {shared.ts, the 12",
-      "approvedAt": "2026-08-13T08:04:03.777Z"
+      "approvedAt": "2026-08-16T06:41:24.812Z"
     },
     "2d496896dc206600996d56d0f7b198fe00d4550337ddfe89056b944564f7dff7": {
       "excerpt": "============================================================================",
@@ -4691,7 +4691,7 @@
     },
     "341093ff75db512600f4abd27baf839c2b9bbddde01dfd05bbc08652588a3846": {
       "excerpt": "Build a synthetic fixture tree: one large `shared.ts` (many exported",
-      "approvedAt": "2026-08-13T08:04:03.777Z"
+      "approvedAt": "2026-08-16T06:41:24.812Z"
     },
     "341dfbbdecec30413311f611dcc07150a8831bd77ea8a3f38ad20f7a33778736": {
       "excerpt": "per-param overrides — e.g. `{ apiKey: { store: \"header\", key: \"x-api-key\" } }`",
@@ -15937,6 +15937,10 @@
       "excerpt": "Assemble one query/mutation/subscription document string. Exported for the",
       "approvedAt": "2026-08-13T07:49:07.394Z"
     },
+    "acfc5930595debb73cbc17950d27c5bcc1cca36f9512dcf57598fbf7973c7780": {
+      "excerpt": "Pre-fix shape, worst case: what codegen-fractal-validators.ts did",
+      "approvedAt": "2026-08-16T06:41:24.812Z"
+    },
     "acfd81aaec6cc41232d6208e07f2d1473bbb43b6647fe7152b77e130abf85e91": {
       "excerpt": "Elm has no literal-value type — decodes the underlying JSON primitive and",
       "approvedAt": "2026-08-13T08:04:03.736Z"
@@ -16737,6 +16741,10 @@
       "excerpt": "`void`/`unknown` have no dedicated dry-types construct — both degrade to",
       "approvedAt": "2026-08-13T08:04:03.773Z"
     },
+    "b5c512585a067b25a19725017bcf92da31d739a9116a83aa1231fafee69488c0": {
+      "excerpt": "Drop the references and confirm the VM actually gives the memory",
+      "approvedAt": "2026-08-16T06:41:24.812Z"
+    },
     "b5fd58695af8c4fadd9e8bc0460a829ec276f476486037f2c560743bd38f1883": {
       "excerpt": "shape is untouched — provenance is metadata, not a wrapping constructor,",
       "approvedAt": "2026-08-13T07:56:55.968Z"
@@ -16951,7 +16959,7 @@
     },
     "b860a1658746dd34e27de4473a6ba8c88a3cb6208e52e50c3c2f9beecbd67cd6": {
       "excerpt": "The pre-fix shape: N independent single-root Programs, each paying",
-      "approvedAt": "2026-08-13T08:04:03.777Z"
+      "approvedAt": "2026-08-16T06:41:24.812Z"
     },
     "b868a4bb99d38479744d5c569350086fa6dfc87a723e6fb6ab823fae2817c475": {
       "excerpt": "Base URL prepended to every request path. Defaults to \"\" (relative).",
@@ -18757,6 +18765,10 @@
       "excerpt": "Matchers applied against the autodetected candidate set (files found by",
       "approvedAt": "2026-08-13T08:14:47.623Z"
     },
+    "cc71591ab1ab4194b22dbc7100790c0190f3b251e3d981b983bcd174bacfaed1": {
+      "excerpt": "The shared-Program path should cost meaningfully less than holding",
+      "approvedAt": "2026-08-16T06:41:24.812Z"
+    },
     "cc7c27f1316dc74e006987ae1c4973d0aca7f02134757a89cea2d900001ca31c": {
       "excerpt": "One `attach_function :name, [:type, ...], :returntype` declaration.",
       "approvedAt": "2026-08-13T07:56:55.979Z"
@@ -19847,7 +19859,7 @@
     },
     "d72d6d0a4ee7c897e049c8ade8066eab44d7b4a24541441de5aec4b661b76635": {
       "excerpt": "Each generated interface gets this many fields — big enough that the",
-      "approvedAt": "2026-08-13T08:04:03.777Z"
+      "approvedAt": "2026-08-16T06:41:24.812Z"
     },
     "d73bd3dfc25ad024b4f1c97b317bf6395a4967dab83b3bc0be229c75fede9980": {
       "excerpt": "Per-axis distribution summary — mean/stddev/CI. Keyed by `EvalAxis`.",
@@ -22065,6 +22077,10 @@
       "excerpt": "Count of TypeRef nodes in a subtree (the node itself + every descendant",
       "approvedAt": "2026-08-13T08:04:03.760Z"
     },
+    "eee1d258b3bb4ea0cfbc0eb89257a8cbf52fc6228e7e155d38c358f563ff7f35": {
+      "excerpt": "Memory-shape regression guard for `createExtractorProgram`.",
+      "approvedAt": "2026-08-16T06:41:24.812Z"
+    },
     "eeec887bf1678efec609142d7762c9d717e649ad0b2e49024c9533f3cfc7d25e": {
       "excerpt": "A tiny inline Standard-Schema validator so withValidation has a real schema",
       "approvedAt": "2026-08-13T07:56:54.063Z"
@@ -22980,6 +22996,10 @@
     "f7a7dff123a1ce511504192863922f94abb79d6bbd2ee913f0164711c69038a3": {
       "excerpt": "`buildWireApplyValidationModuleSource`, cached — Tier 1 (cache.ts's",
       "approvedAt": "2026-08-13T08:14:47.631Z"
+    },
+    "f7a83121cff74d93fbcd73f5aa712dbc786ad75283482b031c2eb5dc227817a6": {
+      "excerpt": "Forces a full GC, then reads `heapTotal` (the VM's committed heap size) —",
+      "approvedAt": "2026-08-16T06:41:24.812Z"
     },
     "f7b4b742489c83824d37ea4cba61303fc53c683970d967a8b4399e53ad524d9b": {
       "excerpt": "============================================================================",
