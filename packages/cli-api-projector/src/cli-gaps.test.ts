@@ -1,15 +1,11 @@
-// packages/cli-api-projector/src/cli-gaps.test.ts — @rhi-zone/fractal-cli-api-projector
-//
-// Tests for the mechanical CLI DX gaps closed alongside the help machinery:
+// Tests for the mechanical CLI DX surface around the help machinery:
 // --version, CliMeta.alias dispatch + help text, and Levenshtein "did you
 // mean?" suggestions for unknown subcommands. Required-field validation and
-// schema-default filling used to be a projector-local fallback
-// (`validateRequired`/`applyDefaults`, tested directly here) — both were
-// deleted (see docs/design/wire-profiles-and-staged-validation.md, "What
-// goes away"): that behavior now lives entirely in the generated wire
-// validator, wired via `applyValidation(key, tree, "cli")` (see
-// cli-validators.test.ts), and a leaf with no such call site gets raw wire
-// values with no required-field/defaults handling at all.
+// schema-default filling live entirely in the generated wire validator,
+// wired via `applyValidation(key, tree, "cli")` (see
+// cli-validators.test.ts, and docs/design/wire-profiles-and-staged-
+// validation.md, "What goes away"); a leaf with no such call site gets raw
+// wire values with no required-field/defaults handling at all.
 
 import { describe, it, expect } from "bun:test";
 import { runCli, CliError } from "./cli.ts";
@@ -75,7 +71,7 @@ describe("--version / -V", () => {
 // 2. No local required-field/defaults handling — `opts.schemas` only drives
 // help text now; a leaf with no `applyValidation(key, tree, "cli")` rewriter
 // gets raw wire values with no required-field check and no defaults-fill,
-// even when a `schemas` map IS supplied (help text and dispatch are
+// even when a `schemas` map is supplied (help text and dispatch are
 // independent — see `CliOpts.schemas`'s doc comment).
 // ============================================================================
 

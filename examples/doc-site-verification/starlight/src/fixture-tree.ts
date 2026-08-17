@@ -1,13 +1,11 @@
-// examples/doc-site-verification/starlight/src/fixture-tree.ts
-//
 // Identical shape to the Docusaurus site's own src/fixture-tree.ts (same
 // header rationale applies — single source of truth shared by generate.ts
-// and this site's live wiring) — deliberately duplicated rather than
-// imported across the two site directories: each site is an independent,
-// non-bun-workspace npm project (examples/doc-site-verification/README.md),
-// so there is no shared-source import path between them that wouldn't
-// reintroduce exactly the file:/workspace-resolution complexity each site's
-// own package.json already carries for the real workspace packages.
+// and this site's live wiring). Duplicated rather than imported across the
+// two site directories: each site is an independent, non-bun-workspace npm
+// project (examples/doc-site-verification/README.md), and there is no
+// shared-source import path between them that wouldn't reintroduce the
+// file:/workspace-resolution complexity each site's own package.json
+// already carries for the real workspace packages.
 
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs";

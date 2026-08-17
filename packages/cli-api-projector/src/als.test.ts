@@ -1,9 +1,9 @@
-// packages/cli-api-projector/src/als.test.ts — CliOpts.als
+// CliOpts.als.
 //
 // Covers: handler runs inside the configured AsyncLocalStorage context,
 // `init` receives CLI dispatch context (CliAlsContext), concurrent
 // invocations stay isolated, and ALS composes with `opts.middleware` as the
-// INNERMOST wrapper (middleware sees the call before/after the ALS-entered
+// innermost wrapper (middleware sees the call before/after the ALS-entered
 // handler — see `packages/http-api-projector/src/preset.ts`'s sibling `als`
 // option for the same contract on HTTP).
 
@@ -82,8 +82,8 @@ describe("CliOpts.als", () => {
     const storage = new AsyncLocalStorage<{ requestId: string }>();
     const tree = api_({
       whoami: op(async (_: unknown) => {
-        // Yield a tick so concurrent runs interleave — proves isolation isn't
-        // an artifact of strictly sequential execution.
+        // Yield a tick so the concurrent runs below genuinely interleave,
+        // exercising isolation under concurrent execution.
         await new Promise((r) => setTimeout(r, 0));
         return { requestId: storage.getStore()?.requestId ?? "none" };
       }, {}),
@@ -110,7 +110,7 @@ describe("CliOpts.als", () => {
 
     const observe: CliMiddleware = (next) => async (input, stores) => {
       // Before calling `next`, ALS hasn't been entered yet — middleware runs
-      // OUTSIDE the store (ALS is the innermost wrapper, closer to the
+      // outside the store (ALS is the innermost wrapper, closer to the
       // handler than middleware — see CliOpts.als).
       seenBeforeNext = storage.getStore()?.requestId;
       const result = await next(input, stores);

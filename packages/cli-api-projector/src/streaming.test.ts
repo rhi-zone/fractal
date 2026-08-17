@@ -1,5 +1,4 @@
-// packages/cli-api-projector/src/streaming.test.ts — async-iterable /
-// streaming handler support in the CLI projector.
+// Async-iterable / streaming handler support in the CLI projector.
 //
 // Covers: docs/design/middleware-and-caller-context.md — "Streaming and
 // Progress". A handler returning an AsyncIterable is detected structurally
@@ -7,7 +6,7 @@
 // incrementally: StreamProgress yields go to stderr as human-readable lines,
 // StreamChunk yields (and untagged yields) go to stdout as JSONL, and the
 // generator's return value is the final stdout JSONL line. Non-async-iterable
-// returns are unaffected (backwards compat).
+// returns use the normal (non-streaming) output path.
 
 import { describe, expect, it } from "bun:test";
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
@@ -142,12 +141,11 @@ describe("CLI streaming — async-iterable handlers", () => {
     const io = {
       stdout: {
         write: (s: string) => {
-          // Record write order relative to generator progress — if runCli
-          // buffered (collected all values before writing any), every
-          // "after-yield-N" marker would already be in `order` by the time
-          // the FIRST write happens. True incremental streaming means the
-          // first write happens right after the first yield, before the
-          // generator has produced its second value.
+          // Each write records a snapshot of `order` at the moment it
+          // happens, capturing how far the generator has progressed
+          // relative to this write. Incremental streaming writes each
+          // value right after its yield, before the generator produces
+          // the next one.
           writes.push(`${s.trim()} | order-so-far=${order.join(",")}`);
         },
       },
@@ -155,9 +153,10 @@ describe("CLI streaming — async-iterable handlers", () => {
       confirm: async () => true,
     };
     await runCli(tree, ["stream"], io);
-    // The first stdout write must happen before "after-yield-2" is recorded —
-    // proof the second value wasn't produced (and thus not buffered) before
-    // the first was written out.
+    // The first stdout write happens before "after-yield-2" is recorded,
+    // i.e. before the second value is produced — writes are emitted
+    // incrementally as the generator progresses, not collected and
+    // flushed at the end.
     expect(writes[0]).toContain(`order-so-far=${["before-yield-1"].join(",")}`);
     expect(writes[0]).not.toContain("after-yield-2");
   });

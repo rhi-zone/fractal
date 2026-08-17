@@ -1,42 +1,38 @@
-// packages/type-ir/src/from-sql.ts — @rhi-zone/fractal-type-ir/from-sql
-//
 // SQL DDL (`CREATE TABLE ...`) -> TypeRef, the reverse direction of sql.ts's
 // TypeRef -> SQL DDL projector (toSqlDdl/toCreateTable). Covers the three
-// dialects sql.ts targets: postgres, mysql, sqlite (sql-mssql.ts's MSSQL
+// dialects sql.ts targets: postgres, mysql, sqlite. sql-mssql.ts's MSSQL
 // dialect is a separate projector with its own IDENTITY/NVARCHAR conventions
-// and is out of scope here, same as sql.ts itself never emits MSSQL DDL).
+// and is out of scope here, matching sql.ts itself, which never emits MSSQL DDL.
 //
-// A lightweight hand-rolled parser, not a real SQL grammar — CREATE TABLE's
-// surface is bounded enough (column list + a handful of table-level
-// constraints) that a full parser-generator/grammar dependency isn't
-// justified. SELECT/INSERT/views/triggers/stored procedures are explicitly
-// out of scope, matching the brief.
+// This is a lightweight hand-rolled parser, not a full SQL grammar: CREATE
+// TABLE's surface is bounded enough (column list + a handful of table-level
+// constraints) that a parser-generator/grammar dependency isn't warranted.
+// SELECT/INSERT/views/triggers/stored procedures are out of scope.
 //
 // Column type mapping mirrors sql.ts's own leaf handlers where a dedicated IR
-// kind exists (uuid/datetime/date/time/duration/bytes from kinds/common.ts) —
-// deliberately NOT the literal `string` + `meta.format` shape a first read of
-// "UUID -> string (format: uuid)" might suggest, because BLOB/BYTEA's own
-// "-> bytes" mapping already establishes the dedicated-kind convention, and
-// using `string`+meta.format here would silently break round-tripping through
-// sql.ts (whose handlers dispatch on `shape.kind`, e.g. `"uuid"` -> `UUID`,
-// not on `meta.format`). Kinds without a dedicated IR representative (e.g. no
-// generic "unsigned" or "interval-less" concept) fall back to `meta` instead.
+// kind exists (uuid/datetime/date/time/duration/bytes from kinds/common.ts),
+// rather than the literal `string` + `meta.format` shape ("UUID -> string
+// (format: uuid)") a first read might suggest: BLOB/BYTEA's own "-> bytes"
+// mapping already establishes the dedicated-kind convention, and using
+// `string`+meta.format here would break round-tripping through sql.ts, whose
+// handlers dispatch on `shape.kind` (e.g. `"uuid"` -> `UUID`), not on
+// `meta.format`. Kinds without a dedicated IR representative (e.g. no generic
+// "unsigned" or "interval-less" concept) fall back to `meta` instead.
 //
-// Column-level SQL concepts sql.ts's forward direction doesn't have a
-// dedicated IR shape for (PRIMARY KEY, UNIQUE, CHECK-as-raw-text,
-// AUTO_INCREMENT/SERIAL) are preserved as open `meta` conventions local to
-// this pair of modules:
+// Column-level SQL concepts sql.ts's forward direction has no dedicated IR
+// shape for (PRIMARY KEY, UNIQUE, CHECK-as-raw-text, AUTO_INCREMENT/SERIAL)
+// are preserved as open `meta` conventions local to this pair of modules:
 //   - meta.primaryKey: boolean — column participates in the table's primary key.
 //   - meta.unique: boolean — column has a single-column UNIQUE constraint.
 //   - meta.autoincrement: boolean — SERIAL/BIGSERIAL/AUTO_INCREMENT/AUTOINCREMENT.
 //   - meta.references: { table: string; column?: string } — FOREIGN KEY target.
-//     sql.ts's toSqlDdl DOES read this one back (unlike the others above) and
-//     emits a `REFERENCES table(column)` clause, so this key round-trips.
-//   - meta.checks: string[] — CHECK clause text that didn't parse into one of
-//     the structured constraint keys sql.ts's buildChecks already understands
+//     sql.ts's toSqlDdl reads this key back and emits a `REFERENCES
+//     table(column)` clause, so it round-trips (the other keys above do not).
+//   - meta.checks: string[] — CHECK clause text that doesn't parse into one of
+//     the structured constraint keys sql.ts's buildChecks understands
 //     (minimum/maximum/exclusiveMinimum/exclusiveMaximum/minLength/maxLength/
-//     multipleOf) — those DO get parsed back into their structured form so a
-//     round trip through sql.ts's toSqlDdl regenerates an equivalent CHECK.
+//     multipleOf); those parse back into their structured form so a round
+//     trip through sql.ts's toSqlDdl regenerates an equivalent CHECK.
 // The table's own object-level TypeRef additionally carries:
 //   - meta.primaryKey: string[] — full (possibly composite) primary key column
 //     list, independent of the per-column boolean above.
@@ -119,10 +115,10 @@ function parseCreateTable(stmt: string): ParsedCreateTable | undefined {
   if (match === null) return undefined;
   const name = match[1] ?? match[2] ?? match[3] ?? match[4];
   if (name === undefined) return undefined;
-  // The regex's `([\s\S]*)` for the body is greedy across the WHOLE
-  // statement, which would swallow a trailing `)` that actually closes the
-  // outer CREATE TABLE paren, not a nested one. Re-derive the body by
-  // scanning for the matching close paren of the FIRST `(` instead.
+  // The regex's `([\s\S]*)` for the body is greedy across the whole statement,
+  // so it would swallow a trailing `)` that actually closes the outer CREATE
+  // TABLE paren rather than a nested one. The body is re-derived by scanning
+  // for the matching close paren of the first `(` instead.
   const openIdx = stmt.indexOf("(", match.index);
   if (openIdx < 0) return undefined;
   let depth = 0;

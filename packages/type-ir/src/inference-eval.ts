@@ -1,10 +1,8 @@
-// packages/type-ir/src/inference-eval.ts — @rhi-zone/fractal-type-ir/inference-eval
-//
 // Evaluation harness for JSON inference quality. `from-json-corpus.ts`'s
 // heuristics (K/N < 1/3 enum saturation, Jaccard > 0.1 discriminated-union
 // splits, growthRatio > 0.5 dict detection, …) were hand-picked with no
 // labeled-corpus validation. This module closes that gap by running
-// inference BACKWARDS from a known-good schema:
+// inference backwards from a known-good schema:
 //
 //   schema --(generateCorpus)--> synthetic JSON values --(fromJsonCorpus)-->
 //     inferred schema --(scoreInference against the original)--> quality report
@@ -13,16 +11,16 @@
 //   - `generateCorpus` — the inverse of inference: given a TypeRef, produce
 //     N synthetic JSON values that conform to it.
 //   - `scoreInference` — given the original schema and what inference
-//     produced from a corpus generated from it, compute precision/recall/F1
+//     produced from a corpus generated from it, computes precision/recall/F1
 //     metrics along several axes (field coverage, type accuracy, enum
 //     detection, dict-vs-record detection, union fidelity).
 //   - `runEvaluation` — drives a labeled set of schemas through both at
 //     several corpus sizes and reports how quality trends with N.
 //
-// This is deliberately independent of any one threshold's current value —
-// it measures outcomes (did we recover the right shape), not the internals
-// (which constant fired). That's what makes it useful for tuning the
-// thresholds in from-json-corpus.ts: change a threshold, rerun, compare.
+// The scoring is independent of any one threshold's current value: it
+// measures outcomes (did inference recover the right shape), not which
+// internal constant fired. That makes it useful for tuning the thresholds in
+// from-json-corpus.ts — change a threshold, rerun, compare.
 
 import { ancestors, t, types, type TypeRef } from "./index.ts";
 import {
@@ -127,13 +125,13 @@ function clamp(x: number, lo: number, hi: number): number {
 // Generator profiles — pluggable presence/value distributions layered on
 // top of generateValue's structural walk.
 //
-// Every eval result from Phase 1 was implicitly conditioned on exactly one
-// generation policy: uniform random picks, a flat optional-presence rate, a
-// flat null rate, uniform array/map sizing. That's a confound — a
-// clustering method that wins under uniform field presence could lose under
-// realistic skew, and none of the labeled cases probed enum false-positives
-// at all. `GeneratorProfile` swaps the DISTRIBUTIONS `generateValue` samples
-// from without touching the walk itself: each profile is one small
+// The default generation policy (uniform random picks, a flat
+// optional-presence rate, a flat null rate, uniform array/map sizing) is one
+// generation policy among several. Evaluating only under it is a confound —
+// a clustering method that wins under uniform field presence could lose
+// under realistic skew, and it never probes enum false-positives.
+// `GeneratorProfile` swaps the distributions `generateValue` samples from
+// without touching the walk itself: each profile is one small
 // `ProfileSampler` implementation, looked up once per corpus (via
 // `resolveGenOptions`) and consulted at the handful of call sites below
 // (optional-field presence, enum-member choice, scalar-leaf generation, map
@@ -162,18 +160,18 @@ export interface AdversarialBoundaryProfile {
   readonly kind: "adversarial-boundary";
   /**
    * Signed offset applied to each targeted threshold's exact cutover before
-   * constructing the corpus (e.g. `-0.02` lands just BELOW the cutover,
-   * `+0.02` just ABOVE). Default 0 (land as close to exact as integer
-   * sample/field counts allow). This profile directly evaluates threshold
-   * PLACEMENT, not typical-case behavior — it deliberately constructs
-   * corpora that land within one sample of a threshold's cutover, for every
+   * constructing the corpus (e.g. `-0.02` lands just below the cutover,
+   * `+0.02` just above). Default 0 (land as close to exact as integer
+   * sample/field counts allow). This profile evaluates threshold placement
+   * directly rather than typical-case behavior: it constructs corpora that
+   * land within one sample of a threshold's cutover, for every
    * threshold-bearing structural position it can act on:
    *
    *  - enum K/N ratio vs. 1/3 — `looksLikeEnum`'s `stronglyRepetitive`
    *    cutover (`from-json-corpus.ts`). Applied at every `enum`-shaped leaf:
    *    the corpus is built by cycling a fixed-size subset of the declared
    *    members (`K = round(N * (1/3 + epsilon))`) across the N samples, so
-   *    the OBSERVED K/N ratio lands exactly at the target (subject to
+   *    the observed K/N ratio lands exactly at the target (subject to
    *    integer rounding).
    *  - field-set Jaccard distance vs. 0.1 — `tryDetectDU`'s
    *    group-distinctness cutover (`from-json-corpus.ts`). Applied at every
@@ -190,7 +188,7 @@ export interface AdversarialBoundaryProfile {
    *    position: each generated key is fresh with probability
    *    `0.5 + epsilon`, else reused from previously-seen keys at that
    *    position — probabilistic, not exact. `growthRatio` itself is
-   *    `(distinct keys added) / (sample count)`, UNNORMALIZED by
+   *    `(distinct keys added) / (sample count)`, not normalized by
    *    per-sample map size, so this only lands near the target ratio when
    *    `GenerateOptions.mapSizeRange` puts (close to) one entry per sample
    *    (e.g. `[1, 1]`) — at larger map sizes the achieved ratio scales up
@@ -206,16 +204,17 @@ export interface HighCardinalityIdProfile {
    * at each plain `string`/`integer`-kind leaf position — near 1 means
    * near-unique per sample (UUID-like or sequential-ID-like). Default 0.98,
    * not exactly 1.0: real ID fields occasionally repeat (retries,
-   * re-fetches, pagination overlap), and a hard 1.0 is an easier case than
-   * this profile exists to probe. This is a NEGATIVE CONTROL: ground truth
-   * for every field this touches is "must NOT be detected as enum" — it
-   * exercises `scoreInference`'s enum-detection PRECISION axis (false
-   * positives), which none of `defaultLabeledCases` specifically probes
-   * (they all test recall — "did we find the real enum"). Only plain
-   * `string`/`integer`-kind leaves are affected; already-enum/literal-typed
-   * positions in the original schema are untouched, so a corpus generated
-   * under this profile still has real enums to (correctly) detect alongside
-   * the high-cardinality fields that must (correctly) be rejected.
+   * re-fetches, pagination overlap), a harder case to reject correctly than
+   * a hard 1.0 would be. This profile is a negative control for enum
+   * detection: ground truth for every field it touches is "must not be
+   * detected as enum," exercising `scoreInference`'s enum-detection
+   * precision axis (false positives) — the axis none of
+   * `defaultLabeledCases` probes on its own (those cases test recall: did
+   * inference find the real enum). Only plain `string`/`integer`-kind
+   * leaves are affected; already-enum/literal-typed positions in the
+   * original schema are untouched, so a corpus generated under this profile
+   * still has real enums alongside the high-cardinality fields that must be
+   * correctly rejected.
    */
   readonly cardinalityRatio?: number;
   /** ID value style: "uuid" (random hex UUID) or "sequential" (zero-padded counter / incrementing integer). Default "uuid". */
@@ -231,25 +230,24 @@ export interface DirtyOutlierProfile {
    * 0.95 — comfortably past `walkAndDetectDirty`'s `max / total > 0.9`
    * cutover (`from-json-corpus.ts`), so a corpus generated under the
    * default lands squarely in the shape that detection targets. Pass
-   * something below 0.9 (e.g. 0.85) to build the NEGATIVE-CONTROL boundary
+   * something below 0.9 (e.g. 0.85) to build the negative-control boundary
    * case instead — skewed, but not past the cutover, so dirty-data
-   * collapsing must NOT fire.
+   * collapsing must not fire.
    *
-   * This is the profile that makes `detectDirtyData`
-   * (`ResolveStrategy`/`AblationSignalKey`) measurable at all: before this
-   * hook existed, `generateValue`'s union branch always picked a variant
-   * uniformly, so `generateCorpus` essentially never produced the skewed
-   * 2-variant union `walkAndDetectDirty` looks for (see the historical note
-   * on `AblationSignalKey`).
+   * This profile is what makes `detectDirtyData`
+   * (`ResolveStrategy`/`AblationSignalKey`) measurable: without it,
+   * `generateValue`'s union branch picks a variant uniformly, so
+   * `generateCorpus` essentially never produces the skewed 2-variant union
+   * `walkAndDetectDirty` looks for.
    *
-   * Only affects `union` positions with EXACTLY 2 variants, matching
+   * Only affects `union` positions with exactly 2 variants, matching
    * `walkAndDetectDirty`'s own restriction — unions of any other arity fall
    * through to uniform picking, same as `uniformSampler`.
    */
   readonly dominantRatio?: number;
 }
 
-/** See the individual profile interfaces for what each varies and why. `{ kind: "uniform" }` (or omitting `profile` entirely) keeps Phase 1's original flat/uniform behavior. */
+/** See the individual profile interfaces for what each varies and why. `{ kind: "uniform" }` (or omitting `profile` entirely) keeps the flat/uniform default behavior. */
 export type GeneratorProfile =
   | { readonly kind: "uniform" }
   | ZipfianPresenceProfile
@@ -484,8 +482,8 @@ export interface GenerateOptions {
   /**
    * The presence/value-frequency distribution `generateValue` samples from,
    * in place of the flat/uniform defaults above. See `GeneratorProfile`.
-   * Default: `{ kind: "uniform" }` (Phase 1's original behavior — every eval
-   * result before this option existed was implicitly generated under it).
+   * Default: `{ kind: "uniform" }`, the flat/uniform generation policy
+   * described above.
    */
   readonly profile?: GeneratorProfile;
 }
@@ -685,7 +683,7 @@ export function generateCorpus(schema: TypeRef, n: number, options?: GenerateOpt
 //
 // Path convention: object fields append `.name`; array/map elements append
 // `[]`/`{}`; tuple elements append `[i]`. A `union`'s variants are indexed
-// UNDER THE SAME PATH as the union itself (not a new segment) — the fields a
+// under the same path as the union itself (not a new segment) — the fields a
 // union's variants carry are exactly what "did inference recover the right
 // fields" cares about, even though which variant a field came from is lost
 // at that resolution. Variant-level fidelity is covered separately by
@@ -716,7 +714,7 @@ function indexSchema(root: TypeRef): SchemaIndex {
   const enumMembersAt = new Map<string, ReadonlySet<string>>();
 
   function visit(ref: TypeRef, path: string, seen: ReadonlySet<TypeRef>): void {
-    if (seen.has(ref)) return; // guard against `ref`-free structural cycles (shouldn't occur, but stay safe)
+    if (seen.has(ref)) return; // breaks structural cycles that don't go through `ref` (two TypeRef nodes sharing object identity)
     const nextSeen = new Set(seen);
     nextSeen.add(ref);
 
@@ -818,8 +816,8 @@ export interface ScoreReport {
   /** Did we find the enum-shaped positions (vs. leaving them as plain string/integer). Shape only — says nothing about whether the recovered member set is right; see `enumMemberFidelity`. */
   readonly enumDetection: PrecisionRecallF1;
   /**
-   * Among positions BOTH schemas agree are enum-shaped, how well did the
-   * inferred member set match the true one. Precision: inferred members
+   * Among positions both schemas agree are enum-shaped, how well the
+   * inferred member set matches the true one. Precision: inferred members
    * that are real. Recall: real members that were found (the axis that
    * catches a rare member simply never appearing in a small sample — see
    * module doc / the zipfian-presence finding in inference-eval.test.ts).
@@ -829,9 +827,9 @@ export interface ScoreReport {
    * existing set-based convention. `comparedPositions === 0` (no position
    * where both schemas agree it's an enum) reports the vacuous perfect
    * score, same convention as `typeAccuracy`'s `compared === 0` case — this
-   * axis is about member-set quality GIVEN shape was found, so it's excluded
-   * from `overallF1` whenever there's nothing to compare, exactly like the
-   * other conditionally-included axes below.
+   * axis measures member-set quality given the shape was found, so it's
+   * excluded from `overallF1` whenever there's nothing to compare, same as
+   * the other conditionally-included axes below.
    */
   readonly enumMemberFidelity: PrecisionRecallF1 & { readonly comparedPositions: number };
   /** Did we find the dict-shaped positions (vs. leaving them as fixed-field record). */
@@ -1124,7 +1122,7 @@ export interface RunEvaluationTrialsOptions {
  * and — for two `runEvaluationTrials` calls made with the same `cases`
  * (same names/schemas), `sizes`, and `trialCount` but different
  * `EvalCase.config` — trial `i` in one call and trial `i` in the other were
- * generated from the SAME corpus, making per-index differences meaningful
+ * generated from the same corpus, making per-index differences meaningful
  * for `pairedBootstrapTest`.
  */
 export function runEvaluationTrials(
@@ -1191,13 +1189,12 @@ const statusEnumSchema = t(
   }),
 );
 
-// NOTE on shape: `tryDetectDU` (from-json-corpus.ts) only fires from
-// `walkAndDetectDU`'s `array` branch — it looks for a field whose value is
-// an ARRAY of union-shaped objects (`node.array.elementObjects`), not for a
-// corpus whose top-level values are themselves the union members. A
-// root-level union schema (like `apiResponse` above) therefore always
-// scores `unionFidelity.recall === 0` regardless of N — a real detection
-// gap this harness surfaced, not a sample-size problem. Nesting the union
+// `tryDetectDU` (from-json-corpus.ts) only fires from `walkAndDetectDU`'s
+// `array` branch — it looks for a field whose value is an array of
+// union-shaped objects (`node.array.elementObjects`), not a corpus whose
+// top-level values are themselves the union members. A root-level union
+// schema (like `apiResponse` above) always scores `unionFidelity.recall ===
+// 0` regardless of N, reflecting this detection gap. Nesting the union
 // under an array field here exercises the code path DU detection actually
 // supports.
 const discriminatedUnionSchema = t(
@@ -1248,23 +1245,21 @@ const dictSchema = t(
 // control automatically, the same way every other union-recovery signal's
 // positive control is classified.
 //
-// The dominant variant is `uint8` (fixed [0,255] range), NOT the generic
-// `types.integer` -- deliberately. `walkAndDetectDirty` re-infers each raw
-// value's type from scratch via a config-less `fromJson(val)` call and
-// compares it against the corpus-MERGED variant type via strict
-// `shapeEqual`. A generic `integer` variant generated over a wide range
-// (e.g. [-1000, 1000]) spans MULTIPLE narrow integer widths (`uint8`,
-// `int8`, `int16`, ...); `fromJson`'s per-value width narrowing picks a
-// different tight kind for different individual values even though the
-// corpus-wide merge widens them all to one common kind, so most individual
-// values silently fail the `shapeEqual` comparison against that widened
-// merged kind -- undercounting the true majority and making collapsing
-// fail to fire even at extreme skew. This was found empirically while
-// building this eval case (probing `types.integer` at 95%+ skew never
-// collapsed): pinning the dominant variant to a single fixed-width kind
-// like `uint8` keeps every individual re-inferred value's kind identical
-// to the merged kind, exercising `walkAndDetectDirty` as designed instead
-// of tripping over this width-narrowing mismatch.
+// The dominant variant is `uint8` (fixed [0,255] range) rather than the
+// generic `types.integer`. `walkAndDetectDirty` re-infers each raw value's
+// type from scratch via a config-less `fromJson(val)` call and compares it
+// against the corpus-merged variant type via strict `shapeEqual`. A generic
+// `integer` variant generated over a wide range (e.g. [-1000, 1000]) spans
+// multiple narrow integer widths (`uint8`, `int8`, `int16`, ...);
+// `fromJson`'s per-value width narrowing picks a different tight kind for
+// different individual values even though the corpus-wide merge widens
+// them all to one common kind, so most individual values fail the
+// `shapeEqual` comparison against that widened merged kind — undercounting
+// the true majority and keeping collapsing from firing even at extreme
+// skew. Pinning the dominant variant to a single fixed-width kind like
+// `uint8` keeps every individual re-inferred value's kind identical to the
+// merged kind, exercising `walkAndDetectDirty` as designed instead of
+// tripping over this width-narrowing mismatch.
 const dirtyOutlierSchema = t(
   types.object({
     id: t(types.integer),
@@ -1290,9 +1285,9 @@ export const defaultLabeledCases: readonly EvalCase[] = [
     // fromJson's default `arrayThreshold`): an empty-array sample infers as
     // `array<unknown>` (see from-json.ts's "empty tuple carries zero
     // information" rule), and unifying that against a populated sample's
-    // `array<object>` collapses the WHOLE element type to `unknown`
+    // `array<object>` collapses the whole element type to `unknown`
     // (`unknown` absorbs everything in `unifyTypes`) — a real corpus-merge
-    // gap this harness surfaced, not something this case is meant to probe.
+    // gap this harness surfaced, outside what this case is meant to probe.
     generateOptions: { arrayLengthRange: [3, 6] },
   },
   { name: "Growing Dict", schema: dictSchema, generateOptions: { mapSizeRange: [1, 5] } },
@@ -1309,23 +1304,24 @@ export const defaultLabeledCases: readonly EvalCase[] = [
 // Ablation runner (Phase 3 of the JSON-inference evaluation rigor plan) —
 // leave-one-out ablation over `ResolveStrategy`'s boolean detection toggles
 // (`from-json-corpus.ts`), following JSONoid's design: for each signal, run
-// the full evaluation once with the signal ON and once OFF (all other
-// signals at their default), across `trialCount` trials, and report on TWO
-// axes rather than one:
+// the full evaluation once with the signal on and once off (all other
+// signals at their default), across `trialCount` trials, and report two
+// axes:
 //
-//  - `discriminativePower` — does the signal ON improve RECALL on cases
-//    whose ground-truth schema actually HAS the shape the signal detects
+//  - `discriminativePower` — does the signal on improve recall on cases
+//    whose ground-truth schema actually has the shape the signal detects
 //    (e.g. `detectEnums` on the "Status Enum" case).
-//  - `overfitRate` — does the signal ON hurt PRECISION on cases whose
-//    ground truth does NOT have that shape (e.g. does `detectEnums` fire
-//    spuriously on cases with no enum fields at all). This is the axis
-//    `defaultLabeledCases` alone never probed before the `high-cardinality-id`
-//    profile (Phase 2) — JSONoid's finding was that these two axes trade off
-//    very differently per signal, so a signal that wins on recall can still
-//    be a net loss if it also tanks precision elsewhere.
+//  - `overfitRate` — does the signal on hurt precision on cases whose
+//    ground truth does not have that shape (e.g. does `detectEnums` fire
+//    spuriously on cases with no enum fields at all). Probing this axis
+//    requires the `high-cardinality-id` profile (Phase 2) —
+//    `defaultLabeledCases` alone has no negative controls for it. JSONoid's
+//    finding is that these two axes trade off very differently per signal,
+//    so a signal that wins on recall can still be a net loss if it also
+//    tanks precision elsewhere.
 //
 // Positive/negative case classification is automatic, not hand-curated: a
-// case is a positive control for a signal if its ORIGINAL schema contains
+// case is a positive control for a signal if its original schema contains
 // the shape that signal targets (checked via `indexSchema`, the same index
 // `scoreInference` builds), and a negative control if it doesn't. This is
 // the same principle the `high-cardinality-id` profile embodies (ground
@@ -1339,12 +1335,10 @@ export const defaultLabeledCases: readonly EvalCase[] = [
  * `detectDirtyData`'s effect is measurable via the "Dirty Outlier Field"
  * case in `defaultLabeledCases`, which pairs a 2-variant scalar union with
  * the `dirty-outlier` `GeneratorProfile` to land the skewed corpus shape
- * `walkAndDetectDirty` (from-json-corpus.ts) looks for. Before that profile
- * existed, `generateValue`'s union branch always picked a variant
- * uniformly — no profile hook varied union-variant selection — so
- * `generateCorpus` essentially never produced the >90%-skewed 2-variant
- * union this signal needs, and the ablation could only report a null tie
- * (see the git history on this module for that finding).
+ * `walkAndDetectDirty` (from-json-corpus.ts) looks for. Without that
+ * profile, `generateValue`'s union branch picks a variant uniformly, and
+ * `generateCorpus` essentially never produces the >90%-skewed 2-variant
+ * union this signal needs to be measurable.
  */
 export type AblationSignalKey =
   | "detectEnums"
@@ -1370,7 +1364,7 @@ const ablationSignals: readonly AblationSignalKey[] = [
  * discriminant-field detection, general structural splitting, CFD-style
  * discriminant search, and dirty-minority-variant collapsing respectively)
  * so they share `unionFidelity` as their target axis; each still gets its
- * own independent ON/OFF run (only that one toggle changes, the rest stay
+ * own independent on/off run (only that one toggle changes, the rest stay
  * at default), so the numbers legitimately differ per signal even though
  * the axis and case classification are the same.
  */
@@ -1404,11 +1398,11 @@ function hasShapeForSignal(schema: TypeRef, signal: AblationSignalKey): boolean 
   }
 }
 
-/** One ON-vs-OFF comparison, paired-bootstrap tested (same seeds on both sides — only the signal's toggle differs). */
+/** One on-vs-off comparison, paired-bootstrap tested (same seeds on both sides — only the signal's toggle differs). */
 export interface AblationDelta {
   readonly onMean: number;
   readonly offMean: number;
-  /** onMean - offMean. Positive means turning the signal ON helped (recall axis) or hurt (precision axis, where "helped" would be a smaller drop). */
+  /** onMean - offMean. Positive means turning the signal on helped (recall axis) or hurt (precision axis, where "helped" would be a smaller drop). */
   readonly meanDiff: number;
   readonly pValue: number;
   readonly significant: boolean;
@@ -1425,9 +1419,9 @@ export interface SignalAblationReport {
   readonly signal: AblationSignalKey;
   /** `ScoreReport` axis this signal's effect was measured on (see `signalAxis`). */
   readonly axis: "enumDetection" | "dictDetection" | "unionFidelity";
-  /** Recall-based: does the signal ON find more of what's really there, on cases whose ground truth has the shape. */
+  /** Recall-based: does the signal on find more of what's really there, on cases whose ground truth has the shape. */
   readonly discriminativePower: AblationDelta | AblationNotMeasurable;
-  /** Precision-based: does the signal ON introduce false positives, on cases whose ground truth does NOT have the shape. */
+  /** Precision-based: does the signal on introduce false positives, on cases whose ground truth does not have the shape. */
   readonly overfitRate: AblationDelta | AblationNotMeasurable;
   readonly positiveCaseNames: readonly string[];
   readonly negativeCaseNames: readonly string[];
@@ -1447,7 +1441,7 @@ function withSignalToggle(
   return cases.map((c) => ({ ...c, config: { ...c.config, [signal]: on } }));
 }
 
-/** Pools every trial's `part` (precision/recall) value for `signal`'s axis across every (case, n) in `summary`, in a stable order — the shape `pairedBootstrapTest` needs when the ON and OFF summaries were run over the same cases/sizes/trialCount (so index i on each side shares a seed). */
+/** Pools every trial's `part` (precision/recall) value for `signal`'s axis across every (case, n) in `summary`, in a stable order — the shape `pairedBootstrapTest` needs when the on and off summaries were run over the same cases/sizes/trialCount (so index i on each side shares a seed). */
 function pooledPart(
   summary: EvalTrialsSummary,
   signal: AblationSignalKey,
@@ -1461,7 +1455,7 @@ function pooledPart(
 
 /**
  * Leave-one-out ablation over every `AblationSignalKey`: for each signal,
- * run `cases` x `sizes` x `trialCount` twice (signal ON, signal OFF — all
+ * run `cases` x `sizes` x `trialCount` twice (signal on, signal off — all
  * other `ResolveStrategy` toggles left at their defaults) via
  * `runEvaluationTrials`, and report `discriminativePower` (recall delta on
  * positive-control cases) and `overfitRate` (precision delta on
@@ -1571,14 +1565,14 @@ export function ablationRunner(
 // Clustering-method sweep — the JSONoid-derived comparison the design calls
 // for: run each `clusteringMethod` across each `GeneratorProfile` and check
 // whether one method's confidence interval sits strictly above the other
-// two's on EVERY profile (crown it the default) or the intervals overlap
+// two's on every profile (crown it the default) or the intervals overlap
 // somewhere in the sweep (no universal default — expose as configuration).
 // Cases are chosen to isolate the specific clustering failure modes
 // `ResolveStrategy.clusteringMethod`'s doc names (chaining risk,
 // near-identical polymorphic-API-response shapes, and — critically —
 // `"key-signature"`'s own documented weakness: "over-splits ordinary
 // records with a few sparsely-present optional fields"). Leaving that last
-// case out would silently bias the sweep toward whichever method the OTHER
+// case out would silently bias the sweep toward whichever method the other
 // three cases were built to favor (key-signature, on this set); it's the
 // negative control that makes "crowned default" a claim earned across the
 // method's known failure mode, not just its known strength. Same schemas
@@ -1615,13 +1609,13 @@ const clusteringApiVariantsSchema = t(
   ]),
 );
 
-// A single population (NOT a union — no unionPaths in ground truth at all)
-// with six sparsely-present optional fields. Real records routinely look
-// like this (a handful of near-always-present fields plus a long tail of
-// rare ones), and every sample's key set differs from every other's purely
-// from independent presence noise — exactly the shape `key-signature`'s
-// doc warns it over-splits, since it groups by *exact* key-set signature
-// with no distance tolerance. `splitDissimilarObjects`'s ablation
+// A single population (not a union — no unionPaths in ground truth) with
+// six sparsely-present optional fields. Real records routinely look like
+// this (a handful of near-always-present fields plus a long tail of rare
+// ones), and every sample's key set differs from every other's purely from
+// independent presence noise — exactly the shape `key-signature`'s doc
+// warns it over-splits, since it groups by exact key-set signature with no
+// distance tolerance. `splitDissimilarObjects`'s ablation
 // (`ablationRunner`) already covers this schema as a generic
 // negative-control case; it's included here too so the clustering-method
 // sweep specifically stress-tests key-signature's weakness alongside its

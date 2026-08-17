@@ -8,10 +8,10 @@
 // cases, dict-vs-record stress, optional-field edge cases, dirty data, and
 // empty/degenerate corpora — at corpus sizes into the hundreds.
 //
-// Per the task: REPORT FAILURES, DO NOT FIX THE INFERRER. Any property that
-// fails is marked `.todo` (kept as documentation of the failure, not run in
-// CI) with a comment recording the minimal counterexample fast-check found.
-// Properties that pass stay as live `test(...)`.
+// A failing property is an inferrer finding, not a bug in this suite: it is
+// marked `.todo` (documented but excluded from CI) with a comment recording
+// the minimal counterexample fast-check found. Passing properties stay as
+// live `test(...)`.
 
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -37,11 +37,10 @@ function objectFields(ref: TypeRef): Record<string, TypeRef> {
 }
 
 // Recursively check that `value` is a plausible inhabitant of `inferred`.
-// This is a *structural sanity* check, not a full validator: it walks
-// containers and only asserts kind-level agreement (never crashes, never
-// silently mismatches gross shape). It intentionally does not need to
-// understand enum/DU/dict post-processing precisely — those are covered by
-// dedicated properties below.
+// This is a structural sanity check, not a full validator: it walks
+// containers and asserts kind-level agreement only (never crashes, never
+// silently mismatches gross shape). Enum/DU/dict post-processing is covered
+// precisely by dedicated properties below.
 function inhabits(value: unknown, ref: TypeRef): string | null {
   const kind = ref.shape.kind;
 
@@ -321,8 +320,8 @@ describe("adversarial: string format confusion", () => {
     fc.assert(
       fc.property(fc.oneof(almostUuid(), almostEmail(), almostDate()), (s) => {
         const inferred = inferOne(s);
-        // These are deliberately malformed vs. every format regex — must not
-        // be misclassified as a semantic string subtype.
+        // These strings are near-misses on every format regex; the inferrer
+        // must not misclassify them as a semantic string subtype.
         expect(inferred.shape.kind).toBe("string");
       }),
       { numRuns: 2000 },
@@ -1166,12 +1165,11 @@ describe("adversarial: misc numeric and structural edge cases", () => {
     );
   });
 
-  // Previously FAILED — see packages/type-ir/src/from-json-corpus.ts,
-  // walkAndDetectEnums. Enum detection replaced a field's TypeRef with
-  // `t(types.enum(members))` / `t(types.union(variants))` without carrying
-  // `ref.meta` through, dropping `meta.optional` set upstream by
-  // mergeObjectTypes when a field isn't present in every sample. Fixed by
-  // threading `ref.meta` through both return sites.
+  // Regression: walkAndDetectEnums (packages/type-ir/src/from-json-corpus.ts)
+  // must carry `ref.meta` through when it replaces a field's TypeRef with
+  // `t(types.enum(members))` / `t(types.union(variants))`, preserving
+  // `meta.optional` set upstream by mergeObjectTypes when a field isn't
+  // present in every sample.
   test("discriminant-like field missing from some elements does not crash DU detection", () => {
     fc.assert(
       fc.property(
@@ -1275,13 +1273,12 @@ describe("adversarial: large corpus", () => {
 // 13. K=1 literal detection — asymmetry and confidence scaling
 //
 // `looksLikeEnum` treats K===1 (every sample shares one value) as maximal
-// saturation, but now gates it on `literalMinSamples` (default 5, higher
-// than the general `enumMinSamples`) before committing — a K=1 corpus
-// below that size hasn't had much chance to show a second value.
-// Both the integer and string leaf paths turn a saturated K=1 into
-// `literal(v)` (walkAndDetectEnums, from-json-corpus.ts) — the string path
-// no longer special-cases K=1 into a one-member `enum` the way it used to;
-// that asymmetry has been fixed.
+// saturation, but gates it on `literalMinSamples` (default 5, higher than
+// the general `enumMinSamples`) before committing — a K=1 corpus below that
+// size hasn't had much chance to show a second value. Both the integer and
+// string leaf paths turn a saturated K=1 into `literal(v)`
+// (walkAndDetectEnums, from-json-corpus.ts); the string path collapses to
+// `literal`, not a one-member `enum`, matching the integer path.
 // ---------------------------------------------------------------------------
 
 describe("adversarial: K=1 literal/enum aggressiveness", () => {
@@ -1320,9 +1317,9 @@ describe("adversarial: K=1 literal/enum aggressiveness", () => {
     ];
     const inferred = fromJsonCorpus(samples);
     const fields = objectFields(inferred);
-    // status: K=1, N=5 clears literalMinSamples -> literal (symmetric with integers now)
+    // status: K=1, N=5 clears literalMinSamples -> literal, matching the integer path.
     expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" });
-    // id: K=5, N=5 -> K>=N -> "every value unique", conclusive evidence AGAINST enum
+    // id: K=5, N=5, so K>=N — every value is unique, conclusive evidence against enum.
     expect(fields.id!.shape.kind).not.toBe("enum");
     expect(fields.id!.shape.kind).not.toBe("union");
     expect(fields.id!.shape.kind).not.toBe("literal");
@@ -1386,13 +1383,10 @@ describe("adversarial: K=1 in arrays of objects", () => {
     ];
     const inferred = inferOne(samples);
     expect(inferred.shape.kind).toBe("array");
-    // CORRECTED. This asserted `string` and its comment said the point was to
-    // "confirm the two entry points disagree" — pinning the divergence as if it
-    // were a feature. It was not: `fromJson` is now defined as the N=1 case of
-    // corpus inference, so the five array elements are five observations of
-    // `status` and a constant across all five clears `literalMinSamples`. The
-    // old single-value path returned `string` only because it had no
-    // cross-element evidence machinery, not because `string` was right here.
+    // `fromJson` is the N=1 case of corpus inference, so the five array
+    // elements are five observations of `status`; a constant value across
+    // all five clears `literalMinSamples`, collapsing the field to
+    // `literal("active")` under both single-value and corpus inference.
     const el = (inferred.shape as { element: TypeRef }).element;
     const fields = objectFields(el);
     expect(fields.status!.shape).toEqual({ kind: "literal", value: "active" });
@@ -1448,13 +1442,13 @@ describe("adversarial: K=1 in arrays of objects", () => {
 //   ratio = K/N; ratio >= 0.5      -> not saturated -> not enum
 //   ratio <= 1/3                   -> strongly repetitive -> enum
 //   1/3 < ratio < 0.5              -> borderline: needs integer clustering
-//                                      corroboration; STRINGS HAVE NO
-//                                      CLUSTERING SIGNAL AVAILABLE (the
+//                                      corroboration; strings have no
+//                                      clustering signal available (the
 //                                      string branch calls looksLikeEnum
 //                                      without sortedValues), so borderline
-//                                      string ratios can never become enum.
+//                                      string ratios never become enum.
 //
-// Verified empirically against the current implementation.
+// The table above is verified empirically against the current implementation.
 // ---------------------------------------------------------------------------
 
 describe("adversarial: enum/non-enum boundary thresholds", () => {
@@ -1469,12 +1463,9 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
     expect(fields.tag!.shape).toEqual({ kind: "enum", members: ["a", "b", "c"] });
   });
 
-  // CORRECTED BEHAVIOUR. This asserted `string` under the old rule, which
-  // could only clear the 1/3-1/2 band via integer clustering — so a string
-  // field in that band could never become an enum no matter how strong its
-  // evidence. That asymmetry was an artifact of the escape hatch being
-  // integer-only, not a principle. The coverage rule treats both alike:
-  // a,b,c over 8 samples is 3/3/2, zero singletons, estimated coverage 1.0.
+  // The coverage rule treats string and integer fields alike: a,b,c over 8
+  // samples is 3/3/2, zero singletons, estimated coverage 1.0 — enough for
+  // enum status regardless of the 1/3-1/2 ratio band.
   test("string field at ratio=3/8=0.375 IS enum — every member repeats, coverage 1.0", () => {
     const samples = makeStringField(["a", "b", "c"], 8);
     const inferred = fromJsonCorpus(samples);
@@ -1489,7 +1480,7 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
     expect(fields.tag!.shape.kind).toBe("string");
   });
 
-  // CORRECTED BEHAVIOUR, same reason as above: 3/2/2, zero singletons.
+  // Same coverage rule as above: 3/2/2, zero singletons, estimated coverage 1.0.
   test("string field at ratio=3/7≈0.4286 IS enum — zero singletons clears the coverage bar", () => {
     const samples = makeStringField(["a", "b", "c"], 7);
     const inferred = fromJsonCorpus(samples);
@@ -1510,7 +1501,7 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
   test("enum that saturates for 20 samples then gets one never-before-seen value at the very end still covers every sample (existing regression, re-verified at the exact K/N boundary)", () => {
     // 20 samples over {a,b,c} (K=3, N=20, ratio=0.15, strongly repetitive)
     // then a 21st distinct value pushes K to 4, N to 21 (ratio≈0.19) — still
-    // strongly repetitive, so the heuristic should (and does) keep it enum.
+    // strongly repetitive, so the heuristic keeps it enum.
     const samples = [...makeStringField(["a", "b", "c"], 20), { tag: "surprise" }];
     const inferred = fromJsonCorpus(samples);
     for (const s of samples) {
@@ -1551,12 +1542,12 @@ describe("adversarial: enum/non-enum boundary thresholds", () => {
 //   K <= range / 2
 //
 // This is really just an "average gap is at least 2" check over the full
-// span — it does NOT distinguish a true bimodal cluster (e.g. two tight
+// span — it does not distinguish a true bimodal cluster (e.g. two tight
 // groups far apart) from uniformly-spread values with the same overall
-// range and the same K. Verified empirically below: a genuinely clustered
-// sequence and a uniformly-spread sequence with matching range/K produce
-// the IDENTICAL enum result. Small-range dense sequences (e.g. 1..4, which
-// look like a bounded counter rather than an enum) correctly stay
+// range and the same K: a genuinely clustered sequence and a
+// uniformly-spread sequence with matching range/K produce the identical
+// enum result, verified empirically below. Small-range dense sequences
+// (e.g. 1..4, which look like a bounded counter rather than an enum) stay
 // non-enum, because K > range/2 there.
 // ---------------------------------------------------------------------------
 
@@ -1590,9 +1581,8 @@ describe("adversarial: clustering signal interaction", () => {
     expect(fields.code!.shape.kind).toBe("union");
   });
 
-  // CORRECTED BEHAVIOUR. The old rule withheld enum status here via a
-  // `K <= range/2` clustering test that has no empirical support — it rejects
-  // 1,2,3,4 each seen 2-3 times, which is a bounded set by any reading. The
+  // A `K <= range/2` clustering test alone would reject 1,2,3,4 each seen
+  // 2-3 times, even though that is a bounded set by any reading. The
   // coverage rule accepts it: zero singletons, estimated coverage 1.0.
   test("dense small-range integers (1..4, K/N=0.4, every value repeated) DO become a literal union", () => {
     const base = [1, 2, 3, 4];

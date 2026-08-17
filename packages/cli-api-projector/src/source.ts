@@ -1,5 +1,3 @@
-// packages/cli-api-projector/src/source.ts — @rhi-zone/fractal-cli-api-projector
-//
 // `cli.source(map)` — literal-preserving authoring helper for
 // `meta.cli.sourceMap`, the CLI counterpart to `http.source()`
 // (http-api-projector/src/verbs.ts). The mapped type and shorthand-expansion

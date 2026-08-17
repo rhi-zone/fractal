@@ -1,4 +1,4 @@
-// packages/cli-api-projector/src/middleware.test.ts — CliOpts.middleware
+// CliOpts.middleware.
 //
 // Covers: middleware is `F => F` where `F = (input, stores) => result` (see
 // docs/design/middleware-and-caller-context.md) — a middleware can read from
@@ -92,9 +92,9 @@ describe("CliOpts.middleware", () => {
 
   it("the handler does not receive stores — only the assembled input", async () => {
     // A handler declared with a single `input` parameter has no way to reach
-    // `stores` — there is no second parameter to receive it. This proves the
-    // base adapter is `(input, _stores) => handler(input)`, not something
-    // that leaks `stores` through to the handler.
+    // `stores` — there is no second parameter to receive it. The base
+    // adapter is `(input, _stores) => handler(input)`: `stores` stops at the
+    // adapter boundary and is never passed to the handler.
     const tree = api_({
       whatArgs: op((input: unknown) => ({ argCount: Object.keys(input as object).length }), {}),
     });

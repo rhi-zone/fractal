@@ -1,11 +1,9 @@
-// packages/type-ir/src/codegen-helpers.ts — @rhi-zone/fractal-type-ir
-//
-// Small structural helpers shared across projector files (java-gson.ts,
-// rust-serde.ts, python-pydantic.ts, …). Every function here was previously
-// reimplemented byte-for-byte (module-local, unexported) in each projector
-// that needed it — this module is the single canonical copy. Domain-specific
-// mapping logic (TypeShape -> target-language syntax) stays in each
-// projector; only scaffolding this generic is consolidated here.
+// Structural helpers shared across projector files (java-gson.ts,
+// rust-serde.ts, python-pydantic.ts, …) — the single canonical
+// implementation of each, rather than a module-local copy in every
+// projector that needs it. Domain-specific mapping logic (TypeShape ->
+// target-language syntax) stays in each projector; only scaffolding this
+// generic is consolidated here.
 //
 // Where an ecosystem family needs a *different* implementation (e.g. Java's
 // always-multiline `/** */` doc comment vs Kotlin's collapse-to-one-line
@@ -164,9 +162,9 @@ export function quoteDart(value: string): string {
 // ============================================================================
 
 /** Merges caller-supplied `options` over `defaults`, producing a fully
- * resolved `Required<T>`. Every projector with a `*Options` type (JavaOptions,
- * KotlinGsonOptions, …) reimplemented this as a one-line spread; generic here
- * since the merge itself doesn't depend on what `T` is. */
+ * resolved `Required<T>`. Generic since the merge itself doesn't depend on
+ * what `T` is; every projector with a `*Options` type (JavaOptions,
+ * KotlinGsonOptions, …) uses it in place of a one-line spread of its own. */
 export function resolveOptions<T extends object>(defaults: Required<T>, options?: T): Required<T> {
   return { ...defaults, ...options };
 }

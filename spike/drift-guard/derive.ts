@@ -1,8 +1,6 @@
-// spike/drift-guard/derive.ts
-//
-// Type-level derivation of a FLAT route map from a handler tree's `.meta`, plus a
-// SOUND exact-equality assertion. This is the substrate the four guard
-// formulations share. None of it runs; it is all `type`.
+// Type-level derivation of a flat route map from a handler tree's `.meta`, plus a
+// sound exact-equality assertion. This is the substrate the guard formulations
+// share. None of it runs; it is all `type`.
 //
 // The source of truth is `typeof app` whose type carries `.meta` (a tree of
 // PathMeta / ChoiceMeta / ParamMeta / PrefixMeta / MethodsMeta). The generated
@@ -19,9 +17,9 @@ import type {
 } from "@rhi-zone/fractal-api-tree";
 
 // ============================================================================
-// SOUND exact-equality. The function-identity invariant trick: two types are
-// mutually-assignable-as-conditional-keys iff they are identical (catches both
-// added AND removed members, and changed shapes — unlike loose `extends`).
+// Sound exact-equality. The function-identity invariant trick: two types are
+// mutually-assignable-as-conditional-keys iff they are identical, so this catches
+// added members, removed members, and changed shapes — unlike loose `extends`.
 // ============================================================================
 
 export type Equals<A, B> =
@@ -43,8 +41,8 @@ export type AssertExact<A, B> =
 export type Assert<T extends true> = T;
 
 // ============================================================================
-// The cheap FLAT derivation. We walk `.meta` ONCE accumulating a path string and
-// param list, and at each `methods` node emit one flat entry per verb keyed
+// The cheap flat derivation. It walks `.meta` once, accumulating a path string
+// and param list, and at each `methods` node emits one flat entry per verb keyed
 // `"VERB /seg/{p}"`. No UnionToIntersection, no nested call-signature assembly —
 // the expensive parts of the retired `Client<App>` walk are absent. The result
 // is a flat object type whose keys are the route keys and whose values are the
@@ -68,10 +66,10 @@ type LowerVerb<V extends string> = V extends "GET"
               ? "options"
               : Lowercase<V>;
 
-// The per-route value. We keep params as a record name->type, body as the input
+// The per-route value: params as a record name->type, body as the input
 // phantom, response as the output phantom. These come straight off the meta
 // phantoms (`__io`) and the accumulated params — no schema resolution needed for
-// the structural compare (the GENERATED side mirrors the same projection).
+// the structural compare (the generated side mirrors the same projection).
 // NB: members are NON-readonly and the type is inlined (not an interface) so the
 // derived shape is byte-identical to the generated `{ params; body; response }`.
 // `AssertExact` is sound — a `readonly` mismatch WOULD make it (correctly) fail —
@@ -125,15 +123,16 @@ export type Walk<M, Pfx extends string, P> =
             ? UnionToObj<WalkAlts<Alts, Pfx, P>>
             : {};
 
-// Walk a tuple of choice alts → a UNION of their flat maps.
+// Walks a tuple of choice alts → a union of their flat maps.
 type WalkAlts<Alts, Pfx extends string, P> = Alts extends readonly [infer Head, ...infer Tail]
   ? Walk<Head, Pfx, P> | WalkAlts<Tail, Pfx, P>
   : never;
 
-// Merge a UNION of single-/multi-key object types into one object type WITHOUT
-// UnionToIntersection over the whole client (which is what blew up). We collect
-// the union of all keys, then for each key pick its value from whichever member
-// has it. This is linear in total entries, not quadratic.
+// Merges a union of single-/multi-key object types into one object type without
+// UnionToIntersection over the whole client — UnionToIntersection over the full
+// client is the O(N²) blowup this derivation avoids. It collects the union of
+// all keys, then for each key picks its value from whichever member has it.
+// This is linear in total entries, not quadratic.
 type UnionToObj<U> = {
   [K in U extends unknown ? keyof U : never]: U extends Record<K, infer V> ? V : never;
 };
@@ -149,14 +148,15 @@ export type FlatRoutes<App> = App extends { meta: infer M }
 type Flatten<T> = { [K in keyof T]: T[K] } & {};
 
 // ============================================================================
-// f5 — the LINEAR winner. Derive a UNION of single-route ENTRY objects
-// `{ k; params; body; response }` and compare it against the generated union
-// with one `AssertExact`. The key difference from FlatRoutes: we NEVER merge the
-// union into a keyed object (no `UnionToObj`). Merging is the O(N²) step — for
+// f5 — the linear winner. Derives a union of single-route entry objects
+// `{ k; params; body; response }` and compares it against the generated union
+// with one `AssertExact`. The key difference from FlatRoutes: the union is never
+// merged into a keyed object (no `UnionToObj`). Merging is the O(N²) step — for
 // each of N keys it re-scans the N-member union. A union stays one pass: building
-// it is ~linear and `AssertExact` over two unions is sound (it catches added /
-// removed / renamed routes and any param/body/response shape change, incl. subtle
-// widenings — verified in the spike). This is what codegen should emit.
+// it is ~linear, and `AssertExact` over two unions is sound — it catches added,
+// removed, or renamed routes and any param/body/response shape change, including
+// subtle widenings (verified in this spike). This is the shape codegen should
+// emit.
 // ============================================================================
 
 export interface RouteEntry<K extends string, Params, Body, Response> {
@@ -190,6 +190,6 @@ type WalkUnionAlts<Alts, Pfx extends string, P> = Alts extends readonly [infer H
   ? WalkUnion<Head, Pfx, P> | WalkUnionAlts<Tail, Pfx, P>
   : never;
 
-/** The LINEAR derivation: a union of route entries, ready for one AssertExact
+/** The linear derivation: a union of route entries, ready for one AssertExact
  *  against the generated union. */
 export type RouteUnion<App> = App extends { meta: infer M } ? WalkUnion<M, "", EmptyParams> : never;

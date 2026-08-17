@@ -1,5 +1,3 @@
-// packages/type-ir/src/inference-eval.test.ts — tests for the JSON
-// inference quality evaluation harness (inference-eval.ts).
 import { describe, expect, test } from "bun:test";
 import { t, types } from "./index.ts";
 import { fromJsonCorpus } from "./from-json-corpus.ts";
@@ -223,7 +221,7 @@ describe("scoreInference", () => {
       const inferred = t(types.object({ status: t(types.string) })); // shape not recovered at all
       const score = scoreInference(original, inferred);
       expect(score.enumDetection.recall).toBe(0); // shape axis catches this
-      expect(score.enumMemberFidelity.comparedPositions).toBe(0); // nothing to compare — not double-penalized
+      expect(score.enumMemberFidelity.comparedPositions).toBe(0); // no positions to compare, so the axis contributes nothing to the score
       expect(score.enumMemberFidelity.f1).toBe(1); // vacuous perfect score, same convention as typeAccuracy's `compared === 0`
     });
 
@@ -317,11 +315,11 @@ describe("runEvaluation", () => {
 // ---------------------------------------------------------------------------
 
 describe("CFD-style discriminant search — union-fidelity comparison", () => {
-  // PRECONDITION (see from-json-corpus.test.ts's CFD block for the full note):
+  // Precondition (see from-json-corpus.test.ts's CFD block for the full note):
   // the CFD pass only runs on discriminants the enum generalization declines
-  // to type. The coverage rule now types this corpus's `tag` as an enum, so
-  // `tryDetectDU` recovers the union first — a better outcome, but not the one
-  // these tests are measuring. Set the precondition explicitly.
+  // to type. The coverage rule types this corpus's `tag` as an enum, which
+  // makes `tryDetectDU` recover the union first — a different outcome than
+  // the one these tests measure, so the precondition below is set explicitly.
   const cfdOnly = { enumCoverageBar: 1.1 } as const;
   test("recovers full union fidelity via chaining-immune exact-value grouping, where single-linkage's chaining failure leaves general splitting at zero", () => {
     // `stage` "p"/"q"/"r" groups chain under single-linkage: p={stage,shared1},
@@ -329,7 +327,7 @@ describe("CFD-style discriminant search — union-fidelity comparison", () => {
     // both p and r that single-linkage's growing-cluster-union comparison
     // pulls all three into one merged cluster (see "clustering method
     // comparison" above for the same failure mode on plain structural
-    // splitting). The CFD search groups by `stage`'s literal VALUE instead
+    // splitting). The CFD search groups by `stage`'s literal value instead
     // of by incrementally-clustered field-set distance, so it never chains.
     const values = [
       { stage: "p", shared1: "x1" },
@@ -924,12 +922,12 @@ describe("generator profiles — distributional shape", () => {
 });
 
 // ---------------------------------------------------------------------------
-// dirty-outlier profile — threshold behavior against the REAL
+// dirty-outlier profile — threshold behavior against the actual
 // `walkAndDetectDirty` heuristic (from-json-corpus.ts), not just the
 // generator's own claimed distribution. Mirrors the adversarial-boundary
 // threshold-behavior tests above: land a corpus just past the 0.9 cutover
 // (positive control — collapsing should fire) and just below it (negative
-// control — collapsing must NOT fire).
+// control — collapsing should not fire).
 // ---------------------------------------------------------------------------
 
 describe("dirty-outlier profile — walkAndDetectDirty threshold behavior", () => {
@@ -937,7 +935,7 @@ describe("dirty-outlier profile — walkAndDetectDirty threshold behavior", () =
   // `types.integer` -- a wide-range integer variant spans multiple narrow
   // integer widths, and `walkAndDetectDirty` re-infers each raw value's
   // type from scratch (config-less `fromJson`) and strictly `shapeEqual`s
-  // it against the corpus-MERGED (possibly wider) variant type, so most
+  // it against the corpus-merged (possibly wider) variant type, so most
   // individual values silently fail to match and collapsing never fires
   // even at extreme skew. See `dirtyOutlierSchema`'s doc in inference-eval.ts.
   const dirtySchema = t(types.object({ v: t(types.union([uint8(), t(types.string)])) }));
@@ -996,15 +994,15 @@ describe("generator profiles — threshold-behavior findings", () => {
   const TRIAL_COUNT = 40;
 
   test("SUPERSEDED FINDING: zipfian skew no longer buys a shape-detection advantage", () => {
-    // ORIGINAL FINDING (K/N-only rule): zipfian-presence significantly
-    // IMPROVED enum-detection F1 at small N, because skew concentrates
-    // samples on 1-2 members so observed K stays low and the ratio test
-    // saturates sooner. The very next test recorded that this "gain" was an
-    // illusion — the same sampling pattern silently drops the rare members.
+    // Under a K/N-only rule, zipfian-presence significantly improves
+    // enum-detection F1 at small N: skew concentrates samples on 1-2
+    // members, so observed K stays low and the ratio test saturates sooner.
+    // The member-set fidelity test below shows that "gain" is illusory —
+    // the same sampling pattern silently drops the rare members.
     //
     // The coverage rule closes that gap directly rather than by a separate
     // guard: rare members are the ones seen exactly once, and singletons are
-    // what the Good-Turing term measures. Skew now REDUCES estimated coverage
+    // what the Good-Turing term measures. Skew reduces estimated coverage
     // instead of flattering the ratio, so the spurious advantage is gone.
     // Measured at N=10, 40 trials: meanDiff -0.075, p=0.47, not significant.
     const statusEnumCase = defaultLabeledCases.find((c) => c.name === "Status Enum")!;
@@ -1021,19 +1019,19 @@ describe("generator profiles — threshold-behavior findings", () => {
       axisValues(uniform, "enumDetectionF1"),
       mulberry32(0xa11e),
     );
-    // no longer a significant advantage in either direction
+    // not a significant advantage in either direction
     expect(result.significant).toBe(false);
     expect(result.meanDiff).toBeLessThanOrEqual(0);
   });
 
   test("FINDING (member-set fidelity): skew still costs real members, and the shape metric no longer disagrees", () => {
-    // The corrected metric's warning stands: at N=10 a zipfian corpus still
-    // fails to show the tail members, so member-set fidelity is significantly
-    // worse (meanDiff -0.052, p=0.001). What CHANGED is that the shape metric
-    // no longer reports the opposite. Under the old rule the two axes pointed
-    // in opposite directions, which is what made the shape reading an
-    // illusion; under the coverage rule they agree in sign, so shape
-    // detection is no longer blind to the tail it is dropping.
+    // At N=10, a zipfian corpus still fails to show the tail members, so
+    // member-set fidelity is significantly worse (meanDiff -0.052, p=0.001).
+    // Under the K/N-only rule, the shape metric reported the opposite result
+    // for the same corpus — the two axes pointed in opposite directions,
+    // which made the shape reading misleading. Under the coverage rule the
+    // two axes agree in sign: shape detection is not blind to the tail
+    // member-set fidelity catches.
     const statusEnumCase = defaultLabeledCases.find((c) => c.name === "Status Enum")!;
     const n = 10;
     const uniform = runEvaluationTrials([statusEnumCase], [n], TRIAL_COUNT).results[0]!;
@@ -1052,7 +1050,7 @@ describe("generator profiles — threshold-behavior findings", () => {
     expect(memberResult.significant).toBe(true);
     expect(memberResult.pValue).toBeLessThan(0.05);
 
-    // the two axes now agree in sign — no shape-vs-members divergence
+    // the two axes agree in sign here too — no shape-vs-members divergence
     const shapeResult = pairedBootstrapTest(
       axisValues(zipfian, "enumDetectionF1"),
       axisValues(uniform, "enumDetectionF1"),
@@ -1064,7 +1062,7 @@ describe("generator profiles — threshold-behavior findings", () => {
   test("FINDING: high-cardinality-id fields are NOT flagged as false-positive enums under current thresholds -- enum-detection precision stays 1 across sizes", () => {
     // Negative control: `id` (string) and `count` (integer) are near-unique
     // per sample; ground truth is "must not be detected as enum". This
-    // exercises the PRECISION axis of enumDetection, which none of
+    // exercises the precision axis of enumDetection, which none of
     // defaultLabeledCases specifically probes (they all test recall).
     const hcCase: EvalCase = {
       name: "HC probe",
@@ -1116,7 +1114,7 @@ describe("ablationRunner", () => {
     }
 
     // Positive-control classification: a case only counts as positive for a
-    // signal if its OWN schema actually contains that shape.
+    // signal if its own schema actually contains that shape.
     const enums = bySignal.get("detectEnums")!;
     expect(enums.positiveCaseNames).toContain("Status Enum");
     expect(enums.positiveCaseNames).toContain("E-commerce Order"); // has a `status` enum field
@@ -1159,27 +1157,26 @@ describe("ablationRunner", () => {
   });
 
   test("FINDING: the three union-recovery signals (detectDiscriminatedUnions, splitDissimilarObjects, detectCfdDiscriminants) show ZERO leave-one-out discriminative power on this case set, because each backs up the others", () => {
-    // This is a real leave-one-out property, not a bug in the ablation: on
-    // `defaultLabeledCases`, every union-shaped case that ONE of these three
-    // mechanisms would miss is still recovered by at least one of the other
-    // two (e.g. `trySplitDissimilarObjects`'s general structural splitting
-    // covers ground a discriminant-based `tryDetectDU` would also cover).
-    // Leave-one-out ablation can only show a signal's OWN discriminative
-    // power net of redundancy with its siblings -- it is not, and does not
-    // claim to be, evidence that any of the three is individually useless;
-    // the full power set (JSONoid-style, `O(2^signals)`) would be needed to
-    // decompose the redundancy, which is exactly why this runner is
-    // documented as leave-one-out, not power-set.
+    // This is a leave-one-out redundancy property: on `defaultLabeledCases`,
+    // every union-shaped case that one of these three mechanisms would miss
+    // is still recovered by at least one of the other two (e.g.
+    // `trySplitDissimilarObjects`'s general structural splitting covers
+    // ground a discriminant-based `tryDetectDU` would also cover).
+    // Leave-one-out ablation shows a signal's own discriminative power net
+    // of redundancy with its siblings — it does not decompose the
+    // redundancy between the three, which would need the full power set
+    // (JSONoid-style, `O(2^signals)`). This runner is leave-one-out, not
+    // power-set, by design.
     //
-    // onMean/offMean are no longer a clean exact 1 now that "Dirty Outlier
-    // Field" (added for the `detectDirtyData` ablation -- see the
-    // dedicated FINDING test below) is in the positive-control set: its
-    // 0.95-dominant-ratio corpus has a small (~0.95^50 ≈ 8%) per-trial
-    // chance of never sampling the minority variant at all, which drops
-    // that one case's recall regardless of any of these three toggles.
-    // That's sampling luck shared identically by both the ON and OFF runs
-    // (same seeds), not a real effect of the signals -- meanDiff staying
-    // exactly 0 is the property this test actually cares about.
+    // onMean/offMean are not a clean exact 1: "Dirty Outlier Field" (added
+    // for the `detectDirtyData` ablation — see the dedicated FINDING test
+    // below) is in the positive-control set, and its 0.95-dominant-ratio
+    // corpus has a small (~0.95^50 ≈ 8%) per-trial chance of never sampling
+    // the minority variant at all, which drops that one case's recall
+    // regardless of any of these three toggles. That sampling luck is
+    // shared identically by both the on and off runs (same seeds), so it
+    // is not a real effect of the signals — meanDiff staying exactly 0 is
+    // the property this test cares about.
     const reports = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT);
     for (const signal of [
       "detectDiscriminatedUnions",
@@ -1195,31 +1192,28 @@ describe("ablationRunner", () => {
   });
 
   test("FINDING: detectDirtyData is now measurable (via the dirty-outlier profile), and it HURTS union recall on this case set -- collapsing a skewed-but-genuine minority variant costs more than it's shown to gain", () => {
-    // Before the `dirty-outlier` `GeneratorProfile` existed, `generateValue`'s
-    // union branch always picked a variant uniformly, so `generateCorpus`
-    // essentially never produced the >90%-skewed 2-variant union
-    // `walkAndDetectDirty` (from-json-corpus.ts) looks for -- the ablation
-    // could only report a tied null result, not a real measurement. The
-    // "Dirty Outlier Field" case in `defaultLabeledCases` closes that gap:
-    // its `count` field is declared as a genuine 2-variant union
-    // (`uint8 | string`) whose ground truth says BOTH variants are real,
-    // generated under `dirty-outlier`'s default 0.95 dominant ratio so the
-    // corpus lands past `walkAndDetectDirty`'s 0.9 cutover.
+    // Measuring `detectDirtyData` requires a corpus with a genuinely
+    // >90%-skewed 2-variant union, since `walkAndDetectDirty`
+    // (from-json-corpus.ts) only fires past that skew. The "Dirty Outlier
+    // Field" case in `defaultLabeledCases` supplies it: its `count` field
+    // is declared as a genuine 2-variant union (`uint8 | string`) whose
+    // ground truth says both variants are real, generated under
+    // `dirty-outlier`'s default 0.95 dominant ratio so the corpus lands
+    // past `walkAndDetectDirty`'s 0.9 cutover.
     //
-    // The measured result: `detectDirtyData` ON collapses that union and
-    // discards the (real, if rare) minority variant, which is a genuine
-    // RECALL cost against this ground truth -- not a wash, not noise.
-    // `walkAndDetectDirty` has no way to distinguish "a rare but legitimate
-    // variant" from "sampling contamination that isn't really part of the
-    // schema" -- it only looks at the raw skew, so it always pays this cost
-    // whenever a real schema happens to be skewed. This ablation set has no
-    // case where a corpus is contaminated with values that are genuinely
-    // NOT part of the schema (as opposed to a rare real variant), so it
-    // cannot show the heuristic's intended upside (recovering a clean type
-    // from a corpus polluted with real garbage) -- only its downside on the
-    // cases available. That upside scenario is exercised directly, at the
-    // `from-json-corpus.ts` level, by the "walkAndDetectDirty threshold
-    // behavior" tests above/below.
+    // The measured result: `detectDirtyData` on collapses that union and
+    // discards the (real, if rare) minority variant, a genuine recall cost
+    // against this ground truth. `walkAndDetectDirty` has no way to
+    // distinguish a rare but legitimate variant from sampling contamination
+    // that isn't really part of the schema — it only looks at the raw
+    // skew, so it pays this cost whenever a real schema happens to be
+    // skewed. This ablation set has no case where a corpus is contaminated
+    // with values that are genuinely not part of the schema (as opposed to
+    // a rare real variant), so it shows only the heuristic's downside on
+    // the cases available, not its intended upside (recovering a clean
+    // type from a corpus polluted with real garbage). That upside scenario
+    // is exercised directly, at the `from-json-corpus.ts` level, by the
+    // "walkAndDetectDirty threshold behavior" tests above/below.
     const report = ablationRunner(defaultLabeledCases, [50], TRIAL_COUNT).find(
       (r) => r.signal === "detectDirtyData",
     )!;
@@ -1230,10 +1224,10 @@ describe("ablationRunner", () => {
     expect(power.significant).toBe(true);
     expect(power.pValue).toBeLessThan(0.05);
 
-    // No case in this set has ground truth WITHOUT a union that also gets
-    // contaminated with non-schema noise, so `detectDirtyData` never even
-    // gets a chance to fire on the negative-control cases -- overfit rate
-    // is unaffected (measured, not just assumed).
+    // No case in this set has ground truth without a union that also gets
+    // contaminated with non-schema noise, so `detectDirtyData` never gets a
+    // chance to fire on the negative-control cases — overfit rate
+    // is unaffected (measured directly, not assumed).
     const overfit = report.overfitRate as AblationDelta;
     expect(overfit.meanDiff).toBe(0);
   });
@@ -1245,7 +1239,7 @@ describe("ablationRunner", () => {
     // "Status Enum" has no map anywhere -- there's no positive control for detectDicts in this set.
     expect(dicts.discriminativePower).toMatchObject({ measurable: false });
     expect((dicts.discriminativePower as { reason: string }).reason).toContain("positive-control");
-    // But it IS a negative control (no map at all), so overfit rate is measurable.
+    // It is a negative control (no map at all), so overfit rate is measurable.
     expect(dicts.overfitRate).not.toMatchObject({ measurable: false });
   });
 });
@@ -1253,7 +1247,7 @@ describe("ablationRunner", () => {
 // ---------------------------------------------------------------------------
 // Clustering-method sweep (Phase 3) — the JSONoid-derived comparison: does
 // one `ClusteringMethod`'s confidence interval sit strictly above the other
-// two's across EVERY generator profile (crown a default), or do the
+// two's across every generator profile (crown a default), or do the
 // intervals overlap somewhere in the sweep (no universal default, expose as
 // configuration)? `clusteringSensitiveCases`'s default set includes both
 // key-signature's known strength (near-identical polymorphic-API-response

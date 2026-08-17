@@ -441,13 +441,14 @@ function valueInhabitsType(value: unknown, inferred: TypeRef): string | null {
   }
 
   if (typeof value === "string") {
-    // Any string subtype is valid for a string value. `date`/`datetime` are
-    // no longer string subtypes (they're type-ir's `Date` domain type — see
-    // kinds/date-time.ts), but `fromJson`'s string-format detection still
-    // infers them FROM a raw JSON string (from-json.ts's `inferString`) —
-    // this property is about that wire-to-inference relationship, not the
-    // compiled validator's domain-typed `check()`, so a string value
-    // inferred as date/datetime is still a valid inhabitant here.
+    // Any string subtype is a valid inhabitant for a string value. `date` and
+    // `datetime` are type-ir's `Date` domain type (see kinds/date-time.ts),
+    // not string subtypes, but `fromJson`'s string-format detection
+    // (`inferString` in from-json.ts) infers them from a raw JSON string
+    // based on its format. This property checks that wire-to-inference
+    // relationship, not the compiled validator's domain-typed `check()`, so
+    // a string value inferred as date or datetime counts as a valid
+    // inhabitant here.
     if (kind === "string" || isSubkind(kind, "string") || kind === "date" || kind === "datetime")
       return null;
     return `string "${value}" inferred as ${kind}`;
@@ -554,14 +555,14 @@ describe("fromJson property-based tests", () => {
   });
 
   // Property 3: the generated value inhabits the inferred type
-  // Explicit timeout: this property runs 3.8-5.2s standalone and 6-7.5s under
-  // full-suite CPU contention, against bun's 5000ms default — so it failed
-  // intermittently with "timed out", which reads exactly like a flaky property
-  // violation but is not one (no counterexample, no seed, because fast-check
-  // never failed; the runner killed it mid-run). Every other property in this
-  // file is under 0.3s. Raising the bound rather than cutting `numRuns` keeps
-  // the search space; the timeout is here to catch a genuine hang, so it wants
-  // real headroom over normal variance, not a value tuned to the current time.
+  // This property takes 3.8-5.2s standalone and 6-7.5s under full-suite CPU
+  // contention, against bun's 5000ms default test timeout: the default
+  // produces intermittent failures reported as "timed out" with no
+  // counterexample or seed, because fast-check itself never failed — the
+  // runner killed the run mid-property. Every other property in this file
+  // finishes under 0.3s. The timeout below is raised, rather than lowering
+  // `numRuns` (which would shrink the search space), to give headroom over
+  // normal runtime variance while still catching a genuine hang.
   test("roundtrip: value inhabits inferred type", () => {
     fc.assert(
       fc.property(arbTypeAndValue(), ({ type, value }) => {

@@ -1,9 +1,10 @@
-// spike/drift-guard/run.ts — measure each guard formulation × N.
+// Measures each guard formulation × resource-count N.
 //
-// For each formulation file × resource-count, typecheck in ISOLATION and record
+// For each formulation file × resource-count, typechecks in isolation and records
 // tsgo --extendedDiagnostics (instantiations, check ms, errors) plus stock-tsc
-// 6.0.3 survival (ok / crash / errors). The in-sync cases must be 0 errors; we
-// measure their COST. Writes logs/results.csv + logs/table.md.
+// 6.0.3 survival (ok / crash / errors). The in-sync cases have 0 errors; the
+// instantiation/check-time numbers are the cost being compared. Writes
+// logs/results.csv + logs/table.md.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -78,8 +79,8 @@ function runTsc(): { out: string; crash: boolean } {
   } catch (e) {
     const x = e as { stdout?: string; stderr?: string; status?: number | null };
     const out = (x.stdout ?? "") + (x.stderr ?? "");
-    // a real type error exits 2 with `error TS…`; a crash has no TS errors but a
-    // RangeError/stack message, OR a null status (killed).
+    // A real type error exits 2 with `error TS…`. A crash has no TS errors but
+    // either a RangeError/stack message, or a null status (process killed).
     const crash =
       /RangeError|stack size exceeded|Maximum call stack|FATAL/i.test(out) ||
       (x.status == null && !/error TS\d+/.test(out));

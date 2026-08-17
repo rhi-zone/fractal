@@ -1,9 +1,9 @@
-// packages/cli-api-projector/src/error-encoder.test.ts — structured error
-// types: composable error-to-transport mapping (CliErrorEncoder/cliErrors).
+// Structured error types: composable error-to-transport mapping
+// (CliErrorEncoder/cliErrors).
 //
 // Covers: a handler returns `err({ kind, ... })`; `cliErrors` maps `kind` to
 // an exit code + message. Unmatched kinds and an absent `errorEncoder` fall
-// back to the existing default (exit 1, `Error: ${JSON.stringify(error)}`).
+// back to the default (exit 1, `Error: ${JSON.stringify(error)}`).
 // See docs/design/middleware-and-caller-context.md.
 
 import { describe, expect, it } from "bun:test";

@@ -1,10 +1,8 @@
-// spike/drift-guard/naive.ts
-//
-// Formulation #1's heavy derivation: re-walk `.meta` into the FULL nested
+// Formulation #1's heavy derivation: re-walks `.meta` into the full nested
 // ApiClient shape (path → { verb: (args) => Promise<response> }) — the same
-// nested call-signature assembly the RETIRED `Client<App>` did. This is the
-// baseline expected to blow up; we measure it to prove the naive approach is
-// unacceptable.
+// nested call-signature assembly the retired `Client<App>` used. This is the
+// baseline this spike measures to characterize the cost of the naive approach
+// at scale.
 
 import type {
   ChoiceMeta,
@@ -14,14 +12,14 @@ import type {
   PrefixMeta,
 } from "@rhi-zone/fractal-api-tree";
 
-// Reuse the flat walk machinery's primitives but assemble the NESTED, grouped
+// Reuses the flat walk machinery's primitives but assembles the nested, grouped
 // call-signature client (the expensive form): group by path, build per-verb call
 // signatures `(args:{params;body}) => Promise<response>`.
 
 type EmptyParams = {};
 
-// One flat entry carries everything; we then GROUP flat entries by path and build
-// nested call sigs. The grouping + call-sig assembly is the heavy part.
+// One flat entry carries everything; entries are then grouped by path to build
+// nested call sigs. The grouping and call-sig assembly is the heavy part.
 interface Flat {
   readonly k: string; // "GET /res0/{id}"
   readonly path: string; // "/res0/{id}"
@@ -71,9 +69,9 @@ type CallSig<F extends Flat> =
       ? (args: { params: F["params"] }) => Promise<F["response"]>
       : (args: { params: F["params"]; body: F["body"] }) => Promise<F["response"]>;
 
-// Group the union of flat entries by path, then by verb → call sig. This is the
+// Groups the union of flat entries by path, then by verb → call sig. This is the
 // nested fold that, combined with the per-path key narrowing, is the quadratic
-// hot spot (each path member filters the WHOLE flat union).
+// hot spot: each path member filters the entire flat union.
 export type ClientShapeFromMeta<App> = App extends { meta: infer M }
   ? Group<WalkFlat<M, "", EmptyParams> & Flat>
   : never;

@@ -1,12 +1,10 @@
-// packages/type-ir/src/compile.ts — @rhi-zone/fractal-type-ir
+// AOT validator codegen: compiles a TypeRef to standalone JS/TS source with
+// zero runtime dependencies. Rather than building an intermediate schema
+// representation and compiling that (the retired TypeBox-based approach,
+// TypeRef -> TSchema -> `TypeCompiler.Code()`), this codegen walks the
+// TypeRef tree directly and emits string templates per shape kind.
 //
-// AOT VALIDATOR CODEGEN: TypeRef -> standalone JS/TS source with ZERO runtime
-// dependencies. Unlike the retired TypeBox-based version of this module
-// (TypeRef -> TSchema -> `TypeCompiler.Code()`), this codegen walks the
-// TypeRef tree directly and emits string templates per shape kind — no
-// intermediate schema representation, no build-time-only runtime dependency.
-//
-// Each compiled operation gets THREE functions, all standalone:
+// Each compiled operation gets three standalone functions:
 //   - check(value): value is T         — boolean fast path, no allocations
 //     on the happy path, short-circuits on first failure. Used at the hot
 //     request-time path where only a yes/no answer is needed.
@@ -14,12 +12,12 @@
 //     every field (doesn't short-circuit) so a caller can report everything
 //     wrong with a payload in one pass.
 //   - parse(value): {kind:"ok",value:T} | {kind:"err",errors}
-//                                       — validates AND coerces (e.g. string
-//     "42" -> number 42) in one pass, building a FRESH output value (never
-//     mutates the input). Ok branch narrows via the discriminated-union
-//     return type, no explicit `is` predicate needed. ONE documented
+//                                       — validates and coerces (e.g. string
+//     "42" -> number 42) in one pass, building a fresh output value that
+//     never mutates the input. The ok branch narrows via the discriminated-
+//     union return type, with no explicit `is` predicate needed. One
 //     carve-out: `unknown`/`instance`/`ref` subtrees have no structure to
-//     validate or rebuild from, so their parsed output ALIASES the
+//     validate or rebuild from, so their parsed output aliases the
 //     corresponding input subtree rather than copying it — see the
 //     `validateHandlers.unknown`/`instance`/`ref` doc comment below.
 //
@@ -97,11 +95,11 @@ function indentLines(lines: readonly string[], spaces: number): string[] {
  * named consts declared once (at entry-eval time, not per-call), and mints
  * fresh local variable names for coerced/nested values in parse(). */
 class GenCtx {
-  /** Module-uniqueness namespace, empty by default (every existing single-`GenCtx`-
+  /** Module-uniqueness namespace, empty by default (every single-`GenCtx`-
    * per-module caller — `compileEntryFragment`'s/`compileWireEntryFragment`'s own
    * IIFE-scoped `ctx`, `compileDefsBlock`'s single shared `defCtx` — reproduces the
-   * exact `__prefixN` names it always has). Only a caller that splices MULTIPLE
-   * `GenCtx` instances' hoisted consts into ONE shared scope (`compileConstraintsFn`,
+   * exact `__prefixN` names it always has). Only a caller that splices multiple
+   * `GenCtx` instances' hoisted consts into one shared scope (`compileConstraintsFn`,
    * whose `fn.lines` land at module scope in `assembleWireModule`/
    * `assembleWireApplyValidationModule`) needs distinct instances to mint
    * non-colliding names — passing each instance its own namespace (e.g. the entry
@@ -111,7 +109,7 @@ class GenCtx {
   private consts: string[] = [];
   private constCounter = 0;
   // Keyed by `${prefix}\0${expr}` — check/errors/parse each walk the same
-  // TypeRef tree independently against the SAME ctx (see `compileEntryBody`),
+  // TypeRef tree independently against the same ctx (see `compileEntryBody`),
   // so an enum's member array or an object's known-field Set gets requested
   // up to three times with identical content. Caching by content (not just
   // by regex pattern, which `addRegex` already did) means each unique
@@ -122,9 +120,9 @@ class GenCtx {
 
   /** Names of `defs` entries in scope for this compile — populated by
    * `compileDefs` before `genCheckExpr`/`genValidate` walk any body that
-   * might reference them via `ref`. A `ref` whose target ISN'T in this set has
-   * no generated function to call (no `defs` passed in) and passes through,
-   * preserving pre-`defs` behavior for bare-`TypeRef` callers. */
+   * might reference them via `ref`. A `ref` whose target isn't in this set has
+   * no generated function to call and passes through unchanged, the same
+   * behavior as a bare `TypeRef` with no `defs`. */
   readonly defNames = new Set<string>();
 
   addConst(prefix: string, expr: string): string {
@@ -169,7 +167,7 @@ function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
  * the same tree, and a shape can recur under a union/array/object — emits its
  * `JSON.stringify` literal once rather than inlining it at every site.
  * `as any`: the literal's inferred object-literal type (`{ kind: string }`,
- * a WIDENED string, not the exact `TypeKinds` discriminant it structurally
+ * a widened string, not the exact `TypeKinds` discriminant it structurally
  * is) doesn't satisfy `ValidationError`'s `expected`/`actual: TypeRef` field
  * without a full recursive `TypeRef`-shaped type annotation reproduced
  * inline — `any` sidesteps that without weakening `ValidationError` itself,
@@ -291,18 +289,18 @@ function dateCheck(): CheckHandler {
 }
 
 // `stream` (AsyncIterable<T>) is a runtime construct, not a materialized
-// value — its elements are only observable by consuming the iterator, which
-// validation must not do (that would drain a live generator as a side
+// value — its elements are only observable by consuming the iterator, and
+// validation must not do that (it would drain a live generator as a side
 // effect of a type check). The only structural fact checkable without
-// consuming it is "does this look like an async iterable at all" — the
-// `Symbol.asyncIterator` duck-check every native `for await` loop relies on.
-// Elements are NOT validated (see the `stream` doc comment in index.ts and
-// TODO.md — this is the documented carve-out, not an oversight).
+// consuming it is whether the value looks like an async iterable at all —
+// the `Symbol.asyncIterator` duck-check every native `for await` loop relies
+// on. Elements are not validated — see the `stream` doc comment in index.ts
+// and TODO.md.
 function isAsyncIterableExpr(v: string): string {
   return `(typeof ${v} === "object" && ${v} !== null && typeof ${v}[Symbol.asyncIterator] === "function")`;
 }
 
-// `page` (CursorPage<T>/OffsetPage<T>, see api-tree/src/page.ts) IS a
+// `page` (CursorPage<T>/OffsetPage<T>, see api-tree/src/page.ts) is a
 // materialized value — `items`/`hasMore` plus either `cursor` (cursor style)
 // or `offset`/`total` (offset style) — so unlike `stream` it validates like
 // any other structural shape. Modeled as a synthetic `object` TypeRef and
@@ -351,13 +349,13 @@ const checkHandlers: Record<string, CheckHandler> = {
   // Purely nominal (instance) shapes can't be validated structurally — pass
   // through. See the `instance` doc comment in index.ts.
   instance: () => "true",
-  // `ref` now resolves against a document's `defs` (see index.ts's
+  // `ref` resolves against a document's `defs` (see index.ts's
   // `TypeRefDocument`) — delegates to the named validator function
   // `compileEntryBody`/`compileDefs` emit for the target def, so a recursive
-  // def type-checks by ordinary mutual JS-function recursion, no cycle
+  // def type-checks by ordinary mutual JS-function recursion, with no cycle
   // detection needed here. A ref with no matching def in scope (bare TypeRef,
   // no `defs` passed to `compileValidator`/`compileValidatorModule`) has
-  // nothing to call and passes through, same as before this change.
+  // nothing to call and passes through unchanged.
   ref: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "ref" };
     return ctx.defNames.has(s.target) ? `${defFnName(s.target, "check")}(${v})` : "true";
@@ -395,20 +393,19 @@ const checkHandlers: Record<string, CheckHandler> = {
   },
   map: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "map" };
-    // `Object.values(${v})` — NOT `Object.keys` (always `string[]`, no
-    // generic ambiguity) — hits a genuine TS overload-resolution quirk when
-    // `${v}` is `any`: `values<T>(o: { [s: string]: T } | ArrayLike<T>): T[]`
-    // matches even an `any` argument, but with no contextual type to infer
-    // `T` from, TS resolves it to `unknown` (not `any`), so the `.every`
-    // callback's element parameter loses `any`'s implicit-index-access
-    // exemption — a real, reproduced `TS7053` on the very next
-    // property/index access inside that callback (confirmed via a minimal
-    // repro: `Object.values((v as any)["x"]).every((e) => e["y"])` fails
-    // `noImplicitAny` under `--strict` even though `v` is `any`). `as any[]`
-    // forces the array itself back to `any[]`, restoring `any`'s
-    // pass-through semantics for the callback parameter — this is a type-
-    // level cast only, erased at runtime, with no effect on the emitted
-    // module's actual validation behavior.
+    // `Object.values(${v})` — not `Object.keys` (always `string[]`, no
+    // generic ambiguity) — hits a TS overload-resolution quirk when `${v}` is
+    // `any`: `values<T>(o: { [s: string]: T } | ArrayLike<T>): T[]` matches
+    // even an `any` argument, but with no contextual type to infer `T` from,
+    // TS resolves it to `unknown` (not `any`), so the `.every` callback's
+    // element parameter loses `any`'s implicit-index-access exemption — a
+    // `TS7053` on the very next property/index access inside that callback
+    // (minimal repro: `Object.values((v as any)["x"]).every((e) => e["y"])`
+    // fails `noImplicitAny` under `--strict` even though `v` is `any`).
+    // `as any[]` forces the array itself back to `any[]`, restoring `any`'s
+    // pass-through semantics for the callback parameter — a type-level cast
+    // only, erased at runtime, with no effect on the emitted module's actual
+    // validation behavior.
     return `(typeof ${v} === "object" && ${v} !== null && !Array.isArray(${v}) && Object.keys(${v}).every((__k) => (${genCheckExpr(s.key, "__k", ctx)})) && (Object.values(${v}) as any[]).every((__e) => (${genCheckExpr(s.value, "__e", ctx)})))`;
   },
   union: (ref, v, ctx) => {
@@ -794,7 +791,7 @@ function unionValidate(
   return { stmts, outExpr: out ?? v };
 }
 
-/** Intersection: every member validates against the SAME value (not
+/** Intersection: every member validates against the same value (not
  * alternate representations, unlike union), so their errors just accumulate
  * into the shared `errs` array at the same path. Fresh-object construction
  * merges object-shaped members' outputs via `Object.assign`, in order; a
@@ -871,11 +868,10 @@ const validateHandlers: Record<string, ValidateHandler> = {
   void: nonCoercingLeaf((v) => `${v} === undefined`),
   // `unknown`/`instance` have no structure to validate or reconstruct from
   // (see the doc comments on their `checkHandlers` counterparts above, and
-  // index.ts's own `instance` docs) — parse() returns the SAME reference it
-  // was given rather than a fresh copy. This is one documented carve-out to
-  // parse()'s "fresh output, never mutates the input" contract (see this
-  // file's header comment): there's nothing to copy FROM, so aliasing is the
-  // only option, not a shortcut taken for convenience.
+  // index.ts's own `instance` docs) — parse() returns the same reference it
+  // was given rather than a fresh copy. This is the one carve-out to parse()'s
+  // "fresh output, never mutates the input" contract (see this file's header
+  // comment): there's nothing to copy from, so aliasing is the only option.
   unknown: (_ref, v) => ({ stmts: [], outExpr: v }),
   never: (ref, v, pathExpr, ctx) => ({ stmts: [typeErrorStmt(pathExpr, ref, v, ctx)], outExpr: v }),
   instance: (_ref, v) => ({ stmts: [], outExpr: v }),
@@ -966,13 +962,12 @@ function genValidate(
 // per-branch object-literal type doesn't satisfy `ValidationError`'s
 // `actual: TypeRef` field without reproducing the full recursive `TypeRef`
 // type inline — `any` sidesteps that.
-/** Exported (additively — every existing use above is unaffected) so a
- * caller assembling its OWN module out of individually-compiled
- * `CompiledWireEntryFragment`s (`apply-validation-build.ts`'s per-protocol
- * wire build path, whose entries don't share one uniform profile SET the way
- * `assembleWireModule`'s own per-entry-per-profile loop assumes) can still
- * emit the shared `__inferTypeRef` helper every fragment's `type`-kind error
- * path references, without re-deriving its source. */
+/** Exported so a caller assembling its own module out of individually-
+ * compiled `CompiledWireEntryFragment`s (`apply-validation-build.ts`'s
+ * per-protocol wire build path, whose entries don't share one uniform
+ * profile set the way `assembleWireModule`'s own per-entry-per-profile loop
+ * assumes) can emit the shared `__inferTypeRef` helper every fragment's
+ * `type`-kind error path references, without re-deriving its source. */
 export const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
   if (v === null) return { shape: { kind: "null" }, meta: {} };
   if (v === undefined) return { shape: { kind: "void" }, meta: {} };
@@ -988,20 +983,17 @@ export const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
 
 /**
  * The type-guard annotation for a validator's input, plus the `import type`
- * this annotation needs (if any). Two cases:
+ * this annotation needs, if any. Two cases:
  *   - The TypeRef carries `meta.typeName` + `meta.declarationFile` (see
- *     index.ts's meta-bag doc) AND the caller passed `resolveImport`: the
+ *     index.ts's meta-bag doc) and the caller passed `resolveImport`: the
  *     annotation is the bare type name, imported.
  *   - Otherwise: the annotation is the type's own structural TypeScript
  *     rendering (`toTypeScript`), inlined directly. `defNames` (the shared/
  *     recursive `defs` entries in scope for this compile — see `compileDefs`'
- *     doc comment above) is threaded through so a NESTED `ref` inside this
- *     structural rendering — not just the entry's own top-level type — also
- *     resolves to its locally-declared `__def_NAME` alias instead of an
- *     unimportable bare name (the gap this function's `defNames` parameter
- *     closes: previously only the entry's OWN top-level type could get
- *     import-provenance treatment; a nested field typed as a shared/
- *     recursive def fell through to the bare rendering unconditionally).
+ *     doc comment above) is threaded through so a nested `ref` inside this
+ *     structural rendering — not just the entry's own top-level type —
+ *     also resolves to its locally-declared `__def_NAME` alias instead of an
+ *     unimportable bare name.
  */
 function guardAnnotation(
   ref: TypeRef,
@@ -1018,16 +1010,16 @@ function guardAnnotation(
 }
 
 /**
- * Emit one `function __def_NAME_check/errors/parse(...)` declaration triple
+ * Emits one `function __def_NAME_check/errors/parse(...)` declaration triple
  * per entry in `defs`, all sharing `ctx` (so a const/regex reused across
  * multiple defs — or between a def and the entry that refs it — is hoisted
- * once). Populates `ctx.defNames` FIRST (before generating any body), so a
- * def whose body `ref`s another def — including itself — resolves to a call,
- * not a no-op passthrough: recursion is ordinary JS function recursion, not
+ * once). Populates `ctx.defNames` before generating any body, so a def whose
+ * body `ref`s another def — including itself — resolves to a call, not a
+ * no-op passthrough: recursion is ordinary JS function recursion, not
  * anything special-cased here. Declared as `function` statements (hoisted),
  * so declaration order among mutually-referential defs never matters.
  *
- * ALSO emits one `type __def_NAME = <structural TS>;` alias per entry (via
+ * Also emits one `type __def_NAME = <structural TS>;` alias per entry (via
  * `toTypeScript(ref, ctx.defNames)` — see typescript-native.ts's `ref`
  * handler and `defTypeAliasName`), so a caller building a real static
  * annotation for a value that contains a `ref` to a shared/recursive def
@@ -1038,10 +1030,9 @@ function guardAnnotation(
  * `compileValidator` case) is exactly as valid as at module scope (the
  * `compileValidatorModule` case) — both callers just splice these lines in
  * alongside the function declarations below. Emitted with `ctx.defNames`
- * (populated on the line above, BEFORE this loop) so a def that refs itself
- * or another def in the same batch renders its OWN alias name, not a bare
- * unimported string — the same recursion guarantee the runtime functions
- * below already have.
+ * (populated before this loop) so a def that refs itself or another def in
+ * the same batch renders its own alias name, not a bare unimported string —
+ * the same recursion guarantee the runtime functions below already have.
  */
 function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
   for (const name of Object.keys(defs)) ctx.defNames.add(name);
@@ -1074,17 +1065,17 @@ function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
   return lines;
 }
 
-/** Emit the `{ check, errors, parse }` triple's body lines (no wrapping
+/** Emits the `{ check, errors, parse }` triple's body lines (no wrapping
  * IIFE/braces — the caller supplies those) for a single TypeRef. `withHelper`
- * controls whether the `__inferTypeRef` runtime helper AND the
+ * controls whether the `__inferTypeRef` runtime helper and the
  * `ValidationError` type (used by `type`-kind ValidationErrors) are declared
  * inline — `compileValidatorModule` hoists one shared copy of each to module
  * scope instead and passes `false`.
  *
  * The narrowing `value is T` / discriminated-`parse`-return cast is applied
- * INSIDE this function body's `return` statement (not by the caller wrapping
- * the IIFE call from outside) — when `withHelper` is true, `ValidationError`
- * is a TYPE LOCAL to this function body, out of scope for a cast written
+ * inside this function body's `return` statement, not by the caller wrapping
+ * the IIFE call from outside — when `withHelper` is true, `ValidationError`
+ * is a type local to this function body, out of scope for a cast written
  * after the IIFE closes; casting from inside keeps it in scope in both
  * `withHelper` cases. */
 function compileEntryBody(
@@ -1092,16 +1083,16 @@ function compileEntryBody(
   annotation: string,
   withHelper: boolean,
   defs?: Record<string, TypeRef>,
-  // Module-scope case (`compileValidatorModule`): the def FUNCTIONS are
+  // Module-scope case (`compileValidatorModule`): the def functions are
   // declared once, shared across all entries, outside any single entry's
-  // IIFE — but each entry's OWN `ctx.defNames` still needs the names seeded
+  // IIFE — but each entry's own `ctx.defNames` still needs the names seeded
   // so its `ref` handlers know to emit a call rather than a no-op. Mutually
-  // exclusive with `defs` in practice (a caller passing both would double-
-  // declare); `compileValidatorModule` only ever passes this one.
+  // exclusive with `defs` in practice, since a caller passing both would
+  // double-declare; `compileValidatorModule` only ever passes this one.
   externalDefNames?: ReadonlySet<string>,
 ): string[] {
   const ctx = new GenCtx();
-  // `defs`' function declarations are generated FIRST (populating
+  // `defs`' function declarations are generated first (populating
   // `ctx.defNames` before the entry body itself is walked), so a `ref` at
   // the entry's own top level — not just inside a def — also resolves to a
   // call rather than a no-op passthrough.
@@ -1119,18 +1110,18 @@ function compileEntryBody(
   // hoists one shared copy of each to module scope instead (see
   // `compileValidatorModule`) and passes `false` here.
   if (withHelper) {
-    // A local `type` declaration inside the IIFE body — NOT `export type`
-    // (module-level export syntax is invalid inside a function body).
+    // A local `type` declaration inside the IIFE body; module-level `export
+    // type` syntax is invalid inside a function body.
     lines.push(VALIDATION_ERROR_TYPE_SOURCE.replace(/^export /, ""));
     lines.push(INFER_TYPE_REF_SOURCE);
   }
   lines.push(...ctx.declarations());
   lines.push(...defLines);
   // `value: any` (not `unknown`) throughout the raw compiled body — bracket
-  // access (`value["field"]`) only type-checks against `any`; the ANNOTATED,
+  // access (`value["field"]`) only type-checks against `any`; the annotated,
   // narrower signature (`value is T`, the discriminated `parse` return type)
-  // is applied at the CALL site via the `as {...}` cast below, same
-  // reasoning as the retired TypeBox-compiler wrapper this replaces.
+  // is applied at the call site via the `as {...}` cast below, the same
+  // approach the retired TypeBox-compiler wrapper this replaces used.
   // `void value;`/`void path;` — a trivial (e.g. `unknown`) shape's checkExpr/
   // genValidate body never references its own `value`/`path` parameter, which
   // would otherwise trip `noUnusedParameters`/`noUnusedLocals` on the emitted
@@ -1169,18 +1160,17 @@ function compileEntryBody(
 }
 
 /**
- * Compile a single TypeRef to a standalone JS EXPRESSION evaluating to `{
+ * Compiles a single TypeRef to a standalone JS expression evaluating to `{
  * check, errors, parse }` — zero runtime dependency, `check`/`parse` narrow
  * via TypeScript (a type-guard cast on `check`, a discriminated-union return
  * type on `parse`).
  *
- * `defs` (optional, backwards compatible with the pre-`defs` single-arg
- * call) is a `TypeRefDocument`'s named definitions (see index.ts) — a `ref`
- * inside `ref` (or inside a def's own body) whose target has an entry here
- * compiles to a real recursive check, not the previous always-`true`
- * passthrough. Every def's `check`/`errors`/`parse` triple is generated as a
- * standalone function INSIDE this same IIFE (there's no module scope to
- * hoist to, unlike `compileValidatorModule`).
+ * `defs` is optional and holds a `TypeRefDocument`'s named definitions (see
+ * index.ts) — a `ref` inside `ref` (or inside a def's own body) whose target
+ * has an entry here compiles to a real recursive check. Every def's
+ * `check`/`errors`/`parse` triple is generated as a standalone function
+ * inside this same IIFE, since there's no module scope to hoist to, unlike
+ * `compileValidatorModule`.
  */
 export function compileValidator(ref: TypeRef, defs?: Record<string, TypeRef>): string {
   const defNames = new Set(Object.keys(defs ?? {}));
@@ -1209,12 +1199,12 @@ const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
   | { kind: "decode"; path: string[]; message: string };`;
 
 /** The module-scope `defs` block (shared `__def_NAME_check/errors/parse`
- * function declarations + their own hoisted consts) — declared ONCE per
+ * function declarations plus their own hoisted consts) — declared once per
  * module, independent of any single leaf, and reused by every leaf whose
- * `ref` targets one of `defNames`. Gated by the caller on its OWN rollup
- * (e.g. a hash of `defs`' content) — see cache.ts's `defNamesFingerprint`/
- * per-entry defs handling — since unlike a leaf's fragment, this block's
- * generated names (`defCtx`'s sequential counters) depend on the FULL `defs`
+ * `ref` targets one of `defNames`. Gated by the caller on its own rollup
+ * (e.g. a hash of `defs`' content — see cache.ts's `defNamesFingerprint`/
+ * per-entry defs handling), since unlike a leaf's fragment, this block's
+ * generated names (`defCtx`'s sequential counters) depend on the full `defs`
  * record's content and iteration order, not any one def in isolation. */
 export type CompiledDefsBlock = {
   readonly lines: readonly string[];
@@ -1226,7 +1216,7 @@ export type CompiledDefsBlock = {
  * declaration block, shared once at module scope by every leaf/entry that
  * refs one of `defNames` — used by api-tree's wire-profile build path
  * (`apply-validation-build.ts`'s `buildWireApplyValidationModuleSource*`,
- * which compiles this ONCE per build and passes the resulting `defNames`
+ * which compiles this once per build and passes the resulting `defNames`
  * into `compileConstraintsFn` for every entry) so an incremental caller can
  * compile it once per Tier-2 run independent of per-leaf
  * fragment compilation. */
@@ -1245,51 +1235,51 @@ export function compileDefsBlock(defs: Record<string, TypeRef>): CompiledDefsBlo
 //     --defaults-fill--> T --validateConstraints--> valid T
 //
 // See docs/design/wire-profiles-and-staged-validation.md for the full design
-// this section implements. `check`/`errors`/`parse` above are UNCHANGED by
+// this section implements. `check`/`errors`/`parse` above are unchanged by
 // everything below — they remain exactly the strict, non-coercing path they
-// always were. This section ADDS a second, profile-parameterized entry point
+// always were. This section adds a second, profile-parameterized entry point
 // (`compileWireEntryFragment`/`compileWireModule`) alongside the existing
-// profile-blind `compileValidator`/`compileValidatorModule` — it does not
-// alter their behavior or output, so every EXISTING caller (api-tree's
+// profile-blind `compileValidator`/`compileValidatorModule`; it does not
+// alter their behavior or output, so every existing caller (api-tree's
 // `apply-validation-build.ts`, and — indirectly, through the generated module
 // it produces — the cli/mcp projectors' `isApplyValidationWrapped`-gated
 // path) keeps working unmodified. Wiring these new exports into that call
 // path, and retiring `isApplyValidationWrapped`/the cli/mcp fallbacks it
 // guards, is phase B/C's job (see the design doc's "What goes away" item 4
-// and this phase's own scope statement: "This phase does NOT touch
+// and this phase's own scope statement: "This phase does not touch
 // projectors or api-tree's apply-validation surfaces").
 //
-// Scope cuts made in THIS phase, called out explicitly (not contradictions —
-// none of the settled decisions in the design doc require these, and the
-// phase's own test list doesn't exercise them):
-//   - [CLOSED, phase D] `defs`/`ref` recursion support for wire profiles: a
-//     `ref` inside a wire-profile-compiled tree now compiles to a real call —
+// Scope cuts made in this phase (none contradict the design doc's settled
+// decisions; the phase's own test list doesn't exercise them):
+//   - [closed, phase D] `defs`/`ref` recursion support for wire profiles: a
+//     `ref` inside a wire-profile-compiled tree compiles to a real call —
 //     `compileConstraintsFn`'s `externalDefNames` param (constraints layer,
-//     reusing `compileDefs`/`ctx.defNames` unchanged) plus the new
+//     reusing `compileDefs`/`ctx.defNames` unchanged) plus the
 //     `WireDefsRegistry` (decode layer, one `__wiredecode_NAME_PROFILE`
 //     function per (defName, profile) pair actually referenced — see that
 //     class's doc comment). A `ref` with no `defs`/registry passed in still
 //     falls through as the pre-phase-D structural no-op — the carve-out
-//     itself isn't gone, just no longer the ONLY option.
+//     itself isn't gone, just no longer the only option.
 //   - `defaults-fill` recurses into `object` fields and `array` elements only
 //     — matching `meta.default`'s only current authoring site
 //     (`json-schema.ts`'s `withMeta`, always on a field, never on a
 //     tuple/map/union/intersection member).
 // ============================================================================
 
-/** One profile's per-KIND leaf override. Structural recursion (object/array/
- * tuple/map/union/intersection, below) is IDENTICAL for every profile —
- * wire profiles only ever change LEAF encoding+decode. A kind with no entry
- * (every profile-independent kind: `string`, `enum`, `literal`, `uuid`/`uri`/
- * `email`/…, `null`, `void`, `unknown`, `never`, `instance`, `function`,
- * `interface`, `ref`) falls back to `defaultWireLeaf` — "the wire value must
- * already be a valid `T`, no coercion" — which is exactly `identityProfile`'s
- * definition for every kind (an empty `leafHandlers` map) and every OTHER
- * profile's definition for whichever kinds IT doesn't override either. */
+/** One profile's per-kind leaf override. Structural recursion (object/array/
+ * tuple/map/union/intersection, below) is identical for every profile —
+ * wire profiles only ever change leaf encoding and decode. A kind with no
+ * entry (every profile-independent kind: `string`, `enum`, `literal`,
+ * `uuid`/`uri`/`email`/…, `null`, `void`, `unknown`, `never`, `instance`,
+ * `function`, `interface`, `ref`) falls back to `defaultWireLeaf` — "the wire
+ * value must already be a valid `T`, no coercion" — which is exactly
+ * `identityProfile`'s definition for every kind (an empty `leafHandlers`
+ * map) and every other profile's definition for whichever kinds it doesn't
+ * override either. */
 export type WireLeafHandler = {
   /** Fused `validateEncoding` + `decode` for this leaf kind (fusing the two
    * stages into one traversal is the permitted emission optimization the
-   * design doc calls out — the MODEL still has both, as the two things this
+   * design doc calls out — the model still has both, as the two things this
    * one pass does: push `errs` on a wire-shape mismatch, or produce a valid
    * `T`-shaped `outExpr`, never both for the same input). */
   readonly decode: (ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx) => ValidateResult;
@@ -1314,7 +1304,7 @@ function encodingErrorStmt(pathExpr: string, expectedText: string, v: string): s
  * extension kind registered via `registerParent` + a `checkHandlers` entry
  * gets a correct default wire leaf for free, the same open-registry story
  * this file's header comment already promises for `check`/`errors`/`parse`).
- * This IS `identityProfile`'s entire behavior, and any other profile's
+ * This is `identityProfile`'s entire behavior, and any other profile's
  * behavior for whichever kinds it doesn't list. */
 function defaultWireLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
   const handler = resolve(ref.shape.kind, checkHandlers);
@@ -1327,10 +1317,10 @@ function defaultWireType(ref: TypeRef): string {
 }
 
 /** number/integer/int32/int64/float32/float64 (argv, query): the wire value
- * is a numeric string. `resolve`s the SAME per-kind `checkHandlers` entry
- * (e.g. int32's own range+integer-ness check) against the COERCED number, so
- * an out-of-range/non-integer numeric string is an ENCODING failure, not a
- * `validateConstraints` one — the same "this IS the right shape" framing
+ * is a numeric string. `resolve`s the same per-kind `checkHandlers` entry
+ * (e.g. int32's own range+integer-ness check) against the coerced number, so
+ * an out-of-range/non-integer numeric string is an encoding failure, not a
+ * `validateConstraints` one — the same "this is the right shape" framing
  * `defaultWireLeaf` uses for every other kind, just reached via a coercion
  * step first. */
 function numericStringLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
@@ -1405,7 +1395,7 @@ function isoDateStringLeaf(
 }
 
 /** Trivial encoding check + identity decode, for every kind — no coercion at
- * all. This IS strict validation: the mcp/graphql in-process/already-typed-
+ * all. This is strict validation: the mcp/graphql in-process/already-typed-
  * value posture `check`/`errors`/`parse` above have always assumed. An empty
  * `leafHandlers` map means every kind falls through to `defaultWireLeaf`. */
 export const identityProfile: WireProfile = { name: "identity", leafHandlers: {} };
@@ -1475,44 +1465,46 @@ const STRUCTURAL_WIRE_KINDS = new Set([
 ]);
 
 /**
- * Module-scope registry of wire-decode functions + `ValidWire` type aliases
- * for shared/recursive `defs`, keyed by the (defName, profileName) PAIR — the
- * decode-layer half of phase D's "close the wire-profile defs/ref scope cut"
- * work (see this section's header comment). A shared def needs one compiled
- * wire-decode function PER (defName, profile) pair actually referenced across
- * a module, not one per defName (unlike the constraints layer's
- * `__def_NAME_errors`, which is profile-independent) — this registry compiles
- * each pair LAZILY, the first time `genWireEncodeDecodeShape`'s `ref` case (or
- * `wireTypeTextShape`'s) encounters it, and memoizes by pair so the SAME def
- * referenced from multiple entries/fields under the SAME profile compiles
- * once. The function's own name is reserved in the memo BEFORE its body is
- * generated, so a self- (or mutually-) recursive def's own body resolves to a
- * call to that reserved name rather than re-entering compilation.
+ * Module-scope registry of wire-decode functions and `ValidWire` type
+ * aliases for shared/recursive `defs`, keyed by the (defName, profileName)
+ * pair — the decode-layer half of phase D's "close the wire-profile
+ * defs/ref scope cut" work (see this section's header comment). A shared def
+ * needs one compiled wire-decode function per (defName, profile) pair
+ * actually referenced across a module, not one per defName (unlike the
+ * constraints layer's `__def_NAME_errors`, which is profile-independent) —
+ * this registry compiles each pair lazily, the first time
+ * `genWireEncodeDecodeShape`'s `ref` case (or `wireTypeTextShape`'s)
+ * encounters it, and memoizes by pair so the same def referenced from
+ * multiple entries/fields under the same profile compiles once. The
+ * function's own name is reserved in the memo before its body is generated,
+ * so a self- (or mutually-) recursive def's own body resolves to a call to
+ * that reserved name rather than re-entering compilation.
  *
  * One instance is shared across an entire module's compile (constructed by
  * the caller — `compileWireModule`, or api-tree's `apply-validation-build.ts`
- * — via `createWireDefsRegistry`, threaded into every `compileWireEntryFragment`/
- * `compileWireEntryFragmentComposite` call for that module) so dedup spans
- * every entry, not just one.
+ * — via `createWireDefsRegistry`, threaded into every
+ * `compileWireEntryFragment`/`compileWireEntryFragmentComposite` call for
+ * that module) so dedup spans every entry, not just one.
  */
 export class WireDefsRegistry {
   private readonly defs: Readonly<Record<string, TypeRef>>;
   /** Names with a `defs` entry in scope for this compile — a `ref` whose
-   * target ISN'T in this set has nothing to call (bare `TypeRef`, no `defs`
-   * passed in) and falls through to today's structural no-op, same carve-out
+   * target isn't in this set has nothing to call (bare `TypeRef`, no `defs`
+   * passed in) and falls through to the structural no-op, the same carve-out
    * as `checkHandlers.ref`/`validateHandlers.ref`. */
   readonly defNames: ReadonlySet<string>;
   private readonly decodeFnNames = new Map<string, string>();
   private readonly typeAliasNames = new Map<string, string>();
   private readonly lines: string[] = [];
 
-  // NOT a parameter property (`private readonly defs: ...` in the
-  // constructor signature): a parameter property's assignment runs AFTER
-  // this class's OWN field initializers (JS class-field-initializer-order
-  // semantics), so `defNames`'s initializer above would have observed
-  // `this.defs` as still `undefined` had it been declared as one — the
-  // explicit assignments below run in the constructor BODY, after every
-  // field initializer, so `this.defs` is guaranteed set first.
+  // `defs` is assigned explicitly in the constructor body rather than via a
+  // parameter property (`private readonly defs: ...` in the constructor
+  // signature): a parameter property's assignment runs after this class's
+  // own field initializers (JS class-field-initializer-order semantics), so
+  // `defNames`'s initializer above would observe `this.defs` as still
+  // `undefined` if `defs` were declared that way. The explicit assignments
+  // below run in the constructor body, after every field initializer, so
+  // `this.defs` is set before `defNames` needs it.
   constructor(defs: Readonly<Record<string, TypeRef>>) {
     this.defs = defs;
     this.defNames = new Set(Object.keys(defs));
@@ -1568,7 +1560,7 @@ export class WireDefsRegistry {
   }
 
   /** Every wire-decode function + type-alias declaration compiled so far —
-   * spliced ONCE at module scope by the caller (`assembleWireModule`/
+   * spliced once at module scope by the caller (`assembleWireModule`/
    * `assembleWireApplyValidationModule`), alongside (not instead of) the
    * constraints layer's own `compileDefsBlock` output. */
   moduleLines(): readonly string[] {
@@ -1586,19 +1578,19 @@ export function createWireDefsRegistry(defs: Readonly<Record<string, TypeRef>>):
 
 /** Structural recursion for the fused `validateEncoding` + `decode` stage.
  * Every structural kind (object/array/tuple/map/union/intersection/page) is
- * profile-INDEPENDENT — only leaf kinds vary, via `profile.leafHandlers`
+ * profile-independent — only leaf kinds vary, via `profile.leafHandlers`
  * (falling back to `defaultWireLeaf`). Diverges from this file's existing
  * `genValidate` ("errors"/"parse" traversal) in exactly the ways the staged
  * model's contract requires:
  *   - `object`: a field absent from the wire is left absent in the decoded
- *     output — NEVER a `missing` error here. Required-ness is
- *     `validateConstraints`'s job (`errors()`, run on the DEFAULTS-FILLED
+ *     output, never a `missing` error here. Required-ness is
+ *     `validateConstraints`'s job (`errors()`, run on the defaults-filled
  *     value — see "Where defaults-fill sits" in the design doc).
- *   - `object`'s `additionalProperties: false` unexpected-KEY check DOES
- *     belong here (not in `validateConstraints`): it's a fact about the
- *     WIRE's own key set, which decode's per-field copy silently drops (an
- *     extra wire key is never assigned into the decoded output) — checking
- *     it post-decode would never fire.
+ *   - `object`'s `additionalProperties: false` unexpected-key check belongs
+ *     here, not in `validateConstraints`: it's a fact about the wire's own
+ *     key set, which decode's per-field copy silently drops (an extra wire
+ *     key is never assigned into the decoded output) — checking it
+ *     post-decode would never fire.
  *   - no `metaConstraintStmts` anywhere in this traversal — min/max/pattern/
  *     enum/minLength/maxLength/multipleOf are entirely `validateConstraints`'s
  *     job, shared unchanged across every profile (see `compileConstraintsFn`
@@ -1628,7 +1620,7 @@ function genWireEncodeDecode(
 
 /** `ref`'s own wire-decode handling (phase D): delegates to
  * `registry.decodeFnName` when the target has a `defs` entry in scope
- * (a `WireDefsRegistry` was passed in AND knows this target); with no
+ * (a `WireDefsRegistry` was passed in and knows this target); with no
  * registry, or a target not in it, this is a structural no-op that aliases
  * the wire value — the same pre-phase-D carve-out `checkHandlers.ref`/
  * `validateHandlers.ref` document for a bare `TypeRef` with no `defs`. */
@@ -1875,7 +1867,7 @@ function wireIntersection(
 
 /** `ValidWire`'s TypeScript rendering for `ref` under `profile` — a real,
  * named-by-the-caller type (see `compileWireEntryFragment`), not a phantom
- * brand: an object's fields are ALWAYS rendered optional (`?:`) regardless of
+ * brand: an object's fields are always rendered optional (`?:`) regardless of
  * `meta.optional`, matching `wireObject`'s "absent field, no error" decode
  * semantics above — decode only ever produces what the wire actually
  * carried. */
@@ -1932,12 +1924,12 @@ function wireTypeTextShape(
 }
 
 /** `defaults-fill` — see "Where defaults-fill sits" in the design doc: runs
- * AFTER `decode`, BEFORE `validateConstraints`, so a defaulted field is
+ * after `decode`, before `validateConstraints`, so a defaulted field is
  * checked exactly like a caller-supplied one (no separate "missing-but-has-
- * a-default" carve-out in `validateConstraints`). Profile-INDEPENDENT —
+ * a-default" carve-out in `validateConstraints`). Profile-independent —
  * defaults are author-supplied `T`-typed values (`meta.default`, the
  * convention `json-schema.ts`'s `withMeta` already reads/emits), with no
- * wire encoding to decode FROM; running them through `decode` would require
+ * wire encoding to decode from; running them through `decode` would require
  * `decode` to accept `T` values it never itself produced, breaking its
  * totality-by-construction guarantee for no benefit. */
 function genDefaultsFillChildren(ref: TypeRef, v: string): string[] {
@@ -1975,27 +1967,27 @@ function genDefaultsFillField(field: TypeRef, fv: string): string[] {
 }
 
 /** `validateConstraints` — min/max/pattern/enum/minLength/maxLength/
- * multipleOf/required-field checks on `T`. This IS `errors()`'s existing
+ * multipleOf/required-field checks on `T`. This is `errors()`'s existing
  * codegen (`genValidate(ref, ..., "errors")`, entirely unmodified — the
  * design doc's identity-profile framing is literal: "what today's
  * check/errors/parse do for an in-process, already-typed value with no wire
  * in between"), given its own module-scope function name so every wire
- * profile's `parse` for the SAME entry calls the SAME compiled function
- * instead of regenerating it — "compiled ONCE per TypeRef and shared across
- * all profiles" (design doc). Depends only on `ref`'s own IR fingerprint,
+ * profile's `parse` for the same entry calls the same compiled function
+ * instead of regenerating it — "compiled once per TypeRef and shared across
+ * all profiles" (design doc). It depends only on `ref`'s own IR fingerprint,
  * never on any wire profile — the doc's "wire profile as a second
  * fingerprint input" (see `compileWireEntryFragment`'s doc comment) is
- * exactly what THIS function does not take.
+ * exactly what this function does not take.
  *
  * `externalDefNames` (phase D) is the same seeding `compileEntryBody` does
  * for `compileValidatorModule`'s module-scope `defs` block: a caller compiles
- * the shared `__def_NAME_check/errors/parse` functions ONCE at module scope
+ * the shared `__def_NAME_check/errors/parse` functions once at module scope
  * (`compileDefsBlock`, unchanged) and passes the resulting `defNames` set
  * here so a `ref` inside `ref`'s own tree resolves to a call into that
  * shared function (via the existing, unmodified `validateHandlers.ref`)
- * instead of the pre-phase-D no-op passthrough. This does NOT recompile
+ * instead of the pre-phase-D no-op passthrough. This does not recompile
  * `defs`' own bodies — that stays `compileDefsBlock`'s job, shared with the
- * non-wire `check`/`errors`/`parse` path, so a def reused by BOTH paths in
+ * non-wire `check`/`errors`/`parse` path, so a def reused by both paths in
  * one module still compiles once. */
 export type CompiledConstraintsFn = { readonly fnName: string; readonly lines: readonly string[] };
 
@@ -2007,13 +1999,13 @@ export function compileConstraintsFn(
   const fnName = `__constraints_${sanitizeDefName(name)}`;
   // Namespaced by entry name (not the module-shared default `""`) — see `GenCtx`'s
   // `namespace` doc comment: this function's `.lines` (including its hoisted consts)
-  // get spliced at MODULE scope alongside every other entry's own `compileConstraintsFn`
+  // get spliced at module scope alongside every other entry's own `compileConstraintsFn`
   // output (`assembleWireModule`/`assembleWireApplyValidationModule`), so two entries'
   // consts must never collide on `__ref0`-style names the way two `GenCtx()` instances
   // both starting their counters at 0 otherwise would.
   const ctx = new GenCtx(`${sanitizeDefName(name)}_`);
-  // Seed `ctx.defNames` BEFORE walking the body (mirrors `compileEntryBody`'s
-  // own `externalDefNames` seeding) — the def function DECLARATIONS
+  // Seed `ctx.defNames` before walking the body (mirrors `compileEntryBody`'s
+  // own `externalDefNames` seeding) — the def function declarations
   // themselves live in the caller's shared `compileDefsBlock` output, not here.
   if (externalDefNames !== undefined)
     for (const defName of externalDefNames) ctx.defNames.add(defName);
@@ -2037,28 +2029,28 @@ export function compileConstraintsFn(
  * optimization ("fusing stages into one emitted `parse_profile` function"):
  * `validateEncoding`+`decode` (this fragment's own codegen, profile-driven),
  * then `defaults-fill` (profile-independent), then `validateConstraints`
- * (a call to `constraintsFnName` — NOT regenerated here, see
+ * (a call to `constraintsFnName`, not regenerated here — see
  * `compileConstraintsFn`'s doc comment for why sharing it across profiles is
  * load-bearing, not just an optimization). Self-contained modulo that one
- * by-name reference — same incremental-caching shape `compileEntryFragment`
- * already has, with `profile.name` as the doc-noted SECOND fingerprint input
- * (a caller re-derives this fragment only when `ref`'s own IR fingerprint OR
+ * by-name reference — the same incremental-caching shape `compileEntryFragment`
+ * already has, with `profile.name` as the doc-noted second fingerprint input:
+ * a caller re-derives this fragment only when `ref`'s own IR fingerprint or
  * `profile.name` changed; `constraintsFnName` is a pure naming convention,
- * not part of the fingerprint, since it's derived from the entry name alone). */
+ * not part of the fingerprint, since it's derived from the entry name alone. */
 export type CompiledWireEntryFragment = {
   readonly code: string;
   readonly wireType: string;
   readonly typeImport?: { readonly typeName: string; readonly from: string };
   /** Field names this fragment's generated `parse` expects a custom-decoder
-   * HOOK for, supplied at WRAP time (function-form `encodingMap` — see
+   * hook for, supplied at wrap time (function-form `encodingMap` — see
    * `wireObjectWithFieldProfiles`'s doc comment). Always `[]` for a fragment
    * compiled via `compileWireEntryFragment` (the uniform-profile path never
    * dispatches per field name, so it can never have a hook field); non-empty
    * only for a `compileWireEntryFragmentComposite` fragment whose caller
-   * passed a non-empty `hookFields`. Embedded VERBATIM into the fragment's
+   * passed a non-empty `hookFields`. Embedded verbatim into the fragment's
    * own generated `code` (as a literal property on the returned entry
    * object), not just carried on this compile-time wrapper — api-tree's
-   * `apply-validation.ts` reads it off the RUNTIME generated entry, which
+   * `apply-validation.ts` reads it off the runtime generated entry, which
    * never sees this TypeScript-only wrapper type. */
   readonly hookFields: readonly string[];
 };
@@ -2113,36 +2105,35 @@ function isTopLevelObjectRef(ref: TypeRef): boolean {
   return kind === "object";
 }
 
-/** Sibling of `wireObject` (unchanged) whose per-field profile lookup varies
- * by field NAME instead of using one profile for every field — see
+/** Sibling of `wireObject` whose per-field profile lookup varies by field
+ * name instead of using one profile for every field — see
  * `compileWireEntryFragmentComposite`'s doc comment for why this exists as a
- * separate function rather than a parameter added to `wireObject` itself
- * (purely additive: `wireObject`/`genWireEncodeDecode` are untouched).
+ * separate function rather than a parameter added to `wireObject` itself.
  *
- * `hookFields` (default empty — every existing caller is unaffected) names
- * fields whose decode is a CUSTOM DECODER FUNCTION supplied at WRAP time
- * (function-form `encodingMap`, see docs/design/
- * wire-profiles-and-staged-validation.md's implementation-trace addendum for
- * this phase) rather than this profile's fused default decode. A hook field
- * still runs its ordinary `genWireEncodeDecode` STATEMENTS — the same
- * `validateEncoding` check every other field gets, so a wire-shape-invalid
- * input is rejected exactly as it would be fused — but DISCARDS that call's
- * own decoded `outExpr`; the assignment instead calls `hooks[name](fv)` with
- * the RAW wire field value (`fv`/`v` above), which per the staged model IS
- * `ValidWire` once `validateEncoding` has passed (no existing leaf handler
- * mutates its input before decoding it — see `numericStringLeaf`/
- * `strictBoolFromStringLeaf`/`argvBoolLeaf`/`isoDateStringLeaf`/
- * `defaultWireLeaf`, none of which touch `v` itself). Guarded by `errs.length`
- * before/after the field's own `validateEncoding` statements — a hook only
- * runs when THIS field introduced no new error — and wrapped in try/catch:
- * a throw (or a missing/non-function hook — the wrap-time stale-module check
- * in api-tree's `apply-validation.ts` is the LOUD, fail-at-wrap-time version
- * of this same defect; this is the generated code's own defensive fallback
- * for a caller that invokes `parse` directly without going through that
- * check) becomes a structured `"decode"` `ValidationError` instead of
- * propagating or silently producing `undefined`. A field NOT in `hookFields`
- * is completely unaffected — same fused single-pass emission as before this
- * parameter existed, zero extra machinery. */
+ * `hookFields` (default empty) names fields whose decode is a custom decoder
+ * function supplied at wrap time (function-form `encodingMap`, see
+ * docs/design/wire-profiles-and-staged-validation.md's implementation-trace
+ * addendum for this phase) rather than this profile's fused default decode.
+ * A hook field still runs its ordinary `genWireEncodeDecode` statements — the
+ * same `validateEncoding` check every other field gets, so a wire-shape-
+ * invalid input is rejected exactly as it would be fused — but discards that
+ * call's own decoded `outExpr`; the assignment instead calls
+ * `hooks[name](fv)` with the raw wire field value (`fv`/`v` above), which
+ * per the staged model is `ValidWire` once `validateEncoding` has passed (no
+ * existing leaf handler mutates its input before decoding it — see
+ * `numericStringLeaf`/`strictBoolFromStringLeaf`/`argvBoolLeaf`/
+ * `isoDateStringLeaf`/`defaultWireLeaf`, none of which touch `v` itself).
+ * Guarded by `errs.length` before/after the field's own `validateEncoding`
+ * statements — a hook only runs when that field introduced no new error —
+ * and wrapped in try/catch: a throw (or a missing/non-function hook — the
+ * wrap-time stale-module check in api-tree's `apply-validation.ts` is the
+ * fail-at-wrap-time version of this same defect; this is the generated
+ * code's own fallback for a caller that invokes `parse` directly without
+ * going through that check) becomes a structured `"decode"`
+ * `ValidationError` instead of propagating or silently producing
+ * `undefined`. A field not in `hookFields` is unaffected — the same fused
+ * single-pass emission as when this parameter didn't exist, with zero extra
+ * machinery. */
 function wireObjectWithFieldProfiles(
   ref: TypeRef,
   v: string,
@@ -2211,7 +2202,7 @@ const EMPTY_HOOK_FIELDS: ReadonlySet<string> = new Set();
  * dispatches to `wireObjectWithFieldProfiles` for the top-level object.
  * `compileWireEntryFragmentComposite` only ever calls this once it has
  * already confirmed (`isTopLevelObjectRef`) that `ref` unwraps to an object —
- * this function still has to handle the unwrapping ITSELF because that's the
+ * this function still has to handle the unwrapping itself because that's the
  * shape the fields end up dispatched against, not just a delegation check. */
 function genWireEncodeDecodeCompositeTop(
   ref: TypeRef,
@@ -2339,15 +2330,15 @@ function wireTypeTextComposite(
 
 /**
  * Per-field composite entry-fragment compiler — `compileWireEntryFragment`'s
- * sibling for the case where a SINGLE leaf's own params need DIFFERENT wire
+ * sibling for the case where a single leaf's own params need different wire
  * profiles per field (HTTP: a query-string field and a JSON-body field on the
  * same operation; CLI: a flag-store field and a path-slug field). Phase A's
- * `WireProfile.leafHandlers` dispatches by TypeRef KIND only, which cannot
- * vary by field NAME — this is the top-level, per-field-NAME dispatch that
- * closes that gap, WITHOUT touching `compileWireEntryFragment` or anything it
+ * `WireProfile.leafHandlers` dispatches by TypeRef kind only, which cannot
+ * vary by field name — this is the top-level, per-field-name dispatch that
+ * closes that gap, without touching `compileWireEntryFragment` or anything it
  * calls: every structural/leaf function above (`wireObject`,
  * `genWireEncodeDecode`, `wireTypeTextShape`, ...) is reused completely
- * unchanged, including for every field's OWN sub-structure (a composite
+ * unchanged, including for every field's own sub-structure (a composite
  * profile only ever varies dispatch at the leaf's own direct fields — a
  * validated leaf's input is always an object of named params one level deep,
  * per the design doc; nested structure under one field still resolves via
@@ -2359,24 +2350,23 @@ function wireTypeTextComposite(
  * dispatch per-name over, so this is exactly
  * `compileWireEntryFragment(ref, defaultProfile, ...)` — delegation, not a
  * separate codepath, so the non-object case can never drift from the ordinary
- * one. (Also means a non-empty `hookFields` is silently inert for a non-object
- * `ref` — there are no named fields to hook here, the same way `fieldProfiles`
- * is already inert in this branch.)
+ * one. This also means a non-empty `hookFields` is silently inert for a
+ * non-object `ref` — there are no named fields to hook here, the same way
+ * `fieldProfiles` is already inert in this branch.
  *
- * `hookFields` (default empty — every pre-existing caller is unaffected)
- * threads straight through to `genWireEncodeDecodeCompositeTop`/
- * `wireObjectWithFieldProfiles` (see that function's doc comment for the
- * full hook-emission contract) and is embedded verbatim into the compiled
- * fragment's generated entry object AND this function's own return value
- * (`CompiledWireEntryFragment.hookFields`) — the one static surface a caller
- * needs to drive both the wrap-time stale-module check (api-tree's
- * `apply-validation.ts`) and the incremental-build fingerprint (api-tree's
- * `apply-validation-build.ts`'s `fingerprintableDerivation`). The generated
- * `parse` function itself gains a second, optional `hooks` parameter
- * regardless of whether `hookFields` is empty — a stable signature is
- * simpler than a fragment-shape that varies by whether hooks are in play,
- * and an ignored extra parameter costs nothing at the (rare, wrap-time-only)
- * call site.
+ * `hookFields` (default empty) threads straight through to
+ * `genWireEncodeDecodeCompositeTop`/`wireObjectWithFieldProfiles` (see that
+ * function's doc comment for the full hook-emission contract) and is
+ * embedded verbatim into the compiled fragment's generated entry object and
+ * this function's own return value (`CompiledWireEntryFragment.hookFields`)
+ * — the one static surface a caller needs to drive both the wrap-time
+ * stale-module check (api-tree's `apply-validation.ts`) and the
+ * incremental-build fingerprint (api-tree's `apply-validation-build.ts`'s
+ * `fingerprintableDerivation`). The generated `parse` function itself gains
+ * a second, optional `hooks` parameter regardless of whether `hookFields` is
+ * empty — a stable signature is simpler than a fragment-shape that varies by
+ * whether hooks are in play, and an ignored extra parameter costs nothing at
+ * the (rare, wrap-time-only) call site.
  */
 export function compileWireEntryFragmentComposite(
   ref: TypeRef,
@@ -2451,21 +2441,20 @@ export function wireValidatorKey(name: string, profileName: string): string {
 }
 
 /**
- * Reassemble a complete wire-validator module from already-compiled pieces —
- * the wire-profile analogue of `assembleValidatorModule`. `constraintsFns`
- * (keyed by entry name) is emitted ONCE per entry at module scope,
+ * Reassembles a complete wire-validator module from already-compiled pieces
+ * — the wire-profile analogue of `assembleValidatorModule`. `constraintsFns`
+ * (keyed by entry name) is emitted once per entry at module scope,
  * independent of how many profiles that entry has fragments for — see
  * `compileConstraintsFn`'s doc comment for why. `wireFragments` is keyed by
  * `wireValidatorKey(name, profileName)`.
  *
  * `defsBlockLines` (phase D, default `[]`) is the constraints layer's shared
  * `__def_NAME_check/errors/parse` + `type __def_NAME` declarations —
- * `compileDefsBlock`'s own output, UNCHANGED, spliced here exactly once (the
- * same defs record a caller also builds `wireDefsLines` from). `wireDefsLines`
- * (phase D, default `[]`) is the decode layer's own `__wiredecode_*`/
- * `__wiretype_*` declarations — `WireDefsRegistry.moduleLines()`. Both are
- * optional and default to empty so an existing caller passing only the first
- * four arguments (no `defs` in play) is completely unaffected.
+ * `compileDefsBlock`'s own output, spliced here exactly once (the same defs
+ * record a caller also builds `wireDefsLines` from). `wireDefsLines` (phase
+ * D, default `[]`) is the decode layer's own `__wiredecode_*`/`__wiretype_*`
+ * declarations — `WireDefsRegistry.moduleLines()`. Both default to empty for
+ * a caller with no `defs` in play.
  */
 export function assembleWireModule(
   entries: readonly { readonly name: string }[],
@@ -2539,7 +2528,7 @@ export function assembleWireModule(
  * (api-tree's build orchestrator) should use the split functions directly.
  *
  * `options.defs` (phase D) mirrors `compileValidatorModule`'s own (now-deleted)
- * `defs` option: compiled ONCE at module scope (`compileDefsBlock` for the
+ * `defs` option: compiled once at module scope (`compileDefsBlock` for the
  * constraints layer, one shared `WireDefsRegistry` for the decode layer),
  * shared across every entry/profile — a def referenced by multiple entries,
  * or by the same entry under multiple profiles, compiles once per layer.

@@ -1,6 +1,4 @@
-// packages/type-ir/src/from-json-corpus.ts — @rhi-zone/fractal-type-ir/from-json-corpus
-//
-// Corpus-level JSON inference: given MULTIPLE JSON values, infer the
+// Corpus-level JSON inference: given multiple JSON values, infer the
 // tightest type that covers all of them. This is where accumulation
 // signals live — enum detection, discriminated unions, record-vs-dict,
 // optional field detection — none of which are possible from a single
@@ -11,7 +9,7 @@
 //   Phase 1 — collectEvidence(values, config) -> EvidenceTree
 //     A purely mechanical upward pass over the raw corpus. It counts,
 //     buckets, and structurally mirrors the data (per-field evidence for
-//     objects, per-element evidence for arrays) but makes NO type
+//     objects, per-element evidence for arrays) but makes no type
 //     commitment decisions — no enum/dict/DU calls, no union resolution.
 //
 //   Phase 2 — resolveEvidence(tree, strategy) -> TypeRef
@@ -22,7 +20,7 @@
 //     All the tunable heuristics live here, behind `ResolveStrategy`.
 //
 //   fromJsonCorpus(values, config) is a convenience wrapper that runs both
-//   phases back to back, so existing callers see identical behavior.
+//   phases back to back.
 
 import { t, types, ancestors, type TypeRef } from "./index.ts";
 import { inferValueShape as fromJson, type InferConfig, type LeafHeuristic } from "./from-json.ts";
@@ -125,26 +123,25 @@ export interface ResolveStrategy extends InferConfig {
   enumMinSamples?: number;
   /**
    * Minimum samples before K=1 evidence (every sample shares one value)
-   * collapses to `literal`/a one-member `enum`. Deliberately higher than
-   * `enumMinSamples`: committing to the single exact value a field has ever
-   * been observed to take is a stronger claim than committing to a small
-   * bounded set of values, and a corpus that's barely cleared
-   * `enumMinSamples` hasn't yet had much chance to show a second value.
-   * Default: 5.
+   * collapses to `literal`/a one-member `enum`. Higher than `enumMinSamples`
+   * because committing to the single exact value a field has ever been
+   * observed to take is a stronger claim than committing to a small bounded
+   * set of values, and a corpus that's barely cleared `enumMinSamples`
+   * hasn't yet had much chance to show a second value. Default: 5.
    */
   literalMinSamples?: number;
   /**
    * Upper bound on distinct-value count (K) above which a position is never
    * called an enum, regardless of how many samples support it. Default: 50.
    *
-   * PROVISIONAL — this is a policy default, not a derived constant, and the
-   * K-only form is known to be defective: it rejects a field with K=100 at
-   * N=100,000 (ratio 0.001, unambiguously a bounded vocabulary) purely
-   * because K exceeds the cap, while admitting K=49 at N=50. The ratio tests
-   * below (`K/N`) are the part that carries the evidence; this cap is an
-   * independent guard on output size. Set to `Infinity` to disable it and
-   * rely on the ratio alone. See `docs/design/inference-theory.md` §6.6-6.7
-   * for why a cut on K alone cannot separate memorization from restriction.
+   * A policy default, not a derived constant. The K-only form is defective
+   * on its own: it rejects a field with K=100 at N=100,000 (ratio 0.001,
+   * unambiguously a bounded vocabulary) purely because K exceeds the cap,
+   * while admitting K=49 at N=50. The ratio tests below (`K/N`) are the part
+   * that carries the evidence; this cap is an independent guard on output
+   * size. Set to `Infinity` to disable it and rely on the ratio alone. See
+   * `docs/design/inference-theory.md` §6.6-6.7 for why a cut on K alone
+   * cannot separate memorization from restriction.
    */
   enumMaxMembers?: number;
   /**
@@ -471,9 +468,9 @@ function withMeta(ref: TypeRef, extra: Record<string, unknown>): TypeRef {
 
 // Structural equality is on the serialized form, and the serialized form of a
 // TypeRef never changes — they are constructed fresh by `t(...)`/`withMeta` and
-// never mutated — so it is cached per object. Without this, comparing against a
+// never mutated — so it is cached per object. Uncached, comparing against a
 // growing accumulator re-serializes the whole accumulated subtree on every
-// step, which is quadratic in the number of merged types and was ~90% of the
+// step: quadratic in the number of merged types, and measured at ~90% of
 // runtime on structurally-diverse corpora (JSON Schema documents).
 const shapeKeyCache = new WeakMap<TypeRef, string>();
 function shapeKey(r: TypeRef): string {
@@ -514,15 +511,15 @@ function isSubkind(child: string, parent: string): boolean {
 
 // `date`/`datetime` are type-ir's `Date` domain type, not a string subtype
 // (see kinds/date-time.ts) — but `fromJson`'s string-format detection (see
-// from-json.ts's `inferString`) still guesses them FROM a raw JSON string
+// from-json.ts's `inferString`) still guesses them from a raw JSON string
 // sample. When corpus evidence disagrees on which format a string-shaped
 // field actually is (e.g. some samples parse as a date, others don't, or
-// parse as a different format like uuid), the honest fallback is still
-// "it's a string, we're just not sure which format" — same as two
-// conflicting `string`-subtype format guesses (uuid vs. uri) always
-// widened to plain `string`. This set names the format-detected kinds that
-// need that string-widening path even though they're no longer literal
-// string subtypes in the type system.
+// parse as a different format like uuid), the fallback is "it's a string,
+// we're just not sure which format" — the same widening two conflicting
+// `string`-subtype format guesses (uuid vs. uri) get to plain `string`.
+// This set names the format-detected kinds that need that string-widening
+// path even though they're no longer literal string subtypes in the type
+// system.
 const stringDetectedFormatKinds = new Set(["date", "datetime"]);
 
 function isStringLikeForUnification(kind: string): boolean {
@@ -704,7 +701,7 @@ function mergeAll(refs: readonly TypeRef[]): TypeRef {
  *  - K saturation: distinct-value count stays low relative to sample count
  *    (approximated in the batch case as K/N below a threshold).
  *  - Uniqueness: K << N — heavy repetition is strong enum evidence; K == N
- *    (every value unique) is conclusive evidence AGAINST enum.
+ *    (every value unique) is conclusive evidence against enum.
  *  - Clustering (integers only): sorted distinct values leave large gaps
  *    relative to the value range. This alone is not sufficient (timestamps
  *    cluster too) — it only corroborates a borderline saturation signal.
@@ -780,8 +777,8 @@ export function defaultEnumPredicate(ctx: PositionContext): boolean {
   if (K === 1) return N >= strategy.literalMinSamples;
   if (K >= N) return false; // every value unique — never a bounded vocabulary
 
-  // Output-size guard, NOT an evidence test. A cut on K alone cannot separate
-  // memorization from genuine restriction (inference-theory.md §6.6-6.7).
+  // Output-size guard rather than an evidence test — a cut on K alone cannot
+  // separate memorization from genuine restriction (inference-theory.md §6.6-6.7).
   if (K > strategy.enumMaxMembers) return false;
 
   // Guard term: K/N. Under a duplication factor r it falls as (K/N)/r rather
@@ -1363,10 +1360,10 @@ function walkAndDetectCfdDiscriminant(
  * distance 0 from anything. A sample with zero keys (`{}`) is compatible
  * with every shape — it's the "all fields absent" case of an
  * all-optional-fields record, not positive evidence of a second,
- * differently-shaped population. Without this, `{}` vs. `{tag: "a"}` scores
- * a Jaccard distance of 1.0 (maximal) purely because there's only one field
- * to disagree about, which would split what is really just "tag is
- * optional" into two spurious single-field-vs-empty variants.
+ * differently-shaped population. Plain Jaccard distance would score `{}`
+ * vs. `{tag: "a"}` as 1.0 (maximal) purely because there's only one field
+ * to disagree about, splitting what is really just "tag is optional" into
+ * two spurious single-field-vs-empty variants.
  */
 function objectSplitDistance(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
@@ -1633,13 +1630,13 @@ function walkAndSplitDissimilarObjects(
     );
   }
 
-  // Deliberately no `union` case: a union at this position was already
-  // produced by an earlier pass (DU detection) from evidence scoped to its
-  // own discriminant groups. `node` here is the raw, unscoped evidence for
-  // the *whole* position — reusing it to re-walk each variant would ignore
-  // which raw samples actually belong to which variant and could re-split
-  // (or corrupt) an already-correct discriminated union. General splitting
-  // only ever acts on positions still in plain `object` form.
+  // No `union` case here: a union at this position was already produced by
+  // an earlier pass (DU detection) from evidence scoped to its own
+  // discriminant groups. `node` is the raw, unscoped evidence for the whole
+  // position, so re-walking each variant with it would ignore which raw
+  // samples belong to which variant and could re-split (or corrupt) an
+  // already-correct discriminated union. General splitting only acts on
+  // positions still in plain `object` form.
 
   return ref;
 }
@@ -1720,7 +1717,7 @@ function tryDetectDict(
   const firstCount = growthPoints[0]!;
   const lastCount = growthPoints[growthPoints.length - 1]!;
 
-  // Keys common to ALL samples → record fields
+  // Keys common to every sample → record fields
   let commonKeys: Set<string> | undefined;
   for (const ks of allKeySets) {
     if (commonKeys === undefined) {
@@ -1994,30 +1991,30 @@ export function resolvedStrategy(
 // Everything `resolveEvidence` does beyond the mechanical merge is one of two
 // kinds of judgment, and they are different questions:
 //
-//   GROUPING       which occurrences count as ONE position?
-//                  DU splitting, dict-vs-record, structural clustering. All
-//                  three answer "are these one population or several", before
-//                  any question of what type to emit for them.
+//   Grouping        which occurrences count as a single position?
+//                    DU splitting, dict-vs-record, structural clustering. All
+//                    three answer "are these one population or several",
+//                    before any question of what type to emit for them.
 //
-//   GENERALIZATION given an already-grouped position and its accumulated
-//                  evidence, what type should it emit? Enum-vs-literal-vs-base,
-//                  dirty-data flagging.
+//   Generalization   given an already-grouped position and its accumulated
+//                    evidence, what type should it emit? Enum-vs-literal-vs-base,
+//                    dirty-data flagging.
 //
-// Both consume ACCUMULATED evidence — a grouping policy is invoked once phase 1
+// Both consume accumulated evidence — a grouping policy is invoked once phase 1
 // has gathered evidence under every candidate grouping simultaneously
-// (`array.element` AND `array.perIndex`, `object.keySets`, `elementObjects`),
+// (`array.element` and `array.perIndex`, `object.keySets`, `elementObjects`),
 // so it selects among pre-gathered alternatives rather than committing during
-// the walk. That deferral is deliberate and is what makes the interface
-// possible at all: a policy that had to decide per-record could not see the
-// discriminant distribution it needs.
+// the walk. That deferral is what makes the interface possible at all: a
+// policy that had to decide per-record could not see the discriminant
+// distribution it needs.
 //
-// ORDER IS LOAD-BEARING, and the two kinds interleave rather than forming two
-// clean phases. `walkAndDetectDU` only fires on positions whose discriminant
-// field has already been typed as an enum/literal, so the enum GENERALIZATION
-// must run before the DU GROUPING. This is a real constraint, not an artifact:
-// grouping by a discriminant requires knowing the discriminant is low-arity,
-// which is itself a generalization decision. The pipeline is therefore an
-// ordered list of tagged stages, not two passes.
+// The two kinds interleave rather than forming two clean phases, and their
+// order matters: `walkAndDetectDU` only fires on positions whose discriminant
+// field has already been typed as an enum/literal, so the enum generalization
+// stage must run before the DU grouping stage. This is a real constraint, not
+// an artifact — grouping by a discriminant requires knowing the discriminant
+// is low-arity, which is itself a generalization decision. The pipeline is
+// therefore an ordered list of tagged stages, not two passes.
 // ---------------------------------------------------------------------------
 
 /** Context handed to every stage. */
@@ -2055,7 +2052,7 @@ const generalization = (name: string, apply: Generalization["apply"]): Stage => 
 });
 
 /**
- * Lift a PER-POSITION decision into a whole-tree stage.
+ * Lift a per-position decision into a whole-tree stage.
  *
  * Stages are whole-tree transforms (`TypeRef × EvidenceNode → TypeRef`),
  * matching the shape of the built-ins. Most policies are not whole-tree
@@ -2124,7 +2121,7 @@ export function perPosition(
 }
 
 /**
- * Everything a GROUPING decision at one position can see: the generalization
+ * Everything a grouping decision at one position can see: the generalization
  * context plus the raw object samples a partition is computed over.
  */
 export interface GroupingContext extends PositionContext {
@@ -2213,7 +2210,7 @@ export const defaultDetectDict: Group = (c) =>
 export function defaultStages(resolved: ResolvedStrategy): Stage[] {
   const out: Stage[] = [];
 
-  // GENERALIZATION first: DU grouping below consumes its output (see above).
+  // Generalization runs first: DU grouping below consumes its output (see above).
   if (resolved.detectEnums) {
     out.push(generalization("generalize", (ref, node) => walkAndGeneralize(ref, node, resolved)));
   }

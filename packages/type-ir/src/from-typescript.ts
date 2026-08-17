@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-typescript.ts — @rhi-zone/fractal-type-ir/from-typescript
-//
 // General-purpose TypeScript compiler-API ingester: `ts.Type` + `ts.TypeChecker`
 // → `TypeRef`. Handles primitives, literals, objects (incl. optional/readonly/
 // JSDoc-derived meta), arrays, tuples, unions (incl. TS enums, literal unions,
@@ -11,11 +9,10 @@
 // opt-in `SharingRegistry` that extracts reused named types to `defs` instead
 // of inlining them at every use site).
 //
-// Extracted out of `@rhi-zone/fractal-api-tree`'s `extract.ts`, where this
-// logic originated tightly coupled to op/route extraction (function-signature
-// parameter extraction, `Result<T, E>` unwrapping, endpoint JSDoc parsing).
-// Those api-tree-specific concerns stay in api-tree; this module is the
-// reusable core any TS-source ingester can build on.
+// This module is the reusable TS-ingestion core: op/route-specific concerns
+// (function-signature parameter extraction, `Result<T, E>` unwrapping,
+// endpoint JSDoc parsing) belong to `@rhi-zone/fractal-api-tree`'s
+// `extract.ts` instead.
 //
 // Punts anything genuinely unsupported (constructable types, exotic
 // conditional/mapped types, …) to `t(types.unknown, { $comment })` carrying a
@@ -32,37 +29,37 @@ const puntRef = (reason: string): TypeRef =>
   t(types.unknown, { $comment: `TODO(type-ir): unhandled type — ${reason}` });
 
 // ============================================================================
-// Call budget — a defensive circuit breaker `typeRefFromType`'s `seen`-based
-// (identity-keyed) cycle detection cannot substitute for.
+// Call budget — a defensive circuit breaker for cases `typeRefFromType`'s
+// `seen`-based (identity-keyed) cycle detection cannot catch.
 //
-// `seen` correctly terminates a hand-authored self-recursive domain type
-// (`type Tree = { children: Tree[] }`) because TS caches and reuses the SAME
-// `ts.Type` object for a directly-recursive alias's repeated occurrences —
-// `seen.has(type)` fires almost immediately. It does NOT terminate a walk
-// into certain TS/DOM built-in LIBRARY types (confirmed: the Fetch API's
+// `seen` terminates a hand-authored self-recursive domain type (`type Tree =
+// { children: Tree[] }`) because TS caches and reuses the same `ts.Type`
+// object for a directly-recursive alias's repeated occurrences, so
+// `seen.has(type)` fires almost immediately. It does not terminate a walk
+// into certain TS/DOM built-in library types — the Fetch API's
 // `Response`/`ReadableStream`/`ReadableStreamReader`/`ReadableStreamBYOBReader`
-// family, reachable e.g. via a handler's `Promise<Response>` return type):
+// family, reachable e.g. via a handler's `Promise<Response>` return type:
 // their mutually overloaded, generically self-referential methods resolve to
-// a FRESH, non-identical `ts.Type` instance on every visit — TS does not
-// guarantee referential stability for repeated generic instantiations reached
-// via different call paths — so `seen.has(type)` never fires even though the
-// walk never terminates, and it eventually overflows the native JS call
-// stack (confirmed via a reproduction against a real op's `Promise<Response>`
-// return type: ~3200 `typeRefFromType` calls before `RangeError: Maximum
-// call stack size exceeded`, with `seen.size` still under 25 throughout —
-// the runaway is BREADTH across overload sets, not path depth, so a
-// path-depth cap over `seen.size` would not catch it).
+// a fresh, non-identical `ts.Type` instance on every visit, because TS does
+// not guarantee referential stability for repeated generic instantiations
+// reached via different call paths. `seen.has(type)` never fires even though
+// the walk never terminates, and the walk eventually overflows the native JS
+// call stack. A reproduction against a real op's `Promise<Response>` return
+// type hit ~3200 `typeRefFromType` calls before `RangeError: Maximum call
+// stack size exceeded`, with `seen.size` still under 25 throughout — the
+// runaway is breadth across overload sets, not path depth, so a path-depth
+// cap over `seen.size` would not catch it.
 //
 // `budget` is a mutable call counter threaded through every recursive call
-// the exact same way `seen`/`registry` already are — fresh per top-level
+// the same way `seen`/`registry` already are: fresh per top-level
 // `typeRefFromType` entry (mirrors `seen`'s own "omitted param → fresh Set"
-// convention), shared by reference across one whole descent. Measured
-// against this repo's own working slices (domain-auth/forecasting/
-// tax-compliance), the largest full-FILE extraction (every leaf's input AND
-// output combined) totals a few hundred calls; `MAX_TYPE_REF_CALLS` is a
-// full order of magnitude above that per-leaf, and comfortably below the
-// ~3200-call point that overflows the native stack for the pathological
-// case, so it always trips and punts gracefully before a `RangeError` would.
+// convention), shared by reference across one whole descent. Across this
+// repo's own working slices (domain-auth/forecasting/tax-compliance), the
+// largest full-file extraction (every leaf's input and output combined)
+// totals a few hundred calls; `MAX_TYPE_REF_CALLS` sits a full order of
+// magnitude above that per-leaf, and comfortably below the ~3200-call point
+// where the native stack overflows for the pathological case, so it always
+// trips and punts gracefully before a `RangeError` would.
 // ============================================================================
 
 /** Mutable call-budget for one top-level `typeRefFromType` descent — see the
@@ -77,20 +74,19 @@ const MAX_TYPE_REF_CALLS = 1000;
 // Structural sharing — an opt-in `SharingRegistry` threaded through
 // `typeRefFromType` (and everything it calls) accumulates named-type use
 // counts and builds a `defs` map, so a type used in multiple places is
-// extracted ONCE and referenced by `{ kind: "ref", target }` everywhere else,
+// extracted once and referenced by `{ kind: "ref", target }` everywhere else,
 // instead of being inlined (and re-descended) at every use site. Omitting the
-// registry entirely (every function's default) preserves exact prior
-// behavior: no sharing, every named type still inlines structurally except
-// true self-recursion (which already always produced a `ref`, registry or
-// not).
+// registry (the default for every function here) disables sharing: every
+// named type inlines structurally, except true self-recursion, which always
+// produces a `ref` regardless of the registry.
 // ============================================================================
 
-/** Symbol/alias names that name a STRUCTURAL CONVENTION this extractor
+/** Symbol/alias names that name a structural convention this extractor
  * special-cases (Promise/AsyncIterable unwrapping, CursorPage/OffsetPage/Page
- * pagination, the TS lib's own generic container names) rather than a
- * "real" user-declared type worth sharing. Excluded from registry-based
- * naming so e.g. `Promise<Foo>`'s outer `Promise` type itself never becomes
- * a spurious `defs` entry. */
+ * pagination, the TS lib's own generic container names), not a "real"
+ * user-declared type worth sharing. Excluded from registry-based naming so
+ * e.g. `Promise<Foo>`'s outer `Promise` type never becomes a spurious `defs`
+ * entry. */
 const NON_SHAREABLE_SYMBOL_NAMES = new Set([
   "Promise",
   "AsyncIterable",
@@ -171,7 +167,7 @@ function bumpUseCount(registry: SharingRegistry, name: string): void {
   registry.useCounts.set(name, (registry.useCounts.get(name) ?? 0) + 1);
 }
 
-/** The predicate a caller supplies to decide whether a REUSED (not
+/** The predicate a caller supplies to decide whether a reused (not
  * self-recursive — those always share, unconditionally) named type is worth
  * extracting to `defs` rather than inlining at every use site. */
 export type ShouldShare = (info: {
@@ -240,9 +236,9 @@ function mapTypeRefChildren(shape: TypeShape, fn: (ref: TypeRef) => TypeRef): Ty
 }
 
 /** Rewrite every `ref` node in `ref`'s subtree via `replace` — `replace(target)`
- * returns the def body to inline IN PLACE OF the ref (recursively substituted
+ * returns the def body to inline in place of the ref (recursively substituted
  * further, so a chain of demoted refs fully resolves), or `undefined` to leave
- * the ref as-is (a KEPT shared def, or a target `replace` doesn't know about).
+ * the ref as-is (a kept shared def, or a target `replace` doesn't know about).
  * Terminates even on defs that reference each other, because `replace` never
  * returns a body for a name flagged recursive (see `finalizeSharedDefs`) —
  * the one case where re-expanding could recurse forever. */
@@ -261,24 +257,24 @@ function substituteRefs(ref: TypeRef, replace: (target: string) => TypeRef | und
 
 /**
  * Decide, per `SharingRegistry` entry, whether to keep it in `defs` (shared)
- * or inline it back everywhere it's referenced — run ONCE, after the whole
+ * or inline it back everywhere it's referenced — run once, after the whole
  * extraction pass (every leaf a caller cares about) has populated `registry`
  * via `typeRefFromType`/callers that thread `registry` through.
  *
  * Every named type encountered during extraction is unconditionally shared
- * AT EXTRACTION TIME (see `typeRefFromType`'s registry branch) — final counts
- * aren't known until the whole pass finishes, so "share everything, then
- * demote" is the only single-pass-generation option that still lets
+ * at extraction time (see `typeRefFromType`'s registry branch), because final
+ * counts aren't known until the whole pass finishes — "share everything,
+ * then demote" is the only single-pass-generation option that still lets
  * `shouldShare` see accurate `useCount`s. This function is that demotion
- * pass: self-recursive names (`registry.recursive`) are always kept — a
- * recursive type has nowhere finite to inline TO — everything else is kept
+ * pass: self-recursive names (`registry.recursive`) are always kept, since a
+ * recursive type has nowhere finite to inline to; everything else is kept
  * only if `shouldShare` (default: `defaultShouldShare`) says so, and demoted
  * names are substituted back into every remaining ref (roots and kept defs
  * alike) via `substituteRefs`.
  *
  * `roots` is every top-level TypeRef the caller extracted (e.g. one entry per
- * tool/route) keyed however the caller likes — the keys are preserved on the
- * returned `roots`, only the TypeRefs themselves are rewritten.
+ * tool/route), keyed however the caller likes — the keys are preserved on the
+ * returned `roots`; only the TypeRefs themselves are rewritten.
  */
 export function finalizeSharedDefs(
   registry: SharingRegistry,
@@ -349,15 +345,15 @@ function functionRefFromSignature(
 }
 
 /**
- * Lower ALL call signatures of a callable type to `types.function` TypeRefs.
+ * Lower all call signatures of a callable type to `types.function` TypeRefs.
  * TypeScript represents an overloaded function as an intersection of its call
  * signatures (`((A) => X) & ((B) => Y)`), so more than one signature wraps as
  * `types.intersection([fn1, fn2, …])` — one member per overload. A single
- * signature (the common case) keeps prior behavior exactly: a bare
- * `types.function(...)`, no intersection wrapper. `seen` is shared across all
- * signatures of the same overload set (they're siblings on the same
- * type-position, not a recursion chain, but sharing avoids re-descending a
- * type already seen via another overload).
+ * signature (the common case) produces a bare `types.function(...)`, no
+ * intersection wrapper. `seen` is shared across all signatures of the same
+ * overload set (they're siblings on the same type-position, not a recursion
+ * chain, but sharing avoids re-descending a type already seen via another
+ * overload).
  */
 function functionRefFromSignatures(
   sigs: readonly ts.Signature[],
@@ -407,7 +403,7 @@ function methodRefFromSignature(
 }
 
 /**
- * Lower ALL call signatures of a class method (overloads) to `types.method`
+ * Lower all call signatures of a class method (overloads) to `types.method`
  * TypeRefs, wrapped in `types.intersection` when there's more than one — same
  * overload-as-intersection convention as `functionRefFromSignatures`, applied
  * to the method kind instead of the standalone-function kind.
@@ -471,8 +467,8 @@ function methodsFromClassType(
 /**
  * True for a symbol-keyed property (`escapedName` starting `__@`, TS's
  * internal spelling for a `unique symbol`-keyed member — see
- * `isRefinementTagProp`'s doc comment above for the same prefix check used
- * to recognize a SPECIFIC symbol-keyed marker). General filter: EVERY
+ * `isRefinementTagProp`'s doc comment below for the same prefix check used
+ * to recognize a specific symbol-keyed marker). General filter: every
  * symbol-keyed property — brand/refinement tags, well-known Symbols
  * (`Symbol.iterator`/`Symbol.dispose`/`Symbol.asyncIterator`/
  * `Symbol.toStringTag`/…), or any other `unique symbol` key — is excluded
@@ -484,21 +480,21 @@ function methodsFromClassType(
  *      real decoded input, regardless of what type declares it.
  *   2. `prop.name` for a well-known-Symbol-keyed property is TS's own
  *      internal synthetic spelling (`"__@iterator@8"`,
- *      `"__@dispose@46197"`, …) — not a usable property name at all: it
+ *      `"__@dispose@46197"`, …), not a usable property name at all: it
  *      contains `@`, so a codegen consumer emitting it as a bare object-type
- *      field name (`{ __@iterator@8: … }`) produces a TypeScript SYNTAX
- *      ERROR, not just a semantically-useless field. Confirmed via TS/DOM
- *      builtin types reachable now that the call-budget circuit breaker
- *      (above) lets extraction terminate INTO their structure instead of
+ *      field name (`{ __@iterator@8: … }`) produces a TypeScript syntax
+ *      error, not just a semantically-useless field. This is reachable via
+ *      TS/DOM builtin types now that the call-budget circuit breaker (above)
+ *      lets extraction terminate into their structure instead of
  *      overflowing the stack before ever reaching this loop — `Uint8Array`'s
  *      `[Symbol.iterator]`/`[Symbol.toStringTag]`, `ReadableStream`'s
  *      `[Symbol.dispose]`, etc.
  *
- * (Brand/refinement-tag symbol-keyed properties never reach this loop in
- * the first place — they're consumed by `typeRefFromBrandedIntersection`
- * BEFORE the intersection's base type's own properties are walked here —
- * but this filter is correct and needed independently of that, for every
- * OTHER symbol-keyed property no intersection classification consumes.)
+ * Brand/refinement-tag symbol-keyed properties never reach this loop in the
+ * first place — they're consumed by `typeRefFromBrandedIntersection` before
+ * the intersection's base type's own properties are walked here — but this
+ * filter is correct and needed independently of that, for every other
+ * symbol-keyed property no intersection classification consumes.
  */
 function isSymbolKeyedProp(prop: ts.Symbol): boolean {
   return prop.escapedName.toString().startsWith("__@");
@@ -700,12 +696,12 @@ function literalValueOf(type: ts.Type): string | number | boolean | undefined {
  * symbol` declaration is specifically named `RefinementTag` — the shared
  * marker every refinement-tag type in `kinds/refinements.ts` carries its
  * value under. Mirrors `brandNameFromSymbolKeyedProp`'s "read the tag off
- * the symbol declaration's own identifier" move, but confirms IDENTITY (is
+ * the symbol declaration's own identifier" move, but confirms identity (is
  * this the refinement marker, as opposed to a brand's `BrandTag` or some
- * unrelated symbol-keyed member?) rather than deriving a brand NAME from it.
+ * unrelated symbol-keyed member?) rather than deriving a brand name from it.
  * Declared ahead of `classifyIntersectionConstituent` so that function can
  * skip refinement-tag props instead of misreading one as an (unrecognized)
- * brand — `RefinementTag`'s value type is a literal-bearing OBJECT, not a
+ * brand: `RefinementTag`'s value type is a literal-bearing object, not a
  * plain string literal or `never`, so left unchecked it would otherwise fall
  * into `brandNameFromSymbolKeyedProp`'s "no literal value" branch and read
  * the symbol's own name (`"RefinementTag"`) as a bogus brand.
@@ -785,16 +781,15 @@ type IntersectionConstituentKind =
  * tag, or a base-shape constituent — the per-constituent building block
  * `typeRefFromBrandedIntersection` walks the whole intersection with.
  *
- * Refinement check runs first (`refinementMetaOfConstituent`, unchanged).
- * Brand detection examines a single constituent: only OBJECT-flagged
- * constituents are examined (a primitive constituent — `string`, `number`,
- * … — carries its own symbol-keyed properties, e.g. `Symbol.iterator`, that
- * would otherwise spuriously match), and a refinement-tag property is
- * skipped so it isn't misread as an (unrecognized) brand. Named tags
- * (`__brand`/`__tag`/…) and shared-symbol tags carry the brand name as a
- * string-literal property value; a symbol-keyed tag with no literal value
- * (typically `never`) falls back to the `unique symbol` declaration's own
- * identifier.
+ * Refinement check runs first, via `refinementMetaOfConstituent`. Brand
+ * detection examines a single constituent: only object-flagged constituents
+ * are examined (a primitive constituent — `string`, `number`, … — carries
+ * its own symbol-keyed properties, e.g. `Symbol.iterator`, that would
+ * otherwise spuriously match), and a refinement-tag property is skipped so
+ * it isn't misread as an (unrecognized) brand. Named tags (`__brand`/`__tag`/
+ * …) and shared-symbol tags carry the brand name as a string-literal
+ * property value; a symbol-keyed tag with no literal value (typically
+ * `never`) falls back to the `unique symbol` declaration's own identifier.
  */
 function classifyIntersectionConstituent(
   constituent: ts.Type,
@@ -832,8 +827,8 @@ function classifyIntersectionConstituent(
  * (which itself expands to `string & { [BrandTag]: "email" } &
  * { [RefinementTag]: { minLength: 5 } }`, three constituents). Any
  * combination of base type, brand tag, and refinement tags in a single
- * intersection collapses here — not just the brand-only or refinement-only
- * shapes each used to be recognized by a separate, narrower function.
+ * intersection collapses here, whether brand-only, refinement-only, or both
+ * together.
  *
  * Walks every constituent via `classifyIntersectionConstituent`: refinement
  * tags merge their value objects into one meta bag; a brand tag's name is
@@ -904,17 +899,17 @@ function typeRefFromBrandedIntersection(
  * a type already on the path means the type is recursive; it lowers to
  * `t(types.ref(name))` when a name is recoverable, else punts.
  *
- * `registry` (optional, omitted by every existing caller — exact prior
- * behavior when absent) opts into structural sharing (see the "Structural
- * sharing" section above): a NAMED type (`shareableTypeName`) is extracted to
- * `registry.defs` under a unique name on first encounter and returned as
- * `{ kind: "ref", target: name }` on every encounter, first or not — including
- * nested occurrences (a field typed `Address` shares just as readily as the
- * op's own top-level input type). `finalizeSharedDefs` runs AFTER the whole
- * extraction pass (every leaf, not just one) to decide which shared names are
- * worth KEEPING shared (per the caller's `ShouldShare` predicate) versus
- * inlining back — self-recursive names are never inlined, everything else is
- * a genuine choice.
+ * `registry` is optional; every existing caller omits it, which disables
+ * structural sharing entirely (see the "Structural sharing" section above).
+ * Supplying it opts into sharing: a named type (`shareableTypeName`) is
+ * extracted to `registry.defs` under a unique name on first encounter and
+ * returned as `{ kind: "ref", target: name }` on every encounter, first or
+ * not — including nested occurrences (a field typed `Address` shares just as
+ * readily as the op's own top-level input type). `finalizeSharedDefs` runs
+ * after the whole extraction pass (every leaf, not just one) to decide which
+ * shared names are worth keeping shared (per the caller's `ShouldShare`
+ * predicate) versus inlining back — self-recursive names are never inlined,
+ * everything else is a genuine choice.
  */
 export function typeRefFromType(
   type: ts.Type,
@@ -991,18 +986,18 @@ function typeRefFromTypeStructural(
   if (flags & ts.TypeFlags.StringLike) return t(types.string);
   if (flags & ts.TypeFlags.NumberLike) return t(types.number);
   if (flags & ts.TypeFlags.BooleanLike) return t(types.boolean);
-  // `void` was never reachable before function-typed return positions existed
-  // (object/param extraction never produces it) — a callable's `void` return
-  // now flows through here via `functionRefFromSignature`.
+  // `void` is reachable here via a callable's return type
+  // (`functionRefFromSignature`); object/param extraction never produces it
+  // directly.
   if (flags & ts.TypeFlags.Void) return t(types.void);
   if (flags & ts.TypeFlags.Null) return t(types.null);
 
   // ── Page<T>/CursorPage<T>/OffsetPage<T> (an api-tree pagination
   //    convention: a handler returning one of these shapes signals "this
   //    endpoint is paginated," the same convention role AsyncIterable plays
-  //    for `stream` (see the Object-types section below). Checked here,
-  //    BEFORE the tuple/array/union branches, via `aliasSymbol` — the alias
-  //    name survives regardless of whether the ALIASED type resolves
+  //    for `stream` — see the Object-types section below). Checked here,
+  //    before the tuple/array/union branches, via `aliasSymbol`: the alias
+  //    name survives regardless of whether the aliased type resolves
   //    structurally to a plain object (`CursorPage<T>`/`OffsetPage<T>`) or a
   //    union (`Page<T> = CursorPage<T> | OffsetPage<T>`), and checking it
   //    early (rather than only inside the object-types branch) is what
@@ -1011,9 +1006,8 @@ function typeRefFromTypeStructural(
   //    pagination signal. `CursorPage`/`OffsetPage` resolve to their own
   //    literal style directly; the general `Page<T>` alias is ambiguous
   //    between the two (a handler typed with the reader-facing union, not
-  //    one concrete variant) and defaults to `"cursor"` — the more common
-  //    convention of the two, and a deliberate, documented fallback rather
-  //    than a silent guess. ──────────
+  //    one concrete variant) and defaults to `"cursor"`, the more common
+  //    convention of the two. ──────────
   if (
     type.aliasSymbol &&
     (type.aliasSymbol.name === "CursorPage" ||
@@ -1254,12 +1248,12 @@ function typeRefFromTypeStructural(
     // in this function (before the Object-flag branch even starts) — Set<T>'s
     // OWN interface methods are themselves self-referential
     // (`forEach(callback: (value: T, value2: T, set: Set<T>) => void): void`,
-    // whose third parameter's type resolves to the SAME cached `Set<T>` type
+    // whose third parameter's type resolves to the same cached `Set<T>` type
     // object as the outer type being extracted). Left unhandled, walking
     // Set<T>'s public method surface as a plain object would re-enter that
     // identical `Set<T>` type via `forEach`'s `set` parameter (or similarly
     // through other methods); the `seen` check's recursive-type fallback
-    // (`type.symbol?.name`) would then name the match after the CONTAINER —
+    // (`type.symbol?.name`) would then name the match after the container —
     // `ref("Set")` — since `Set<T>` itself is never a named/registered type,
     // producing a dangling ref no `defs` entry ever resolves. This is the
     // container-mediated-recursion failure the array/generic-wrapper case
@@ -1304,30 +1298,26 @@ function typeRefFromTypeStructural(
     // File/Blob: the Web `File`/`Blob` binary-upload types — checked before
     // the general properties walk below, same name-based special-casing
     // style as Promise/AsyncIterable/Set/Map above. A multipart POST body
-    // decodes a file field into a REAL runtime `File` instance
+    // decodes a file field into a real runtime `File` instance
     // (`@rhi-zone/fractal-http-api-projector/decode.ts`'s
-    // `parseRequestBody`), never JSON data — there is no meaningful
-    // structural JSON validation for it. Worse than merely meaningless: DOM
-    // lib's own declared `File`/`Blob` member surface
-    // (`webkitRelativePath: string`, `arrayBuffer(): Promise<ArrayBuffer>`,
-    // `slice(...): Blob`, …) does not reliably match every JS runtime's
-    // actual implementation — Bun's own `File`, for instance, has no
-    // `webkitRelativePath` property at all (`"webkitRelativePath" in new
-    // File([], "x")` is `false`, confirmed directly against the Bun
-    // runtime) — so a check/parse function built from that structural
-    // surface REJECTS every real multipart-decoded `File` (`check` fails on
-    // the missing property) and, worse, a PARSE-mode caller would silently
-    // reconstruct a `{}`-shaped non-File value from it (the same class of
-    // corruption the optional-`unknown` non-nullable-narrowing bug caused
-    // elsewhere in this file — see the git history around
-    // `MAX_TYPE_REF_CALLS`). Found reproducing a multipart resource-upload
-    // leaf (the sibling codebase's `curriculum` slice) whose generated validator
+    // `parseRequestBody`), never JSON data, so there is no meaningful
+    // structural JSON validation for it. The DOM lib's own declared
+    // `File`/`Blob` member surface (`webkitRelativePath: string`,
+    // `arrayBuffer(): Promise<ArrayBuffer>`, `slice(...): Blob`, …) also
+    // does not reliably match every JS runtime's actual implementation —
+    // Bun's own `File`, for instance, has no `webkitRelativePath` property
+    // (`"webkitRelativePath" in new File([], "x")` is `false` on Bun) — so a
+    // check/parse function built from that structural surface rejects every
+    // real multipart-decoded `File` (`check` fails on the missing property),
+    // and a parse-mode caller would silently reconstruct a `{}`-shaped
+    // non-File value from it. This surfaced in a multipart resource-upload
+    // leaf (the sibling codebase's `curriculum` slice), whose generated validator
     // rejected every real upload with `file.webkitRelativePath: missing`.
-    // Lowered to `types.unknown` — the same opaque, always-passes,
+    // Lowered to `types.unknown` directly — the same opaque, always-passes,
     // pass-through treatment a genuinely non-JSON-representable field
     // already gets elsewhere (e.g. a hand-typed `condition?: unknown`
-    // field), not a punt-with-comment (this is a KNOWN, intentional case,
-    // not an unhandled one).
+    // field). This is an intentional, recognized case, not the generic
+    // unhandled-type punt path.
     if (type.symbol && (type.symbol.name === "File" || type.symbol.name === "Blob")) {
       return t(types.unknown, {
         $comment: "binary upload type (File/Blob) — not structurally validated",
@@ -1337,7 +1327,8 @@ function typeRefFromTypeStructural(
     const properties = checker.getPropertiesOfType(type);
 
     // Pure index-signature types (Record<K,V>, `{ [key: string]: V }`) have no
-    // own properties — without this they'd lower to `types.object({})`.
+    // own properties; this routes them to `types.map` instead of the empty
+    // `types.object({})` the properties-only path would otherwise produce.
     const stringIndex = type.getStringIndexType();
     const numberIndex = type.getNumberIndexType();
     if (properties.length === 0 && (stringIndex || numberIndex)) {
@@ -1364,9 +1355,8 @@ function typeRefFromTypeStructural(
       // separate multi-declaration output channel here (extraction yields
       // one TypeRef per type), so the `interface` TypeRef rides along as
       // `meta.interface` — an open-metadata-bag attachment rather than a new
-      // return shape, additive and non-breaking for every existing consumer
-      // of this function. `instance` itself stays purely nominal; nothing
-      // here adds fields to it.
+      // return shape. `instance` itself stays purely nominal; nothing here
+      // adds fields to it.
       const methods = methodsFromClassType(
         type,
         checker,
@@ -1396,37 +1386,33 @@ function typeRefFromTypeStructural(
       // Skip symbol-keyed members (well-known Symbols, brand/refinement
       // tags not already consumed by `typeRefFromBrandedIntersection`) —
       // see `isSymbolKeyedProp`'s doc comment for why this is correct
-      // (never JSON-representable) AND necessary (TS's own synthetic name
+      // (never JSON-representable) and necessary (TS's own synthetic name
       // for these isn't valid to emit as a bare object-type field name).
       if (isSymbolKeyedProp(prop)) continue;
 
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
       const readonly = isReadonly(prop);
-      // Strip `| undefined` so `field?: string` lowers as a plain string.
+      // Strip `| undefined` so `field?: string` lowers as a plain string —
+      // except for `unknown`/`any` fields, which skip this narrowing (see
+      // `packages/api-tree/src/extract.test.ts` for the regression coverage).
       //
-      // Regression (found migrating the sibling codebase's `triggers` slice, 2026-07-30;
-      // also affects the ALREADY-LIVE `filter-sets` slice's own `expr:
-      // unknown` field — see `packages/api-tree/src/extract.test.ts`'s
-      // regression test): `ts.Type#getNonNullableType()` applied to a field
-      // typed `unknown` (or `any`) does NOT return `unknown` unchanged — it
-      // returns a type reporting `TypeFlags.Object` with ZERO own properties
-      // (TS's internal approximation of "unknown minus null/undefined" as
-      // the structural empty-object type `{}`, confirmed via the TS compiler
-      // API directly, not guessed). Left unguarded, this made an `unknown`
-      // OPTIONAL field lower to `types.object({})` instead of
-      // `types.unknown` — silently WRONG in a way that is actively harmful,
-      // not just imprecise: `compile.ts`'s `objectValidate` PARSE mode
-      // reconstructs its output using ONLY the shape's OWN declared fields
-      // (empty, for `{}`), so a validator generated from this shape
-      // DISCARDS the real value entirely and replaces it with `{}` — e.g. a
-      // real `Expr` condition submitted to a wired endpoint gets silently
-      // wiped before the handler ever sees it. `unknown`/`any` are already
-      // maximally permissive with nothing meaningful to strip a `|
-      // undefined` from, so the non-nullable narrowing is skipped for them,
-      // preserving the original type (still `Unknown`/`Any`-flagged) into
-      // the recursive `typeRefFromType` call below, which lowers it to
-      // `types.unknown` via the ordinary punt path (`from-typescript.ts`'s
-      // own fallback for a type flags don't otherwise handle).
+      // `ts.Type#getNonNullableType()` applied to a field typed `unknown`
+      // (or `any`) does not return `unknown` unchanged: it returns a type
+      // flagged `TypeFlags.Object` with zero own properties, TS's internal
+      // approximation of "unknown minus null/undefined" as the structural
+      // empty-object type `{}`. Narrowing an `unknown` field this way makes
+      // it lower to `types.object({})` instead of `types.unknown`, which is
+      // unsafe rather than merely imprecise: `compile.ts`'s `objectValidate`
+      // parse mode reconstructs its output using only the shape's own
+      // declared fields, so a validator generated from `{}` discards the
+      // real value and replaces it with `{}` — e.g. a real `Expr` condition
+      // submitted to a wired endpoint gets silently wiped before the
+      // handler ever sees it. `unknown`/`any` are already maximally
+      // permissive, with nothing meaningful to strip a `| undefined` from,
+      // so the non-nullable narrowing is skipped for them: the original
+      // type (still `Unknown`/`Any`-flagged) passes into the recursive
+      // `typeRefFromType` call below, which lowers it to `types.unknown`
+      // via the ordinary punt path.
       const rawPropType = checker.getTypeOfSymbolAtLocation(prop, loc);
       const propType =
         (rawPropType.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) !== 0
@@ -1461,16 +1447,17 @@ function typeRefFromTypeStructural(
     return t(types.object(fields));
   }
 
-  // ── Generic type parameters: extract the CONSTRAINT, not the unresolved
+  // ── Generic type parameters: extract the constraint, not the unresolved
   //    parameter itself. `T extends Searchable` guarantees the caller's `T`
   //    is at least shaped like `Searchable` — that's real information worth
   //    keeping instead of punting to `unknown`. `T extends string` likewise
   //    extracts `string`. An unconstrained `T` truly has no information to
-  //    extract (its only guarantee is "anything"), so it stays `unknown` —
-  //    now with a descriptive comment instead of the generic "unsupported"
-  //    punt message. Only the `extends` clause is read; a type parameter's
-  //    DEFAULT (`T = string`) describes what the caller may omit, not what
-  //    the type guarantees, so `getDefault()` is deliberately not consulted.
+  //    extract (its only guarantee is "anything"), so it stays `unknown`,
+  //    with a descriptive comment naming the case instead of the generic
+  //    "unsupported" punt message. Only the `extends` clause is read; a type
+  //    parameter's default (`T = string`) describes what the caller may
+  //    omit, not what the type guarantees, so `getDefault()` is deliberately
+  //    not consulted.
   //    The constraint is lowered recursively — `T extends Record<string, V>`
   //    or `T extends OtherGeneric` both fall through this same path, so a
   //    constrained-generic constraint referencing another type parameter (or
@@ -1542,23 +1529,24 @@ function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
 /** Create a read-only Program over a single entry file, resolving modules
  * exactly the way `entryFile`'s own `tsconfig.json` (if any) would.
  *
- * Pass MULTIPLE entry files (all under the same project) to get one Program
- * rooted at all of them — critical for batch extraction. A `ts.Program`'s
- * dominant cost is parsing+binding its whole transitive import closure, not
- * the root file count: for a set of entry files that share most of their
- * dependency graph (siblings in one app, e.g.), that closure is nearly the
- * SAME whether it's rooted at one file or all of them (measured: one
- * `the sibling codebase` slice's Program ≈ 3.3GB peak RSS; all 16 slices sharing one
- * Program ≈ 3.3GB peak RSS too — the union of their imports barely grew).
- * Building N separate single-root Programs in a sequential batch instead
- * pays that multi-GB parse+bind cost N times, and — since each `ts.Program`
- * is a large, long-lived-looking object graph — a long-running batch process
- * can accumulate several of them before the GC gets around to reclaiming the
- * earlier ones, which is exactly how `the sibling codebase`'s 16-slice validator codegen
- * script (`apps/web/scripts/codegen-fractal-validators.ts`) reached 20+GB
- * RSS and repeatedly OOM-killed unrelated processes on the host before this
- * function grew multi-root support. See `build.ts`'s `buildValidatorModuleSource`
- * `program` parameter for the batch-reuse entry point. */
+ * Pass multiple entry files (all under the same project) to get one Program
+ * rooted at all of them — this matters for batch extraction. A
+ * `ts.Program`'s dominant cost is parsing and binding its whole transitive
+ * import closure, not the root file count: for a set of entry files that
+ * share most of their dependency graph (siblings in one app, e.g.), that
+ * closure is nearly the same size whether it's rooted at one file or all of
+ * them (measured across one `the sibling codebase` slice's Program, ≈3.3GB peak RSS,
+ * versus all 16 slices sharing one Program, also ≈3.3GB peak RSS — the union
+ * of their imports barely grew). Building N separate single-root Programs in
+ * a sequential batch instead pays that multi-GB parse+bind cost N times, and
+ * since each `ts.Program` is a large, long-lived object graph, a
+ * long-running batch process can accumulate several of them before the GC
+ * reclaims the earlier ones — the failure mode `the sibling codebase`'s 16-slice
+ * validator codegen script (`apps/web/scripts/codegen-fractal-validators.ts`)
+ * hits without multi-root support, reaching 20+GB RSS and OOM-killing
+ * unrelated processes on the host. See `build.ts`'s
+ * `buildValidatorModuleSource` `program` parameter for the batch-reuse entry
+ * point. */
 export function createExtractorProgram(entryFile: string): ts.Program;
 export function createExtractorProgram(entryFiles: readonly string[]): ts.Program;
 export function createExtractorProgram(entryFile: string | readonly string[]): ts.Program {

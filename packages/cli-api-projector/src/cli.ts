@@ -1,15 +1,13 @@
-// packages/cli-api-projector/src/cli.ts — @rhi-zone/fractal-cli-api-projector
-//
 // CLI projection for the function-core tree.
 //
 // Walks a Node tree along an argv subcommand path, resolving:
 //   - Branch children → subcommand prefix segments
-//   - `fallback` (wildcard-capture) → the current argv token IS the slug
+//   - `fallback` (wildcard-capture) → the current argv token is the slug
 //     value directly (no separate key segment — same as HTTP: the value
 //     itself discriminates, not a tree-authored name)
 //   - Leaf children (nodes with handler) → terminal subcommand names
 //
-// Tag-driven behavior (read directly from the leaf's OWN meta.tags — there is
+// Tag-driven behavior (read directly from the leaf's own meta.tags — there is
 // no ancestor inheritance; see docs/design/router-model.md — "Tags"):
 //   - destructive:true  → io.confirm() before running (skippable via --yes/--force)
 //   - readOnly:true     → no confirm
@@ -19,7 +17,7 @@
 // Async-generator streaming (see docs/design/middleware-and-caller-context.md
 // — "Streaming and Progress"): when a handler returns an `AsyncIterable`
 // (detected structurally via `Symbol.asyncIterator`, same as HTTP's
-// `isAsyncIterable`), it's streamed incrementally — NOT gated by
+// `isAsyncIterable`), it's streamed incrementally — not gated by
 // `tags.streaming`/`--jsonl`, which only affect array results. Each yielded
 // value is written to stdout as a JSONL line as soon as it's yielded (true
 // push streaming, not buffer-then-emit); a `StreamProgress` effect goes to
@@ -73,17 +71,17 @@ import type {
 } from "@rhi-zone/fractal-api-tree";
 
 /**
- * CLI's own store-name fragment: an INERT, plain interface naming the stores
- * this projector builds and the shape each carries. Deliberately NOT a
- * `declare module` augmentation of api-tree's `StoreRegistry` — per
+ * CLI's own store-name fragment: a plain interface naming the stores this
+ * projector builds and the shape each carries, not a `declare module`
+ * augmentation of api-tree's `StoreRegistry` — per
  * docs/design/typed-store-spec.md §3, a projector that augments core makes the
  * type surface depend on which packages are in the compilation rather than on
- * what the deployment composes. A DEPLOYMENT composes this in, once, in its own
+ * what the deployment composes. A deployment composes this in, once, in its own
  * augmentation file (`interface StoreRegistry extends CliStores {}`); see
  * `HttpStores` in http-api-projector/src/decode.ts for the worked example.
  *
- * Every member is OPTIONAL — per-invocation stores this projector builds when
- * it dispatches. `caller` is NOT declared here: core declares it once
+ * Every member is optional — per-invocation stores this projector builds when
+ * it dispatches. `caller` is not declared here: core declares it once
  * (api-tree's `CoreStores`), shared across every projector.
  */
 export interface CliStores {
@@ -194,12 +192,12 @@ export type CliIO = {
 
 export type CliOpts<T = unknown> = {
   /**
-   * Pre-computed schema map (from extractToolSchemas). Used for HELP TEXT
+   * Pre-computed schema map (from extractToolSchemas). Used for help text
    * generation only (`buildHelp`/`buildLeafHelp`) and for generated shell
    * completions (`generateCompletions`, ./completions.ts) — it derives
-   * per-field flag names/types/required-ness for display. It is NOT
+   * per-field flag names/types/required-ness for display. It is not
    * consulted for decode/validation/defaults: that's the generated wire
-   * validator's job now (see `rewriters` below). When `schemas` is absent,
+   * validator's job (see `rewriters` below). When `schemas` is absent,
    * help text just can't list per-field flags for a leaf; dispatch itself is
    * unaffected.
    */
@@ -219,12 +217,11 @@ export type CliOpts<T = unknown> = {
    * Additional `Node => Node` passes, applied in array order, to `rootNode`
    * before dispatch — CLI's counterpart to HTTP's `PresetOptions.rewriters`
    * (`packages/http-api-projector/src/preset.ts`). This is also where
-   * generated VALIDATION wires in, via `applyValidation(key, tree)`
-   * (`@rhi-zone/fractal-api-tree/apply-validation`) — there is no dedicated
-   * `validators` option (removed, phase 3): `applyValidation`'s call site
-   * must live in the CONSUMER's own entry file for codegen to anchor on it
-   * (see that module's doc comment), so `runCli` itself can never own the
-   * call.
+   * generated validation wires in, via `applyValidation(key, tree)`
+   * (`@rhi-zone/fractal-api-tree/apply-validation`). There is no dedicated
+   * `validators` option: `applyValidation`'s call site must live in the
+   * consumer's own entry file for codegen to anchor on it (see that
+   * module's doc comment), so `runCli` itself never owns the call.
    *
    * ```ts
    * import { applyValidation } from "./generated/apply-validation.ts"
@@ -238,9 +235,9 @@ export type CliOpts<T = unknown> = {
    * `rewriters` to run after, so a rewrite here applies to `rootNode`
    * itself, before any subcommand resolution.
    *
-   * This is also where a leaf's decode+validate actually comes from, now
-   * that there is no local fallback: pass `"cli"` as `applyValidation`'s
-   * third argument to opt a tree into wire-profile-driven staged decode +
+   * This is also where a leaf's decode+validate comes from — there is no
+   * local fallback: pass `"cli"` as `applyValidation`'s third argument to
+   * opt a tree into wire-profile-driven staged decode +
    * validation for CLI's argv wire shape (`string | string[] | true`,
    * per-field derived via `@rhi-zone/fractal-api-tree/wire-derive`'s
    * `deriveFieldProfiles`):
@@ -257,9 +254,8 @@ export type CliOpts<T = unknown> = {
    * for this tree (`createApplyValidation`'s stub is pass-through by
    * design) — gets the raw assembled wire input (see `buildInput`) passed
    * straight to its handler: no decode, no coercion, no defaults-fill, no
-   * required-field check. There is no other path; that fallback was deleted
-   * (see docs/design/wire-profiles-and-staged-validation.md, "What goes
-   * away").
+   * required-field check — there is no fallback path (see docs/design/
+   * wire-profiles-and-staged-validation.md, "What goes away").
    */
   readonly rewriters?: ReadonlyArray<(tree: Node) => Node>;
   /**
@@ -267,10 +263,10 @@ export type CliOpts<T = unknown> = {
    * context. `init` computes the per-invocation context value from
    * CLI-specific dispatch context (see `CliAlsContext`). Mirrors HTTP's
    * `PresetOptions.als` (`packages/http-api-projector/src/preset.ts`). ALS is
-   * the INNERMOST wrapper — closer to the handler than `opts.middleware` —
+   * the innermost wrapper — closer to the handler than `opts.middleware` —
    * so the store is active only while `target.handler` (and anything it
    * calls, transitively) runs; a `CliMiddleware`'s own code, before or after
-   * calling `next`, is NOT itself inside the ALS context — Node's
+   * calling `next`, is not itself inside the ALS context — Node's
    * `AsyncLocalStorage` doesn't propagate back out through an `await`'d call
    * once it settles. A middleware that needs cross-cutting context should
    * read it from `stores` (the second parameter every `CliMiddleware`
@@ -282,7 +278,7 @@ export type CliOpts<T = unknown> = {
    * Around-hooks wrapping the handler call — `F => F` where
    * `F = (input, stores) => result` (see
    * docs/design/middleware-and-caller-context.md). Composes like an onion:
-   * the first entry in the array is the OUTERMOST wrapper (it sees the call
+   * the first entry in the array is the outermost wrapper (it sees the call
    * first and last), matching HTTP's layer composition
    * (`packages/http-api-projector/src/layers.ts`). `stores` is the raw
    * pre-assembly stores built for input assembly (see `buildInput`) — the
@@ -300,7 +296,7 @@ export type CliOpts<T = unknown> = {
    * yields via `streamAsyncIterable`). Both default to `true` — existing
    * behavior — when `detection` itself, or either field, is omitted.
    * Disable one when a handler legitimately returns/yields data shaped like
-   * one of these DUs and it must NOT be reinterpreted as the transport
+   * one of these DUs and it must not be reinterpreted as the transport
    * protocol (see `docs/design/middleware-and-caller-context.md`'s
    * "Streaming and Progress" section, and `DetectionOptions`'s own doc,
    * `@rhi-zone/fractal-api-tree`). Mirrors HTTP's `PresetOptions.detection`
@@ -384,10 +380,10 @@ export type CliAlsContext = {
  * `meta.cli` open bag — per-projection overrides for CLI subcommand
  * generation, split by role (docs/design/meta-role-split-spec.md §2/§4).
  * Standard keys are typed; any other key passes through untouched (open
- * bag, not a fixed schema) at BOTH roles.
+ * bag, not a fixed schema) at both roles.
  */
 
-/** `meta.cli` fields valid at BOTH leaf and branch position. */
+/** `meta.cli` fields valid at both leaf and branch position. */
 export type CliSharedMetaProperties = {
   /** Hides this leaf/branch from generated help text (`buildHelp`) without removing it from dispatch. */
   readonly hidden?: boolean;
@@ -399,7 +395,7 @@ export type CliSharedMeta = {
   readonly cli?: CliSharedMetaProperties;
 };
 
-/** `meta.cli` fields valid at LEAF position only. */
+/** `meta.cli` fields valid at leaf position only. */
 export type CliLeafMetaProperties = CliSharedMetaProperties & {
   readonly name?: string;
   readonly alias?: string;
@@ -414,12 +410,12 @@ export type CliLeafMetaProperties = CliSharedMetaProperties & {
   readonly sourceMap?: SourceMap;
   /**
    * Keyed partial contribution — per-field wire-encoding overrides layered
-   * on top of `sourceMap`'s per-field STORE choice (phase B/E, docs/design/
+   * on top of `sourceMap`'s per-field store choice (phase B/E, docs/design/
    * wire-profiles-and-staged-validation.md), mirroring HTTP's own
    * `encodingMap` (`HttpLeafMetaProperties`, http-api-projector's
-   * project.ts). Each entry is either a base-profile-name STRING
+   * project.ts). Each entry is either a base-profile-name string
    * (overriding that field's derived wire profile outright) or a custom
-   * decoder FUNCTION run at WRAP time instead of the fused default decode.
+   * decoder function run at wrap time instead of the fused default decode.
    * Declared here structurally (see `EncodingMap`'s own doc comment,
    * api-tree's input.ts) — a function entry's own param/return types are
    * checked separately, against the literal object passed to `op()`, by
@@ -432,10 +428,10 @@ export type CliLeafMetaProperties = CliSharedMetaProperties & {
    * offset into, when this leaf's result is page-shaped (`CursorPage<T>`/
    * `OffsetPage<T>`, see `@rhi-zone/fractal-api-tree/page`) — mirrors HTTP's
    * `paginated()` directive (`http-api-projector/src/verbs.ts`). Detection of
-   * "is this command paginated at all" is a RUNTIME shape check on the
+   * "is this command paginated at all" is a runtime shape check on the
    * actual result (`isPageShape`), same "conventions over contracts"
    * split every other stream/page convention in this codebase uses — this
-   * only overrides which flag name carries the cursor/offset on the NEXT
+   * only overrides which flag name carries the cursor/offset on the next
    * call, when the leaf's own input field doesn't already default to
    * `"cursor"`/`"offset"`.
    */
@@ -468,20 +464,20 @@ export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
 // ============================================================================
 
 /**
- * Resolved dispatch target: the leaf handler to call, the accumulated slug
- * values from `fallback` traversal, and a SNAPSHOT of the leaf's `meta.cli`
- * fields that dispatch itself needs — the CLI counterpart of mcp/graphql/
- * json-rpc's `Dispatch` type (each built once per leaf, carrying its own
- * already-parsed `sourceMap` rather than re-parsing it at read time). CLI
- * has no separate build-once/dispatch-many projection phase the way those
- * three (and HTTP's `HttpRoute` build) do — a leaf's terminal argv segment
- * can be a `fallback`-captured slug value only known from THIS invocation's
- * own argv, so a `Resolved` can't be precomputed ahead of a specific call
- * the way a whole-tree `Dispatch` map can — but the fields below ARE
- * resolved exactly once, here, at the point `resolveLeaf` finds the leaf,
- * rather than being re-derived from `leafMeta` at whichever later point in
- * `runCli` happens to need them (see `runCli`'s own use of `target.sourceMap`
- * for the read site this snapshot replaces).
+ * Resolved dispatch target: the leaf handler, the slug values accumulated
+ * from `fallback` traversal, and a snapshot of the `meta.cli` fields
+ * dispatch needs — CLI's counterpart of mcp/graphql/json-rpc's `Dispatch`
+ * type (each built once per leaf, its `sourceMap` parsed once rather than
+ * re-parsed at read time).
+ *
+ * Unlike those three (and HTTP's `HttpRoute`), CLI has no build-once/
+ * dispatch-many phase: a leaf's terminal argv segment can be a
+ * `fallback`-captured slug value known only from this invocation's own
+ * argv, so a whole-tree `Resolved` map can't be precomputed ahead of a
+ * call. The fields below are still resolved exactly once — here, when
+ * `resolveLeaf` finds the leaf — rather than re-derived from `leafMeta` at
+ * whichever later point in `runCli` needs them (see `target.sourceMap`'s
+ * use in `runCli` for the read site this snapshot replaces).
  */
 type Resolved = {
   readonly handler: Handler;
@@ -494,7 +490,7 @@ type Resolved = {
    * The path used to look up this leaf's schema in a `SchemaMap`, i.e. the
    * same underscore-joined segments `extractToolSchemas` (packages/api-tree/
    * src/tree.ts) produces: fallback segments are named by `fallback.name`
-   * (e.g. "bookId"), NOT by the runtime slug value the user typed on argv.
+   * (e.g. "bookId"), not by the runtime slug value the user typed on argv.
    * Distinct from the raw argv path segments, which contain the literal
    * slug value at that position.
    */
@@ -503,7 +499,7 @@ type Resolved = {
 
 /**
  * Find a leaf child of `children` whose `meta.cli.alias` equals `head`.
- * Returns the child's canonical key (NOT the alias) alongside the node —
+ * Returns the child's canonical key (not the alias) alongside the node —
  * schema lookups and help text key off the canonical name, so an alias is
  * purely an alternate invocation spelling, never a rename.
  */
@@ -558,14 +554,12 @@ function resolveLeaf(
       };
     }
 
-    // No static/alias match at the terminal segment — if `head` isn't a
-    // literal key at all, it may BE the fallback-captured slug value, with
-    // the fallback subtree itself a bare leaf (`op()`, no further
-    // subcommand). The Node model allows this (see api-tree/node.ts's doc);
-    // without this check `head` is a dead end even though a real handler
-    // sits at `fallback.subtree` — same blind spot as the listing walks
-    // above (api-tree/tree.ts's `walkNodeType` fix, aa28952), just on the
-    // dispatch side: `head` IS the slug value directly (no separate key
+    // No static/alias match at the terminal segment — `head` may instead be
+    // the fallback-captured slug value itself, with the fallback subtree a
+    // bare leaf (`op()`, no further subcommand). The Node model allows this
+    // (see api-tree/node.ts's doc); this is the dispatch-side counterpart of
+    // the same case in the tree-listing walk (`walkNodeType`,
+    // api-tree/tree.ts): `head` is the slug value directly (no separate key
     // segment), matching the non-terminal fallback branch below.
     if (n.fallback !== undefined && isLeaf(n.fallback.subtree)) {
       return {
@@ -592,7 +586,7 @@ function resolveLeaf(
   }
 
   // No static match — fall back to the wildcard-capture subtree, if any.
-  // `head` IS the slug value directly (no separate key segment); the
+  // `head` is the slug value directly (no separate key segment); the
   // schema path instead records `fallback.name`, matching how
   // extractToolSchemas names the fallback subtree's tools.
   if (n.fallback !== undefined) {
@@ -906,8 +900,8 @@ function buildInput(
 
 // ============================================================================
 // Levenshtein distance — used by `suggestCommand` (below) for "did you mean"
-// unknown-subcommand hints. No decode/coercion runs in this package anymore —
-// that's the generated wire validator's job now, wired via
+// unknown-subcommand hints. No decode/coercion runs in this package; that's
+// the generated wire validator's job, wired via
 // `applyValidation(key, tree, "cli")` (see `CliOpts.rewriters`'s doc comment).
 // ============================================================================
 
@@ -948,7 +942,7 @@ const defaultIO: CliIO = {
 /**
  * Dispatch a Node tree from argv.
  *
- * argv should be the arguments AFTER the program name (i.e. process.argv.slice(2)).
+ * argv should be the arguments after the program name (i.e. process.argv.slice(2)).
  * Leading non-flag tokens are consumed as the subcommand path; remaining
  * --flags are parsed as handler input fields.
  *
@@ -971,7 +965,7 @@ export async function runCli<T = unknown>(
   const ioResolved: CliIO = { ...defaultIO, ...io };
   const schemas: SchemaMap = opts.schemas ?? {};
   const programName = opts.programName ?? "cli";
-  // Apply any consumer-supplied Node => Node rewriters BEFORE any dispatch —
+  // Apply any consumer-supplied Node => Node rewriters before any dispatch —
   // see `CliOpts.rewriters`. This is where generated validation wires in
   // (`applyValidation`), same integration point HTTP's `PresetOptions.
   // rewriters` provides.
@@ -1088,11 +1082,11 @@ export async function runCli<T = unknown>(
   // projection-time snapshot, given CLI has no separate build-once/
   // dispatch-many phase (see `Resolved`'s doc for why).
   //
-  // No local decode/coercion/defaults/required-field step runs here anymore
-  // — that fallback was deleted (see docs/design/
+  // No local decode/coercion/defaults/required-field step runs here — there
+  // is no fallback path (see docs/design/
   // wire-profiles-and-staged-validation.md, "What goes away"). If this
   // leaf's tree was passed through `applyValidation(key, tree, "cli")` (see
-  // `CliOpts.rewriters`), `target.handler` is ALREADY wrapped to decode +
+  // `CliOpts.rewriters`), `target.handler` is already wrapped to decode +
   // validate `rawInput` before running; if not (no rewriter names this leaf,
   // or codegen hasn't run yet), `rawInput` — raw wire values, `string |
   // string[] | true` per flag, exactly as `parseFlags`/`buildInput` produced
@@ -1135,9 +1129,9 @@ export async function runCli<T = unknown>(
     // to a generic "internal server error" 500 rather than leaking
     // `err.message`. A handler's thrown message can carry internals (stack
     // frames, file paths, driver-specific SQL text, ...) that weren't meant
-    // for a CLI consumer; a handler that WANTS to communicate a specific,
+    // for a CLI consumer; a handler that wants to communicate a specific,
     // user-facing failure should return an `err(...)` Result instead (see
-    // the Result-unwrapping check below), which IS surfaced verbatim — that
+    // the Result-unwrapping check below), which is surfaced verbatim — that
     // is the intentional, opt-in error-reporting channel.
     ioResolved.stderr.write("Error: internal error\n");
     throw new CliError("internal error", 1);
@@ -1156,8 +1150,8 @@ export async function runCli<T = unknown>(
   // Result nor a plain value is an async iterable, so there's no ambiguity.
   // Not gated by `tags.streaming`/`--jsonl` — mirroring HTTP's
   // `isAsyncIterable(output)` check, which also isn't gated by a per-route
-  // flag: a handler that returns an async iterable IS the signal to stream,
-  // on every projector. IS gated by `detectStreaming` (`CliOpts.detection`)
+  // flag: a handler that returns an async iterable is the signal to stream,
+  // on every projector. It is gated by `detectStreaming` (`CliOpts.detection`)
   // — with detection disabled, an async-iterable result falls through to
   // the plain-value output path below instead.
   if (detectStreaming && isAsyncIterable(result)) {
@@ -1195,7 +1189,7 @@ export async function runCli<T = unknown>(
   // call), streaming every item as a JSONL line as it's fetched. Without
   // `--all-pages`, the current page still prints through the normal Output
   // path below unchanged; a `# more results available` hint goes to stderr
-  // when there IS a next page, so a human knows how to continue (a machine
+  // when there is a next page, so a human knows how to continue (a machine
   // consumer already has `cursor`/`offset`+`hasMore` in the JSON body).
   if (isPageShape(result)) {
     const paginatedMeta = getCliMeta(target.leafMeta as CliLeafMeta).paginated;
@@ -1452,14 +1446,13 @@ export function walkCliCommands(
 
   if (n.fallback !== undefined) {
     // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
-    // not just a branch (`api({...})`) — recursing into it unconditionally
-    // (`Object.entries(subtree.children ?? {})`) would silently see no
-    // children and drop it from the listing entirely. Mirror the
-    // ordinary-leaf push above: when the subtree itself is a leaf, push it
-    // directly at the CURRENT `prefix` with `leafName = fallback.name` — no
-    // extra path segment beyond the fallback's own name (same convention
-    // api-tree/tree.ts's `walkNodeType` fix, aa28952, and the other
-    // projectors' identical fix use).
+    // not just a branch (`api({...})`). When it is, this pushes that leaf
+    // directly at the current `prefix` with `leafName = fallback.name` — no
+    // extra path segment beyond the fallback's own name — mirroring the
+    // ordinary-leaf push above, rather than recursing into
+    // `subtree.children` (which a bare leaf doesn't have). Same convention
+    // as api-tree/tree.ts's `walkNodeType` and the other projectors'
+    // identical handling.
     if (isLeaf(n.fallback.subtree)) {
       out.push({
         path: prefix,

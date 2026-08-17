@@ -1,5 +1,3 @@
-// scripts/rewrite-package-exports.ts
-//
 // Mechanically rewrites a publishable package's package.json so its
 // `exports` (and `main`/`module`/`types`/`bin`, when present) point at
 // built `dist/*.js` + `dist/*.d.ts` output instead of `src/*.ts` source.
@@ -20,8 +18,9 @@
 //   bun scripts/rewrite-package-exports.ts <package-dir> [...more package dirs]
 //   bun scripts/rewrite-package-exports.ts --check <package-dir>   # dry run, exit 1 on diff
 //
-// Used per-package while rolling out the tsc build pipeline (Option A);
-// safe to re-run — it's idempotent once exports already point at dist.
+// Run per package to switch its shipped package.json from source to build
+// output; idempotent, so re-running on an already-rewritten package.json is
+// a no-op.
 
 type ExportsMap = Record<string, unknown>;
 
@@ -39,9 +38,9 @@ function srcTsToDistPaths(srcPointer: string): { dtsRel: string; jsRel: string }
 }
 
 function rewriteExportsEntry(key: string, entry: unknown): unknown {
-  // The "." root entry and every subpath entry we've seen in this repo is
+  // The "." root entry and every subpath entry in this repo's `exports` is
   // an object with "types" and "import" both pointing at the same
-  // ./src/X.ts file. Reject anything else loudly rather than guess.
+  // ./src/X.ts file; anything else is rejected rather than guessed at.
   if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
     throw new Error(
       `exports["${key}"]: expected an object with "types"/"import", got ${JSON.stringify(entry)}`,
@@ -113,10 +112,10 @@ export function rewritePackageJson(pkg: Record<string, unknown>): Record<string,
     out.bin = rewritten;
   }
 
-  // `files` currently ships raw source (with test-file globs excluded by
-  // hand); once we ship dist output the whole directory is the package
-  // contents and none of the exclusion globs are needed (tsc's build
-  // excludes already keep tests/fixtures out of dist).
+  // `files` becomes just `["dist"]`: once a package ships built output, the
+  // whole `dist` directory is the package contents, and no source-side
+  // test-file exclusion globs are needed since tsc's build already excludes
+  // tests/fixtures from dist.
   if (Array.isArray(out.files)) {
     out.files = ["dist"];
   }

@@ -1,5 +1,4 @@
-// packages/cli-api-projector/src/cli-detection.test.ts — opt-in Result/
-// streaming detection config (CliOpts.detection).
+// Opt-in Result/streaming detection config (CliOpts.detection).
 //
 // Covers: docs/design/middleware-and-caller-context.md's opt-in-detection
 // note. Both `detection.result` and `detection.streaming` default to `true`

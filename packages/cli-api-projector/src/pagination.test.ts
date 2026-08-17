@@ -1,6 +1,5 @@
-// packages/cli-api-projector/src/pagination.test.ts — page-shaped (`CursorPage`/
-// `OffsetPage`, see `@rhi-zone/fractal-api-tree/page`) handler support in the
-// CLI projector.
+// Page-shaped (`CursorPage`/`OffsetPage`, see `@rhi-zone/fractal-api-tree/page`)
+// handler support in the CLI projector.
 //
 // Covers: a page-shaped result is detected structurally (`isPageShape`, same
 // "conventions over contracts" split streaming's `isAsyncIterable` uses) —

@@ -1,9 +1,8 @@
-// examples/doc-site-verification/starlight/generate.ts — run with `bun run generate`.
-// Mirrors the Docusaurus site's generate.ts (same fixture, same schema
-// hand-authoring rationale — see that file's header comment) but projects
-// through the REAL `toStarlightRouteReference` into
-// src/content/docs/api/ (Starlight's content-collection convention, per
-// src/content.config.ts).
+// Run with `bun run generate`. Mirrors the Docusaurus site's generate.ts
+// (same fixture, same schema hand-authoring rationale — see that file's
+// header comment) but projects through the real `toStarlightRouteReference`
+// into src/content/docs/api/ (Starlight's content-collection convention,
+// per src/content.config.ts).
 
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

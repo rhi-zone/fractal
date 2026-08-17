@@ -1,5 +1,3 @@
-// examples/library-api/src/client.test.ts
-//
 // End-to-end proof that the codegen'd standalone client (src/client.generated.ts,
 // produced by scripts/generate-client.ts from tree.ts) actually works against a
 // real live HTTP server — not just createFetch's in-process Request/Response

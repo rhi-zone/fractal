@@ -257,12 +257,12 @@ describe("discriminated union detection", () => {
     const result = fromJsonCorpus(values);
     expect(result.shape.kind).toBe("array");
     const el = (result.shape as { element: TypeRef }).element;
-    // Should detect discriminated union
+    // Detects a discriminated union.
     expect(el.shape.kind).toBe("union");
     expect(el.meta.discriminator).toBe("type");
     const variants = (el.shape as { variants: readonly TypeRef[] }).variants;
     expect(variants.length).toBe(2);
-    // Each variant should have a literal "type" field
+    // Each variant has a literal `type` field.
     for (const v of variants) {
       const fields = (v.shape as { fields: Record<string, TypeRef> }).fields;
       expect(fields.type!.shape.kind).toBe("literal");
@@ -271,11 +271,11 @@ describe("discriminated union detection", () => {
 
   test("top-level corpus values (not nested in an array field) with discriminant field", () => {
     // Same shapes as the array-of-objects case above, but the union members
-    // ARE the corpus this time — no wrapping array field. `tryDetectDU` used
-    // to only ever get called from the `array` branch of `walkAndDetectDU`
-    // (fed by `node.array.elementObjects`), so this shape of corpus never
-    // reached DU detection at all and fell through to a single merged
-    // optional-everything object.
+    // are the corpus itself, with no wrapping array field. `tryDetectDU`
+    // must fire from this position too, not only from the array branch fed
+    // by `node.array.elementObjects` — otherwise this shape of corpus falls
+    // through to a single merged optional-everything object instead of a
+    // union.
     const values = [
       { type: "circle", radius: 5 },
       { type: "rect", width: 3, height: 4 },
@@ -320,23 +320,16 @@ describe("discriminated union detection", () => {
 });
 
 describe("CFD-style discriminant search (non-enum-typed fields)", () => {
-  // PRECONDITION, now explicit. The CFD pass exists for discriminants the
-  // enum generalization DECLINES to type — `tryDetectDU` only considers
-  // enum/literal-typed fields, so something else must recover the union.
-  //
-  // Under the old K/N-only rule this corpus reached that state by accident:
-  // `tag` sat in the ambiguous 1/3-1/2 band, and the escape hatch out of that
-  // band was integer-clustering, which a string field could never satisfy.
-  // The coverage rule types it as an enum instead (K=4, N=10, zero
-  // singletons, coverage 1.0) and the DU pass then recovers a 4-variant union
-  // with a discriminator — a strictly better outcome, verified below.
-  //
-  // So these tests now set the precondition deliberately, via an unreachable
-  // coverage bar, rather than relying on a rule asymmetry that has been fixed.
+  // The CFD pass recovers discriminants that enum generalization declines
+  // to type: `tryDetectDU` only considers fields already typed enum or
+  // literal, so a field that never clears that bar needs a separate pass to
+  // recover the union. `enumCoverageBar: 1.1` is unreachable, so these tests
+  // force `tag` to stay untyped as enum, isolating the CFD pass as the only
+  // mechanism that can still recover the union from it.
   const cfdOnly = { enumCoverageBar: 1.1 } as const;
   // `tag` has K=4 distinct string values over N=10 samples (ratio 0.4),
   // squarely in `looksLikeEnum`'s ambiguous 1/3-1/2 band — which for a
-  // STRING field (no integer-clustering escape hatch) is rejected, so `tag`
+  // string field (no integer-clustering escape hatch) is rejected, so `tag`
   // never becomes `enum`/literal-union and `tryDetectDU` never considers it
   // a candidate. Each distinct `tag` value maps to a completely disjoint
   // set of sibling fields, so the CFD search's cohesion (all same-tag
@@ -357,10 +350,10 @@ describe("CFD-style discriminant search (non-enum-typed fields)", () => {
   ];
 
   test("under the DEFAULT rule this corpus no longer needs the CFD pass at all", () => {
-    // The improvement the precondition above documents: the enum pass types
-    // `tag`, `tryDetectDU` fires, and the result is a 4-variant union carrying
-    // a real discriminator with literal tags — the primary mechanism, not the
-    // fallback.
+    // Under the default rule, the enum pass types `tag`, `tryDetectDU`
+    // fires, and the result is a 4-variant union carrying a real
+    // discriminator with literal tags — the primary mechanism recovers this
+    // case directly, without needing the CFD fallback below.
     const result = fromJsonCorpus(values);
     expect(result.shape.kind).toBe("union");
     expect(result.meta?.discriminator).toBe("tag");
@@ -395,9 +388,9 @@ describe("CFD-style discriminant search (non-enum-typed fields)", () => {
   test("detectCfdDiscriminants: false disables the pass (general splitting may still recover a union, without a discriminator)", () => {
     const result = fromJsonCorpus(values, { ...cfdOnly, detectCfdDiscriminants: false });
     // General structural splitting (Jaccard clustering on raw field sets)
-    // can still separate these four disjoint shapes, but it never attaches
-    // a `discriminator` — that's how we know the CFD pass, not general
-    // splitting, produced the tagged result above.
+    // can still separate these four disjoint shapes, but it never attaches a
+    // `discriminator` — only the CFD pass does, which is what distinguishes
+    // it from the tagged result above.
     if (result.shape.kind === "union") {
       expect(result.meta.discriminator).toBeUndefined();
     }
@@ -748,7 +741,7 @@ describe("dict detection", () => {
       values.push(obj);
     }
     const result = fromJsonCorpus(values);
-    // Should detect as map (key set keeps growing)
+    // Detected as a map because the key set keeps growing.
     expect(result.shape.kind).toBe("map");
   });
 
@@ -773,7 +766,7 @@ describe("dict detection", () => {
       values.push(obj);
     }
     const result = fromJsonCorpus(values);
-    // Should detect mixed: record fields (id, name) + dynamic keys
+    // Detected as mixed: stable record fields (id, name) plus dynamic keys.
     expect(result.shape.kind).toBe("object");
     expect(result.meta.additionalPropertyType).toBeDefined();
     const fields = (result.shape as { fields: Record<string, TypeRef> }).fields;
@@ -786,7 +779,8 @@ describe("dirty data detection", () => {
   test("off by default", () => {
     const values = [1, 2, 3, 4, 5, 6, 7, 8, 9, "oops"];
     const result = fromJsonCorpus(values);
-    // Without dirty data detection, it should be a union
+    // Dirty data detection is off by default, so mixed-type values merge
+    // into a union.
     expect(result.shape.kind).toBe("union");
   });
 
@@ -795,13 +789,14 @@ describe("dirty data detection", () => {
     for (let i = 0; i < 20; i++) values.push(i);
     values.push("oops"); // 1 dirty value
     const result = fromJsonCorpus(values, { detectDirtyData: true });
-    // The uint8 type should dominate, with a dirty data warning
+    // With dirty data detection on, the uint8 type dominates and carries a
+    // dirty data warning once the threshold is met.
     if (result.meta.dirtyDataWarning !== undefined) {
       expect(result.shape.kind).not.toBe("union");
       expect(typeof result.meta.dirtyDataWarning).toBe("string");
     }
-    // If dirty data detection didn't fire (threshold not met), it's
-    // still a union — that's also acceptable behavior
+    // Below the threshold, dirty data detection does not fire and the
+    // result stays a union.
   });
 });
 
@@ -974,8 +969,9 @@ describe("property: corpus inference is at least as wide as any single value", (
         ),
         (values) => {
           const corpus = fromJsonCorpus(values);
-          // The corpus type should be a supertype of each individual value's inferred type.
-          // For this test, just check it doesn't crash and the kind is reasonable.
+          // The corpus type is a supertype of each individual value's inferred
+          // type; this check only confirms inference does not crash and
+          // produces a plausible kind.
           const ck = corpus.shape.kind;
           const hasNull = values.some((v) => v === null);
           const hasBool = values.some((v) => typeof v === "boolean");
@@ -985,8 +981,8 @@ describe("property: corpus inference is at least as wide as any single value", (
           const typeCount = [hasNull, hasBool, hasNum || hasInt, hasStr].filter(Boolean).length;
 
           if (typeCount > 1 || (hasNull && typeCount === 1)) {
-            // Multiple JS-level types -> should be union or have nullable meta
-            // (null + one type -> nullable, multiple types -> union)
+            // Multiple JS-level types produce a union or nullable meta: null
+            // plus one type sets nullable, multiple types produce a union.
             if (typeCount === 1 && hasNull) {
               // null + one other type -> nullable
               expect(corpus.meta.nullable === true || ck === "null" || ck === "union").toBe(true);
@@ -1033,7 +1029,7 @@ describe("property: optional field detection", () => {
           expect(result.shape.kind).toBe("object");
           const fields = (result.shape as { fields: Record<string, TypeRef> }).fields;
           expect(fields.name!.meta.optional).toBe(true);
-          // 'id' should NOT be optional
+          // `id` stays required.
           expect(fields.id!.meta.optional).toBeUndefined();
         },
       ),
@@ -1062,7 +1058,7 @@ describe("property: enum detection with fast-check", () => {
           }
           const result = fromJsonCorpus(values);
           const fields = (result.shape as { fields: Record<string, TypeRef> }).fields;
-          // Should detect enum for 'status' field
+          // Detects `status` as an enum.
           expect(fields.status!.shape.kind).toBe("enum");
           const members = (fields.status!.shape as { members: readonly string[] }).members;
           expect([...members].sort()).toEqual([...enumValues].sort());
@@ -1096,13 +1092,13 @@ describe("property: dict detection with fast-check", () => {
 // ---------------------------------------------------------------------------
 // `enumMaxMembers` — the distinct-value cap as a declared, swappable policy
 //
-// The cap is an output-size guard, not an evidence test. `docs/design/
-// inference-theory.md` §6.6-6.7 derives why a cut on K alone cannot separate
-// memorization from genuine restriction: the evidence lives in the K/N ratio,
-// and a K-only bound rejects arbitrarily well-supported bounded vocabularies
-// while admitting poorly-supported small ones. These tests pin the default
-// (50, unchanged) AND the fact that it is overridable, so the policy is
-// visible rather than buried in a constant.
+// The cap bounds output size; it is not itself a test of the underlying
+// evidence. `docs/design/inference-theory.md` §6.6-6.7 derives why a cut on
+// K alone cannot separate memorization from genuine restriction: the
+// evidence lives in the K/N ratio, and a K-only bound rejects arbitrarily
+// well-supported bounded vocabularies while admitting poorly-supported small
+// ones. These tests pin the default (50) and confirm it is overridable, so
+// the policy stays visible rather than buried in a constant.
 // ---------------------------------------------------------------------------
 
 describe("enumMaxMembers", () => {
@@ -1139,9 +1135,9 @@ describe("enumMaxMembers", () => {
 // ---------------------------------------------------------------------------
 // Grouping / Generalization stages
 //
-// The two pluggable layers. These tests exist to prove the seams are real —
-// that a caller can inspect, filter, replace and extend the pipeline — not
-// just that the defaults still work (the suites above already pin that).
+// The two pluggable layers. These tests exercise the seams themselves — a
+// caller can inspect, filter, replace, and extend the pipeline; the suites
+// above already cover default behavior.
 // ---------------------------------------------------------------------------
 
 describe("stage pipeline", () => {
@@ -1163,8 +1159,9 @@ describe("stage pipeline", () => {
       "cfd-discriminant",
       "structural-split",
     ]);
-    // the enum GENERALIZATION precedes the DU GROUPING, because DU grouping
-    // only fires on discriminants already typed as enum/literal
+    // The enum generalization stage precedes the DU grouping stage, because
+    // DU grouping only fires on discriminants already typed as enum or
+    // literal.
     expect(stages[0]!.kind).toBe("generalization");
     expect(stages[1]!.kind).toBe("grouping");
   });
@@ -1248,12 +1245,12 @@ describe("stage pipeline", () => {
 });
 
 // ---------------------------------------------------------------------------
-// `generalize` — the decision RETURNS A TYPE, it is not a yes/no gate
+// `generalize` returns a type; it is not a boolean gate.
 //
 // `Generalize = (ctx: PositionContext) => TypeRef | undefined`. A boolean rule
-// is the degenerate case (`cond ? defaultGeneralize(c) : undefined`); these
-// tests pin the cases a boolean could not have expressed — constructing types
-// the built-in path never produces.
+// is the degenerate case (`cond ? defaultGeneralize(c) : undefined`). These
+// tests pin the cases a boolean could not express — types the built-in path
+// never constructs.
 // ---------------------------------------------------------------------------
 
 describe("generalize", () => {

@@ -1,10 +1,10 @@
-// packages/cli-api-projector/src/source.test.ts — cli.source() tests
+// cli.source() tests.
 //
 // Mirrors http-api-projector/src/verbs.test.ts's `http.source()` coverage —
 // docs/design/wire-profiles-and-staged-validation.md's "Prerequisite: meta
-// unification" §"UncoveredSourceParams generalizes": the SAME op()-time
-// static coverage check http has now also has a literal-preserving
-// authoring path for cli.
+// unification" §"UncoveredSourceParams generalizes": the same op()-time
+// static coverage check that http has extends to cli through this
+// literal-preserving authoring path.
 //
 // The compile-time assertions here (`expectTypeOf`, `@ts-expect-error`)
 // assert at `bun run typecheck` time; the runtime bodies exist only so

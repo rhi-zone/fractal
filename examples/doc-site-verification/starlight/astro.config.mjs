@@ -7,11 +7,10 @@ import starlight from "@astrojs/starlight";
 export default defineConfig({
   integrations: [
     // Starlight embeds <ApiExplorer/> (a React component) via
-    // http-route-reference.ts's Starlight renderer — the @astrojs/react
-    // integration is what makes Astro able to hydrate a React component
-    // via `client:load` at all (see docs/design/mocked-fetch-backend.md's
-    // dated write-up for the real-build verification this wiring is part
-    // of).
+    // http-route-reference.ts's Starlight renderer. The @astrojs/react
+    // integration is what makes Astro able to hydrate a React component via
+    // `client:load` (see docs/design/mocked-fetch-backend.md's dated
+    // write-up on this wiring).
     react(),
     starlight({
       title: "My Docs",

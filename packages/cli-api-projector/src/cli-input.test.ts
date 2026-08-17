@@ -1,13 +1,10 @@
-// packages/cli-api-projector/src/cli-input.test.ts — @rhi-zone/fractal-cli-api-projector
-//
-// Tests for the CLI's input assembly, now wired to the shared stores/
-// sourceMap/assemble pipeline (packages/api-tree/src/input.ts) instead of a
-// CLI-local flags+slugs merge. Covers:
-//   - default behavior unchanged (flags + slugs, slugs win)
-//   - the new "env" store, reachable via a leaf's `meta.cli.sourceMap`
+// Tests for the CLI's input assembly, wired to the shared stores/
+// sourceMap/assemble pipeline (packages/api-tree/src/input.ts). Covers:
+//   - default behavior: flags + slugs merge, slugs win
+//   - the "env" store, reachable via a leaf's `meta.cli.sourceMap`
 //   - a sourceMap override taking precedence over the primary "flag" store
 //   - assembly produces raw wire values only — no coercion/defaults/
-//     validation runs locally anymore (see docs/design/
+//     validation runs locally (see docs/design/
 //     wire-profiles-and-staged-validation.md); that's the generated wire
 //     validator's job, wired via `applyValidation(key, tree, "cli")`
 

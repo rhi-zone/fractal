@@ -1,21 +1,19 @@
-// packages/cli-api-projector/src/cli-validators.test.ts — @rhi-zone/fractal-cli-api-projector
-//
 // Generated-validator wiring: `runCli`'s `opts.rewriters` runs
 // `applyValidation(key, tree)` (@rhi-zone/fractal-api-tree/apply-validation)
 // on `rootNode` before dispatch, wrapping a covered leaf's handler to run
 // `parse()` (decode + validation) before the handler ever sees its input.
-// There is no local fallback anymore (see
+// There is no local fallback (see
 // docs/design/wire-profiles-and-staged-validation.md, "What goes away"): a
 // leaf `applyValidation` doesn't cover gets the raw assembled wire values
 // (`buildInput`'s output — argv's `string | string[] | true` shape,
 // untouched) passed straight to its handler, unvalidated. These tests build
 // their `GeneratedEntry`s directly (a synthetic `parse()`, not real codegen
-// output) — a full codegen-driven `applyValidation(key, tree, "cli")` test
+// output). A full codegen-driven `applyValidation(key, tree, "cli")` test
 // through a generated wire validator would need a fixture built via
 // api-tree's `apply-validation-build.ts` machinery (see e.g.
-// packages/api-tree/src/__fixtures__/wire-apply-validation.fixture.ts), which
-// this pass didn't build; that's a coverage gap, not a claim that the wire
-// profile path itself is untested (it has its own tests in api-tree).
+// packages/api-tree/src/__fixtures__/wire-apply-validation.fixture.ts); that
+// fixture doesn't exist here — the wire profile path itself is covered
+// separately, in api-tree's own tests.
 
 import { describe, it, expect } from "bun:test";
 import { runCli, CliError } from "./cli.ts";
@@ -112,7 +110,7 @@ describe("runCli — generated validators wired via opts.rewriters' applyValidat
 
   it("a leaf with no matching generated-validator entry gets raw wire values, unvalidated — qty stays a string", async () => {
     const mock = makeMockIO();
-    // A validator IS wired, but keyed under a DIFFERENT path — this leaf
+    // A validator is wired, but keyed under a different path — this leaf
     // isn't covered, so it gets no decode/validation at all: `--qty 3`
     // reaches the handler as the string "3", not the number 3.
     const applyValidation = createApplyValidation({ gen: { "other/path": qtyEntry() } });
@@ -139,7 +137,7 @@ describe("runCli — generated validators wired via opts.rewriters' applyValidat
     const mock = makeMockIO();
     await runCli(boolTree, ["widgets", "toggle", "--ready", "true"], mock.io);
     const result = JSON.parse(mock.out.join(""));
-    // "true" the STRING (argv value), not the boolean `true` — no decode ran.
+    // "true" the string (argv value), not the boolean `true` — no decode ran.
     expect(result).toEqual({ ready: "true" });
   });
 });

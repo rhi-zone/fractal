@@ -1,5 +1,3 @@
-// packages/type-ir/src/from-typescript.test.ts — @rhi-zone/fractal-type-ir/from-typescript tests
-//
 // Builds small in-memory TS programs (source text never touches disk — a
 // custom `ts.CompilerHost` backed by an in-memory file map) and asserts on
 // the `TypeRef` `typeRefFromType` derives for each. Covers every branch
@@ -170,17 +168,15 @@ describe("objects", () => {
     expect(fields.name!.meta.pattern).toBe("^[a-z]+$");
   });
 
-  // Regression (found migrating the sibling codebase's `triggers` slice, 2026-07-30; also
-  // affects the ALREADY-LIVE `filter-sets` slice's own `expr: unknown`
-  // field): `ts.Type#getNonNullableType()` applied to a field typed
-  // `unknown` does NOT return `unknown` unchanged — it returns a type
-  // reporting `TypeFlags.Object` with ZERO own properties (confirmed via the
-  // TS compiler API directly). Left unguarded, an OPTIONAL `unknown` field
-  // lowered to `types.object({})` instead of `types.unknown` — actively
-  // harmful, not just imprecise: a validator module generated from
-  // `types.object({})` reconstructs its PARSE output using only the shape's
+  // `ts.Type#getNonNullableType()` applied to a field typed `unknown` does
+  // not return `unknown` unchanged — it returns a type reporting
+  // `TypeFlags.Object` with zero own properties (confirmed via the TS
+  // compiler API directly). Left unguarded, an optional `unknown` field
+  // lowers to `types.object({})` instead of `types.unknown`, which is
+  // actively harmful, not just imprecise: a validator generated from
+  // `types.object({})` reconstructs its parse output using only the shape's
   // declared fields (none), silently discarding the real submitted value.
-  // `unknown`/`any` fields must still lower to `types.unknown` regardless of
+  // `unknown`/`any` fields must lower to `types.unknown` regardless of
   // optionality.
   it("an OPTIONAL `unknown` field lowers to `types.unknown`, NOT `types.object({})`", () => {
     const ref = typeRefOf(`type X = { name: string; payload?: unknown }`, "X");
@@ -327,28 +323,24 @@ describe("classes", () => {
     expect(Object.keys(iface.methods)).toEqual(["greet"]);
   });
 
-  // Regression: a symbol-keyed member (a `unique symbol`-computed property
-  // name — same `__@`-prefixed `escapedName` shape as a brand/refinement
-  // tag, but not one `classifyIntersectionConstituent` ever classifies,
-  // since this isn't reached via an intersection at all) must be excluded
-  // from the object-field walk. `prop.name` for a well-known-Symbol-keyed
-  // member is TS's own synthetic spelling (`"__@iterator@8"`, confirmed via
-  // `Uint8Array` below, a REAL lib type — a hand-authored class's own
-  // `[Symbol.iterator]` does NOT reproduce this synthetic-name shape in a
-  // minimal in-memory program, so this test exercises the general
-  // mechanism via an explicit `unique symbol` AND the exact real-world
-  // shape via `Uint8Array` itself) — contains `@`, so a codegen consumer
-  // emitting it as a bare object-type field name produces a TypeScript
-  // SYNTAX ERROR downstream, not just a useless field. Reachable in
-  // practice via a TS/DOM builtin type's structural surface
-  // (`Uint8Array`/`ReadableStream`/`Response`/…) now that the call budget
-  // above lets extraction terminate INTO such types instead of overflowing
-  // the stack first — confirmed via a real generated module downstream
-  // (the sibling codebase's `ingestion` slice, whose `resumeGet`-shaped leaf
-  // return-types reach `Uint8Array`/`ReadableStream`) breaking with exactly
-  // this symptom before this fix; `build.test.ts`'s
+  // A symbol-keyed member (a `unique symbol`-computed property name — the
+  // same `__@`-prefixed `escapedName` shape as a brand/refinement tag, but
+  // not one `classifyIntersectionConstituent` classifies, since it isn't
+  // reached via an intersection) must be excluded from the object-field
+  // walk. `prop.name` for a well-known-Symbol-keyed member is TS's own
+  // synthetic spelling (`"__@iterator@8"`, confirmed via `Uint8Array`
+  // below, a real lib type — a hand-authored class's `[Symbol.iterator]`
+  // doesn't reproduce this synthetic-name shape in a minimal in-memory
+  // program, so this test exercises the general mechanism via an explicit
+  // `unique symbol` and the real-world shape via `Uint8Array`). The name
+  // contains `@`, so a codegen consumer emitting it as a bare object-type
+  // field name produces a TypeScript syntax error downstream, not just a
+  // useless field. This is reachable in practice via a TS/DOM builtin
+  // type's structural surface (`Uint8Array`/`ReadableStream`/`Response`/…)
+  // once the call budget above lets extraction terminate into such types
+  // instead of overflowing the stack first; `build.test.ts`'s
   // `builtinReturnType/fetchIt` fixture leaf is the end-to-end regression
-  // test for that.
+  // test for the same symptom.
   it("a symbol-keyed member (unique symbol) is excluded from the object-field walk", () => {
     const objRef = typeRefOf(
       `declare const sym: unique symbol
@@ -395,11 +387,10 @@ describe("Map/Set/Record", () => {
 
 // ============================================================================
 // File / Blob — Web API binary-upload types punt to `unknown`, not a
-// structural walk (found migrating the sibling codebase's `curriculum` slice: a
-// multipart resource-upload leaf typed a field `file: File`, and the
-// generated validator's structural check rejected every real Bun `File`
-// instance for missing `webkitRelativePath` — a DOM-lib-declared property
-// Bun's own File implementation never has)
+// structural walk. A structural walk of DOM's `File` interface requires
+// `webkitRelativePath`, a DOM-lib-declared property Bun's own `File`
+// implementation never has, so a generated validator doing a structural
+// check would reject every real Bun `File` instance.
 // ============================================================================
 
 describe("File/Blob binary-upload types", () => {
@@ -485,9 +476,9 @@ describe("recursion and sharing", () => {
       type X = { home: Address; work: Address }
     `;
     const registry = createSharingRegistry();
-    // With a registry supplied, the top-level named alias (X itself) is ALSO
-    // subject to registry-sharing — same as any other named type encountered
-    // during extraction (see typeRefFromType's doc comment). So `ref` here is
+    // With a registry supplied, the top-level named alias (X itself) is also
+    // subject to registry-sharing, same as any other named type encountered
+    // during extraction (see typeRefFromType's doc comment). `ref` here is
     // itself `{ kind: "ref", target: "X" }`; its body lives in the registry.
     const ref = typeRefOf(source, "X", registry);
     expect(ref.shape).toEqual({ kind: "ref", target: "X" });
@@ -529,34 +520,34 @@ describe("recursion and sharing", () => {
     expect(fields.home!.shape.kind).toBe("object");
   });
 
-  // Regression: `seen`'s cycle detection is IDENTITY-keyed (a `Set<ts.Type>`),
-  // which correctly terminates a hand-authored self-recursive alias (the test
-  // just above — TS reuses the SAME `ts.Type` object for `X`'s repeated
-  // occurrences) but does NOT terminate a walk into certain TS/DOM builtin
-  // LIBRARY types. The Fetch API's `Response` is a real, minimal repro: its
-  // method surface is mutually self-referential (`.clone(): Response`,
-  // `.body: ReadableStream<Uint8Array> | null`, whose own reader types chain
-  // back through more overloaded, generic methods) and TS does NOT hand back
-  // a referentially-stable `ts.Type` for those repeated occurrences — each
-  // visit is a fresh instance, so `seen.has(type)` never fires. Before the
-  // call-budget circuit breaker, extracting `Response` overflowed the native
-  // JS stack (`RangeError: Maximum call stack size exceeded`, confirmed via a
-  // real op's `Promise<Response>` return type in a downstream consumer,
-  // ~3200 `typeRefFromType` calls deep with `seen.size` still under 25 the
-  // whole way — the runaway is BREADTH across overload sets, not path depth).
+  // `seen`'s cycle detection is identity-keyed (a `Set<ts.Type>`), which
+  // correctly terminates a hand-authored self-recursive alias (the test just
+  // above — TS reuses the same `ts.Type` object for `X`'s repeated
+  // occurrences) but does not terminate a walk into certain TS/DOM builtin
+  // library types. The Fetch API's `Response` is a minimal repro: its method
+  // surface is mutually self-referential (`.clone(): Response`, `.body:
+  // ReadableStream<Uint8Array> | null`, whose own reader types chain back
+  // through more overloaded, generic methods), and TS does not hand back a
+  // referentially-stable `ts.Type` for those repeated occurrences — each
+  // visit is a fresh instance, so `seen.has(type)` never fires. Without the
+  // call-budget circuit breaker, extracting `Response` overflows the native
+  // JS stack (`RangeError: Maximum call stack size exceeded`); the runaway
+  // is breadth across overload sets, not path depth — `seen.size` stays
+  // under 25 for the ~3200 `typeRefFromType` calls it takes to exhaust the
+  // budget.
   it("a generically self-referential builtin library type (Response) terminates via the call budget, not a stack overflow", () => {
     const ref = typeRefOf(`type X = Response`, "X");
-    // Terminates at all (no RangeError) — the primary regression. The walk
-    // also genuinely can't finish within budget, so SOME node in the tree
-    // must carry the budget-exceeded punt rather than a silently-truncated
-    // (and therefore wrong) full structural rendering.
+    // Terminating at all (no RangeError) is the primary regression this pins
+    // down. The walk also genuinely can't finish within budget, so some node
+    // in the tree must carry the budget-exceeded punt rather than a
+    // silently-truncated, and therefore wrong, full structural rendering.
     const serialized = JSON.stringify(ref);
     expect(serialized).toContain("extraction call budget exceeded");
   });
 
-  // A hand-authored type nested many objects deep (but genuinely non-cyclic
-  // and non-generic) must NOT trip the same budget — it's exactly the case
-  // the budget must stay well clear of. 100 levels comfortably exceeds any
+  // A hand-authored type nested many objects deep, but genuinely non-cyclic
+  // and non-generic, must not trip the same budget — it's exactly the case
+  // the budget needs to stay clear of. 100 levels comfortably exceeds any
   // legitimate domain DTO's nesting (this repo's own working slices peak at
   // single-digit `seen` depth) while staying far under `MAX_TYPE_REF_CALLS`.
   it("a deeply (but finitely) nested ordinary object type extracts fully, no budget punt", () => {

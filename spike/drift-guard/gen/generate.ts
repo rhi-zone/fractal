@@ -1,11 +1,9 @@
-// spike/drift-guard/gen/generate.ts
-//
-// Build an N-resource app (same shape as packages/type-ir/test/scale/gen.ts:
-// each resource has GET/POST /res{i} + GET /res{i}/{id} ≈ 3N routes), then emit,
+// Builds an N-resource app (same shape as packages/type-ir/test/scale/gen.ts:
+// each resource has GET/POST /res{i} + GET /res{i}/{id} ≈ 3N routes), then emits,
 // for each N, the files each guard formulation needs to be typechecked in
 // isolation:
 //
-//   app-{N}.ts          the source handler tree (exports `app`; its TYPE carries .meta)
+//   app-{N}.ts          the source handler tree (exports `app`; its type carries .meta)
 //   noguard-{N}.ts      the plain generated client only (baseline: no guard)
 //   f1-naive-{N}.ts     #1 naive full re-derive AssertExact
 //   f2-flatmap-{N}.ts   #2 single flat route-map AssertExact (the candidate)
@@ -13,8 +11,8 @@
 //   f4-hybrid-{N}.ts    #4 key-set union assert + linear per-route asserts
 //
 // Each guard file `import type`s the source `app` and the generated artifact, so
-// the guard lives WITH the consumer of the generated code and references source
-// only via `import type` (generated depends on source; never the reverse).
+// the guard lives alongside the consumer of the generated code and references
+// source only via `import type` (generated depends on source; never the reverse).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -26,19 +24,19 @@ mkdirSync(outDir, { recursive: true });
 
 const Ns = (process.argv.length > 2 ? process.argv.slice(2) : ["100", "300", "600", "900"]).map(
   (s) => Math.round(Number(s) / 3),
-); // arg is route count target; /3 → resources
+); // Each arg is a route-count target; dividing by 3 gives the resource count.
 
 // Relative import roots (out/ → spike root packages).
 const CORE = "@rhi-zone/fractal-api-tree";
 const DERIVE = "../derive.ts";
 
 // ------------------------------------------------------------------------------
-// Source app: a path({...}) whose value & type carry `.meta`. Resource i:
+// Source app: a path({...}) whose value and type carry `.meta`. Resource i:
 //   res{i}: choice( methods({GET,POST}), param("id", methods({GET})) )
-// To exercise BODY/RESPONSE drift we make POST carry a typed body and GET a typed
-// response via the validated/returns phantom handler TYPES (no runtime schema
-// needed for the structural compare — we use the core phantom-tagged handler
-// types directly so `__io` is populated).
+// To exercise body/response drift, POST carries a typed body and GET a typed
+// response via the validated/returns phantom handler types (no runtime schema
+// is needed for the structural compare — the core phantom-tagged handler types
+// are used directly so `__io` is populated).
 // ------------------------------------------------------------------------------
 
 function appSource(resources: number): string {
@@ -78,13 +76,13 @@ function appSource(resources: number): string {
 }
 
 // ------------------------------------------------------------------------------
-// Generated artifacts. We emit two GENERATED-side concrete types per N:
+// Generated artifacts. Two generated-side concrete types are emitted per N:
 //   1. ApiClient — the existing flat path→verb→callsig interface (the real codegen
 //      output shape; used by the no-guard baseline and the naive #1 formulation).
 //   2. GenRoutes — a flat `{ "GET /res0/{id}": { params; body; response } }` map
 //      (concrete types) mirroring `FlatRoutes<typeof app>`; used by #2/#3/#4.
-// Both are PLAIN concrete types (the codegen scale win). The guard compares the
-// DERIVED form against these.
+// Both are plain concrete types — the codegen scale win. The guard compares the
+// derived form against these.
 // ------------------------------------------------------------------------------
 
 interface RouteSpec {
@@ -101,9 +99,9 @@ function routesFor(resources: number): RouteSpec[] {
   const r: RouteSpec[] = [];
   for (let i = 0; i < resources; i++) {
     // methods({GET: returns<{id;name}>, POST: validated<{title}>}) at /res{i}.
-    // POST has a typed BODY (validated) but NO typed response — `validated` types
-    // input only; a typed response would require composing `returns`. So its
-    // derived `o` is `unknown`, and the generated side must mirror that.
+    // POST has a typed body (validated) but no typed response: `validated` types
+    // input only, and a typed response would require composing `returns`. Its
+    // derived `o` is `unknown`, and the generated side mirrors that.
     r.push({
       key: `GET /res${i}`,
       pathKey: `/res${i}`,
@@ -148,8 +146,8 @@ function genRoutesSource(resources: number, opts?: { drift?: Drift }): string {
   return lines.join("\n") + "\n";
 }
 
-// The GENERATED union of route entries (concrete types). Mirrors RouteUnion<typeof app>.
-// This is the f5 artifact — a flat UNION, never merged into a keyed object.
+// The generated union of route entries (concrete types). Mirrors RouteUnion<typeof app>.
+// This is the f5 artifact — a flat union, never merged into a keyed object.
 function genUnionSource(resources: number, opts?: { drift?: Drift }): string {
   const routes = applyDrift(routesFor(resources), opts?.drift);
   const lines: string[] = [];
@@ -193,7 +191,7 @@ function apiClientSource(resources: number): string {
 }
 
 // ------------------------------------------------------------------------------
-// Drift injection. Each kind mutates the GENERATED side ONLY (source stays the
+// Drift injection. Each kind mutates the generated side only (source stays the
 // truth), simulating a stale generated file. The guard must then error.
 // ------------------------------------------------------------------------------
 
@@ -204,7 +202,7 @@ function applyDrift(routes: RouteSpec[], drift: Drift): RouteSpec[] {
   const r = routes.map((x) => ({ ...x }));
   switch (drift) {
     case "add":
-      // generated has an EXTRA route the source lacks.
+      // Generated has an extra route the source lacks.
       r.push({
         key: `GET /ghost`,
         pathKey: `/ghost`,
@@ -215,19 +213,20 @@ function applyDrift(routes: RouteSpec[], drift: Drift): RouteSpec[] {
       });
       return r;
     case "remove":
-      // generated is MISSING a route the source has (drop the last GET /{id}).
+      // Generated is missing a route the source has (drops the last GET /{id}).
       return r.filter((x) => x.key !== `GET /res${((routes.length / 3) | 0) - 1}/{id}`);
     case "renameParam": {
-      // a param renamed in source but not generated: generated still says {id},
-      // source would derive {ident}. We simulate by renaming generated's param key
-      // value to a different name → shape mismatch.
+      // A param renamed in source but not generated: generated still says {id},
+      // source would derive {ident}. Simulated by renaming generated's param key
+      // to a different name, producing a shape mismatch.
       const idx = r.findIndex((x) => x.params.includes("id: string"));
       if (idx >= 0) r[idx].params = "{ ident: string }";
       return r;
     }
     case "changeBody": {
-      // a body field type changed in source but generated stale: generated has
-      // `title: string`, source would have `title: number`. We flip generated.
+      // A body field type changed in source but generated is stale: generated
+      // has `title: string`, source would have `title: number`. Simulated by
+      // flipping the generated field.
       const idx = r.findIndex((x) => x.body.includes("title"));
       if (idx >= 0) r[idx].body = "{ title: number }";
       return r;
@@ -237,11 +236,11 @@ function applyDrift(routes: RouteSpec[], drift: Drift): RouteSpec[] {
 }
 
 // ------------------------------------------------------------------------------
-// The four guard formulations (each as a standalone file). All `import type` the
+// The guard formulations, each as a standalone file. All `import type` the
 // source `app` and the generated artifact, then assert.
 // ------------------------------------------------------------------------------
 
-// #5 — LINEAR union-vs-union AssertExact (the winner).
+// #5 — linear union-vs-union AssertExact (the winner).
 function f5_union(N: number): string {
   return [
     `// Formulation #5 — LINEAR union-vs-union AssertExact (the winner).`,
@@ -272,9 +271,9 @@ function f2_flatmap(N: number): string {
   ].join("\n");
 }
 
-// #1 — naive full re-derive: derive the FULL ApiClient shape (path→verb→callsig,
+// #1 — naive full re-derive: derives the full ApiClient shape (path→verb→callsig,
 // the nested call-signature assembly) from .meta and AssertExact vs the generated
-// ApiClient. This re-walks into the heavy nested form — the cost to measure.
+// ApiClient. This re-walks into the heavy nested form — the cost being measured.
 function f1_naive(N: number): string {
   return [
     `// Formulation #1 — naive full ApiClient re-derive AssertExact (baseline).`,
@@ -311,10 +310,10 @@ function f3_perroute(N: number, resources: number): string {
   return lines.join("\n") + "\n";
 }
 
-// #4 — hybrid: ONE key-set equality assert (catches add/remove/rename of route
-// KEYS cheaply) + per-route shape asserts that DON'T re-walk the tree (derive D
+// #4 — hybrid: one key-set equality assert (catches add/remove/rename of route
+// keys cheaply) plus per-route shape asserts that don't re-walk the tree (derive D
 // once, index it). This is #3 plus a key-set guard, but with the per-route asserts
-// indexing a single precomputed D (so no per-route whole-tree traversal).
+// indexing a single precomputed D, so there is no per-route whole-tree traversal.
 function f4_hybrid(N: number, resources: number): string {
   const routes = routesFor(resources);
   const lines: string[] = [
@@ -357,7 +356,7 @@ function noguard(N: number): string {
 // ------------------------------------------------------------------------------
 
 for (const resources of Ns) {
-  const N = resources; // file suffix is RESOURCE count to keep names short
+  const N = resources; // file suffix is the resource count, to keep names short
   const routes = resources * 3;
   writeFileSync(resolve(outDir, `app-${N}.ts`), appSource(resources));
   writeFileSync(resolve(outDir, `genroutes-${N}.ts`), genRoutesSource(resources));

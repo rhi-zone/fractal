@@ -1,5 +1,3 @@
-// packages/cli-api-projector/src/index.ts — @rhi-zone/fractal-cli-api-projector
-//
 // CLI projection for the function-core tree.
 // Exports runCli, CliIO, CliLeafMeta/CliSharedMeta, CliOpts, walkCliCommands, CliCommandEntry, getCliMeta.
 
