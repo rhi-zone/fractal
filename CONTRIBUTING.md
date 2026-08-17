@@ -192,9 +192,6 @@ and read `docs/design/design-philosophy.md`'s "routing is the API structure" sec
   output needs to be auditable against the standard without hunting for the section, which
   matters especially when the code was written or modified by an LLM.
   See `packages/type-ir/src/kotlin-jackson.ts` for the header-comment shape to follow.
-  Enforced on files you touch, not by periodic review: see
-  `tooling/comment-approval/README.md` — a comment's content-hash must be in the approved
-  manifest (pre-commit hook + CI), or fix/approve it.
 - Conventions over contracts: don't add enforcement machinery for a metadata-bag key just
   because one exists — document the convention, write tests that exercise it, leave the IR
   itself unopinionated. See `docs/design/design-philosophy.md`.

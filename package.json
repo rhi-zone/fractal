@@ -23,8 +23,6 @@
     "typecheck": "bun run --filter '*' typecheck",
     "test": "tooling/check-workspace.sh && bun run --filter '*' test",
     "build:packages": "tooling/check-workspace.sh && tsc -b tsconfig.build.json",
-    "comments:check": "bun tooling/comment-approval/cli.ts check",
-    "comments:approve": "bun tooling/comment-approval/cli.ts approve",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint ."

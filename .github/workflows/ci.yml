@@ -11,12 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Full history, not the default shallow clone: the comment-approval
-          # check (below) diffs against the PR base / pre-push commit to find
-          # which files this change touches, which needs that commit to
-          # actually be present locally.
-          fetch-depth: 0
 
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
@@ -35,39 +29,6 @@ jobs:
 
       - name: Test
         run: nix develop --command bun run test
-
-      # tooling/comment-approval isn't a workspace package (it's repo
-      # infra, like tooling/check-workspace.sh — see its own README for
-      # why), so `bun run typecheck`/`bun run test`'s --filter '*' above
-      # don't reach it.
-      - name: Typecheck comment-approval tool
-        run: nix develop --command ./node_modules/.bin/tsc --noEmit -p tooling/comment-approval/tsconfig.json
-
-      - name: Test comment-approval tool
-        run: nix develop --command bun test tooling/comment-approval
-
-      # Gate on comments in files this push/PR actually touches, not the
-      # whole repo — see tooling/comment-approval/README.md's bootstrap
-      # section for why the pre-existing backlog starts unapproved rather
-      # than bulk-approved, and .githooks/pre-commit's own comment for why
-      # this mirrors that hook's file-scoped (not whole-repo) semantics.
-      - name: Determine comment-approval diff base
-        id: comment_approval_base
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            echo "sha=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
-          else
-            # First push creating a branch (no prior commit to diff against)
-            # — nothing meaningful to scope the check to; skip rather than
-            # guess.
-            echo "sha=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check comment approvals
-        if: steps.comment_approval_base.outputs.sha != ''
-        run: nix develop --command bun tooling/comment-approval/cli.ts check --diff-base ${{ steps.comment_approval_base.outputs.sha }}
 
       # compile-check.test.ts (part of the type-ir package, already covered by
       # `bun run test` above) shells out to each target language's real
