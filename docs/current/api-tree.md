@@ -1,3 +1,7 @@
+> Rejected. Not a template and not a reference.
+>
+> First attempt at a per-package understanding doc. Wrong on register, wrong on density, and its file:line citations go stale on the next edit. Kept only as something for the next attempt to be measured against.
+
 # `@rhi-zone/fractal-api-tree`
 
 `packages/api-tree` — the tree model every protocol projector (`http-api-projector`,
