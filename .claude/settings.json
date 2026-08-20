@@ -75,17 +75,6 @@
           }
         ]
       }
-    ],
-    "SubagentStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/tooling/claude-hooks/subagent-decomposition-check.sh"
-          }
-        ]
-      }
     ]
   },
   "agent": "lily"
