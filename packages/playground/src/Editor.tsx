@@ -39,6 +39,7 @@ export interface EditorProps {
 }
 
 const Editor: Component<EditorProps> = (props) => {
+  // eslint-disable-next-line no-unassigned-vars -- assigned by Solid's `ref={container}` compile-time transform below, not visible to the linter.
   let container: HTMLDivElement | undefined;
   let view: EditorView | undefined;
   const langCompartment = new Compartment();

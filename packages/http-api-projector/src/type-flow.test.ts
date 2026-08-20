@@ -67,6 +67,7 @@ describe("HttpRoute layer: naiveTransform preserves the concrete handler type", 
     const route = naiveTransform(tree);
 
     // @ts-expect-error — route has no top-level `methods`; it's a branch.
+    // eslint-disable-next-line no-unused-expressions -- the expression itself is the type-level assertion (paired with @ts-expect-error above).
     route.methods;
     expect((route as HttpRoute).methods).toBeUndefined();
   });
