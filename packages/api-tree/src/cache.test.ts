@@ -172,7 +172,10 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
     expect(typeof meta.compilerOptionsHash).toBe("string");
     expect((meta.compilerOptionsHash as string).length).toBeGreaterThan(0);
-    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, compilerOptionsHash: "not-the-real-hash" }));
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({ ...meta, compilerOptionsHash: "not-the-real-hash" }),
+    );
 
     const check = checkCache(FIXTURE, outFile);
     expect(check.hit).toBe(false);
@@ -227,8 +230,8 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     expect(first.status).toBe("built");
     if (first.status !== "built") throw new Error("unreachable");
     // `result` (what got written) starts with the header, and disk holds
-    // exactly `result` — the byte-exact contract `withCache`'s doc comment
-    // requires, now satisfied even with a header folded in.
+    // exactly `result` — the byte-exact write contract cache.ts's cached-build
+    // orchestration requires, now satisfied even with a header folded in.
     expect(first.result.startsWith(HEADER)).toBe(true);
     expect(fs.readFileSync(outFile, "utf8")).toBe(first.result);
 

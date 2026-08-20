@@ -1049,9 +1049,9 @@ export function buildWireApplyValidationModuleSourceIncremental(
  * caller to get headered output through this wrapper instead of hand-rolling
  * its own header-prepend around it (the reason a header-wanting consumer
  * couldn't use this wrapper at all before — see
- * docs/current/repo-audit-2026-08-20.md §6#2/§8.1): `withCache`'s
- * byte-exact-write contract (cache.ts) is about the FINAL written bytes, and
- * prior to this option a caller that wanted a header had no way to fold it
+ * docs/current/repo-audit-2026-08-20.md §6#2/§8.1): the cached-build
+ * orchestration's byte-exact-write contract (cache.ts) is about the FINAL
+ * written bytes, and prior to this option a caller that wanted a header had no way to fold it
  * into those bytes without reimplementing this function's whole
  * orchestration around its own prepend step. Omitting `header` (or passing
  * `""`) preserves the exact pre-existing behavior (raw, headerless source).

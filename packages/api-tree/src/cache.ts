@@ -719,65 +719,16 @@ export function readCarryForwardState(
 }
 
 // ============================================================================
-// withCache — a reference implementation of the checkCache -> build ->
-// writeCacheMetadata orchestration below, NOT currently called by
-// schema-build.ts, apply-validation-build.ts, or cli.ts — each hand-inlines
-// this exact sequence instead (see docs/current/repo-audit-2026-08-20.md
-// §2.4). Kept as the orchestration's single documented contract (and what
-// docs/design/ir-keyed-cache-spec.md describes) for a future caller that
-// wants it directly; a caller with its own header-prepending/write
-// convention still needs to satisfy the same "write those exact same bytes"
-// contract documented below whether or not it calls this function.
+// The checkCache -> build -> writeCacheMetadata orchestration is hand-inlined
+// by each of schema-build.ts, apply-validation-build.ts, and cli.ts, each
+// with its own header-prepending/write convention — the shared piece across
+// all three is the contract below, on the result type. A `build(program)`
+// must return the exact string that gets (or will get) written to `outFile`
+// — a caller writes `outFile` itself (before or immediately after calling
+// `writeCacheMetadata`), and as long as it writes those exact same bytes it
+// records as `result`, cache and disk stay consistent.
 // ============================================================================
 
 export type CachedBuildOutcome<T> =
   | { readonly status: "hit" }
   | { readonly status: "built"; readonly result: T; readonly program: ts.Program };
-
-/**
- * Run `build(program)` only when the cache misses (or `options.force` is
- * set); on a hit, skip both the Program construction AND `build` entirely —
- * returning `{status:"hit"}` with no further work. On a build, `program`
- * defaults to `createExtractorProgram(entryFile)` (a fresh single-root
- * Program, giving `writeCacheMetadata` a precise per-entry closure) unless
- * the caller passes one in (a batch caller's shared multi-root Program —
- * see the key-granularity decision above).
- *
- * `build` must return the exact string that gets (or will get) written to
- * `outFile` — `withCache` doesn't write `outFile` itself (a caller may have
- * its own header-prepending/write convention to preserve — see cli.ts's
- * `withHeader`), it only needs the final bytes to compute `outputHash` for
- * next time. Callers MUST
- * write `outFile` themselves before (or immediately after) calling
- * `writeCacheMetadata` — `withCache` calls it automatically right after a
- * successful `build`, keyed to whatever bytes `build` returned, so as long
- * as the caller writes those exact same bytes to `outFile`, cache and disk
- * stay consistent.
- *
- * `options.reachable`, when given, is passed straight through to
- * `writeCacheMetadata` — a batch caller sharing one multi-root `program`
- * across many entries (see `reachability.ts`'s `computeEntryClosures`) uses
- * this to record each entry's own precise closure instead of the whole
- * shared Program's file set. Irrelevant (and safe to omit) for the
- * single-Program-per-entry callers this package's own CLI uses.
- */
-export function withCache<T extends string>(
-  entryFile: string,
-  outFile: string,
-  build: (program: ts.Program) => T,
-  options: {
-    readonly program?: ts.Program;
-    readonly force?: boolean;
-    readonly createProgram: (entryFile: string) => ts.Program;
-    readonly reachable?: ReadonlySet<string>;
-  } & CacheLocationOptions,
-): CachedBuildOutcome<T> {
-  if (!options.force) {
-    const check = checkCache(entryFile, outFile, options);
-    if (check.hit) return { status: "hit" };
-  }
-  const program = options.program ?? options.createProgram(entryFile);
-  const result = build(program);
-  writeCacheMetadata(entryFile, outFile, program, result, options, options.reachable);
-  return { status: "built", result, program };
-}

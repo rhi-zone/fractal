@@ -37,9 +37,10 @@ paraphrased:
   set cheap (a `stat` before a content hash — the measured 52ms→5ms/entry
   win the doc block records), but it does not change what a MISS does: on
   any tracked file's content actually changing, the entire entry is
-  rebuilt and its entire output re-emitted — `withCache` (lines 403–422)
-  is a binary hit/miss over the WHOLE `outFile`, there is no partial-miss
-  path.
+  rebuilt and its entire output re-emitted — the checkCache → build →
+  writeCacheMetadata orchestration (hand-inlined by each of build.ts,
+  schema-build.ts, cli.ts) is a binary hit/miss over the WHOLE `outFile`,
+  there is no partial-miss path.
 - **A comment-only or implementation-only edit inside a leaf's own handler
   body forces a full re-emit of every artifact whose entry closure contains
   that file** — even though nothing about any leaf's resolved input/output
@@ -287,8 +288,9 @@ it), not reasoned about from memory.
 ### IR fingerprint determinism — CONFIRMED, byte-stable as-is
 
 Method: built two INDEPENDENT fresh `ts.Program`s (via
-`createExtractorProgram`, the same factory `withCache`'s default path
-uses) over the identical fixture source, ran `typeRefFromFunctionNode` +
+`createExtractorProgram`, the same factory each cached-build caller
+(build.ts, schema-build.ts, cli.ts) uses as its default Program constructor)
+over the identical fixture source, ran `typeRefFromFunctionNode` +
 `typeRefFromReturnType` against each, `JSON.stringify`'d both results, and
 compared byte-for-byte.
 
@@ -426,17 +428,18 @@ Under this spec, that collapse changes Tier 1's SHAPE but not Tier 2's:
   actual throw would come from something outside that punting path, e.g.
   a compiler-internal exception, an out-of-memory condition building the
   `Program`, or a bug in the extractor itself) — the build must fail
-  loudly (propagate the exception to the caller, matching
-  `withCache`/`build`'s existing un-caught-exception behavior — `build.ts`
-  read directly: nothing in `withCache` today swallows an exception from
-  `build(program)`) and MUST NOT write cache metadata for that entry. A
+  loudly (propagate the exception to the caller, matching each cached-build
+  caller's existing un-caught-exception behavior — `build.ts` read directly:
+  nothing in the hand-inlined checkCache → build → writeCacheMetadata
+  sequence today swallows an exception from `build(program)`) and MUST NOT
+  write cache metadata for that entry. A
   partial/corrupt `leafFingerprints` map recorded from a failed run would
   be WORSE than no cache file at all — a subsequent run would compare
   against fingerprints for leaves that were never actually validated
   against a successfully-compiled output, silently treating a stale or
   wrong artifact as current. This is the same reasoning `writeCacheMetadata`
   already embodies structurally today (it's only ever called AFTER
-  `build(program)` returns successfully inside `withCache`, never before or
+  `build(program)` returns successfully, never before or
   independent of it) — this spec states the extraction-failure case
   explicitly because Tier 2 introduces a NEW opportunity to fail mid-way
   through a MULTI-leaf entry (leaf 3 of 20 throws) where a naive
