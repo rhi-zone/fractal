@@ -34,6 +34,7 @@
 //   - a tree expression whose declaration lives in another file throws too —
 //     same-file resolution is this phase's scope.
 
+import { mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import ts from "typescript";
 import { compileDefsBlock, type TypeRef } from "@rhi-zone/fractal-type-ir";
@@ -1108,6 +1109,14 @@ export async function writeWireApplyValidationModuleCached(
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildWireApplyValidationModuleCached(entryFile, outFile, options);
-  if (outcome.status === "built") await Bun.write(outFile, outcome.result);
+  if (outcome.status === "built") {
+    // `node:fs/promises`, not `Bun.write` — this package is otherwise
+    // `node:fs`-based, and `Bun.write` made this write helper (and its
+    // schema-artifact twin) the one Bun-only surface in it, unusable from a
+    // plain Node consumer (audit §6#6). Creates `outFile`'s parent
+    // directory first, matching `Bun.write`'s own auto-mkdir behavior.
+    await mkdir(path.dirname(outFile), { recursive: true });
+    await writeFile(outFile, outcome.result);
+  }
   return outcome;
 }

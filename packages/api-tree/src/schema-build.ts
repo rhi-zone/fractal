@@ -29,6 +29,8 @@
 // because compiled validator functions need custom control flow per shape;
 // a schema is just data.
 
+import * as path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import type ts from "typescript";
 import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema";
 import { createExtractorProgram } from "./extract.ts";
@@ -86,6 +88,17 @@ function renderSchemaModule(schemas: SchemaMap): string {
   return lines.join("\n");
 }
 
+/** `fs.writeFileSync`-equivalent used throughout this file instead of
+ * `Bun.write` — this package is otherwise `node:fs`-based (its own CLI,
+ * `apply-validation-build.ts`), and `Bun.write` made these two write helpers
+ * the one Bun-only surface in it, unusable from a plain Node consumer (audit
+ * §6#6). Creates `outFile`'s parent directory first, matching `Bun.write`'s
+ * own auto-mkdir behavior. */
+async function writeFileEnsuringDir(outFile: string, content: string): Promise<void> {
+  await mkdir(path.dirname(outFile), { recursive: true });
+  await writeFile(outFile, content);
+}
+
 /**
  * Build the schema module for `entryFile`'s `treeId` tree and write it to
  * `outFile`.
@@ -95,7 +108,7 @@ export async function writeSchemaModule(
   treeId: string,
   outFile: string,
 ): Promise<void> {
-  await Bun.write(outFile, buildSchemaModuleSource(entryFile, treeId));
+  await writeFileEnsuringDir(outFile, buildSchemaModuleSource(entryFile, treeId));
 }
 
 // Tier 2 — leaf-level incremental build (see docs/design/
@@ -246,9 +259,15 @@ export async function writeSchemaModuleCached(
   options?: {
     readonly program?: ts.Program;
     readonly force?: boolean;
+    // Was previously missing here while its validator-artifact twin
+    // (`writeWireApplyValidationModuleCached`) kept it — copy drift between
+    // the two wrapper's option shapes (audit §6#6). A batch caller sharing
+    // one multi-root Program across many schema entries needs this to record
+    // each entry's own precise closure, same as the validator twin.
+    readonly reachable?: ReadonlySet<string>;
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildSchemaModuleCached(entryFile, treeId, outFile, options);
-  if (outcome.status === "built") await Bun.write(outFile, outcome.result);
+  if (outcome.status === "built") await writeFileEnsuringDir(outFile, outcome.result);
   return outcome;
 }
