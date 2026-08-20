@@ -1040,7 +1040,63 @@ export function buildWireApplyValidationModuleSourceIncremental(
  * only the leaves whose fingerprint actually changed, including the
  * def-name-set fingerprint (see `WireApplyValidationCarryForwardState`'s doc
  * comment for why a leaf's carry-forward reuse depends on it too).
+ *
+ * `options.header`, when given, is prepended to the compiled source BEFORE
+ * `outputHash` is computed and before it's returned as `result` — so
+ * `result` is always the exact bytes a caller should write to `outFile`, and
+ * a cache hit's on-disk bytes (from a PRIOR call with the same header) match
+ * what this call would have produced. This is what makes it safe for a
+ * caller to get headered output through this wrapper instead of hand-rolling
+ * its own header-prepend around it (the reason a header-wanting consumer
+ * couldn't use this wrapper at all before — see
+ * docs/current/repo-audit-2026-08-20.md §6#2/§8.1): `withCache`'s
+ * byte-exact-write contract (cache.ts) is about the FINAL written bytes, and
+ * prior to this option a caller that wanted a header had no way to fold it
+ * into those bytes without reimplementing this function's whole
+ * orchestration around its own prepend step. Omitting `header` (or passing
+ * `""`) preserves the exact pre-existing behavior (raw, headerless source).
  */
+export type WireApplyValidationBuildOptionsKeyInput = {
+  readonly runtimeImport?: string;
+  readonly shouldShare?: ShouldShare;
+  readonly header?: string;
+};
+
+/** The `buildOptionsKey` `buildWireApplyValidationModuleCached` folds
+ * `runtimeImport`/`shouldShare`/`header` into (audit §1.3, extended to
+ * `header` for the same reason): none of the three is part of the tracked
+ * file closure, so a caller changing any of them between runs with no other
+ * input change was previously a silent Tier-1 hit that kept serving the OLD
+ * option's artifact indefinitely — including a stale/missing header stuck on
+ * disk after a caller starts (or stops) passing one. `shouldShare`'s
+ * identity is approximated by its source text (`Function.prototype.
+ * toString`) — the best available signal for a predicate function's identity
+ * across runs; a caller passing a differently-named-but-behaviorally-
+ * identical function still round-trips correctly (same source text), and a
+ * real behavior change (different source text) is what needs to invalidate
+ * the cache, not name identity. "" (not e.g. " ") when none of the three is
+ * passed — matches `CacheLocationOptions.buildOptionsKey`'s own "" default,
+ * so a caller/test that checks this artifact's cache via a plain
+ * checkCache/readCarryForwardState call (no options) still agrees with what
+ * got recorded when none of the three was passed to the build.
+ *
+ * Exported (not inlined into `buildWireApplyValidationModuleCached`) so a
+ * caller that needs to compute/check this SAME cache key outside that
+ * function's own orchestration — cli.ts's `runCheck`, which builds via the
+ * Tier-2 incremental function directly rather than this cached wrapper, but
+ * still needs `checkCache`/`writeCacheMetadata` calls that agree with what a
+ * `build`/`watch` run using this wrapper would have recorded — can reuse the
+ * exact formula instead of re-deriving (and risking drifting from) it. */
+export function wireApplyValidationBuildOptionsKey(
+  options?: WireApplyValidationBuildOptionsKeyInput,
+): string {
+  return options?.runtimeImport === undefined &&
+    options?.shouldShare === undefined &&
+    options?.header === undefined
+    ? ""
+    : `${options?.runtimeImport ?? ""} ${String(options?.shouldShare ?? "")} ${options?.header ?? ""}`;
+}
+
 export function buildWireApplyValidationModuleCached(
   entryFile: string,
   outFile: string,
@@ -1050,28 +1106,10 @@ export function buildWireApplyValidationModuleCached(
     readonly force?: boolean;
     readonly reachable?: ReadonlySet<string>;
     readonly shouldShare?: ShouldShare;
+    readonly header?: string;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
-  // `runtimeImport`/`shouldShare` folded into the cache key (audit §1.3):
-  // neither is part of the tracked file closure, so a caller changing either
-  // between runs with no other input change was previously a silent Tier-1
-  // hit that kept serving the OLD runtimeImport/shouldShare's artifact
-  // indefinitely. `shouldShare`'s identity is approximated by its source
-  // text (`Function.prototype.toString`) — the best available signal for a
-  // predicate function's identity across runs; a caller passing a
-  // differently-named-but-behaviorally-identical function still round-trips
-  // correctly (same source text), and a real behavior change (different
-  // source text) is what needs to invalidate the cache, not name identity.
-  // "" (not e.g. " ") when neither is passed — matches
-  // CacheLocationOptions.buildOptionsKey's own "" default, so a caller/test
-  // that checks this artifact's cache via a plain checkCache/
-  // readCarryForwardState call (no options) still agrees with what got
-  // recorded when neither option was passed to the build.
-  const buildOptionsKey =
-    options?.runtimeImport === undefined && options?.shouldShare === undefined
-      ? ""
-      : `${options?.runtimeImport ?? ""} ${String(options?.shouldShare ?? "")}`;
-  const cacheOpts = { ...options, buildOptionsKey };
+  const cacheOpts = { ...options, buildOptionsKey: wireApplyValidationBuildOptionsKey(options) };
   if (!cacheOpts?.force) {
     const check = checkCache(entryFile, outFile, cacheOpts);
     if (check.hit) return { status: "hit" };
@@ -1093,12 +1131,13 @@ export function buildWireApplyValidationModuleCached(
     ...(cacheOpts?.shouldShare !== undefined ? { shouldShare: cacheOpts.shouldShare } : {}),
     ...(prior !== undefined ? { prior } : {}),
   });
-  writeCacheMetadata(entryFile, outFile, program, built.source, cacheOpts, cacheOpts?.reachable, {
+  const finalSource = (cacheOpts?.header ?? "") + built.source;
+  writeCacheMetadata(entryFile, outFile, program, finalSource, cacheOpts, cacheOpts?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
     defNamesFingerprint: built.defNamesFingerprint,
   });
-  return { status: "built", result: built.source, program };
+  return { status: "built", result: finalSource, program };
 }
 
 /**
@@ -1114,6 +1153,7 @@ export async function writeWireApplyValidationModuleCached(
     readonly force?: boolean;
     readonly reachable?: ReadonlySet<string>;
     readonly shouldShare?: ShouldShare;
+    readonly header?: string;
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildWireApplyValidationModuleCached(entryFile, outFile, options);

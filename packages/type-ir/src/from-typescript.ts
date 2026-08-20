@@ -1512,8 +1512,21 @@ const FALLBACK_COMPILER_OPTIONS: ts.CompilerOptions = {
  * project where the plain `tsconfig.json` sets `noEmit: false` for `tsc -b`.
  * (`findConfigFile`'s default `searchName` is `"tsconfig.json"`, so a sibling
  * `tsconfig.build.json` is never what gets picked up in the first place.)
+ *
+ * Exported (not just `createExtractorProgram`'s private helper) so a cache
+ * layer can fingerprint the SAME resolved options object this function hands
+ * `ts.createProgram` — see `@rhi-zone/fractal-api-tree/cache`'s
+ * `compilerOptionsFingerprint`. Fingerprinting the resolved options directly,
+ * rather than trying to enumerate every file in the `extends` chain and track
+ * those as if they were source files, sidesteps having to reimplement
+ * `extends`-chain file resolution (including the `node_modules`-package-name
+ * extends form) a second time just to know which paths to hash — any edit
+ * anywhere in the chain that actually changes the resolved options is caught
+ * by fingerprinting the result, and an edit that doesn't change the resolved
+ * options correctly doesn't invalidate anything (docs/current/
+ * repo-audit-2026-08-20.md §2.2).
  */
-function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
+export function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
   const configPath = ts.findConfigFile(path.dirname(entryFile), ts.sys.fileExists);
   if (!configPath) return FALLBACK_COMPILER_OPTIONS;
 

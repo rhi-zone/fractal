@@ -61,10 +61,18 @@
 // already tracked — so the new file's absence from the recorded file set
 // before isn't a blind spot: the edit that introduced it always shows up as
 // a changed-content hash on some file already in (or about to reenter) the
-// closure. The only thing this key can't detect is a change to something
-// outside file content entirely (compiler options embedded in tsconfig.json
-// resolution, environment) — `tsVersion`/`typeIrVersion` below cover the
-// toolchain half of that; the rest is out of scope here.
+// closure. The only thing this key can't detect from the tracked file set
+// alone is a change to something outside file content entirely (environment,
+// toolchain) — `tsVersion`/`typeIrVersion` below cover the toolchain half of
+// that. Compiler options resolved from tsconfig.json (`paths`, `strict`,
+// `exactOptionalPropertyTypes`, …) are NOT file content in this sense — the
+// entry file's own content is unchanged even when its resolved options move
+// — so they're fingerprinted separately, as `compilerOptionsHash` below:
+// sha256 of the exact `ts.CompilerOptions` object `createExtractorProgram`
+// hands `ts.createProgram` (`loadCompilerOptionsForFile`,
+// `@rhi-zone/fractal-type-ir/from-typescript`), tracked with the same
+// conceptual treatment as a tracked source file's content hash
+// (docs/current/repo-audit-2026-08-20.md §2.2).
 //
 // ============================================================================
 // Warm-check cost — read this before changing how `checkCache` re-validates
@@ -110,6 +118,7 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import ts from "typescript";
+import { loadCompilerOptionsForFile } from "@rhi-zone/fractal-type-ir/from-typescript";
 
 /** sha256 of a string, hex-encoded — the one hash primitive this module uses
  * throughout (entry/dependency file content, output content). */
@@ -209,6 +218,24 @@ export function isTsBuiltinLibFile(fileName: string): boolean {
   return /[\\/]typescript[\\/]lib[\\/]lib\.[a-z0-9.]+\.d\.ts$/i.test(fileName);
 }
 
+/** sha256 of `entryFile`'s resolved `ts.CompilerOptions` — the same object
+ * `createExtractorProgram` hands `ts.createProgram`
+ * (`loadCompilerOptionsForFile`, `@rhi-zone/fractal-type-ir/from-typescript`),
+ * so this fingerprint is guaranteed to move exactly when the options a real
+ * build would actually use move: a `paths`/`strict`/
+ * `exactOptionalPropertyTypes`/… edit anywhere in `entryFile`'s tsconfig.json
+ * or its `extends` chain changes the resolved object, whether or not the edit
+ * touches a file already in the tracked source-file closure — see the
+ * cache-key-granularity doc block above and
+ * docs/current/repo-audit-2026-08-20.md §2.2. `JSON.stringify` (not a
+ * hand-rolled sorted-keys canonicalizer) is sufficient: `ts.CompilerOptions`
+ * as returned by `parseJsonConfigFileContent` is a plain, deterministic
+ * function of the same tsconfig content — no encounter-order-dependent
+ * allocation to worry about, unlike a `Map`/`Set`-shaped value. */
+function computeCompilerOptionsFingerprint(entryFile: string): string {
+  return sha256(JSON.stringify(loadCompilerOptionsForFile(entryFile)));
+}
+
 // ============================================================================
 // Cache file location
 // ============================================================================
@@ -288,6 +315,16 @@ type CacheFileShape = {
    * docs/current/repo-audit-2026-08-20.md §1.1/§2.1. Resolved the same way
    * `typeIrVersion` is (see `resolvePackageVersion`'s doc comment). */
   readonly apiTreeVersion: string;
+  /** sha256 of `entryFile`'s resolved `ts.CompilerOptions` — see
+   * `computeCompilerOptionsFingerprint`'s doc comment and
+   * docs/current/repo-audit-2026-08-20.md §2.2 ("tsconfig / compilerOptions
+   * are not tracked"). Gated the same way as the tracked file closure: a
+   * mismatch is a Tier-1 miss, and (via `toolchainMatches`) also disqualifies
+   * every leaf's Tier-2 carry-forward, since a changed `strict`/
+   * `exactOptionalPropertyTypes`/… can change what ANY leaf's extraction
+   * produces, not just leaves whose own fingerprint moved — same reasoning as
+   * `tsVersion`/`typeIrVersion`. */
+  readonly compilerOptionsHash: string;
   /** Opaque caller-computed fingerprint of build options not already covered
    * by the tracked file closure or the toolchain-version signals above (a
    * `--tree-id`, a `runtimeImport`, a `shouldShare` predicate's identity) —
@@ -388,6 +425,7 @@ function toolchainMatches(
     meta.tsVersion === ts.version &&
     meta.typeIrVersion === resolvePackageVersion("@rhi-zone/fractal-type-ir", entryFile) &&
     meta.apiTreeVersion === resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile) &&
+    meta.compilerOptionsHash === computeCompilerOptionsFingerprint(entryFile) &&
     meta.buildOptionsKey === (opts?.buildOptionsKey ?? "")
   );
 }
@@ -434,6 +472,10 @@ export function checkCache(
   const apiTreeVersion = resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile);
   if (meta.apiTreeVersion !== apiTreeVersion)
     return { hit: false, reason: "fractal-api-tree version changed" };
+
+  const compilerOptionsHash = computeCompilerOptionsFingerprint(entryFile);
+  if (meta.compilerOptionsHash !== compilerOptionsHash)
+    return { hit: false, reason: "tsconfig/compilerOptions changed" };
 
   if (meta.buildOptionsKey !== (opts?.buildOptionsKey ?? ""))
     return { hit: false, reason: "build options changed" };
@@ -551,6 +593,7 @@ export function writeCacheMetadata(
     tsVersion: ts.version,
     typeIrVersion: resolvePackageVersion("@rhi-zone/fractal-type-ir", entryFile),
     apiTreeVersion: resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile),
+    compilerOptionsHash: computeCompilerOptionsFingerprint(entryFile),
     buildOptionsKey: opts?.buildOptionsKey ?? "",
     entryFile: path.resolve(entryFile),
     files,

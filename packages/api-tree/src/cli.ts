@@ -1,13 +1,25 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildWireApplyValidationModuleSource } from "./apply-validation-build.ts";
-import { buildSchemaModuleSource } from "./schema-build.ts";
+import type ts from "typescript";
+import {
+  buildWireApplyValidationModuleCached,
+  buildWireApplyValidationModuleSourceIncremental,
+  wireApplyValidationBuildOptionsKey,
+} from "./apply-validation-build.ts";
+import {
+  buildSchemaModuleCached,
+  buildSchemaModuleSourceIncremental,
+  schemaBuildOptionsKey,
+} from "./schema-build.ts";
 import { createExtractorProgram } from "./extract.ts";
 import {
   checkCache,
   isTsBuiltinLibFile,
+  readCarryForwardState,
   writeCacheMetadata,
+  type CachedBuildOutcome,
+  type CacheFileShapeV3,
   type CacheLocationOptions,
 } from "./cache.ts";
 
@@ -45,12 +57,14 @@ Options:
 
 Caching: build/watch/check (and their -schema counterparts) skip regeneration
 when a content-addressed cache (entry file + every source file its
-extraction reads + TypeScript/fractal-type-ir/fractal-api-tree versions +
---tree-id) says nothing relevant changed — see
-@rhi-zone/fractal-api-tree/cache's module doc for the full design. NOT
-tracked: tsconfig.json/compilerOptions (resolved separately from the tracked
-source-file closure — an edit to paths/types/strict can change extraction
-output without the cache noticing). --force bypasses the cache unconditionally.
+extraction reads + its resolved tsconfig/compilerOptions +
+TypeScript/fractal-type-ir/fractal-api-tree versions + --tree-id) says
+nothing relevant changed — see @rhi-zone/fractal-api-tree/cache's module doc
+for the full design. build/watch/check now all go through the library's
+Tier-2 (leaf-level incremental) builders, so a Tier-1 miss still only
+recompiles the leaves whose own fingerprint actually changed, carried
+forward via the cache file's leafFingerprints/leafArtifacts. --force bypasses
+the cache unconditionally.
 `;
 
 type ParsedArgs = {
@@ -120,10 +134,6 @@ function parseArgs(argv: string[]): ParsedArgs {
   };
 }
 
-function withHeader(source: string): string {
-  return GENERATED_HEADER + source;
-}
-
 /** Formats `source` through the repo's `oxfmt` (via `bunx`, so it resolves
  * from whichever workspace package's node_modules the check is invoked from
  * — same binary `bun run format`/`format:check` use at the repo root) the
@@ -173,85 +183,142 @@ function requireTreeId(treeId: string | undefined): string {
   return treeId;
 }
 
-function cacheOptsOf(args: ParsedArgs): CacheLocationOptions {
+/** `--cache-file`/`--cache-dir` only — the cache key's `buildOptionsKey` half
+ * is now computed by each `ArtifactKind`'s own `buildOptionsKey` (mirroring
+ * exactly what its `cached` builder computes internally), not assembled here
+ * — see `ArtifactKind`'s doc comment. */
+function cacheLocationOptsOf(args: ParsedArgs): CacheLocationOptions {
   return {
     ...(args.cacheFile !== undefined ? { cacheFile: args.cacheFile } : {}),
     ...(args.cacheDir !== undefined ? { cacheDir: args.cacheDir } : {}),
-    // Folds `--tree-id` into the cache key (see cache.ts's
-    // `CacheLocationOptions.buildOptionsKey` doc comment and
-    // docs/current/repo-audit-2026-08-20.md §1.3): without this,
-    // `build-schema e -o out --tree-id A` then `--tree-id B` was a Tier-1
-    // hit serving tree A's stale artifact as "up to date" for tree B. `""`
-    // for the non-schema commands (`args.treeId` is always undefined there),
-    // preserving their existing cache key exactly.
-    buildOptionsKey: args.treeId ?? "",
   };
 }
 
-/** One artifact kind's build function — `buildWireApplyValidationModuleSource`
- * (with its extra `outFile`-anchored import-resolution option) for
- * `build`/`watch`/`check`, `buildSchemaModuleSource` for the `-schema`
- * commands. Both take `(entryFile, program)` once curried here, so
- * `runBuild`/`runCheck`/`runWatch` below are shared across both artifact
- * kinds — same cache contract, same CLI plumbing, no second divergent code
- * path. An entry file with no `applyValidation` call sites builds to the
- * pre-codegen stub (`applyValidationStubSource`, apply-validation-build.ts),
- * following the same "compiles and runs before codegen has ever produced
- * anything" convention `build`/`watch`/`check` always had.
- *
- * `build`/`watch`/`check` run every `applyValidation(key, tree, protocol?)`
- * call site, whether or not its source spells a `protocol` (an omitted one
- * resolves to `"identity"` — see `extractWireApplyValidationTypeRefs`'s doc
- * comment, apply-validation-build.ts). `shouldShare`/defs structural sharing
- * is not exposed as a CLI flag here. */
-type ArtifactBuilder = (
-  entryFile: string,
-  outFile: string,
-  program: import("typescript").Program,
-) => string;
+/** Prior Tier-2 state as `readCarryForwardState` returns it — passed straight
+ * through to an `ArtifactKind.incremental` call. */
+type PriorState = Pick<
+  CacheFileShapeV3,
+  "leafFingerprints" | "leafArtifacts" | "defNamesFingerprint"
+>;
 
-const VALIDATOR_BUILDER: ArtifactBuilder = (entryFile, outFile, program) =>
-  buildWireApplyValidationModuleSource(entryFile, { outFile, program });
+/** One Tier-2 incremental build's result, narrowed to what `runCheck` needs
+ * to pass on to `writeCacheMetadata`'s `leafData` — a subset of
+ * `WireApplyValidationIncrementalResult`/`SchemaIncrementalResult` (both
+ * carry more fields — `changedLeaves`, and the validator's own
+ * `defNamesFingerprint` — that this shape's callers don't need). */
+type IncrementalBuildResult = {
+  readonly source: string;
+  readonly leafFingerprints: Record<string, string>;
+  readonly leafArtifacts: Record<string, unknown>;
+  readonly defNamesFingerprint?: string;
+};
 
-/** Curries `treeId` (mandatory on `buildSchemaModuleSource` — see tree.ts's
- * `extractToolSchemas` doc comment) into an `ArtifactBuilder`, so
+/** One artifact kind's build machinery, both tiers: `cached` is the
+ * library's `build*Cached` wrapper (Tier 1 `checkCache` gate + Tier 2
+ * leaf-level incremental build + `writeCacheMetadata`, all in one call) —
+ * what `runBuild`/`runWatch` use directly, now that the CLI engages Tier 2
+ * for real instead of calling the plain non-incremental builders and writing
+ * cache metadata with empty `leafFingerprints`/`leafArtifacts` (audit §6#1).
+ * `incremental` is the lower-level Tier-2 build function alone (no Tier-1
+ * gate, no metadata write) — `runCheck` needs this instead of `cached`
+ * because it writes its OWN cache metadata keyed to the oxfmt-*formatted*
+ * source (see `runCheck`'s doc comment for why), not the raw bytes `cached`
+ * would record. `buildOptionsKey` is the exact formula `cached` folds
+ * `--tree-id`/header/etc into (`wireApplyValidationBuildOptionsKey`/
+ * `schemaBuildOptionsKey`, exported by the two build modules for this
+ * reason) — `runCheck` needs it too, to compute a `checkCache`/
+ * `writeCacheMetadata` call that agrees with what `cached` would have
+ * recorded, without duplicating (and risking drifting from) that formula. */
+type ArtifactKind = {
+  readonly cached: (
+    entryFile: string,
+    outFile: string,
+    opts: CacheLocationOptions & { readonly force?: boolean; readonly header?: string },
+  ) => CachedBuildOutcome<string>;
+  readonly incremental: (
+    entryFile: string,
+    outFile: string,
+    program: ts.Program,
+    prior: PriorState | undefined,
+  ) => IncrementalBuildResult;
+  readonly buildOptionsKey: (header: string) => string;
+};
+
+const VALIDATOR_KIND: ArtifactKind = {
+  cached: (entryFile, outFile, opts) => buildWireApplyValidationModuleCached(entryFile, outFile, opts),
+  incremental: (entryFile, outFile, program, prior) => {
+    const built = buildWireApplyValidationModuleSourceIncremental(entryFile, {
+      outFile,
+      program,
+      ...(prior !== undefined ? { prior } : {}),
+    });
+    return {
+      source: built.source,
+      leafFingerprints: built.leafFingerprints,
+      leafArtifacts: built.leafArtifacts,
+      defNamesFingerprint: built.defNamesFingerprint,
+    };
+  },
+  buildOptionsKey: (header) => wireApplyValidationBuildOptionsKey({ header }),
+};
+
+/** Curries `treeId` (mandatory on the schema builders — see tree.ts's
+ * `extractToolSchemas` doc comment) into an `ArtifactKind`, so
  * `runBuild`/`runCheck`/`runWatch` stay shared across both artifact kinds
- * without VALIDATOR_BUILDER also needing a `treeId` it has no use for. */
-function schemaBuilderFor(treeId: string): ArtifactBuilder {
-  return (entryFile, _outFile, program) => buildSchemaModuleSource(entryFile, treeId, program);
+ * without `VALIDATOR_KIND` also needing a `treeId` it has no use for. */
+function schemaKindFor(treeId: string): ArtifactKind {
+  return {
+    cached: (entryFile, outFile, opts) => buildSchemaModuleCached(entryFile, treeId, outFile, opts),
+    incremental: (entryFile, _outFile, program, prior) => {
+      const built = buildSchemaModuleSourceIncremental(entryFile, treeId, program, prior);
+      return {
+        source: built.source,
+        leafFingerprints: built.leafFingerprints,
+        leafArtifacts: built.leafArtifacts,
+      };
+    },
+    buildOptionsKey: (header) => schemaBuildOptionsKey(treeId, { header }),
+  };
 }
 
-function runBuild(
-  builder: ArtifactBuilder,
-  entryFile: string,
-  outFile: string,
-  args: ParsedArgs,
-): void {
-  const cacheOpts = cacheOptsOf(args);
-  if (!args.force) {
-    const check = checkCache(entryFile, outFile, cacheOpts);
-    if (check.hit) {
-      process.stdout.write(`up to date: ${outFile} (cache hit)\n`);
-      return;
-    }
-  }
+function runBuild(kind: ArtifactKind, entryFile: string, outFile: string, args: ParsedArgs): void {
   const start = performance.now();
-  const program = createExtractorProgram(entryFile);
-  const source = withHeader(builder(entryFile, outFile, program));
+  const outcome = kind.cached(entryFile, outFile, {
+    ...cacheLocationOptsOf(args),
+    force: args.force,
+    header: GENERATED_HEADER,
+  });
+  if (outcome.status === "hit") {
+    process.stdout.write(`up to date: ${outFile} (cache hit)\n`);
+    return;
+  }
   ensureParentDir(outFile);
-  fs.writeFileSync(outFile, source);
-  writeCacheMetadata(entryFile, outFile, program, source, cacheOpts);
+  fs.writeFileSync(outFile, outcome.result);
   const elapsed = performance.now() - start;
   process.stdout.write(`built ${outFile} in ${elapsed.toFixed(1)}ms\n`);
 }
 
-function runCheck(
-  builder: ArtifactBuilder,
-  entryFile: string,
-  outFile: string,
-  args: ParsedArgs,
-): void {
-  const cacheOpts = cacheOptsOf(args);
+/**
+ * `check` builds through the SAME Tier-2 incremental function `runBuild`
+ * uses (`kind.incremental`, carry-forward included via
+ * `readCarryForwardState`) but does NOT use `kind.cached` end to end,
+ * because `check`'s own `writeCacheMetadata` call needs to record the
+ * oxfmt-*formatted* bytes, not the raw ones `kind.incremental`/`cached`
+ * produce — the committed artifact went through `oxfmt --write .` after
+ * `build` wrote it (build itself emits raw, unformatted output), so diffing
+ * raw generator bytes against it would fail on style alone even with zero
+ * real drift (audit §7#5), and recording metadata keyed to the wrong (raw)
+ * bytes would immediately re-mismatch `outFile`'s real (formatted) bytes on
+ * the very next check. `cacheOpts.buildOptionsKey` is computed via
+ * `kind.buildOptionsKey` — the exact formula `kind.cached` uses internally —
+ * so this function's own `checkCache`/`writeCacheMetadata` calls agree with
+ * what a `build`/`watch` run would have recorded.
+ */
+function runCheck(kind: ArtifactKind, entryFile: string, outFile: string, args: ParsedArgs): void {
+  const cacheOpts: CacheLocationOptions = {
+    ...cacheLocationOptsOf(args),
+    buildOptionsKey: kind.buildOptionsKey(GENERATED_HEADER),
+  };
   if (!args.force) {
     const cached = checkCache(entryFile, outFile, cacheOpts);
     if (cached.hit) {
@@ -260,12 +327,11 @@ function runCheck(
     }
   }
   const program = createExtractorProgram(entryFile);
-  const source = withHeader(builder(entryFile, outFile, program));
+  const prior = readCarryForwardState(entryFile, outFile, cacheOpts);
+  const built = kind.incremental(entryFile, outFile, program, prior);
+  const source = GENERATED_HEADER + built.source;
   // Compare the *formatted* generator output against the committed file —
-  // the committed artifact went through `oxfmt --write .` after `build`
-  // wrote it (build itself emits raw, unformatted output), so diffing raw
-  // `source` against it would fail on style alone even with zero real drift
-  // (audit §7#5).
+  // see this function's doc comment above.
   const formattedSource = formatWithOxfmt(source, outFile);
   const existing = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : undefined;
   if (existing === formattedSource) {
@@ -276,12 +342,19 @@ function runCheck(
     // cost again (audit §6#5). Only done on the up-to-date branch: writing
     // metadata on the stale branch below would record a fresh outputHash
     // for content that was never actually written to `outFile`. Hashed as
-    // `formattedSource`, not raw `source` — `outFile` on disk holds the
-    // oxfmt-formatted bytes, and `checkCache` compares its stored
-    // `outputHash` against `hashFile(outFile)` next run; hashing raw
-    // `source` here would immediately mismatch that and force a full
-    // regenerate+format+compare on every subsequent `check`.
-    writeCacheMetadata(entryFile, outFile, program, formattedSource, cacheOpts);
+    // `formattedSource`, not raw `source` — see this function's doc comment.
+    // `leafData` is now populated (audit §6#1) — previously `check` (like
+    // `build`/`watch`) called `writeCacheMetadata` with no `leafData` at
+    // all, so a cache file `check` last touched carried empty
+    // `leafFingerprints`/`leafArtifacts` regardless of how much Tier-2 state
+    // a prior `build` had accumulated.
+    writeCacheMetadata(entryFile, outFile, program, formattedSource, cacheOpts, undefined, {
+      leafFingerprints: built.leafFingerprints,
+      leafArtifacts: built.leafArtifacts,
+      ...(built.defNamesFingerprint !== undefined
+        ? { defNamesFingerprint: built.defNamesFingerprint }
+        : {}),
+    });
     process.stdout.write(`up to date: ${outFile}\n`);
     return;
   }
@@ -298,7 +371,7 @@ function runCheck(
  * transitively imported files outside that one directory — a subdirectory, a
  * sibling package, anything — even though the cache tracks the full
  * closure). */
-function watchDirsOf(program: import("typescript").Program): Set<string> {
+function watchDirsOf(program: ts.Program): Set<string> {
   const dirs = new Set<string>();
   for (const sourceFile of program.getSourceFiles()) {
     if (isTsBuiltinLibFile(sourceFile.fileName)) continue;
@@ -307,15 +380,10 @@ function watchDirsOf(program: import("typescript").Program): Set<string> {
   return dirs;
 }
 
-function runWatch(
-  builder: ArtifactBuilder,
-  entryFile: string,
-  outFile: string,
-  args: ParsedArgs,
-): void {
-  runBuild(builder, entryFile, outFile, args);
+function runWatch(kind: ArtifactKind, entryFile: string, outFile: string, args: ParsedArgs): void {
+  runBuild(kind, entryFile, outFile, args);
 
-  const cacheOpts = cacheOptsOf(args);
+  const cacheLocationOpts = cacheLocationOptsOf(args);
   let timer: NodeJS.Timeout | undefined;
   let watchers: fs.FSWatcher[] = [];
 
@@ -341,20 +409,32 @@ function runWatch(
     );
   };
 
+  /** Every trigger goes through `kind.cached` — the Tier-1 `checkCache` gate
+   * it runs internally means a spurious/no-op fs event (nothing in the
+   * tracked closure actually changed) now resolves to a fast hit instead of
+   * unconditionally rebuilding and re-extracting on every filesystem event,
+   * as the pre-Tier-2 CLI did. `force` is never passed here — only the
+   * initial `runBuild` call above honors `--force`; once watching, staying
+   * on the cache's own change-detection is the point. */
   const rebuild = () => {
     const start = performance.now();
-    const program = createExtractorProgram(entryFile);
-    const source = withHeader(builder(entryFile, outFile, program));
+    const outcome = kind.cached(entryFile, outFile, { ...cacheLocationOpts, header: GENERATED_HEADER });
+    if (outcome.status === "hit") {
+      process.stdout.write("no changes\n");
+      return;
+    }
+    setWatchers(watchDirsOf(outcome.program));
     const existing = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : undefined;
-    setWatchers(watchDirsOf(program));
-    if (existing === source) {
-      writeCacheMetadata(entryFile, outFile, program, source, cacheOpts);
+    if (existing === outcome.result) {
+      // Tracked-file content moved (Tier-1 miss) but the emitted bytes
+      // didn't (e.g. a comment-only edit) — skip the write to avoid an
+      // needless mtime bump; `kind.cached` already wrote fresh metadata for
+      // the new tracked-file state.
       process.stdout.write("no changes\n");
       return;
     }
     ensureParentDir(outFile);
-    fs.writeFileSync(outFile, source);
-    writeCacheMetadata(entryFile, outFile, program, source, cacheOpts);
+    fs.writeFileSync(outFile, outcome.result);
     const elapsed = performance.now() - start;
     process.stdout.write(`built ${outFile} in ${elapsed.toFixed(1)}ms\n`);
   };
@@ -388,40 +468,40 @@ function main(): void {
     case "build": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
-      runBuild(VALIDATOR_BUILDER, entry, output, args);
+      runBuild(VALIDATOR_KIND, entry, output, args);
       break;
     }
     case "watch": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
-      runWatch(VALIDATOR_BUILDER, entry, output, args);
+      runWatch(VALIDATOR_KIND, entry, output, args);
       break;
     }
     case "check": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
-      runCheck(VALIDATOR_BUILDER, entry, output, args);
+      runCheck(VALIDATOR_KIND, entry, output, args);
       break;
     }
     case "build-schema": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
       const treeId = requireTreeId(args.treeId);
-      runBuild(schemaBuilderFor(treeId), entry, output, args);
+      runBuild(schemaKindFor(treeId), entry, output, args);
       break;
     }
     case "watch-schema": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
       const treeId = requireTreeId(args.treeId);
-      runWatch(schemaBuilderFor(treeId), entry, output, args);
+      runWatch(schemaKindFor(treeId), entry, output, args);
       break;
     }
     case "check-schema": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
       const treeId = requireTreeId(args.treeId);
-      runCheck(schemaBuilderFor(treeId), entry, output, args);
+      runCheck(schemaKindFor(treeId), entry, output, args);
       break;
     }
     default:

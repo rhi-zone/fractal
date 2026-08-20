@@ -216,7 +216,39 @@ export function buildSchemaModuleSourceIncremental(
  * each with its own `outFile` (cache metadata is keyed by `outFile`, so two
  * trees sharing one `outFile` would clobber each other's cache entry — not
  * this function's problem to prevent, same as any other `outFile` reuse).
+ *
+ * `options.header`, when given, is prepended to the rendered module source
+ * BEFORE `outputHash` is computed and before it's returned as `result` — the
+ * same treatment as the wire-validator module's cached wrapper (see
+ * `buildWireApplyValidationModuleCached`'s doc comment for the full
+ * rationale: this is what makes a header-wanting caller able to use this
+ * wrapper directly, per docs/current/repo-audit-2026-08-20.md §6#2/§8.1,
+ * instead of hand-rolling its own header-prepend around it). Omitting
+ * `header` (or passing `""`) preserves the exact pre-existing behavior.
  */
+/** The `buildOptionsKey` `buildSchemaModuleCached` folds `treeId`/`header`
+ * into (audit §1.3, and the header half for the same reason as the
+ * wire-validator twin's `wireApplyValidationBuildOptionsKey`): a single
+ * entryFile can export several trees, each built to its own outFile —
+ * without `treeId` here, a cache metadata file keyed only by
+ * outFile+entryFile can't tell "tree A's artifact" from "tree B's artifact"
+ * apart if a caller reuses cache location options across trees, and a
+ * `--tree-id` change with no other input change was a silent Tier-1 hit
+ * serving the WRONG tree's artifact. Without `header` folded in too, a
+ * caller changing whether (or what) header it passes, with no other input
+ * change, would be a silent Tier-1 hit serving a stale/missing header.
+ * `treeId` alone (no trailing separator) when `header` is omitted —
+ * preserves the exact pre-existing buildOptionsKey value for every caller
+ * that doesn't pass a header.
+ *
+ * Exported for the same reason as `wireApplyValidationBuildOptionsKey`:
+ * cli.ts's `runCheck` builds via the Tier-2 incremental function directly,
+ * but still needs `checkCache`/`writeCacheMetadata` calls that agree with
+ * what a `build`/`watch` run using this cached wrapper would have recorded. */
+export function schemaBuildOptionsKey(treeId: string, options?: { readonly header?: string }): string {
+  return options?.header === undefined ? treeId : `${treeId} ${options.header}`;
+}
+
 export function buildSchemaModuleCached(
   entryFile: string,
   treeId: string,
@@ -225,15 +257,10 @@ export function buildSchemaModuleCached(
     readonly program?: ts.Program;
     readonly force?: boolean;
     readonly reachable?: ReadonlySet<string>;
+    readonly header?: string;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
-  // `treeId` folded into the cache key (audit §1.3): a single entryFile can
-  // export several trees, each built to its own outFile — without this, a
-  // cache metadata file keyed only by outFile+entryFile can't tell "tree A's
-  // artifact" from "tree B's artifact" apart if a caller reuses cache
-  // location options across trees, and a `--tree-id` change with no other
-  // input change was a silent Tier-1 hit serving the WRONG tree's artifact.
-  const cacheOpts = { ...options, buildOptionsKey: treeId };
+  const cacheOpts = { ...options, buildOptionsKey: schemaBuildOptionsKey(treeId, options) };
   if (!cacheOpts?.force) {
     const check = checkCache(entryFile, outFile, cacheOpts);
     if (check.hit) return { status: "hit" };
@@ -241,11 +268,12 @@ export function buildSchemaModuleCached(
   const program = cacheOpts?.program ?? createExtractorProgram(entryFile);
   const prior = readCarryForwardState(entryFile, outFile, cacheOpts);
   const built = buildSchemaModuleSourceIncremental(entryFile, treeId, program, prior);
-  writeCacheMetadata(entryFile, outFile, program, built.source, cacheOpts, cacheOpts?.reachable, {
+  const finalSource = (cacheOpts?.header ?? "") + built.source;
+  writeCacheMetadata(entryFile, outFile, program, finalSource, cacheOpts, cacheOpts?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
   });
-  return { status: "built", result: built.source, program };
+  return { status: "built", result: finalSource, program };
 }
 
 /**
@@ -265,6 +293,7 @@ export async function writeSchemaModuleCached(
     // one multi-root Program across many schema entries needs this to record
     // each entry's own precise closure, same as the validator twin.
     readonly reachable?: ReadonlySet<string>;
+    readonly header?: string;
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
   const outcome = buildSchemaModuleCached(entryFile, treeId, outFile, options);

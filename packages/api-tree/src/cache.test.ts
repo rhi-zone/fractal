@@ -165,6 +165,20 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     if (!check.hit) expect(check.reason).toContain("fractal-api-tree version");
   });
 
+  it("a different compilerOptionsHash in the recorded metadata is a miss (audit §2.2: tsconfig/compilerOptions weren't tracked at all before)", async () => {
+    const outFile = freshOutFile("v-compileropts.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    const cacheFile = `${outFile}.cache.json`;
+    const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
+    expect(typeof meta.compilerOptionsHash).toBe("string");
+    expect((meta.compilerOptionsHash as string).length).toBeGreaterThan(0);
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, compilerOptionsHash: "not-the-real-hash" }));
+
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(false);
+    if (!check.hit) expect(check.reason).toContain("tsconfig/compilerOptions");
+  });
+
   it("a different buildOptionsKey (e.g. a changed --tree-id/runtimeImport) in the recorded metadata is a miss (audit §1.3)", async () => {
     const outFile = freshOutFile("v-buildoptions.ts");
     await writeWireApplyValidationModuleCached(FIXTURE, outFile);
@@ -203,6 +217,55 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     expect(
       (await writeWireApplyValidationModuleCached(FIXTURE, outFile, { cacheDir })).status,
     ).toBe("hit");
+  });
+
+  it("options.header is folded into the written bytes AND the cache key (audit §6#2/§8.1)", async () => {
+    const HEADER = "// @generated header for this test — do not edit\n";
+    const outFile = freshOutFile("v-header.ts");
+
+    const first = await writeWireApplyValidationModuleCached(FIXTURE, outFile, { header: HEADER });
+    expect(first.status).toBe("built");
+    if (first.status !== "built") throw new Error("unreachable");
+    // `result` (what got written) starts with the header, and disk holds
+    // exactly `result` — the byte-exact contract `withCache`'s doc comment
+    // requires, now satisfied even with a header folded in.
+    expect(first.result.startsWith(HEADER)).toBe(true);
+    expect(fs.readFileSync(outFile, "utf8")).toBe(first.result);
+
+    // Same header again: a real hit, since the recorded outputHash matches
+    // the headered bytes actually on disk.
+    const second = await writeWireApplyValidationModuleCached(FIXTURE, outFile, { header: HEADER });
+    expect(second.status).toBe("hit");
+
+    // A different header, everything else unchanged, must NOT be served the
+    // old header's cached artifact — header is folded into buildOptionsKey.
+    const differentHeaderOutcome = await writeWireApplyValidationModuleCached(FIXTURE, outFile, {
+      header: "// a completely different header\n",
+    });
+    expect(differentHeaderOutcome.status).toBe("built");
+
+    // Dropping the header entirely (back to the pre-existing no-header
+    // behavior) is also a distinct cache key, not a hit against the
+    // headered artifact.
+    const noHeaderCheck = checkCache(FIXTURE, outFile);
+    expect(noHeaderCheck.hit).toBe(false);
+  });
+
+  it("buildSchemaModuleCached's options.header is folded into the written bytes AND the cache key, same as the wire-validator wrapper", async () => {
+    const HEADER = "// @generated schema header for this test — do not edit\n";
+    const outFile = freshOutFile("v-schema-header.ts");
+
+    const first = await writeSchemaModuleCached(FIXTURE, "validated", outFile, { header: HEADER });
+    expect(first.status).toBe("built");
+    if (first.status !== "built") throw new Error("unreachable");
+    expect(first.result.startsWith(HEADER)).toBe(true);
+    expect(fs.readFileSync(outFile, "utf8")).toBe(first.result);
+
+    const second = await writeSchemaModuleCached(FIXTURE, "validated", outFile, { header: HEADER });
+    expect(second.status).toBe("hit");
+
+    const noHeaderOutcome = await writeSchemaModuleCached(FIXTURE, "validated", outFile);
+    expect(noHeaderOutcome.status).toBe("built");
   });
 
   it("a warm hit never constructs a ts.Program — checkCache re-validates off recorded size/mtime/hash only", async () => {
