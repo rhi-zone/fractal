@@ -52,6 +52,10 @@
       "types": "./dist/path.d.ts",
       "import": "./dist/path.js"
     },
+    "./tree-walk": {
+      "types": "./dist/tree-walk.d.ts",
+      "import": "./dist/tree-walk.js"
+    },
     "./extract": {
       "types": "./dist/extract.d.ts",
       "import": "./dist/extract.js"

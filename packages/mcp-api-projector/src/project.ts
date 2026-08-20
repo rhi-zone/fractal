@@ -57,6 +57,7 @@ import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import { assertUniqueName } from "@rhi-zone/fractal-api-tree/tree";
+import { walkNamedTree } from "@rhi-zone/fractal-api-tree/tree-walk";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import type { SourceMap } from "@rhi-zone/fractal-api-tree";
@@ -518,53 +519,11 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
     };
   };
 
-  // `nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`)
-  // is the name-scoped segment array — tree keys with `meta.mcp.segment`
-  // overrides folded in — joined via `escapeJoin` exactly once, at each leaf,
-  // instead of unescaped-joined one level at a time on the way down.
-  const walk = (
-    n: Node,
-    nameSegments: readonly string[],
-    segments: readonly string[],
-  ): McpTool[] => {
-    const out: McpTool[] = [];
-
-    for (const [key, child] of Object.entries(n.children ?? {})) {
-      if (isLeaf(child)) {
-        const name = escapeJoin([...nameSegments, key], "_");
-        const tool = buildTool(child, name, key, [...segments, key]);
-        if (tool !== undefined) out.push(tool);
-      } else {
-        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
-        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
-        out.push(...walk(child, [...nameSegments, rawSeg], [...segments, key]));
-      }
-    }
-
-    if (n.fallback !== undefined) {
-      // A fallback contributes its own name as the next segment.
-      const fallbackNameSegments = [...nameSegments, n.fallback.name];
-      const fallbackSegments = [...segments, `:${n.fallback.name}`];
-
-      // `fallback.subtree` may be a bare `op()` rather than an `api({...})` —
-      // the Node model allows either (api-tree/node.ts). Recursing as though it
-      // were a branch would read `children`, find none, and drop the leaf
-      // without a trace, so a bare leaf is built directly at `seg`, with no
-      // segment beyond the fallback's own name. Extraction resolves the same
-      // case the same way, in api-tree/tree.ts's `walkNodeType` (aa28952).
-      if (isLeaf(n.fallback.subtree)) {
-        const seg = escapeJoin(fallbackNameSegments, "_");
-        const tool = buildTool(n.fallback.subtree, seg, n.fallback.name, fallbackSegments);
-        if (tool !== undefined) out.push(tool);
-      } else {
-        out.push(...walk(n.fallback.subtree, fallbackNameSegments, fallbackSegments));
-      }
-    }
-
-    return out;
-  };
-
-  const tools = walk(n, [], []);
+  // Delimiter "_", meta namespace "mcp", leaf builder `buildTool` — the
+  // shared walk shape factored out to api-tree's `walkNamedTree` (see that
+  // module's doc comment). Collision detection and the `meta.mcp.as`
+  // surface filter both live inside `buildTool` itself, not here.
+  const tools = walkNamedTree(n, { delimiter: "_", namespace: "mcp", buildLeaf: buildTool });
   return { tools, handlers };
 }
 
@@ -1025,45 +984,8 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
     };
   };
 
-  // Same name-segment-array-carried-to-a-single-escapeJoin-call scheme as
-  // `projectTools`' walk — see that function's matching comment.
-  const walk = (
-    n: Node,
-    nameSegments: readonly string[],
-    segments: readonly string[],
-  ): McpPrompt[] => {
-    const out: McpPrompt[] = [];
-
-    for (const [key, child] of Object.entries(n.children ?? {})) {
-      if (isLeaf(child)) {
-        const name = escapeJoin([...nameSegments, key], "_");
-        const prompt = buildPrompt(child, name, key, [...segments, key]);
-        if (prompt !== undefined) out.push(prompt);
-      } else {
-        const childMcp = getMcpMeta(child.meta as McpLeafMeta & McpBranchMeta);
-        const rawSeg = typeof childMcp.segment === "string" ? childMcp.segment : key;
-        out.push(...walk(child, [...nameSegments, rawSeg], [...segments, key]));
-      }
-    }
-
-    if (n.fallback !== undefined) {
-      const fallbackNameSegments = [...nameSegments, n.fallback.name];
-      const fallbackSegments = [...segments, `:${n.fallback.name}`];
-
-      // A bare-leaf `fallback.subtree` needs building directly, for the reason
-      // spelled out in `projectTools`' matching branch.
-      if (isLeaf(n.fallback.subtree)) {
-        const seg = escapeJoin(fallbackNameSegments, "_");
-        const prompt = buildPrompt(n.fallback.subtree, seg, n.fallback.name, fallbackSegments);
-        if (prompt !== undefined) out.push(prompt);
-      } else {
-        out.push(...walk(n.fallback.subtree, fallbackNameSegments, fallbackSegments));
-      }
-    }
-
-    return out;
-  };
-
-  const prompts = walk(n, [], []);
+  // Same shared walk `projectTools` uses (api-tree's `walkNamedTree`) — same
+  // delimiter and meta namespace, only the leaf builder differs.
+  const prompts = walkNamedTree(n, { delimiter: "_", namespace: "mcp", buildLeaf: buildPrompt });
   return { prompts, handlers };
 }

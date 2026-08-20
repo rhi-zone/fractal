@@ -50,9 +50,9 @@
 //   docs/design/router-model.md                       — Node Shape, Dispatch, fallback
 
 import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc";
-import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
-import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
+import { readMetaBag } from "@rhi-zone/fractal-api-tree/node";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
+import { walkNamedTree } from "@rhi-zone/fractal-api-tree/tree-walk";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import type { SourceMap } from "@rhi-zone/fractal-api-tree";
@@ -256,48 +256,19 @@ export function projectMethods(n: Node, opts: ProjectMethodsOptions = {}): Proje
     };
   };
 
-  // `nameSegments` (replaces a prior incrementally-rebuilt `prefix: string`)
-  // is the name-scoped segment array — tree keys with `meta.jsonrpc.segment`
-  // overrides folded in — joined via `escapeJoin` (@rhi-zone/fractal-api-tree/
-  // path) exactly once, at each leaf, instead of unescaped-joining one level
-  // at a time on the way down. Without this, a leaf key/segment/override that
-  // itself contains "." (the delimiter) could derive the identical method
-  // name as a genuinely different, deeper tree position — see api-tree's
-  // path.ts and this fix's sibling in mcp-api-projector/project.ts.
-  const walk = (n: Node, nameSegments: readonly string[]): JsonRpcMethod[] => {
-    const out: JsonRpcMethod[] = [];
-
-    for (const [key, child] of Object.entries(n.children ?? {})) {
-      if (isLeaf(child)) {
-        const name = escapeJoin([...nameSegments, key], ".");
-        out.push(buildMethod(child, name, key));
-      } else {
-        const childJr = getJsonRpcMeta(child.meta as JsonRpcLeafMeta & JsonRpcBranchMeta);
-        const rawSeg = typeof childJr.segment === "string" ? childJr.segment : key;
-        out.push(...walk(child, [...nameSegments, rawSeg]));
-      }
-    }
-
-    if (n.fallback !== undefined) {
-      // The Node model allows `fallback.subtree` to be a bare leaf (`op()`),
-      // not just a branch (`api({...})`) — walking it as a branch here
-      // (`Object.entries(subtree.children ?? {})`) would silently see no
-      // children and omit it entirely. Mirror extraction: when the subtree
-      // itself is a leaf, build its method directly at `seg` (no extra
-      // segment beyond the fallback's own name).
-      const fallbackNameSegments = [...nameSegments, n.fallback.name];
-      if (isLeaf(n.fallback.subtree)) {
-        const seg = escapeJoin(fallbackNameSegments, ".");
-        out.push(buildMethod(n.fallback.subtree, seg, n.fallback.name));
-      } else {
-        out.push(...walk(n.fallback.subtree, fallbackNameSegments));
-      }
-    }
-
-    return out;
-  };
-
-  const methods = walk(n, []);
+  // Delimiter ".", meta namespace "jsonrpc", leaf builder `buildMethod` — the
+  // shared walk shape factored out to api-tree's `walkNamedTree` (see that
+  // module's doc comment; also mcp-api-projector's `projectTools`/
+  // `projectPrompts`, the walker's other two callers). `buildMethod` never
+  // returns `undefined` and does no collision detection of its own — unlike
+  // mcp's leaf builders, json-rpc has no surface-selection concept and no
+  // `assertUniqueName` call today; `walkNamedTree` doesn't require either,
+  // so this is a pure factor-out, not a behavior change.
+  const methods = walkNamedTree(n, {
+    delimiter: ".",
+    namespace: "jsonrpc",
+    buildLeaf: buildMethod,
+  });
   return { methods, handlers };
 }
 
