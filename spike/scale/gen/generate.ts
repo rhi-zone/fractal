@@ -66,10 +66,9 @@ const bodySchema: StandardSchema<unknown, Body> = {
 function variantA(routes: Route[]): string {
   const lines: string[] = [];
   lines.push(
-    `import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http-api-projector"`,
+    `import { createClient as client, httpRouter, json, withValidation } from "@rhi-zone/fractal-http-api-projector"`,
   );
   lines.push(`import type { StandardSchema } from "@rhi-zone/fractal-api-tree"`);
-  lines.push(`import { client } from "@rhi-zone/fractal-client-api-projector"`);
   lines.push(SCHEMA_HELPER);
   lines.push(`const app = httpRouter()`);
   for (const r of routes) {

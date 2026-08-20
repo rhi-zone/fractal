@@ -1,6 +1,5 @@
-import { httpRouter, json, withValidation } from "@rhi-zone/fractal-http-api-projector";
+import { createClient as client, httpRouter, json, withValidation } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema } from "@rhi-zone/fractal-api-tree";
-import { client } from "@rhi-zone/fractal-client-api-projector";
 
 // Minimal Standard-Schema validator (no zod — isolate fractal's cost).
 interface Body {
