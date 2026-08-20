@@ -1,12 +1,19 @@
 # Splitting `Meta` into `SharedMeta` / `LeafMeta` / `BranchMeta`
 
-Status: **design spec, settled by the project owner — not yet implemented.**
-This is not a proposal under discussion; it is the certified target
-architecture. Scope: `packages/api-tree/src/node.ts`'s `Meta` interface,
-every projector's current `declare module` augmentation of it
-(`http-api-projector`, `mcp-api-projector`, `cli-api-projector`,
-`graphql-api-projector`, `json-rpc-api-projector`), and the reference
-deployment (the sibling codebase)'s own augmentation.
+Status: **design spec, settled by the project owner — implemented.** This
+document now describes the shipped architecture, not a proposal: core
+declares `SharedMeta`/`LeafMeta`/`BranchMeta` with no protocol name in
+`node.ts`, every projector exports inert namespaced fragment interfaces
+instead of augmenting core, and zero projector-owned `declare module` blocks
+remain (`http-api-projector/src/project.ts:39` states this directly for that
+package; the same holds across `mcp-api-projector`, `cli-api-projector`,
+`graphql-api-projector`, `json-rpc-api-projector`). §1 below narrates the
+PRE-migration shape this spec replaced, kept for the rationale it argues
+from. Scope: `packages/api-tree/src/node.ts`'s `Meta`-role interfaces, every
+projector's namespaced fragment exports (`http-api-projector`,
+`mcp-api-projector`, `cli-api-projector`, `graphql-api-projector`,
+`json-rpc-api-projector`), and the reference deployment (the sibling
+codebase)'s own single augmentation file.
 
 **Invariant (owner-stated, non-negotiable): api-tree core does not know about
 projectors — full stop.** No protocol name (`http`, `cli`, `mcp`, `graphql`,
@@ -23,10 +30,14 @@ inert plain interfaces and performs zero `declare module` side effects. The
 **deployment** is the only place a `declare module` block exists, in one
 file, written once. §9 records the full defect list this design corrects.
 
-## 1. Motivation
+## 1. Motivation (the PRE-migration shape this spec replaced)
 
-Today `Meta` is one open, all-optional interface, declared in core with
-exactly two members (`node.ts:43-53`):
+This section narrates the design problem as it stood before this spec
+shipped — kept because §2's shape is derived from it, not because it's
+current. See the Status line above for what actually exists now.
+
+Before this migration, `Meta` was one open, all-optional interface, declared
+in core with exactly two members:
 
 ```ts
 export interface Meta {
@@ -35,39 +46,37 @@ export interface Meta {
 }
 ```
 
-Core itself never declares a protocol namespace. Each projector
-declaration-merges its own single key onto this same `Meta` interface — one
+Core itself never declared a protocol namespace. Each projector
+declaration-merged its own single key onto this same `Meta` interface — one
 `declare module "@rhi-zone/fractal-api-tree/node" { interface Meta { http?:
-HttpMeta } }` block in `http-api-projector/src/project.ts:67-71`, one for
-`openapi?: OpenApiMeta` in `http-api-projector/src/openapi.ts:199-203`, one
-for `cli?: CliMeta` in `cli-api-projector/src/cli.ts:361-365`, one for
-`mcp?: McpMeta` in `mcp-api-projector/src/project.ts:320-324`, one for
-`jsonrpc?: JsonRpcMeta` in `json-rpc-api-projector/src/project.ts:139-143`,
-one for `graphql?: GraphQLMeta` in `graphql-api-projector/src/project.ts:95-99`
-— verified by reading each `declare module` block directly, not inferred.
-Each of `HttpMeta`/`CliMeta`/`McpMeta`/`JsonRpcMeta`/`GraphQLMeta`/
-`OpenApiMeta` is today a single FLAT interface owned entirely by its
-projector package, spanning fields that in practice are read at different
-tree positions (leaf-only, branch-only, or both — §4). A consumer can
-declaration-merge further onto `Meta` too — e.g. a required
-`scopes: readonly string[]` on an op, so an authorization check has
-something to enforce instead of silently treating absence as "no scope
-required" (the sibling codebase's `packages/fractal-support/src/meta.ts` does exactly
-this today, as an OPTIONAL `scopes?: readonly string[]` — §7 covers the
-migration this spec drives there).
+HttpMeta } }` block in http-api-projector's project.ts, one for `openapi?:
+OpenApiMeta` in its openapi.ts, one for `cli?: CliMeta` in cli-api-projector's
+cli.ts, one for `mcp?: McpMeta` in mcp-api-projector's project.ts, one for
+`jsonrpc?: JsonRpcMeta` in json-rpc-api-projector's project.ts, one for
+`graphql?: GraphQLMeta` in graphql-api-projector's project.ts. Each of
+`HttpMeta`/`CliMeta`/`McpMeta`/`JsonRpcMeta`/`GraphQLMeta`/`OpenApiMeta` was a
+single FLAT interface owned entirely by its projector package, spanning
+fields that in practice are read at different tree positions (leaf-only,
+branch-only, or both — §4). A consumer could declaration-merge further onto
+`Meta` too — e.g. a required `scopes: readonly string[]` on an op, so an
+authorization check has something to enforce instead of silently treating
+absence as "no scope required" (the sibling codebase's
+`packages/fractal-support/src/meta.ts` did exactly this, as an OPTIONAL
+`scopes?: readonly string[]` — §7 covers the migration this spec drove
+there).
 
-`HasRequiredKeys<Meta>` (`node.ts:65`) already exists to make requiredness
-legal: `op()` (`node.ts:357-359`) and `api()` (`node.ts:441-443`) both flip
-their meta-parameter arity from "optional, folds contributions" to "one
-required `Meta` argument" the moment `HasRequiredKeys<Meta>` is `true`. But
-today the flip is global — a consumer can't require a member on OPERATIONS
-only. A `declare module` block that adds `scopes: readonly string[]` to
-`Meta` makes every `api()` branch call require it too, even though a branch
-has no scope of its own to check. Splitting `Meta` by ROLE (shared /
-leaf-only / branch-only) and running `HasRequiredKeys` per-interface instead
-of once lets a consumer target the requirement at the position where it's
-meaningful — and, independently of requiredness, lets each projector split
-ITS OWN namespace by the same role axis, so a field only valid at one
+`HasRequiredKeys<T>` (`node.ts`) already existed to make requiredness legal:
+`op()` and `api()` both flip their meta-parameter arity from "optional, folds
+contributions" to "one required argument" the moment `HasRequiredKeys<T>` is
+`true`. But against the single old `Meta`, the flip was global — a consumer
+couldn't require a member on OPERATIONS only. A `declare module` block that
+added `scopes: readonly string[]` to `Meta` made every `api()` branch call
+require it too, even though a branch has no scope of its own to check.
+Splitting `Meta` by ROLE (shared / leaf-only / branch-only) and running
+`HasRequiredKeys` per-interface instead of once (the shape §2 describes,
+now shipped) lets a consumer target the requirement at the position where
+it's meaningful — and, independently of requiredness, lets each projector
+split ITS OWN namespace by the same role axis, so a field only valid at one
 position (e.g. `mcp.segment`, a branch-only field) stops typechecking at the
 other.
 
@@ -351,7 +360,7 @@ future author read it as live surface.
 
 | Key                              | Exported on         | Evidence                                                                             |
 | -------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
-| `jsonrpc.{name,errorDataSchema}` | `JsonRpcLeafMeta`   | `JsonRpcMeta` fields, read per method during the tree walk (`project.ts:124-136`)    |
+| `jsonrpc.{name,errorDataSchema}` | `JsonRpcLeafMeta`   | `JsonRpcMeta` fields, read per method during the tree walk (`project.ts:227-241`)    |
 | `jsonrpc.description`            | `JsonRpcLeafMeta`   | leaf-only override, ranked above `meta.description` (`project.ts:208-213`)           |
 | `jsonrpc.sourceMap`              | `JsonRpcLeafMeta`   | `Dispatch.sourceMap` per leaf (`project.ts:226`); **not read at branch position**    |
 | `jsonrpc.segment`                | `JsonRpcBranchMeta` | wired: `project.ts:229` — a static child's own contribution to the dot-joined prefix |

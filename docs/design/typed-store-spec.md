@@ -84,6 +84,18 @@ by design (its doc comment explains why: every projector populates one, so
 it belongs on the shared registry instead of being redundantly declared
 three times) — this spec does not change that part.
 
+(As implemented, these five `declare module` blocks are gone — each
+projector now exports an inert fragment interface instead, matching the
+shape §3 below settles on: `HttpStores` (`http-api-projector/src/decode.ts:66-75`)
+carries `path`/`query`/`header`/`body`; `CliStores`
+(`cli-api-projector/src/cli.ts:88-95`) carries `flag`/`path`/`env`;
+`McpStores` (`mcp-api-projector/src/server.ts:105-110`) carries
+`argument`/`"uri-variable"`; `JsonRpcStores`
+(`json-rpc-api-projector/src/server.ts:133-136`) carries `params`;
+`GraphQLStores` (`graphql-api-projector/src/resolve.ts:49-52`) carries
+`argument`. A deployment's own single augmentation file extends
+`StoreRegistry` with whichever fragments it uses — see §3.)
+
 Two defects follow directly from `true`-typed members and the blanket `?`:
 
 - **Every store read is `unknown`-through-`Store`, never the store's real
