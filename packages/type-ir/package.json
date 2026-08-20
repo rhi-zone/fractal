@@ -312,12 +312,12 @@
       "import": "./dist/swift-objectmapper.js"
     },
     "./rescript": {
-      "types": "./src/rescript-native.ts",
-      "import": "./src/rescript-native.ts"
+      "types": "./dist/rescript-native.d.ts",
+      "import": "./dist/rescript-native.js"
     },
     "./rescript-native": {
-      "types": "./src/rescript-native.ts",
-      "import": "./src/rescript-native.ts"
+      "types": "./dist/rescript-native.d.ts",
+      "import": "./dist/rescript-native.js"
     },
     "./rust": {
       "types": "./dist/rust-serde.d.ts",
@@ -328,16 +328,16 @@
       "import": "./dist/rust-serde.js"
     },
     "./gleam": {
-      "types": "./src/gleam-native.ts",
-      "import": "./src/gleam-native.ts"
+      "types": "./dist/gleam-native.d.ts",
+      "import": "./dist/gleam-native.js"
     },
     "./gleam-native": {
-      "types": "./src/gleam-native.ts",
-      "import": "./src/gleam-native.ts"
+      "types": "./dist/gleam-native.d.ts",
+      "import": "./dist/gleam-native.js"
     },
     "./rust-wasm-bindgen": {
-      "types": "./src/rust-wasm-bindgen.ts",
-      "import": "./src/rust-wasm-bindgen.ts"
+      "types": "./dist/rust-wasm-bindgen.d.ts",
+      "import": "./dist/rust-wasm-bindgen.js"
     },
     "./ruby-sorbet": {
       "types": "./dist/ruby-sorbet.d.ts",

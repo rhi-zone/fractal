@@ -120,6 +120,8 @@ import { toCrystal, toCrystalDeclarations } from "./crystal-json-serializable.ts
 import { toElixir } from "./elixir-jason.ts";
 import { toElm } from "./elm-json.ts";
 import { toFlow } from "./flow-native.ts";
+import { toGleam } from "./gleam-native.ts";
+import { toReScript } from "./rescript-native.ts";
 import { toHaskell, toHaskellModule } from "./haskell-aeson.ts";
 import { toObjC } from "./objc-foundation.ts";
 
@@ -692,6 +694,8 @@ const projectorList: readonly Projector[] = [
   src("elixir-jason", "./elixir-jason", ".ex", viaRefFirst(toElixir)),
   src("elm-json", "./elm-json", ".elm", viaRefFirst(toElm)),
   src("flow-native", "./flow-native", ".js.flow", viaRefFirst(toFlow)),
+  src("gleam-native", "./gleam-native", ".gleam", viaRefFirst(toGleam)),
+  src("rescript-native", "./rescript-native", ".res", viaRefFirst(toReScript)),
   src(
     "haskell-aeson",
     "./haskell-aeson",
@@ -805,6 +809,8 @@ const projectorAliases: Readonly<Record<string, string>> = {
   elixir: "elixir-jason",
   elm: "elm-json",
   flow: "flow-native",
+  gleam: "gleam-native",
+  rescript: "rescript-native",
   haskell: "haskell-aeson",
 };
 
