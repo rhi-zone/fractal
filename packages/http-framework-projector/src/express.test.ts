@@ -97,7 +97,7 @@ let source: string;
 let schemas: SchemaMap;
 
 beforeAll(() => {
-  schemas = extractToolSchemas(treePath);
+  schemas = extractToolSchemas(treePath, "api");
   source = generateExpressRouterFromNode(tree, schemas, { routerName: "Books" });
 });
 
@@ -184,7 +184,7 @@ describe("generated Express router — real app, real requests", () => {
 
   beforeAll(async () => {
     const { tree: evalTree, store } = makeStore();
-    const evalSchemas = extractToolSchemas(treePath);
+    const evalSchemas = extractToolSchemas(treePath, "api");
     const evalSource = generateExpressRouterFromNode(evalTree, evalSchemas, {
       routerName: "Books",
     });

@@ -788,8 +788,8 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * Program instead of paying a second multi-GB `ts.Program` build just for
  * schemas.
  *
- * Passing `options.treeId` scopes the walk to ONE exported candidate (its own
- * binding name — `forEachTreeCandidate`'s `treeId`) instead of every
+ * `treeId` (required — its own binding name, `forEachTreeCandidate`'s
+ * `treeId`) scopes the walk to ONE exported candidate instead of every
  * candidate the file exports — see `walkTree`'s doc comment for why a
  * multi-tree file needs this: a bare tool NAME is only unique within one
  * standalone tree by convention (this function's own module doc comment,
@@ -797,12 +797,19 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * structurally identical (e.g. a raw tree and its `applyValidation`-wrapped
  * copy, both exported for different downstream consumers) legitimately
  * derive the same names and would otherwise trip `assertUniqueName` even
- * though neither is a real naming mistake. Omitted, behavior is unchanged —
- * every candidate is walked, as before.
+ * though neither is a real naming mistake. Mandatory (not an optional
+ * options-bag field) precisely so a caller can't forget it and reintroduce
+ * that collision by accident — see this file's history: an earlier opt-in
+ * `options.treeId` shipped four call sites inside this repo but never
+ * reached `schema-build.ts`'s wrappers, so the sibling codebase's codegen (the only
+ * outside caller) had no way to pass one at all and reverted to the
+ * every-candidate walk unconditionally. A single-tree file just passes that
+ * file's own sole binding name.
  */
 export function extractToolSchemas(
   entryFile: string,
-  options?: { program?: ts.Program; treeId?: string },
+  treeId: string,
+  options?: { program?: ts.Program },
 ): SchemaMap {
   const out: SchemaMap = {};
   const paths = new Map<string, readonly string[]>();
@@ -825,7 +832,7 @@ export function extractToolSchemas(
       };
     },
     options?.program,
-    options?.treeId,
+    treeId,
   );
   return out;
 }
@@ -921,21 +928,24 @@ export type TypeRefMapWithDefs = {
  * single-root one over `entryFile` — see that function's doc comment for why
  * this matters for batch extraction across many entry files in one process.
  *
- * Passing `options.treeId` scopes the walk to ONE exported candidate — see
- * `extractToolSchemas`'s doc comment for the multi-tree-file rationale (same
- * name-keyed-output constraint applies here identically).
+ * `treeId` (required — same shape/rationale as `extractToolSchemas`'s own
+ * mandatory `treeId` parameter, see that function's doc comment) scopes the
+ * walk to ONE exported candidate.
  */
 export function extractToolTypeRefs(
   entryFile: string,
-  options?: { program?: ts.Program; treeId?: string },
+  treeId: string,
+  options?: { program?: ts.Program },
 ): TypeRefMap;
 export function extractToolTypeRefs(
   entryFile: string,
-  options: { shouldShare: ShouldShare; program?: ts.Program; treeId?: string },
+  treeId: string,
+  options: { shouldShare: ShouldShare; program?: ts.Program },
 ): TypeRefMapWithDefs;
 export function extractToolTypeRefs(
   entryFile: string,
-  options?: { shouldShare?: ShouldShare; program?: ts.Program; treeId?: string },
+  treeId: string,
+  options?: { shouldShare?: ShouldShare; program?: ts.Program },
 ): TypeRefMap | TypeRefMapWithDefs {
   const registry = options?.shouldShare ? createSharingRegistry() : undefined;
   const out: TypeRefMap = {};
@@ -959,7 +969,7 @@ export function extractToolTypeRefs(
       };
     },
     options?.program,
-    options?.treeId,
+    treeId,
   );
   if (!options?.shouldShare || !registry) return out;
   return finalizeWithDefs(out, registry, options.shouldShare);

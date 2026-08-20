@@ -52,14 +52,22 @@ import {
 /**
  * Extract every leaf op's derived JSON-Schema from `entryFile` and render it
  * as a standalone TS module source string: `export const schemas:
- * SchemaMap`. `program`, when given, reuses a pre-built `ts.Program`: a
- * caller building both the validator module and the schema artifact for the
- * same batch of entry files shares one Program across both passes, rather
- * than building it twice (once per artifact kind) or twice per entry.
+ * SchemaMap`. `treeId` (required — same rationale as `extractToolSchemas`'s
+ * own mandatory `treeId`, tree.ts) names which of `entryFile`'s exported
+ * trees to build the artifact for; a single-tree file passes that tree's
+ * sole binding name. `program`, when given, reuses a pre-built `ts.Program`:
+ * a caller building both the validator module and the schema artifact for
+ * the same batch of entry files shares one Program across both passes,
+ * rather than building it twice (once per artifact kind) or twice per
+ * entry.
  */
-export function buildSchemaModuleSource(entryFile: string, program?: ts.Program): string {
+export function buildSchemaModuleSource(
+  entryFile: string,
+  treeId: string,
+  program?: ts.Program,
+): string {
   const programOpt = program === undefined ? {} : { program };
-  const schemas = extractToolSchemas(entryFile, programOpt);
+  const schemas = extractToolSchemas(entryFile, treeId, programOpt);
   return renderSchemaModule(schemas);
 }
 
@@ -79,10 +87,15 @@ function renderSchemaModule(schemas: SchemaMap): string {
 }
 
 /**
- * Build the schema module for `entryFile` and write it to `outFile`.
+ * Build the schema module for `entryFile`'s `treeId` tree and write it to
+ * `outFile`.
  */
-export async function writeSchemaModule(entryFile: string, outFile: string): Promise<void> {
-  await Bun.write(outFile, buildSchemaModuleSource(entryFile));
+export async function writeSchemaModule(
+  entryFile: string,
+  treeId: string,
+  outFile: string,
+): Promise<void> {
+  await Bun.write(outFile, buildSchemaModuleSource(entryFile, treeId));
 }
 
 // Tier 2 — leaf-level incremental build (see docs/design/
@@ -126,14 +139,17 @@ export type SchemaIncrementalResult = {
  * internally, exposed here so this function can fingerprint each leaf's IR
  * BEFORE projecting it) and reuses `prior`'s `ToolSchema` for any leaf whose
  * fingerprint is unchanged instead of re-running `toJsonSchema` on it.
+ * `treeId` (required) is `buildSchemaModuleSource`'s own — same tree, same
+ * scoping rationale.
  */
 export function buildSchemaModuleSourceIncremental(
   entryFile: string,
+  treeId: string,
   program: ts.Program | undefined,
   prior: SchemaCarryForwardState | undefined,
 ): SchemaIncrementalResult {
   const programOpt = program === undefined ? {} : { program };
-  const types = extractToolTypeRefs(entryFile, programOpt);
+  const types = extractToolTypeRefs(entryFile, treeId, programOpt);
 
   const leafFingerprints: Record<string, string> = {};
   const leafArtifacts: Record<string, ToolSchema> = {};
@@ -174,10 +190,16 @@ export function buildSchemaModuleSourceIncremental(
 /**
  * `buildSchemaModuleSource`, cached: gates on the same Tier-1 (`checkCache`)
  * / Tier-2 (leaf fingerprint) contract as the wire-validator module's cached
- * build, applied here to the schema artifact instead.
+ * build, applied here to the schema artifact instead. `treeId` (required) is
+ * `buildSchemaModuleSource`'s own — a caller building artifacts for several
+ * trees exported from the same `entryFile` calls this once per `treeId`,
+ * each with its own `outFile` (cache metadata is keyed by `outFile`, so two
+ * trees sharing one `outFile` would clobber each other's cache entry — not
+ * this function's problem to prevent, same as any other `outFile` reuse).
  */
 export function buildSchemaModuleCached(
   entryFile: string,
+  treeId: string,
   outFile: string,
   options?: {
     readonly program?: ts.Program;
@@ -191,7 +213,7 @@ export function buildSchemaModuleCached(
   }
   const program = options?.program ?? createExtractorProgram(entryFile);
   const prior = readCarryForwardState(entryFile, outFile, options);
-  const built = buildSchemaModuleSourceIncremental(entryFile, program, prior);
+  const built = buildSchemaModuleSourceIncremental(entryFile, treeId, program, prior);
   writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
@@ -205,13 +227,14 @@ export function buildSchemaModuleCached(
  */
 export async function writeSchemaModuleCached(
   entryFile: string,
+  treeId: string,
   outFile: string,
   options?: {
     readonly program?: ts.Program;
     readonly force?: boolean;
   } & CacheLocationOptions,
 ): Promise<CachedBuildOutcome<string>> {
-  const outcome = buildSchemaModuleCached(entryFile, outFile, options);
+  const outcome = buildSchemaModuleCached(entryFile, treeId, outFile, options);
   if (outcome.status === "built") await Bun.write(outFile, outcome.result);
   return outcome;
 }

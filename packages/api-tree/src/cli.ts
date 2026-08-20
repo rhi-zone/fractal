@@ -22,12 +22,16 @@ Commands:
                                       and-staged-validation.md)
   watch <entry> -o <output>          Rebuild on change
   check <entry> -o <output>          Verify output is up to date; exit 1 if stale
-  build-schema <entry> -o <output>   Build the JSON-Schema module (skip if cached)
-  watch-schema <entry> -o <output>   Rebuild on change
-  check-schema <entry> -o <output>   Verify output is up to date; exit 1 if stale
+  build-schema <entry> -o <output> --tree-id <id>   Build the JSON-Schema module (skip if cached)
+  watch-schema <entry> -o <output> --tree-id <id>   Rebuild on change
+  check-schema <entry> -o <output> --tree-id <id>   Verify output is up to date; exit 1 if stale
 
 Options:
   -o, --output <path>     Output file path
+  --tree-id <id>          Which exported tree in <entry> to build (required for
+                           the -schema commands — the tree's own exported
+                           binding name; a factory function's name, a const's
+                           identifier, or "default" for a bare default export)
   --force                 Rebuild even if the cache says up to date
   --cache-file <path>     Cache metadata file (default: <output>.cache.json)
   --cache-dir <path>      Directory to pool cache metadata in (overridden by --cache-file)
@@ -43,6 +47,7 @@ full design. --force bypasses it unconditionally.
 type ParsedArgs = {
   positional: string[];
   output?: string;
+  treeId?: string;
   force: boolean;
   help: boolean;
   cacheFile?: string;
@@ -52,6 +57,7 @@ type ParsedArgs = {
 function parseArgs(argv: string[]): ParsedArgs {
   const positional: string[] = [];
   let output: string | undefined;
+  let treeId: string | undefined;
   let force = false;
   let help = false;
   let cacheFile: string | undefined;
@@ -62,6 +68,11 @@ function parseArgs(argv: string[]): ParsedArgs {
     const arg = argv[i];
     if (arg === "-o" || arg === "--output") {
       output = argv[i + 1];
+      i += 2;
+      continue;
+    }
+    if (arg === "--tree-id") {
+      treeId = argv[i + 1];
       i += 2;
       continue;
     }
@@ -94,6 +105,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     force,
     help,
     ...(output !== undefined ? { output } : {}),
+    ...(treeId !== undefined ? { treeId } : {}),
     ...(cacheFile !== undefined ? { cacheFile } : {}),
     ...(cacheDir !== undefined ? { cacheDir } : {}),
   };
@@ -120,6 +132,13 @@ function requireEntry(positional: string[]): string {
     throw new Error("missing required argument: <entry>");
   }
   return entry;
+}
+
+function requireTreeId(treeId: string | undefined): string {
+  if (treeId === undefined) {
+    throw new Error("missing required flag: --tree-id <id>");
+  }
+  return treeId;
 }
 
 function cacheOptsOf(args: ParsedArgs): CacheLocationOptions {
@@ -154,8 +173,13 @@ type ArtifactBuilder = (
 const VALIDATOR_BUILDER: ArtifactBuilder = (entryFile, outFile, program) =>
   buildWireApplyValidationModuleSource(entryFile, { outFile, program });
 
-const SCHEMA_BUILDER: ArtifactBuilder = (entryFile, _outFile, program) =>
-  buildSchemaModuleSource(entryFile, program);
+/** Curries `treeId` (mandatory on `buildSchemaModuleSource` — see tree.ts's
+ * `extractToolSchemas` doc comment) into an `ArtifactBuilder`, so
+ * `runBuild`/`runCheck`/`runWatch` stay shared across both artifact kinds
+ * without VALIDATOR_BUILDER also needing a `treeId` it has no use for. */
+function schemaBuilderFor(treeId: string): ArtifactBuilder {
+  return (entryFile, _outFile, program) => buildSchemaModuleSource(entryFile, treeId, program);
+}
 
 function runBuild(
   builder: ArtifactBuilder,
@@ -282,19 +306,22 @@ function main(): void {
     case "build-schema": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
-      runBuild(SCHEMA_BUILDER, entry, output, args);
+      const treeId = requireTreeId(args.treeId);
+      runBuild(schemaBuilderFor(treeId), entry, output, args);
       break;
     }
     case "watch-schema": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
-      runWatch(SCHEMA_BUILDER, entry, output, args);
+      const treeId = requireTreeId(args.treeId);
+      runWatch(schemaBuilderFor(treeId), entry, output, args);
       break;
     }
     case "check-schema": {
       const entry = requireEntry(args.positional);
       const output = requireOutput(args.output);
-      runCheck(SCHEMA_BUILDER, entry, output, args);
+      const treeId = requireTreeId(args.treeId);
+      runCheck(schemaBuilderFor(treeId), entry, output, args);
       break;
     }
     default:

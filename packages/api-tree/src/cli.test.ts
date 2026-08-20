@@ -86,18 +86,25 @@ describe("cli.ts — build/watch/check cache behavior end-to-end", () => {
 
   it("build-schema/check-schema get the same cache treatment as build/check", async () => {
     const outFile = path.join(TMP_DIR, "out-schema.ts");
-    const first = await runCli(["build-schema", FIXTURE, "-o", outFile]);
+    const first = await runCli(["build-schema", FIXTURE, "-o", outFile, "--tree-id", "tree"]);
     expect(first.exitCode).toBe(0);
     expect(first.stdout).toContain("built");
     const source = fs.readFileSync(outFile, "utf8");
     expect(source).toContain("export const schemas");
 
-    const second = await runCli(["build-schema", FIXTURE, "-o", outFile]);
+    const second = await runCli(["build-schema", FIXTURE, "-o", outFile, "--tree-id", "tree"]);
     expect(second.stdout).toContain("cache hit");
 
-    const check = await runCli(["check-schema", FIXTURE, "-o", outFile]);
+    const check = await runCli(["check-schema", FIXTURE, "-o", outFile, "--tree-id", "tree"]);
     expect(check.exitCode).toBe(0);
     expect(check.stdout).toContain("cache hit");
+  }, 30_000);
+
+  it("build-schema without --tree-id fails loudly", async () => {
+    const outFile = path.join(TMP_DIR, "out-schema-no-treeid.ts");
+    const result = await runCli(["build-schema", FIXTURE, "-o", outFile]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("--tree-id");
   }, 30_000);
 
   it("build/check get the same cache treatment over applyValidation call sites that name a protocol", async () => {

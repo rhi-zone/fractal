@@ -188,7 +188,7 @@ export function generateClientFromSource(
   // same tool names (e.g. a raw tree and its `applyValidation`-wrapped
   // copy) even though `chosen` already disambiguated which one this client
   // is for.
-  const schemas = extractToolSchemas(entryFilePath, { program, treeId: chosen.treeId });
+  const schemas = extractToolSchemas(entryFilePath, chosen.treeId, { program });
 
   return generateClientWithNames(projected, codegenNames, memberNames, schemas, options);
 }

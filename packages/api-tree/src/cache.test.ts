@@ -187,15 +187,15 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     const validatorOut = freshOutFile("v7.validators.ts");
     const schemaOut = freshOutFile("v7.schemas.ts");
 
-    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("built");
-    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit");
+    expect((await writeSchemaModuleCached(FIXTURE, "validated", schemaOut)).status).toBe("built");
+    expect((await writeSchemaModuleCached(FIXTURE, "validated", schemaOut)).status).toBe("hit");
 
     // Building the validator module for the same entry doesn't touch the
     // schema artifact's cache entry (separate outFile, separate metadata).
     expect((await writeWireApplyValidationModuleCached(FIXTURE, validatorOut)).status).toBe(
       "built",
     );
-    expect((await writeSchemaModuleCached(FIXTURE, schemaOut)).status).toBe("hit");
+    expect((await writeSchemaModuleCached(FIXTURE, "validated", schemaOut)).status).toBe("hit");
 
     const source = fs.readFileSync(schemaOut, "utf8");
     expect(source).toContain("export const schemas");

@@ -35,7 +35,7 @@ import { tree } from "./__fixtures__/tree.fixture.ts";
 import ts from "typescript";
 
 const FIXTURE = `${import.meta.dir}/__fixtures__/tree.fixture.ts`;
-const schemas = extractToolSchemas(FIXTURE);
+const schemas = extractToolSchemas(FIXTURE, "tree");
 
 const TYPEREF_FIXTURE = `${import.meta.dir}/__fixtures__/typeref.fixture.ts`;
 
@@ -216,7 +216,10 @@ describe("MCP tool carries the derived inputSchema + description", () => {
 
 describe("walkTree recognizes trees returned from an exported factory function", () => {
   const FACTORY_FIXTURE = `${import.meta.dir}/__fixtures__/tree-factory.fixture.ts`;
-  const factorySchemas = extractToolSchemas(FACTORY_FIXTURE);
+  const factorySchemas = {
+    ...extractToolSchemas(FACTORY_FIXTURE, "buildGreeterTree"),
+    ...extractToolSchemas(FACTORY_FIXTURE, "buildPingTree"),
+  };
 
   it("extracts the leaf behind the two-statement `const tree = api(...); return tree` form", () => {
     expect(factorySchemas["greet"]).toBeDefined();
@@ -266,7 +269,7 @@ describe("walkTree recognizes a bare `export default api(...)` (no function wrap
   });
 
   it("extractToolSchemas discovers the leaf under the underscore-joined default name", () => {
-    const toolSchemas = extractToolSchemas(DEFAULT_EXPORT_FIXTURE);
+    const toolSchemas = extractToolSchemas(DEFAULT_EXPORT_FIXTURE, "default");
     expect(toolSchemas["ping"]).toBeDefined();
     expect(toolSchemas["ping"]!.inputSchema).toEqual({
       type: "object",
@@ -367,7 +370,7 @@ describe("extractToolSchemas / extractToolTypeRefs: a segment containing the joi
   const NAME_COLLISION_FIXTURE = `${import.meta.dir}/__fixtures__/name-collision.fixture.ts`;
 
   it("extractToolSchemas derives two distinct names instead of throwing or colliding", () => {
-    const schemas = extractToolSchemas(NAME_COLLISION_FIXTURE);
+    const schemas = extractToolSchemas(NAME_COLLISION_FIXTURE, "tree");
     expect(Object.keys(schemas).sort()).toEqual(["books\\_get", "books_get"]);
     // Each name keeps its OWN schema — no overwrite happened.
     const props = schemas["books\\_get"]!.inputSchema.properties as Record<string, unknown>;
@@ -377,12 +380,12 @@ describe("extractToolSchemas / extractToolTypeRefs: a segment containing the joi
   });
 
   it("extractToolTypeRefs derives the same two distinct names", () => {
-    const types = extractToolTypeRefs(NAME_COLLISION_FIXTURE);
+    const types = extractToolTypeRefs(NAME_COLLISION_FIXTURE, "tree");
     expect(Object.keys(types).sort()).toEqual(["books\\_get", "books_get"]);
   });
 
   it("the nested leaf's ancestor-joined name is byte-identical to the pre-escaping join (no segment here contains the delimiter)", () => {
-    const schemas = extractToolSchemas(NAME_COLLISION_FIXTURE);
+    const schemas = extractToolSchemas(NAME_COLLISION_FIXTURE, "tree");
     expect(schemas["books_get"]).toBeDefined();
   });
 });
@@ -546,7 +549,7 @@ describe("outputSchema derivation", () => {
 // ============================================================================
 
 describe("TypeRef extraction", () => {
-  const typeRefs = extractToolTypeRefs(FIXTURE);
+  const typeRefs = extractToolTypeRefs(FIXTURE, "tree");
 
   it("typeRefFromType produces correct shapes for primitives / optional / array / nested fields", () => {
     const input = typeRefs["users_create"]!.input;
@@ -1664,7 +1667,7 @@ describe("structural sharing", () => {
   const SHARING_FIXTURE = `${import.meta.dir}/__fixtures__/sharing.fixture.ts`;
 
   it("without shouldShare, extractToolTypeRefs returns the exact prior TypeRefMap shape — no defs, Address inlined at every use", () => {
-    const plain = extractToolTypeRefs(SHARING_FIXTURE);
+    const plain = extractToolTypeRefs(SHARING_FIXTURE, "tree");
     expect(Object.keys(plain)).toEqual(["getUser", "getOrder", "getProduct"]);
     // Every output is a plain TypeRef, not { types, defs } — the type system
     // already enforces this via the overload, but confirm at runtime too.
@@ -1675,7 +1678,7 @@ describe("structural sharing", () => {
   });
 
   it("with shouldShare, Address (reused 3x, big enough) is extracted to defs and referenced via ref", () => {
-    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, {
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, "tree", {
       shouldShare: defaultShouldShare,
     });
     expect(Object.keys(defs)).toContain("Address");
@@ -1691,7 +1694,7 @@ describe("structural sharing", () => {
 
   it("a self-recursive type (Category.parent: Category) is ALWAYS shared, regardless of shouldShare", () => {
     // A predicate that never shares anything — recursive types bypass it entirely.
-    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => false });
+    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, "tree", { shouldShare: () => false });
     expect(Object.keys(defs)).toContain("Category");
     const category = defs.Category!;
     const fields = (category.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
@@ -1699,7 +1702,7 @@ describe("structural sharing", () => {
   });
 
   it("a predicate that always returns false still keeps recursive defs but drops non-recursive ones (Address inlined back)", () => {
-    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, {
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, "tree", {
       shouldShare: () => false,
     });
     expect(Object.keys(defs)).toEqual(["Category"]);
@@ -1710,7 +1713,7 @@ describe("structural sharing", () => {
   });
 
   it("a predicate that always returns true shares every named type encountered", () => {
-    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, { shouldShare: () => true });
+    const { defs } = extractToolTypeRefs(SHARING_FIXTURE, "tree", { shouldShare: () => true });
     expect(Object.keys(defs).sort()).toEqual(["Address", "Category"]);
   });
 

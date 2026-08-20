@@ -22,7 +22,7 @@ const treePath = new URL("../../../examples/library-api/src/tree.ts", import.met
 // `assertUniqueName` on their shared leaf names. `treeId: "api"` scopes this
 // suite's schema map to the raw tree, which is what `toOpenApi(api, ...)`
 // below is actually keyed against.
-const schemas = extractToolSchemas(treePath, { treeId: "api" });
+const schemas = extractToolSchemas(treePath, "api");
 
 // Build the doc once for structural tests (no codegen schemas)
 let doc: OpenApiDoc;

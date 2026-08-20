@@ -200,7 +200,7 @@ describe("library-api — MCP tools", () => {
     // `httpRoutes`); `api` and `validatedApi` are structurally identical (the
     // latter is the former wrapped by `applyValidation`), so an unscoped
     // extraction would trip `assertUniqueName` on their shared leaf names.
-    const schemas = extractToolSchemas(treePath, { treeId: "api" });
+    const schemas = extractToolSchemas(treePath, "api");
     const tools = toTools(api, { schemas });
     const t = tools.find((t) => t.name === "catalog_search");
     // Real schema has properties.q; the placeholder { type: "object" } does not
@@ -215,7 +215,7 @@ describe("library-api — MCP tools", () => {
     // `httpRoutes`); `api` and `validatedApi` are structurally identical (the
     // latter is the former wrapped by `applyValidation`), so an unscoped
     // extraction would trip `assertUniqueName` on their shared leaf names.
-    const schemas = extractToolSchemas(treePath, { treeId: "api" });
+    const schemas = extractToolSchemas(treePath, "api");
     const tools = toTools(api, { schemas });
     const t = tools.find((t) => t.name === "catalog_genres");
     // Real schema has properties.prefix

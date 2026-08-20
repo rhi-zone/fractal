@@ -40,7 +40,7 @@ const treePath = new URL("../../../examples/library-api/src/tree.ts", import.met
 // former wrapped by `applyValidation`), so an unscoped extraction would trip
 // `assertUniqueName` on their shared leaf names. `treeId: "api"` scopes this
 // to the raw tree, matching `generateClientFromNode(api, schemas, ...)` below.
-const schemas = extractToolSchemas(treePath, { treeId: "api" });
+const schemas = extractToolSchemas(treePath, "api");
 
 let source: string;
 

@@ -25,7 +25,7 @@ describe("generateClientFromSource — identical output to generateClientFromNod
     // `httpRoutes`); `api` and `validatedApi` are structurally identical (the
     // latter is the former wrapped by `applyValidation`), so an unscoped
     // extraction would trip `assertUniqueName` on their shared leaf names.
-    const schemas = extractToolSchemas(treePath, { treeId: "api" });
+    const schemas = extractToolSchemas(treePath, "api");
     const fromNode = generateClientFromNode(api, schemas, { clientName: "Client" });
     const fromSource = generateClientFromSource(treePath, { treeId: "api", clientName: "Client" });
     expect(fromSource).toBe(fromNode);

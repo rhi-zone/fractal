@@ -96,7 +96,7 @@ let source: string;
 let schemas: SchemaMap;
 
 beforeAll(() => {
-  schemas = extractToolSchemas(treePath);
+  schemas = extractToolSchemas(treePath, "api");
   source = generateFastifyRoutesFromNode(tree, schemas, { routerName: "Books" });
 });
 
@@ -195,7 +195,7 @@ describe("generated Fastify routes — real app, real requests", () => {
 
   beforeAll(async () => {
     const { tree: evalTree, store } = makeStore();
-    const evalSchemas = extractToolSchemas(treePath);
+    const evalSchemas = extractToolSchemas(treePath, "api");
     const evalSource = generateFastifyRoutesFromNode(evalTree, evalSchemas, {
       routerName: "Books",
     });
