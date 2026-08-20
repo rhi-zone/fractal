@@ -3,7 +3,12 @@ import * as path from "node:path";
 import { buildWireApplyValidationModuleSource } from "./apply-validation-build.ts";
 import { buildSchemaModuleSource } from "./schema-build.ts";
 import { createExtractorProgram } from "./extract.ts";
-import { checkCache, writeCacheMetadata, type CacheLocationOptions } from "./cache.ts";
+import {
+  checkCache,
+  isTsBuiltinLibFile,
+  writeCacheMetadata,
+  type CacheLocationOptions,
+} from "./cache.ts";
 
 // The generated module's `compileWireEntryFragment`/`compileConstraintsFn`
 // output (type-ir/src/compile.ts) emits typed guards — each entry's `check`
@@ -145,6 +150,14 @@ function cacheOptsOf(args: ParsedArgs): CacheLocationOptions {
   return {
     ...(args.cacheFile !== undefined ? { cacheFile: args.cacheFile } : {}),
     ...(args.cacheDir !== undefined ? { cacheDir: args.cacheDir } : {}),
+    // Folds `--tree-id` into the cache key (see cache.ts's
+    // `CacheLocationOptions.buildOptionsKey` doc comment and
+    // docs/current/repo-audit-2026-08-20.md §1.3): without this,
+    // `build-schema e -o out --tree-id A` then `--tree-id B` was a Tier-1
+    // hit serving tree A's stale artifact as "up to date" for tree B. `""`
+    // for the non-schema commands (`args.treeId` is always undefined there),
+    // preserving their existing cache key exactly.
+    buildOptionsKey: args.treeId ?? "",
   };
 }
 
@@ -223,11 +236,37 @@ function runCheck(
   const source = withHeader(builder(entryFile, outFile, program));
   const existing = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : undefined;
   if (existing === source) {
+    // Refresh cache metadata now that we've already paid for building the
+    // Program and the fresh source — a from-scratch `check` (no cache file,
+    // or a prior miss) that confirms the output is still correct previously
+    // wrote nothing, so every subsequent `check` repaid the exact same full
+    // cost again (audit §6#5). Only done on the up-to-date branch: writing
+    // metadata on the stale branch below would record a fresh outputHash
+    // for content that was never actually written to `outFile`.
+    writeCacheMetadata(entryFile, outFile, program, source, cacheOpts);
     process.stdout.write(`up to date: ${outFile}\n`);
     return;
   }
   process.stderr.write(`stale: ${outFile} needs regeneration\n`);
   process.exit(1);
+}
+
+/** Every directory containing a file in `program`'s tracked closure (its own
+ * per-file `.ts` sources, excluding TypeScript's bundled lib files — same
+ * exclusion `writeCacheMetadata` uses) — the set of directories `runWatch`
+ * needs a watcher on for the closure to actually be covered, instead of just
+ * the entry file's own (non-recursive) directory (audit §6#4: a `watch` that
+ * only watches `path.dirname(entryFile)` non-recursively misses edits to
+ * transitively imported files outside that one directory — a subdirectory, a
+ * sibling package, anything — even though the cache tracks the full
+ * closure). */
+function watchDirsOf(program: import("typescript").Program): Set<string> {
+  const dirs = new Set<string>();
+  for (const sourceFile of program.getSourceFiles()) {
+    if (isTsBuiltinLibFile(sourceFile.fileName)) continue;
+    dirs.add(path.dirname(sourceFile.fileName));
+  }
+  return dirs;
 }
 
 function runWatch(
@@ -238,15 +277,38 @@ function runWatch(
 ): void {
   runBuild(builder, entryFile, outFile, args);
 
-  const watchDir = path.dirname(entryFile);
   const cacheOpts = cacheOptsOf(args);
   let timer: NodeJS.Timeout | undefined;
+  let watchers: fs.FSWatcher[] = [];
+
+  const scheduleRebuild = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(rebuild, 150);
+  };
+
+  /** (Re-)watch exactly `dirs`, tearing down any previous watcher set first —
+   * called after every rebuild since the closure itself (and so the set of
+   * directories worth watching) can change between builds (a new import
+   * added/removed). Each directory is watched non-recursively — watching the
+   * closure's own directories directly, rather than relying on platform-
+   * dependent `recursive: true` support, covers the "wrong scope" half of
+   * §6#4 without a portability dependency. */
+  const setWatchers = (dirs: ReadonlySet<string>) => {
+    for (const watcher of watchers) watcher.close();
+    watchers = [...dirs].map((dir) =>
+      fs.watch(dir, (_event, filename) => {
+        if (filename === null || !filename.endsWith(".ts")) return;
+        scheduleRebuild();
+      }),
+    );
+  };
 
   const rebuild = () => {
     const start = performance.now();
     const program = createExtractorProgram(entryFile);
     const source = withHeader(builder(entryFile, outFile, program));
     const existing = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : undefined;
+    setWatchers(watchDirsOf(program));
     if (existing === source) {
       writeCacheMetadata(entryFile, outFile, program, source, cacheOpts);
       process.stdout.write("no changes\n");
@@ -259,15 +321,15 @@ function runWatch(
     process.stdout.write(`built ${outFile} in ${elapsed.toFixed(1)}ms\n`);
   };
 
-  const watcher = fs.watch(watchDir, (_event, filename) => {
-    if (filename === null || !filename.endsWith(".ts")) return;
-    if (timer !== undefined) clearTimeout(timer);
-    timer = setTimeout(rebuild, 150);
-  });
+  // Initial watch set: a fresh Program over `entryFile`, same as `rebuild`
+  // would build — `runBuild` above may have taken the cache-hit path (no
+  // Program built), so this can't reuse its result; the extra Program build
+  // is a one-time startup cost for a long-running dev command.
+  setWatchers(watchDirsOf(createExtractorProgram(entryFile)));
 
   const shutdown = () => {
     if (timer !== undefined) clearTimeout(timer);
-    watcher.close();
+    for (const watcher of watchers) watcher.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);
