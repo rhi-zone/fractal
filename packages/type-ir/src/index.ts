@@ -151,7 +151,7 @@ export type TypeRef = {
 //     object literal). `declarationFile` is the absolute path of the file
 //     `typeName` is declared in. Consumed by codegen that needs to reference
 //     the type by name instead of inlining its structure — e.g.
-//     `compileValidatorModule`'s generated type-guard annotations, which
+//     `compileWireEntryFragment`'s generated type-guard annotations, which
 //     `import type { typeName } from "…"` (path resolved by the caller,
 //     which alone knows the emitted module's own location) when both are
 //     present, and inline the structural TypeScript rendering otherwise.

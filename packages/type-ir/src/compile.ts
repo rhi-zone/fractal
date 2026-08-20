@@ -96,7 +96,7 @@ function indentLines(lines: readonly string[], spaces: number): string[] {
  * fresh local variable names for coerced/nested values in parse(). */
 class GenCtx {
   /** Module-uniqueness namespace, empty by default (every single-`GenCtx`-
-   * per-module caller — `compileEntryFragment`'s/`compileWireEntryFragment`'s own
+   * per-module caller — `compileEntryBody`'s/`compileWireEntryFragment`'s own
    * IIFE-scoped `ctx`, `compileDefsBlock`'s single shared `defCtx` — reproduces the
    * exact `__prefixN` names it always has). Only a caller that splices multiple
    * `GenCtx` instances' hoisted consts into one shared scope (`compileConstraintsFn`,
@@ -171,7 +171,7 @@ function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
  * is) doesn't satisfy `ValidationError`'s `expected`/`actual: TypeRef` field
  * without a full recursive `TypeRef`-shaped type annotation reproduced
  * inline — `any` sidesteps that without weakening `ValidationError` itself,
- * whose real definition (imported from type-ir, see `compileValidatorModule`
+ * whose real definition (imported from type-ir, see `assembleWireModule`
  * and this file's own `ValidationError` export) still requires `TypeRef`. */
 function refLiteral(ref: TypeRef, ctx: GenCtx): string {
   return ctx.addConst("ref", `${JSON.stringify(ref)} as any`);
@@ -354,8 +354,8 @@ const checkHandlers: Record<string, CheckHandler> = {
   // `compileEntryBody`/`compileDefs` emit for the target def, so a recursive
   // def type-checks by ordinary mutual JS-function recursion, with no cycle
   // detection needed here. A ref with no matching def in scope (bare TypeRef,
-  // no `defs` passed to `compileValidator`/`compileValidatorModule`) has
-  // nothing to call and passes through unchanged.
+  // no `defs` passed to `compileValidator`) has nothing to call and passes
+  // through unchanged.
   ref: (ref, v, ctx) => {
     const s = ref.shape as TypeShape & { kind: "ref" };
     return ctx.defNames.has(s.target) ? `${defFnName(s.target, "check")}(${v})` : "true";
@@ -1027,9 +1027,10 @@ function guardAnnotation(
  * locally-declared type to name instead of an unimportable bare string. A
  * `type` alias is a local, block-scoped declaration in TS (unlike a runtime
  * `const`), so emitting it inside an IIFE body (the standalone
- * `compileValidator` case) is exactly as valid as at module scope (the
- * `compileValidatorModule` case) — both callers just splice these lines in
- * alongside the function declarations below. Emitted with `ctx.defNames`
+ * `compileValidator` case) is exactly as valid as at module scope
+ * (`compileDefsBlock`'s output, spliced into `assembleWireModule`) — both
+ * callers just splice these lines in alongside the function declarations
+ * below. Emitted with `ctx.defNames`
  * (populated before this loop) so a def that refs itself or another def in
  * the same batch renders its own alias name, not a bare unimported string —
  * the same recursion guarantee the runtime functions below already have.
@@ -1069,8 +1070,8 @@ function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
  * IIFE/braces — the caller supplies those) for a single TypeRef. `withHelper`
  * controls whether the `__inferTypeRef` runtime helper and the
  * `ValidationError` type (used by `type`-kind ValidationErrors) are declared
- * inline — `compileValidatorModule` hoists one shared copy of each to module
- * scope instead and passes `false`.
+ * inline, versus assumed to already be in scope at module level — the only
+ * current caller (`compileValidator`) always passes `true`.
  *
  * The narrowing `value is T` / discriminated-`parse`-return cast is applied
  * inside this function body's `return` statement, not by the caller wrapping
@@ -1083,12 +1084,13 @@ function compileEntryBody(
   annotation: string,
   withHelper: boolean,
   defs?: Record<string, TypeRef>,
-  // Module-scope case (`compileValidatorModule`): the def functions are
+  // Seeds `ctx.defNames` for a module-scope caller whose def functions are
   // declared once, shared across all entries, outside any single entry's
-  // IIFE — but each entry's own `ctx.defNames` still needs the names seeded
-  // so its `ref` handlers know to emit a call rather than a no-op. Mutually
+  // IIFE — each entry's own `ctx.defNames` still needs the names seeded so
+  // its `ref` handlers know to emit a call rather than a no-op. Mutually
   // exclusive with `defs` in practice, since a caller passing both would
-  // double-declare; `compileValidatorModule` only ever passes this one.
+  // double-declare. Not currently exercised — `compileEntryBody`'s only
+  // caller (`compileValidator`) always passes `defs` instead.
   externalDefNames?: ReadonlySet<string>,
 ): string[] {
   const ctx = new GenCtx();
@@ -1103,12 +1105,12 @@ function compileEntryBody(
   const parseBody = genValidate(ref, "value", "path", ctx, "parse");
 
   const lines: string[] = [];
-  // `withHelper` is true only for `compileValidator`'s single-expression,
+  // `withHelper` is true for `compileValidator`'s single-expression,
   // truly-standalone output — there's no module scope to hoist a shared
   // `ValidationError` type/`__inferTypeRef` helper to, so both are declared
-  // locally inside the IIFE (erased at runtime, no cost). `compileValidatorModule`
-  // hoists one shared copy of each to module scope instead (see
-  // `compileValidatorModule`) and passes `false` here.
+  // locally inside the IIFE (erased at runtime, no cost). This is the only
+  // case `compileEntryBody` currently compiles; a module-scope caller
+  // sharing one copy across entries would pass `false` here instead.
   if (withHelper) {
     // A local `type` declaration inside the IIFE body; module-level `export
     // type` syntax is invalid inside a function body.
@@ -1169,8 +1171,8 @@ function compileEntryBody(
  * index.ts) — a `ref` inside `ref` (or inside a def's own body) whose target
  * has an entry here compiles to a real recursive check. Every def's
  * `check`/`errors`/`parse` triple is generated as a standalone function
- * inside this same IIFE, since there's no module scope to hoist to, unlike
- * `compileValidatorModule`.
+ * inside this same IIFE — there's no module scope to hoist to, since this
+ * expression is meant to stand entirely on its own.
  */
 export function compileValidator(ref: TypeRef, defs?: Record<string, TypeRef>): string {
   const defNames = new Set(Object.keys(defs ?? {}));
@@ -1239,15 +1241,12 @@ export function compileDefsBlock(defs: Record<string, TypeRef>): CompiledDefsBlo
 // everything below — they remain exactly the strict, non-coercing path they
 // always were. This section adds a second, profile-parameterized entry point
 // (`compileWireEntryFragment`/`compileWireModule`) alongside the existing
-// profile-blind `compileValidator`/`compileValidatorModule`; it does not
-// alter their behavior or output, so every existing caller (api-tree's
-// `apply-validation-build.ts`, and — indirectly, through the generated module
-// it produces — the cli/mcp projectors' `isApplyValidationWrapped`-gated
-// path) keeps working unmodified. Wiring these new exports into that call
-// path, and retiring `isApplyValidationWrapped`/the cli/mcp fallbacks it
-// guards, is phase B/C's job (see the design doc's "What goes away" item 4
-// and this phase's own scope statement: "This phase does not touch
-// projectors or api-tree's apply-validation surfaces").
+// profile-blind `compileValidator` — it does not alter that path's behavior
+// or output. api-tree's `apply-validation-build.ts` and `apply-validation.ts`
+// are wired onto this wire-profile path; the legacy 2-arg codegen route this
+// section originally sat alongside (`compileValidatorModule`, and the cli/mcp
+// `isApplyValidationWrapped` sniff it gated) was retired in phases C and D —
+// see the design doc's phase C/D implementation-trace sections.
 //
 // Scope cuts made in this phase (none contradict the design doc's settled
 // decisions; the phase's own test list doesn't exercise them):
@@ -1979,12 +1978,13 @@ function genDefaultsFillField(field: TypeRef, fv: string): string[] {
  * fingerprint input" (see `compileWireEntryFragment`'s doc comment) is
  * exactly what this function does not take.
  *
- * `externalDefNames` (phase D) is the same seeding `compileEntryBody` does
- * for `compileValidatorModule`'s module-scope `defs` block: a caller compiles
- * the shared `__def_NAME_check/errors/parse` functions once at module scope
- * (`compileDefsBlock`, unchanged) and passes the resulting `defNames` set
- * here so a `ref` inside `ref`'s own tree resolves to a call into that
- * shared function (via the existing, unmodified `validateHandlers.ref`)
+ * `externalDefNames` (phase D) is the same seeding mechanism
+ * `compileEntryBody`'s own `externalDefNames` parameter uses: a caller
+ * compiles the shared `__def_NAME_check/errors/parse` functions once at
+ * module scope (`compileDefsBlock`, unchanged) and passes the resulting
+ * `defNames` set here — as `compileWireModule` does — so a `ref` inside
+ * `ref`'s own tree resolves to a call into that shared function (via the
+ * existing, unmodified `validateHandlers.ref`)
  * instead of the pre-phase-D no-op passthrough. This does not recompile
  * `defs`' own bodies — that stays `compileDefsBlock`'s job, shared with the
  * non-wire `check`/`errors`/`parse` path, so a def reused by both paths in
@@ -2032,8 +2032,8 @@ export function compileConstraintsFn(
  * (a call to `constraintsFnName`, not regenerated here — see
  * `compileConstraintsFn`'s doc comment for why sharing it across profiles is
  * load-bearing, not just an optimization). Self-contained modulo that one
- * by-name reference — the same incremental-caching shape `compileEntryFragment`
- * already has, with `profile.name` as the doc-noted second fingerprint input:
+ * by-name reference, with `profile.name` as the doc-noted second fingerprint
+ * input:
  * a caller re-derives this fragment only when `ref`'s own IR fingerprint or
  * `profile.name` changed; `constraintsFnName` is a pure naming convention,
  * not part of the fingerprint, since it's derived from the entry name alone. */
@@ -2442,8 +2442,9 @@ export function wireValidatorKey(name: string, profileName: string): string {
 
 /**
  * Reassembles a complete wire-validator module from already-compiled pieces
- * — the wire-profile analogue of `assembleValidatorModule`. `constraintsFns`
- * (keyed by entry name) is emitted once per entry at module scope,
+ * — the wire-profile analogue of the now-deleted (phase D)
+ * `assembleValidatorModule`. `constraintsFns` (keyed by entry name) is
+ * emitted once per entry at module scope,
  * independent of how many profiles that entry has fragments for — see
  * `compileConstraintsFn`'s doc comment for why. `wireFragments` is keyed by
  * `wireValidatorKey(name, profileName)`.
