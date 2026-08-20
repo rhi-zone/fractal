@@ -11,43 +11,43 @@ describe("scalar fields", () => {
 
   test("String! -> non-null string", () => {
     const result = fromGraphql(`type T { f: String! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.string));
   });
 
   test("Int -> integer", () => {
     const result = fromGraphql(`type T { f: Int! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.integer));
   });
 
   test("Float -> number", () => {
     const result = fromGraphql(`type T { f: Float! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.number));
   });
 
   test("Boolean -> boolean", () => {
     const result = fromGraphql(`type T { f: Boolean! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.boolean));
   });
 
   test("ID -> string with format:id", () => {
     const result = fromGraphql(`type T { f: ID! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.string, { format: "id" }));
   });
 
   test("DateTime -> datetime()", () => {
     const result = fromGraphql(`type T { f: DateTime! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(datetime());
   });
 
   test("Date -> date()", () => {
     const result = fromGraphql(`type T { f: Date! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(date());
   });
 });
@@ -152,19 +152,19 @@ describe("interface types", () => {
 describe("list modifiers", () => {
   test("[T] -> nullable array of nullable T", () => {
     const result = fromGraphql(`type T { f: [String] }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.array(t(types.string, { nullable: true })), { nullable: true }));
   });
 
   test("[T!]! -> non-null array of non-null T", () => {
     const result = fromGraphql(`type T { f: [String!]! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.array(t(types.string))));
   });
 
   test("[T!] -> nullable array of non-null T", () => {
     const result = fromGraphql(`type T { f: [String!] }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.array(t(types.string)), { nullable: true }));
   });
 });
@@ -176,7 +176,7 @@ describe("field arguments", () => {
         users(limit: Int, offset: Int!): [String!]!
       }
     `);
-    const field = (result.Query?.shape as { fields: Record<string, { shape: unknown }> }).fields
+    const field = (result.Query!.shape as { fields: Record<string, { shape: unknown }> }).fields
       .users;
     expect(field?.shape).toEqual({
       kind: "method",
@@ -214,7 +214,7 @@ describe("descriptions", () => {
       }
     `);
     const field = (
-      result.User?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.User!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields.id;
     expect(field?.meta.description).toBe("The user's unique id");
   });
@@ -229,7 +229,7 @@ describe("custom scalars", () => {
 
   test("field referencing an undeclared custom scalar -> unknown with graphqlScalar meta", () => {
     const result = fromGraphql(`type T { f: Upload! }`);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.unknown, { graphqlScalar: "Upload" }));
   });
 
@@ -238,7 +238,7 @@ describe("custom scalars", () => {
       scalar JSON
       type T { f: JSON! }
     `);
-    const field = (result.T?.shape as { fields: Record<string, unknown> }).fields.f;
+    const field = (result.T!.shape as { fields: Record<string, unknown> }).fields.f;
     expect(field).toEqual(t(types.ref("JSON")));
   });
 });
@@ -250,7 +250,7 @@ describe("directives", () => {
         old: String @deprecated(reason: "use new instead")
       }
     `);
-    const field = (result.T?.shape as { fields: Record<string, { meta: Record<string, unknown> }> })
+    const field = (result.T!.shape as { fields: Record<string, { meta: Record<string, unknown> }> })
       .fields.old;
     expect(field?.meta.deprecated).toBe(true);
     expect(field?.meta.deprecatedReason).toBe("use new instead");
@@ -258,7 +258,7 @@ describe("directives", () => {
 
   test("@deprecated with no reason -> meta.deprecated only", () => {
     const result = fromGraphql(`type T { old: String @deprecated }`);
-    const field = (result.T?.shape as { fields: Record<string, { meta: Record<string, unknown> }> })
+    const field = (result.T!.shape as { fields: Record<string, { meta: Record<string, unknown> }> })
       .fields.old;
     expect(field?.meta.deprecated).toBe(true);
     expect(field?.meta.deprecatedReason).toBeUndefined();
@@ -270,7 +270,7 @@ describe("directives", () => {
         secret: String @auth(role: "ADMIN")
       }
     `);
-    const field = (result.T?.shape as { fields: Record<string, { meta: Record<string, unknown> }> })
+    const field = (result.T!.shape as { fields: Record<string, { meta: Record<string, unknown> }> })
       .fields.secret;
     expect(field?.meta.directives).toEqual([{ name: "auth", args: { role: "ADMIN" } }]);
   });

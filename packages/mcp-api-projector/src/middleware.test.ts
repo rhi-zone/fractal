@@ -207,7 +207,7 @@ describe("CreateMcpServerOptions.middleware — prompts", () => {
     };
     const { client } = await connectedClient(tree, { middleware: [track] });
     const result = await client.getPrompt({ name: "greet", arguments: { who: "world" } });
-    expect((result.messages[0]?.content as { text: string }).text).toBe("hi world");
+    expect((result.messages[0]!.content as { text: string }).text).toBe("hi world");
     expect(seenWho).toBe("world");
   });
 });

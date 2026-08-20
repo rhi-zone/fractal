@@ -512,8 +512,8 @@ describe("listRoutes", () => {
     const entries = listRoutes(route);
     const get = entries.find((e) => e.verb === "GET");
     const post = entries.find((e) => e.verb === "POST");
-    expect((get?.meta as { openapi?: { summary?: string } }).openapi?.summary).toBe("get it");
-    expect((post?.meta as { openapi?: { summary?: string } }).openapi?.summary).toBe("post it");
+    expect((get!.meta as { openapi?: { summary?: string } }).openapi?.summary).toBe("get it");
+    expect((post!.meta as { openapi?: { summary?: string } }).openapi?.summary).toBe("post it");
   });
 
   it("listRoutes matches the walk toOpenApi uses internally — path/method sets agree", async () => {

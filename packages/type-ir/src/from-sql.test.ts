@@ -7,7 +7,7 @@ describe("basic column types", () => {
   test("varchar/text -> string", () => {
     const result = fromSql("CREATE TABLE t (a VARCHAR(50), b TEXT);");
     expect(result.t?.shape.kind).toBe("object");
-    const fields = (result.t?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (result.t!.shape as { fields: Record<string, unknown> }).fields;
     expect((fields.a as { shape: { kind: string } }).shape.kind).toBe("string");
     expect((fields.a as { meta: Record<string, unknown> }).meta.maxLength).toBe(50);
     expect((fields.b as { shape: { kind: string } }).shape.kind).toBe("string");
@@ -15,7 +15,7 @@ describe("basic column types", () => {
 
   test("integer/int/bigint -> integer", () => {
     const result = fromSql("CREATE TABLE t (a INTEGER, b INT, c BIGINT);");
-    const fields = (result.t?.shape as { fields: Record<string, { shape: { kind: string } }> })
+    const fields = (result.t!.shape as { fields: Record<string, { shape: { kind: string } }> })
       .fields;
     expect(fields.a?.shape.kind).toBe("integer");
     expect(fields.b?.shape.kind).toBe("integer");
@@ -27,7 +27,7 @@ describe("basic column types", () => {
       "CREATE TABLE t (a FLOAT, b DOUBLE PRECISION, c REAL, d DECIMAL(10,2));",
     );
     const fields = (
-      result.t?.shape as {
+      result.t!.shape as {
         fields: Record<string, { shape: { kind: string }; meta: Record<string, unknown> }>;
       }
     ).fields;
@@ -41,7 +41,7 @@ describe("basic column types", () => {
 
   test("boolean/bool -> boolean", () => {
     const result = fromSql("CREATE TABLE t (a BOOLEAN, b BOOL);");
-    const fields = (result.t?.shape as { fields: Record<string, { shape: { kind: string } }> })
+    const fields = (result.t!.shape as { fields: Record<string, { shape: { kind: string } }> })
       .fields;
     expect(fields.a?.shape.kind).toBe("boolean");
     expect(fields.b?.shape.kind).toBe("boolean");
@@ -49,20 +49,20 @@ describe("basic column types", () => {
 
   test("date -> date kind", () => {
     const result = fromSql("CREATE TABLE t (a DATE);");
-    const fields = (result.t?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (result.t!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.a).toEqual(date({ nullable: true }));
   });
 
   test("timestamp/datetime -> datetime kind", () => {
     const result = fromSql("CREATE TABLE t (a TIMESTAMP, b DATETIME);");
-    const fields = (result.t?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (result.t!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.a).toEqual(datetime({ nullable: true }));
     expect(fields.b).toEqual(datetime({ nullable: true }));
   });
 
   test("json/jsonb -> unknown", () => {
     const result = fromSql("CREATE TABLE t (a JSON, b JSONB);");
-    const fields = (result.t?.shape as { fields: Record<string, { shape: { kind: string } }> })
+    const fields = (result.t!.shape as { fields: Record<string, { shape: { kind: string } }> })
       .fields;
     expect(fields.a?.shape.kind).toBe("unknown");
     expect(fields.b?.shape.kind).toBe("unknown");
@@ -70,13 +70,13 @@ describe("basic column types", () => {
 
   test("uuid -> uuid kind", () => {
     const result = fromSql("CREATE TABLE t (a UUID);");
-    const fields = (result.t?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (result.t!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.a).toEqual(uuid({ nullable: true }));
   });
 
   test("blob/bytea -> bytes kind", () => {
     const result = fromSql("CREATE TABLE t (a BLOB, b BYTEA);");
-    const fields = (result.t?.shape as { fields: unknown }).fields as Record<string, unknown>;
+    const fields = (result.t!.shape as { fields: unknown }).fields as Record<string, unknown>;
     expect(fields.a).toEqual(bytes({ nullable: true }));
     expect(fields.b).toEqual(bytes({ nullable: true }));
   });
@@ -84,7 +84,7 @@ describe("basic column types", () => {
   test("serial/bigserial -> integer with autoincrement meta", () => {
     const result = fromSql("CREATE TABLE t (a SERIAL, b BIGSERIAL);");
     const fields = (
-      result.t?.shape as {
+      result.t!.shape as {
         fields: Record<string, { shape: { kind: string }; meta: Record<string, unknown> }>;
       }
     ).fields;
@@ -97,7 +97,7 @@ describe("basic column types", () => {
   test("enum -> enum kind", () => {
     const result = fromSql("CREATE TABLE t (status ENUM('active', 'inactive'));");
     const fields = (
-      result.t?.shape as {
+      result.t!.shape as {
         fields: Record<string, { shape: { kind: string; members?: readonly string[] } }>;
       }
     ).fields;
@@ -110,7 +110,7 @@ describe("nullability", () => {
   test("column without NOT NULL is nullable", () => {
     const result = fromSql("CREATE TABLE t (a TEXT);");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.a?.meta.nullable).toBe(true);
   });
@@ -118,7 +118,7 @@ describe("nullability", () => {
   test("NOT NULL column is not nullable", () => {
     const result = fromSql("CREATE TABLE t (a TEXT NOT NULL);");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.a?.meta.nullable).toBeUndefined();
   });
@@ -128,7 +128,7 @@ describe("primary key", () => {
   test("inline PRIMARY KEY", () => {
     const result = fromSql("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.id?.meta.primaryKey).toBe(true);
     expect(fields.id?.meta.nullable).toBeUndefined();
@@ -138,7 +138,7 @@ describe("primary key", () => {
   test("table-level PRIMARY KEY", () => {
     const result = fromSql("CREATE TABLE t (id INTEGER, name TEXT, PRIMARY KEY (id));");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.id?.meta.primaryKey).toBe(true);
     expect(result.t?.meta.primaryKey).toEqual(["id"]);
@@ -148,7 +148,7 @@ describe("primary key", () => {
     const result = fromSql("CREATE TABLE t (a INTEGER, b INTEGER, PRIMARY KEY (a, b));");
     expect(result.t?.meta.primaryKey).toEqual(["a", "b"]);
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.a?.meta.primaryKey).toBe(true);
     expect(fields.b?.meta.primaryKey).toBe(true);
@@ -159,7 +159,7 @@ describe("default values", () => {
   test("string default", () => {
     const result = fromSql("CREATE TABLE t (status TEXT DEFAULT 'pending');");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.status?.meta.default).toBe("pending");
   });
@@ -167,7 +167,7 @@ describe("default values", () => {
   test("numeric default", () => {
     const result = fromSql("CREATE TABLE t (count INTEGER DEFAULT 0);");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.count?.meta.default).toBe(0);
   });
@@ -175,7 +175,7 @@ describe("default values", () => {
   test("boolean default", () => {
     const result = fromSql("CREATE TABLE t (active BOOLEAN DEFAULT TRUE);");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.active?.meta.default).toBe(true);
   });
@@ -185,7 +185,7 @@ describe("default values", () => {
       "CREATE TABLE t (created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, id UUID DEFAULT gen_random_uuid());",
     );
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.created_at?.meta.default).toBe("CURRENT_TIMESTAMP");
     expect(fields.id?.meta.default).toBe("gen_random_uuid()");
@@ -196,7 +196,7 @@ describe("default values", () => {
       "CREATE TABLE t (count INTEGER DEFAULT 0 NOT NULL, name TEXT DEFAULT 'x' UNIQUE);",
     );
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.count?.meta.default).toBe(0);
     expect(fields.count?.meta.nullable).toBeUndefined();
@@ -211,7 +211,7 @@ describe("foreign keys", () => {
       "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id));",
     );
     const fields = (
-      result.orders?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.orders!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.user_id?.meta.references).toEqual({ table: "users", column: "id" });
   });
@@ -221,7 +221,7 @@ describe("foreign keys", () => {
       "CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, FOREIGN KEY (user_id) REFERENCES users (id));",
     );
     const fields = (
-      result.orders?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.orders!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.user_id?.meta.references).toEqual({ table: "users", column: "id" });
   });
@@ -231,7 +231,7 @@ describe("check constraints", () => {
   test("numeric range check parses into structured meta", () => {
     const result = fromSql("CREATE TABLE t (age INTEGER CHECK (age >= 0));");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.age?.meta.minimum).toBe(0);
   });
@@ -239,7 +239,7 @@ describe("check constraints", () => {
   test("length check parses into structured meta", () => {
     const result = fromSql("CREATE TABLE t (name TEXT CHECK (LENGTH(name) <= 50));");
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.name?.meta.maxLength).toBe(50);
   });
@@ -262,7 +262,7 @@ describe("postgres-specific types", () => {
       { dialect: "postgres" },
     );
     const fields = (
-      result.events?.shape as {
+      result.events!.shape as {
         fields: Record<string, { shape: { kind: string; element?: { shape: { kind: string } } } }>;
       }
     ).fields;
@@ -286,7 +286,7 @@ describe("mysql-specific types", () => {
       { dialect: "mysql" },
     );
     const fields = (
-      result.items?.shape as {
+      result.items!.shape as {
         fields: Record<string, { shape: { kind: string }; meta: Record<string, unknown> }>;
       }
     ).fields;
@@ -309,7 +309,7 @@ describe("sqlite flexible typing", () => {
       );`,
       { dialect: "sqlite" },
     );
-    const fields = (result.t?.shape as { fields: Record<string, { shape: { kind: string } }> })
+    const fields = (result.t!.shape as { fields: Record<string, { shape: { kind: string } }> })
       .fields;
     expect(fields.a?.shape.kind).toBe("integer");
     expect(fields.b?.shape.kind).toBe("string");
@@ -323,7 +323,7 @@ describe("sqlite flexible typing", () => {
       dialect: "sqlite",
     });
     const fields = (
-      result.t?.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
+      result.t!.shape as { fields: Record<string, { meta: Record<string, unknown> }> }
     ).fields;
     expect(fields.id?.meta.autoincrement).toBe(true);
     expect(fields.id?.meta.primaryKey).toBe(true);
@@ -337,9 +337,9 @@ describe("multiple tables", () => {
       CREATE TABLE posts (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users(id), title TEXT);
     `);
     expect(Object.keys(result).sort()).toEqual(["posts", "users"]);
-    const userFields = (result.users?.shape as { fields: Record<string, unknown> }).fields;
+    const userFields = (result.users!.shape as { fields: Record<string, unknown> }).fields;
     expect(Object.keys(userFields)).toEqual(["id", "name"]);
-    const postFields = (result.posts?.shape as { fields: Record<string, unknown> }).fields;
+    const postFields = (result.posts!.shape as { fields: Record<string, unknown> }).fields;
     expect(Object.keys(postFields)).toEqual(["id", "user_id", "title"]);
   });
 });

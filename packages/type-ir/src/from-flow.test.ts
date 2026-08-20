@@ -39,14 +39,14 @@ describe("basic object types", () => {
 describe("optional fields", () => {
   test("optional property carries meta.optional", () => {
     const doc = fromFlow(`type T = { a: string, b?: number }`);
-    const fields = (doc.defs.T?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (doc.defs.T!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.a).toEqual(t(types.string));
     expect(fields.b).toEqual(t(types.number, { optional: true }));
   });
 
   test("covariant (+) property carries meta.readonly", () => {
     const doc = fromFlow(`type T = { +a: string }`);
-    const fields = (doc.defs.T?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (doc.defs.T!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.a).toEqual(t(types.string, { readonly: true }));
   });
 });
@@ -99,13 +99,13 @@ describe("arrays and tuples", () => {
 describe("generics", () => {
   test("unconstrained type parameter -> unknown with comment", () => {
     const doc = fromFlow(`type Box<T> = { value: T }`);
-    const fields = (doc.defs.Box?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (doc.defs.Box!.shape as { fields: Record<string, unknown> }).fields;
     expect((fields.value as { shape: { kind: string } }).shape.kind).toBe("unknown");
   });
 
   test("bounded type parameter extracts constraint, tagged generic", () => {
     const doc = fromFlow(`type Box<T: string> = { value: T }`);
-    const fields = (doc.defs.Box?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (doc.defs.Box!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.value).toEqual(t(types.string, { generic: true }));
   });
 
@@ -144,7 +144,7 @@ describe("interfaces", () => {
         greet(x: string): void,
       }
     `);
-    const fields = (doc.defs.Greeter?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (doc.defs.Greeter!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.greet).toEqual(
       t(types.function([{ name: "x", type: t(types.string) }], t(types.void))),
     );
@@ -194,7 +194,7 @@ describe("nested types", () => {
       type Address = { street: string, city: string }
       type Person = { name: string, address: Address }
     `);
-    const fields = (doc.defs.Person?.shape as { fields: Record<string, unknown> }).fields;
+    const fields = (doc.defs.Person!.shape as { fields: Record<string, unknown> }).fields;
     expect(fields.address).toEqual(t(types.ref("Address")));
   });
 

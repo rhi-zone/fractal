@@ -38,11 +38,11 @@ describe("crud() with all handlers", () => {
 
   it("each child is a leaf node wrapping the given handler", () => {
     expect(isLeaf(tree.children?.list as Node)).toBe(true);
-    expect((tree.children?.list as Node).handler).toBe(list);
-    expect((tree.children?.create as Node).handler).toBe(create);
-    expect((tree.children?.get as Node).handler).toBe(get);
-    expect((tree.children?.update as Node).handler).toBe(update);
-    expect((tree.children?.delete as Node).handler).toBe(del);
+    expect((tree.children!.list as Node).handler).toBe(list);
+    expect((tree.children!.create as Node).handler).toBe(create);
+    expect((tree.children!.get as Node).handler).toBe(get);
+    expect((tree.children!.update as Node).handler).toBe(update);
+    expect((tree.children!.delete as Node).handler).toBe(del);
   });
 
   it("sets the correct HTTP method directive per operation", () => {
@@ -153,8 +153,8 @@ describe("restCrud() tree shape", () => {
   it("wires list/create as children carrying moveTo('..'), not sibling keys", () => {
     const tree = restCrud({ list, create, get, update, delete: del });
     expect(Object.keys(tree.children ?? {}).sort()).toEqual(["create", "list"]);
-    expect((tree.children?.list as Node).meta.http).toMatchObject({ method: "GET", moveTo: ".." });
-    expect((tree.children?.create as Node).meta.http).toMatchObject({
+    expect((tree.children!.list as Node).meta.http).toMatchObject({ method: "GET", moveTo: ".." });
+    expect((tree.children!.create as Node).meta.http).toMatchObject({
       method: "POST",
       moveTo: "..",
     });

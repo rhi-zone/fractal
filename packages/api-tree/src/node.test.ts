@@ -297,18 +297,16 @@ describe("mapNodes", () => {
       isLeaf(n) ? { ...n, meta: { ...n.meta, tags: { readOnly: true } } } : n,
     );
 
-    expect(((tagged.children?.["list"] as Node).meta.tags as Tags | undefined)?.readOnly).toBe(
-      true,
-    );
+    expect(((tagged.children!["list"] as Node).meta.tags as Tags | undefined)?.readOnly).toBe(true);
     expect(
       (
-        ((tagged.children?.["detail"] as Node).children?.["read"] as Node).meta.tags as
+        ((tagged.children!["detail"] as Node).children!["read"] as Node).meta.tags as
           | Tags
           | undefined
       )?.readOnly,
     ).toBe(true);
     // Original tree is untouched
-    expect((tree.children?.["list"] as Node).meta.tags).toBeUndefined();
+    expect((tree.children!["list"] as Node).meta.tags).toBeUndefined();
   });
 });
 
@@ -416,6 +414,6 @@ describe("api()", () => {
       users: api({ list: op(() => []) }),
     });
     expect(isNode(tree)).toBe(true);
-    expect(isLeaf((tree.children?.["users"] as Node).children?.["list"] as Node)).toBe(true);
+    expect(isLeaf((tree.children!["users"] as Node).children?.["list"] as Node)).toBe(true);
   });
 });

@@ -236,7 +236,7 @@ describe("CreateMcpServerOptions.als — prompts", () => {
       },
     });
     const result = await client.getPrompt({ name: "greet", arguments: {} });
-    expect((result.messages[0]?.content as { text: string }).text).toBe("req-prompt");
+    expect((result.messages[0]!.content as { text: string }).text).toBe("req-prompt");
     expect(seenRequestType).toBe("prompt");
   });
 });

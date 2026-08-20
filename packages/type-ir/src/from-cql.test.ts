@@ -140,7 +140,7 @@ describe("collections", () => {
     const fields = fieldsOf(result.t);
     expect(fields.tags?.shape.kind).toBe("array");
     expect(
-      (fields.tags?.shape as unknown as { element: { shape: { kind: string } } }).element.shape
+      (fields.tags!.shape as unknown as { element: { shape: { kind: string } } }).element.shape
         .kind,
     ).toBe("string");
   });
@@ -184,7 +184,7 @@ describe("tuples", () => {
     const result = fromCql("CREATE TABLE t (id uuid PRIMARY KEY, coord tuple<int, int, text>);");
     const fields = fieldsOf(result.t);
     expect(fields.coord?.shape.kind).toBe("tuple");
-    const elements = (fields.coord?.shape as unknown as { elements: { shape: { kind: string } }[] })
+    const elements = (fields.coord!.shape as unknown as { elements: { shape: { kind: string } }[] })
       .elements;
     expect(elements.map((e) => e.shape.kind)).toEqual(["integer", "integer", "string"]);
   });
@@ -206,7 +206,7 @@ describe("user-defined types", () => {
     `);
     const fields = fieldsOf(result.users);
     expect(fields.home?.shape.kind).toBe("ref");
-    expect((fields.home?.shape as unknown as { target: string }).target).toBe("address");
+    expect((fields.home!.shape as unknown as { target: string }).target).toBe("address");
     expect(fields.home?.meta.frozen).toBe(true);
   });
 
@@ -217,7 +217,7 @@ describe("user-defined types", () => {
     `);
     const fields = fieldsOf(result.users);
     expect(fields.home?.shape.kind).toBe("ref");
-    expect((fields.home?.shape as unknown as { target: string }).target).toBe("address");
+    expect((fields.home!.shape as unknown as { target: string }).target).toBe("address");
   });
 });
 

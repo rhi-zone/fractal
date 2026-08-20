@@ -565,7 +565,7 @@ describe("TypeRef extraction", () => {
     expect(fields.age?.meta.optional).toBe(true);
     expect(fields.roles?.shape.kind).toBe("array");
     expect(
-      (fields.roles?.shape as { element: { shape: { kind: string } } }).element.shape.kind,
+      (fields.roles!.shape as { element: { shape: { kind: string } } }).element.shape.kind,
     ).toBe("string");
     expect(fields.address?.shape.kind).toBe("object");
   });
@@ -938,7 +938,7 @@ describe("typeRefFromType gap fixes", () => {
     expect(greetShape.params).toEqual([]);
     expect(greetShape.returnType.shape.kind).toBe("string");
     expect(greetShape.thisType?.shape.kind).toBe("instance");
-    expect((greetShape.thisType?.shape as { className: string }).className).toBe("SampleClass");
+    expect((greetShape.thisType!.shape as { className: string }).className).toBe("SampleClass");
   });
 
   it("omits meta.interface entirely for a class with no methods", () => {
@@ -957,7 +957,7 @@ describe("typeRefFromType gap fixes", () => {
     const ref = typeRefFromType(typeOf("AsyncIterableField"), checker, source);
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
     expect(fields.events?.shape.kind).toBe("stream");
-    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element;
+    const element = (fields.events!.shape as { kind: "stream"; element: TypeRef }).element;
     expect(element.shape.kind).toBe("string");
   });
 
@@ -965,7 +965,7 @@ describe("typeRefFromType gap fixes", () => {
     const ref = typeRefFromType(typeOf("AsyncGeneratorField"), checker, source);
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
     expect(fields.events?.shape.kind).toBe("stream");
-    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element;
+    const element = (fields.events!.shape as { kind: "stream"; element: TypeRef }).element;
     expect(element.shape.kind).toBe("number");
   });
 
@@ -973,7 +973,7 @@ describe("typeRefFromType gap fixes", () => {
     const ref = typeRefFromType(typeOf("AsyncIterableIteratorField"), checker, source);
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
     expect(fields.events?.shape.kind).toBe("stream");
-    const element = (fields.events?.shape as { kind: "stream"; element: TypeRef }).element;
+    const element = (fields.events!.shape as { kind: "stream"; element: TypeRef }).element;
     expect(element.shape.kind).toBe("boolean");
   });
 
@@ -1170,10 +1170,10 @@ describe("typeRefFromType gap fixes", () => {
     expect(members).toHaveLength(2);
     const [hasId, hasTimestamps] = members;
     expect(hasId?.shape.kind).toBe("object");
-    const idFields = (hasId?.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const idFields = (hasId!.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
     expect(Object.keys(idFields)).toEqual(["id"]);
     expect(hasTimestamps?.shape.kind).toBe("object");
-    const tsFields = (hasTimestamps?.shape as { kind: "object"; fields: Record<string, TypeRef> })
+    const tsFields = (hasTimestamps!.shape as { kind: "object"; fields: Record<string, TypeRef> })
       .fields;
     expect(Object.keys(tsFields)).toEqual(["createdAt", "updatedAt"]);
   });
@@ -1535,7 +1535,7 @@ describe("typeRefFromType gap fixes", () => {
     for (const m of members) {
       const thisType = (m.shape as MethodShape).thisType;
       expect(thisType?.shape.kind).toBe("instance");
-      expect((thisType?.shape as { className: string }).className).toBe("OverloadedMethodClass");
+      expect((thisType!.shape as { className: string }).className).toBe("OverloadedMethodClass");
     }
   });
 

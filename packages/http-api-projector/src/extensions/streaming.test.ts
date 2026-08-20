@@ -99,7 +99,7 @@ describe("streaming() — decodeResponse", () => {
     const res = closedSseStream("data: 1\n\n" + "event: done\ndata: 2\n\n");
     const decoded = ext.decodeResponse?.(res, testCtx);
     expect(decoded).toBeDefined();
-    expect(typeof (decoded?.value as AsyncIterable<unknown>)[Symbol.asyncIterator]).toBe(
+    expect(typeof (decoded!.value as AsyncIterable<unknown>)[Symbol.asyncIterator]).toBe(
       "function",
     );
   });
