@@ -156,9 +156,16 @@ export function buildSchemaModuleSourceIncremental(
   const changedLeaves: string[] = [];
 
   for (const [name, info] of Object.entries(types)) {
+    // `description` is part of the fingerprint, not just `input`/`output` —
+    // `toolSchemaFrom` below embeds `info.description` into the carried-
+    // forward artifact, so a Tier-1-miss rebuild that reused a prior
+    // artifact fingerprinted on `{input, output}` alone would silently keep
+    // a stale description on any leaf whose types didn't change but whose
+    // description did (audit §1.2).
     const fingerprint = computeLeafFingerprint(entryFile, {
       input: info.input,
       output: info.output,
+      description: info.description,
     });
     leafFingerprints[name] = fingerprint;
 
@@ -207,14 +214,21 @@ export function buildSchemaModuleCached(
     readonly reachable?: ReadonlySet<string>;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
-  if (!options?.force) {
-    const check = checkCache(entryFile, outFile, options);
+  // `treeId` folded into the cache key (audit §1.3): a single entryFile can
+  // export several trees, each built to its own outFile — without this, a
+  // cache metadata file keyed only by outFile+entryFile can't tell "tree A's
+  // artifact" from "tree B's artifact" apart if a caller reuses cache
+  // location options across trees, and a `--tree-id` change with no other
+  // input change was a silent Tier-1 hit serving the WRONG tree's artifact.
+  const cacheOpts = { ...options, buildOptionsKey: treeId };
+  if (!cacheOpts?.force) {
+    const check = checkCache(entryFile, outFile, cacheOpts);
     if (check.hit) return { status: "hit" };
   }
-  const program = options?.program ?? createExtractorProgram(entryFile);
-  const prior = readCarryForwardState(entryFile, outFile, options);
+  const program = cacheOpts?.program ?? createExtractorProgram(entryFile);
+  const prior = readCarryForwardState(entryFile, outFile, cacheOpts);
   const built = buildSchemaModuleSourceIncremental(entryFile, treeId, program, prior);
-  writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
+  writeCacheMetadata(entryFile, outFile, program, built.source, cacheOpts, cacheOpts?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
   });
