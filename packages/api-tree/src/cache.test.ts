@@ -129,6 +129,70 @@ describe("cache.ts — content-addressed incremental build cache", () => {
     if (!check.hit) expect(check.reason).toContain("output file changed");
   });
 
+  it("a different tsVersion in the recorded metadata is a miss (was structurally uncatchable before — audit §7#1)", async () => {
+    const outFile = freshOutFile("v-tsversion.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    const cacheFile = `${outFile}.cache.json`;
+    const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, tsVersion: "0.0.0-not-real" }));
+
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(false);
+    if (!check.hit) expect(check.reason).toContain("typescript version");
+  });
+
+  it("a different typeIrVersion in the recorded metadata is a miss (audit §7#1)", async () => {
+    const outFile = freshOutFile("v-typeirversion.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    const cacheFile = `${outFile}.cache.json`;
+    const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, typeIrVersion: "0.0.0-not-real" }));
+
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(false);
+    if (!check.hit) expect(check.reason).toContain("fractal-type-ir version");
+  });
+
+  it("a different apiTreeVersion in the recorded metadata is a miss (audit §1.1/§2.1: the toolchain gate previously had no signal for a fractal-api-tree-internal codegen change at all)", async () => {
+    const outFile = freshOutFile("v-apitreeversion.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    const cacheFile = `${outFile}.cache.json`;
+    const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, apiTreeVersion: "0.0.0-not-real" }));
+
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(false);
+    if (!check.hit) expect(check.reason).toContain("fractal-api-tree version");
+  });
+
+  it("a different buildOptionsKey (e.g. a changed --tree-id/runtimeImport) in the recorded metadata is a miss (audit §1.3)", async () => {
+    const outFile = freshOutFile("v-buildoptions.ts");
+    await writeWireApplyValidationModuleCached(FIXTURE, outFile);
+    const cacheFile = `${outFile}.cache.json`;
+    const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, buildOptionsKey: "some-other-option" }));
+
+    const check = checkCache(FIXTURE, outFile);
+    expect(check.hit).toBe(false);
+    if (!check.hit) expect(check.reason).toContain("build options");
+  });
+
+  it("writeSchemaModuleCached folds treeId into the cache key: hand-editing a recorded buildOptionsKey away from the real treeId is a miss (audit §1.3's --tree-id example)", async () => {
+    const outFile = freshOutFile("v-schema-treeid.ts");
+    await writeSchemaModuleCached(FIXTURE, "validated", outFile);
+    expect((await writeSchemaModuleCached(FIXTURE, "validated", outFile)).status).toBe("hit");
+
+    const cacheFile = `${outFile}.cache.json`;
+    const meta = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, unknown>;
+    expect(meta.buildOptionsKey).toBe("validated");
+    fs.writeFileSync(cacheFile, JSON.stringify({ ...meta, buildOptionsKey: "someOtherTreeId" }));
+
+    // Building "validated" again must not trust a cache entry recorded under
+    // a different tree's key — was a Tier-1 hit serving the wrong tree's
+    // artifact as "up to date" before treeId was part of the cache key.
+    expect((await writeSchemaModuleCached(FIXTURE, "validated", outFile)).status).toBe("built");
+  });
+
   it("cacheFile/cacheDir options relocate cache metadata away from the default <output>.cache.json sibling", async () => {
     const outFile = freshOutFile("v6.ts");
     const cacheDir = freshOutFile("cache-pool");

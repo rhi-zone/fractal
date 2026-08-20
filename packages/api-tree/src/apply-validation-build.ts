@@ -1062,7 +1062,15 @@ export function buildWireApplyValidationModuleCached(
   // differently-named-but-behaviorally-identical function still round-trips
   // correctly (same source text), and a real behavior change (different
   // source text) is what needs to invalidate the cache, not name identity.
-  const buildOptionsKey = `${options?.runtimeImport ?? ""} ${String(options?.shouldShare ?? "")}`;
+  // "" (not e.g. " ") when neither is passed — matches
+  // CacheLocationOptions.buildOptionsKey's own "" default, so a caller/test
+  // that checks this artifact's cache via a plain checkCache/
+  // readCarryForwardState call (no options) still agrees with what got
+  // recorded when neither option was passed to the build.
+  const buildOptionsKey =
+    options?.runtimeImport === undefined && options?.shouldShare === undefined
+      ? ""
+      : `${options?.runtimeImport ?? ""} ${String(options?.shouldShare ?? "")}`;
   const cacheOpts = { ...options, buildOptionsKey };
   if (!cacheOpts?.force) {
     const check = checkCache(entryFile, outFile, cacheOpts);
