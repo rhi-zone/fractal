@@ -360,7 +360,7 @@ export function createWsHandler(
 
     const onClose = (): void => {
       if (initTimer !== undefined) clearTimeout(initTimer);
-      for (const id of [...subscriptions.keys()]) stopSubscription(id);
+      for (const id of subscriptions.keys()) stopSubscription(id);
     };
 
     return { onMessage, onClose };
