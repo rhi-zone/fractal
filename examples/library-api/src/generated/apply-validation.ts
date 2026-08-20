@@ -406,15 +406,16 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
       ) => { kind: "ok"; value: unknown } | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000books/add http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: {} } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -466,17 +467,19 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) =>
         | { kind: "ok"; value: { title: string; author: string; genre: string } }
         | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000books/:bookId/read http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: {} } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -506,16 +509,18 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) => { kind: "ok"; value: { bookId: string } } | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000books/:bookId/replace http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: {} } as any;
     const __ref1 = { shape: { kind: "string" }, meta: { optional: true } } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -578,17 +583,19 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) =>
         | { kind: "ok"; value: { bookId: string; title?: string; author?: string; genre?: string } }
         | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000books/:bookId/remove http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: {} } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -618,15 +625,17 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) => { kind: "ok"; value: { bookId: string } } | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000books/:bookId/checkout/start http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: {} } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -656,15 +665,17 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) => { kind: "ok"; value: { bookId: string } } | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000books/:bookId/checkout/reserve http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: {} } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -705,17 +716,19 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) =>
         | { kind: "ok"; value: { bookId: string; patronId: string } }
         | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000catalog/search http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: { optional: true } } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -745,15 +758,17 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) => { kind: "ok"; value: { q?: string } } | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
   "books\u0000catalog/genres http": (function () {
     const __ref0 = { shape: { kind: "string" }, meta: { optional: true } } as any;
-    function parse(wire: any) {
+    function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
       const errs: ValidationError[] = [];
@@ -783,10 +798,12 @@ export const wireValidators = {
       }
       return { kind: "ok" as const, value: __decoded };
     }
-    return { parse: parse } as unknown as {
+    return { parse: parse, hookFields: [] } as unknown as {
       parse: (
         wire: unknown,
+        hooks?: Readonly<Record<string, (w: unknown) => unknown>>,
       ) => { kind: "ok"; value: { prefix?: string } } | { kind: "err"; errors: ValidationError[] };
+      hookFields: readonly string[];
     };
   })(),
 };

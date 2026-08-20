@@ -2403,7 +2403,20 @@ export function compileWireEntryFragmentComposite(
   const hookFieldsLiteral = JSON.stringify([...hookFields]);
 
   const lines: string[] = [...ctx.declarations()];
-  lines.push(`function parse(wire: any, hooks?: Readonly<Record<string, (w: any) => any>>) {`);
+  // `hooks` is only actually referenced in `decodeBody.stmts` when some field
+  // in `s.fields` is both in `hookFields` and emitted by
+  // `wireObjectWithFieldProfiles` (see that function's hook-emission branch,
+  // guarded by `hookFields.has(name)`). When that never fires — the
+  // overwhelmingly common no-hooks case — the parameter is dead in the
+  // function body, and `noUnusedParameters`-strict consumers (this repo's
+  // own tsconfig included) flag it as `TS6133`. Name it `_hooks` in exactly
+  // that case, the standard TS/eslint "intentionally unused" convention,
+  // rather than emitting a name the body never uses.
+  const hooksParamUsed = decodeBody.stmts.some((line) => /\bhooks\b/.test(line));
+  const hooksParamName = hooksParamUsed ? "hooks" : "_hooks";
+  lines.push(
+    `function parse(wire: any, ${hooksParamName}?: Readonly<Record<string, (w: any) => any>>) {`,
+  );
   lines.push(`  const path: string[] = [];`);
   lines.push(`  void path;`);
   lines.push(`  const errs: ValidationError[] = [];`);
