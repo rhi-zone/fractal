@@ -746,8 +746,8 @@ function walkTree(
  *
  * `sharedProgram`, when given, reuses a pre-built `ts.Program` instead of
  * building a fresh single-root one over `entryFile` — same rationale as
- * `walkTree`'s own `sharedProgram` parameter and `buildValidatorModuleSource`'s
- * `program` option (build.ts).
+ * `walkTree`'s own `sharedProgram` parameter and `buildWireApplyValidationModuleSource`'s
+ * `program` option (apply-validation-build.ts).
  */
 export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): boolean {
   const program = sharedProgram ?? createExtractorProgram(entryFile);
@@ -773,8 +773,8 @@ export function hasTreeExport(entryFile: string, sharedProgram?: ts.Program): bo
  * `createExtractorProgram`'s multi-root form) instead of building a fresh
  * single-root one over `entryFile` — same rationale, and same parameter
  * shape, as `extractToolTypeRefs`/`extractRouteTypeRefs`'s own
- * `options.program` (this file) and `buildValidatorModuleSource`'s `program`
- * argument (build.ts): a batch caller building JSON-Schema artifacts for many
+ * `options.program` (this file) and `buildWireApplyValidationModuleSource`'s `program`
+ * argument (apply-validation-build.ts): a batch caller building JSON-Schema artifacts for many
  * entry files alongside their validator modules (see
  * `schema-build.ts`'s `buildSchemaModuleSource`) reuses the SAME shared
  * Program instead of paying a second multi-GB `ts.Program` build just for

@@ -44,9 +44,12 @@ Options:
 
 Caching: build/watch/check (and their -schema counterparts) skip regeneration
 when a content-addressed cache (entry file + every source file its
-extraction reads + TypeScript/fractal-type-ir versions) says nothing
-relevant changed — see @rhi-zone/fractal-api-tree/cache's module doc for the
-full design. --force bypasses it unconditionally.
+extraction reads + TypeScript/fractal-type-ir/fractal-api-tree versions +
+--tree-id) says nothing relevant changed — see
+@rhi-zone/fractal-api-tree/cache's module doc for the full design. NOT
+tracked: tsconfig.json/compilerOptions (resolved separately from the tracked
+source-file closure — an edit to paths/types/strict can change extraction
+output without the cache noticing). --force bypasses the cache unconditionally.
 `;
 
 type ParsedArgs = {

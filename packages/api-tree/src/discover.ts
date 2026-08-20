@@ -1,8 +1,8 @@
 // Autodetection: a library-level replacement for a hand-maintained
 // per-consumer entry-file list.
 //
-// The pain point this exists to kill: a consumer of `buildValidatorModuleSource`
-// (build.ts) that needs to batch-generate validators across many entry files
+// The pain point this exists to kill: a consumer of `buildWireApplyValidationModuleSource`
+// (apply-validation-build.ts) that needs to batch-generate validators across many entry files
 // (e.g. the sibling codebase's `apps/web/scripts/codegen-fractal-validators.ts`, one
 // entry file per domain slice) has historically hand-maintained a literal
 // array of entry-file paths. A new file dropped under the deployment's
@@ -100,14 +100,15 @@ export type FindEntryFilesOptions = {
   /**
    * Reuse an already-built `ts.Program` for the `hasTreeExport` detection
    * pass instead of building a fresh one over the scanned candidates —
-   * mirrors `buildValidatorModuleSource`'s own `program` option (build.ts)
+   * mirrors `buildWireApplyValidationModuleSource`'s own `program` option
+   * (apply-validation-build.ts)
    * and the multi-GB-Program-reuse rationale documented there and in
    * `createExtractorProgram`'s own doc comment
    * (`@rhi-zone/fractal-type-ir/from-typescript`): a `ts.Program`'s dominant
    * cost is parsing+binding its transitive import closure, which is nearly
    * the same whether rooted at one file or many siblings under the same
    * project — so a batch caller should build one Program up front and pass
-   * it here (and again into `buildValidatorModuleSource` for the actual
+   * it here (and again into `buildWireApplyValidationModuleSource` for the actual
    * codegen pass) rather than paying that cost once per candidate. If
    * omitted, and there's at least one scanned candidate, a Program is built
    * internally via `createExtractorProgram(candidates)` (the multi-root
