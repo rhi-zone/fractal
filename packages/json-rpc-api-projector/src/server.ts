@@ -275,6 +275,17 @@ type RunOptions = {
   readonly errorEncoder: JsonRpcErrorEncoder | undefined;
   /** Present only for the WebSocket transport — enables the notification-streaming path (see `streamViaNotifications`) instead of HTTP's drain-to-array degrade. */
   readonly sendNotification: ((n: JsonRpcNotification) => void | Promise<void>) | undefined;
+  /**
+   * The `caller` store's contents for this dispatch — see `dispatchRequest`.
+   * The HTTP transport builds this from the request's own headers (matching
+   * http-api-projector's `httpStores` convention: dump every header
+   * key-by-key, parsing is the consumer's job — docs/design/middleware-and-
+   * caller-context.md). The WebSocket transport always passes `{}`: a
+   * `message` handler has no per-message `Request`/headers at all (see
+   * `createJsonRpcWebSocketHandlers`'s own doc comment for why that's a
+   * structural limit of this transport, not an oversight).
+   */
+  readonly caller: Record<string, unknown>;
 };
 
 /**
@@ -321,7 +332,7 @@ async function dispatchRequest(
       : {};
 
   try {
-    const stores: JsonRpcStoreBag = { params: paramsObj, caller: {} };
+    const stores: JsonRpcStoreBag = { params: paramsObj, caller: opts.caller };
     const paramNames = [
       ...new Set([...Object.keys(paramsObj), ...Object.keys(dispatch.sourceMap)]),
     ];
@@ -383,13 +394,22 @@ async function dispatchBody(
 function resolveRunOptions(
   opts: CreateJsonRpcServerOptions,
   sendNotification: RunOptions["sendNotification"],
+  caller: Record<string, unknown>,
 ): RunOptions {
   return {
     detectResult: opts.detection?.result ?? true,
     detectStreaming: opts.detection?.streaming ?? true,
     errorEncoder: opts.errorEncoder,
     sendNotification,
+    caller,
   };
+}
+
+/** `req.headers` dumped key-by-key into a plain object — the HTTP transport's `caller` convention, matching `httpStores` (http-api-projector/src/decode.ts). */
+function callerFromRequestHeaders(req: Request): Record<string, unknown> {
+  const caller: Record<string, unknown> = {};
+  for (const [key, value] of req.headers.entries()) caller[key] = value;
+  return caller;
 }
 
 // ============================================================================
@@ -422,7 +442,6 @@ export function createJsonRpcHttpHandler(
   opts: CreateJsonRpcServerOptions = {},
 ): (req: Request) => Promise<Response> {
   const { handlers } = projectMethods(tree, toProjectOptions(opts));
-  const runOpts = resolveRunOptions(opts, undefined);
 
   return async (req) => {
     let body: unknown;
@@ -432,6 +451,7 @@ export function createJsonRpcHttpHandler(
       return jsonResponse(jsonRpcErrorResponse(null, JSON_RPC_PARSE_ERROR, "Parse error"));
     }
 
+    const runOpts = resolveRunOptions(opts, undefined, callerFromRequestHeaders(req));
     const result = await dispatchBody(handlers, body, runOpts);
     // §6: a batch consisting entirely of Notifications (or a lone
     // Notification) sends no response at all — 204 No Content is the
@@ -494,7 +514,7 @@ export function createJsonRpcWebSocketHandlers(
         return;
       }
 
-      const runOpts = resolveRunOptions(opts, (n) => ws.send(JSON.stringify(n)));
+      const runOpts = resolveRunOptions(opts, (n) => ws.send(JSON.stringify(n)), {});
       const result = await dispatchBody(handlers, body, runOpts);
       if (result !== undefined) ws.send(JSON.stringify(result));
     },

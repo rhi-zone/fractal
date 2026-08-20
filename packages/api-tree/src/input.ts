@@ -33,12 +33,25 @@ export type Store = Record<string, unknown>;
 
 /**
  * The `caller` store's shape — auth/identity context, populated by every
- * projector (see `CoreStores.caller`). Deliberately `Store` (a plain bag of
- * unknown-typed fields) at the CORE declaration: no single concrete shape
- * unifies HTTP's raw header pass-through, CLI's environment, and MCP's
- * `authInfo`/`sessionId` + optional `createMessage`/`sendLog`. A deployment
- * wanting a richer `caller` composes it in its own augmentation, the same way
- * it composes any other store member (docs/design/typed-store-spec.md §2).
+ * projector that has a per-call source to populate it FROM (see
+ * `CoreStores.caller`). Deliberately `Store` (a plain bag of unknown-typed
+ * fields) at the CORE declaration: no single concrete shape unifies HTTP's
+ * raw header pass-through, CLI's environment, MCP's `authInfo`/`sessionId` +
+ * optional `createMessage`/`sendLog`, and GraphQL's resolver-`context`-
+ * derived bag (headers when `context.request` is a `Request`, the context
+ * object verbatim otherwise — see graphql-api-projector's
+ * `callerFromContext`). A deployment wanting a richer `caller` composes it
+ * in its own augmentation, the same way it composes any other store member
+ * (docs/design/typed-store-spec.md §2).
+ *
+ * One documented exception: json-rpc-api-projector's WebSocket transport
+ * (`createJsonRpcWebSocketHandlers`) always passes `caller: {}` — a
+ * `message` handler receives no per-message `Request`/headers at all, so
+ * there is genuinely nothing to populate it from at that layer (see that
+ * function's own doc comment for the structural reason and the documented
+ * workaround: bake per-connection identity into the tree's handlers
+ * instead). Its HTTP transport (`createJsonRpcHttpHandler`) populates
+ * `caller` from request headers like every other request-shaped transport.
  */
 export type CallerStoreShape = Store;
 
@@ -54,8 +67,12 @@ export type CallerStoreShape = Store;
  * docs/design/middleware-and-caller-context.md), so it belongs on the shared
  * registry instead of being redundantly declared three times. HTTP populates
  * it from auth headers/cookies, CLI from environment, MCP from the SDK's
- * `authInfo`/`sessionId` — see each projector's stores factory
- * (`httpStores`, `buildInput`, `assembleArgumentInput`).
+ * `authInfo`/`sessionId`, GraphQL from the resolver's own `context` argument,
+ * and json-rpc's HTTP transport from request headers — see each projector's
+ * stores factory (`httpStores`, `buildInput`, `assembleArgumentInput`,
+ * `callerFromContext`, `callerFromRequestHeaders`). See `CallerStoreShape`'s
+ * own doc comment (above) for the one documented exception: json-rpc's
+ * WebSocket transport, which has no per-message source to populate it from.
  */
 export interface CoreStores {
   caller: CallerStoreShape;
@@ -679,6 +696,39 @@ export type MismatchedEncodingMapDecoders<H, Meta, NS extends "http" | "cli"> =
               : never;
           }[Extract<keyof M, string>]
     : never;
+
+/**
+ * `MismatchedEncodingMapDecoders`, folded over every namespace this module's
+ * decoder-typing check covers (`"http"`, `"cli"` — see this section's header
+ * comment for why exactly these two, structurally, and no others: mcp/
+ * graphql/jsonrpc/identity have no per-field wire derivation for this check
+ * to run against at all, not an oversight but `apply-validation-build.ts`'s
+ * own documented scope cut) into ONE result `node.ts`'s `CheckedContributions`
+ * can consume without itself naming either namespace.
+ *
+ * This is the seam that keeps `node.ts` protocol-blind
+ * (docs/design/meta-role-split-spec.md's invariant: "No protocol name...
+ * may appear anywhere in packages/api-tree/src/node.ts") while this file
+ * keeps its own already-argued-for structural knowledge of exactly `http`/
+ * `cli` (this section's header comment: "reads only `Meta["http"]`/
+ * `Meta["cli"]` STRUCTURALLY, by literal key, never by importing either
+ * package's own meta-fragment interface"). `node.ts` no longer needs to
+ * enumerate namespaces itself — it calls this one generic entry point and
+ * reports whichever namespace (if any) came back mismatched, via the
+ * `namespace` field in the result rather than via a namespace-named marker
+ * property.
+ *
+ * Checks `"http"` first, matching `CheckedContributions`'s prior check order
+ * (a leaf mismatched under both namespaces at once reports `"http"`, the
+ * same leaf position that order already reported before this fold existed).
+ */
+export type EncodingMapDecoderMismatch<H, Meta> = [
+  MismatchedEncodingMapDecoders<H, Meta, "http">,
+] extends [never]
+  ? [MismatchedEncodingMapDecoders<H, Meta, "cli">] extends [never]
+    ? never
+    : { readonly namespace: "cli"; readonly fields: MismatchedEncodingMapDecoders<H, Meta, "cli"> }
+  : { readonly namespace: "http"; readonly fields: MismatchedEncodingMapDecoders<H, Meta, "http"> };
 
 // ============================================================================
 // Assembler

@@ -124,17 +124,60 @@ function isAsyncIterable(v: unknown): v is AsyncIterable<unknown> {
 // ============================================================================
 
 /**
+ * Populate the `caller` store from a resolver's own `context` argument
+ * (graphql-js's third positional resolver parameter, `contextValue` —
+ * `execute`/`subscribe`'s own `unknown`-typed passthrough, see server.ts).
+ * `contextValue` is entirely deployment/transport-controlled — this package
+ * cannot know its shape ahead of time the way `httpStores`
+ * (http-api-projector/src/decode.ts) knows it always has a real `Request` —
+ * so this mirrors http's own "dump auth-relevant data key-by-key, parsing is
+ * the consumer's job" convention (docs/design/middleware-and-caller-
+ * context.md) against the two shapes this package's own transports actually
+ * produce:
+ *
+ *   - the HTTP preset's `{ request: req }` (presets.ts) — when `context` has
+ *     a `request` that's a real `Request`, its headers are dumped the exact
+ *     same way `httpStores` dumps them, so `caller.authorization`/
+ *     `caller.cookie` read identically whether a leaf is reached via
+ *     http-api-projector or this preset's `/graphql` endpoint.
+ *   - the WebSocket preset's `{ ...opts.context, connectionParams }` (ws.ts)
+ *     — no `request` field, so the whole context object is used as `caller`
+ *     directly; `connectionParams` (whatever a graphql-ws client sent on
+ *     `connection_init`, e.g. an auth token) lands at `caller.connectionParams`.
+ *
+ * Any other `context` shape a caller supplies via a hand-rolled transport
+ * (or a direct `server.execute(query, vars, context)` call) falls into the
+ * second branch — used as `caller` verbatim when it's a plain object, `{}`
+ * when it isn't an object at all. Never throws: an unrecognized `context`
+ * shape degrades to an empty `caller`, matching the prior (always-`{}`)
+ * behavior for anyone not on one of the two named transports.
+ */
+function callerFromContext(context: unknown): Record<string, unknown> {
+  if (typeof context !== "object" || context === null) return {};
+  const ctx = context as Record<string, unknown>;
+  if (ctx.request instanceof Request) {
+    const caller: Record<string, unknown> = {};
+    for (const [key, value] of ctx.request.headers.entries()) caller[key] = value;
+    return caller;
+  }
+  return ctx;
+}
+
+/**
  * Assemble a field's handler input bag from its resolver `args` object via
  * the shared `assemble()` pipeline. `args` already is the "argument" store's
  * raw values (see module doc) — `paramNames` is `entry.inputNames`, computed
  * once by `projectGraphQL` (captured-fallback names + declared-arg names, in
- * that order — see project.ts's `buildDispatch`).
+ * that order — see project.ts's `buildDispatch`). `context` is the
+ * resolver's own third argument, threaded through to populate `caller` (see
+ * `callerFromContext`).
  */
 function assembleGraphQLInput(
   entry: Dispatch,
   args: Record<string, unknown>,
+  context: unknown,
 ): { readonly input: Record<string, unknown>; readonly stores: GraphQLStoreBag } {
-  const stores: GraphQLStoreBag = { argument: args, caller: {} };
+  const stores: GraphQLStoreBag = { argument: args, caller: callerFromContext(context) };
   const input = assemble(stores, entry.inputNames, entry.sourceMap, "argument");
   return { input, stores };
 }
@@ -159,9 +202,10 @@ export type ResolverOptions = {
   /**
    * Around-hooks wrapping the handler call — `F => F` where
    * `F = (input, stores) => result`. `stores` is the raw pre-assembly stores
-   * built for input assembly (`assembleGraphQLInput` — today just the
-   * `argument` store, the resolver's own `args`); the handler itself never
-   * sees `stores`. Empty/absent by default (no-op, zero overhead).
+   * built for input assembly (`assembleGraphQLInput` — the `argument` store,
+   * the resolver's own `args`, plus `caller`, populated from the resolver's
+   * own `context` argument — see `callerFromContext`); the handler itself
+   * never sees `stores`. Empty/absent by default (no-op, zero overhead).
    */
   readonly middleware?: readonly GraphQLHandlerMiddleware[];
   /**
@@ -246,8 +290,8 @@ function createFieldResolver(entry: Dispatch, options: ResolverOptions): FieldRe
   ): unknown | Promise<unknown> => runHandler(entry, input, options.errorEncoder, detectResult);
   const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
 
-  return async (_parent, args) => {
-    const { input, stores } = assembleGraphQLInput(entry, args);
+  return async (_parent, args, context) => {
+    const { input, stores } = assembleGraphQLInput(entry, args, context);
     return callHandler(input, stores);
   };
 }
@@ -299,8 +343,8 @@ function createSubscriptionResolver(
   const callHandler = middleware.length === 0 ? base : composeMiddleware(middleware, base);
 
   return {
-    subscribe: async (_parent, args) => {
-      const { input, stores } = assembleGraphQLInput(entry, args);
+    subscribe: async (_parent, args, context) => {
+      const { input, stores } = assembleGraphQLInput(entry, args, context);
       const result: unknown = await callHandler(input, stores);
       if (!isAsyncIterable(result)) {
         throw new GraphQLError(
