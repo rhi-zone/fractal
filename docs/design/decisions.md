@@ -5,6 +5,36 @@ Each entry: what was decided, why, and what evidence or prior work grounds it.
 
 ---
 
+## Customizable pagination field names exist to match arbitrary backend naming (2026-08-21)
+
+**Context:** `paginated()`'s `inputCursorParam`/`inputOffsetParam`/`inputLimitParam`
+options (`project.ts`'s `HttpLeafMetaProperties.paginated`) were added without any
+written rationale — traced to one copy-pasted example in an original task prompt,
+never explained in a commit message, doc, or design discussion. `inputCursorParam`
+and `inputOffsetParam` were wired into both `extensions/pagination.ts` (client,
+`nextRequestFor`) and `route.ts` (server, `pageLinkHeader`); `inputLimitParam` was
+declared and documented in `directive-contract.md` but never wired up on either
+side.
+
+**Decision:** The customization exists to let a generated client match whatever
+pagination field names a target backend already uses, when that backend's API
+shape is fixed and not this framework's own choice to make — real-world APIs vary
+widely here: GitHub uses `page`/`per_page`, Stripe uses `starting_after`/`limit`,
+Twitter/X uses `cursor`/`max_results`, Shopify uses `page_info`/`limit`. That
+variance applies equally to the limit field as to cursor/offset — `per_page` vs.
+`limit` vs. `max_results` vs. `page_size` is exactly the same shape of naming
+disagreement `per_page` vs. `page_info` vs. `starting_after` is. There is no
+principled reason to expose the override for two of the three fields and leave the
+third aspirational. Going forward, `inputCursorParam`, `inputOffsetParam`, and
+`inputLimitParam` get equal treatment: all three are real, wired options, none
+selectively excluded.
+
+**Evidence:** `inputLimitParam` wiring landed alongside this entry — see the
+following commit. `directive-contract.md`'s pagination row and
+`extensions/pagination.ts`'s module doc updated accordingly.
+
+---
+
 ## `kind` is the canonical DU discriminant field name (2026-07-09)
 
 **Context:** The codebase had inconsistent discriminant naming — `DispatchMarker` used
