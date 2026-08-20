@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Blocks commits whose staged changes contain any sensitive term listed in
+# .sensitive-terms.local (gitignored, not tracked — see .gitignore).
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+terms_file="$repo_root/.sensitive-terms.local"
+
+if [[ ! -f "$terms_file" ]]; then
+  # No local term list present (e.g. fresh clone) — nothing to check.
+  exit 0
+fi
+
+blocked=0
+
+while IFS= read -r term; do
+  [[ -z "$term" ]] && continue
+
+  while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    matches="$(git diff --cached -U0 -- "$file" \
+      | grep -nE '^\+' \
+      | grep -viE '^\+\+\+' \
+      | grep -inE "$term" || true)"
+
+    if [[ -n "$matches" ]]; then
+      blocked=1
+      echo "error: commit blocked — \"$file\" contains the sensitive term \"${term}\"" >&2
+      echo "  use a placeholder instead: \"the sibling codebase\" / \"The sibling codebase\" / \"THE SIBLING CODEBASE\"" >&2
+      echo "  matching added lines:" >&2
+      echo "$matches" | sed 's/^/    /' >&2
+    fi
+  done < <(git diff --cached --name-only -- . ":(exclude).sensitive-terms.local")
+
+  # Also check the staged commit message target isn't relevant here (handled
+  # separately by a commit-msg hook if ever added); this hook only covers
+  # staged file content.
+done < "$terms_file"
+
+if [[ "$blocked" -eq 1 ]]; then
+  exit 1
+fi
+
+exit 0

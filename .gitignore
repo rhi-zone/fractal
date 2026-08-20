@@ -38,6 +38,10 @@ examples/doc-site-verification/starlight/src/content/docs/api/
 # Local-only data (e.g. test corpora), never tracked
 .local-data/
 
+# Sensitive term list read by the pre-commit hook (.githooks/pre-commit),
+# never tracked
+.sensitive-terms.local
+
 # Spike logs
 spike/*/logs/commit.log
 
