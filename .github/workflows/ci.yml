@@ -30,6 +30,18 @@ jobs:
       - name: Test
         run: nix develop --command bun run test
 
+      # Verifies the committed generated artifact
+      # (src/generated/apply-validation.ts) still matches what the current
+      # generator produces from src/tree.ts — the same drift `bun run test`
+      # doesn't catch on its own, since a stale artifact can still typecheck
+      # and pass its own tests. `codegen:check` formats the freshly-generated
+      # source through oxfmt before comparing (cli.ts's `runCheck`), matching
+      # how the committed file itself was formatted, so this only fails on
+      # real drift, not style.
+      - name: Codegen check (library-api example)
+        run: nix develop --command bun run codegen:check
+        working-directory: examples/library-api
+
       # compile-check.test.ts (part of the type-ir package, already covered by
       # `bun run test` above) shells out to each target language's real
       # compiler/checker — tsc, go, cargo, swiftc, ghc, dotnet, g++, crystal,

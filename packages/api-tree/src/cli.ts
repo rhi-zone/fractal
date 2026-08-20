@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { spawnSync } from "node:child_process";
 import { buildWireApplyValidationModuleSource } from "./apply-validation-build.ts";
 import { buildSchemaModuleSource } from "./schema-build.ts";
 import { createExtractorProgram } from "./extract.ts";
@@ -123,6 +124,29 @@ function withHeader(source: string): string {
   return GENERATED_HEADER + source;
 }
 
+/** Formats `source` through the repo's `oxfmt` (via `bunx`, so it resolves
+ * from whichever workspace package's node_modules the check is invoked from
+ * — same binary `bun run format`/`format:check` use at the repo root) the
+ * same way the committed artifact was formatted before it was committed.
+ * `runCheck` needs this because it compares in-memory generator output
+ * against a committed file that went through `oxfmt --write .` after being
+ * generated — comparing raw generator bytes against that formatted file
+ * fails unconditionally on style alone, regardless of real drift. `outFile`
+ * is passed only as `--stdin-filepath` so oxfmt infers the right parser
+ * (TypeScript) and any path-based formatting config; the file itself is
+ * never read or written. */
+function formatWithOxfmt(source: string, outFile: string): string {
+  const result = spawnSync("bunx", ["oxfmt", `--stdin-filepath=${outFile}`], {
+    input: source,
+    encoding: "utf-8",
+  });
+  if (result.status !== 0) {
+    const stderr = result.stderr ?? "";
+    throw new Error(`oxfmt failed formatting ${outFile} for comparison: ${stderr}`);
+  }
+  return result.stdout;
+}
+
 function ensureParentDir(outFile: string): void {
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
 }
@@ -237,16 +261,27 @@ function runCheck(
   }
   const program = createExtractorProgram(entryFile);
   const source = withHeader(builder(entryFile, outFile, program));
+  // Compare the *formatted* generator output against the committed file —
+  // the committed artifact went through `oxfmt --write .` after `build`
+  // wrote it (build itself emits raw, unformatted output), so diffing raw
+  // `source` against it would fail on style alone even with zero real drift
+  // (audit §7#5).
+  const formattedSource = formatWithOxfmt(source, outFile);
   const existing = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : undefined;
-  if (existing === source) {
+  if (existing === formattedSource) {
     // Refresh cache metadata now that we've already paid for building the
     // Program and the fresh source — a from-scratch `check` (no cache file,
     // or a prior miss) that confirms the output is still correct previously
     // wrote nothing, so every subsequent `check` repaid the exact same full
     // cost again (audit §6#5). Only done on the up-to-date branch: writing
     // metadata on the stale branch below would record a fresh outputHash
-    // for content that was never actually written to `outFile`.
-    writeCacheMetadata(entryFile, outFile, program, source, cacheOpts);
+    // for content that was never actually written to `outFile`. Hashed as
+    // `formattedSource`, not raw `source` — `outFile` on disk holds the
+    // oxfmt-formatted bytes, and `checkCache` compares its stored
+    // `outputHash` against `hashFile(outFile)` next run; hashing raw
+    // `source` here would immediately mismatch that and force a full
+    // regenerate+format+compare on every subsequent `check`.
+    writeCacheMetadata(entryFile, outFile, program, formattedSource, cacheOpts);
     process.stdout.write(`up to date: ${outFile}\n`);
     return;
   }
