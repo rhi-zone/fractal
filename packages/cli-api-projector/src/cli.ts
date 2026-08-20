@@ -42,7 +42,7 @@
 //   packages/api-tree/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
@@ -52,6 +52,7 @@ import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
 import {
   assemble,
   composeErrorEncoders,
+  composeMiddleware,
   isCursorPage,
   isOffsetPage,
   isPageShape,
@@ -341,22 +342,6 @@ export type CliMiddleware = (
   next: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
 ) => (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>;
 
-/**
- * Compose `middleware` around `base`, first entry outermost — `middleware[0]`
- * wraps `middleware[1]` wraps ... wraps `base`. An empty array returns `base`
- * unchanged (identity — no wrapping overhead).
- */
-function composeMiddleware(
-  middleware: readonly CliMiddleware[],
-  base: (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: CliStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base;
-  for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped);
-  }
-  return wrapped;
-}
-
 // ============================================================================
 // ALS dispatch context — separate from CliMiddleware's (input, stores). ALS
 // is a side channel (see docs/design/middleware-and-caller-context.md); this
@@ -454,9 +439,7 @@ export type CliLeafMeta = {
  * inherited `CliSharedMetaProperties` shape) at different call sites below.
  */
 export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
-  const c = meta.cli;
-  if (typeof c !== "object" || c === null) return {};
-  return c;
+  return readMetaBag<CliLeafMetaProperties>(meta.cli);
 }
 
 // ============================================================================

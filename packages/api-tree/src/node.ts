@@ -69,6 +69,22 @@ export interface LeafMeta extends SharedMeta {
 export interface BranchMeta extends SharedMeta {}
 
 /**
+ * Safely read a namespaced meta bag — `meta.<namespace>` — as an object,
+ * `{}` when it's absent or not an object. Every projector's own
+ * `get<Namespace>Meta` (http, cli, mcp, graphql, jsonrpc, http-api-
+ * projector's openapi sub-bag) was this exact three-line guard under a
+ * namespace-specific name; this is the one implementation they now share,
+ * called with the already-namespace-scoped value (`meta.http`, `meta.cli`,
+ * ...) and the caller's own `<Namespace>MetaProperties` type parameter.
+ */
+export function readMetaBag<Properties extends object>(
+  namespaceValue: unknown,
+): Properties | Record<string, never> {
+  if (typeof namespaceValue !== "object" || namespaceValue === null) return {};
+  return namespaceValue as Properties;
+}
+
+/**
  * True when `T` has at least one required key. `{}` is assignable from (and
  * to) any object type with only optional keys, so `{} extends T` is false
  * exactly when `T` has a required key.

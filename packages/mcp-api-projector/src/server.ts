@@ -71,6 +71,7 @@ import type { LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import {
   assemble,
   composeErrorEncoders,
+  composeMiddleware,
   isResultShape,
   isStreamChunk,
   isStreamProgress,
@@ -677,18 +678,6 @@ type McpRequestExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 export type McpMiddleware = (
   next: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
 ) => (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>;
-
-/** Wrap `base` in each middleware, first entry ending up outermost. An empty list returns `base` itself, unwrapped. */
-function composeMiddleware(
-  middleware: readonly McpMiddleware[],
-  base: (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: McpStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base;
-  for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped);
-  }
-  return wrapped;
-}
 
 // ============================================================================
 // ALS dispatch context

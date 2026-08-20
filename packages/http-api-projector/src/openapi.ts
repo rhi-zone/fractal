@@ -29,7 +29,7 @@
 //   packages/api-tree/src/tree.ts               — extractToolSchemas, SchemaMap
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
@@ -244,15 +244,11 @@ export interface OpenApiLeafMeta {
 export type OpenApiMeta = OpenApiLeafMetaProperties;
 
 function getOpenApiSharedMeta(meta: OpenApiSharedMeta): OpenApiSharedMetaProperties {
-  const o = meta.openapi;
-  if (typeof o !== "object" || o === null) return {};
-  return o;
+  return readMetaBag<OpenApiSharedMetaProperties>(meta.openapi);
 }
 
 function getOpenApiMeta(meta: OpenApiLeafMeta): OpenApiLeafMetaProperties {
-  const o = meta.openapi;
-  if (typeof o !== "object" || o === null) return {};
-  return o;
+  return readMetaBag<OpenApiLeafMetaProperties>(meta.openapi);
 }
 
 // ============================================================================

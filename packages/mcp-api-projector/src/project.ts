@@ -53,7 +53,7 @@
 //                                                and which of those concepts recur
 //                                                across projections
 
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import { assertUniqueName } from "@rhi-zone/fractal-api-tree/tree";
@@ -385,9 +385,7 @@ export type McpBranchMeta = {
 export function getMcpMeta(
   meta: McpLeafMeta & McpBranchMeta,
 ): McpLeafMetaProperties & McpBranchMetaProperties {
-  const m = meta.mcp;
-  if (typeof m !== "object" || m === null) return {};
-  return m;
+  return readMetaBag<McpLeafMetaProperties & McpBranchMetaProperties>(meta.mcp);
 }
 
 // ============================================================================

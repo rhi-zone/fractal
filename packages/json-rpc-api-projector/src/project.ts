@@ -50,7 +50,7 @@
 //   docs/design/router-model.md                       — Node Shape, Dispatch, fallback
 
 import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc";
-import { isLeaf } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
@@ -170,9 +170,7 @@ export type JsonRpcBranchMeta = {
 export function getJsonRpcMeta(
   meta: JsonRpcLeafMeta & JsonRpcBranchMeta,
 ): JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties {
-  const j = meta.jsonrpc;
-  if (typeof j !== "object" || j === null) return {};
-  return j;
+  return readMetaBag<JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties>(meta.jsonrpc);
 }
 
 // ============================================================================

@@ -17,6 +17,7 @@ import { GraphQLError } from "graphql";
 import {
   assemble,
   composeErrorEncoders,
+  composeMiddleware,
   isResultShape,
   isStreamChunk,
   isStreamProgress,
@@ -150,18 +151,6 @@ function assembleGraphQLInput(
 export type GraphQLHandlerMiddleware = (
   next: (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>,
 ) => (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>;
-
-/** Compose `middleware` around `base`, first entry outermost. An empty array returns `base` unchanged. */
-function composeMiddleware(
-  middleware: readonly GraphQLHandlerMiddleware[],
-  base: (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown>,
-): (input: Record<string, unknown>, stores: GraphQLStoreBag) => unknown | Promise<unknown> {
-  let wrapped = base;
-  for (let i = middleware.length - 1; i >= 0; i--) {
-    wrapped = middleware[i]!(wrapped);
-  }
-  return wrapped;
-}
 
 /** Options for `createResolver`. */
 export type ResolverOptions = {

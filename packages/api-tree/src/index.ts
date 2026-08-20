@@ -87,6 +87,30 @@ export const compose =
   (a) =>
     g(f(a));
 
+/**
+ * Wrap `base` in each entry of `middleware`, first entry ending up outermost
+ * — `middleware[0]` wraps `middleware[1]` wraps ... wraps `base`. An empty
+ * array returns `base` unchanged (identity — no wrapping overhead).
+ *
+ * Generic over any function shape `F` a projector's own middleware type
+ * wraps (`(next: F) => F`) — cli-api-projector's `CliMiddleware`,
+ * graphql-api-projector's `GraphQLHandlerMiddleware`, and
+ * mcp-api-projector's `McpMiddleware` all had this exact loop copied under a
+ * type-specific name; this is the one implementation they now share, the
+ * same reasoning as `assemble`/`composeErrorEncoders` living here instead of
+ * per-projector (see input.ts's module doc).
+ */
+export function composeMiddleware<F extends (...args: never[]) => unknown>(
+  middleware: readonly ((next: F) => F)[],
+  base: F,
+): F {
+  let wrapped = base;
+  for (let i = middleware.length - 1; i >= 0; i--) {
+    wrapped = middleware[i]!(wrapped);
+  }
+  return wrapped;
+}
+
 /** Left-to-right value threading: `pipe(a, f, g)` is `g(f(a))`. */
 export function pipe<A>(a: A): A;
 export function pipe<A, B>(a: A, f: Fn<A, B>): B;
