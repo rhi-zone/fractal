@@ -139,6 +139,24 @@ describe("wire profiles — per-profile emission", () => {
     expect(err.kind).toBe("err");
     expect(err.errors[0]!.kind).toBe("max");
   });
+
+  // Regression: `defaultWireLeaf`'s fallback for a kind with no
+  // `checkHandlers` entry (e.g. `unknown` — nothing to structurally
+  // validate) used to always emit an `if (!(cond))` guard, even when `cond`
+  // was the literal `"true"`. oxfmt simplifies the emitted `!(true)` to
+  // `!true`, which then trips oxlint's `no-constant-condition` on genuinely
+  // dead code. The fix skips emitting the guard entirely for this case.
+  it("unknown leaf: no dead always-false guard emitted, value still passes through", () => {
+    const ref = t(types.object({ payload: t(types.unknown) }));
+    const source = compileWireModule([{ name: "Anything", ref }], [identityProfile]);
+    expect(source).not.toContain("!(true)");
+    expect(source).not.toContain("!true");
+    const v = evalWireEntry("Anything", ref, identityProfile);
+    expect(v.parse({ payload: { anything: "goes" } })).toEqual({
+      kind: "ok",
+      value: { payload: { anything: "goes" } },
+    });
+  });
 });
 
 describe("wire profiles — strict boolean encoding", () => {

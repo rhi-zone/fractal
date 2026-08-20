@@ -1308,6 +1308,11 @@ function encodingErrorStmt(pathExpr: string, expectedText: string, v: string): s
 function defaultWireLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
   const handler = resolve(ref.shape.kind, checkHandlers);
   const cond = handler === undefined ? "true" : handler(ref, v, ctx);
+  // A literal-`"true"` condition (no handler, or a handler that says "always
+  // valid", e.g. `unknown`) means "nothing to structurally validate" —
+  // emitting `if (!(true))` would be dead code that oxlint's
+  // `no-constant-condition` then flags, so skip the guard entirely.
+  if (cond === "true") return { stmts: [], outExpr: v };
   return { stmts: [`if (!(${cond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
 }
 
