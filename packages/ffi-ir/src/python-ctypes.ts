@@ -1,4 +1,5 @@
 import type { TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Python ctypes projector — Python source (a `ctypes.CDLL` load, per-function
@@ -65,14 +66,6 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // escaping, snake_case conversion) don't apply here. Python identifier rules
 // and keyword list are re-derived below, self-contained (each projector file
 // owns its own copy of these small helpers).
-
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
 
 // Python 3 reserved keywords (https://docs.python.org/3/reference/lexical_analysis.html#keywords)
 // — cannot appear as a plain identifier.

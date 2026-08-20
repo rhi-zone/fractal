@@ -87,11 +87,9 @@ function decapitalize(name: string): string {
 
 // ReScript reserved words that cannot be used as an `external`'s binding
 // identifier (the left-hand name) — mirrors type-ir's `rescript-native.ts`
-// RESERVED set (not imported: that file doesn't export it, and
-// `codegen-helpers.ts` isn't part of type-ir's public package exports, only
-// reachable within type-ir's own src — same "small local duplicate, not a
-// cross-package reach-in" precedent `wasm-bindgen.ts` sets with its own local
-// `toSnakeCase`).
+// RESERVED set, duplicated here because that file doesn't export its set
+// (unlike `codegen-helpers.ts`'s helpers, which this package now imports
+// directly via `@rhi-zone/fractal-type-ir/codegen-helpers`).
 const RESERVED = new Set([
   "and",
   "as",

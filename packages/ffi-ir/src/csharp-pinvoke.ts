@@ -6,6 +6,7 @@ import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir";
 // `wasm-bindgen.ts` (ffi-ir's own sibling) imports this module for its own
 // "bytes" reference. This file uses no named export from it.
 import "@rhi-zone/fractal-type-ir/kinds/common";
+import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // .NET/P-Invoke consumer-side projector — the caller of a C-ABI shared
@@ -128,14 +129,6 @@ import type { FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts
 // nothing on the producer side to verify it against. Throws explicitly,
 // matching the throw-not-degrade convention `wasm-bindgen.ts`/`rust-c-abi.ts`
 // already use for kinds/disciplines they can't realize on their own targets.
-
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
 
 function toPascalCase(name: string): string {
   return name

@@ -1,20 +1,7 @@
 import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 import { toGleamType } from "@rhi-zone/fractal-type-ir/gleam";
+import { toSnakeCaseStripSeparators } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiParam, FfiRef, FfiShape } from "./index.ts";
-
-// `toSnakeCaseStripSeparators` duplicated here (not imported) — type-ir's
-// `codegen-helpers.ts` is an internal-only shared module across type-ir's own
-// projector files, not part of type-ir's public package.json `exports` map,
-// so it isn't reachable from this package. Same "each projector file is
-// self-contained" duplication precedent `wasm-bindgen.ts`/`rust-c-abi.ts` already
-// use for their own copy of `toSnakeCase` in this package.
-function toSnakeCaseStripSeparators(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
 
 // Gleam `@external` codegen for ffi-ir's boundary layer — module/function/
 // resource/ownership-discipline shapes — the JS-target analogue of

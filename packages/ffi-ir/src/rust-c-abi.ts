@@ -1,5 +1,6 @@
 import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 import { toRustType } from "@rhi-zone/fractal-type-ir/rust-serde";
+import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // rust-c-abi: Rust source (`#[repr(C)]` structs, `#[no_mangle] pub
@@ -41,18 +42,6 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // than silently approximating — same throw-not-degrade convention
 // `wasm-bindgen.ts` already uses for kinds/values it can't realize on its
 // own target's ABI.
-
-// Same conventions as rust-serde.ts/wasm-bindgen.ts (duplicated here — each
-// projector file in this package is self-contained, same precedent
-// wasm-bindgen.ts's own file header documents for its duplication of these
-// exact helpers relative to rust-serde.ts).
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
 
 const RUST_KEYWORDS = new Set([
   "type",

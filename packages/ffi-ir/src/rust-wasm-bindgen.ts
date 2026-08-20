@@ -8,6 +8,7 @@ import { t, type TypeRef } from "@rhi-zone/fractal-type-ir";
 // convention for the same reason (see `@rhi-zone/fractal-type-ir/kinds/common`).
 import "@rhi-zone/fractal-type-ir/kinds/common";
 import { toWasmBindgen, toWasmBindgenType } from "@rhi-zone/fractal-type-ir/rust-wasm-bindgen";
+import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts";
 
 // Rust codegen targeting wasm-bindgen for ffi-ir's boundary layer —
@@ -35,14 +36,6 @@ import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts
 // `requireSupportedOwnership` throws for both, matching the
 // throw-on-unsupported convention `wasm-bindgen.ts` already uses for type-ir
 // kinds it can't realize.
-
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
 
 function indent(block: string, prefix = "    "): string {
   return block

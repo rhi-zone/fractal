@@ -503,6 +503,10 @@
       "types": "./dist/derive.d.ts",
       "import": "./dist/derive.js"
     },
+    "./codegen-helpers": {
+      "types": "./dist/codegen-helpers.d.ts",
+      "import": "./dist/codegen-helpers.js"
+    },
     "./kinds/int-widths": {
       "types": "./dist/kinds/int-widths.d.ts",
       "import": "./dist/kinds/int-widths.js"

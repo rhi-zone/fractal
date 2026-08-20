@@ -9,6 +9,7 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 // wasm-bindgen.ts in this same package establishes the identical convention
 // for the identical reason.
 import "@rhi-zone/fractal-type-ir/kinds/common";
+import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // ffi-ir -> Deno FFI consumer projector — a consumer, not a producer, of the
@@ -94,14 +95,6 @@ import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "
 //     carry no equivalent function name in today's schema (index.ts defines
 //     `freeFn` only on the `opaque-handle` variant), so no such wrapper is
 //     synthesized for them.
-
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
 
 function toCamelCase(name: string): string {
   const snake = toSnakeCase(name);

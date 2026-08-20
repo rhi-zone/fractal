@@ -1,4 +1,5 @@
 import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir";
+import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Bun (`bun:ffi`) consumer projector — the JS-side counterpart to
@@ -59,17 +60,10 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 //     `rust-c-abi.ts`'s own scope decision for the identical discipline, for
 //     the identical reason: no such mechanism exists on this wire boundary.
 
-// Duplicated across every projector file in this package (see `rust-c-abi.ts`'s
-// identical copy) — `toSnakeCase` here must match `rust-c-abi.ts`'s symbol-naming
-// convention exactly, since this file's whole job is binding against symbols
-// that convention produced in the compiled library.
-function toSnakeCase(name: string): string {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .toLowerCase();
-}
+// `toSnakeCase` (imported above, from type-ir's shared `codegen-helpers.ts`)
+// must match `rust-c-abi.ts`'s symbol-naming convention exactly, since this
+// file's whole job is binding against symbols that convention produced in
+// the compiled library — both now share the same canonical implementation.
 
 const JS_RESERVED = new Set([
   "break",
