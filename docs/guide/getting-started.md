@@ -6,7 +6,15 @@ Not yet published to npm. Install from the monorepo (git or workspace link) unti
 
 ## Install
 
-The core packages are separate npm packages, composed via workspace/git dependency until publish:
+The core packages are separate npm packages, composed via workspace/git dependency until publish.
+
+If you want more than one protocol, start with the umbrella — one install for the core plus HTTP, CLI, and JSON-RPC behind subpaths (`@rhi-zone/fractal/http`, `/cli`, `/json-rpc`), with GraphQL and MCP as optional peers so neither protocol's runtime is loaded unless you ask for it:
+
+```sh
+bun add @rhi-zone/fractal
+```
+
+Or install only what you need, package by package — every projector is installable on its own:
 
 ```sh
 bun add @rhi-zone/fractal-api-tree
