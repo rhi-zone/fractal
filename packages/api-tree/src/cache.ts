@@ -1,6 +1,7 @@
 // Content-addressed incremental-build cache for the extract/codegen pipeline
-// (build.ts's `buildValidatorModuleSource`, schema-build.ts's
-// `buildSchemaModuleSource`, wired into cli.ts's build/watch/check commands).
+// (apply-validation-build.ts's `buildWireApplyValidationModuleSource`,
+// schema-build.ts's `buildSchemaModuleSource`, wired into cli.ts's
+// build/watch/check commands).
 // The cache key is content, not mtime: an entry is a hit only when the entry
 // file's own content and the content of every transitive file the extractor
 // reads are unchanged from the last successful build, and the output file's
@@ -12,8 +13,9 @@
 // type-IR fingerprint, not a file. Everything below this point (file-closure
 // hashing, mtime+size tiering, `reachability.ts`'s per-entry closures) is
 // Tier 1 — a cheap "could anything have changed" file-content gate. Tier 2
-// (the "Tier 2 primitives" section further down this file, plus build.ts's/
-// schema-build.ts's incremental build orchestration) narrows a Tier-1 miss
+// (the "Tier 2 primitives" section further down this file, plus
+// apply-validation-build.ts's/schema-build.ts's incremental build
+// orchestration) narrows a Tier-1 miss
 // down to which leaves actually changed. Read that spec before changing
 // either tier.
 //
@@ -30,8 +32,9 @@
 //
 // A batch caller (the sibling codebase's `codegen-fractal-validators.ts`) instead builds
 // ONE shared multi-root Program across many entries, to avoid paying a
-// fresh Program's multi-GB cost per entry (see build.ts's
-// `buildValidatorModuleSource` doc comment for the measured before/after).
+// fresh Program's multi-GB cost per entry (see
+// `@rhi-zone/fractal-type-ir/from-typescript`'s doc comment for the measured
+// numbers).
 // `program.getSourceFiles()` on that shared Program is the whole batch's
 // union closure, not any one entry's own closure — recording it unfiltered
 // against every entry means touching one slice's source invalidates every
@@ -108,8 +111,6 @@ import { createRequire } from "node:module";
 import * as path from "node:path";
 import ts from "typescript";
 
-const require = createRequire(import.meta.url);
-
 /** sha256 of a string, hex-encoded — the one hash primitive this module uses
  * throughout (entry/dependency file content, output content). */
 function sha256(content: string): string {
@@ -148,14 +149,32 @@ function statFile(
  * inside the package, and every real package's own manifest lives somewhere
  * above that file in the directory tree.
  *
+ * `fromFile` anchors the module resolution — resolved as if `require` were
+ * called from `fromFile`'s own directory, NOT from this module's (cache.ts's)
+ * location. That distinction matters for exactly one real layout: a consumer
+ * whose only `node_modules/@rhi-zone/*` symlinks live alongside its own
+ * source (e.g. `apps/web/node_modules/@rhi-zone/`), not hoisted to a root
+ * `node_modules` this package's own `dist/cache.js` can see by walking up
+ * from ITS location. `require.resolve` follows symlinks to their real path
+ * before searching `node_modules` upward, so resolving from cache.js's own
+ * location walks up the dependency's real checkout, not the consumer's
+ * install tree — a real checkout that may never have had its own
+ * `node_modules` installed at all (see
+ * docs/current/repo-audit-2026-08-20.md §1.1/§1.5). Resolving from
+ * `fromFile` (the entry file actually being extracted, always somewhere
+ * inside the consumer's own source tree) walks up the consumer's own
+ * `node_modules` chain instead, which is where a sibling `@rhi-zone/*`
+ * package is actually reachable from.
+ *
  * Returns `"unknown"` if resolution fails entirely (package not installed
  * under this name in whatever `node_modules`/workspace-link layout the
  * caller runs under) — a stable-but-not-invalidating value, since a caller
  * lacking the package at all can't be codegenning against it either.
  */
-function resolvePackageVersion(pkgName: string): string {
+function resolvePackageVersion(pkgName: string, fromFile: string): string {
   try {
-    const entry = require.resolve(pkgName);
+    const fromRequire = createRequire(path.resolve(fromFile));
+    const entry = fromRequire.resolve(pkgName);
     let dir = path.dirname(entry);
     for (;;) {
       const pkgJsonPath = path.join(dir, "package.json");
@@ -207,6 +226,21 @@ export function isTsBuiltinLibFile(fileName: string): boolean {
 export type CacheLocationOptions = {
   readonly cacheFile?: string;
   readonly cacheDir?: string;
+  /** Opaque fingerprint of any build-option state that affects the emitted
+   * artifact but isn't already covered by the tracked file closure or the
+   * toolchain-version signals (`tsVersion`/`typeIrVersion`/`apiTreeVersion`)
+   * — e.g. a `--tree-id`, a `runtimeImport` string, a `shouldShare`
+   * predicate's identity. Folded into both `checkCache`'s hit/miss decision
+   * and `readCarryForwardState`'s carry-forward eligibility, so a caller-
+   * option change (a different `--tree-id`, a changed `runtimeImport`) is a
+   * real miss instead of silently serving another option's artifact — see
+   * docs/current/repo-audit-2026-08-20.md §1.3 ("builder options are not
+   * part of the cache key at all") and §4. Compute however suits the
+   * caller's own options shape (string concatenation, a hash — anything
+   * stable across runs with the same effective options); omit (or leave `""`)
+   * when the caller has no such option state to guard, which preserves the
+   * pre-existing behavior exactly. */
+  readonly buildOptionsKey?: string;
 };
 
 function resolveCacheFile(outFile: string, opts?: CacheLocationOptions): string {
@@ -245,6 +279,22 @@ type CacheFileShape = {
   readonly version: 3;
   readonly tsVersion: string;
   readonly typeIrVersion: string;
+  /** `@rhi-zone/fractal-api-tree`'s own resolved version — gates a
+   * fractal-internal codegen-logic change the same way `typeIrVersion` gates
+   * a `fractal-type-ir` upgrade. Without this, a change to THIS package's own
+   * extraction/codegen (the `.js` that actually emits the artifact, not just
+   * the type surface `files` already fingerprints via tracked `.d.ts`s) was
+   * invisible to every cache check — see
+   * docs/current/repo-audit-2026-08-20.md §1.1/§2.1. Resolved the same way
+   * `typeIrVersion` is (see `resolvePackageVersion`'s doc comment). */
+  readonly apiTreeVersion: string;
+  /** Opaque caller-computed fingerprint of build options not already covered
+   * by the tracked file closure or the toolchain-version signals above (a
+   * `--tree-id`, a `runtimeImport`, a `shouldShare` predicate's identity) —
+   * see `CacheLocationOptions.buildOptionsKey`'s doc comment and
+   * docs/current/repo-audit-2026-08-20.md §1.3/§4. `""` for a caller with
+   * nothing to key on (preserves old behavior). */
+  readonly buildOptionsKey: string;
   readonly entryFile: string;
   /** Absolute file path -> recorded state, as of the last successful build —
    * the entry file itself is included under its own path, so an edit to the
@@ -327,12 +377,18 @@ function readMeta(outFile: string, opts?: CacheLocationOptions): CacheFileShape 
  * (a `fractal-type-ir` upgrade can change `compile.ts`'s own templates), so
  * that specifically disqualifies every leaf's carry-forward, not just the
  * ones whose fingerprint changed. */
-function toolchainMatches(meta: CacheFileShape, entryFile: string): boolean {
+function toolchainMatches(
+  meta: CacheFileShape,
+  entryFile: string,
+  opts?: CacheLocationOptions,
+): boolean {
   return (
     meta.version === 3 &&
     meta.entryFile === path.resolve(entryFile) &&
     meta.tsVersion === ts.version &&
-    meta.typeIrVersion === resolvePackageVersion("@rhi-zone/fractal-type-ir")
+    meta.typeIrVersion === resolvePackageVersion("@rhi-zone/fractal-type-ir", entryFile) &&
+    meta.apiTreeVersion === resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile) &&
+    meta.buildOptionsKey === (opts?.buildOptionsKey ?? "")
   );
 }
 
@@ -371,9 +427,16 @@ export function checkCache(
     return { hit: false, reason: "entry file path changed" };
   if (meta.tsVersion !== ts.version) return { hit: false, reason: "typescript version changed" };
 
-  const typeIrVersion = resolvePackageVersion("@rhi-zone/fractal-type-ir");
+  const typeIrVersion = resolvePackageVersion("@rhi-zone/fractal-type-ir", entryFile);
   if (meta.typeIrVersion !== typeIrVersion)
     return { hit: false, reason: "fractal-type-ir version changed" };
+
+  const apiTreeVersion = resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile);
+  if (meta.apiTreeVersion !== apiTreeVersion)
+    return { hit: false, reason: "fractal-api-tree version changed" };
+
+  if (meta.buildOptionsKey !== (opts?.buildOptionsKey ?? ""))
+    return { hit: false, reason: "build options changed" };
 
   const outputHash = hashFile(outFile);
   if (outputHash !== meta.outputHash) {
@@ -450,6 +513,24 @@ export function writeCacheMetadata(
       : program
           .getSourceFiles()
           .filter((sourceFile) => reachable.has(path.resolve(sourceFile.fileName)));
+  if (reachable !== undefined) {
+    // A `reachable` path absent from `program.getSourceFiles()` silently
+    // drops out of tracking (see this function's doc comment above) — that's
+    // intentionally not a thrown exception (the mismatch is expected to be
+    // rare and the build itself should still succeed), but staying silent
+    // about it meant the symptom (permanent stale hits for edits to the
+    // untracked file) was invisible until a wrong artifact shipped — see
+    // docs/current/repo-audit-2026-08-20.md §2.3. Surface it instead.
+    const present = new Set(
+      program.getSourceFiles().map((sourceFile) => path.resolve(sourceFile.fileName)),
+    );
+    const untracked = [...reachable].filter((file) => !present.has(path.resolve(file)));
+    if (untracked.length > 0) {
+      process.stderr.write(
+        `warning: writeCacheMetadata — ${untracked.length} path(s) in \`reachable\` are not in \`program\`'s parsed source files and will never be tracked (likely \`reachable\` computed against a different Program than \`program\`): ${untracked.slice(0, 5).join(", ")}${untracked.length > 5 ? `, … (${untracked.length - 5} more)` : ""}\n`,
+      );
+    }
+  }
   for (const sourceFile of sourceFiles) {
     if (isTsBuiltinLibFile(sourceFile.fileName)) continue;
     // `size`/`mtimeMs` come from a fresh `fs.statSync`, not the Program's
@@ -468,7 +549,9 @@ export function writeCacheMetadata(
   const meta: CacheFileShape = {
     version: 3,
     tsVersion: ts.version,
-    typeIrVersion: resolvePackageVersion("@rhi-zone/fractal-type-ir"),
+    typeIrVersion: resolvePackageVersion("@rhi-zone/fractal-type-ir", entryFile),
+    apiTreeVersion: resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile),
+    buildOptionsKey: opts?.buildOptionsKey ?? "",
     entryFile: path.resolve(entryFile),
     files,
     leafFingerprints,
@@ -584,7 +667,7 @@ export function readCarryForwardState(
   opts?: CacheLocationOptions,
 ): Pick<CacheFileShape, "leafFingerprints" | "leafArtifacts" | "defNamesFingerprint"> | undefined {
   const meta = readMeta(outFile, opts);
-  if (meta === undefined || !toolchainMatches(meta, entryFile)) return undefined;
+  if (meta === undefined || !toolchainMatches(meta, entryFile, opts)) return undefined;
   return {
     leafFingerprints: meta.leafFingerprints,
     leafArtifacts: meta.leafArtifacts,
@@ -593,7 +676,15 @@ export function readCarryForwardState(
 }
 
 // ============================================================================
-// withCache — the shared orchestration both build.ts and schema-build.ts use
+// withCache — a reference implementation of the checkCache -> build ->
+// writeCacheMetadata orchestration below, NOT currently called by
+// schema-build.ts, apply-validation-build.ts, or cli.ts — each hand-inlines
+// this exact sequence instead (see docs/current/repo-audit-2026-08-20.md
+// §2.4). Kept as the orchestration's single documented contract (and what
+// docs/design/ir-keyed-cache-spec.md describes) for a future caller that
+// wants it directly; a caller with its own header-prepending/write
+// convention still needs to satisfy the same "write those exact same bytes"
+// contract documented below whether or not it calls this function.
 // ============================================================================
 
 export type CachedBuildOutcome<T> =
@@ -610,10 +701,10 @@ export type CachedBuildOutcome<T> =
  * see the key-granularity decision above).
  *
  * `build` must return the exact string that gets (or will get) written to
- * `outFile` — `withCache` doesn't write `outFile` itself (callers already
- * have their own header-prepending/write conventions to preserve — see
- * build.ts's `writeValidatorModule` and cli.ts's `withHeader`), it only
- * needs the final bytes to compute `outputHash` for next time. Callers MUST
+ * `outFile` — `withCache` doesn't write `outFile` itself (a caller may have
+ * its own header-prepending/write convention to preserve — see cli.ts's
+ * `withHeader`), it only needs the final bytes to compute `outputHash` for
+ * next time. Callers MUST
  * write `outFile` themselves before (or immediately after) calling
  * `writeCacheMetadata` — `withCache` calls it automatically right after a
  * successful `build`, keyed to whatever bytes `build` returned, so as long
