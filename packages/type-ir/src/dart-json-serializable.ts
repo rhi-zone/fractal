@@ -210,6 +210,7 @@ function fromJsonExpr(ref: TypeRef, jsonExpr: string, ctx: Ctx, hint: string): s
 }
 
 // `toJson` serialization expression for a Dart field's value at `fieldExpr`.
+// eslint-disable-next-line only-used-in-recursion -- `ctx` is threaded through recursive calls for signature consistency with `fromJsonExpr`/`dartTypeName`, not consulted directly here.
 function toJsonExpr(ref: TypeRef, fieldExpr: string, ctx: Ctx, hint: string): string {
   const nullable = isNullable(ref);
   const kind = ref.shape.kind;
