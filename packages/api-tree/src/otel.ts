@@ -24,14 +24,16 @@
 //      concern belongs.
 //
 // HTTP is the one surface with something MORE to do than any tree-wrap could
-// give it: an incoming request carries real W3C `traceparent`/`tracestate`
-// headers, and a response carries a real status code — neither is visible at
-// the `Handler` level (`(input) => output`, no `Request`/`Response` in
-// sight). `http-api-projector/src/extensions/tracing.ts` (client side) and
-// its server-side counterpart in `http-api-projector/src/layers.ts` (not
-// this package — protocol-specific) build directly on the types/helpers
-// exported here (`parseTraceParent`/`formatTraceParent`/`runServerSpan`/
-// `runClientSpan`/`getActiveSpan`) instead of duplicating them.
+// give it: an incoming request carries a real W3C `traceparent` header, and a
+// response carries a real status code — neither is visible at the `Handler`
+// level (`(input) => output`, no `Request`/`Response` in sight).
+// `http-api-projector/src/extensions/tracing.ts` (client side) and its
+// server-side counterpart in `http-api-projector/src/layers.ts` (not this
+// package — protocol-specific) build directly on the types/helpers exported
+// here (`parseTraceParent`/`formatTraceParent`/`runServerSpan`/
+// `runClientSpan`/`getActiveSpan`) instead of duplicating them. Only
+// `traceparent` is handled end to end — `tracestate` is parsed by neither
+// this module nor its HTTP-side callers.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Handler, Node } from "./node.ts";
@@ -83,7 +85,6 @@ export type OtelSpanContext = {
   readonly traceId: string;
   readonly spanId: string;
   readonly traceFlags: number;
-  readonly traceState?: string;
   readonly isRemote?: boolean;
 };
 
