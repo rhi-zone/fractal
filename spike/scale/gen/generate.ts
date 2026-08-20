@@ -79,9 +79,10 @@ function variantA(routes: Route[]): string {
           `async (b: Body) => json({ id: ${r.i}, name: b.name, qty: b.qty }), bodySchema))`,
       );
     } else {
+      const ctxName = r.hasParam ? "ctx" : "_ctx";
       const paramExpr = r.hasParam ? `ctx.params.id` : `"${r.resource}"`;
       lines.push(
-        `  .${r.verb}("${r.pattern}", async (ctx) => json({ id: ${r.i}, key: ${paramExpr} }))`,
+        `  .${r.verb}("${r.pattern}", async (${ctxName}) => json({ id: ${r.i}, key: ${paramExpr} }))`,
       );
     }
   }
@@ -133,9 +134,10 @@ function variantB(routes: Route[]): string {
         `const h${r.i} = withValidation(async (b: Body) => json({ id: ${r.i}, name: b.name, qty: b.qty }), bodySchema)`,
       );
     } else {
+      const ctxName = r.hasParam ? "ctx" : "_ctx";
       const paramExpr = r.hasParam ? `ctx.params.id` : `"${r.resource}"`;
       lines.push(
-        `const h${r.i} = async (ctx: Ctx<"${r.pattern}">) => json({ id: ${r.i}, key: ${paramExpr} })`,
+        `const h${r.i} = async (${ctxName}: Ctx<"${r.pattern}">) => json({ id: ${r.i}, key: ${paramExpr} })`,
       );
     }
   }
@@ -183,9 +185,10 @@ function variantC1(routes: Route[]): string {
           `    ${r.verb}: withValidation(async (b: Body) => json({ id: ${r.i}, name: b.name, qty: b.qty }), bodySchema),`,
         );
       } else {
+        const ctxName = r.hasParam ? "ctx" : "_ctx";
         const paramExpr = r.hasParam ? `ctx.params.id` : `"${r.resource}"`;
         lines.push(
-          `    ${r.verb}: async (ctx: Ctx<"${pattern}">) => json({ id: ${r.i}, key: ${paramExpr} }),`,
+          `    ${r.verb}: async (${ctxName}: Ctx<"${pattern}">) => json({ id: ${r.i}, key: ${paramExpr} }),`,
         );
       }
     }
@@ -234,9 +237,10 @@ function variantC2(routes: Route[]): string {
         `const ${name} = defineRoute("${r.verb.toUpperCase()}", "${r.pattern}", withValidation(async (b: Body) => json({ id: ${r.i}, name: b.name, qty: b.qty }), bodySchema))`,
       );
     } else {
+      const ctxName = r.hasParam ? "ctx" : "_ctx";
       const paramExpr = r.hasParam ? `ctx.params.id` : `"${r.resource}"`;
       lines.push(
-        `const ${name} = defineRoute("${r.verb.toUpperCase()}", "${r.pattern}", async (ctx: Ctx<"${r.pattern}">) => json({ id: ${r.i}, key: ${paramExpr} }))`,
+        `const ${name} = defineRoute("${r.verb.toUpperCase()}", "${r.pattern}", async (${ctxName}: Ctx<"${r.pattern}">) => json({ id: ${r.i}, key: ${paramExpr} }))`,
       );
     }
   }

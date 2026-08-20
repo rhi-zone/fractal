@@ -2,7 +2,7 @@ import { json, withValidation } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree";
 import { buildClient, defineRoute } from "../contract";
 
-// Minimal Standard-Schema validator (no zod — isolate fractal's cost).
+// Minimal Standard-Schema validator (no zod, to isolate fractal's cost).
 interface Body {
   readonly name: string;
   readonly qty: number;
@@ -35,7 +35,7 @@ const r1 = defineRoute(
 const r2 = defineRoute("PUT", "/res2/:id", async (ctx: Ctx<"/res2/:id">) =>
   json({ id: 2, key: ctx.params.id }),
 );
-const r3 = defineRoute("GET", "/res3", async (ctx: Ctx<"/res3">) => json({ id: 3, key: "res3" }));
+const r3 = defineRoute("GET", "/res3", async (_ctx: Ctx<"/res3">) => json({ id: 3, key: "res3" }));
 const r4 = defineRoute("POST", "/res4/:id", async (ctx: Ctx<"/res4/:id">) =>
   json({ id: 4, key: ctx.params.id }),
 );
@@ -47,15 +47,15 @@ const r5 = defineRoute(
 const r6 = defineRoute("GET", "/res6/:id", async (ctx: Ctx<"/res6/:id">) =>
   json({ id: 6, key: ctx.params.id }),
 );
-const r7 = defineRoute("POST", "/res7", async (ctx: Ctx<"/res7">) => json({ id: 7, key: "res7" }));
+const r7 = defineRoute("POST", "/res7", async (_ctx: Ctx<"/res7">) => json({ id: 7, key: "res7" }));
 const r8 = defineRoute("PUT", "/res8/:id", async (ctx: Ctx<"/res8/:id">) =>
   json({ id: 8, key: ctx.params.id }),
 );
-const r9 = defineRoute("GET", "/res9", async (ctx: Ctx<"/res9">) => json({ id: 9, key: "res9" }));
+const r9 = defineRoute("GET", "/res9", async (_ctx: Ctx<"/res9">) => json({ id: 9, key: "res9" }));
 const r10 = defineRoute("POST", "/res10/:id", async (ctx: Ctx<"/res10/:id">) =>
   json({ id: 10, key: ctx.params.id }),
 );
-const r11 = defineRoute("PUT", "/res11", async (ctx: Ctx<"/res11">) =>
+const r11 = defineRoute("PUT", "/res11", async (_ctx: Ctx<"/res11">) =>
   json({ id: 11, key: "res11" }),
 );
 const r12 = defineRoute("GET", "/res12/:id", async (ctx: Ctx<"/res12/:id">) =>
@@ -69,7 +69,7 @@ const r13 = defineRoute(
 const r14 = defineRoute("PUT", "/res14/:id", async (ctx: Ctx<"/res14/:id">) =>
   json({ id: 14, key: ctx.params.id }),
 );
-const r15 = defineRoute("GET", "/res15", async (ctx: Ctx<"/res15">) =>
+const r15 = defineRoute("GET", "/res15", async (_ctx: Ctx<"/res15">) =>
   json({ id: 15, key: "res15" }),
 );
 const r16 = defineRoute("POST", "/res16/:id", async (ctx: Ctx<"/res16/:id">) =>
@@ -83,19 +83,19 @@ const r17 = defineRoute(
 const r18 = defineRoute("GET", "/res18/:id", async (ctx: Ctx<"/res18/:id">) =>
   json({ id: 18, key: ctx.params.id }),
 );
-const r19 = defineRoute("POST", "/res19", async (ctx: Ctx<"/res19">) =>
+const r19 = defineRoute("POST", "/res19", async (_ctx: Ctx<"/res19">) =>
   json({ id: 19, key: "res19" }),
 );
 const r20 = defineRoute("PUT", "/res20/:id", async (ctx: Ctx<"/res20/:id">) =>
   json({ id: 20, key: ctx.params.id }),
 );
-const r21 = defineRoute("GET", "/res21", async (ctx: Ctx<"/res21">) =>
+const r21 = defineRoute("GET", "/res21", async (_ctx: Ctx<"/res21">) =>
   json({ id: 21, key: "res21" }),
 );
 const r22 = defineRoute("POST", "/res22/:id", async (ctx: Ctx<"/res22/:id">) =>
   json({ id: 22, key: ctx.params.id }),
 );
-const r23 = defineRoute("PUT", "/res23", async (ctx: Ctx<"/res23">) =>
+const r23 = defineRoute("PUT", "/res23", async (_ctx: Ctx<"/res23">) =>
   json({ id: 23, key: "res23" }),
 );
 const r24 = defineRoute("GET", "/res24/:id", async (ctx: Ctx<"/res24/:id">) =>
@@ -109,7 +109,7 @@ const r25 = defineRoute(
 const r26 = defineRoute("PUT", "/res26/:id", async (ctx: Ctx<"/res26/:id">) =>
   json({ id: 26, key: ctx.params.id }),
 );
-const r27 = defineRoute("GET", "/res27", async (ctx: Ctx<"/res27">) =>
+const r27 = defineRoute("GET", "/res27", async (_ctx: Ctx<"/res27">) =>
   json({ id: 27, key: "res27" }),
 );
 const r28 = defineRoute("POST", "/res28/:id", async (ctx: Ctx<"/res28/:id">) =>
@@ -123,19 +123,19 @@ const r29 = defineRoute(
 const r30 = defineRoute("GET", "/res30/:id", async (ctx: Ctx<"/res30/:id">) =>
   json({ id: 30, key: ctx.params.id }),
 );
-const r31 = defineRoute("POST", "/res31", async (ctx: Ctx<"/res31">) =>
+const r31 = defineRoute("POST", "/res31", async (_ctx: Ctx<"/res31">) =>
   json({ id: 31, key: "res31" }),
 );
 const r32 = defineRoute("PUT", "/res32/:id", async (ctx: Ctx<"/res32/:id">) =>
   json({ id: 32, key: ctx.params.id }),
 );
-const r33 = defineRoute("GET", "/res33", async (ctx: Ctx<"/res33">) =>
+const r33 = defineRoute("GET", "/res33", async (_ctx: Ctx<"/res33">) =>
   json({ id: 33, key: "res33" }),
 );
 const r34 = defineRoute("POST", "/res34/:id", async (ctx: Ctx<"/res34/:id">) =>
   json({ id: 34, key: ctx.params.id }),
 );
-const r35 = defineRoute("PUT", "/res35", async (ctx: Ctx<"/res35">) =>
+const r35 = defineRoute("PUT", "/res35", async (_ctx: Ctx<"/res35">) =>
   json({ id: 35, key: "res35" }),
 );
 const r36 = defineRoute("GET", "/res36/:id", async (ctx: Ctx<"/res36/:id">) =>
@@ -149,7 +149,7 @@ const r37 = defineRoute(
 const r38 = defineRoute("PUT", "/res38/:id", async (ctx: Ctx<"/res38/:id">) =>
   json({ id: 38, key: ctx.params.id }),
 );
-const r39 = defineRoute("GET", "/res39", async (ctx: Ctx<"/res39">) =>
+const r39 = defineRoute("GET", "/res39", async (_ctx: Ctx<"/res39">) =>
   json({ id: 39, key: "res39" }),
 );
 const r40 = defineRoute("POST", "/res40/:id", async (ctx: Ctx<"/res40/:id">) =>
@@ -163,19 +163,19 @@ const r41 = defineRoute(
 const r42 = defineRoute("GET", "/res42/:id", async (ctx: Ctx<"/res42/:id">) =>
   json({ id: 42, key: ctx.params.id }),
 );
-const r43 = defineRoute("POST", "/res43", async (ctx: Ctx<"/res43">) =>
+const r43 = defineRoute("POST", "/res43", async (_ctx: Ctx<"/res43">) =>
   json({ id: 43, key: "res43" }),
 );
 const r44 = defineRoute("PUT", "/res44/:id", async (ctx: Ctx<"/res44/:id">) =>
   json({ id: 44, key: ctx.params.id }),
 );
-const r45 = defineRoute("GET", "/res45", async (ctx: Ctx<"/res45">) =>
+const r45 = defineRoute("GET", "/res45", async (_ctx: Ctx<"/res45">) =>
   json({ id: 45, key: "res45" }),
 );
 const r46 = defineRoute("POST", "/res46/:id", async (ctx: Ctx<"/res46/:id">) =>
   json({ id: 46, key: ctx.params.id }),
 );
-const r47 = defineRoute("PUT", "/res47", async (ctx: Ctx<"/res47">) =>
+const r47 = defineRoute("PUT", "/res47", async (_ctx: Ctx<"/res47">) =>
   json({ id: 47, key: "res47" }),
 );
 const r48 = defineRoute("GET", "/res48/:id", async (ctx: Ctx<"/res48/:id">) =>
@@ -189,7 +189,7 @@ const r49 = defineRoute(
 const r50 = defineRoute("PUT", "/res50/:id", async (ctx: Ctx<"/res50/:id">) =>
   json({ id: 50, key: ctx.params.id }),
 );
-const r51 = defineRoute("GET", "/res51", async (ctx: Ctx<"/res51">) =>
+const r51 = defineRoute("GET", "/res51", async (_ctx: Ctx<"/res51">) =>
   json({ id: 51, key: "res51" }),
 );
 const r52 = defineRoute("POST", "/res52/:id", async (ctx: Ctx<"/res52/:id">) =>
@@ -203,19 +203,19 @@ const r53 = defineRoute(
 const r54 = defineRoute("GET", "/res54/:id", async (ctx: Ctx<"/res54/:id">) =>
   json({ id: 54, key: ctx.params.id }),
 );
-const r55 = defineRoute("POST", "/res55", async (ctx: Ctx<"/res55">) =>
+const r55 = defineRoute("POST", "/res55", async (_ctx: Ctx<"/res55">) =>
   json({ id: 55, key: "res55" }),
 );
 const r56 = defineRoute("PUT", "/res56/:id", async (ctx: Ctx<"/res56/:id">) =>
   json({ id: 56, key: ctx.params.id }),
 );
-const r57 = defineRoute("GET", "/res57", async (ctx: Ctx<"/res57">) =>
+const r57 = defineRoute("GET", "/res57", async (_ctx: Ctx<"/res57">) =>
   json({ id: 57, key: "res57" }),
 );
 const r58 = defineRoute("POST", "/res58/:id", async (ctx: Ctx<"/res58/:id">) =>
   json({ id: 58, key: ctx.params.id }),
 );
-const r59 = defineRoute("PUT", "/res59", async (ctx: Ctx<"/res59">) =>
+const r59 = defineRoute("PUT", "/res59", async (_ctx: Ctx<"/res59">) =>
   json({ id: 59, key: "res59" }),
 );
 const r60 = defineRoute("GET", "/res60/:id", async (ctx: Ctx<"/res60/:id">) =>
@@ -229,7 +229,7 @@ const r61 = defineRoute(
 const r62 = defineRoute("PUT", "/res62/:id", async (ctx: Ctx<"/res62/:id">) =>
   json({ id: 62, key: ctx.params.id }),
 );
-const r63 = defineRoute("GET", "/res63", async (ctx: Ctx<"/res63">) =>
+const r63 = defineRoute("GET", "/res63", async (_ctx: Ctx<"/res63">) =>
   json({ id: 63, key: "res63" }),
 );
 const r64 = defineRoute("POST", "/res64/:id", async (ctx: Ctx<"/res64/:id">) =>
@@ -243,19 +243,19 @@ const r65 = defineRoute(
 const r66 = defineRoute("GET", "/res66/:id", async (ctx: Ctx<"/res66/:id">) =>
   json({ id: 66, key: ctx.params.id }),
 );
-const r67 = defineRoute("POST", "/res67", async (ctx: Ctx<"/res67">) =>
+const r67 = defineRoute("POST", "/res67", async (_ctx: Ctx<"/res67">) =>
   json({ id: 67, key: "res67" }),
 );
 const r68 = defineRoute("PUT", "/res68/:id", async (ctx: Ctx<"/res68/:id">) =>
   json({ id: 68, key: ctx.params.id }),
 );
-const r69 = defineRoute("GET", "/res69", async (ctx: Ctx<"/res69">) =>
+const r69 = defineRoute("GET", "/res69", async (_ctx: Ctx<"/res69">) =>
   json({ id: 69, key: "res69" }),
 );
 const r70 = defineRoute("POST", "/res70/:id", async (ctx: Ctx<"/res70/:id">) =>
   json({ id: 70, key: ctx.params.id }),
 );
-const r71 = defineRoute("PUT", "/res71", async (ctx: Ctx<"/res71">) =>
+const r71 = defineRoute("PUT", "/res71", async (_ctx: Ctx<"/res71">) =>
   json({ id: 71, key: "res71" }),
 );
 const r72 = defineRoute("GET", "/res72/:id", async (ctx: Ctx<"/res72/:id">) =>
@@ -269,7 +269,7 @@ const r73 = defineRoute(
 const r74 = defineRoute("PUT", "/res74/:id", async (ctx: Ctx<"/res74/:id">) =>
   json({ id: 74, key: ctx.params.id }),
 );
-const r75 = defineRoute("GET", "/res75", async (ctx: Ctx<"/res75">) =>
+const r75 = defineRoute("GET", "/res75", async (_ctx: Ctx<"/res75">) =>
   json({ id: 75, key: "res75" }),
 );
 const r76 = defineRoute("POST", "/res76/:id", async (ctx: Ctx<"/res76/:id">) =>
@@ -283,19 +283,19 @@ const r77 = defineRoute(
 const r78 = defineRoute("GET", "/res78/:id", async (ctx: Ctx<"/res78/:id">) =>
   json({ id: 78, key: ctx.params.id }),
 );
-const r79 = defineRoute("POST", "/res79", async (ctx: Ctx<"/res79">) =>
+const r79 = defineRoute("POST", "/res79", async (_ctx: Ctx<"/res79">) =>
   json({ id: 79, key: "res79" }),
 );
 const r80 = defineRoute("PUT", "/res80/:id", async (ctx: Ctx<"/res80/:id">) =>
   json({ id: 80, key: ctx.params.id }),
 );
-const r81 = defineRoute("GET", "/res81", async (ctx: Ctx<"/res81">) =>
+const r81 = defineRoute("GET", "/res81", async (_ctx: Ctx<"/res81">) =>
   json({ id: 81, key: "res81" }),
 );
 const r82 = defineRoute("POST", "/res82/:id", async (ctx: Ctx<"/res82/:id">) =>
   json({ id: 82, key: ctx.params.id }),
 );
-const r83 = defineRoute("PUT", "/res83", async (ctx: Ctx<"/res83">) =>
+const r83 = defineRoute("PUT", "/res83", async (_ctx: Ctx<"/res83">) =>
   json({ id: 83, key: "res83" }),
 );
 const r84 = defineRoute("GET", "/res84/:id", async (ctx: Ctx<"/res84/:id">) =>
@@ -309,7 +309,7 @@ const r85 = defineRoute(
 const r86 = defineRoute("PUT", "/res86/:id", async (ctx: Ctx<"/res86/:id">) =>
   json({ id: 86, key: ctx.params.id }),
 );
-const r87 = defineRoute("GET", "/res87", async (ctx: Ctx<"/res87">) =>
+const r87 = defineRoute("GET", "/res87", async (_ctx: Ctx<"/res87">) =>
   json({ id: 87, key: "res87" }),
 );
 const r88 = defineRoute("POST", "/res88/:id", async (ctx: Ctx<"/res88/:id">) =>
@@ -323,19 +323,19 @@ const r89 = defineRoute(
 const r90 = defineRoute("GET", "/res90/:id", async (ctx: Ctx<"/res90/:id">) =>
   json({ id: 90, key: ctx.params.id }),
 );
-const r91 = defineRoute("POST", "/res91", async (ctx: Ctx<"/res91">) =>
+const r91 = defineRoute("POST", "/res91", async (_ctx: Ctx<"/res91">) =>
   json({ id: 91, key: "res91" }),
 );
 const r92 = defineRoute("PUT", "/res92/:id", async (ctx: Ctx<"/res92/:id">) =>
   json({ id: 92, key: ctx.params.id }),
 );
-const r93 = defineRoute("GET", "/res93", async (ctx: Ctx<"/res93">) =>
+const r93 = defineRoute("GET", "/res93", async (_ctx: Ctx<"/res93">) =>
   json({ id: 93, key: "res93" }),
 );
 const r94 = defineRoute("POST", "/res94/:id", async (ctx: Ctx<"/res94/:id">) =>
   json({ id: 94, key: ctx.params.id }),
 );
-const r95 = defineRoute("PUT", "/res95", async (ctx: Ctx<"/res95">) =>
+const r95 = defineRoute("PUT", "/res95", async (_ctx: Ctx<"/res95">) =>
   json({ id: 95, key: "res95" }),
 );
 const r96 = defineRoute("GET", "/res96/:id", async (ctx: Ctx<"/res96/:id">) =>
@@ -349,7 +349,7 @@ const r97 = defineRoute(
 const r98 = defineRoute("PUT", "/res98/:id", async (ctx: Ctx<"/res98/:id">) =>
   json({ id: 98, key: ctx.params.id }),
 );
-const r99 = defineRoute("GET", "/res99", async (ctx: Ctx<"/res99">) =>
+const r99 = defineRoute("GET", "/res99", async (_ctx: Ctx<"/res99">) =>
   json({ id: 99, key: "res99" }),
 );
 const r100 = defineRoute("POST", "/res100/:id", async (ctx: Ctx<"/res100/:id">) =>
@@ -363,19 +363,19 @@ const r101 = defineRoute(
 const r102 = defineRoute("GET", "/res102/:id", async (ctx: Ctx<"/res102/:id">) =>
   json({ id: 102, key: ctx.params.id }),
 );
-const r103 = defineRoute("POST", "/res103", async (ctx: Ctx<"/res103">) =>
+const r103 = defineRoute("POST", "/res103", async (_ctx: Ctx<"/res103">) =>
   json({ id: 103, key: "res103" }),
 );
 const r104 = defineRoute("PUT", "/res104/:id", async (ctx: Ctx<"/res104/:id">) =>
   json({ id: 104, key: ctx.params.id }),
 );
-const r105 = defineRoute("GET", "/res105", async (ctx: Ctx<"/res105">) =>
+const r105 = defineRoute("GET", "/res105", async (_ctx: Ctx<"/res105">) =>
   json({ id: 105, key: "res105" }),
 );
 const r106 = defineRoute("POST", "/res106/:id", async (ctx: Ctx<"/res106/:id">) =>
   json({ id: 106, key: ctx.params.id }),
 );
-const r107 = defineRoute("PUT", "/res107", async (ctx: Ctx<"/res107">) =>
+const r107 = defineRoute("PUT", "/res107", async (_ctx: Ctx<"/res107">) =>
   json({ id: 107, key: "res107" }),
 );
 const r108 = defineRoute("GET", "/res108/:id", async (ctx: Ctx<"/res108/:id">) =>
@@ -389,7 +389,7 @@ const r109 = defineRoute(
 const r110 = defineRoute("PUT", "/res110/:id", async (ctx: Ctx<"/res110/:id">) =>
   json({ id: 110, key: ctx.params.id }),
 );
-const r111 = defineRoute("GET", "/res111", async (ctx: Ctx<"/res111">) =>
+const r111 = defineRoute("GET", "/res111", async (_ctx: Ctx<"/res111">) =>
   json({ id: 111, key: "res111" }),
 );
 const r112 = defineRoute("POST", "/res112/:id", async (ctx: Ctx<"/res112/:id">) =>
@@ -403,19 +403,19 @@ const r113 = defineRoute(
 const r114 = defineRoute("GET", "/res114/:id", async (ctx: Ctx<"/res114/:id">) =>
   json({ id: 114, key: ctx.params.id }),
 );
-const r115 = defineRoute("POST", "/res115", async (ctx: Ctx<"/res115">) =>
+const r115 = defineRoute("POST", "/res115", async (_ctx: Ctx<"/res115">) =>
   json({ id: 115, key: "res115" }),
 );
 const r116 = defineRoute("PUT", "/res116/:id", async (ctx: Ctx<"/res116/:id">) =>
   json({ id: 116, key: ctx.params.id }),
 );
-const r117 = defineRoute("GET", "/res117", async (ctx: Ctx<"/res117">) =>
+const r117 = defineRoute("GET", "/res117", async (_ctx: Ctx<"/res117">) =>
   json({ id: 117, key: "res117" }),
 );
 const r118 = defineRoute("POST", "/res118/:id", async (ctx: Ctx<"/res118/:id">) =>
   json({ id: 118, key: ctx.params.id }),
 );
-const r119 = defineRoute("PUT", "/res119", async (ctx: Ctx<"/res119">) =>
+const r119 = defineRoute("PUT", "/res119", async (_ctx: Ctx<"/res119">) =>
   json({ id: 119, key: "res119" }),
 );
 const r120 = defineRoute("GET", "/res120/:id", async (ctx: Ctx<"/res120/:id">) =>
@@ -429,7 +429,7 @@ const r121 = defineRoute(
 const r122 = defineRoute("PUT", "/res122/:id", async (ctx: Ctx<"/res122/:id">) =>
   json({ id: 122, key: ctx.params.id }),
 );
-const r123 = defineRoute("GET", "/res123", async (ctx: Ctx<"/res123">) =>
+const r123 = defineRoute("GET", "/res123", async (_ctx: Ctx<"/res123">) =>
   json({ id: 123, key: "res123" }),
 );
 const r124 = defineRoute("POST", "/res124/:id", async (ctx: Ctx<"/res124/:id">) =>
@@ -443,19 +443,19 @@ const r125 = defineRoute(
 const r126 = defineRoute("GET", "/res126/:id", async (ctx: Ctx<"/res126/:id">) =>
   json({ id: 126, key: ctx.params.id }),
 );
-const r127 = defineRoute("POST", "/res127", async (ctx: Ctx<"/res127">) =>
+const r127 = defineRoute("POST", "/res127", async (_ctx: Ctx<"/res127">) =>
   json({ id: 127, key: "res127" }),
 );
 const r128 = defineRoute("PUT", "/res128/:id", async (ctx: Ctx<"/res128/:id">) =>
   json({ id: 128, key: ctx.params.id }),
 );
-const r129 = defineRoute("GET", "/res129", async (ctx: Ctx<"/res129">) =>
+const r129 = defineRoute("GET", "/res129", async (_ctx: Ctx<"/res129">) =>
   json({ id: 129, key: "res129" }),
 );
 const r130 = defineRoute("POST", "/res130/:id", async (ctx: Ctx<"/res130/:id">) =>
   json({ id: 130, key: ctx.params.id }),
 );
-const r131 = defineRoute("PUT", "/res131", async (ctx: Ctx<"/res131">) =>
+const r131 = defineRoute("PUT", "/res131", async (_ctx: Ctx<"/res131">) =>
   json({ id: 131, key: "res131" }),
 );
 const r132 = defineRoute("GET", "/res132/:id", async (ctx: Ctx<"/res132/:id">) =>
@@ -469,7 +469,7 @@ const r133 = defineRoute(
 const r134 = defineRoute("PUT", "/res134/:id", async (ctx: Ctx<"/res134/:id">) =>
   json({ id: 134, key: ctx.params.id }),
 );
-const r135 = defineRoute("GET", "/res135", async (ctx: Ctx<"/res135">) =>
+const r135 = defineRoute("GET", "/res135", async (_ctx: Ctx<"/res135">) =>
   json({ id: 135, key: "res135" }),
 );
 const r136 = defineRoute("POST", "/res136/:id", async (ctx: Ctx<"/res136/:id">) =>
@@ -483,19 +483,19 @@ const r137 = defineRoute(
 const r138 = defineRoute("GET", "/res138/:id", async (ctx: Ctx<"/res138/:id">) =>
   json({ id: 138, key: ctx.params.id }),
 );
-const r139 = defineRoute("POST", "/res139", async (ctx: Ctx<"/res139">) =>
+const r139 = defineRoute("POST", "/res139", async (_ctx: Ctx<"/res139">) =>
   json({ id: 139, key: "res139" }),
 );
 const r140 = defineRoute("PUT", "/res140/:id", async (ctx: Ctx<"/res140/:id">) =>
   json({ id: 140, key: ctx.params.id }),
 );
-const r141 = defineRoute("GET", "/res141", async (ctx: Ctx<"/res141">) =>
+const r141 = defineRoute("GET", "/res141", async (_ctx: Ctx<"/res141">) =>
   json({ id: 141, key: "res141" }),
 );
 const r142 = defineRoute("POST", "/res142/:id", async (ctx: Ctx<"/res142/:id">) =>
   json({ id: 142, key: ctx.params.id }),
 );
-const r143 = defineRoute("PUT", "/res143", async (ctx: Ctx<"/res143">) =>
+const r143 = defineRoute("PUT", "/res143", async (_ctx: Ctx<"/res143">) =>
   json({ id: 143, key: "res143" }),
 );
 const r144 = defineRoute("GET", "/res144/:id", async (ctx: Ctx<"/res144/:id">) =>
@@ -509,7 +509,7 @@ const r145 = defineRoute(
 const r146 = defineRoute("PUT", "/res146/:id", async (ctx: Ctx<"/res146/:id">) =>
   json({ id: 146, key: ctx.params.id }),
 );
-const r147 = defineRoute("GET", "/res147", async (ctx: Ctx<"/res147">) =>
+const r147 = defineRoute("GET", "/res147", async (_ctx: Ctx<"/res147">) =>
   json({ id: 147, key: "res147" }),
 );
 const r148 = defineRoute("POST", "/res148/:id", async (ctx: Ctx<"/res148/:id">) =>
@@ -523,19 +523,19 @@ const r149 = defineRoute(
 const r150 = defineRoute("GET", "/res150/:id", async (ctx: Ctx<"/res150/:id">) =>
   json({ id: 150, key: ctx.params.id }),
 );
-const r151 = defineRoute("POST", "/res151", async (ctx: Ctx<"/res151">) =>
+const r151 = defineRoute("POST", "/res151", async (_ctx: Ctx<"/res151">) =>
   json({ id: 151, key: "res151" }),
 );
 const r152 = defineRoute("PUT", "/res152/:id", async (ctx: Ctx<"/res152/:id">) =>
   json({ id: 152, key: ctx.params.id }),
 );
-const r153 = defineRoute("GET", "/res153", async (ctx: Ctx<"/res153">) =>
+const r153 = defineRoute("GET", "/res153", async (_ctx: Ctx<"/res153">) =>
   json({ id: 153, key: "res153" }),
 );
 const r154 = defineRoute("POST", "/res154/:id", async (ctx: Ctx<"/res154/:id">) =>
   json({ id: 154, key: ctx.params.id }),
 );
-const r155 = defineRoute("PUT", "/res155", async (ctx: Ctx<"/res155">) =>
+const r155 = defineRoute("PUT", "/res155", async (_ctx: Ctx<"/res155">) =>
   json({ id: 155, key: "res155" }),
 );
 const r156 = defineRoute("GET", "/res156/:id", async (ctx: Ctx<"/res156/:id">) =>
@@ -549,7 +549,7 @@ const r157 = defineRoute(
 const r158 = defineRoute("PUT", "/res158/:id", async (ctx: Ctx<"/res158/:id">) =>
   json({ id: 158, key: ctx.params.id }),
 );
-const r159 = defineRoute("GET", "/res159", async (ctx: Ctx<"/res159">) =>
+const r159 = defineRoute("GET", "/res159", async (_ctx: Ctx<"/res159">) =>
   json({ id: 159, key: "res159" }),
 );
 const r160 = defineRoute("POST", "/res160/:id", async (ctx: Ctx<"/res160/:id">) =>
@@ -563,19 +563,19 @@ const r161 = defineRoute(
 const r162 = defineRoute("GET", "/res162/:id", async (ctx: Ctx<"/res162/:id">) =>
   json({ id: 162, key: ctx.params.id }),
 );
-const r163 = defineRoute("POST", "/res163", async (ctx: Ctx<"/res163">) =>
+const r163 = defineRoute("POST", "/res163", async (_ctx: Ctx<"/res163">) =>
   json({ id: 163, key: "res163" }),
 );
 const r164 = defineRoute("PUT", "/res164/:id", async (ctx: Ctx<"/res164/:id">) =>
   json({ id: 164, key: ctx.params.id }),
 );
-const r165 = defineRoute("GET", "/res165", async (ctx: Ctx<"/res165">) =>
+const r165 = defineRoute("GET", "/res165", async (_ctx: Ctx<"/res165">) =>
   json({ id: 165, key: "res165" }),
 );
 const r166 = defineRoute("POST", "/res166/:id", async (ctx: Ctx<"/res166/:id">) =>
   json({ id: 166, key: ctx.params.id }),
 );
-const r167 = defineRoute("PUT", "/res167", async (ctx: Ctx<"/res167">) =>
+const r167 = defineRoute("PUT", "/res167", async (_ctx: Ctx<"/res167">) =>
   json({ id: 167, key: "res167" }),
 );
 const r168 = defineRoute("GET", "/res168/:id", async (ctx: Ctx<"/res168/:id">) =>
@@ -589,7 +589,7 @@ const r169 = defineRoute(
 const r170 = defineRoute("PUT", "/res170/:id", async (ctx: Ctx<"/res170/:id">) =>
   json({ id: 170, key: ctx.params.id }),
 );
-const r171 = defineRoute("GET", "/res171", async (ctx: Ctx<"/res171">) =>
+const r171 = defineRoute("GET", "/res171", async (_ctx: Ctx<"/res171">) =>
   json({ id: 171, key: "res171" }),
 );
 const r172 = defineRoute("POST", "/res172/:id", async (ctx: Ctx<"/res172/:id">) =>
@@ -603,19 +603,19 @@ const r173 = defineRoute(
 const r174 = defineRoute("GET", "/res174/:id", async (ctx: Ctx<"/res174/:id">) =>
   json({ id: 174, key: ctx.params.id }),
 );
-const r175 = defineRoute("POST", "/res175", async (ctx: Ctx<"/res175">) =>
+const r175 = defineRoute("POST", "/res175", async (_ctx: Ctx<"/res175">) =>
   json({ id: 175, key: "res175" }),
 );
 const r176 = defineRoute("PUT", "/res176/:id", async (ctx: Ctx<"/res176/:id">) =>
   json({ id: 176, key: ctx.params.id }),
 );
-const r177 = defineRoute("GET", "/res177", async (ctx: Ctx<"/res177">) =>
+const r177 = defineRoute("GET", "/res177", async (_ctx: Ctx<"/res177">) =>
   json({ id: 177, key: "res177" }),
 );
 const r178 = defineRoute("POST", "/res178/:id", async (ctx: Ctx<"/res178/:id">) =>
   json({ id: 178, key: ctx.params.id }),
 );
-const r179 = defineRoute("PUT", "/res179", async (ctx: Ctx<"/res179">) =>
+const r179 = defineRoute("PUT", "/res179", async (_ctx: Ctx<"/res179">) =>
   json({ id: 179, key: "res179" }),
 );
 const r180 = defineRoute("GET", "/res180/:id", async (ctx: Ctx<"/res180/:id">) =>
@@ -629,7 +629,7 @@ const r181 = defineRoute(
 const r182 = defineRoute("PUT", "/res182/:id", async (ctx: Ctx<"/res182/:id">) =>
   json({ id: 182, key: ctx.params.id }),
 );
-const r183 = defineRoute("GET", "/res183", async (ctx: Ctx<"/res183">) =>
+const r183 = defineRoute("GET", "/res183", async (_ctx: Ctx<"/res183">) =>
   json({ id: 183, key: "res183" }),
 );
 const r184 = defineRoute("POST", "/res184/:id", async (ctx: Ctx<"/res184/:id">) =>
@@ -643,19 +643,19 @@ const r185 = defineRoute(
 const r186 = defineRoute("GET", "/res186/:id", async (ctx: Ctx<"/res186/:id">) =>
   json({ id: 186, key: ctx.params.id }),
 );
-const r187 = defineRoute("POST", "/res187", async (ctx: Ctx<"/res187">) =>
+const r187 = defineRoute("POST", "/res187", async (_ctx: Ctx<"/res187">) =>
   json({ id: 187, key: "res187" }),
 );
 const r188 = defineRoute("PUT", "/res188/:id", async (ctx: Ctx<"/res188/:id">) =>
   json({ id: 188, key: ctx.params.id }),
 );
-const r189 = defineRoute("GET", "/res189", async (ctx: Ctx<"/res189">) =>
+const r189 = defineRoute("GET", "/res189", async (_ctx: Ctx<"/res189">) =>
   json({ id: 189, key: "res189" }),
 );
 const r190 = defineRoute("POST", "/res190/:id", async (ctx: Ctx<"/res190/:id">) =>
   json({ id: 190, key: ctx.params.id }),
 );
-const r191 = defineRoute("PUT", "/res191", async (ctx: Ctx<"/res191">) =>
+const r191 = defineRoute("PUT", "/res191", async (_ctx: Ctx<"/res191">) =>
   json({ id: 191, key: "res191" }),
 );
 const r192 = defineRoute("GET", "/res192/:id", async (ctx: Ctx<"/res192/:id">) =>
@@ -669,7 +669,7 @@ const r193 = defineRoute(
 const r194 = defineRoute("PUT", "/res194/:id", async (ctx: Ctx<"/res194/:id">) =>
   json({ id: 194, key: ctx.params.id }),
 );
-const r195 = defineRoute("GET", "/res195", async (ctx: Ctx<"/res195">) =>
+const r195 = defineRoute("GET", "/res195", async (_ctx: Ctx<"/res195">) =>
   json({ id: 195, key: "res195" }),
 );
 const r196 = defineRoute("POST", "/res196/:id", async (ctx: Ctx<"/res196/:id">) =>
@@ -683,19 +683,19 @@ const r197 = defineRoute(
 const r198 = defineRoute("GET", "/res198/:id", async (ctx: Ctx<"/res198/:id">) =>
   json({ id: 198, key: ctx.params.id }),
 );
-const r199 = defineRoute("POST", "/res199", async (ctx: Ctx<"/res199">) =>
+const r199 = defineRoute("POST", "/res199", async (_ctx: Ctx<"/res199">) =>
   json({ id: 199, key: "res199" }),
 );
 const r200 = defineRoute("PUT", "/res200/:id", async (ctx: Ctx<"/res200/:id">) =>
   json({ id: 200, key: ctx.params.id }),
 );
-const r201 = defineRoute("GET", "/res201", async (ctx: Ctx<"/res201">) =>
+const r201 = defineRoute("GET", "/res201", async (_ctx: Ctx<"/res201">) =>
   json({ id: 201, key: "res201" }),
 );
 const r202 = defineRoute("POST", "/res202/:id", async (ctx: Ctx<"/res202/:id">) =>
   json({ id: 202, key: ctx.params.id }),
 );
-const r203 = defineRoute("PUT", "/res203", async (ctx: Ctx<"/res203">) =>
+const r203 = defineRoute("PUT", "/res203", async (_ctx: Ctx<"/res203">) =>
   json({ id: 203, key: "res203" }),
 );
 const r204 = defineRoute("GET", "/res204/:id", async (ctx: Ctx<"/res204/:id">) =>
@@ -709,7 +709,7 @@ const r205 = defineRoute(
 const r206 = defineRoute("PUT", "/res206/:id", async (ctx: Ctx<"/res206/:id">) =>
   json({ id: 206, key: ctx.params.id }),
 );
-const r207 = defineRoute("GET", "/res207", async (ctx: Ctx<"/res207">) =>
+const r207 = defineRoute("GET", "/res207", async (_ctx: Ctx<"/res207">) =>
   json({ id: 207, key: "res207" }),
 );
 const r208 = defineRoute("POST", "/res208/:id", async (ctx: Ctx<"/res208/:id">) =>
@@ -723,19 +723,19 @@ const r209 = defineRoute(
 const r210 = defineRoute("GET", "/res210/:id", async (ctx: Ctx<"/res210/:id">) =>
   json({ id: 210, key: ctx.params.id }),
 );
-const r211 = defineRoute("POST", "/res211", async (ctx: Ctx<"/res211">) =>
+const r211 = defineRoute("POST", "/res211", async (_ctx: Ctx<"/res211">) =>
   json({ id: 211, key: "res211" }),
 );
 const r212 = defineRoute("PUT", "/res212/:id", async (ctx: Ctx<"/res212/:id">) =>
   json({ id: 212, key: ctx.params.id }),
 );
-const r213 = defineRoute("GET", "/res213", async (ctx: Ctx<"/res213">) =>
+const r213 = defineRoute("GET", "/res213", async (_ctx: Ctx<"/res213">) =>
   json({ id: 213, key: "res213" }),
 );
 const r214 = defineRoute("POST", "/res214/:id", async (ctx: Ctx<"/res214/:id">) =>
   json({ id: 214, key: ctx.params.id }),
 );
-const r215 = defineRoute("PUT", "/res215", async (ctx: Ctx<"/res215">) =>
+const r215 = defineRoute("PUT", "/res215", async (_ctx: Ctx<"/res215">) =>
   json({ id: 215, key: "res215" }),
 );
 const r216 = defineRoute("GET", "/res216/:id", async (ctx: Ctx<"/res216/:id">) =>
@@ -749,7 +749,7 @@ const r217 = defineRoute(
 const r218 = defineRoute("PUT", "/res218/:id", async (ctx: Ctx<"/res218/:id">) =>
   json({ id: 218, key: ctx.params.id }),
 );
-const r219 = defineRoute("GET", "/res219", async (ctx: Ctx<"/res219">) =>
+const r219 = defineRoute("GET", "/res219", async (_ctx: Ctx<"/res219">) =>
   json({ id: 219, key: "res219" }),
 );
 const r220 = defineRoute("POST", "/res220/:id", async (ctx: Ctx<"/res220/:id">) =>
@@ -763,19 +763,19 @@ const r221 = defineRoute(
 const r222 = defineRoute("GET", "/res222/:id", async (ctx: Ctx<"/res222/:id">) =>
   json({ id: 222, key: ctx.params.id }),
 );
-const r223 = defineRoute("POST", "/res223", async (ctx: Ctx<"/res223">) =>
+const r223 = defineRoute("POST", "/res223", async (_ctx: Ctx<"/res223">) =>
   json({ id: 223, key: "res223" }),
 );
 const r224 = defineRoute("PUT", "/res224/:id", async (ctx: Ctx<"/res224/:id">) =>
   json({ id: 224, key: ctx.params.id }),
 );
-const r225 = defineRoute("GET", "/res225", async (ctx: Ctx<"/res225">) =>
+const r225 = defineRoute("GET", "/res225", async (_ctx: Ctx<"/res225">) =>
   json({ id: 225, key: "res225" }),
 );
 const r226 = defineRoute("POST", "/res226/:id", async (ctx: Ctx<"/res226/:id">) =>
   json({ id: 226, key: ctx.params.id }),
 );
-const r227 = defineRoute("PUT", "/res227", async (ctx: Ctx<"/res227">) =>
+const r227 = defineRoute("PUT", "/res227", async (_ctx: Ctx<"/res227">) =>
   json({ id: 227, key: "res227" }),
 );
 const r228 = defineRoute("GET", "/res228/:id", async (ctx: Ctx<"/res228/:id">) =>
@@ -789,7 +789,7 @@ const r229 = defineRoute(
 const r230 = defineRoute("PUT", "/res230/:id", async (ctx: Ctx<"/res230/:id">) =>
   json({ id: 230, key: ctx.params.id }),
 );
-const r231 = defineRoute("GET", "/res231", async (ctx: Ctx<"/res231">) =>
+const r231 = defineRoute("GET", "/res231", async (_ctx: Ctx<"/res231">) =>
   json({ id: 231, key: "res231" }),
 );
 const r232 = defineRoute("POST", "/res232/:id", async (ctx: Ctx<"/res232/:id">) =>
@@ -803,19 +803,19 @@ const r233 = defineRoute(
 const r234 = defineRoute("GET", "/res234/:id", async (ctx: Ctx<"/res234/:id">) =>
   json({ id: 234, key: ctx.params.id }),
 );
-const r235 = defineRoute("POST", "/res235", async (ctx: Ctx<"/res235">) =>
+const r235 = defineRoute("POST", "/res235", async (_ctx: Ctx<"/res235">) =>
   json({ id: 235, key: "res235" }),
 );
 const r236 = defineRoute("PUT", "/res236/:id", async (ctx: Ctx<"/res236/:id">) =>
   json({ id: 236, key: ctx.params.id }),
 );
-const r237 = defineRoute("GET", "/res237", async (ctx: Ctx<"/res237">) =>
+const r237 = defineRoute("GET", "/res237", async (_ctx: Ctx<"/res237">) =>
   json({ id: 237, key: "res237" }),
 );
 const r238 = defineRoute("POST", "/res238/:id", async (ctx: Ctx<"/res238/:id">) =>
   json({ id: 238, key: ctx.params.id }),
 );
-const r239 = defineRoute("PUT", "/res239", async (ctx: Ctx<"/res239">) =>
+const r239 = defineRoute("PUT", "/res239", async (_ctx: Ctx<"/res239">) =>
   json({ id: 239, key: "res239" }),
 );
 const r240 = defineRoute("GET", "/res240/:id", async (ctx: Ctx<"/res240/:id">) =>
@@ -829,7 +829,7 @@ const r241 = defineRoute(
 const r242 = defineRoute("PUT", "/res242/:id", async (ctx: Ctx<"/res242/:id">) =>
   json({ id: 242, key: ctx.params.id }),
 );
-const r243 = defineRoute("GET", "/res243", async (ctx: Ctx<"/res243">) =>
+const r243 = defineRoute("GET", "/res243", async (_ctx: Ctx<"/res243">) =>
   json({ id: 243, key: "res243" }),
 );
 const r244 = defineRoute("POST", "/res244/:id", async (ctx: Ctx<"/res244/:id">) =>
@@ -843,19 +843,19 @@ const r245 = defineRoute(
 const r246 = defineRoute("GET", "/res246/:id", async (ctx: Ctx<"/res246/:id">) =>
   json({ id: 246, key: ctx.params.id }),
 );
-const r247 = defineRoute("POST", "/res247", async (ctx: Ctx<"/res247">) =>
+const r247 = defineRoute("POST", "/res247", async (_ctx: Ctx<"/res247">) =>
   json({ id: 247, key: "res247" }),
 );
 const r248 = defineRoute("PUT", "/res248/:id", async (ctx: Ctx<"/res248/:id">) =>
   json({ id: 248, key: ctx.params.id }),
 );
-const r249 = defineRoute("GET", "/res249", async (ctx: Ctx<"/res249">) =>
+const r249 = defineRoute("GET", "/res249", async (_ctx: Ctx<"/res249">) =>
   json({ id: 249, key: "res249" }),
 );
 const r250 = defineRoute("POST", "/res250/:id", async (ctx: Ctx<"/res250/:id">) =>
   json({ id: 250, key: ctx.params.id }),
 );
-const r251 = defineRoute("PUT", "/res251", async (ctx: Ctx<"/res251">) =>
+const r251 = defineRoute("PUT", "/res251", async (_ctx: Ctx<"/res251">) =>
   json({ id: 251, key: "res251" }),
 );
 const r252 = defineRoute("GET", "/res252/:id", async (ctx: Ctx<"/res252/:id">) =>
@@ -869,7 +869,7 @@ const r253 = defineRoute(
 const r254 = defineRoute("PUT", "/res254/:id", async (ctx: Ctx<"/res254/:id">) =>
   json({ id: 254, key: ctx.params.id }),
 );
-const r255 = defineRoute("GET", "/res255", async (ctx: Ctx<"/res255">) =>
+const r255 = defineRoute("GET", "/res255", async (_ctx: Ctx<"/res255">) =>
   json({ id: 255, key: "res255" }),
 );
 const r256 = defineRoute("POST", "/res256/:id", async (ctx: Ctx<"/res256/:id">) =>
@@ -883,19 +883,19 @@ const r257 = defineRoute(
 const r258 = defineRoute("GET", "/res258/:id", async (ctx: Ctx<"/res258/:id">) =>
   json({ id: 258, key: ctx.params.id }),
 );
-const r259 = defineRoute("POST", "/res259", async (ctx: Ctx<"/res259">) =>
+const r259 = defineRoute("POST", "/res259", async (_ctx: Ctx<"/res259">) =>
   json({ id: 259, key: "res259" }),
 );
 const r260 = defineRoute("PUT", "/res260/:id", async (ctx: Ctx<"/res260/:id">) =>
   json({ id: 260, key: ctx.params.id }),
 );
-const r261 = defineRoute("GET", "/res261", async (ctx: Ctx<"/res261">) =>
+const r261 = defineRoute("GET", "/res261", async (_ctx: Ctx<"/res261">) =>
   json({ id: 261, key: "res261" }),
 );
 const r262 = defineRoute("POST", "/res262/:id", async (ctx: Ctx<"/res262/:id">) =>
   json({ id: 262, key: ctx.params.id }),
 );
-const r263 = defineRoute("PUT", "/res263", async (ctx: Ctx<"/res263">) =>
+const r263 = defineRoute("PUT", "/res263", async (_ctx: Ctx<"/res263">) =>
   json({ id: 263, key: "res263" }),
 );
 const r264 = defineRoute("GET", "/res264/:id", async (ctx: Ctx<"/res264/:id">) =>
@@ -909,7 +909,7 @@ const r265 = defineRoute(
 const r266 = defineRoute("PUT", "/res266/:id", async (ctx: Ctx<"/res266/:id">) =>
   json({ id: 266, key: ctx.params.id }),
 );
-const r267 = defineRoute("GET", "/res267", async (ctx: Ctx<"/res267">) =>
+const r267 = defineRoute("GET", "/res267", async (_ctx: Ctx<"/res267">) =>
   json({ id: 267, key: "res267" }),
 );
 const r268 = defineRoute("POST", "/res268/:id", async (ctx: Ctx<"/res268/:id">) =>
@@ -923,19 +923,19 @@ const r269 = defineRoute(
 const r270 = defineRoute("GET", "/res270/:id", async (ctx: Ctx<"/res270/:id">) =>
   json({ id: 270, key: ctx.params.id }),
 );
-const r271 = defineRoute("POST", "/res271", async (ctx: Ctx<"/res271">) =>
+const r271 = defineRoute("POST", "/res271", async (_ctx: Ctx<"/res271">) =>
   json({ id: 271, key: "res271" }),
 );
 const r272 = defineRoute("PUT", "/res272/:id", async (ctx: Ctx<"/res272/:id">) =>
   json({ id: 272, key: ctx.params.id }),
 );
-const r273 = defineRoute("GET", "/res273", async (ctx: Ctx<"/res273">) =>
+const r273 = defineRoute("GET", "/res273", async (_ctx: Ctx<"/res273">) =>
   json({ id: 273, key: "res273" }),
 );
 const r274 = defineRoute("POST", "/res274/:id", async (ctx: Ctx<"/res274/:id">) =>
   json({ id: 274, key: ctx.params.id }),
 );
-const r275 = defineRoute("PUT", "/res275", async (ctx: Ctx<"/res275">) =>
+const r275 = defineRoute("PUT", "/res275", async (_ctx: Ctx<"/res275">) =>
   json({ id: 275, key: "res275" }),
 );
 const r276 = defineRoute("GET", "/res276/:id", async (ctx: Ctx<"/res276/:id">) =>
@@ -949,7 +949,7 @@ const r277 = defineRoute(
 const r278 = defineRoute("PUT", "/res278/:id", async (ctx: Ctx<"/res278/:id">) =>
   json({ id: 278, key: ctx.params.id }),
 );
-const r279 = defineRoute("GET", "/res279", async (ctx: Ctx<"/res279">) =>
+const r279 = defineRoute("GET", "/res279", async (_ctx: Ctx<"/res279">) =>
   json({ id: 279, key: "res279" }),
 );
 const r280 = defineRoute("POST", "/res280/:id", async (ctx: Ctx<"/res280/:id">) =>
@@ -963,19 +963,19 @@ const r281 = defineRoute(
 const r282 = defineRoute("GET", "/res282/:id", async (ctx: Ctx<"/res282/:id">) =>
   json({ id: 282, key: ctx.params.id }),
 );
-const r283 = defineRoute("POST", "/res283", async (ctx: Ctx<"/res283">) =>
+const r283 = defineRoute("POST", "/res283", async (_ctx: Ctx<"/res283">) =>
   json({ id: 283, key: "res283" }),
 );
 const r284 = defineRoute("PUT", "/res284/:id", async (ctx: Ctx<"/res284/:id">) =>
   json({ id: 284, key: ctx.params.id }),
 );
-const r285 = defineRoute("GET", "/res285", async (ctx: Ctx<"/res285">) =>
+const r285 = defineRoute("GET", "/res285", async (_ctx: Ctx<"/res285">) =>
   json({ id: 285, key: "res285" }),
 );
 const r286 = defineRoute("POST", "/res286/:id", async (ctx: Ctx<"/res286/:id">) =>
   json({ id: 286, key: ctx.params.id }),
 );
-const r287 = defineRoute("PUT", "/res287", async (ctx: Ctx<"/res287">) =>
+const r287 = defineRoute("PUT", "/res287", async (_ctx: Ctx<"/res287">) =>
   json({ id: 287, key: "res287" }),
 );
 const r288 = defineRoute("GET", "/res288/:id", async (ctx: Ctx<"/res288/:id">) =>
@@ -989,7 +989,7 @@ const r289 = defineRoute(
 const r290 = defineRoute("PUT", "/res290/:id", async (ctx: Ctx<"/res290/:id">) =>
   json({ id: 290, key: ctx.params.id }),
 );
-const r291 = defineRoute("GET", "/res291", async (ctx: Ctx<"/res291">) =>
+const r291 = defineRoute("GET", "/res291", async (_ctx: Ctx<"/res291">) =>
   json({ id: 291, key: "res291" }),
 );
 const r292 = defineRoute("POST", "/res292/:id", async (ctx: Ctx<"/res292/:id">) =>
@@ -1003,19 +1003,19 @@ const r293 = defineRoute(
 const r294 = defineRoute("GET", "/res294/:id", async (ctx: Ctx<"/res294/:id">) =>
   json({ id: 294, key: ctx.params.id }),
 );
-const r295 = defineRoute("POST", "/res295", async (ctx: Ctx<"/res295">) =>
+const r295 = defineRoute("POST", "/res295", async (_ctx: Ctx<"/res295">) =>
   json({ id: 295, key: "res295" }),
 );
 const r296 = defineRoute("PUT", "/res296/:id", async (ctx: Ctx<"/res296/:id">) =>
   json({ id: 296, key: ctx.params.id }),
 );
-const r297 = defineRoute("GET", "/res297", async (ctx: Ctx<"/res297">) =>
+const r297 = defineRoute("GET", "/res297", async (_ctx: Ctx<"/res297">) =>
   json({ id: 297, key: "res297" }),
 );
 const r298 = defineRoute("POST", "/res298/:id", async (ctx: Ctx<"/res298/:id">) =>
   json({ id: 298, key: ctx.params.id }),
 );
-const r299 = defineRoute("PUT", "/res299", async (ctx: Ctx<"/res299">) =>
+const r299 = defineRoute("PUT", "/res299", async (_ctx: Ctx<"/res299">) =>
   json({ id: 299, key: "res299" }),
 );
 

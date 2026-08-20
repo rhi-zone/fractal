@@ -2,7 +2,7 @@ import { json, withValidation } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree";
 import type { ClientOfContract } from "../contract";
 
-// Minimal Standard-Schema validator (no zod — isolate fractal's cost).
+// Minimal Standard-Schema validator (no zod, to isolate fractal's cost).
 interface Body {
   readonly name: string;
   readonly qty: number;
@@ -35,7 +35,7 @@ const contract = {
     put: async (ctx: Ctx<"/res2/:id">) => json({ id: 2, key: ctx.params.id }),
   },
   "/res3": {
-    get: async (ctx: Ctx<"/res3">) => json({ id: 3, key: "res3" }),
+    get: async (_ctx: Ctx<"/res3">) => json({ id: 3, key: "res3" }),
   },
   "/res4/:id": {
     post: async (ctx: Ctx<"/res4/:id">) => json({ id: 4, key: ctx.params.id }),
@@ -47,19 +47,19 @@ const contract = {
     get: async (ctx: Ctx<"/res6/:id">) => json({ id: 6, key: ctx.params.id }),
   },
   "/res7": {
-    post: async (ctx: Ctx<"/res7">) => json({ id: 7, key: "res7" }),
+    post: async (_ctx: Ctx<"/res7">) => json({ id: 7, key: "res7" }),
   },
   "/res8/:id": {
     put: async (ctx: Ctx<"/res8/:id">) => json({ id: 8, key: ctx.params.id }),
   },
   "/res9": {
-    get: async (ctx: Ctx<"/res9">) => json({ id: 9, key: "res9" }),
+    get: async (_ctx: Ctx<"/res9">) => json({ id: 9, key: "res9" }),
   },
   "/res10/:id": {
     post: async (ctx: Ctx<"/res10/:id">) => json({ id: 10, key: ctx.params.id }),
   },
   "/res11": {
-    put: async (ctx: Ctx<"/res11">) => json({ id: 11, key: "res11" }),
+    put: async (_ctx: Ctx<"/res11">) => json({ id: 11, key: "res11" }),
   },
   "/res12/:id": {
     get: async (ctx: Ctx<"/res12/:id">) => json({ id: 12, key: ctx.params.id }),
@@ -71,7 +71,7 @@ const contract = {
     put: async (ctx: Ctx<"/res14/:id">) => json({ id: 14, key: ctx.params.id }),
   },
   "/res15": {
-    get: async (ctx: Ctx<"/res15">) => json({ id: 15, key: "res15" }),
+    get: async (_ctx: Ctx<"/res15">) => json({ id: 15, key: "res15" }),
   },
   "/res16/:id": {
     post: async (ctx: Ctx<"/res16/:id">) => json({ id: 16, key: ctx.params.id }),
@@ -83,19 +83,19 @@ const contract = {
     get: async (ctx: Ctx<"/res18/:id">) => json({ id: 18, key: ctx.params.id }),
   },
   "/res19": {
-    post: async (ctx: Ctx<"/res19">) => json({ id: 19, key: "res19" }),
+    post: async (_ctx: Ctx<"/res19">) => json({ id: 19, key: "res19" }),
   },
   "/res20/:id": {
     put: async (ctx: Ctx<"/res20/:id">) => json({ id: 20, key: ctx.params.id }),
   },
   "/res21": {
-    get: async (ctx: Ctx<"/res21">) => json({ id: 21, key: "res21" }),
+    get: async (_ctx: Ctx<"/res21">) => json({ id: 21, key: "res21" }),
   },
   "/res22/:id": {
     post: async (ctx: Ctx<"/res22/:id">) => json({ id: 22, key: ctx.params.id }),
   },
   "/res23": {
-    put: async (ctx: Ctx<"/res23">) => json({ id: 23, key: "res23" }),
+    put: async (_ctx: Ctx<"/res23">) => json({ id: 23, key: "res23" }),
   },
   "/res24/:id": {
     get: async (ctx: Ctx<"/res24/:id">) => json({ id: 24, key: ctx.params.id }),
@@ -107,7 +107,7 @@ const contract = {
     put: async (ctx: Ctx<"/res26/:id">) => json({ id: 26, key: ctx.params.id }),
   },
   "/res27": {
-    get: async (ctx: Ctx<"/res27">) => json({ id: 27, key: "res27" }),
+    get: async (_ctx: Ctx<"/res27">) => json({ id: 27, key: "res27" }),
   },
   "/res28/:id": {
     post: async (ctx: Ctx<"/res28/:id">) => json({ id: 28, key: ctx.params.id }),
@@ -119,19 +119,19 @@ const contract = {
     get: async (ctx: Ctx<"/res30/:id">) => json({ id: 30, key: ctx.params.id }),
   },
   "/res31": {
-    post: async (ctx: Ctx<"/res31">) => json({ id: 31, key: "res31" }),
+    post: async (_ctx: Ctx<"/res31">) => json({ id: 31, key: "res31" }),
   },
   "/res32/:id": {
     put: async (ctx: Ctx<"/res32/:id">) => json({ id: 32, key: ctx.params.id }),
   },
   "/res33": {
-    get: async (ctx: Ctx<"/res33">) => json({ id: 33, key: "res33" }),
+    get: async (_ctx: Ctx<"/res33">) => json({ id: 33, key: "res33" }),
   },
   "/res34/:id": {
     post: async (ctx: Ctx<"/res34/:id">) => json({ id: 34, key: ctx.params.id }),
   },
   "/res35": {
-    put: async (ctx: Ctx<"/res35">) => json({ id: 35, key: "res35" }),
+    put: async (_ctx: Ctx<"/res35">) => json({ id: 35, key: "res35" }),
   },
   "/res36/:id": {
     get: async (ctx: Ctx<"/res36/:id">) => json({ id: 36, key: ctx.params.id }),
@@ -143,7 +143,7 @@ const contract = {
     put: async (ctx: Ctx<"/res38/:id">) => json({ id: 38, key: ctx.params.id }),
   },
   "/res39": {
-    get: async (ctx: Ctx<"/res39">) => json({ id: 39, key: "res39" }),
+    get: async (_ctx: Ctx<"/res39">) => json({ id: 39, key: "res39" }),
   },
   "/res40/:id": {
     post: async (ctx: Ctx<"/res40/:id">) => json({ id: 40, key: ctx.params.id }),
@@ -155,19 +155,19 @@ const contract = {
     get: async (ctx: Ctx<"/res42/:id">) => json({ id: 42, key: ctx.params.id }),
   },
   "/res43": {
-    post: async (ctx: Ctx<"/res43">) => json({ id: 43, key: "res43" }),
+    post: async (_ctx: Ctx<"/res43">) => json({ id: 43, key: "res43" }),
   },
   "/res44/:id": {
     put: async (ctx: Ctx<"/res44/:id">) => json({ id: 44, key: ctx.params.id }),
   },
   "/res45": {
-    get: async (ctx: Ctx<"/res45">) => json({ id: 45, key: "res45" }),
+    get: async (_ctx: Ctx<"/res45">) => json({ id: 45, key: "res45" }),
   },
   "/res46/:id": {
     post: async (ctx: Ctx<"/res46/:id">) => json({ id: 46, key: ctx.params.id }),
   },
   "/res47": {
-    put: async (ctx: Ctx<"/res47">) => json({ id: 47, key: "res47" }),
+    put: async (_ctx: Ctx<"/res47">) => json({ id: 47, key: "res47" }),
   },
   "/res48/:id": {
     get: async (ctx: Ctx<"/res48/:id">) => json({ id: 48, key: ctx.params.id }),
@@ -179,7 +179,7 @@ const contract = {
     put: async (ctx: Ctx<"/res50/:id">) => json({ id: 50, key: ctx.params.id }),
   },
   "/res51": {
-    get: async (ctx: Ctx<"/res51">) => json({ id: 51, key: "res51" }),
+    get: async (_ctx: Ctx<"/res51">) => json({ id: 51, key: "res51" }),
   },
   "/res52/:id": {
     post: async (ctx: Ctx<"/res52/:id">) => json({ id: 52, key: ctx.params.id }),
@@ -191,19 +191,19 @@ const contract = {
     get: async (ctx: Ctx<"/res54/:id">) => json({ id: 54, key: ctx.params.id }),
   },
   "/res55": {
-    post: async (ctx: Ctx<"/res55">) => json({ id: 55, key: "res55" }),
+    post: async (_ctx: Ctx<"/res55">) => json({ id: 55, key: "res55" }),
   },
   "/res56/:id": {
     put: async (ctx: Ctx<"/res56/:id">) => json({ id: 56, key: ctx.params.id }),
   },
   "/res57": {
-    get: async (ctx: Ctx<"/res57">) => json({ id: 57, key: "res57" }),
+    get: async (_ctx: Ctx<"/res57">) => json({ id: 57, key: "res57" }),
   },
   "/res58/:id": {
     post: async (ctx: Ctx<"/res58/:id">) => json({ id: 58, key: ctx.params.id }),
   },
   "/res59": {
-    put: async (ctx: Ctx<"/res59">) => json({ id: 59, key: "res59" }),
+    put: async (_ctx: Ctx<"/res59">) => json({ id: 59, key: "res59" }),
   },
   "/res60/:id": {
     get: async (ctx: Ctx<"/res60/:id">) => json({ id: 60, key: ctx.params.id }),
@@ -215,7 +215,7 @@ const contract = {
     put: async (ctx: Ctx<"/res62/:id">) => json({ id: 62, key: ctx.params.id }),
   },
   "/res63": {
-    get: async (ctx: Ctx<"/res63">) => json({ id: 63, key: "res63" }),
+    get: async (_ctx: Ctx<"/res63">) => json({ id: 63, key: "res63" }),
   },
   "/res64/:id": {
     post: async (ctx: Ctx<"/res64/:id">) => json({ id: 64, key: ctx.params.id }),
@@ -227,19 +227,19 @@ const contract = {
     get: async (ctx: Ctx<"/res66/:id">) => json({ id: 66, key: ctx.params.id }),
   },
   "/res67": {
-    post: async (ctx: Ctx<"/res67">) => json({ id: 67, key: "res67" }),
+    post: async (_ctx: Ctx<"/res67">) => json({ id: 67, key: "res67" }),
   },
   "/res68/:id": {
     put: async (ctx: Ctx<"/res68/:id">) => json({ id: 68, key: ctx.params.id }),
   },
   "/res69": {
-    get: async (ctx: Ctx<"/res69">) => json({ id: 69, key: "res69" }),
+    get: async (_ctx: Ctx<"/res69">) => json({ id: 69, key: "res69" }),
   },
   "/res70/:id": {
     post: async (ctx: Ctx<"/res70/:id">) => json({ id: 70, key: ctx.params.id }),
   },
   "/res71": {
-    put: async (ctx: Ctx<"/res71">) => json({ id: 71, key: "res71" }),
+    put: async (_ctx: Ctx<"/res71">) => json({ id: 71, key: "res71" }),
   },
   "/res72/:id": {
     get: async (ctx: Ctx<"/res72/:id">) => json({ id: 72, key: ctx.params.id }),
@@ -251,7 +251,7 @@ const contract = {
     put: async (ctx: Ctx<"/res74/:id">) => json({ id: 74, key: ctx.params.id }),
   },
   "/res75": {
-    get: async (ctx: Ctx<"/res75">) => json({ id: 75, key: "res75" }),
+    get: async (_ctx: Ctx<"/res75">) => json({ id: 75, key: "res75" }),
   },
   "/res76/:id": {
     post: async (ctx: Ctx<"/res76/:id">) => json({ id: 76, key: ctx.params.id }),
@@ -263,19 +263,19 @@ const contract = {
     get: async (ctx: Ctx<"/res78/:id">) => json({ id: 78, key: ctx.params.id }),
   },
   "/res79": {
-    post: async (ctx: Ctx<"/res79">) => json({ id: 79, key: "res79" }),
+    post: async (_ctx: Ctx<"/res79">) => json({ id: 79, key: "res79" }),
   },
   "/res80/:id": {
     put: async (ctx: Ctx<"/res80/:id">) => json({ id: 80, key: ctx.params.id }),
   },
   "/res81": {
-    get: async (ctx: Ctx<"/res81">) => json({ id: 81, key: "res81" }),
+    get: async (_ctx: Ctx<"/res81">) => json({ id: 81, key: "res81" }),
   },
   "/res82/:id": {
     post: async (ctx: Ctx<"/res82/:id">) => json({ id: 82, key: ctx.params.id }),
   },
   "/res83": {
-    put: async (ctx: Ctx<"/res83">) => json({ id: 83, key: "res83" }),
+    put: async (_ctx: Ctx<"/res83">) => json({ id: 83, key: "res83" }),
   },
   "/res84/:id": {
     get: async (ctx: Ctx<"/res84/:id">) => json({ id: 84, key: ctx.params.id }),
@@ -287,7 +287,7 @@ const contract = {
     put: async (ctx: Ctx<"/res86/:id">) => json({ id: 86, key: ctx.params.id }),
   },
   "/res87": {
-    get: async (ctx: Ctx<"/res87">) => json({ id: 87, key: "res87" }),
+    get: async (_ctx: Ctx<"/res87">) => json({ id: 87, key: "res87" }),
   },
   "/res88/:id": {
     post: async (ctx: Ctx<"/res88/:id">) => json({ id: 88, key: ctx.params.id }),
@@ -299,19 +299,19 @@ const contract = {
     get: async (ctx: Ctx<"/res90/:id">) => json({ id: 90, key: ctx.params.id }),
   },
   "/res91": {
-    post: async (ctx: Ctx<"/res91">) => json({ id: 91, key: "res91" }),
+    post: async (_ctx: Ctx<"/res91">) => json({ id: 91, key: "res91" }),
   },
   "/res92/:id": {
     put: async (ctx: Ctx<"/res92/:id">) => json({ id: 92, key: ctx.params.id }),
   },
   "/res93": {
-    get: async (ctx: Ctx<"/res93">) => json({ id: 93, key: "res93" }),
+    get: async (_ctx: Ctx<"/res93">) => json({ id: 93, key: "res93" }),
   },
   "/res94/:id": {
     post: async (ctx: Ctx<"/res94/:id">) => json({ id: 94, key: ctx.params.id }),
   },
   "/res95": {
-    put: async (ctx: Ctx<"/res95">) => json({ id: 95, key: "res95" }),
+    put: async (_ctx: Ctx<"/res95">) => json({ id: 95, key: "res95" }),
   },
   "/res96/:id": {
     get: async (ctx: Ctx<"/res96/:id">) => json({ id: 96, key: ctx.params.id }),
@@ -323,7 +323,7 @@ const contract = {
     put: async (ctx: Ctx<"/res98/:id">) => json({ id: 98, key: ctx.params.id }),
   },
   "/res99": {
-    get: async (ctx: Ctx<"/res99">) => json({ id: 99, key: "res99" }),
+    get: async (_ctx: Ctx<"/res99">) => json({ id: 99, key: "res99" }),
   },
   "/res100/:id": {
     post: async (ctx: Ctx<"/res100/:id">) => json({ id: 100, key: ctx.params.id }),
@@ -335,19 +335,19 @@ const contract = {
     get: async (ctx: Ctx<"/res102/:id">) => json({ id: 102, key: ctx.params.id }),
   },
   "/res103": {
-    post: async (ctx: Ctx<"/res103">) => json({ id: 103, key: "res103" }),
+    post: async (_ctx: Ctx<"/res103">) => json({ id: 103, key: "res103" }),
   },
   "/res104/:id": {
     put: async (ctx: Ctx<"/res104/:id">) => json({ id: 104, key: ctx.params.id }),
   },
   "/res105": {
-    get: async (ctx: Ctx<"/res105">) => json({ id: 105, key: "res105" }),
+    get: async (_ctx: Ctx<"/res105">) => json({ id: 105, key: "res105" }),
   },
   "/res106/:id": {
     post: async (ctx: Ctx<"/res106/:id">) => json({ id: 106, key: ctx.params.id }),
   },
   "/res107": {
-    put: async (ctx: Ctx<"/res107">) => json({ id: 107, key: "res107" }),
+    put: async (_ctx: Ctx<"/res107">) => json({ id: 107, key: "res107" }),
   },
   "/res108/:id": {
     get: async (ctx: Ctx<"/res108/:id">) => json({ id: 108, key: ctx.params.id }),
@@ -362,7 +362,7 @@ const contract = {
     put: async (ctx: Ctx<"/res110/:id">) => json({ id: 110, key: ctx.params.id }),
   },
   "/res111": {
-    get: async (ctx: Ctx<"/res111">) => json({ id: 111, key: "res111" }),
+    get: async (_ctx: Ctx<"/res111">) => json({ id: 111, key: "res111" }),
   },
   "/res112/:id": {
     post: async (ctx: Ctx<"/res112/:id">) => json({ id: 112, key: ctx.params.id }),
@@ -374,19 +374,19 @@ const contract = {
     get: async (ctx: Ctx<"/res114/:id">) => json({ id: 114, key: ctx.params.id }),
   },
   "/res115": {
-    post: async (ctx: Ctx<"/res115">) => json({ id: 115, key: "res115" }),
+    post: async (_ctx: Ctx<"/res115">) => json({ id: 115, key: "res115" }),
   },
   "/res116/:id": {
     put: async (ctx: Ctx<"/res116/:id">) => json({ id: 116, key: ctx.params.id }),
   },
   "/res117": {
-    get: async (ctx: Ctx<"/res117">) => json({ id: 117, key: "res117" }),
+    get: async (_ctx: Ctx<"/res117">) => json({ id: 117, key: "res117" }),
   },
   "/res118/:id": {
     post: async (ctx: Ctx<"/res118/:id">) => json({ id: 118, key: ctx.params.id }),
   },
   "/res119": {
-    put: async (ctx: Ctx<"/res119">) => json({ id: 119, key: "res119" }),
+    put: async (_ctx: Ctx<"/res119">) => json({ id: 119, key: "res119" }),
   },
   "/res120/:id": {
     get: async (ctx: Ctx<"/res120/:id">) => json({ id: 120, key: ctx.params.id }),
@@ -401,7 +401,7 @@ const contract = {
     put: async (ctx: Ctx<"/res122/:id">) => json({ id: 122, key: ctx.params.id }),
   },
   "/res123": {
-    get: async (ctx: Ctx<"/res123">) => json({ id: 123, key: "res123" }),
+    get: async (_ctx: Ctx<"/res123">) => json({ id: 123, key: "res123" }),
   },
   "/res124/:id": {
     post: async (ctx: Ctx<"/res124/:id">) => json({ id: 124, key: ctx.params.id }),
@@ -413,19 +413,19 @@ const contract = {
     get: async (ctx: Ctx<"/res126/:id">) => json({ id: 126, key: ctx.params.id }),
   },
   "/res127": {
-    post: async (ctx: Ctx<"/res127">) => json({ id: 127, key: "res127" }),
+    post: async (_ctx: Ctx<"/res127">) => json({ id: 127, key: "res127" }),
   },
   "/res128/:id": {
     put: async (ctx: Ctx<"/res128/:id">) => json({ id: 128, key: ctx.params.id }),
   },
   "/res129": {
-    get: async (ctx: Ctx<"/res129">) => json({ id: 129, key: "res129" }),
+    get: async (_ctx: Ctx<"/res129">) => json({ id: 129, key: "res129" }),
   },
   "/res130/:id": {
     post: async (ctx: Ctx<"/res130/:id">) => json({ id: 130, key: ctx.params.id }),
   },
   "/res131": {
-    put: async (ctx: Ctx<"/res131">) => json({ id: 131, key: "res131" }),
+    put: async (_ctx: Ctx<"/res131">) => json({ id: 131, key: "res131" }),
   },
   "/res132/:id": {
     get: async (ctx: Ctx<"/res132/:id">) => json({ id: 132, key: ctx.params.id }),
@@ -440,7 +440,7 @@ const contract = {
     put: async (ctx: Ctx<"/res134/:id">) => json({ id: 134, key: ctx.params.id }),
   },
   "/res135": {
-    get: async (ctx: Ctx<"/res135">) => json({ id: 135, key: "res135" }),
+    get: async (_ctx: Ctx<"/res135">) => json({ id: 135, key: "res135" }),
   },
   "/res136/:id": {
     post: async (ctx: Ctx<"/res136/:id">) => json({ id: 136, key: ctx.params.id }),
@@ -452,19 +452,19 @@ const contract = {
     get: async (ctx: Ctx<"/res138/:id">) => json({ id: 138, key: ctx.params.id }),
   },
   "/res139": {
-    post: async (ctx: Ctx<"/res139">) => json({ id: 139, key: "res139" }),
+    post: async (_ctx: Ctx<"/res139">) => json({ id: 139, key: "res139" }),
   },
   "/res140/:id": {
     put: async (ctx: Ctx<"/res140/:id">) => json({ id: 140, key: ctx.params.id }),
   },
   "/res141": {
-    get: async (ctx: Ctx<"/res141">) => json({ id: 141, key: "res141" }),
+    get: async (_ctx: Ctx<"/res141">) => json({ id: 141, key: "res141" }),
   },
   "/res142/:id": {
     post: async (ctx: Ctx<"/res142/:id">) => json({ id: 142, key: ctx.params.id }),
   },
   "/res143": {
-    put: async (ctx: Ctx<"/res143">) => json({ id: 143, key: "res143" }),
+    put: async (_ctx: Ctx<"/res143">) => json({ id: 143, key: "res143" }),
   },
   "/res144/:id": {
     get: async (ctx: Ctx<"/res144/:id">) => json({ id: 144, key: ctx.params.id }),
@@ -479,7 +479,7 @@ const contract = {
     put: async (ctx: Ctx<"/res146/:id">) => json({ id: 146, key: ctx.params.id }),
   },
   "/res147": {
-    get: async (ctx: Ctx<"/res147">) => json({ id: 147, key: "res147" }),
+    get: async (_ctx: Ctx<"/res147">) => json({ id: 147, key: "res147" }),
   },
   "/res148/:id": {
     post: async (ctx: Ctx<"/res148/:id">) => json({ id: 148, key: ctx.params.id }),
@@ -491,19 +491,19 @@ const contract = {
     get: async (ctx: Ctx<"/res150/:id">) => json({ id: 150, key: ctx.params.id }),
   },
   "/res151": {
-    post: async (ctx: Ctx<"/res151">) => json({ id: 151, key: "res151" }),
+    post: async (_ctx: Ctx<"/res151">) => json({ id: 151, key: "res151" }),
   },
   "/res152/:id": {
     put: async (ctx: Ctx<"/res152/:id">) => json({ id: 152, key: ctx.params.id }),
   },
   "/res153": {
-    get: async (ctx: Ctx<"/res153">) => json({ id: 153, key: "res153" }),
+    get: async (_ctx: Ctx<"/res153">) => json({ id: 153, key: "res153" }),
   },
   "/res154/:id": {
     post: async (ctx: Ctx<"/res154/:id">) => json({ id: 154, key: ctx.params.id }),
   },
   "/res155": {
-    put: async (ctx: Ctx<"/res155">) => json({ id: 155, key: "res155" }),
+    put: async (_ctx: Ctx<"/res155">) => json({ id: 155, key: "res155" }),
   },
   "/res156/:id": {
     get: async (ctx: Ctx<"/res156/:id">) => json({ id: 156, key: ctx.params.id }),
@@ -518,7 +518,7 @@ const contract = {
     put: async (ctx: Ctx<"/res158/:id">) => json({ id: 158, key: ctx.params.id }),
   },
   "/res159": {
-    get: async (ctx: Ctx<"/res159">) => json({ id: 159, key: "res159" }),
+    get: async (_ctx: Ctx<"/res159">) => json({ id: 159, key: "res159" }),
   },
   "/res160/:id": {
     post: async (ctx: Ctx<"/res160/:id">) => json({ id: 160, key: ctx.params.id }),
@@ -530,19 +530,19 @@ const contract = {
     get: async (ctx: Ctx<"/res162/:id">) => json({ id: 162, key: ctx.params.id }),
   },
   "/res163": {
-    post: async (ctx: Ctx<"/res163">) => json({ id: 163, key: "res163" }),
+    post: async (_ctx: Ctx<"/res163">) => json({ id: 163, key: "res163" }),
   },
   "/res164/:id": {
     put: async (ctx: Ctx<"/res164/:id">) => json({ id: 164, key: ctx.params.id }),
   },
   "/res165": {
-    get: async (ctx: Ctx<"/res165">) => json({ id: 165, key: "res165" }),
+    get: async (_ctx: Ctx<"/res165">) => json({ id: 165, key: "res165" }),
   },
   "/res166/:id": {
     post: async (ctx: Ctx<"/res166/:id">) => json({ id: 166, key: ctx.params.id }),
   },
   "/res167": {
-    put: async (ctx: Ctx<"/res167">) => json({ id: 167, key: "res167" }),
+    put: async (_ctx: Ctx<"/res167">) => json({ id: 167, key: "res167" }),
   },
   "/res168/:id": {
     get: async (ctx: Ctx<"/res168/:id">) => json({ id: 168, key: ctx.params.id }),
@@ -557,7 +557,7 @@ const contract = {
     put: async (ctx: Ctx<"/res170/:id">) => json({ id: 170, key: ctx.params.id }),
   },
   "/res171": {
-    get: async (ctx: Ctx<"/res171">) => json({ id: 171, key: "res171" }),
+    get: async (_ctx: Ctx<"/res171">) => json({ id: 171, key: "res171" }),
   },
   "/res172/:id": {
     post: async (ctx: Ctx<"/res172/:id">) => json({ id: 172, key: ctx.params.id }),
@@ -569,19 +569,19 @@ const contract = {
     get: async (ctx: Ctx<"/res174/:id">) => json({ id: 174, key: ctx.params.id }),
   },
   "/res175": {
-    post: async (ctx: Ctx<"/res175">) => json({ id: 175, key: "res175" }),
+    post: async (_ctx: Ctx<"/res175">) => json({ id: 175, key: "res175" }),
   },
   "/res176/:id": {
     put: async (ctx: Ctx<"/res176/:id">) => json({ id: 176, key: ctx.params.id }),
   },
   "/res177": {
-    get: async (ctx: Ctx<"/res177">) => json({ id: 177, key: "res177" }),
+    get: async (_ctx: Ctx<"/res177">) => json({ id: 177, key: "res177" }),
   },
   "/res178/:id": {
     post: async (ctx: Ctx<"/res178/:id">) => json({ id: 178, key: ctx.params.id }),
   },
   "/res179": {
-    put: async (ctx: Ctx<"/res179">) => json({ id: 179, key: "res179" }),
+    put: async (_ctx: Ctx<"/res179">) => json({ id: 179, key: "res179" }),
   },
   "/res180/:id": {
     get: async (ctx: Ctx<"/res180/:id">) => json({ id: 180, key: ctx.params.id }),
@@ -596,7 +596,7 @@ const contract = {
     put: async (ctx: Ctx<"/res182/:id">) => json({ id: 182, key: ctx.params.id }),
   },
   "/res183": {
-    get: async (ctx: Ctx<"/res183">) => json({ id: 183, key: "res183" }),
+    get: async (_ctx: Ctx<"/res183">) => json({ id: 183, key: "res183" }),
   },
   "/res184/:id": {
     post: async (ctx: Ctx<"/res184/:id">) => json({ id: 184, key: ctx.params.id }),
@@ -608,19 +608,19 @@ const contract = {
     get: async (ctx: Ctx<"/res186/:id">) => json({ id: 186, key: ctx.params.id }),
   },
   "/res187": {
-    post: async (ctx: Ctx<"/res187">) => json({ id: 187, key: "res187" }),
+    post: async (_ctx: Ctx<"/res187">) => json({ id: 187, key: "res187" }),
   },
   "/res188/:id": {
     put: async (ctx: Ctx<"/res188/:id">) => json({ id: 188, key: ctx.params.id }),
   },
   "/res189": {
-    get: async (ctx: Ctx<"/res189">) => json({ id: 189, key: "res189" }),
+    get: async (_ctx: Ctx<"/res189">) => json({ id: 189, key: "res189" }),
   },
   "/res190/:id": {
     post: async (ctx: Ctx<"/res190/:id">) => json({ id: 190, key: ctx.params.id }),
   },
   "/res191": {
-    put: async (ctx: Ctx<"/res191">) => json({ id: 191, key: "res191" }),
+    put: async (_ctx: Ctx<"/res191">) => json({ id: 191, key: "res191" }),
   },
   "/res192/:id": {
     get: async (ctx: Ctx<"/res192/:id">) => json({ id: 192, key: ctx.params.id }),
@@ -635,7 +635,7 @@ const contract = {
     put: async (ctx: Ctx<"/res194/:id">) => json({ id: 194, key: ctx.params.id }),
   },
   "/res195": {
-    get: async (ctx: Ctx<"/res195">) => json({ id: 195, key: "res195" }),
+    get: async (_ctx: Ctx<"/res195">) => json({ id: 195, key: "res195" }),
   },
   "/res196/:id": {
     post: async (ctx: Ctx<"/res196/:id">) => json({ id: 196, key: ctx.params.id }),
@@ -647,19 +647,19 @@ const contract = {
     get: async (ctx: Ctx<"/res198/:id">) => json({ id: 198, key: ctx.params.id }),
   },
   "/res199": {
-    post: async (ctx: Ctx<"/res199">) => json({ id: 199, key: "res199" }),
+    post: async (_ctx: Ctx<"/res199">) => json({ id: 199, key: "res199" }),
   },
   "/res200/:id": {
     put: async (ctx: Ctx<"/res200/:id">) => json({ id: 200, key: ctx.params.id }),
   },
   "/res201": {
-    get: async (ctx: Ctx<"/res201">) => json({ id: 201, key: "res201" }),
+    get: async (_ctx: Ctx<"/res201">) => json({ id: 201, key: "res201" }),
   },
   "/res202/:id": {
     post: async (ctx: Ctx<"/res202/:id">) => json({ id: 202, key: ctx.params.id }),
   },
   "/res203": {
-    put: async (ctx: Ctx<"/res203">) => json({ id: 203, key: "res203" }),
+    put: async (_ctx: Ctx<"/res203">) => json({ id: 203, key: "res203" }),
   },
   "/res204/:id": {
     get: async (ctx: Ctx<"/res204/:id">) => json({ id: 204, key: ctx.params.id }),
@@ -674,7 +674,7 @@ const contract = {
     put: async (ctx: Ctx<"/res206/:id">) => json({ id: 206, key: ctx.params.id }),
   },
   "/res207": {
-    get: async (ctx: Ctx<"/res207">) => json({ id: 207, key: "res207" }),
+    get: async (_ctx: Ctx<"/res207">) => json({ id: 207, key: "res207" }),
   },
   "/res208/:id": {
     post: async (ctx: Ctx<"/res208/:id">) => json({ id: 208, key: ctx.params.id }),
@@ -686,19 +686,19 @@ const contract = {
     get: async (ctx: Ctx<"/res210/:id">) => json({ id: 210, key: ctx.params.id }),
   },
   "/res211": {
-    post: async (ctx: Ctx<"/res211">) => json({ id: 211, key: "res211" }),
+    post: async (_ctx: Ctx<"/res211">) => json({ id: 211, key: "res211" }),
   },
   "/res212/:id": {
     put: async (ctx: Ctx<"/res212/:id">) => json({ id: 212, key: ctx.params.id }),
   },
   "/res213": {
-    get: async (ctx: Ctx<"/res213">) => json({ id: 213, key: "res213" }),
+    get: async (_ctx: Ctx<"/res213">) => json({ id: 213, key: "res213" }),
   },
   "/res214/:id": {
     post: async (ctx: Ctx<"/res214/:id">) => json({ id: 214, key: ctx.params.id }),
   },
   "/res215": {
-    put: async (ctx: Ctx<"/res215">) => json({ id: 215, key: "res215" }),
+    put: async (_ctx: Ctx<"/res215">) => json({ id: 215, key: "res215" }),
   },
   "/res216/:id": {
     get: async (ctx: Ctx<"/res216/:id">) => json({ id: 216, key: ctx.params.id }),
@@ -713,7 +713,7 @@ const contract = {
     put: async (ctx: Ctx<"/res218/:id">) => json({ id: 218, key: ctx.params.id }),
   },
   "/res219": {
-    get: async (ctx: Ctx<"/res219">) => json({ id: 219, key: "res219" }),
+    get: async (_ctx: Ctx<"/res219">) => json({ id: 219, key: "res219" }),
   },
   "/res220/:id": {
     post: async (ctx: Ctx<"/res220/:id">) => json({ id: 220, key: ctx.params.id }),
@@ -725,19 +725,19 @@ const contract = {
     get: async (ctx: Ctx<"/res222/:id">) => json({ id: 222, key: ctx.params.id }),
   },
   "/res223": {
-    post: async (ctx: Ctx<"/res223">) => json({ id: 223, key: "res223" }),
+    post: async (_ctx: Ctx<"/res223">) => json({ id: 223, key: "res223" }),
   },
   "/res224/:id": {
     put: async (ctx: Ctx<"/res224/:id">) => json({ id: 224, key: ctx.params.id }),
   },
   "/res225": {
-    get: async (ctx: Ctx<"/res225">) => json({ id: 225, key: "res225" }),
+    get: async (_ctx: Ctx<"/res225">) => json({ id: 225, key: "res225" }),
   },
   "/res226/:id": {
     post: async (ctx: Ctx<"/res226/:id">) => json({ id: 226, key: ctx.params.id }),
   },
   "/res227": {
-    put: async (ctx: Ctx<"/res227">) => json({ id: 227, key: "res227" }),
+    put: async (_ctx: Ctx<"/res227">) => json({ id: 227, key: "res227" }),
   },
   "/res228/:id": {
     get: async (ctx: Ctx<"/res228/:id">) => json({ id: 228, key: ctx.params.id }),
@@ -752,7 +752,7 @@ const contract = {
     put: async (ctx: Ctx<"/res230/:id">) => json({ id: 230, key: ctx.params.id }),
   },
   "/res231": {
-    get: async (ctx: Ctx<"/res231">) => json({ id: 231, key: "res231" }),
+    get: async (_ctx: Ctx<"/res231">) => json({ id: 231, key: "res231" }),
   },
   "/res232/:id": {
     post: async (ctx: Ctx<"/res232/:id">) => json({ id: 232, key: ctx.params.id }),
@@ -764,19 +764,19 @@ const contract = {
     get: async (ctx: Ctx<"/res234/:id">) => json({ id: 234, key: ctx.params.id }),
   },
   "/res235": {
-    post: async (ctx: Ctx<"/res235">) => json({ id: 235, key: "res235" }),
+    post: async (_ctx: Ctx<"/res235">) => json({ id: 235, key: "res235" }),
   },
   "/res236/:id": {
     put: async (ctx: Ctx<"/res236/:id">) => json({ id: 236, key: ctx.params.id }),
   },
   "/res237": {
-    get: async (ctx: Ctx<"/res237">) => json({ id: 237, key: "res237" }),
+    get: async (_ctx: Ctx<"/res237">) => json({ id: 237, key: "res237" }),
   },
   "/res238/:id": {
     post: async (ctx: Ctx<"/res238/:id">) => json({ id: 238, key: ctx.params.id }),
   },
   "/res239": {
-    put: async (ctx: Ctx<"/res239">) => json({ id: 239, key: "res239" }),
+    put: async (_ctx: Ctx<"/res239">) => json({ id: 239, key: "res239" }),
   },
   "/res240/:id": {
     get: async (ctx: Ctx<"/res240/:id">) => json({ id: 240, key: ctx.params.id }),
@@ -791,7 +791,7 @@ const contract = {
     put: async (ctx: Ctx<"/res242/:id">) => json({ id: 242, key: ctx.params.id }),
   },
   "/res243": {
-    get: async (ctx: Ctx<"/res243">) => json({ id: 243, key: "res243" }),
+    get: async (_ctx: Ctx<"/res243">) => json({ id: 243, key: "res243" }),
   },
   "/res244/:id": {
     post: async (ctx: Ctx<"/res244/:id">) => json({ id: 244, key: ctx.params.id }),
@@ -803,19 +803,19 @@ const contract = {
     get: async (ctx: Ctx<"/res246/:id">) => json({ id: 246, key: ctx.params.id }),
   },
   "/res247": {
-    post: async (ctx: Ctx<"/res247">) => json({ id: 247, key: "res247" }),
+    post: async (_ctx: Ctx<"/res247">) => json({ id: 247, key: "res247" }),
   },
   "/res248/:id": {
     put: async (ctx: Ctx<"/res248/:id">) => json({ id: 248, key: ctx.params.id }),
   },
   "/res249": {
-    get: async (ctx: Ctx<"/res249">) => json({ id: 249, key: "res249" }),
+    get: async (_ctx: Ctx<"/res249">) => json({ id: 249, key: "res249" }),
   },
   "/res250/:id": {
     post: async (ctx: Ctx<"/res250/:id">) => json({ id: 250, key: ctx.params.id }),
   },
   "/res251": {
-    put: async (ctx: Ctx<"/res251">) => json({ id: 251, key: "res251" }),
+    put: async (_ctx: Ctx<"/res251">) => json({ id: 251, key: "res251" }),
   },
   "/res252/:id": {
     get: async (ctx: Ctx<"/res252/:id">) => json({ id: 252, key: ctx.params.id }),
@@ -830,7 +830,7 @@ const contract = {
     put: async (ctx: Ctx<"/res254/:id">) => json({ id: 254, key: ctx.params.id }),
   },
   "/res255": {
-    get: async (ctx: Ctx<"/res255">) => json({ id: 255, key: "res255" }),
+    get: async (_ctx: Ctx<"/res255">) => json({ id: 255, key: "res255" }),
   },
   "/res256/:id": {
     post: async (ctx: Ctx<"/res256/:id">) => json({ id: 256, key: ctx.params.id }),
@@ -842,19 +842,19 @@ const contract = {
     get: async (ctx: Ctx<"/res258/:id">) => json({ id: 258, key: ctx.params.id }),
   },
   "/res259": {
-    post: async (ctx: Ctx<"/res259">) => json({ id: 259, key: "res259" }),
+    post: async (_ctx: Ctx<"/res259">) => json({ id: 259, key: "res259" }),
   },
   "/res260/:id": {
     put: async (ctx: Ctx<"/res260/:id">) => json({ id: 260, key: ctx.params.id }),
   },
   "/res261": {
-    get: async (ctx: Ctx<"/res261">) => json({ id: 261, key: "res261" }),
+    get: async (_ctx: Ctx<"/res261">) => json({ id: 261, key: "res261" }),
   },
   "/res262/:id": {
     post: async (ctx: Ctx<"/res262/:id">) => json({ id: 262, key: ctx.params.id }),
   },
   "/res263": {
-    put: async (ctx: Ctx<"/res263">) => json({ id: 263, key: "res263" }),
+    put: async (_ctx: Ctx<"/res263">) => json({ id: 263, key: "res263" }),
   },
   "/res264/:id": {
     get: async (ctx: Ctx<"/res264/:id">) => json({ id: 264, key: ctx.params.id }),
@@ -869,7 +869,7 @@ const contract = {
     put: async (ctx: Ctx<"/res266/:id">) => json({ id: 266, key: ctx.params.id }),
   },
   "/res267": {
-    get: async (ctx: Ctx<"/res267">) => json({ id: 267, key: "res267" }),
+    get: async (_ctx: Ctx<"/res267">) => json({ id: 267, key: "res267" }),
   },
   "/res268/:id": {
     post: async (ctx: Ctx<"/res268/:id">) => json({ id: 268, key: ctx.params.id }),
@@ -881,19 +881,19 @@ const contract = {
     get: async (ctx: Ctx<"/res270/:id">) => json({ id: 270, key: ctx.params.id }),
   },
   "/res271": {
-    post: async (ctx: Ctx<"/res271">) => json({ id: 271, key: "res271" }),
+    post: async (_ctx: Ctx<"/res271">) => json({ id: 271, key: "res271" }),
   },
   "/res272/:id": {
     put: async (ctx: Ctx<"/res272/:id">) => json({ id: 272, key: ctx.params.id }),
   },
   "/res273": {
-    get: async (ctx: Ctx<"/res273">) => json({ id: 273, key: "res273" }),
+    get: async (_ctx: Ctx<"/res273">) => json({ id: 273, key: "res273" }),
   },
   "/res274/:id": {
     post: async (ctx: Ctx<"/res274/:id">) => json({ id: 274, key: ctx.params.id }),
   },
   "/res275": {
-    put: async (ctx: Ctx<"/res275">) => json({ id: 275, key: "res275" }),
+    put: async (_ctx: Ctx<"/res275">) => json({ id: 275, key: "res275" }),
   },
   "/res276/:id": {
     get: async (ctx: Ctx<"/res276/:id">) => json({ id: 276, key: ctx.params.id }),
@@ -908,7 +908,7 @@ const contract = {
     put: async (ctx: Ctx<"/res278/:id">) => json({ id: 278, key: ctx.params.id }),
   },
   "/res279": {
-    get: async (ctx: Ctx<"/res279">) => json({ id: 279, key: "res279" }),
+    get: async (_ctx: Ctx<"/res279">) => json({ id: 279, key: "res279" }),
   },
   "/res280/:id": {
     post: async (ctx: Ctx<"/res280/:id">) => json({ id: 280, key: ctx.params.id }),
@@ -920,19 +920,19 @@ const contract = {
     get: async (ctx: Ctx<"/res282/:id">) => json({ id: 282, key: ctx.params.id }),
   },
   "/res283": {
-    post: async (ctx: Ctx<"/res283">) => json({ id: 283, key: "res283" }),
+    post: async (_ctx: Ctx<"/res283">) => json({ id: 283, key: "res283" }),
   },
   "/res284/:id": {
     put: async (ctx: Ctx<"/res284/:id">) => json({ id: 284, key: ctx.params.id }),
   },
   "/res285": {
-    get: async (ctx: Ctx<"/res285">) => json({ id: 285, key: "res285" }),
+    get: async (_ctx: Ctx<"/res285">) => json({ id: 285, key: "res285" }),
   },
   "/res286/:id": {
     post: async (ctx: Ctx<"/res286/:id">) => json({ id: 286, key: ctx.params.id }),
   },
   "/res287": {
-    put: async (ctx: Ctx<"/res287">) => json({ id: 287, key: "res287" }),
+    put: async (_ctx: Ctx<"/res287">) => json({ id: 287, key: "res287" }),
   },
   "/res288/:id": {
     get: async (ctx: Ctx<"/res288/:id">) => json({ id: 288, key: ctx.params.id }),
@@ -947,7 +947,7 @@ const contract = {
     put: async (ctx: Ctx<"/res290/:id">) => json({ id: 290, key: ctx.params.id }),
   },
   "/res291": {
-    get: async (ctx: Ctx<"/res291">) => json({ id: 291, key: "res291" }),
+    get: async (_ctx: Ctx<"/res291">) => json({ id: 291, key: "res291" }),
   },
   "/res292/:id": {
     post: async (ctx: Ctx<"/res292/:id">) => json({ id: 292, key: ctx.params.id }),
@@ -959,19 +959,19 @@ const contract = {
     get: async (ctx: Ctx<"/res294/:id">) => json({ id: 294, key: ctx.params.id }),
   },
   "/res295": {
-    post: async (ctx: Ctx<"/res295">) => json({ id: 295, key: "res295" }),
+    post: async (_ctx: Ctx<"/res295">) => json({ id: 295, key: "res295" }),
   },
   "/res296/:id": {
     put: async (ctx: Ctx<"/res296/:id">) => json({ id: 296, key: ctx.params.id }),
   },
   "/res297": {
-    get: async (ctx: Ctx<"/res297">) => json({ id: 297, key: "res297" }),
+    get: async (_ctx: Ctx<"/res297">) => json({ id: 297, key: "res297" }),
   },
   "/res298/:id": {
     post: async (ctx: Ctx<"/res298/:id">) => json({ id: 298, key: ctx.params.id }),
   },
   "/res299": {
-    put: async (ctx: Ctx<"/res299">) => json({ id: 299, key: "res299" }),
+    put: async (_ctx: Ctx<"/res299">) => json({ id: 299, key: "res299" }),
   },
   "/res300/:id": {
     get: async (ctx: Ctx<"/res300/:id">) => json({ id: 300, key: ctx.params.id }),
@@ -986,7 +986,7 @@ const contract = {
     put: async (ctx: Ctx<"/res302/:id">) => json({ id: 302, key: ctx.params.id }),
   },
   "/res303": {
-    get: async (ctx: Ctx<"/res303">) => json({ id: 303, key: "res303" }),
+    get: async (_ctx: Ctx<"/res303">) => json({ id: 303, key: "res303" }),
   },
   "/res304/:id": {
     post: async (ctx: Ctx<"/res304/:id">) => json({ id: 304, key: ctx.params.id }),
@@ -998,19 +998,19 @@ const contract = {
     get: async (ctx: Ctx<"/res306/:id">) => json({ id: 306, key: ctx.params.id }),
   },
   "/res307": {
-    post: async (ctx: Ctx<"/res307">) => json({ id: 307, key: "res307" }),
+    post: async (_ctx: Ctx<"/res307">) => json({ id: 307, key: "res307" }),
   },
   "/res308/:id": {
     put: async (ctx: Ctx<"/res308/:id">) => json({ id: 308, key: ctx.params.id }),
   },
   "/res309": {
-    get: async (ctx: Ctx<"/res309">) => json({ id: 309, key: "res309" }),
+    get: async (_ctx: Ctx<"/res309">) => json({ id: 309, key: "res309" }),
   },
   "/res310/:id": {
     post: async (ctx: Ctx<"/res310/:id">) => json({ id: 310, key: ctx.params.id }),
   },
   "/res311": {
-    put: async (ctx: Ctx<"/res311">) => json({ id: 311, key: "res311" }),
+    put: async (_ctx: Ctx<"/res311">) => json({ id: 311, key: "res311" }),
   },
   "/res312/:id": {
     get: async (ctx: Ctx<"/res312/:id">) => json({ id: 312, key: ctx.params.id }),
@@ -1025,7 +1025,7 @@ const contract = {
     put: async (ctx: Ctx<"/res314/:id">) => json({ id: 314, key: ctx.params.id }),
   },
   "/res315": {
-    get: async (ctx: Ctx<"/res315">) => json({ id: 315, key: "res315" }),
+    get: async (_ctx: Ctx<"/res315">) => json({ id: 315, key: "res315" }),
   },
   "/res316/:id": {
     post: async (ctx: Ctx<"/res316/:id">) => json({ id: 316, key: ctx.params.id }),
@@ -1037,19 +1037,19 @@ const contract = {
     get: async (ctx: Ctx<"/res318/:id">) => json({ id: 318, key: ctx.params.id }),
   },
   "/res319": {
-    post: async (ctx: Ctx<"/res319">) => json({ id: 319, key: "res319" }),
+    post: async (_ctx: Ctx<"/res319">) => json({ id: 319, key: "res319" }),
   },
   "/res320/:id": {
     put: async (ctx: Ctx<"/res320/:id">) => json({ id: 320, key: ctx.params.id }),
   },
   "/res321": {
-    get: async (ctx: Ctx<"/res321">) => json({ id: 321, key: "res321" }),
+    get: async (_ctx: Ctx<"/res321">) => json({ id: 321, key: "res321" }),
   },
   "/res322/:id": {
     post: async (ctx: Ctx<"/res322/:id">) => json({ id: 322, key: ctx.params.id }),
   },
   "/res323": {
-    put: async (ctx: Ctx<"/res323">) => json({ id: 323, key: "res323" }),
+    put: async (_ctx: Ctx<"/res323">) => json({ id: 323, key: "res323" }),
   },
   "/res324/:id": {
     get: async (ctx: Ctx<"/res324/:id">) => json({ id: 324, key: ctx.params.id }),
@@ -1064,7 +1064,7 @@ const contract = {
     put: async (ctx: Ctx<"/res326/:id">) => json({ id: 326, key: ctx.params.id }),
   },
   "/res327": {
-    get: async (ctx: Ctx<"/res327">) => json({ id: 327, key: "res327" }),
+    get: async (_ctx: Ctx<"/res327">) => json({ id: 327, key: "res327" }),
   },
   "/res328/:id": {
     post: async (ctx: Ctx<"/res328/:id">) => json({ id: 328, key: ctx.params.id }),
@@ -1076,19 +1076,19 @@ const contract = {
     get: async (ctx: Ctx<"/res330/:id">) => json({ id: 330, key: ctx.params.id }),
   },
   "/res331": {
-    post: async (ctx: Ctx<"/res331">) => json({ id: 331, key: "res331" }),
+    post: async (_ctx: Ctx<"/res331">) => json({ id: 331, key: "res331" }),
   },
   "/res332/:id": {
     put: async (ctx: Ctx<"/res332/:id">) => json({ id: 332, key: ctx.params.id }),
   },
   "/res333": {
-    get: async (ctx: Ctx<"/res333">) => json({ id: 333, key: "res333" }),
+    get: async (_ctx: Ctx<"/res333">) => json({ id: 333, key: "res333" }),
   },
   "/res334/:id": {
     post: async (ctx: Ctx<"/res334/:id">) => json({ id: 334, key: ctx.params.id }),
   },
   "/res335": {
-    put: async (ctx: Ctx<"/res335">) => json({ id: 335, key: "res335" }),
+    put: async (_ctx: Ctx<"/res335">) => json({ id: 335, key: "res335" }),
   },
   "/res336/:id": {
     get: async (ctx: Ctx<"/res336/:id">) => json({ id: 336, key: ctx.params.id }),
@@ -1103,7 +1103,7 @@ const contract = {
     put: async (ctx: Ctx<"/res338/:id">) => json({ id: 338, key: ctx.params.id }),
   },
   "/res339": {
-    get: async (ctx: Ctx<"/res339">) => json({ id: 339, key: "res339" }),
+    get: async (_ctx: Ctx<"/res339">) => json({ id: 339, key: "res339" }),
   },
   "/res340/:id": {
     post: async (ctx: Ctx<"/res340/:id">) => json({ id: 340, key: ctx.params.id }),
@@ -1115,19 +1115,19 @@ const contract = {
     get: async (ctx: Ctx<"/res342/:id">) => json({ id: 342, key: ctx.params.id }),
   },
   "/res343": {
-    post: async (ctx: Ctx<"/res343">) => json({ id: 343, key: "res343" }),
+    post: async (_ctx: Ctx<"/res343">) => json({ id: 343, key: "res343" }),
   },
   "/res344/:id": {
     put: async (ctx: Ctx<"/res344/:id">) => json({ id: 344, key: ctx.params.id }),
   },
   "/res345": {
-    get: async (ctx: Ctx<"/res345">) => json({ id: 345, key: "res345" }),
+    get: async (_ctx: Ctx<"/res345">) => json({ id: 345, key: "res345" }),
   },
   "/res346/:id": {
     post: async (ctx: Ctx<"/res346/:id">) => json({ id: 346, key: ctx.params.id }),
   },
   "/res347": {
-    put: async (ctx: Ctx<"/res347">) => json({ id: 347, key: "res347" }),
+    put: async (_ctx: Ctx<"/res347">) => json({ id: 347, key: "res347" }),
   },
   "/res348/:id": {
     get: async (ctx: Ctx<"/res348/:id">) => json({ id: 348, key: ctx.params.id }),
@@ -1142,7 +1142,7 @@ const contract = {
     put: async (ctx: Ctx<"/res350/:id">) => json({ id: 350, key: ctx.params.id }),
   },
   "/res351": {
-    get: async (ctx: Ctx<"/res351">) => json({ id: 351, key: "res351" }),
+    get: async (_ctx: Ctx<"/res351">) => json({ id: 351, key: "res351" }),
   },
   "/res352/:id": {
     post: async (ctx: Ctx<"/res352/:id">) => json({ id: 352, key: ctx.params.id }),
@@ -1154,19 +1154,19 @@ const contract = {
     get: async (ctx: Ctx<"/res354/:id">) => json({ id: 354, key: ctx.params.id }),
   },
   "/res355": {
-    post: async (ctx: Ctx<"/res355">) => json({ id: 355, key: "res355" }),
+    post: async (_ctx: Ctx<"/res355">) => json({ id: 355, key: "res355" }),
   },
   "/res356/:id": {
     put: async (ctx: Ctx<"/res356/:id">) => json({ id: 356, key: ctx.params.id }),
   },
   "/res357": {
-    get: async (ctx: Ctx<"/res357">) => json({ id: 357, key: "res357" }),
+    get: async (_ctx: Ctx<"/res357">) => json({ id: 357, key: "res357" }),
   },
   "/res358/:id": {
     post: async (ctx: Ctx<"/res358/:id">) => json({ id: 358, key: ctx.params.id }),
   },
   "/res359": {
-    put: async (ctx: Ctx<"/res359">) => json({ id: 359, key: "res359" }),
+    put: async (_ctx: Ctx<"/res359">) => json({ id: 359, key: "res359" }),
   },
   "/res360/:id": {
     get: async (ctx: Ctx<"/res360/:id">) => json({ id: 360, key: ctx.params.id }),
@@ -1181,7 +1181,7 @@ const contract = {
     put: async (ctx: Ctx<"/res362/:id">) => json({ id: 362, key: ctx.params.id }),
   },
   "/res363": {
-    get: async (ctx: Ctx<"/res363">) => json({ id: 363, key: "res363" }),
+    get: async (_ctx: Ctx<"/res363">) => json({ id: 363, key: "res363" }),
   },
   "/res364/:id": {
     post: async (ctx: Ctx<"/res364/:id">) => json({ id: 364, key: ctx.params.id }),
@@ -1193,19 +1193,19 @@ const contract = {
     get: async (ctx: Ctx<"/res366/:id">) => json({ id: 366, key: ctx.params.id }),
   },
   "/res367": {
-    post: async (ctx: Ctx<"/res367">) => json({ id: 367, key: "res367" }),
+    post: async (_ctx: Ctx<"/res367">) => json({ id: 367, key: "res367" }),
   },
   "/res368/:id": {
     put: async (ctx: Ctx<"/res368/:id">) => json({ id: 368, key: ctx.params.id }),
   },
   "/res369": {
-    get: async (ctx: Ctx<"/res369">) => json({ id: 369, key: "res369" }),
+    get: async (_ctx: Ctx<"/res369">) => json({ id: 369, key: "res369" }),
   },
   "/res370/:id": {
     post: async (ctx: Ctx<"/res370/:id">) => json({ id: 370, key: ctx.params.id }),
   },
   "/res371": {
-    put: async (ctx: Ctx<"/res371">) => json({ id: 371, key: "res371" }),
+    put: async (_ctx: Ctx<"/res371">) => json({ id: 371, key: "res371" }),
   },
   "/res372/:id": {
     get: async (ctx: Ctx<"/res372/:id">) => json({ id: 372, key: ctx.params.id }),
@@ -1220,7 +1220,7 @@ const contract = {
     put: async (ctx: Ctx<"/res374/:id">) => json({ id: 374, key: ctx.params.id }),
   },
   "/res375": {
-    get: async (ctx: Ctx<"/res375">) => json({ id: 375, key: "res375" }),
+    get: async (_ctx: Ctx<"/res375">) => json({ id: 375, key: "res375" }),
   },
   "/res376/:id": {
     post: async (ctx: Ctx<"/res376/:id">) => json({ id: 376, key: ctx.params.id }),
@@ -1232,19 +1232,19 @@ const contract = {
     get: async (ctx: Ctx<"/res378/:id">) => json({ id: 378, key: ctx.params.id }),
   },
   "/res379": {
-    post: async (ctx: Ctx<"/res379">) => json({ id: 379, key: "res379" }),
+    post: async (_ctx: Ctx<"/res379">) => json({ id: 379, key: "res379" }),
   },
   "/res380/:id": {
     put: async (ctx: Ctx<"/res380/:id">) => json({ id: 380, key: ctx.params.id }),
   },
   "/res381": {
-    get: async (ctx: Ctx<"/res381">) => json({ id: 381, key: "res381" }),
+    get: async (_ctx: Ctx<"/res381">) => json({ id: 381, key: "res381" }),
   },
   "/res382/:id": {
     post: async (ctx: Ctx<"/res382/:id">) => json({ id: 382, key: ctx.params.id }),
   },
   "/res383": {
-    put: async (ctx: Ctx<"/res383">) => json({ id: 383, key: "res383" }),
+    put: async (_ctx: Ctx<"/res383">) => json({ id: 383, key: "res383" }),
   },
   "/res384/:id": {
     get: async (ctx: Ctx<"/res384/:id">) => json({ id: 384, key: ctx.params.id }),
@@ -1259,7 +1259,7 @@ const contract = {
     put: async (ctx: Ctx<"/res386/:id">) => json({ id: 386, key: ctx.params.id }),
   },
   "/res387": {
-    get: async (ctx: Ctx<"/res387">) => json({ id: 387, key: "res387" }),
+    get: async (_ctx: Ctx<"/res387">) => json({ id: 387, key: "res387" }),
   },
   "/res388/:id": {
     post: async (ctx: Ctx<"/res388/:id">) => json({ id: 388, key: ctx.params.id }),
@@ -1271,19 +1271,19 @@ const contract = {
     get: async (ctx: Ctx<"/res390/:id">) => json({ id: 390, key: ctx.params.id }),
   },
   "/res391": {
-    post: async (ctx: Ctx<"/res391">) => json({ id: 391, key: "res391" }),
+    post: async (_ctx: Ctx<"/res391">) => json({ id: 391, key: "res391" }),
   },
   "/res392/:id": {
     put: async (ctx: Ctx<"/res392/:id">) => json({ id: 392, key: ctx.params.id }),
   },
   "/res393": {
-    get: async (ctx: Ctx<"/res393">) => json({ id: 393, key: "res393" }),
+    get: async (_ctx: Ctx<"/res393">) => json({ id: 393, key: "res393" }),
   },
   "/res394/:id": {
     post: async (ctx: Ctx<"/res394/:id">) => json({ id: 394, key: ctx.params.id }),
   },
   "/res395": {
-    put: async (ctx: Ctx<"/res395">) => json({ id: 395, key: "res395" }),
+    put: async (_ctx: Ctx<"/res395">) => json({ id: 395, key: "res395" }),
   },
   "/res396/:id": {
     get: async (ctx: Ctx<"/res396/:id">) => json({ id: 396, key: ctx.params.id }),
@@ -1298,7 +1298,7 @@ const contract = {
     put: async (ctx: Ctx<"/res398/:id">) => json({ id: 398, key: ctx.params.id }),
   },
   "/res399": {
-    get: async (ctx: Ctx<"/res399">) => json({ id: 399, key: "res399" }),
+    get: async (_ctx: Ctx<"/res399">) => json({ id: 399, key: "res399" }),
   },
   "/res400/:id": {
     post: async (ctx: Ctx<"/res400/:id">) => json({ id: 400, key: ctx.params.id }),
@@ -1310,19 +1310,19 @@ const contract = {
     get: async (ctx: Ctx<"/res402/:id">) => json({ id: 402, key: ctx.params.id }),
   },
   "/res403": {
-    post: async (ctx: Ctx<"/res403">) => json({ id: 403, key: "res403" }),
+    post: async (_ctx: Ctx<"/res403">) => json({ id: 403, key: "res403" }),
   },
   "/res404/:id": {
     put: async (ctx: Ctx<"/res404/:id">) => json({ id: 404, key: ctx.params.id }),
   },
   "/res405": {
-    get: async (ctx: Ctx<"/res405">) => json({ id: 405, key: "res405" }),
+    get: async (_ctx: Ctx<"/res405">) => json({ id: 405, key: "res405" }),
   },
   "/res406/:id": {
     post: async (ctx: Ctx<"/res406/:id">) => json({ id: 406, key: ctx.params.id }),
   },
   "/res407": {
-    put: async (ctx: Ctx<"/res407">) => json({ id: 407, key: "res407" }),
+    put: async (_ctx: Ctx<"/res407">) => json({ id: 407, key: "res407" }),
   },
   "/res408/:id": {
     get: async (ctx: Ctx<"/res408/:id">) => json({ id: 408, key: ctx.params.id }),
@@ -1337,7 +1337,7 @@ const contract = {
     put: async (ctx: Ctx<"/res410/:id">) => json({ id: 410, key: ctx.params.id }),
   },
   "/res411": {
-    get: async (ctx: Ctx<"/res411">) => json({ id: 411, key: "res411" }),
+    get: async (_ctx: Ctx<"/res411">) => json({ id: 411, key: "res411" }),
   },
   "/res412/:id": {
     post: async (ctx: Ctx<"/res412/:id">) => json({ id: 412, key: ctx.params.id }),
@@ -1349,19 +1349,19 @@ const contract = {
     get: async (ctx: Ctx<"/res414/:id">) => json({ id: 414, key: ctx.params.id }),
   },
   "/res415": {
-    post: async (ctx: Ctx<"/res415">) => json({ id: 415, key: "res415" }),
+    post: async (_ctx: Ctx<"/res415">) => json({ id: 415, key: "res415" }),
   },
   "/res416/:id": {
     put: async (ctx: Ctx<"/res416/:id">) => json({ id: 416, key: ctx.params.id }),
   },
   "/res417": {
-    get: async (ctx: Ctx<"/res417">) => json({ id: 417, key: "res417" }),
+    get: async (_ctx: Ctx<"/res417">) => json({ id: 417, key: "res417" }),
   },
   "/res418/:id": {
     post: async (ctx: Ctx<"/res418/:id">) => json({ id: 418, key: ctx.params.id }),
   },
   "/res419": {
-    put: async (ctx: Ctx<"/res419">) => json({ id: 419, key: "res419" }),
+    put: async (_ctx: Ctx<"/res419">) => json({ id: 419, key: "res419" }),
   },
   "/res420/:id": {
     get: async (ctx: Ctx<"/res420/:id">) => json({ id: 420, key: ctx.params.id }),
@@ -1376,7 +1376,7 @@ const contract = {
     put: async (ctx: Ctx<"/res422/:id">) => json({ id: 422, key: ctx.params.id }),
   },
   "/res423": {
-    get: async (ctx: Ctx<"/res423">) => json({ id: 423, key: "res423" }),
+    get: async (_ctx: Ctx<"/res423">) => json({ id: 423, key: "res423" }),
   },
   "/res424/:id": {
     post: async (ctx: Ctx<"/res424/:id">) => json({ id: 424, key: ctx.params.id }),
@@ -1388,19 +1388,19 @@ const contract = {
     get: async (ctx: Ctx<"/res426/:id">) => json({ id: 426, key: ctx.params.id }),
   },
   "/res427": {
-    post: async (ctx: Ctx<"/res427">) => json({ id: 427, key: "res427" }),
+    post: async (_ctx: Ctx<"/res427">) => json({ id: 427, key: "res427" }),
   },
   "/res428/:id": {
     put: async (ctx: Ctx<"/res428/:id">) => json({ id: 428, key: ctx.params.id }),
   },
   "/res429": {
-    get: async (ctx: Ctx<"/res429">) => json({ id: 429, key: "res429" }),
+    get: async (_ctx: Ctx<"/res429">) => json({ id: 429, key: "res429" }),
   },
   "/res430/:id": {
     post: async (ctx: Ctx<"/res430/:id">) => json({ id: 430, key: ctx.params.id }),
   },
   "/res431": {
-    put: async (ctx: Ctx<"/res431">) => json({ id: 431, key: "res431" }),
+    put: async (_ctx: Ctx<"/res431">) => json({ id: 431, key: "res431" }),
   },
   "/res432/:id": {
     get: async (ctx: Ctx<"/res432/:id">) => json({ id: 432, key: ctx.params.id }),
@@ -1415,7 +1415,7 @@ const contract = {
     put: async (ctx: Ctx<"/res434/:id">) => json({ id: 434, key: ctx.params.id }),
   },
   "/res435": {
-    get: async (ctx: Ctx<"/res435">) => json({ id: 435, key: "res435" }),
+    get: async (_ctx: Ctx<"/res435">) => json({ id: 435, key: "res435" }),
   },
   "/res436/:id": {
     post: async (ctx: Ctx<"/res436/:id">) => json({ id: 436, key: ctx.params.id }),
@@ -1427,19 +1427,19 @@ const contract = {
     get: async (ctx: Ctx<"/res438/:id">) => json({ id: 438, key: ctx.params.id }),
   },
   "/res439": {
-    post: async (ctx: Ctx<"/res439">) => json({ id: 439, key: "res439" }),
+    post: async (_ctx: Ctx<"/res439">) => json({ id: 439, key: "res439" }),
   },
   "/res440/:id": {
     put: async (ctx: Ctx<"/res440/:id">) => json({ id: 440, key: ctx.params.id }),
   },
   "/res441": {
-    get: async (ctx: Ctx<"/res441">) => json({ id: 441, key: "res441" }),
+    get: async (_ctx: Ctx<"/res441">) => json({ id: 441, key: "res441" }),
   },
   "/res442/:id": {
     post: async (ctx: Ctx<"/res442/:id">) => json({ id: 442, key: ctx.params.id }),
   },
   "/res443": {
-    put: async (ctx: Ctx<"/res443">) => json({ id: 443, key: "res443" }),
+    put: async (_ctx: Ctx<"/res443">) => json({ id: 443, key: "res443" }),
   },
   "/res444/:id": {
     get: async (ctx: Ctx<"/res444/:id">) => json({ id: 444, key: ctx.params.id }),
@@ -1454,7 +1454,7 @@ const contract = {
     put: async (ctx: Ctx<"/res446/:id">) => json({ id: 446, key: ctx.params.id }),
   },
   "/res447": {
-    get: async (ctx: Ctx<"/res447">) => json({ id: 447, key: "res447" }),
+    get: async (_ctx: Ctx<"/res447">) => json({ id: 447, key: "res447" }),
   },
   "/res448/:id": {
     post: async (ctx: Ctx<"/res448/:id">) => json({ id: 448, key: ctx.params.id }),
@@ -1466,19 +1466,19 @@ const contract = {
     get: async (ctx: Ctx<"/res450/:id">) => json({ id: 450, key: ctx.params.id }),
   },
   "/res451": {
-    post: async (ctx: Ctx<"/res451">) => json({ id: 451, key: "res451" }),
+    post: async (_ctx: Ctx<"/res451">) => json({ id: 451, key: "res451" }),
   },
   "/res452/:id": {
     put: async (ctx: Ctx<"/res452/:id">) => json({ id: 452, key: ctx.params.id }),
   },
   "/res453": {
-    get: async (ctx: Ctx<"/res453">) => json({ id: 453, key: "res453" }),
+    get: async (_ctx: Ctx<"/res453">) => json({ id: 453, key: "res453" }),
   },
   "/res454/:id": {
     post: async (ctx: Ctx<"/res454/:id">) => json({ id: 454, key: ctx.params.id }),
   },
   "/res455": {
-    put: async (ctx: Ctx<"/res455">) => json({ id: 455, key: "res455" }),
+    put: async (_ctx: Ctx<"/res455">) => json({ id: 455, key: "res455" }),
   },
   "/res456/:id": {
     get: async (ctx: Ctx<"/res456/:id">) => json({ id: 456, key: ctx.params.id }),
@@ -1493,7 +1493,7 @@ const contract = {
     put: async (ctx: Ctx<"/res458/:id">) => json({ id: 458, key: ctx.params.id }),
   },
   "/res459": {
-    get: async (ctx: Ctx<"/res459">) => json({ id: 459, key: "res459" }),
+    get: async (_ctx: Ctx<"/res459">) => json({ id: 459, key: "res459" }),
   },
   "/res460/:id": {
     post: async (ctx: Ctx<"/res460/:id">) => json({ id: 460, key: ctx.params.id }),
@@ -1505,19 +1505,19 @@ const contract = {
     get: async (ctx: Ctx<"/res462/:id">) => json({ id: 462, key: ctx.params.id }),
   },
   "/res463": {
-    post: async (ctx: Ctx<"/res463">) => json({ id: 463, key: "res463" }),
+    post: async (_ctx: Ctx<"/res463">) => json({ id: 463, key: "res463" }),
   },
   "/res464/:id": {
     put: async (ctx: Ctx<"/res464/:id">) => json({ id: 464, key: ctx.params.id }),
   },
   "/res465": {
-    get: async (ctx: Ctx<"/res465">) => json({ id: 465, key: "res465" }),
+    get: async (_ctx: Ctx<"/res465">) => json({ id: 465, key: "res465" }),
   },
   "/res466/:id": {
     post: async (ctx: Ctx<"/res466/:id">) => json({ id: 466, key: ctx.params.id }),
   },
   "/res467": {
-    put: async (ctx: Ctx<"/res467">) => json({ id: 467, key: "res467" }),
+    put: async (_ctx: Ctx<"/res467">) => json({ id: 467, key: "res467" }),
   },
   "/res468/:id": {
     get: async (ctx: Ctx<"/res468/:id">) => json({ id: 468, key: ctx.params.id }),
@@ -1532,7 +1532,7 @@ const contract = {
     put: async (ctx: Ctx<"/res470/:id">) => json({ id: 470, key: ctx.params.id }),
   },
   "/res471": {
-    get: async (ctx: Ctx<"/res471">) => json({ id: 471, key: "res471" }),
+    get: async (_ctx: Ctx<"/res471">) => json({ id: 471, key: "res471" }),
   },
   "/res472/:id": {
     post: async (ctx: Ctx<"/res472/:id">) => json({ id: 472, key: ctx.params.id }),
@@ -1544,19 +1544,19 @@ const contract = {
     get: async (ctx: Ctx<"/res474/:id">) => json({ id: 474, key: ctx.params.id }),
   },
   "/res475": {
-    post: async (ctx: Ctx<"/res475">) => json({ id: 475, key: "res475" }),
+    post: async (_ctx: Ctx<"/res475">) => json({ id: 475, key: "res475" }),
   },
   "/res476/:id": {
     put: async (ctx: Ctx<"/res476/:id">) => json({ id: 476, key: ctx.params.id }),
   },
   "/res477": {
-    get: async (ctx: Ctx<"/res477">) => json({ id: 477, key: "res477" }),
+    get: async (_ctx: Ctx<"/res477">) => json({ id: 477, key: "res477" }),
   },
   "/res478/:id": {
     post: async (ctx: Ctx<"/res478/:id">) => json({ id: 478, key: ctx.params.id }),
   },
   "/res479": {
-    put: async (ctx: Ctx<"/res479">) => json({ id: 479, key: "res479" }),
+    put: async (_ctx: Ctx<"/res479">) => json({ id: 479, key: "res479" }),
   },
   "/res480/:id": {
     get: async (ctx: Ctx<"/res480/:id">) => json({ id: 480, key: ctx.params.id }),
@@ -1571,7 +1571,7 @@ const contract = {
     put: async (ctx: Ctx<"/res482/:id">) => json({ id: 482, key: ctx.params.id }),
   },
   "/res483": {
-    get: async (ctx: Ctx<"/res483">) => json({ id: 483, key: "res483" }),
+    get: async (_ctx: Ctx<"/res483">) => json({ id: 483, key: "res483" }),
   },
   "/res484/:id": {
     post: async (ctx: Ctx<"/res484/:id">) => json({ id: 484, key: ctx.params.id }),
@@ -1583,19 +1583,19 @@ const contract = {
     get: async (ctx: Ctx<"/res486/:id">) => json({ id: 486, key: ctx.params.id }),
   },
   "/res487": {
-    post: async (ctx: Ctx<"/res487">) => json({ id: 487, key: "res487" }),
+    post: async (_ctx: Ctx<"/res487">) => json({ id: 487, key: "res487" }),
   },
   "/res488/:id": {
     put: async (ctx: Ctx<"/res488/:id">) => json({ id: 488, key: ctx.params.id }),
   },
   "/res489": {
-    get: async (ctx: Ctx<"/res489">) => json({ id: 489, key: "res489" }),
+    get: async (_ctx: Ctx<"/res489">) => json({ id: 489, key: "res489" }),
   },
   "/res490/:id": {
     post: async (ctx: Ctx<"/res490/:id">) => json({ id: 490, key: ctx.params.id }),
   },
   "/res491": {
-    put: async (ctx: Ctx<"/res491">) => json({ id: 491, key: "res491" }),
+    put: async (_ctx: Ctx<"/res491">) => json({ id: 491, key: "res491" }),
   },
   "/res492/:id": {
     get: async (ctx: Ctx<"/res492/:id">) => json({ id: 492, key: ctx.params.id }),
@@ -1610,7 +1610,7 @@ const contract = {
     put: async (ctx: Ctx<"/res494/:id">) => json({ id: 494, key: ctx.params.id }),
   },
   "/res495": {
-    get: async (ctx: Ctx<"/res495">) => json({ id: 495, key: "res495" }),
+    get: async (_ctx: Ctx<"/res495">) => json({ id: 495, key: "res495" }),
   },
   "/res496/:id": {
     post: async (ctx: Ctx<"/res496/:id">) => json({ id: 496, key: ctx.params.id }),
@@ -1622,19 +1622,19 @@ const contract = {
     get: async (ctx: Ctx<"/res498/:id">) => json({ id: 498, key: ctx.params.id }),
   },
   "/res499": {
-    post: async (ctx: Ctx<"/res499">) => json({ id: 499, key: "res499" }),
+    post: async (_ctx: Ctx<"/res499">) => json({ id: 499, key: "res499" }),
   },
   "/res500/:id": {
     put: async (ctx: Ctx<"/res500/:id">) => json({ id: 500, key: ctx.params.id }),
   },
   "/res501": {
-    get: async (ctx: Ctx<"/res501">) => json({ id: 501, key: "res501" }),
+    get: async (_ctx: Ctx<"/res501">) => json({ id: 501, key: "res501" }),
   },
   "/res502/:id": {
     post: async (ctx: Ctx<"/res502/:id">) => json({ id: 502, key: ctx.params.id }),
   },
   "/res503": {
-    put: async (ctx: Ctx<"/res503">) => json({ id: 503, key: "res503" }),
+    put: async (_ctx: Ctx<"/res503">) => json({ id: 503, key: "res503" }),
   },
   "/res504/:id": {
     get: async (ctx: Ctx<"/res504/:id">) => json({ id: 504, key: ctx.params.id }),
@@ -1649,7 +1649,7 @@ const contract = {
     put: async (ctx: Ctx<"/res506/:id">) => json({ id: 506, key: ctx.params.id }),
   },
   "/res507": {
-    get: async (ctx: Ctx<"/res507">) => json({ id: 507, key: "res507" }),
+    get: async (_ctx: Ctx<"/res507">) => json({ id: 507, key: "res507" }),
   },
   "/res508/:id": {
     post: async (ctx: Ctx<"/res508/:id">) => json({ id: 508, key: ctx.params.id }),
@@ -1661,19 +1661,19 @@ const contract = {
     get: async (ctx: Ctx<"/res510/:id">) => json({ id: 510, key: ctx.params.id }),
   },
   "/res511": {
-    post: async (ctx: Ctx<"/res511">) => json({ id: 511, key: "res511" }),
+    post: async (_ctx: Ctx<"/res511">) => json({ id: 511, key: "res511" }),
   },
   "/res512/:id": {
     put: async (ctx: Ctx<"/res512/:id">) => json({ id: 512, key: ctx.params.id }),
   },
   "/res513": {
-    get: async (ctx: Ctx<"/res513">) => json({ id: 513, key: "res513" }),
+    get: async (_ctx: Ctx<"/res513">) => json({ id: 513, key: "res513" }),
   },
   "/res514/:id": {
     post: async (ctx: Ctx<"/res514/:id">) => json({ id: 514, key: ctx.params.id }),
   },
   "/res515": {
-    put: async (ctx: Ctx<"/res515">) => json({ id: 515, key: "res515" }),
+    put: async (_ctx: Ctx<"/res515">) => json({ id: 515, key: "res515" }),
   },
   "/res516/:id": {
     get: async (ctx: Ctx<"/res516/:id">) => json({ id: 516, key: ctx.params.id }),
@@ -1688,7 +1688,7 @@ const contract = {
     put: async (ctx: Ctx<"/res518/:id">) => json({ id: 518, key: ctx.params.id }),
   },
   "/res519": {
-    get: async (ctx: Ctx<"/res519">) => json({ id: 519, key: "res519" }),
+    get: async (_ctx: Ctx<"/res519">) => json({ id: 519, key: "res519" }),
   },
   "/res520/:id": {
     post: async (ctx: Ctx<"/res520/:id">) => json({ id: 520, key: ctx.params.id }),
@@ -1700,19 +1700,19 @@ const contract = {
     get: async (ctx: Ctx<"/res522/:id">) => json({ id: 522, key: ctx.params.id }),
   },
   "/res523": {
-    post: async (ctx: Ctx<"/res523">) => json({ id: 523, key: "res523" }),
+    post: async (_ctx: Ctx<"/res523">) => json({ id: 523, key: "res523" }),
   },
   "/res524/:id": {
     put: async (ctx: Ctx<"/res524/:id">) => json({ id: 524, key: ctx.params.id }),
   },
   "/res525": {
-    get: async (ctx: Ctx<"/res525">) => json({ id: 525, key: "res525" }),
+    get: async (_ctx: Ctx<"/res525">) => json({ id: 525, key: "res525" }),
   },
   "/res526/:id": {
     post: async (ctx: Ctx<"/res526/:id">) => json({ id: 526, key: ctx.params.id }),
   },
   "/res527": {
-    put: async (ctx: Ctx<"/res527">) => json({ id: 527, key: "res527" }),
+    put: async (_ctx: Ctx<"/res527">) => json({ id: 527, key: "res527" }),
   },
   "/res528/:id": {
     get: async (ctx: Ctx<"/res528/:id">) => json({ id: 528, key: ctx.params.id }),
@@ -1727,7 +1727,7 @@ const contract = {
     put: async (ctx: Ctx<"/res530/:id">) => json({ id: 530, key: ctx.params.id }),
   },
   "/res531": {
-    get: async (ctx: Ctx<"/res531">) => json({ id: 531, key: "res531" }),
+    get: async (_ctx: Ctx<"/res531">) => json({ id: 531, key: "res531" }),
   },
   "/res532/:id": {
     post: async (ctx: Ctx<"/res532/:id">) => json({ id: 532, key: ctx.params.id }),
@@ -1739,19 +1739,19 @@ const contract = {
     get: async (ctx: Ctx<"/res534/:id">) => json({ id: 534, key: ctx.params.id }),
   },
   "/res535": {
-    post: async (ctx: Ctx<"/res535">) => json({ id: 535, key: "res535" }),
+    post: async (_ctx: Ctx<"/res535">) => json({ id: 535, key: "res535" }),
   },
   "/res536/:id": {
     put: async (ctx: Ctx<"/res536/:id">) => json({ id: 536, key: ctx.params.id }),
   },
   "/res537": {
-    get: async (ctx: Ctx<"/res537">) => json({ id: 537, key: "res537" }),
+    get: async (_ctx: Ctx<"/res537">) => json({ id: 537, key: "res537" }),
   },
   "/res538/:id": {
     post: async (ctx: Ctx<"/res538/:id">) => json({ id: 538, key: ctx.params.id }),
   },
   "/res539": {
-    put: async (ctx: Ctx<"/res539">) => json({ id: 539, key: "res539" }),
+    put: async (_ctx: Ctx<"/res539">) => json({ id: 539, key: "res539" }),
   },
   "/res540/:id": {
     get: async (ctx: Ctx<"/res540/:id">) => json({ id: 540, key: ctx.params.id }),
@@ -1766,7 +1766,7 @@ const contract = {
     put: async (ctx: Ctx<"/res542/:id">) => json({ id: 542, key: ctx.params.id }),
   },
   "/res543": {
-    get: async (ctx: Ctx<"/res543">) => json({ id: 543, key: "res543" }),
+    get: async (_ctx: Ctx<"/res543">) => json({ id: 543, key: "res543" }),
   },
   "/res544/:id": {
     post: async (ctx: Ctx<"/res544/:id">) => json({ id: 544, key: ctx.params.id }),
@@ -1778,19 +1778,19 @@ const contract = {
     get: async (ctx: Ctx<"/res546/:id">) => json({ id: 546, key: ctx.params.id }),
   },
   "/res547": {
-    post: async (ctx: Ctx<"/res547">) => json({ id: 547, key: "res547" }),
+    post: async (_ctx: Ctx<"/res547">) => json({ id: 547, key: "res547" }),
   },
   "/res548/:id": {
     put: async (ctx: Ctx<"/res548/:id">) => json({ id: 548, key: ctx.params.id }),
   },
   "/res549": {
-    get: async (ctx: Ctx<"/res549">) => json({ id: 549, key: "res549" }),
+    get: async (_ctx: Ctx<"/res549">) => json({ id: 549, key: "res549" }),
   },
   "/res550/:id": {
     post: async (ctx: Ctx<"/res550/:id">) => json({ id: 550, key: ctx.params.id }),
   },
   "/res551": {
-    put: async (ctx: Ctx<"/res551">) => json({ id: 551, key: "res551" }),
+    put: async (_ctx: Ctx<"/res551">) => json({ id: 551, key: "res551" }),
   },
   "/res552/:id": {
     get: async (ctx: Ctx<"/res552/:id">) => json({ id: 552, key: ctx.params.id }),
@@ -1805,7 +1805,7 @@ const contract = {
     put: async (ctx: Ctx<"/res554/:id">) => json({ id: 554, key: ctx.params.id }),
   },
   "/res555": {
-    get: async (ctx: Ctx<"/res555">) => json({ id: 555, key: "res555" }),
+    get: async (_ctx: Ctx<"/res555">) => json({ id: 555, key: "res555" }),
   },
   "/res556/:id": {
     post: async (ctx: Ctx<"/res556/:id">) => json({ id: 556, key: ctx.params.id }),
@@ -1817,19 +1817,19 @@ const contract = {
     get: async (ctx: Ctx<"/res558/:id">) => json({ id: 558, key: ctx.params.id }),
   },
   "/res559": {
-    post: async (ctx: Ctx<"/res559">) => json({ id: 559, key: "res559" }),
+    post: async (_ctx: Ctx<"/res559">) => json({ id: 559, key: "res559" }),
   },
   "/res560/:id": {
     put: async (ctx: Ctx<"/res560/:id">) => json({ id: 560, key: ctx.params.id }),
   },
   "/res561": {
-    get: async (ctx: Ctx<"/res561">) => json({ id: 561, key: "res561" }),
+    get: async (_ctx: Ctx<"/res561">) => json({ id: 561, key: "res561" }),
   },
   "/res562/:id": {
     post: async (ctx: Ctx<"/res562/:id">) => json({ id: 562, key: ctx.params.id }),
   },
   "/res563": {
-    put: async (ctx: Ctx<"/res563">) => json({ id: 563, key: "res563" }),
+    put: async (_ctx: Ctx<"/res563">) => json({ id: 563, key: "res563" }),
   },
   "/res564/:id": {
     get: async (ctx: Ctx<"/res564/:id">) => json({ id: 564, key: ctx.params.id }),
@@ -1844,7 +1844,7 @@ const contract = {
     put: async (ctx: Ctx<"/res566/:id">) => json({ id: 566, key: ctx.params.id }),
   },
   "/res567": {
-    get: async (ctx: Ctx<"/res567">) => json({ id: 567, key: "res567" }),
+    get: async (_ctx: Ctx<"/res567">) => json({ id: 567, key: "res567" }),
   },
   "/res568/:id": {
     post: async (ctx: Ctx<"/res568/:id">) => json({ id: 568, key: ctx.params.id }),
@@ -1856,19 +1856,19 @@ const contract = {
     get: async (ctx: Ctx<"/res570/:id">) => json({ id: 570, key: ctx.params.id }),
   },
   "/res571": {
-    post: async (ctx: Ctx<"/res571">) => json({ id: 571, key: "res571" }),
+    post: async (_ctx: Ctx<"/res571">) => json({ id: 571, key: "res571" }),
   },
   "/res572/:id": {
     put: async (ctx: Ctx<"/res572/:id">) => json({ id: 572, key: ctx.params.id }),
   },
   "/res573": {
-    get: async (ctx: Ctx<"/res573">) => json({ id: 573, key: "res573" }),
+    get: async (_ctx: Ctx<"/res573">) => json({ id: 573, key: "res573" }),
   },
   "/res574/:id": {
     post: async (ctx: Ctx<"/res574/:id">) => json({ id: 574, key: ctx.params.id }),
   },
   "/res575": {
-    put: async (ctx: Ctx<"/res575">) => json({ id: 575, key: "res575" }),
+    put: async (_ctx: Ctx<"/res575">) => json({ id: 575, key: "res575" }),
   },
   "/res576/:id": {
     get: async (ctx: Ctx<"/res576/:id">) => json({ id: 576, key: ctx.params.id }),
@@ -1883,7 +1883,7 @@ const contract = {
     put: async (ctx: Ctx<"/res578/:id">) => json({ id: 578, key: ctx.params.id }),
   },
   "/res579": {
-    get: async (ctx: Ctx<"/res579">) => json({ id: 579, key: "res579" }),
+    get: async (_ctx: Ctx<"/res579">) => json({ id: 579, key: "res579" }),
   },
   "/res580/:id": {
     post: async (ctx: Ctx<"/res580/:id">) => json({ id: 580, key: ctx.params.id }),
@@ -1895,19 +1895,19 @@ const contract = {
     get: async (ctx: Ctx<"/res582/:id">) => json({ id: 582, key: ctx.params.id }),
   },
   "/res583": {
-    post: async (ctx: Ctx<"/res583">) => json({ id: 583, key: "res583" }),
+    post: async (_ctx: Ctx<"/res583">) => json({ id: 583, key: "res583" }),
   },
   "/res584/:id": {
     put: async (ctx: Ctx<"/res584/:id">) => json({ id: 584, key: ctx.params.id }),
   },
   "/res585": {
-    get: async (ctx: Ctx<"/res585">) => json({ id: 585, key: "res585" }),
+    get: async (_ctx: Ctx<"/res585">) => json({ id: 585, key: "res585" }),
   },
   "/res586/:id": {
     post: async (ctx: Ctx<"/res586/:id">) => json({ id: 586, key: ctx.params.id }),
   },
   "/res587": {
-    put: async (ctx: Ctx<"/res587">) => json({ id: 587, key: "res587" }),
+    put: async (_ctx: Ctx<"/res587">) => json({ id: 587, key: "res587" }),
   },
   "/res588/:id": {
     get: async (ctx: Ctx<"/res588/:id">) => json({ id: 588, key: ctx.params.id }),
@@ -1922,7 +1922,7 @@ const contract = {
     put: async (ctx: Ctx<"/res590/:id">) => json({ id: 590, key: ctx.params.id }),
   },
   "/res591": {
-    get: async (ctx: Ctx<"/res591">) => json({ id: 591, key: "res591" }),
+    get: async (_ctx: Ctx<"/res591">) => json({ id: 591, key: "res591" }),
   },
   "/res592/:id": {
     post: async (ctx: Ctx<"/res592/:id">) => json({ id: 592, key: ctx.params.id }),
@@ -1934,19 +1934,19 @@ const contract = {
     get: async (ctx: Ctx<"/res594/:id">) => json({ id: 594, key: ctx.params.id }),
   },
   "/res595": {
-    post: async (ctx: Ctx<"/res595">) => json({ id: 595, key: "res595" }),
+    post: async (_ctx: Ctx<"/res595">) => json({ id: 595, key: "res595" }),
   },
   "/res596/:id": {
     put: async (ctx: Ctx<"/res596/:id">) => json({ id: 596, key: ctx.params.id }),
   },
   "/res597": {
-    get: async (ctx: Ctx<"/res597">) => json({ id: 597, key: "res597" }),
+    get: async (_ctx: Ctx<"/res597">) => json({ id: 597, key: "res597" }),
   },
   "/res598/:id": {
     post: async (ctx: Ctx<"/res598/:id">) => json({ id: 598, key: ctx.params.id }),
   },
   "/res599": {
-    put: async (ctx: Ctx<"/res599">) => json({ id: 599, key: "res599" }),
+    put: async (_ctx: Ctx<"/res599">) => json({ id: 599, key: "res599" }),
   },
   "/res600/:id": {
     get: async (ctx: Ctx<"/res600/:id">) => json({ id: 600, key: ctx.params.id }),
@@ -1961,7 +1961,7 @@ const contract = {
     put: async (ctx: Ctx<"/res602/:id">) => json({ id: 602, key: ctx.params.id }),
   },
   "/res603": {
-    get: async (ctx: Ctx<"/res603">) => json({ id: 603, key: "res603" }),
+    get: async (_ctx: Ctx<"/res603">) => json({ id: 603, key: "res603" }),
   },
   "/res604/:id": {
     post: async (ctx: Ctx<"/res604/:id">) => json({ id: 604, key: ctx.params.id }),
@@ -1973,19 +1973,19 @@ const contract = {
     get: async (ctx: Ctx<"/res606/:id">) => json({ id: 606, key: ctx.params.id }),
   },
   "/res607": {
-    post: async (ctx: Ctx<"/res607">) => json({ id: 607, key: "res607" }),
+    post: async (_ctx: Ctx<"/res607">) => json({ id: 607, key: "res607" }),
   },
   "/res608/:id": {
     put: async (ctx: Ctx<"/res608/:id">) => json({ id: 608, key: ctx.params.id }),
   },
   "/res609": {
-    get: async (ctx: Ctx<"/res609">) => json({ id: 609, key: "res609" }),
+    get: async (_ctx: Ctx<"/res609">) => json({ id: 609, key: "res609" }),
   },
   "/res610/:id": {
     post: async (ctx: Ctx<"/res610/:id">) => json({ id: 610, key: ctx.params.id }),
   },
   "/res611": {
-    put: async (ctx: Ctx<"/res611">) => json({ id: 611, key: "res611" }),
+    put: async (_ctx: Ctx<"/res611">) => json({ id: 611, key: "res611" }),
   },
   "/res612/:id": {
     get: async (ctx: Ctx<"/res612/:id">) => json({ id: 612, key: ctx.params.id }),
@@ -2000,7 +2000,7 @@ const contract = {
     put: async (ctx: Ctx<"/res614/:id">) => json({ id: 614, key: ctx.params.id }),
   },
   "/res615": {
-    get: async (ctx: Ctx<"/res615">) => json({ id: 615, key: "res615" }),
+    get: async (_ctx: Ctx<"/res615">) => json({ id: 615, key: "res615" }),
   },
   "/res616/:id": {
     post: async (ctx: Ctx<"/res616/:id">) => json({ id: 616, key: ctx.params.id }),
@@ -2012,19 +2012,19 @@ const contract = {
     get: async (ctx: Ctx<"/res618/:id">) => json({ id: 618, key: ctx.params.id }),
   },
   "/res619": {
-    post: async (ctx: Ctx<"/res619">) => json({ id: 619, key: "res619" }),
+    post: async (_ctx: Ctx<"/res619">) => json({ id: 619, key: "res619" }),
   },
   "/res620/:id": {
     put: async (ctx: Ctx<"/res620/:id">) => json({ id: 620, key: ctx.params.id }),
   },
   "/res621": {
-    get: async (ctx: Ctx<"/res621">) => json({ id: 621, key: "res621" }),
+    get: async (_ctx: Ctx<"/res621">) => json({ id: 621, key: "res621" }),
   },
   "/res622/:id": {
     post: async (ctx: Ctx<"/res622/:id">) => json({ id: 622, key: ctx.params.id }),
   },
   "/res623": {
-    put: async (ctx: Ctx<"/res623">) => json({ id: 623, key: "res623" }),
+    put: async (_ctx: Ctx<"/res623">) => json({ id: 623, key: "res623" }),
   },
   "/res624/:id": {
     get: async (ctx: Ctx<"/res624/:id">) => json({ id: 624, key: ctx.params.id }),
@@ -2039,7 +2039,7 @@ const contract = {
     put: async (ctx: Ctx<"/res626/:id">) => json({ id: 626, key: ctx.params.id }),
   },
   "/res627": {
-    get: async (ctx: Ctx<"/res627">) => json({ id: 627, key: "res627" }),
+    get: async (_ctx: Ctx<"/res627">) => json({ id: 627, key: "res627" }),
   },
   "/res628/:id": {
     post: async (ctx: Ctx<"/res628/:id">) => json({ id: 628, key: ctx.params.id }),
@@ -2051,19 +2051,19 @@ const contract = {
     get: async (ctx: Ctx<"/res630/:id">) => json({ id: 630, key: ctx.params.id }),
   },
   "/res631": {
-    post: async (ctx: Ctx<"/res631">) => json({ id: 631, key: "res631" }),
+    post: async (_ctx: Ctx<"/res631">) => json({ id: 631, key: "res631" }),
   },
   "/res632/:id": {
     put: async (ctx: Ctx<"/res632/:id">) => json({ id: 632, key: ctx.params.id }),
   },
   "/res633": {
-    get: async (ctx: Ctx<"/res633">) => json({ id: 633, key: "res633" }),
+    get: async (_ctx: Ctx<"/res633">) => json({ id: 633, key: "res633" }),
   },
   "/res634/:id": {
     post: async (ctx: Ctx<"/res634/:id">) => json({ id: 634, key: ctx.params.id }),
   },
   "/res635": {
-    put: async (ctx: Ctx<"/res635">) => json({ id: 635, key: "res635" }),
+    put: async (_ctx: Ctx<"/res635">) => json({ id: 635, key: "res635" }),
   },
   "/res636/:id": {
     get: async (ctx: Ctx<"/res636/:id">) => json({ id: 636, key: ctx.params.id }),
@@ -2078,7 +2078,7 @@ const contract = {
     put: async (ctx: Ctx<"/res638/:id">) => json({ id: 638, key: ctx.params.id }),
   },
   "/res639": {
-    get: async (ctx: Ctx<"/res639">) => json({ id: 639, key: "res639" }),
+    get: async (_ctx: Ctx<"/res639">) => json({ id: 639, key: "res639" }),
   },
   "/res640/:id": {
     post: async (ctx: Ctx<"/res640/:id">) => json({ id: 640, key: ctx.params.id }),
@@ -2090,19 +2090,19 @@ const contract = {
     get: async (ctx: Ctx<"/res642/:id">) => json({ id: 642, key: ctx.params.id }),
   },
   "/res643": {
-    post: async (ctx: Ctx<"/res643">) => json({ id: 643, key: "res643" }),
+    post: async (_ctx: Ctx<"/res643">) => json({ id: 643, key: "res643" }),
   },
   "/res644/:id": {
     put: async (ctx: Ctx<"/res644/:id">) => json({ id: 644, key: ctx.params.id }),
   },
   "/res645": {
-    get: async (ctx: Ctx<"/res645">) => json({ id: 645, key: "res645" }),
+    get: async (_ctx: Ctx<"/res645">) => json({ id: 645, key: "res645" }),
   },
   "/res646/:id": {
     post: async (ctx: Ctx<"/res646/:id">) => json({ id: 646, key: ctx.params.id }),
   },
   "/res647": {
-    put: async (ctx: Ctx<"/res647">) => json({ id: 647, key: "res647" }),
+    put: async (_ctx: Ctx<"/res647">) => json({ id: 647, key: "res647" }),
   },
   "/res648/:id": {
     get: async (ctx: Ctx<"/res648/:id">) => json({ id: 648, key: ctx.params.id }),
@@ -2117,7 +2117,7 @@ const contract = {
     put: async (ctx: Ctx<"/res650/:id">) => json({ id: 650, key: ctx.params.id }),
   },
   "/res651": {
-    get: async (ctx: Ctx<"/res651">) => json({ id: 651, key: "res651" }),
+    get: async (_ctx: Ctx<"/res651">) => json({ id: 651, key: "res651" }),
   },
   "/res652/:id": {
     post: async (ctx: Ctx<"/res652/:id">) => json({ id: 652, key: ctx.params.id }),
@@ -2129,19 +2129,19 @@ const contract = {
     get: async (ctx: Ctx<"/res654/:id">) => json({ id: 654, key: ctx.params.id }),
   },
   "/res655": {
-    post: async (ctx: Ctx<"/res655">) => json({ id: 655, key: "res655" }),
+    post: async (_ctx: Ctx<"/res655">) => json({ id: 655, key: "res655" }),
   },
   "/res656/:id": {
     put: async (ctx: Ctx<"/res656/:id">) => json({ id: 656, key: ctx.params.id }),
   },
   "/res657": {
-    get: async (ctx: Ctx<"/res657">) => json({ id: 657, key: "res657" }),
+    get: async (_ctx: Ctx<"/res657">) => json({ id: 657, key: "res657" }),
   },
   "/res658/:id": {
     post: async (ctx: Ctx<"/res658/:id">) => json({ id: 658, key: ctx.params.id }),
   },
   "/res659": {
-    put: async (ctx: Ctx<"/res659">) => json({ id: 659, key: "res659" }),
+    put: async (_ctx: Ctx<"/res659">) => json({ id: 659, key: "res659" }),
   },
   "/res660/:id": {
     get: async (ctx: Ctx<"/res660/:id">) => json({ id: 660, key: ctx.params.id }),
@@ -2156,7 +2156,7 @@ const contract = {
     put: async (ctx: Ctx<"/res662/:id">) => json({ id: 662, key: ctx.params.id }),
   },
   "/res663": {
-    get: async (ctx: Ctx<"/res663">) => json({ id: 663, key: "res663" }),
+    get: async (_ctx: Ctx<"/res663">) => json({ id: 663, key: "res663" }),
   },
   "/res664/:id": {
     post: async (ctx: Ctx<"/res664/:id">) => json({ id: 664, key: ctx.params.id }),
@@ -2168,19 +2168,19 @@ const contract = {
     get: async (ctx: Ctx<"/res666/:id">) => json({ id: 666, key: ctx.params.id }),
   },
   "/res667": {
-    post: async (ctx: Ctx<"/res667">) => json({ id: 667, key: "res667" }),
+    post: async (_ctx: Ctx<"/res667">) => json({ id: 667, key: "res667" }),
   },
   "/res668/:id": {
     put: async (ctx: Ctx<"/res668/:id">) => json({ id: 668, key: ctx.params.id }),
   },
   "/res669": {
-    get: async (ctx: Ctx<"/res669">) => json({ id: 669, key: "res669" }),
+    get: async (_ctx: Ctx<"/res669">) => json({ id: 669, key: "res669" }),
   },
   "/res670/:id": {
     post: async (ctx: Ctx<"/res670/:id">) => json({ id: 670, key: ctx.params.id }),
   },
   "/res671": {
-    put: async (ctx: Ctx<"/res671">) => json({ id: 671, key: "res671" }),
+    put: async (_ctx: Ctx<"/res671">) => json({ id: 671, key: "res671" }),
   },
   "/res672/:id": {
     get: async (ctx: Ctx<"/res672/:id">) => json({ id: 672, key: ctx.params.id }),
@@ -2195,7 +2195,7 @@ const contract = {
     put: async (ctx: Ctx<"/res674/:id">) => json({ id: 674, key: ctx.params.id }),
   },
   "/res675": {
-    get: async (ctx: Ctx<"/res675">) => json({ id: 675, key: "res675" }),
+    get: async (_ctx: Ctx<"/res675">) => json({ id: 675, key: "res675" }),
   },
   "/res676/:id": {
     post: async (ctx: Ctx<"/res676/:id">) => json({ id: 676, key: ctx.params.id }),
@@ -2207,19 +2207,19 @@ const contract = {
     get: async (ctx: Ctx<"/res678/:id">) => json({ id: 678, key: ctx.params.id }),
   },
   "/res679": {
-    post: async (ctx: Ctx<"/res679">) => json({ id: 679, key: "res679" }),
+    post: async (_ctx: Ctx<"/res679">) => json({ id: 679, key: "res679" }),
   },
   "/res680/:id": {
     put: async (ctx: Ctx<"/res680/:id">) => json({ id: 680, key: ctx.params.id }),
   },
   "/res681": {
-    get: async (ctx: Ctx<"/res681">) => json({ id: 681, key: "res681" }),
+    get: async (_ctx: Ctx<"/res681">) => json({ id: 681, key: "res681" }),
   },
   "/res682/:id": {
     post: async (ctx: Ctx<"/res682/:id">) => json({ id: 682, key: ctx.params.id }),
   },
   "/res683": {
-    put: async (ctx: Ctx<"/res683">) => json({ id: 683, key: "res683" }),
+    put: async (_ctx: Ctx<"/res683">) => json({ id: 683, key: "res683" }),
   },
   "/res684/:id": {
     get: async (ctx: Ctx<"/res684/:id">) => json({ id: 684, key: ctx.params.id }),
@@ -2234,7 +2234,7 @@ const contract = {
     put: async (ctx: Ctx<"/res686/:id">) => json({ id: 686, key: ctx.params.id }),
   },
   "/res687": {
-    get: async (ctx: Ctx<"/res687">) => json({ id: 687, key: "res687" }),
+    get: async (_ctx: Ctx<"/res687">) => json({ id: 687, key: "res687" }),
   },
   "/res688/:id": {
     post: async (ctx: Ctx<"/res688/:id">) => json({ id: 688, key: ctx.params.id }),
@@ -2246,19 +2246,19 @@ const contract = {
     get: async (ctx: Ctx<"/res690/:id">) => json({ id: 690, key: ctx.params.id }),
   },
   "/res691": {
-    post: async (ctx: Ctx<"/res691">) => json({ id: 691, key: "res691" }),
+    post: async (_ctx: Ctx<"/res691">) => json({ id: 691, key: "res691" }),
   },
   "/res692/:id": {
     put: async (ctx: Ctx<"/res692/:id">) => json({ id: 692, key: ctx.params.id }),
   },
   "/res693": {
-    get: async (ctx: Ctx<"/res693">) => json({ id: 693, key: "res693" }),
+    get: async (_ctx: Ctx<"/res693">) => json({ id: 693, key: "res693" }),
   },
   "/res694/:id": {
     post: async (ctx: Ctx<"/res694/:id">) => json({ id: 694, key: ctx.params.id }),
   },
   "/res695": {
-    put: async (ctx: Ctx<"/res695">) => json({ id: 695, key: "res695" }),
+    put: async (_ctx: Ctx<"/res695">) => json({ id: 695, key: "res695" }),
   },
   "/res696/:id": {
     get: async (ctx: Ctx<"/res696/:id">) => json({ id: 696, key: ctx.params.id }),
@@ -2273,7 +2273,7 @@ const contract = {
     put: async (ctx: Ctx<"/res698/:id">) => json({ id: 698, key: ctx.params.id }),
   },
   "/res699": {
-    get: async (ctx: Ctx<"/res699">) => json({ id: 699, key: "res699" }),
+    get: async (_ctx: Ctx<"/res699">) => json({ id: 699, key: "res699" }),
   },
   "/res700/:id": {
     post: async (ctx: Ctx<"/res700/:id">) => json({ id: 700, key: ctx.params.id }),
@@ -2285,19 +2285,19 @@ const contract = {
     get: async (ctx: Ctx<"/res702/:id">) => json({ id: 702, key: ctx.params.id }),
   },
   "/res703": {
-    post: async (ctx: Ctx<"/res703">) => json({ id: 703, key: "res703" }),
+    post: async (_ctx: Ctx<"/res703">) => json({ id: 703, key: "res703" }),
   },
   "/res704/:id": {
     put: async (ctx: Ctx<"/res704/:id">) => json({ id: 704, key: ctx.params.id }),
   },
   "/res705": {
-    get: async (ctx: Ctx<"/res705">) => json({ id: 705, key: "res705" }),
+    get: async (_ctx: Ctx<"/res705">) => json({ id: 705, key: "res705" }),
   },
   "/res706/:id": {
     post: async (ctx: Ctx<"/res706/:id">) => json({ id: 706, key: ctx.params.id }),
   },
   "/res707": {
-    put: async (ctx: Ctx<"/res707">) => json({ id: 707, key: "res707" }),
+    put: async (_ctx: Ctx<"/res707">) => json({ id: 707, key: "res707" }),
   },
   "/res708/:id": {
     get: async (ctx: Ctx<"/res708/:id">) => json({ id: 708, key: ctx.params.id }),
@@ -2312,7 +2312,7 @@ const contract = {
     put: async (ctx: Ctx<"/res710/:id">) => json({ id: 710, key: ctx.params.id }),
   },
   "/res711": {
-    get: async (ctx: Ctx<"/res711">) => json({ id: 711, key: "res711" }),
+    get: async (_ctx: Ctx<"/res711">) => json({ id: 711, key: "res711" }),
   },
   "/res712/:id": {
     post: async (ctx: Ctx<"/res712/:id">) => json({ id: 712, key: ctx.params.id }),
@@ -2324,19 +2324,19 @@ const contract = {
     get: async (ctx: Ctx<"/res714/:id">) => json({ id: 714, key: ctx.params.id }),
   },
   "/res715": {
-    post: async (ctx: Ctx<"/res715">) => json({ id: 715, key: "res715" }),
+    post: async (_ctx: Ctx<"/res715">) => json({ id: 715, key: "res715" }),
   },
   "/res716/:id": {
     put: async (ctx: Ctx<"/res716/:id">) => json({ id: 716, key: ctx.params.id }),
   },
   "/res717": {
-    get: async (ctx: Ctx<"/res717">) => json({ id: 717, key: "res717" }),
+    get: async (_ctx: Ctx<"/res717">) => json({ id: 717, key: "res717" }),
   },
   "/res718/:id": {
     post: async (ctx: Ctx<"/res718/:id">) => json({ id: 718, key: ctx.params.id }),
   },
   "/res719": {
-    put: async (ctx: Ctx<"/res719">) => json({ id: 719, key: "res719" }),
+    put: async (_ctx: Ctx<"/res719">) => json({ id: 719, key: "res719" }),
   },
   "/res720/:id": {
     get: async (ctx: Ctx<"/res720/:id">) => json({ id: 720, key: ctx.params.id }),
@@ -2351,7 +2351,7 @@ const contract = {
     put: async (ctx: Ctx<"/res722/:id">) => json({ id: 722, key: ctx.params.id }),
   },
   "/res723": {
-    get: async (ctx: Ctx<"/res723">) => json({ id: 723, key: "res723" }),
+    get: async (_ctx: Ctx<"/res723">) => json({ id: 723, key: "res723" }),
   },
   "/res724/:id": {
     post: async (ctx: Ctx<"/res724/:id">) => json({ id: 724, key: ctx.params.id }),
@@ -2363,19 +2363,19 @@ const contract = {
     get: async (ctx: Ctx<"/res726/:id">) => json({ id: 726, key: ctx.params.id }),
   },
   "/res727": {
-    post: async (ctx: Ctx<"/res727">) => json({ id: 727, key: "res727" }),
+    post: async (_ctx: Ctx<"/res727">) => json({ id: 727, key: "res727" }),
   },
   "/res728/:id": {
     put: async (ctx: Ctx<"/res728/:id">) => json({ id: 728, key: ctx.params.id }),
   },
   "/res729": {
-    get: async (ctx: Ctx<"/res729">) => json({ id: 729, key: "res729" }),
+    get: async (_ctx: Ctx<"/res729">) => json({ id: 729, key: "res729" }),
   },
   "/res730/:id": {
     post: async (ctx: Ctx<"/res730/:id">) => json({ id: 730, key: ctx.params.id }),
   },
   "/res731": {
-    put: async (ctx: Ctx<"/res731">) => json({ id: 731, key: "res731" }),
+    put: async (_ctx: Ctx<"/res731">) => json({ id: 731, key: "res731" }),
   },
   "/res732/:id": {
     get: async (ctx: Ctx<"/res732/:id">) => json({ id: 732, key: ctx.params.id }),
@@ -2390,7 +2390,7 @@ const contract = {
     put: async (ctx: Ctx<"/res734/:id">) => json({ id: 734, key: ctx.params.id }),
   },
   "/res735": {
-    get: async (ctx: Ctx<"/res735">) => json({ id: 735, key: "res735" }),
+    get: async (_ctx: Ctx<"/res735">) => json({ id: 735, key: "res735" }),
   },
   "/res736/:id": {
     post: async (ctx: Ctx<"/res736/:id">) => json({ id: 736, key: ctx.params.id }),
@@ -2402,19 +2402,19 @@ const contract = {
     get: async (ctx: Ctx<"/res738/:id">) => json({ id: 738, key: ctx.params.id }),
   },
   "/res739": {
-    post: async (ctx: Ctx<"/res739">) => json({ id: 739, key: "res739" }),
+    post: async (_ctx: Ctx<"/res739">) => json({ id: 739, key: "res739" }),
   },
   "/res740/:id": {
     put: async (ctx: Ctx<"/res740/:id">) => json({ id: 740, key: ctx.params.id }),
   },
   "/res741": {
-    get: async (ctx: Ctx<"/res741">) => json({ id: 741, key: "res741" }),
+    get: async (_ctx: Ctx<"/res741">) => json({ id: 741, key: "res741" }),
   },
   "/res742/:id": {
     post: async (ctx: Ctx<"/res742/:id">) => json({ id: 742, key: ctx.params.id }),
   },
   "/res743": {
-    put: async (ctx: Ctx<"/res743">) => json({ id: 743, key: "res743" }),
+    put: async (_ctx: Ctx<"/res743">) => json({ id: 743, key: "res743" }),
   },
   "/res744/:id": {
     get: async (ctx: Ctx<"/res744/:id">) => json({ id: 744, key: ctx.params.id }),
@@ -2429,7 +2429,7 @@ const contract = {
     put: async (ctx: Ctx<"/res746/:id">) => json({ id: 746, key: ctx.params.id }),
   },
   "/res747": {
-    get: async (ctx: Ctx<"/res747">) => json({ id: 747, key: "res747" }),
+    get: async (_ctx: Ctx<"/res747">) => json({ id: 747, key: "res747" }),
   },
   "/res748/:id": {
     post: async (ctx: Ctx<"/res748/:id">) => json({ id: 748, key: ctx.params.id }),
@@ -2441,19 +2441,19 @@ const contract = {
     get: async (ctx: Ctx<"/res750/:id">) => json({ id: 750, key: ctx.params.id }),
   },
   "/res751": {
-    post: async (ctx: Ctx<"/res751">) => json({ id: 751, key: "res751" }),
+    post: async (_ctx: Ctx<"/res751">) => json({ id: 751, key: "res751" }),
   },
   "/res752/:id": {
     put: async (ctx: Ctx<"/res752/:id">) => json({ id: 752, key: ctx.params.id }),
   },
   "/res753": {
-    get: async (ctx: Ctx<"/res753">) => json({ id: 753, key: "res753" }),
+    get: async (_ctx: Ctx<"/res753">) => json({ id: 753, key: "res753" }),
   },
   "/res754/:id": {
     post: async (ctx: Ctx<"/res754/:id">) => json({ id: 754, key: ctx.params.id }),
   },
   "/res755": {
-    put: async (ctx: Ctx<"/res755">) => json({ id: 755, key: "res755" }),
+    put: async (_ctx: Ctx<"/res755">) => json({ id: 755, key: "res755" }),
   },
   "/res756/:id": {
     get: async (ctx: Ctx<"/res756/:id">) => json({ id: 756, key: ctx.params.id }),
@@ -2468,7 +2468,7 @@ const contract = {
     put: async (ctx: Ctx<"/res758/:id">) => json({ id: 758, key: ctx.params.id }),
   },
   "/res759": {
-    get: async (ctx: Ctx<"/res759">) => json({ id: 759, key: "res759" }),
+    get: async (_ctx: Ctx<"/res759">) => json({ id: 759, key: "res759" }),
   },
   "/res760/:id": {
     post: async (ctx: Ctx<"/res760/:id">) => json({ id: 760, key: ctx.params.id }),
@@ -2480,19 +2480,19 @@ const contract = {
     get: async (ctx: Ctx<"/res762/:id">) => json({ id: 762, key: ctx.params.id }),
   },
   "/res763": {
-    post: async (ctx: Ctx<"/res763">) => json({ id: 763, key: "res763" }),
+    post: async (_ctx: Ctx<"/res763">) => json({ id: 763, key: "res763" }),
   },
   "/res764/:id": {
     put: async (ctx: Ctx<"/res764/:id">) => json({ id: 764, key: ctx.params.id }),
   },
   "/res765": {
-    get: async (ctx: Ctx<"/res765">) => json({ id: 765, key: "res765" }),
+    get: async (_ctx: Ctx<"/res765">) => json({ id: 765, key: "res765" }),
   },
   "/res766/:id": {
     post: async (ctx: Ctx<"/res766/:id">) => json({ id: 766, key: ctx.params.id }),
   },
   "/res767": {
-    put: async (ctx: Ctx<"/res767">) => json({ id: 767, key: "res767" }),
+    put: async (_ctx: Ctx<"/res767">) => json({ id: 767, key: "res767" }),
   },
   "/res768/:id": {
     get: async (ctx: Ctx<"/res768/:id">) => json({ id: 768, key: ctx.params.id }),
@@ -2507,7 +2507,7 @@ const contract = {
     put: async (ctx: Ctx<"/res770/:id">) => json({ id: 770, key: ctx.params.id }),
   },
   "/res771": {
-    get: async (ctx: Ctx<"/res771">) => json({ id: 771, key: "res771" }),
+    get: async (_ctx: Ctx<"/res771">) => json({ id: 771, key: "res771" }),
   },
   "/res772/:id": {
     post: async (ctx: Ctx<"/res772/:id">) => json({ id: 772, key: ctx.params.id }),
@@ -2519,19 +2519,19 @@ const contract = {
     get: async (ctx: Ctx<"/res774/:id">) => json({ id: 774, key: ctx.params.id }),
   },
   "/res775": {
-    post: async (ctx: Ctx<"/res775">) => json({ id: 775, key: "res775" }),
+    post: async (_ctx: Ctx<"/res775">) => json({ id: 775, key: "res775" }),
   },
   "/res776/:id": {
     put: async (ctx: Ctx<"/res776/:id">) => json({ id: 776, key: ctx.params.id }),
   },
   "/res777": {
-    get: async (ctx: Ctx<"/res777">) => json({ id: 777, key: "res777" }),
+    get: async (_ctx: Ctx<"/res777">) => json({ id: 777, key: "res777" }),
   },
   "/res778/:id": {
     post: async (ctx: Ctx<"/res778/:id">) => json({ id: 778, key: ctx.params.id }),
   },
   "/res779": {
-    put: async (ctx: Ctx<"/res779">) => json({ id: 779, key: "res779" }),
+    put: async (_ctx: Ctx<"/res779">) => json({ id: 779, key: "res779" }),
   },
   "/res780/:id": {
     get: async (ctx: Ctx<"/res780/:id">) => json({ id: 780, key: ctx.params.id }),
@@ -2546,7 +2546,7 @@ const contract = {
     put: async (ctx: Ctx<"/res782/:id">) => json({ id: 782, key: ctx.params.id }),
   },
   "/res783": {
-    get: async (ctx: Ctx<"/res783">) => json({ id: 783, key: "res783" }),
+    get: async (_ctx: Ctx<"/res783">) => json({ id: 783, key: "res783" }),
   },
   "/res784/:id": {
     post: async (ctx: Ctx<"/res784/:id">) => json({ id: 784, key: ctx.params.id }),
@@ -2558,19 +2558,19 @@ const contract = {
     get: async (ctx: Ctx<"/res786/:id">) => json({ id: 786, key: ctx.params.id }),
   },
   "/res787": {
-    post: async (ctx: Ctx<"/res787">) => json({ id: 787, key: "res787" }),
+    post: async (_ctx: Ctx<"/res787">) => json({ id: 787, key: "res787" }),
   },
   "/res788/:id": {
     put: async (ctx: Ctx<"/res788/:id">) => json({ id: 788, key: ctx.params.id }),
   },
   "/res789": {
-    get: async (ctx: Ctx<"/res789">) => json({ id: 789, key: "res789" }),
+    get: async (_ctx: Ctx<"/res789">) => json({ id: 789, key: "res789" }),
   },
   "/res790/:id": {
     post: async (ctx: Ctx<"/res790/:id">) => json({ id: 790, key: ctx.params.id }),
   },
   "/res791": {
-    put: async (ctx: Ctx<"/res791">) => json({ id: 791, key: "res791" }),
+    put: async (_ctx: Ctx<"/res791">) => json({ id: 791, key: "res791" }),
   },
   "/res792/:id": {
     get: async (ctx: Ctx<"/res792/:id">) => json({ id: 792, key: ctx.params.id }),
@@ -2585,7 +2585,7 @@ const contract = {
     put: async (ctx: Ctx<"/res794/:id">) => json({ id: 794, key: ctx.params.id }),
   },
   "/res795": {
-    get: async (ctx: Ctx<"/res795">) => json({ id: 795, key: "res795" }),
+    get: async (_ctx: Ctx<"/res795">) => json({ id: 795, key: "res795" }),
   },
   "/res796/:id": {
     post: async (ctx: Ctx<"/res796/:id">) => json({ id: 796, key: ctx.params.id }),
@@ -2597,19 +2597,19 @@ const contract = {
     get: async (ctx: Ctx<"/res798/:id">) => json({ id: 798, key: ctx.params.id }),
   },
   "/res799": {
-    post: async (ctx: Ctx<"/res799">) => json({ id: 799, key: "res799" }),
+    post: async (_ctx: Ctx<"/res799">) => json({ id: 799, key: "res799" }),
   },
   "/res800/:id": {
     put: async (ctx: Ctx<"/res800/:id">) => json({ id: 800, key: ctx.params.id }),
   },
   "/res801": {
-    get: async (ctx: Ctx<"/res801">) => json({ id: 801, key: "res801" }),
+    get: async (_ctx: Ctx<"/res801">) => json({ id: 801, key: "res801" }),
   },
   "/res802/:id": {
     post: async (ctx: Ctx<"/res802/:id">) => json({ id: 802, key: ctx.params.id }),
   },
   "/res803": {
-    put: async (ctx: Ctx<"/res803">) => json({ id: 803, key: "res803" }),
+    put: async (_ctx: Ctx<"/res803">) => json({ id: 803, key: "res803" }),
   },
   "/res804/:id": {
     get: async (ctx: Ctx<"/res804/:id">) => json({ id: 804, key: ctx.params.id }),
@@ -2624,7 +2624,7 @@ const contract = {
     put: async (ctx: Ctx<"/res806/:id">) => json({ id: 806, key: ctx.params.id }),
   },
   "/res807": {
-    get: async (ctx: Ctx<"/res807">) => json({ id: 807, key: "res807" }),
+    get: async (_ctx: Ctx<"/res807">) => json({ id: 807, key: "res807" }),
   },
   "/res808/:id": {
     post: async (ctx: Ctx<"/res808/:id">) => json({ id: 808, key: ctx.params.id }),
@@ -2636,19 +2636,19 @@ const contract = {
     get: async (ctx: Ctx<"/res810/:id">) => json({ id: 810, key: ctx.params.id }),
   },
   "/res811": {
-    post: async (ctx: Ctx<"/res811">) => json({ id: 811, key: "res811" }),
+    post: async (_ctx: Ctx<"/res811">) => json({ id: 811, key: "res811" }),
   },
   "/res812/:id": {
     put: async (ctx: Ctx<"/res812/:id">) => json({ id: 812, key: ctx.params.id }),
   },
   "/res813": {
-    get: async (ctx: Ctx<"/res813">) => json({ id: 813, key: "res813" }),
+    get: async (_ctx: Ctx<"/res813">) => json({ id: 813, key: "res813" }),
   },
   "/res814/:id": {
     post: async (ctx: Ctx<"/res814/:id">) => json({ id: 814, key: ctx.params.id }),
   },
   "/res815": {
-    put: async (ctx: Ctx<"/res815">) => json({ id: 815, key: "res815" }),
+    put: async (_ctx: Ctx<"/res815">) => json({ id: 815, key: "res815" }),
   },
   "/res816/:id": {
     get: async (ctx: Ctx<"/res816/:id">) => json({ id: 816, key: ctx.params.id }),
@@ -2663,7 +2663,7 @@ const contract = {
     put: async (ctx: Ctx<"/res818/:id">) => json({ id: 818, key: ctx.params.id }),
   },
   "/res819": {
-    get: async (ctx: Ctx<"/res819">) => json({ id: 819, key: "res819" }),
+    get: async (_ctx: Ctx<"/res819">) => json({ id: 819, key: "res819" }),
   },
   "/res820/:id": {
     post: async (ctx: Ctx<"/res820/:id">) => json({ id: 820, key: ctx.params.id }),
@@ -2675,19 +2675,19 @@ const contract = {
     get: async (ctx: Ctx<"/res822/:id">) => json({ id: 822, key: ctx.params.id }),
   },
   "/res823": {
-    post: async (ctx: Ctx<"/res823">) => json({ id: 823, key: "res823" }),
+    post: async (_ctx: Ctx<"/res823">) => json({ id: 823, key: "res823" }),
   },
   "/res824/:id": {
     put: async (ctx: Ctx<"/res824/:id">) => json({ id: 824, key: ctx.params.id }),
   },
   "/res825": {
-    get: async (ctx: Ctx<"/res825">) => json({ id: 825, key: "res825" }),
+    get: async (_ctx: Ctx<"/res825">) => json({ id: 825, key: "res825" }),
   },
   "/res826/:id": {
     post: async (ctx: Ctx<"/res826/:id">) => json({ id: 826, key: ctx.params.id }),
   },
   "/res827": {
-    put: async (ctx: Ctx<"/res827">) => json({ id: 827, key: "res827" }),
+    put: async (_ctx: Ctx<"/res827">) => json({ id: 827, key: "res827" }),
   },
   "/res828/:id": {
     get: async (ctx: Ctx<"/res828/:id">) => json({ id: 828, key: ctx.params.id }),
@@ -2702,7 +2702,7 @@ const contract = {
     put: async (ctx: Ctx<"/res830/:id">) => json({ id: 830, key: ctx.params.id }),
   },
   "/res831": {
-    get: async (ctx: Ctx<"/res831">) => json({ id: 831, key: "res831" }),
+    get: async (_ctx: Ctx<"/res831">) => json({ id: 831, key: "res831" }),
   },
   "/res832/:id": {
     post: async (ctx: Ctx<"/res832/:id">) => json({ id: 832, key: ctx.params.id }),
@@ -2714,19 +2714,19 @@ const contract = {
     get: async (ctx: Ctx<"/res834/:id">) => json({ id: 834, key: ctx.params.id }),
   },
   "/res835": {
-    post: async (ctx: Ctx<"/res835">) => json({ id: 835, key: "res835" }),
+    post: async (_ctx: Ctx<"/res835">) => json({ id: 835, key: "res835" }),
   },
   "/res836/:id": {
     put: async (ctx: Ctx<"/res836/:id">) => json({ id: 836, key: ctx.params.id }),
   },
   "/res837": {
-    get: async (ctx: Ctx<"/res837">) => json({ id: 837, key: "res837" }),
+    get: async (_ctx: Ctx<"/res837">) => json({ id: 837, key: "res837" }),
   },
   "/res838/:id": {
     post: async (ctx: Ctx<"/res838/:id">) => json({ id: 838, key: ctx.params.id }),
   },
   "/res839": {
-    put: async (ctx: Ctx<"/res839">) => json({ id: 839, key: "res839" }),
+    put: async (_ctx: Ctx<"/res839">) => json({ id: 839, key: "res839" }),
   },
   "/res840/:id": {
     get: async (ctx: Ctx<"/res840/:id">) => json({ id: 840, key: ctx.params.id }),
@@ -2741,7 +2741,7 @@ const contract = {
     put: async (ctx: Ctx<"/res842/:id">) => json({ id: 842, key: ctx.params.id }),
   },
   "/res843": {
-    get: async (ctx: Ctx<"/res843">) => json({ id: 843, key: "res843" }),
+    get: async (_ctx: Ctx<"/res843">) => json({ id: 843, key: "res843" }),
   },
   "/res844/:id": {
     post: async (ctx: Ctx<"/res844/:id">) => json({ id: 844, key: ctx.params.id }),
@@ -2753,19 +2753,19 @@ const contract = {
     get: async (ctx: Ctx<"/res846/:id">) => json({ id: 846, key: ctx.params.id }),
   },
   "/res847": {
-    post: async (ctx: Ctx<"/res847">) => json({ id: 847, key: "res847" }),
+    post: async (_ctx: Ctx<"/res847">) => json({ id: 847, key: "res847" }),
   },
   "/res848/:id": {
     put: async (ctx: Ctx<"/res848/:id">) => json({ id: 848, key: ctx.params.id }),
   },
   "/res849": {
-    get: async (ctx: Ctx<"/res849">) => json({ id: 849, key: "res849" }),
+    get: async (_ctx: Ctx<"/res849">) => json({ id: 849, key: "res849" }),
   },
   "/res850/:id": {
     post: async (ctx: Ctx<"/res850/:id">) => json({ id: 850, key: ctx.params.id }),
   },
   "/res851": {
-    put: async (ctx: Ctx<"/res851">) => json({ id: 851, key: "res851" }),
+    put: async (_ctx: Ctx<"/res851">) => json({ id: 851, key: "res851" }),
   },
   "/res852/:id": {
     get: async (ctx: Ctx<"/res852/:id">) => json({ id: 852, key: ctx.params.id }),
@@ -2780,7 +2780,7 @@ const contract = {
     put: async (ctx: Ctx<"/res854/:id">) => json({ id: 854, key: ctx.params.id }),
   },
   "/res855": {
-    get: async (ctx: Ctx<"/res855">) => json({ id: 855, key: "res855" }),
+    get: async (_ctx: Ctx<"/res855">) => json({ id: 855, key: "res855" }),
   },
   "/res856/:id": {
     post: async (ctx: Ctx<"/res856/:id">) => json({ id: 856, key: ctx.params.id }),
@@ -2792,19 +2792,19 @@ const contract = {
     get: async (ctx: Ctx<"/res858/:id">) => json({ id: 858, key: ctx.params.id }),
   },
   "/res859": {
-    post: async (ctx: Ctx<"/res859">) => json({ id: 859, key: "res859" }),
+    post: async (_ctx: Ctx<"/res859">) => json({ id: 859, key: "res859" }),
   },
   "/res860/:id": {
     put: async (ctx: Ctx<"/res860/:id">) => json({ id: 860, key: ctx.params.id }),
   },
   "/res861": {
-    get: async (ctx: Ctx<"/res861">) => json({ id: 861, key: "res861" }),
+    get: async (_ctx: Ctx<"/res861">) => json({ id: 861, key: "res861" }),
   },
   "/res862/:id": {
     post: async (ctx: Ctx<"/res862/:id">) => json({ id: 862, key: ctx.params.id }),
   },
   "/res863": {
-    put: async (ctx: Ctx<"/res863">) => json({ id: 863, key: "res863" }),
+    put: async (_ctx: Ctx<"/res863">) => json({ id: 863, key: "res863" }),
   },
   "/res864/:id": {
     get: async (ctx: Ctx<"/res864/:id">) => json({ id: 864, key: ctx.params.id }),
@@ -2819,7 +2819,7 @@ const contract = {
     put: async (ctx: Ctx<"/res866/:id">) => json({ id: 866, key: ctx.params.id }),
   },
   "/res867": {
-    get: async (ctx: Ctx<"/res867">) => json({ id: 867, key: "res867" }),
+    get: async (_ctx: Ctx<"/res867">) => json({ id: 867, key: "res867" }),
   },
   "/res868/:id": {
     post: async (ctx: Ctx<"/res868/:id">) => json({ id: 868, key: ctx.params.id }),
@@ -2831,19 +2831,19 @@ const contract = {
     get: async (ctx: Ctx<"/res870/:id">) => json({ id: 870, key: ctx.params.id }),
   },
   "/res871": {
-    post: async (ctx: Ctx<"/res871">) => json({ id: 871, key: "res871" }),
+    post: async (_ctx: Ctx<"/res871">) => json({ id: 871, key: "res871" }),
   },
   "/res872/:id": {
     put: async (ctx: Ctx<"/res872/:id">) => json({ id: 872, key: ctx.params.id }),
   },
   "/res873": {
-    get: async (ctx: Ctx<"/res873">) => json({ id: 873, key: "res873" }),
+    get: async (_ctx: Ctx<"/res873">) => json({ id: 873, key: "res873" }),
   },
   "/res874/:id": {
     post: async (ctx: Ctx<"/res874/:id">) => json({ id: 874, key: ctx.params.id }),
   },
   "/res875": {
-    put: async (ctx: Ctx<"/res875">) => json({ id: 875, key: "res875" }),
+    put: async (_ctx: Ctx<"/res875">) => json({ id: 875, key: "res875" }),
   },
   "/res876/:id": {
     get: async (ctx: Ctx<"/res876/:id">) => json({ id: 876, key: ctx.params.id }),
@@ -2858,7 +2858,7 @@ const contract = {
     put: async (ctx: Ctx<"/res878/:id">) => json({ id: 878, key: ctx.params.id }),
   },
   "/res879": {
-    get: async (ctx: Ctx<"/res879">) => json({ id: 879, key: "res879" }),
+    get: async (_ctx: Ctx<"/res879">) => json({ id: 879, key: "res879" }),
   },
   "/res880/:id": {
     post: async (ctx: Ctx<"/res880/:id">) => json({ id: 880, key: ctx.params.id }),
@@ -2870,19 +2870,19 @@ const contract = {
     get: async (ctx: Ctx<"/res882/:id">) => json({ id: 882, key: ctx.params.id }),
   },
   "/res883": {
-    post: async (ctx: Ctx<"/res883">) => json({ id: 883, key: "res883" }),
+    post: async (_ctx: Ctx<"/res883">) => json({ id: 883, key: "res883" }),
   },
   "/res884/:id": {
     put: async (ctx: Ctx<"/res884/:id">) => json({ id: 884, key: ctx.params.id }),
   },
   "/res885": {
-    get: async (ctx: Ctx<"/res885">) => json({ id: 885, key: "res885" }),
+    get: async (_ctx: Ctx<"/res885">) => json({ id: 885, key: "res885" }),
   },
   "/res886/:id": {
     post: async (ctx: Ctx<"/res886/:id">) => json({ id: 886, key: ctx.params.id }),
   },
   "/res887": {
-    put: async (ctx: Ctx<"/res887">) => json({ id: 887, key: "res887" }),
+    put: async (_ctx: Ctx<"/res887">) => json({ id: 887, key: "res887" }),
   },
   "/res888/:id": {
     get: async (ctx: Ctx<"/res888/:id">) => json({ id: 888, key: ctx.params.id }),
@@ -2897,7 +2897,7 @@ const contract = {
     put: async (ctx: Ctx<"/res890/:id">) => json({ id: 890, key: ctx.params.id }),
   },
   "/res891": {
-    get: async (ctx: Ctx<"/res891">) => json({ id: 891, key: "res891" }),
+    get: async (_ctx: Ctx<"/res891">) => json({ id: 891, key: "res891" }),
   },
   "/res892/:id": {
     post: async (ctx: Ctx<"/res892/:id">) => json({ id: 892, key: ctx.params.id }),
@@ -2909,19 +2909,19 @@ const contract = {
     get: async (ctx: Ctx<"/res894/:id">) => json({ id: 894, key: ctx.params.id }),
   },
   "/res895": {
-    post: async (ctx: Ctx<"/res895">) => json({ id: 895, key: "res895" }),
+    post: async (_ctx: Ctx<"/res895">) => json({ id: 895, key: "res895" }),
   },
   "/res896/:id": {
     put: async (ctx: Ctx<"/res896/:id">) => json({ id: 896, key: ctx.params.id }),
   },
   "/res897": {
-    get: async (ctx: Ctx<"/res897">) => json({ id: 897, key: "res897" }),
+    get: async (_ctx: Ctx<"/res897">) => json({ id: 897, key: "res897" }),
   },
   "/res898/:id": {
     post: async (ctx: Ctx<"/res898/:id">) => json({ id: 898, key: ctx.params.id }),
   },
   "/res899": {
-    put: async (ctx: Ctx<"/res899">) => json({ id: 899, key: "res899" }),
+    put: async (_ctx: Ctx<"/res899">) => json({ id: 899, key: "res899" }),
   },
 } as const;
 

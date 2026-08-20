@@ -49,23 +49,6 @@ export type Assert<T extends true> = T;
 // `{ params; body; response }` triples.
 // ============================================================================
 
-// Verbs that may appear in a MethodsMeta (closed set, ≤7).
-type LowerVerb<V extends string> = V extends "GET"
-  ? "get"
-  : V extends "POST"
-    ? "post"
-    : V extends "PUT"
-      ? "put"
-      : V extends "DELETE"
-        ? "delete"
-        : V extends "PATCH"
-          ? "patch"
-          : V extends "HEAD"
-            ? "head"
-            : V extends "OPTIONS"
-              ? "options"
-              : Lowercase<V>;
-
 // The per-route value: params as a record name->type, body as the input
 // phantom, response as the output phantom. These come straight off the meta
 // phantoms (`__io`) and the accumulated params — no schema resolution needed for

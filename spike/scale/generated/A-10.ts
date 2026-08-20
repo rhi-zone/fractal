@@ -6,7 +6,7 @@ import {
 } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema } from "@rhi-zone/fractal-api-tree";
 
-// Minimal Standard-Schema validator (no zod — isolate fractal's cost).
+// Minimal Standard-Schema validator (no zod, to isolate fractal's cost).
 interface Body {
   readonly name: string;
   readonly qty: number;
@@ -29,7 +29,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 1, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res2/:id", async (ctx) => json({ id: 2, key: ctx.params.id }))
-  .get("/res3", async (ctx) => json({ id: 3, key: "res3" }))
+  .get("/res3", async (_ctx) => json({ id: 3, key: "res3" }))
   .post("/res4/:id", async (ctx) => json({ id: 4, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -37,9 +37,9 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 5, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res6/:id", async (ctx) => json({ id: 6, key: ctx.params.id }))
-  .post("/res7", async (ctx) => json({ id: 7, key: "res7" }))
+  .post("/res7", async (_ctx) => json({ id: 7, key: "res7" }))
   .put("/res8/:id", async (ctx) => json({ id: 8, key: ctx.params.id }))
-  .get("/res9", async (ctx) => json({ id: 9, key: "res9" }));
+  .get("/res9", async (_ctx) => json({ id: 9, key: "res9" }));
 
 const api = client(app);
 const r0 = api["/res0/:id"].get({ params: { id: "1" } });

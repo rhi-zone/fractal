@@ -6,7 +6,7 @@ import {
 } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema } from "@rhi-zone/fractal-api-tree";
 
-// Minimal Standard-Schema validator (no zod — isolate fractal's cost).
+// Minimal Standard-Schema validator (no zod, to isolate fractal's cost).
 interface Body {
   readonly name: string;
   readonly qty: number;
@@ -29,7 +29,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 1, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res2/:id", async (ctx) => json({ id: 2, key: ctx.params.id }))
-  .get("/res3", async (ctx) => json({ id: 3, key: "res3" }))
+  .get("/res3", async (_ctx) => json({ id: 3, key: "res3" }))
   .post("/res4/:id", async (ctx) => json({ id: 4, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -37,11 +37,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 5, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res6/:id", async (ctx) => json({ id: 6, key: ctx.params.id }))
-  .post("/res7", async (ctx) => json({ id: 7, key: "res7" }))
+  .post("/res7", async (_ctx) => json({ id: 7, key: "res7" }))
   .put("/res8/:id", async (ctx) => json({ id: 8, key: ctx.params.id }))
-  .get("/res9", async (ctx) => json({ id: 9, key: "res9" }))
+  .get("/res9", async (_ctx) => json({ id: 9, key: "res9" }))
   .post("/res10/:id", async (ctx) => json({ id: 10, key: ctx.params.id }))
-  .put("/res11", async (ctx) => json({ id: 11, key: "res11" }))
+  .put("/res11", async (_ctx) => json({ id: 11, key: "res11" }))
   .get("/res12/:id", async (ctx) => json({ id: 12, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -49,7 +49,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 13, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res14/:id", async (ctx) => json({ id: 14, key: ctx.params.id }))
-  .get("/res15", async (ctx) => json({ id: 15, key: "res15" }))
+  .get("/res15", async (_ctx) => json({ id: 15, key: "res15" }))
   .post("/res16/:id", async (ctx) => json({ id: 16, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -57,11 +57,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 17, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res18/:id", async (ctx) => json({ id: 18, key: ctx.params.id }))
-  .post("/res19", async (ctx) => json({ id: 19, key: "res19" }))
+  .post("/res19", async (_ctx) => json({ id: 19, key: "res19" }))
   .put("/res20/:id", async (ctx) => json({ id: 20, key: ctx.params.id }))
-  .get("/res21", async (ctx) => json({ id: 21, key: "res21" }))
+  .get("/res21", async (_ctx) => json({ id: 21, key: "res21" }))
   .post("/res22/:id", async (ctx) => json({ id: 22, key: ctx.params.id }))
-  .put("/res23", async (ctx) => json({ id: 23, key: "res23" }))
+  .put("/res23", async (_ctx) => json({ id: 23, key: "res23" }))
   .get("/res24/:id", async (ctx) => json({ id: 24, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -69,7 +69,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 25, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res26/:id", async (ctx) => json({ id: 26, key: ctx.params.id }))
-  .get("/res27", async (ctx) => json({ id: 27, key: "res27" }))
+  .get("/res27", async (_ctx) => json({ id: 27, key: "res27" }))
   .post("/res28/:id", async (ctx) => json({ id: 28, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -77,11 +77,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 29, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res30/:id", async (ctx) => json({ id: 30, key: ctx.params.id }))
-  .post("/res31", async (ctx) => json({ id: 31, key: "res31" }))
+  .post("/res31", async (_ctx) => json({ id: 31, key: "res31" }))
   .put("/res32/:id", async (ctx) => json({ id: 32, key: ctx.params.id }))
-  .get("/res33", async (ctx) => json({ id: 33, key: "res33" }))
+  .get("/res33", async (_ctx) => json({ id: 33, key: "res33" }))
   .post("/res34/:id", async (ctx) => json({ id: 34, key: ctx.params.id }))
-  .put("/res35", async (ctx) => json({ id: 35, key: "res35" }))
+  .put("/res35", async (_ctx) => json({ id: 35, key: "res35" }))
   .get("/res36/:id", async (ctx) => json({ id: 36, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -89,7 +89,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 37, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res38/:id", async (ctx) => json({ id: 38, key: ctx.params.id }))
-  .get("/res39", async (ctx) => json({ id: 39, key: "res39" }))
+  .get("/res39", async (_ctx) => json({ id: 39, key: "res39" }))
   .post("/res40/:id", async (ctx) => json({ id: 40, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -97,11 +97,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 41, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res42/:id", async (ctx) => json({ id: 42, key: ctx.params.id }))
-  .post("/res43", async (ctx) => json({ id: 43, key: "res43" }))
+  .post("/res43", async (_ctx) => json({ id: 43, key: "res43" }))
   .put("/res44/:id", async (ctx) => json({ id: 44, key: ctx.params.id }))
-  .get("/res45", async (ctx) => json({ id: 45, key: "res45" }))
+  .get("/res45", async (_ctx) => json({ id: 45, key: "res45" }))
   .post("/res46/:id", async (ctx) => json({ id: 46, key: ctx.params.id }))
-  .put("/res47", async (ctx) => json({ id: 47, key: "res47" }))
+  .put("/res47", async (_ctx) => json({ id: 47, key: "res47" }))
   .get("/res48/:id", async (ctx) => json({ id: 48, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -109,7 +109,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 49, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res50/:id", async (ctx) => json({ id: 50, key: ctx.params.id }))
-  .get("/res51", async (ctx) => json({ id: 51, key: "res51" }))
+  .get("/res51", async (_ctx) => json({ id: 51, key: "res51" }))
   .post("/res52/:id", async (ctx) => json({ id: 52, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -117,11 +117,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 53, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res54/:id", async (ctx) => json({ id: 54, key: ctx.params.id }))
-  .post("/res55", async (ctx) => json({ id: 55, key: "res55" }))
+  .post("/res55", async (_ctx) => json({ id: 55, key: "res55" }))
   .put("/res56/:id", async (ctx) => json({ id: 56, key: ctx.params.id }))
-  .get("/res57", async (ctx) => json({ id: 57, key: "res57" }))
+  .get("/res57", async (_ctx) => json({ id: 57, key: "res57" }))
   .post("/res58/:id", async (ctx) => json({ id: 58, key: ctx.params.id }))
-  .put("/res59", async (ctx) => json({ id: 59, key: "res59" }))
+  .put("/res59", async (_ctx) => json({ id: 59, key: "res59" }))
   .get("/res60/:id", async (ctx) => json({ id: 60, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -129,7 +129,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 61, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res62/:id", async (ctx) => json({ id: 62, key: ctx.params.id }))
-  .get("/res63", async (ctx) => json({ id: 63, key: "res63" }))
+  .get("/res63", async (_ctx) => json({ id: 63, key: "res63" }))
   .post("/res64/:id", async (ctx) => json({ id: 64, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -137,11 +137,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 65, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res66/:id", async (ctx) => json({ id: 66, key: ctx.params.id }))
-  .post("/res67", async (ctx) => json({ id: 67, key: "res67" }))
+  .post("/res67", async (_ctx) => json({ id: 67, key: "res67" }))
   .put("/res68/:id", async (ctx) => json({ id: 68, key: ctx.params.id }))
-  .get("/res69", async (ctx) => json({ id: 69, key: "res69" }))
+  .get("/res69", async (_ctx) => json({ id: 69, key: "res69" }))
   .post("/res70/:id", async (ctx) => json({ id: 70, key: ctx.params.id }))
-  .put("/res71", async (ctx) => json({ id: 71, key: "res71" }))
+  .put("/res71", async (_ctx) => json({ id: 71, key: "res71" }))
   .get("/res72/:id", async (ctx) => json({ id: 72, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -149,7 +149,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 73, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res74/:id", async (ctx) => json({ id: 74, key: ctx.params.id }))
-  .get("/res75", async (ctx) => json({ id: 75, key: "res75" }))
+  .get("/res75", async (_ctx) => json({ id: 75, key: "res75" }))
   .post("/res76/:id", async (ctx) => json({ id: 76, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -157,11 +157,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 77, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res78/:id", async (ctx) => json({ id: 78, key: ctx.params.id }))
-  .post("/res79", async (ctx) => json({ id: 79, key: "res79" }))
+  .post("/res79", async (_ctx) => json({ id: 79, key: "res79" }))
   .put("/res80/:id", async (ctx) => json({ id: 80, key: ctx.params.id }))
-  .get("/res81", async (ctx) => json({ id: 81, key: "res81" }))
+  .get("/res81", async (_ctx) => json({ id: 81, key: "res81" }))
   .post("/res82/:id", async (ctx) => json({ id: 82, key: ctx.params.id }))
-  .put("/res83", async (ctx) => json({ id: 83, key: "res83" }))
+  .put("/res83", async (_ctx) => json({ id: 83, key: "res83" }))
   .get("/res84/:id", async (ctx) => json({ id: 84, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -169,7 +169,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 85, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res86/:id", async (ctx) => json({ id: 86, key: ctx.params.id }))
-  .get("/res87", async (ctx) => json({ id: 87, key: "res87" }))
+  .get("/res87", async (_ctx) => json({ id: 87, key: "res87" }))
   .post("/res88/:id", async (ctx) => json({ id: 88, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -177,11 +177,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 89, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res90/:id", async (ctx) => json({ id: 90, key: ctx.params.id }))
-  .post("/res91", async (ctx) => json({ id: 91, key: "res91" }))
+  .post("/res91", async (_ctx) => json({ id: 91, key: "res91" }))
   .put("/res92/:id", async (ctx) => json({ id: 92, key: ctx.params.id }))
-  .get("/res93", async (ctx) => json({ id: 93, key: "res93" }))
+  .get("/res93", async (_ctx) => json({ id: 93, key: "res93" }))
   .post("/res94/:id", async (ctx) => json({ id: 94, key: ctx.params.id }))
-  .put("/res95", async (ctx) => json({ id: 95, key: "res95" }))
+  .put("/res95", async (_ctx) => json({ id: 95, key: "res95" }))
   .get("/res96/:id", async (ctx) => json({ id: 96, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -189,7 +189,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 97, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res98/:id", async (ctx) => json({ id: 98, key: ctx.params.id }))
-  .get("/res99", async (ctx) => json({ id: 99, key: "res99" }))
+  .get("/res99", async (_ctx) => json({ id: 99, key: "res99" }))
   .post("/res100/:id", async (ctx) => json({ id: 100, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -197,11 +197,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 101, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res102/:id", async (ctx) => json({ id: 102, key: ctx.params.id }))
-  .post("/res103", async (ctx) => json({ id: 103, key: "res103" }))
+  .post("/res103", async (_ctx) => json({ id: 103, key: "res103" }))
   .put("/res104/:id", async (ctx) => json({ id: 104, key: ctx.params.id }))
-  .get("/res105", async (ctx) => json({ id: 105, key: "res105" }))
+  .get("/res105", async (_ctx) => json({ id: 105, key: "res105" }))
   .post("/res106/:id", async (ctx) => json({ id: 106, key: ctx.params.id }))
-  .put("/res107", async (ctx) => json({ id: 107, key: "res107" }))
+  .put("/res107", async (_ctx) => json({ id: 107, key: "res107" }))
   .get("/res108/:id", async (ctx) => json({ id: 108, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -209,7 +209,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 109, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res110/:id", async (ctx) => json({ id: 110, key: ctx.params.id }))
-  .get("/res111", async (ctx) => json({ id: 111, key: "res111" }))
+  .get("/res111", async (_ctx) => json({ id: 111, key: "res111" }))
   .post("/res112/:id", async (ctx) => json({ id: 112, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -217,11 +217,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 113, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res114/:id", async (ctx) => json({ id: 114, key: ctx.params.id }))
-  .post("/res115", async (ctx) => json({ id: 115, key: "res115" }))
+  .post("/res115", async (_ctx) => json({ id: 115, key: "res115" }))
   .put("/res116/:id", async (ctx) => json({ id: 116, key: ctx.params.id }))
-  .get("/res117", async (ctx) => json({ id: 117, key: "res117" }))
+  .get("/res117", async (_ctx) => json({ id: 117, key: "res117" }))
   .post("/res118/:id", async (ctx) => json({ id: 118, key: ctx.params.id }))
-  .put("/res119", async (ctx) => json({ id: 119, key: "res119" }))
+  .put("/res119", async (_ctx) => json({ id: 119, key: "res119" }))
   .get("/res120/:id", async (ctx) => json({ id: 120, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -229,7 +229,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 121, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res122/:id", async (ctx) => json({ id: 122, key: ctx.params.id }))
-  .get("/res123", async (ctx) => json({ id: 123, key: "res123" }))
+  .get("/res123", async (_ctx) => json({ id: 123, key: "res123" }))
   .post("/res124/:id", async (ctx) => json({ id: 124, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -237,11 +237,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 125, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res126/:id", async (ctx) => json({ id: 126, key: ctx.params.id }))
-  .post("/res127", async (ctx) => json({ id: 127, key: "res127" }))
+  .post("/res127", async (_ctx) => json({ id: 127, key: "res127" }))
   .put("/res128/:id", async (ctx) => json({ id: 128, key: ctx.params.id }))
-  .get("/res129", async (ctx) => json({ id: 129, key: "res129" }))
+  .get("/res129", async (_ctx) => json({ id: 129, key: "res129" }))
   .post("/res130/:id", async (ctx) => json({ id: 130, key: ctx.params.id }))
-  .put("/res131", async (ctx) => json({ id: 131, key: "res131" }))
+  .put("/res131", async (_ctx) => json({ id: 131, key: "res131" }))
   .get("/res132/:id", async (ctx) => json({ id: 132, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -249,7 +249,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 133, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res134/:id", async (ctx) => json({ id: 134, key: ctx.params.id }))
-  .get("/res135", async (ctx) => json({ id: 135, key: "res135" }))
+  .get("/res135", async (_ctx) => json({ id: 135, key: "res135" }))
   .post("/res136/:id", async (ctx) => json({ id: 136, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -257,11 +257,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 137, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res138/:id", async (ctx) => json({ id: 138, key: ctx.params.id }))
-  .post("/res139", async (ctx) => json({ id: 139, key: "res139" }))
+  .post("/res139", async (_ctx) => json({ id: 139, key: "res139" }))
   .put("/res140/:id", async (ctx) => json({ id: 140, key: ctx.params.id }))
-  .get("/res141", async (ctx) => json({ id: 141, key: "res141" }))
+  .get("/res141", async (_ctx) => json({ id: 141, key: "res141" }))
   .post("/res142/:id", async (ctx) => json({ id: 142, key: ctx.params.id }))
-  .put("/res143", async (ctx) => json({ id: 143, key: "res143" }))
+  .put("/res143", async (_ctx) => json({ id: 143, key: "res143" }))
   .get("/res144/:id", async (ctx) => json({ id: 144, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -269,7 +269,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 145, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res146/:id", async (ctx) => json({ id: 146, key: ctx.params.id }))
-  .get("/res147", async (ctx) => json({ id: 147, key: "res147" }))
+  .get("/res147", async (_ctx) => json({ id: 147, key: "res147" }))
   .post("/res148/:id", async (ctx) => json({ id: 148, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -277,11 +277,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 149, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res150/:id", async (ctx) => json({ id: 150, key: ctx.params.id }))
-  .post("/res151", async (ctx) => json({ id: 151, key: "res151" }))
+  .post("/res151", async (_ctx) => json({ id: 151, key: "res151" }))
   .put("/res152/:id", async (ctx) => json({ id: 152, key: ctx.params.id }))
-  .get("/res153", async (ctx) => json({ id: 153, key: "res153" }))
+  .get("/res153", async (_ctx) => json({ id: 153, key: "res153" }))
   .post("/res154/:id", async (ctx) => json({ id: 154, key: ctx.params.id }))
-  .put("/res155", async (ctx) => json({ id: 155, key: "res155" }))
+  .put("/res155", async (_ctx) => json({ id: 155, key: "res155" }))
   .get("/res156/:id", async (ctx) => json({ id: 156, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -289,7 +289,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 157, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res158/:id", async (ctx) => json({ id: 158, key: ctx.params.id }))
-  .get("/res159", async (ctx) => json({ id: 159, key: "res159" }))
+  .get("/res159", async (_ctx) => json({ id: 159, key: "res159" }))
   .post("/res160/:id", async (ctx) => json({ id: 160, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -297,11 +297,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 161, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res162/:id", async (ctx) => json({ id: 162, key: ctx.params.id }))
-  .post("/res163", async (ctx) => json({ id: 163, key: "res163" }))
+  .post("/res163", async (_ctx) => json({ id: 163, key: "res163" }))
   .put("/res164/:id", async (ctx) => json({ id: 164, key: ctx.params.id }))
-  .get("/res165", async (ctx) => json({ id: 165, key: "res165" }))
+  .get("/res165", async (_ctx) => json({ id: 165, key: "res165" }))
   .post("/res166/:id", async (ctx) => json({ id: 166, key: ctx.params.id }))
-  .put("/res167", async (ctx) => json({ id: 167, key: "res167" }))
+  .put("/res167", async (_ctx) => json({ id: 167, key: "res167" }))
   .get("/res168/:id", async (ctx) => json({ id: 168, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -309,7 +309,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 169, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res170/:id", async (ctx) => json({ id: 170, key: ctx.params.id }))
-  .get("/res171", async (ctx) => json({ id: 171, key: "res171" }))
+  .get("/res171", async (_ctx) => json({ id: 171, key: "res171" }))
   .post("/res172/:id", async (ctx) => json({ id: 172, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -317,11 +317,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 173, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res174/:id", async (ctx) => json({ id: 174, key: ctx.params.id }))
-  .post("/res175", async (ctx) => json({ id: 175, key: "res175" }))
+  .post("/res175", async (_ctx) => json({ id: 175, key: "res175" }))
   .put("/res176/:id", async (ctx) => json({ id: 176, key: ctx.params.id }))
-  .get("/res177", async (ctx) => json({ id: 177, key: "res177" }))
+  .get("/res177", async (_ctx) => json({ id: 177, key: "res177" }))
   .post("/res178/:id", async (ctx) => json({ id: 178, key: ctx.params.id }))
-  .put("/res179", async (ctx) => json({ id: 179, key: "res179" }))
+  .put("/res179", async (_ctx) => json({ id: 179, key: "res179" }))
   .get("/res180/:id", async (ctx) => json({ id: 180, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -329,7 +329,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 181, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res182/:id", async (ctx) => json({ id: 182, key: ctx.params.id }))
-  .get("/res183", async (ctx) => json({ id: 183, key: "res183" }))
+  .get("/res183", async (_ctx) => json({ id: 183, key: "res183" }))
   .post("/res184/:id", async (ctx) => json({ id: 184, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -337,11 +337,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 185, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res186/:id", async (ctx) => json({ id: 186, key: ctx.params.id }))
-  .post("/res187", async (ctx) => json({ id: 187, key: "res187" }))
+  .post("/res187", async (_ctx) => json({ id: 187, key: "res187" }))
   .put("/res188/:id", async (ctx) => json({ id: 188, key: ctx.params.id }))
-  .get("/res189", async (ctx) => json({ id: 189, key: "res189" }))
+  .get("/res189", async (_ctx) => json({ id: 189, key: "res189" }))
   .post("/res190/:id", async (ctx) => json({ id: 190, key: ctx.params.id }))
-  .put("/res191", async (ctx) => json({ id: 191, key: "res191" }))
+  .put("/res191", async (_ctx) => json({ id: 191, key: "res191" }))
   .get("/res192/:id", async (ctx) => json({ id: 192, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -349,7 +349,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 193, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res194/:id", async (ctx) => json({ id: 194, key: ctx.params.id }))
-  .get("/res195", async (ctx) => json({ id: 195, key: "res195" }))
+  .get("/res195", async (_ctx) => json({ id: 195, key: "res195" }))
   .post("/res196/:id", async (ctx) => json({ id: 196, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -357,11 +357,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 197, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res198/:id", async (ctx) => json({ id: 198, key: ctx.params.id }))
-  .post("/res199", async (ctx) => json({ id: 199, key: "res199" }))
+  .post("/res199", async (_ctx) => json({ id: 199, key: "res199" }))
   .put("/res200/:id", async (ctx) => json({ id: 200, key: ctx.params.id }))
-  .get("/res201", async (ctx) => json({ id: 201, key: "res201" }))
+  .get("/res201", async (_ctx) => json({ id: 201, key: "res201" }))
   .post("/res202/:id", async (ctx) => json({ id: 202, key: ctx.params.id }))
-  .put("/res203", async (ctx) => json({ id: 203, key: "res203" }))
+  .put("/res203", async (_ctx) => json({ id: 203, key: "res203" }))
   .get("/res204/:id", async (ctx) => json({ id: 204, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -369,7 +369,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 205, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res206/:id", async (ctx) => json({ id: 206, key: ctx.params.id }))
-  .get("/res207", async (ctx) => json({ id: 207, key: "res207" }))
+  .get("/res207", async (_ctx) => json({ id: 207, key: "res207" }))
   .post("/res208/:id", async (ctx) => json({ id: 208, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -377,11 +377,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 209, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res210/:id", async (ctx) => json({ id: 210, key: ctx.params.id }))
-  .post("/res211", async (ctx) => json({ id: 211, key: "res211" }))
+  .post("/res211", async (_ctx) => json({ id: 211, key: "res211" }))
   .put("/res212/:id", async (ctx) => json({ id: 212, key: ctx.params.id }))
-  .get("/res213", async (ctx) => json({ id: 213, key: "res213" }))
+  .get("/res213", async (_ctx) => json({ id: 213, key: "res213" }))
   .post("/res214/:id", async (ctx) => json({ id: 214, key: ctx.params.id }))
-  .put("/res215", async (ctx) => json({ id: 215, key: "res215" }))
+  .put("/res215", async (_ctx) => json({ id: 215, key: "res215" }))
   .get("/res216/:id", async (ctx) => json({ id: 216, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -389,7 +389,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 217, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res218/:id", async (ctx) => json({ id: 218, key: ctx.params.id }))
-  .get("/res219", async (ctx) => json({ id: 219, key: "res219" }))
+  .get("/res219", async (_ctx) => json({ id: 219, key: "res219" }))
   .post("/res220/:id", async (ctx) => json({ id: 220, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -397,11 +397,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 221, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res222/:id", async (ctx) => json({ id: 222, key: ctx.params.id }))
-  .post("/res223", async (ctx) => json({ id: 223, key: "res223" }))
+  .post("/res223", async (_ctx) => json({ id: 223, key: "res223" }))
   .put("/res224/:id", async (ctx) => json({ id: 224, key: ctx.params.id }))
-  .get("/res225", async (ctx) => json({ id: 225, key: "res225" }))
+  .get("/res225", async (_ctx) => json({ id: 225, key: "res225" }))
   .post("/res226/:id", async (ctx) => json({ id: 226, key: ctx.params.id }))
-  .put("/res227", async (ctx) => json({ id: 227, key: "res227" }))
+  .put("/res227", async (_ctx) => json({ id: 227, key: "res227" }))
   .get("/res228/:id", async (ctx) => json({ id: 228, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -409,7 +409,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 229, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res230/:id", async (ctx) => json({ id: 230, key: ctx.params.id }))
-  .get("/res231", async (ctx) => json({ id: 231, key: "res231" }))
+  .get("/res231", async (_ctx) => json({ id: 231, key: "res231" }))
   .post("/res232/:id", async (ctx) => json({ id: 232, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -417,11 +417,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 233, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res234/:id", async (ctx) => json({ id: 234, key: ctx.params.id }))
-  .post("/res235", async (ctx) => json({ id: 235, key: "res235" }))
+  .post("/res235", async (_ctx) => json({ id: 235, key: "res235" }))
   .put("/res236/:id", async (ctx) => json({ id: 236, key: ctx.params.id }))
-  .get("/res237", async (ctx) => json({ id: 237, key: "res237" }))
+  .get("/res237", async (_ctx) => json({ id: 237, key: "res237" }))
   .post("/res238/:id", async (ctx) => json({ id: 238, key: ctx.params.id }))
-  .put("/res239", async (ctx) => json({ id: 239, key: "res239" }))
+  .put("/res239", async (_ctx) => json({ id: 239, key: "res239" }))
   .get("/res240/:id", async (ctx) => json({ id: 240, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -429,7 +429,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 241, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res242/:id", async (ctx) => json({ id: 242, key: ctx.params.id }))
-  .get("/res243", async (ctx) => json({ id: 243, key: "res243" }))
+  .get("/res243", async (_ctx) => json({ id: 243, key: "res243" }))
   .post("/res244/:id", async (ctx) => json({ id: 244, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -437,11 +437,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 245, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res246/:id", async (ctx) => json({ id: 246, key: ctx.params.id }))
-  .post("/res247", async (ctx) => json({ id: 247, key: "res247" }))
+  .post("/res247", async (_ctx) => json({ id: 247, key: "res247" }))
   .put("/res248/:id", async (ctx) => json({ id: 248, key: ctx.params.id }))
-  .get("/res249", async (ctx) => json({ id: 249, key: "res249" }))
+  .get("/res249", async (_ctx) => json({ id: 249, key: "res249" }))
   .post("/res250/:id", async (ctx) => json({ id: 250, key: ctx.params.id }))
-  .put("/res251", async (ctx) => json({ id: 251, key: "res251" }))
+  .put("/res251", async (_ctx) => json({ id: 251, key: "res251" }))
   .get("/res252/:id", async (ctx) => json({ id: 252, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -449,7 +449,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 253, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res254/:id", async (ctx) => json({ id: 254, key: ctx.params.id }))
-  .get("/res255", async (ctx) => json({ id: 255, key: "res255" }))
+  .get("/res255", async (_ctx) => json({ id: 255, key: "res255" }))
   .post("/res256/:id", async (ctx) => json({ id: 256, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -457,11 +457,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 257, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res258/:id", async (ctx) => json({ id: 258, key: ctx.params.id }))
-  .post("/res259", async (ctx) => json({ id: 259, key: "res259" }))
+  .post("/res259", async (_ctx) => json({ id: 259, key: "res259" }))
   .put("/res260/:id", async (ctx) => json({ id: 260, key: ctx.params.id }))
-  .get("/res261", async (ctx) => json({ id: 261, key: "res261" }))
+  .get("/res261", async (_ctx) => json({ id: 261, key: "res261" }))
   .post("/res262/:id", async (ctx) => json({ id: 262, key: ctx.params.id }))
-  .put("/res263", async (ctx) => json({ id: 263, key: "res263" }))
+  .put("/res263", async (_ctx) => json({ id: 263, key: "res263" }))
   .get("/res264/:id", async (ctx) => json({ id: 264, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -469,7 +469,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 265, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res266/:id", async (ctx) => json({ id: 266, key: ctx.params.id }))
-  .get("/res267", async (ctx) => json({ id: 267, key: "res267" }))
+  .get("/res267", async (_ctx) => json({ id: 267, key: "res267" }))
   .post("/res268/:id", async (ctx) => json({ id: 268, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -477,11 +477,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 269, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res270/:id", async (ctx) => json({ id: 270, key: ctx.params.id }))
-  .post("/res271", async (ctx) => json({ id: 271, key: "res271" }))
+  .post("/res271", async (_ctx) => json({ id: 271, key: "res271" }))
   .put("/res272/:id", async (ctx) => json({ id: 272, key: ctx.params.id }))
-  .get("/res273", async (ctx) => json({ id: 273, key: "res273" }))
+  .get("/res273", async (_ctx) => json({ id: 273, key: "res273" }))
   .post("/res274/:id", async (ctx) => json({ id: 274, key: ctx.params.id }))
-  .put("/res275", async (ctx) => json({ id: 275, key: "res275" }))
+  .put("/res275", async (_ctx) => json({ id: 275, key: "res275" }))
   .get("/res276/:id", async (ctx) => json({ id: 276, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -489,7 +489,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 277, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res278/:id", async (ctx) => json({ id: 278, key: ctx.params.id }))
-  .get("/res279", async (ctx) => json({ id: 279, key: "res279" }))
+  .get("/res279", async (_ctx) => json({ id: 279, key: "res279" }))
   .post("/res280/:id", async (ctx) => json({ id: 280, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -497,11 +497,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 281, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res282/:id", async (ctx) => json({ id: 282, key: ctx.params.id }))
-  .post("/res283", async (ctx) => json({ id: 283, key: "res283" }))
+  .post("/res283", async (_ctx) => json({ id: 283, key: "res283" }))
   .put("/res284/:id", async (ctx) => json({ id: 284, key: ctx.params.id }))
-  .get("/res285", async (ctx) => json({ id: 285, key: "res285" }))
+  .get("/res285", async (_ctx) => json({ id: 285, key: "res285" }))
   .post("/res286/:id", async (ctx) => json({ id: 286, key: ctx.params.id }))
-  .put("/res287", async (ctx) => json({ id: 287, key: "res287" }))
+  .put("/res287", async (_ctx) => json({ id: 287, key: "res287" }))
   .get("/res288/:id", async (ctx) => json({ id: 288, key: ctx.params.id }))
   .routeNode(
     "POST",
@@ -509,7 +509,7 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 289, name: b.name, qty: b.qty }), bodySchema),
   )
   .put("/res290/:id", async (ctx) => json({ id: 290, key: ctx.params.id }))
-  .get("/res291", async (ctx) => json({ id: 291, key: "res291" }))
+  .get("/res291", async (_ctx) => json({ id: 291, key: "res291" }))
   .post("/res292/:id", async (ctx) => json({ id: 292, key: ctx.params.id }))
   .routeNode(
     "PUT",
@@ -517,11 +517,11 @@ const app = httpRouter()
     withValidation(async (b: Body) => json({ id: 293, name: b.name, qty: b.qty }), bodySchema),
   )
   .get("/res294/:id", async (ctx) => json({ id: 294, key: ctx.params.id }))
-  .post("/res295", async (ctx) => json({ id: 295, key: "res295" }))
+  .post("/res295", async (_ctx) => json({ id: 295, key: "res295" }))
   .put("/res296/:id", async (ctx) => json({ id: 296, key: ctx.params.id }))
-  .get("/res297", async (ctx) => json({ id: 297, key: "res297" }))
+  .get("/res297", async (_ctx) => json({ id: 297, key: "res297" }))
   .post("/res298/:id", async (ctx) => json({ id: 298, key: ctx.params.id }))
-  .put("/res299", async (ctx) => json({ id: 299, key: "res299" }));
+  .put("/res299", async (_ctx) => json({ id: 299, key: "res299" }));
 
 const api = client(app);
 const r0 = api["/res0/:id"].get({ params: { id: "1" } });

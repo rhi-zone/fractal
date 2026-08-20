@@ -2,7 +2,7 @@ import { json, withValidation } from "@rhi-zone/fractal-http-api-projector";
 import type { StandardSchema, RoutingCtx, PathParams } from "@rhi-zone/fractal-api-tree";
 import type { ClientOfContract } from "../contract";
 
-// Minimal Standard-Schema validator (no zod — isolate fractal's cost).
+// Minimal Standard-Schema validator (no zod, to isolate fractal's cost).
 interface Body {
   readonly name: string;
   readonly qty: number;
@@ -35,7 +35,7 @@ const contract = {
     put: async (ctx: Ctx<"/res2/:id">) => json({ id: 2, key: ctx.params.id }),
   },
   "/res3": {
-    get: async (ctx: Ctx<"/res3">) => json({ id: 3, key: "res3" }),
+    get: async (_ctx: Ctx<"/res3">) => json({ id: 3, key: "res3" }),
   },
   "/res4/:id": {
     post: async (ctx: Ctx<"/res4/:id">) => json({ id: 4, key: ctx.params.id }),
@@ -47,13 +47,13 @@ const contract = {
     get: async (ctx: Ctx<"/res6/:id">) => json({ id: 6, key: ctx.params.id }),
   },
   "/res7": {
-    post: async (ctx: Ctx<"/res7">) => json({ id: 7, key: "res7" }),
+    post: async (_ctx: Ctx<"/res7">) => json({ id: 7, key: "res7" }),
   },
   "/res8/:id": {
     put: async (ctx: Ctx<"/res8/:id">) => json({ id: 8, key: ctx.params.id }),
   },
   "/res9": {
-    get: async (ctx: Ctx<"/res9">) => json({ id: 9, key: "res9" }),
+    get: async (_ctx: Ctx<"/res9">) => json({ id: 9, key: "res9" }),
   },
 } as const;
 
