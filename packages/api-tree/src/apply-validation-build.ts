@@ -1051,12 +1051,24 @@ export function buildWireApplyValidationModuleCached(
     readonly shouldShare?: ShouldShare;
   } & CacheLocationOptions,
 ): CachedBuildOutcome<string> {
-  if (!options?.force) {
-    const check = checkCache(entryFile, outFile, options);
+  // `runtimeImport`/`shouldShare` folded into the cache key (audit §1.3):
+  // neither is part of the tracked file closure, so a caller changing either
+  // between runs with no other input change was previously a silent Tier-1
+  // hit that kept serving the OLD runtimeImport/shouldShare's artifact
+  // indefinitely. `shouldShare`'s identity is approximated by its source
+  // text (`Function.prototype.toString`) — the best available signal for a
+  // predicate function's identity across runs; a caller passing a
+  // differently-named-but-behaviorally-identical function still round-trips
+  // correctly (same source text), and a real behavior change (different
+  // source text) is what needs to invalidate the cache, not name identity.
+  const buildOptionsKey = `${options?.runtimeImport ?? ""} ${String(options?.shouldShare ?? "")}`;
+  const cacheOpts = { ...options, buildOptionsKey };
+  if (!cacheOpts?.force) {
+    const check = checkCache(entryFile, outFile, cacheOpts);
     if (check.hit) return { status: "hit" };
   }
-  const program = options?.program ?? createExtractorProgram(entryFile);
-  const priorRaw = readCarryForwardState(entryFile, outFile, options);
+  const program = cacheOpts?.program ?? createExtractorProgram(entryFile);
+  const priorRaw = readCarryForwardState(entryFile, outFile, cacheOpts);
   const prior: WireApplyValidationCarryForwardState | undefined =
     priorRaw === undefined
       ? undefined
@@ -1068,11 +1080,11 @@ export function buildWireApplyValidationModuleCached(
   const built = buildWireApplyValidationModuleSourceIncremental(entryFile, {
     outFile,
     program,
-    ...(options?.runtimeImport !== undefined ? { runtimeImport: options.runtimeImport } : {}),
-    ...(options?.shouldShare !== undefined ? { shouldShare: options.shouldShare } : {}),
+    ...(cacheOpts?.runtimeImport !== undefined ? { runtimeImport: cacheOpts.runtimeImport } : {}),
+    ...(cacheOpts?.shouldShare !== undefined ? { shouldShare: cacheOpts.shouldShare } : {}),
     ...(prior !== undefined ? { prior } : {}),
   });
-  writeCacheMetadata(entryFile, outFile, program, built.source, options, options?.reachable, {
+  writeCacheMetadata(entryFile, outFile, program, built.source, cacheOpts, cacheOpts?.reachable, {
     leafFingerprints: built.leafFingerprints,
     leafArtifacts: built.leafArtifacts,
     defNamesFingerprint: built.defNamesFingerprint,
