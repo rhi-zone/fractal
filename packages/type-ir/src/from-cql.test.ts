@@ -219,6 +219,19 @@ describe("user-defined types", () => {
     expect(fields.home?.shape.kind).toBe("ref");
     expect((fields.home!.shape as unknown as { target: string }).target).toBe("address");
   });
+
+  // Regression: a bare identifier that isn't one of CQL's native keywords
+  // AND isn't a declared UDT anywhere in the script (typo, unsupported
+  // custom type, etc.) must fall through to the unrecognized-type fallback,
+  // not silently become a `ref()` to a type that was never declared.
+  test("bare identifier that is not a declared UDT falls through to unknown", () => {
+    const result = fromCql(`
+      CREATE TABLE users (id uuid PRIMARY KEY, home frozen<addres>);
+    `);
+    const fields = fieldsOf(result.users);
+    expect(fields.home?.shape.kind).toBe("unknown");
+    expect(fields.home?.meta.cqlType).toBe("addres");
+  });
 });
 
 describe("primary keys", () => {

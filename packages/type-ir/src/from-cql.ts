@@ -297,8 +297,13 @@ function mapCqlType(raw: string, knownUdts: Set<string>): TypeRef {
 
     default:
       // Bare identifier not one of CQL's native keywords: a UDT reference
-      // (known or forward-declared — see doc comment above).
-      if (/^[A-Za-z_]\w*$/.test(name)) return t(types.ref(name));
+      // only if it's actually a declared UDT (known or forward-declared —
+      // `knownUdts` is collected from the whole script up front, so a
+      // forward reference is already present by the time this runs). An
+      // identifier that isn't a declared UDT at all has no other plausible
+      // reading, but it also isn't a confirmed reference — fall through to
+      // the unrecognized-type fallback per this function's contract.
+      if (/^[A-Za-z_]\w*$/.test(name) && knownUdts.has(name)) return t(types.ref(name));
       return t(types.unknown, { cqlType: name });
   }
 }
