@@ -458,11 +458,7 @@ standalone helpers, same convention as the MkDocs projector.
 ## Docutils
 
 ```ts
-import {
-  toRstReference,
-  renderTypeExpr,
-  kebabCase,
-} from "@rhi-zone/fractal-type-ir/rst-reference";
+import { toRstReference, renderTypeExpr, kebabCase } from "@rhi-zone/fractal-type-ir/rst-reference";
 
 const pages = toRstReference({
   root: t(types.ref("User")),
@@ -594,7 +590,7 @@ opt into:
   distinct underlying reason (no frontmatter _consumer_ here, versus RST
   having no frontmatter _convention_ at all).
 - **Deprecation** renders as a plain blockquote (`> **Deprecated.**
-  reason`) — core CommonMark, no extension required.
+reason`) — core CommonMark, no extension required.
 - **Multiple `meta.examples`** render as numbered `### Example N`
   subsections rather than a tabbed UI, same reasoning the MkDocs (vanilla)
   and Sphinx sections give for their own numbered subsections — no tabs

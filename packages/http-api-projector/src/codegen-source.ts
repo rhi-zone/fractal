@@ -84,13 +84,7 @@ import {
   walkNodeType,
 } from "@rhi-zone/fractal-api-tree/tree";
 import type { Handler } from "@rhi-zone/fractal-api-tree/node";
-import {
-  applyMethods,
-  applyMoveTo,
-  applyResponse,
-  composeTransforms,
-  httpRoute,
-} from "./route.ts";
+import { applyMethods, applyMoveTo, applyResponse, composeTransforms, httpRoute } from "./route.ts";
 import type { HttpRoute, RouteLeafMeta, RouteMeta } from "./route.ts";
 import { generateClientWithNames } from "./codegen.ts";
 import type { CodegenOptions } from "./codegen.ts";
@@ -145,8 +139,11 @@ export function generateClientFromSource(
     throw new Error(`generateClientFromSource: source file not found: ${entryFilePath}`);
   }
 
-  const candidates: Array<{ readonly nodeType: ts.Type; readonly loc: ts.Node; readonly treeId: string }> =
-    [];
+  const candidates: Array<{
+    readonly nodeType: ts.Type;
+    readonly loc: ts.Node;
+    readonly treeId: string;
+  }> = [];
   forEachTreeCandidate(source, checker, (nodeType, loc, treeId) => {
     candidates.push({ nodeType, loc, treeId });
   });
@@ -327,11 +324,18 @@ function buildSkeletonRoute(
   readonly memberNames: Map<Handler, string>;
 } {
   const root = freshDraft();
-  walkNodeType(nodeType, [], [], loc, checker, (name, path, _fn, _descriptionSource, _checker, leafNodeType) => {
-    const method = readMetaStringLiteral(leafNodeType, "http", "method", loc, checker);
-    const moveTo = readMetaStringLiteral(leafNodeType, "http", "moveTo", loc, checker);
-    plant(root, path, { name, path, method, moveTo });
-  });
+  walkNodeType(
+    nodeType,
+    [],
+    [],
+    loc,
+    checker,
+    (name, path, _fn, _descriptionSource, _checker, leafNodeType) => {
+      const method = readMetaStringLiteral(leafNodeType, "http", "method", loc, checker);
+      const moveTo = readMetaStringLiteral(leafNodeType, "http", "moveTo", loc, checker);
+      plant(root, path, { name, path, method, moveTo });
+    },
+  );
 
   const codegenNames = new Map<Handler, string>();
   const memberNames = new Map<Handler, string>();

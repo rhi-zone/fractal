@@ -79,7 +79,11 @@ function localTypeFields(sourceFile: ts.SourceFile): Map<string, Set<string>> {
   const membersOf = (members: ts.NodeArray<ts.TypeElement>) => {
     const fields = new Set<string>();
     for (const m of members) {
-      if ((ts.isPropertySignature(m) || ts.isMethodSignature(m)) && m.name && ts.isIdentifier(m.name)) {
+      if (
+        (ts.isPropertySignature(m) || ts.isMethodSignature(m)) &&
+        m.name &&
+        ts.isIdentifier(m.name)
+      ) {
         fields.add(m.name.text);
       }
     }
@@ -126,9 +130,7 @@ function buildFacts(
  *  and class/object method declarations. Anything else (interfaces, plain
  *  const values, type aliases) yields `undefined` — those comments still
  *  get extracted, just without signature facts. */
-function resolveFunctionDecl(
-  node: ts.Node,
-):
+function resolveFunctionDecl(node: ts.Node):
   | {
       fn: ts.FunctionDeclaration | ts.FunctionExpression | ts.ArrowFunction | ts.MethodDeclaration;
       name?: string | undefined;
@@ -145,7 +147,10 @@ function resolveFunctionDecl(
       decl.initializer &&
       (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
     ) {
-      return { fn: decl.initializer, name: ts.isIdentifier(decl.name) ? decl.name.text : undefined };
+      return {
+        fn: decl.initializer,
+        name: ts.isIdentifier(decl.name) ? decl.name.text : undefined,
+      };
     }
   }
   return undefined;

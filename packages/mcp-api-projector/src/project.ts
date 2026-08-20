@@ -522,7 +522,11 @@ export function projectTools(n: Node, opts: ToToolsOptions = {}): ProjectToolsRe
   // is the name-scoped segment array — tree keys with `meta.mcp.segment`
   // overrides folded in — joined via `escapeJoin` exactly once, at each leaf,
   // instead of unescaped-joined one level at a time on the way down.
-  const walk = (n: Node, nameSegments: readonly string[], segments: readonly string[]): McpTool[] => {
+  const walk = (
+    n: Node,
+    nameSegments: readonly string[],
+    segments: readonly string[],
+  ): McpTool[] => {
     const out: McpTool[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {
@@ -1023,7 +1027,11 @@ export function projectPrompts(n: Node, opts: ProjectPromptsOptions = {}): Proje
 
   // Same name-segment-array-carried-to-a-single-escapeJoin-call scheme as
   // `projectTools`' walk — see that function's matching comment.
-  const walk = (n: Node, nameSegments: readonly string[], segments: readonly string[]): McpPrompt[] => {
+  const walk = (
+    n: Node,
+    nameSegments: readonly string[],
+    segments: readonly string[],
+  ): McpPrompt[] => {
     const out: McpPrompt[] = [];
 
     for (const [key, child] of Object.entries(n.children ?? {})) {

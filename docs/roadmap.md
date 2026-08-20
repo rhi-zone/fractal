@@ -972,7 +972,7 @@ convention as every other target.
 file in this package is named after the specific downstream tool it
 targets (`sphinx-reference.ts`, `mkdocs-reference.ts`,
 `mkdocs-vanilla-reference.ts`, `docusaurus-reference.ts`,
-`starlight-reference.ts`), never after the output *format* — so this file
+`starlight-reference.ts`), never after the output _format_ — so this file
 is named `docutils-reference.ts` / `toDocutilsReference`, after the real
 tool identity (the `docutils` PyPI package), rather than
 `rst-vanilla-reference.ts` (a format-plus-"vanilla"-suffix name that would
@@ -1001,7 +1001,7 @@ document and in `docs/reference/type-ir/doc-projectors.md` was updated to
 anywhere in this repo (not previously mentioned in this doc, not a
 previously-considered-and-deferred target). Sits between the two
 categories above rather than fitting either cleanly: like Plain Markdown,
-Org's own markup is not owned by one specific *site-generator* tool the
+Org's own markup is not owned by one specific _site-generator_ tool the
 way Sphinx/MkDocs are (there is no separate "Org doc-site generator" this
 target is written for); unlike Plain Markdown, Org mode's syntax is not
 generic prose markup either — headline depth, `:PROPERTIES:`/`:CUSTOM_ID:`
@@ -1039,7 +1039,7 @@ reference.test.ts` has its own task/project-management-flavored fixture
   run: `org-lint` against every generated page (zero structural warnings;
   one expected low-severity "unknown source block language: typescript"
   note per `#+BEGIN_SRC typescript` block, since Org's babel-language
-  registry only recognizes languages it can *execute* and this target
+  registry only recognizes languages it can _execute_ and this target
   never asks Org to evaluate the block, so the note is expected and not
   actionable), and a real `org-html-export-to-html` run whose rendered
   output was inspected directly: cross-page `[[file:…::#id][…]]` links
@@ -1060,16 +1060,16 @@ reference.test.ts` has its own task/project-management-flavored fixture
 - **Popularity-ranking placement — genuinely ambiguous, flagged rather
   than guessed.** Org mode was not part of the original 10-target research
   pass below and does not fit that list's methodology at all: every other
-  entry there is a separately installable tool with *some* real
+  entry there is a separately installable tool with _some_ real
   popularity signal (a package-registry download count, or — for GitBook,
   flagged there for the same reason — a SaaS usage/market-share figure).
   Org mode has neither. It ships bundled with GNU Emacs itself (since
   Emacs 24.1, released 2012) rather than being installed as a separate
   package most of the time, so there is no npm/PyPI/crates.io-style
-  download metric that measures *it* rather than Emacs as a whole; its
+  download metric that measures _it_ rather than Emacs as a whole; its
   canonical home is a Savannah/GNU repository, not GitHub, and the
   unofficial read-only GitHub mirrors that exist (`bzg/org-mode`,
-  `emacs-straight/org-mode`) have no claim to being *the* canonical
+  `emacs-straight/org-mode`) have no claim to being _the_ canonical
   star-count source the way `mkdocs-material`'s own repository does for
   that target. Inventing a ranking position from Emacs' own popularity
   would conflate "how popular is Emacs" with "how popular is this one

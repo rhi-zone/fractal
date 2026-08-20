@@ -44,7 +44,11 @@ describe("escapeJoin / unescapeJoin", () => {
       fc.property(
         fc.constantFrom(...DELIMITERS),
         fc.array(
-          fc.string({ unit: fc.constantFrom("_", ".", "/", " ", ":", "\\", "a"), minLength: 0, maxLength: 6 }),
+          fc.string({
+            unit: fc.constantFrom("_", ".", "/", " ", ":", "\\", "a"),
+            minLength: 0,
+            maxLength: 6,
+          }),
           { minLength: 1, maxLength: 6 },
         ),
         (delimiter, segments) => {

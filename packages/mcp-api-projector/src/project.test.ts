@@ -234,10 +234,7 @@ describe("a segment containing the join delimiter no longer collides with a deep
   it("a meta.mcp.segment override that reproduces an authored key's own name still derives two distinct names", () => {
     const api = api_({
       users_list: op((_: unknown) => ({})),
-      usersNode: api_(
-        { list: op((_: unknown) => ({})) },
-        { meta: { mcp: { segment: "users" } } },
-      ),
+      usersNode: api_({ list: op((_: unknown) => ({})) }, { meta: { mcp: { segment: "users" } } }),
     });
     const tools = toTools(api);
     expect(tools.map((t) => t.name).sort()).toEqual(["users\\_list", "users_list"]);

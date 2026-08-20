@@ -2,128 +2,140 @@
 // Standalone: no imports, depends only on the global `fetch`/`Request`/`URL` surface.
 
 export type BooksListOutput = Array<{
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}>
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+}>;
 
 export type BooksAddInput = {
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksAddOutput = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksBookIdReadOutput = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksBookIdReplaceInput = {
-  readonly title?: string
-  readonly author?: string
-  readonly genre?: string
-}
+  readonly title?: string;
+  readonly author?: string;
+  readonly genre?: string;
+};
 
 export type BooksBookIdReplaceOutput = {
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+};
 
 export type BooksBookIdRemoveOutput = {
-  readonly deleted: boolean
-}
+  readonly deleted: boolean;
+};
 
 export type BooksBookIdCheckoutStartOutput = {
-  readonly sessionId: string
-}
+  readonly sessionId: string;
+};
 
 export type BooksBookIdCheckoutReserveInput = {
-  readonly patronId: string
-}
+  readonly patronId: string;
+};
 
 export type BooksBookIdCheckoutReserveOutput = {
-  readonly reservationId: string
-  readonly patronId: string
-}
+  readonly reservationId: string;
+  readonly patronId: string;
+};
 
 export type CatalogSearchInput = {
-  readonly q?: string
-}
+  readonly q?: string;
+};
 
 export type CatalogSearchOutput = Array<{
-  readonly id: string
-  readonly title: string
-  readonly author: string
-  readonly genre: string
-}>
+  readonly id: string;
+  readonly title: string;
+  readonly author: string;
+  readonly genre: string;
+}>;
 
 export type CatalogGenresInput = {
-  readonly prefix?: string
-}
+  readonly prefix?: string;
+};
 
-export type CatalogGenresOutput = Array<string>
+export type CatalogGenresOutput = Array<string>;
 
 export type Client = {
   readonly books: {
     readonly bookId: (bookId: string) => {
       readonly checkout: {
-        readonly start: (callOpts?: CallOptions) => Promise<BooksBookIdCheckoutStartOutput>
-        readonly reserve: (input: BooksBookIdCheckoutReserveInput, callOpts?: CallOptions) => Promise<BooksBookIdCheckoutReserveOutput>
-      }
-      readonly read: (callOpts?: CallOptions) => Promise<BooksBookIdReadOutput>
-      readonly replace: (input: BooksBookIdReplaceInput, callOpts?: CallOptions) => Promise<BooksBookIdReplaceOutput>
-      readonly remove: (callOpts?: CallOptions) => Promise<BooksBookIdRemoveOutput>
-    }
-    readonly list: (callOpts?: CallOptions) => Promise<BooksListOutput>
-    readonly add: (input: BooksAddInput, callOpts?: CallOptions) => Promise<BooksAddOutput>
-  }
+        readonly start: (callOpts?: CallOptions) => Promise<BooksBookIdCheckoutStartOutput>;
+        readonly reserve: (
+          input: BooksBookIdCheckoutReserveInput,
+          callOpts?: CallOptions,
+        ) => Promise<BooksBookIdCheckoutReserveOutput>;
+      };
+      readonly read: (callOpts?: CallOptions) => Promise<BooksBookIdReadOutput>;
+      readonly replace: (
+        input: BooksBookIdReplaceInput,
+        callOpts?: CallOptions,
+      ) => Promise<BooksBookIdReplaceOutput>;
+      readonly remove: (callOpts?: CallOptions) => Promise<BooksBookIdRemoveOutput>;
+    };
+    readonly list: (callOpts?: CallOptions) => Promise<BooksListOutput>;
+    readonly add: (input: BooksAddInput, callOpts?: CallOptions) => Promise<BooksAddOutput>;
+  };
   readonly catalog: {
-    readonly search: (input: CatalogSearchInput, callOpts?: CallOptions) => Promise<CatalogSearchOutput>
-    readonly genres: (input: CatalogGenresInput, callOpts?: CallOptions) => Promise<CatalogGenresOutput>
-  }
-}
+    readonly search: (
+      input: CatalogSearchInput,
+      callOpts?: CallOptions,
+    ) => Promise<CatalogSearchOutput>;
+    readonly genres: (
+      input: CatalogGenresInput,
+      callOpts?: CallOptions,
+    ) => Promise<CatalogGenresOutput>;
+  };
+};
 
 export type CreateClientOptions = {
-  readonly fetch?: typeof fetch
-  readonly headers?: Record<string, string>
+  readonly fetch?: typeof fetch;
+  readonly headers?: Record<string, string>;
   /** Per-request timeout in milliseconds, applied via `AbortSignal.timeout`. Overridable per-call. Unset by default. */
-  readonly timeout?: number
+  readonly timeout?: number;
   /** An `AbortSignal` that cancels every request from this client. Combined with `timeout` (if both set). Overridable per-call. */
-  readonly signal?: AbortSignal
-}
+  readonly signal?: AbortSignal;
+};
 
 /** Per-call overrides for `timeout`/`signal`, layered on top of the client-level `CreateClientOptions`. */
 export type CallOptions = {
   /** Overrides the client-level `timeout` for this call only. */
-  readonly timeout?: number
+  readonly timeout?: number;
   /** Overrides the client-level `signal` for this call only. */
-  readonly signal?: AbortSignal
-}
+  readonly signal?: AbortSignal;
+};
 
 /** Thrown by the generated client when the server responds with a non-2xx status. */
 export class ClientError extends Error {
-  readonly status: number
-  readonly statusText: string
-  readonly body: unknown
+  readonly status: number;
+  readonly statusText: string;
+  readonly body: unknown;
 
   constructor(status: number, statusText: string, body: unknown) {
-    super(`HTTP ${status} ${statusText}`)
-    this.name = "ClientError"
-    this.status = status
-    this.statusText = statusText
-    this.body = body
+    super(`HTTP ${status} ${statusText}`);
+    this.name = "ClientError";
+    this.status = status;
+    this.statusText = statusText;
+    this.body = body;
   }
 }
 
@@ -137,22 +149,28 @@ function __resolveSignal(
   baseSignal: AbortSignal | undefined,
   callOpts: CallOptions | undefined,
 ): AbortSignal | undefined {
-  const timeout = callOpts?.timeout ?? baseTimeout
-  const signal = callOpts?.signal ?? baseSignal
-  const timeoutSignal = timeout !== undefined ? AbortSignal.timeout(timeout) : undefined
-  if (timeoutSignal !== undefined && signal !== undefined) return AbortSignal.any([signal, timeoutSignal])
-  return timeoutSignal ?? signal
+  const timeout = callOpts?.timeout ?? baseTimeout;
+  const signal = callOpts?.signal ?? baseSignal;
+  const timeoutSignal = timeout !== undefined ? AbortSignal.timeout(timeout) : undefined;
+  if (timeoutSignal !== undefined && signal !== undefined)
+    return AbortSignal.any([signal, timeoutSignal]);
+  return timeoutSignal ?? signal;
 }
 
 /** Rethrow abort-driven fetch failures with a message that distinguishes timeout from user cancellation. */
-function __describeAbort(err: unknown, method: string, path: string, timeout: number | undefined): Error {
+function __describeAbort(
+  err: unknown,
+  method: string,
+  path: string,
+  timeout: number | undefined,
+): Error {
   if (err instanceof Error && err.name === "TimeoutError") {
-    return new Error(`Request timed out after ${timeout}ms: ${method} ${path}`)
+    return new Error(`Request timed out after ${timeout}ms: ${method} ${path}`);
   }
   if (err instanceof Error && err.name === "AbortError") {
-    return new Error(`Request aborted: ${method} ${path}`)
+    return new Error(`Request aborted: ${method} ${path}`);
   }
-  return err instanceof Error ? err : new Error(String(err))
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 async function __request(
@@ -166,73 +184,181 @@ async function __request(
   baseSignal: AbortSignal | undefined,
   callOpts: CallOptions | undefined,
 ): Promise<unknown> {
-  const timeout = callOpts?.timeout ?? baseTimeout
-  const signal = __resolveSignal(baseTimeout, baseSignal, callOpts) ?? null
+  const timeout = callOpts?.timeout ?? baseTimeout;
+  const signal = __resolveSignal(baseTimeout, baseSignal, callOpts) ?? null;
 
-  let url: string
-  const init: RequestInit = { method, headers: { ...(headers ?? {}) }, signal }
+  let url: string;
+  const init: RequestInit = { method, headers: { ...(headers ?? {}) }, signal };
 
   if (method === "GET" || method === "HEAD" || method === "DELETE") {
     // Input goes into query params for read-only/deletion ops.
-    const isAbsolute = baseUrl.startsWith("http")
-    const u = new URL(path, isAbsolute ? baseUrl : "http://localhost")
+    const isAbsolute = baseUrl.startsWith("http");
+    const u = new URL(path, isAbsolute ? baseUrl : "http://localhost");
     if (input !== null && input !== undefined && typeof input === "object") {
       for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
-        if (v !== undefined && v !== null) u.searchParams.set(k, String(v))
+        if (v !== undefined && v !== null) u.searchParams.set(k, String(v));
       }
     }
-    url = isAbsolute ? u.toString() : `${baseUrl}${u.pathname}${u.search}`
+    url = isAbsolute ? u.toString() : `${baseUrl}${u.pathname}${u.search}`;
   } else {
     // POST/PUT/PATCH: input as JSON body.
-    url = `${baseUrl}${path}`
-    init.headers = { ...(init.headers as Record<string, string>), "Content-Type": "application/json" }
-    init.body = JSON.stringify(input ?? {})
+    url = `${baseUrl}${path}`;
+    init.headers = {
+      ...(init.headers as Record<string, string>),
+      "Content-Type": "application/json",
+    };
+    init.body = JSON.stringify(input ?? {});
   }
 
-  let res: Response
+  let res: Response;
   try {
-    res = await fetchImpl(url, init)
+    res = await fetchImpl(url, init);
   } catch (err) {
-    throw __describeAbort(err, method, path, timeout)
+    throw __describeAbort(err, method, path, timeout);
   }
 
-  let body: unknown
-  const ct = res.headers.get("Content-Type") ?? ""
+  let body: unknown;
+  const ct = res.headers.get("Content-Type") ?? "";
   if (ct.includes("application/json")) {
-    body = await res.json()
+    body = await res.json();
   } else {
-    body = await res.text()
+    body = await res.text();
   }
 
   if (!res.ok) {
-    throw new ClientError(res.status, res.statusText, body)
+    throw new ClientError(res.status, res.statusText, body);
   }
 
-  return body
+  return body;
 }
 
 export function createClient(baseUrl: string, options: CreateClientOptions = {}): Client {
-  const fetchImpl = options.fetch ?? fetch
-  const headers = options.headers
-  const baseTimeout = options.timeout
-  const baseSignal = options.signal
+  const fetchImpl = options.fetch ?? fetch;
+  const headers = options.headers;
+  const baseTimeout = options.timeout;
+  const baseSignal = options.signal;
   return {
     books: {
       bookId: (bookId: string) => ({
         checkout: {
-          start: (callOpts?: CallOptions): Promise<BooksBookIdCheckoutStartOutput> => (__request(baseUrl, fetchImpl, headers, "POST", `/books/${encodeURIComponent(bookId)}/checkout/start`, undefined, baseTimeout, baseSignal, callOpts)) as Promise<BooksBookIdCheckoutStartOutput>,
-          reserve: (input: BooksBookIdCheckoutReserveInput, callOpts?: CallOptions): Promise<BooksBookIdCheckoutReserveOutput> => (__request(baseUrl, fetchImpl, headers, "PUT", `/books/${encodeURIComponent(bookId)}/checkout/reserve`, input, baseTimeout, baseSignal, callOpts)) as Promise<BooksBookIdCheckoutReserveOutput>,
+          start: (callOpts?: CallOptions): Promise<BooksBookIdCheckoutStartOutput> =>
+            __request(
+              baseUrl,
+              fetchImpl,
+              headers,
+              "POST",
+              `/books/${encodeURIComponent(bookId)}/checkout/start`,
+              undefined,
+              baseTimeout,
+              baseSignal,
+              callOpts,
+            ) as Promise<BooksBookIdCheckoutStartOutput>,
+          reserve: (
+            input: BooksBookIdCheckoutReserveInput,
+            callOpts?: CallOptions,
+          ): Promise<BooksBookIdCheckoutReserveOutput> =>
+            __request(
+              baseUrl,
+              fetchImpl,
+              headers,
+              "PUT",
+              `/books/${encodeURIComponent(bookId)}/checkout/reserve`,
+              input,
+              baseTimeout,
+              baseSignal,
+              callOpts,
+            ) as Promise<BooksBookIdCheckoutReserveOutput>,
         },
-        read: (callOpts?: CallOptions): Promise<BooksBookIdReadOutput> => (__request(baseUrl, fetchImpl, headers, "GET", `/books/${encodeURIComponent(bookId)}`, undefined, baseTimeout, baseSignal, callOpts)) as Promise<BooksBookIdReadOutput>,
-        replace: (input: BooksBookIdReplaceInput, callOpts?: CallOptions): Promise<BooksBookIdReplaceOutput> => (__request(baseUrl, fetchImpl, headers, "PUT", `/books/${encodeURIComponent(bookId)}`, input, baseTimeout, baseSignal, callOpts)) as Promise<BooksBookIdReplaceOutput>,
-        remove: (callOpts?: CallOptions): Promise<BooksBookIdRemoveOutput> => (__request(baseUrl, fetchImpl, headers, "DELETE", `/books/${encodeURIComponent(bookId)}`, undefined, baseTimeout, baseSignal, callOpts)) as Promise<BooksBookIdRemoveOutput>,
+        read: (callOpts?: CallOptions): Promise<BooksBookIdReadOutput> =>
+          __request(
+            baseUrl,
+            fetchImpl,
+            headers,
+            "GET",
+            `/books/${encodeURIComponent(bookId)}`,
+            undefined,
+            baseTimeout,
+            baseSignal,
+            callOpts,
+          ) as Promise<BooksBookIdReadOutput>,
+        replace: (
+          input: BooksBookIdReplaceInput,
+          callOpts?: CallOptions,
+        ): Promise<BooksBookIdReplaceOutput> =>
+          __request(
+            baseUrl,
+            fetchImpl,
+            headers,
+            "PUT",
+            `/books/${encodeURIComponent(bookId)}`,
+            input,
+            baseTimeout,
+            baseSignal,
+            callOpts,
+          ) as Promise<BooksBookIdReplaceOutput>,
+        remove: (callOpts?: CallOptions): Promise<BooksBookIdRemoveOutput> =>
+          __request(
+            baseUrl,
+            fetchImpl,
+            headers,
+            "DELETE",
+            `/books/${encodeURIComponent(bookId)}`,
+            undefined,
+            baseTimeout,
+            baseSignal,
+            callOpts,
+          ) as Promise<BooksBookIdRemoveOutput>,
       }),
-      list: (callOpts?: CallOptions): Promise<BooksListOutput> => (__request(baseUrl, fetchImpl, headers, "GET", `/books/list`, undefined, baseTimeout, baseSignal, callOpts)) as Promise<BooksListOutput>,
-      add: (input: BooksAddInput, callOpts?: CallOptions): Promise<BooksAddOutput> => (__request(baseUrl, fetchImpl, headers, "POST", `/books/add`, input, baseTimeout, baseSignal, callOpts)) as Promise<BooksAddOutput>,
+      list: (callOpts?: CallOptions): Promise<BooksListOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "GET",
+          `/books/list`,
+          undefined,
+          baseTimeout,
+          baseSignal,
+          callOpts,
+        ) as Promise<BooksListOutput>,
+      add: (input: BooksAddInput, callOpts?: CallOptions): Promise<BooksAddOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "POST",
+          `/books/add`,
+          input,
+          baseTimeout,
+          baseSignal,
+          callOpts,
+        ) as Promise<BooksAddOutput>,
     },
     catalog: {
-      search: (input: CatalogSearchInput, callOpts?: CallOptions): Promise<CatalogSearchOutput> => (__request(baseUrl, fetchImpl, headers, "GET", `/catalog/search`, input, baseTimeout, baseSignal, callOpts)) as Promise<CatalogSearchOutput>,
-      genres: (input: CatalogGenresInput, callOpts?: CallOptions): Promise<CatalogGenresOutput> => (__request(baseUrl, fetchImpl, headers, "GET", `/catalog/genres`, input, baseTimeout, baseSignal, callOpts)) as Promise<CatalogGenresOutput>,
+      search: (input: CatalogSearchInput, callOpts?: CallOptions): Promise<CatalogSearchOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "GET",
+          `/catalog/search`,
+          input,
+          baseTimeout,
+          baseSignal,
+          callOpts,
+        ) as Promise<CatalogSearchOutput>,
+      genres: (input: CatalogGenresInput, callOpts?: CallOptions): Promise<CatalogGenresOutput> =>
+        __request(
+          baseUrl,
+          fetchImpl,
+          headers,
+          "GET",
+          `/catalog/genres`,
+          input,
+          baseTimeout,
+          baseSignal,
+          callOpts,
+        ) as Promise<CatalogGenresOutput>,
     },
-  }
+  };
 }

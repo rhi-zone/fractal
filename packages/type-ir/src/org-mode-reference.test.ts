@@ -153,7 +153,13 @@ describe("org-mode-reference structural validity (bar A, Org-specific)", () => {
 
   it("every page filename is the kebab-case def name plus .org", () => {
     expect([...pages.keys()].sort()).toEqual(
-      ["task.org", "assignee.org", "priority.org", "activity-event.org", "project-board.org"].sort(),
+      [
+        "task.org",
+        "assignee.org",
+        "priority.org",
+        "activity-event.org",
+        "project-board.org",
+      ].sort(),
     );
   });
 });
@@ -252,7 +258,7 @@ describe("org-mode-reference — union def (ActivityEvent)", () => {
     // `to` is `"unassigned" | "reassigned"` (an inline enum) rendered into a
     // table cell — the raw " | " must become " \vert{} ", or it would split
     // the cell into extra (invalid) table columns.
-    expect(org).toContain('\\vert{}');
+    expect(org).toContain("\\vert{}");
   });
 });
 

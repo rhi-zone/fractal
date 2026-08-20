@@ -161,7 +161,10 @@ function buildTree(
     // container), so it's built as an OperationEntry directly instead of
     // recursing into buildTree, which would silently see an empty tree.
     out.param = isLeaf(subtree)
-      ? { name, operation: buildLeafEntry(subtree, path, name, nextCapturedArgs, types, namedTypes) }
+      ? {
+          name,
+          operation: buildLeafEntry(subtree, path, name, nextCapturedArgs, types, namedTypes),
+        }
       : { name, subtree: buildTree(subtree, [...path, name], nextCapturedArgs, types, namedTypes) };
   }
 

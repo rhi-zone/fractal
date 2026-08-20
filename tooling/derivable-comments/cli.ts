@@ -81,7 +81,9 @@ function main() {
     try {
       comments = extractComments(text, file);
     } catch (err) {
-      console.error(`skip ${path.relative(REPO_ROOT, file)}: parse error: ${(err as Error).message}`);
+      console.error(
+        `skip ${path.relative(REPO_ROOT, file)}: parse error: ${(err as Error).message}`,
+      );
       continue;
     }
     const selfPath = path.relative(REPO_ROOT, file);

@@ -160,13 +160,7 @@ describe("rst-reference structural validity (bar A, RST-specific)", () => {
 
   it("every page filename is the kebab-case def name plus .rst", () => {
     expect([...pages.keys()].sort()).toEqual(
-      [
-        "talk.rst",
-        "speaker.rst",
-        "track.rst",
-        "review-event.rst",
-        "program-committee.rst",
-      ].sort(),
+      ["talk.rst", "speaker.rst", "track.rst", "review-event.rst", "program-committee.rst"].sort(),
     );
   });
 });

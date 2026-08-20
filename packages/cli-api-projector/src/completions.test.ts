@@ -493,9 +493,7 @@ describe("generateBashCompletion", () => {
       const script = generateBashCompletion(tree, schemas, "cli");
       expect(script).toContain('STATICS["__root__"]="release notes\nplain\ncompletions"');
       expect(script).toContain('STATICS["release\\\\ notes"]="show"');
-      expect(script).toContain(
-        'ENUMS["release\\\\ notes show|--format"]="short\nlong form"',
-      );
+      expect(script).toContain('ENUMS["release\\\\ notes show|--format"]="short\nlong form"');
       expect(script).toContain("local IFS=$'\\n'");
     });
 
@@ -535,11 +533,7 @@ describe("generateBashCompletion", () => {
         },
       };
       const script = generateBashCompletion(tree, schemas, "cli");
-      const parts = await driveCompletion(
-        script,
-        ["cli", "widgets", "create", "--size", "ex"],
-        4,
-      );
+      const parts = await driveCompletion(script, ["cli", "widgets", "create", "--size", "ex"], 4);
       expect(parts).toEqual(["extra large"]);
     });
   });

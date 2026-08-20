@@ -141,8 +141,9 @@ tsconfig.json resolution … out of scope"). `tsconfig.json` is not in
 `program.getSourceFiles()`, so not in `files`. An edit to `paths`/`types`/
 `strict` can change extraction output; the cache still hits. Acknowledged only
 in an internal comment — the CLI's USAGE text says the cache covers "entry file
-+ every source file its extraction reads + TypeScript/fractal-type-ir versions"
-with no caveat.
+
+- every source file its extraction reads + TypeScript/fractal-type-ir versions"
+  with no caveat.
 
 ### 2.3 `writeCacheMetadata` silently untracks mismatched `reachable` paths
 
@@ -447,12 +448,12 @@ Commands: `build`/`watch`/`check` + `-schema` triplet. Flags: `-o`,
    blocks (:663-668) leaving java/kotlin/newtonsoft/dart/elm/elixir emitters
    string-only in practice. Weakest tier:
    `cross-projector.test.ts:188-198` asserts `typeof result === "string" &&
-   length > 0`, as its own header admits. mcp/cli `source.test.ts` are
+length > 0`, as its own header admits. mcp/cli `source.test.ts` are
    type-level only (asserted at `typecheck`, not `bun test`).
 5. **`examples/library-api`'s committed generated artifact has no CI gate.**
    Its `codegen:check` script (`package.json:17`) is never invoked by
    `.github/workflows/ci.yml`, so the committed `src/generated/
-   apply-validation.ts` (imported for real at `tree.ts:19`, `app.test.ts:32`)
+apply-validation.ts` (imported for real at `tree.ts:19`, `app.test.ts:32`)
    is unchecked against current codegen output. **[partly inferred]** a
    wrap-time fingerprint-mismatch mechanism may catch drift at runtime; not
    chased.

@@ -141,7 +141,6 @@ const ROOT_KEY = "__root__";
 // and a raw newline can't be typed as part of a single shell word at an
 // interactive prompt in the first place.
 
-
 function buildLevels(
   n: Node,
   schemas: SchemaMap,

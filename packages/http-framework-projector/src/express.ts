@@ -73,11 +73,7 @@ import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector";
 import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route";
-import {
-  safeKey,
-  typeBaseName,
-  schemaToType,
-} from "@rhi-zone/fractal-http-api-projector/codegen";
+import { safeKey, typeBaseName, schemaToType } from "@rhi-zone/fractal-http-api-projector/codegen";
 
 // ============================================================================
 // Public API

@@ -31,7 +31,7 @@ itself or built directly on it:
 A protocol projector (HTTP, CLI, MCP, GraphQL) never lives in this package — it depends on
 `api-tree`, never the reverse (`apply-validation.ts:24-28`). That asymmetry is why several
 mechanisms here (validation wiring, context shapes, OTel/auth adapters) are built to work
-*structurally*, without importing a single type from any projector package — see "Staying at
+_structurally_, without importing a single type from any projector package — see "Staying at
 the bottom of the dependency graph" below.
 
 ## The model
@@ -48,7 +48,7 @@ the tree is exactly what's authored. A consumer building a generic recursive pro
 an arbitrary `Node` should not assume leaf-xor-branch; `op()`'s return type does mark
 `handler` as required (narrower than `Node`'s own optional `handler?`) specifically so a
 conditional type can distinguish "produced by `op()`" from "produced by `api()` alone"
-(`node.ts:482-488`) — but that's a discriminator for *construction provenance*, not a
+(`node.ts:482-488`) — but that's a discriminator for _construction provenance_, not a
 guarantee that a node lacks the other field.
 
 **Metadata is an open, per-node bag — not a second source of truth.** `meta` holds only
@@ -79,7 +79,7 @@ fixed implication/conflict pass, `resolveTags`:
   this one asymmetry.
 
 Tag inheritance-by-position (a node picking up its nearest ancestor's tags) was deliberately
-*removed*: "a node's tags are exactly what's on the node — they do not depend on ancestors.
+_removed_: "a node's tags are exactly what's on the node — they do not depend on ancestors.
 Inheritance-by-position would break composability: moving a subtree would silently change its
 behavior" (`tags.ts:206-212`). `mapNodes`, a pre-order tree visitor, is the documented
 replacement primitive for a transform that explicitly wants to propagate something downward —
@@ -97,7 +97,7 @@ exempt a leaf from requiring a generated validator.
 (`op(fn, http.get, extraTags)`), deep-merged left-to-right via `mergeMeta`/`mergeRecords`
 (`node.ts:373-458`). The rules:
 
-- Later argument wins per key. `undefined` in a later bag *defers* — it does not clobber an
+- Later argument wins per key. `undefined` in a later bag _defers_ — it does not clobber an
   already-set value (`node.ts:406`).
 - Plain objects merge recursively; arrays concatenate, they don't replace (`node.ts:408-423`).
 - **Recursion is capped at depth 2.** A `meta.x.y` collision merges field-by-field, but a
@@ -107,7 +107,7 @@ exempt a leaf from requiring a generated validator.
   omitted. This is not an incidental limitation: an earlier unbounded runtime merge actually
   shipped, and it silently diverged from the (also depth-capped) type-level fold — composing
   two `http.source()` calls on the same param, where the second omits `key` relying on
-  `assemble()`'s "defaults to param name" behavior, resurrected the *first* call's stale `key`
+  `assemble()`'s "defaults to param name" behavior, resurrected the _first_ call's stale `key`
   at runtime while the type checker reported the correct (wholesale-replaced, no-`key`)
   result. The depth cap was added specifically to make the runtime match the type level
   (`node.ts:378-397`). **Consequence for an author:** composing two `meta.http.sourceMap`
@@ -115,13 +115,13 @@ exempt a leaf from requiring a generated validator.
   overwrite per colliding key, never a field-level merge — don't rely on a later contribution
   supplying only the field it wants to change.
 
-## `op()` checks the *merged* result, not each contribution individually
+## `op()` checks the _merged_ result, not each contribution individually
 
 When `op()`'s contributions declare required `LeafMeta` fields (e.g. a deployment that
 declaration-merges a required `scopes` field onto `LeafMeta`), the check runs against the
 `mergeMeta`'d result of all contributions together, not against each one separately
 (`node.ts:499-517` — see the surrounding doc comment). This is why a verb bundle
-(`http.get`) that carries no `scopes` of its own can still compose with a *sibling*
+(`http.get`) that carries no `scopes` of its own can still compose with a _sibling_
 contribution that does — checking each contribution in isolation would reject that
 composition even though the combined meta is valid.
 
@@ -149,17 +149,17 @@ something a caller can reorder per call (`input.ts:687-736`):
 2. An explicit `sourceMap` override.
 3. The primary-store convention for that protocol/method.
 
-**Consequence:** a handler param that happens to share a name with a path slug is *always*
+**Consequence:** a handler param that happens to share a name with a path slug is _always_
 bound from `path`, even if the author's intent was a `sourceMap` override for that same name —
 step 1 wins outright, before step 2 is even consulted. This has no compile-time signal; it's a
 runtime resolution-order fact, not visible from `assemble`'s or `op`'s type signatures.
 
 A related, explicitly-documented imprecision: for an HTTP field with no explicit `sourceMap`
 entry, on a non-GET/HEAD/DELETE method, `op()`'s own isolated-leaf view can only report a
-*union* of possible wire encodings (`WireOf<T,"query"> | WireOf<T,"json">`), because `op()`
+_union_ of possible wire encodings (`WireOf<T,"query"> | WireOf<T,"json">`), because `op()`
 cannot see the tree position it will eventually be mounted at, and a same-named path slug vs.
 a JSON-body field can decode differently (`input.ts:588-635`). This is called out in source as
-sound-but-imprecise, and is resolved *exactly* — not just narrowed — by `wire-derive.ts` at
+sound-but-imprecise, and is resolved _exactly_ — not just narrowed — by `wire-derive.ts` at
 codegen time, which has full tree-position visibility (see below). A consumer hand-authoring
 a custom decoder function against `op()`'s own inferred parameter type should expect the
 union, not a single resolved type.
@@ -169,7 +169,7 @@ union, not a single resolved type.
 `wire-derive.ts`, which computes each leaf's protocol/store binding at codegen time, reads a
 leaf's **local, pre-projection path segments** — never its final, post-`moveTo` mounted
 position — to derive the binding (`wire-derive.ts:9-19`). `http.moveTo` is purely an address
-transform; a leaf's field↔store binding is a pure function of its own *authored* ancestry,
+transform; a leaf's field↔store binding is a pure function of its own _authored_ ancestry,
 fixed before `moveTo` ever runs. This supersedes an earlier design where a relocated leaf's
 binding depended on where it ended up mounted — a real "why is it this way and not the
 obvious other way" decision: the obvious alternative (bind against final position) was tried
@@ -192,15 +192,15 @@ references still sitting in `discover.ts`/`tags.ts`.
 The current mechanism, as actually implemented:
 
 - `createApplyValidation(validators, wireValidators?)` returns a rewriter,
-  `applyValidation(key, tree, protocol?)`, that structurally walks a *projected* tree (an
+  `applyValidation(key, tree, protocol?)`, that structurally walks a _projected_ tree (an
   `HttpRoute`, or the raw `Node` tree for protocols with no separate projected type) and wraps
   each matching leaf's handler to run a generated `parse` before the real handler
   (`apply-validation.ts:1-34`).
 - **2-arg vs. 3-arg calls resolve against different maps, and the precedence is a real
   contract, not just documentation:** a 2-arg call (`protocol` omitted) resolves first against
   the hand-authored `ValidatorMap`, and only if absent there, falls back to `WireValidatorMap`
-  tagged `"identity"` — an omitted `protocol` argument is sugar for `"identity"` *at the
-  codegen layer itself*, not merely a documentation convention (`apply-validation.ts:416-441`).
+  tagged `"identity"` — an omitted `protocol` argument is sugar for `"identity"` _at the
+  codegen layer itself_, not merely a documentation convention (`apply-validation.ts:416-441`).
   A hand-authored `ValidatorMap` entry for a key always takes precedence over generated
   `identity`-profile coverage for that same key, even after codegen has run. A 3-arg call
   resolves exclusively against `WireValidatorMap`.
@@ -224,11 +224,11 @@ The current mechanism, as actually implemented:
   a deliberate "loud, not silent" choice.
 - **The decoder function itself never moves through codegen.** Codegen only detects whether a
   callable exists at a given `encodingMap` field (an existence check); the real closure is
-  read off the *live* tree's `meta` at wrap time. This is why a decoder can safely close over
+  read off the _live_ tree's `meta` at wrap time. This is why a decoder can safely close over
   runtime values (e.g. a request-scoped cache) even though codegen is aware of its presence
   (`build.ts:19-28`).
 - `GeneratedEntry` and `schema-build.ts`'s JSON-Schema `SchemaMap` are the only reified
-  artifacts in this package that look schema-shaped, but both are mechanically *derived* from
+  artifacts in this package that look schema-shaped, but both are mechanically _derived_ from
   the same extracted `TypeRef` (itself derived from real TS types + JSDoc) — never
   independently authored. They're kept as two separate generated modules specifically so a
   JSDoc-only edit doesn't dirty the compiled-validator module's generated bytes
@@ -247,13 +247,13 @@ without needing to trace intermediate local variables or generic instantiations
 exactly why `op()`'s return type deliberately narrows `handler` from `Node`'s
 declared-optional to required (`node.ts:482-488`).
 
-A small amount of AST access is still unavoidable: a leaf's underlying function *node* (for
+A small amount of AST access is still unavoidable: a leaf's underlying function _node_ (for
 JSDoc text and parameter/return annotations) has to come from the handler type's call
 signature's own `.declaration`, since the type system alone only ever gives back a resolved
 type, never the original source node (`tree.ts:19-24`).
 
 **Only two exported-tree shapes are recognized:** a top-level `export const x = api(...)`, or
-a top-level `export function f(...)` whose *last statement* is an unconditional return. Any
+a top-level `export function f(...)` whose _last statement_ is an unconditional return. Any
 other export shape — conditional returns, a multi-branch body — silently doesn't count as a
 tree export. A consumer writing a more elaborate tree-factory function needs to keep it to
 this shape or it won't be picked up by `hasTreeExport`/discovery at all.
@@ -266,9 +266,9 @@ elaborate types:
 
 - **`Result<T,E>` unwrapping is genuinely two-path**, forced by `skipLibCheck: true`: under
   that setting, TypeScript leaves alias instantiations like `Result<T,E>` "unresolved," so
-  the primary path is *syntactic* — it walks the function's own return-type annotation AST
+  the primary path is _syntactic_ — it walks the function's own return-type annotation AST
   node looking for a `TypeReference` literally named `"Result"` (handling
-  `Promise<Result<T,E>>`, renamed re-exports, and further local aliases). A *structural*
+  `Promise<Result<T,E>>`, renamed re-exports, and further local aliases). A _structural_
   fallback (exact `{kind:"ok"|"err"}` shape match) only fires for inferred/unannotated return
   types. A handler whose return type is annotated via a renamed local alias with no
   traceable `Result<...>` body in reach of the syntactic patterns will punt to `unknown`
@@ -294,13 +294,13 @@ uses a single character, so this is a real but currently-inert constraint.
 
 **This closes only derived-name collisions, not authored-override collisions.**
 `assertUniqueName` (`tree.ts:143-161`) still exists and still throws when two tree positions'
-*authored* overrides (`meta.mcp.name`/`meta.mcp.segment`/`meta.mcp.uri`) collide, because an
+_authored_ overrides (`meta.mcp.name`/`meta.mcp.segment`/`meta.mcp.uri`) collide, because an
 override supplies a final string outright, bypassing `escapeJoin` entirely
 (`tree.ts:485-490, 500-508`). A reader might assume `escapeJoin`'s injectivity makes
 `assertUniqueName` redundant; it does not — they cover two different collision sources.
 
 Also worth knowing: a bare tool/leaf name recovered by `extractToolSchemas`/
-`extractToolTypeRefs` is unique only *within one standalone tree*, "by convention" — it is not
+`extractToolTypeRefs` is unique only _within one standalone tree_, "by convention" — it is not
 safe to merge names across multiple files' trees composed into one root.
 `extractRouteSchemas`/`extractRouteTypeRefs`'s `treeId`-prefixed path keying exists
 specifically for that composed-root case (`tree.ts:833-871`); a first-time consumer building
@@ -311,7 +311,7 @@ a multi-file composed tree needs the path-keyed variant, not the name-keyed one.
 Despite the name, this module has nothing to do with which API-tree nodes are reachable via
 dispatch. It's a build-time TypeScript **module-graph** reachability utility: given one shared
 `ts.Program` spanning many entry files (a batch-codegen setup — one entry per domain slice), it
-computes each entry's own transitive *import closure* so the incremental build cache
+computes each entry's own transitive _import closure_ so the incremental build cache
 (`cache.ts`) can invalidate only the entries whose source actually changed, not the whole
 shared batch (`reachability.ts:1-11`). It works by reading `ts.SourceFile.imports` — an
 internal, undocumented field, not part of the public `SourceFile` interface, but verified
@@ -342,7 +342,7 @@ of the `extensions` option passed (`discover.ts:97-99, 138-142`).
 `context.ts`, `auth.ts`, and `otel.ts` all use the same trick to integrate tightly with
 projector-specific shapes (CLI/MCP context, auth adapters, OTel spans) without ever importing
 a type from a projector package (which would create the package cycle `api-tree` is supposed
-to sit underneath): each module redeclares the shape it needs *structurally* and relies on
+to sit underneath): each module redeclares the shape it needs _structurally_ and relies on
 TypeScript's structural typing to make the real projector type assignable with no import or
 cast. This is a consistent, named architectural pattern across the package, not three
 unrelated tricks — worth recognizing as one thing if you see it again elsewhere.
@@ -350,7 +350,7 @@ unrelated tricks — worth recognizing as one thing if you see it again elsewher
 One concrete behavioral contract riding on this: `auth.ts`'s `authLayer`/`authMiddleware`,
 given the same adapter object, transparently dedupe `adapter.resolve()` to at most one call
 per `(adapter, request)` pair via a `WeakMap` keyed on `Request` object identity. This only
-works because the framework threads the *same* `Request` instance unchanged through the whole
+works because the framework threads the _same_ `Request` instance unchanged through the whole
 `createFetch` composition chain — a caller who reconstructs a new `Request` object partway
 through their own middleware stack silently defeats the cache (it just re-resolves), with no
 error or signal that the dedup stopped applying.

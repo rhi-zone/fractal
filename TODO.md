@@ -199,13 +199,13 @@ _Open threads from a previous session. Treat as starting context, not instructio
   one for an owner, not something to resolve by more digging. Today regen is
   a one-shot script (`examples/library-api/scripts/generate-client.ts`, run
   via `bun run codegen:client`): `extractToolSchemas` + `generateClientFromNode`
-  + `Bun.write`, no CLI bin, no watch, no caching.
-  `packages/http-api-projector/package.json` has no codegen script of its own
-  at all — only `typecheck`/`test`/`test:watch`. Regen is only needed when the
-  route tree's shape or schemas change (new/changed ops, input/output types),
-  not on every save of unrelated code — the emitted `client.generated.ts`
-  carries a do-not-edit header and is consumed as a build artifact, never
-  hand-edited.
+  - `Bun.write`, no CLI bin, no watch, no caching.
+    `packages/http-api-projector/package.json` has no codegen script of its own
+    at all — only `typecheck`/`test`/`test:watch`. Regen is only needed when the
+    route tree's shape or schemas change (new/changed ops, input/output types),
+    not on every save of unrelated code — the emitted `client.generated.ts`
+    carries a do-not-edit header and is consumed as a build artifact, never
+    hand-edited.
 
   **Measured** (2026-08-16, `bun run scripts/generate-client.ts`, 5 runs,
   warm disk cache, no other load): consistently 550-600ms wall clock
@@ -222,16 +222,16 @@ _Open threads from a previous session. Treat as starting context, not instructio
   resolve it, it just makes the tradeoff concrete instead of speculative.
 
   **Reuse depth, read from `packages/api-tree/src/cli.ts`'s `watch <entry>
-  -o <output>` subcommand (~line 205) directly**: the `fs.watch`-on-dir +
+-o <output>` subcommand (~line 205) directly**: the `fs.watch`-on-dir +
   150ms debounce + rebuild + byte-diff-before-write + `SIGINT` shutdown loop
   (`runWatch`) is generic over an `ArtifactBuilder = (entryFile, outFile,
-  program: ts.Program) => string` — it already covers both the
+program: ts.Program) => string` — it already covers both the
   `applyValidation` and JSON-Schema builders via that same shape, so
-  extending it to a *third* builder of that exact shape would be close to
+  extending it to a _third_ builder of that exact shape would be close to
   mechanical. Client codegen doesn't fit that shape unmodified, though:
   `generate-client.ts` needs not just the statically-extracted `SchemaMap`
-  (`extractToolSchemas`, which *does* already accept a pre-built `program` —
-  reuse-compatible) but also the live `api` route-tree *object*, imported at
+  (`extractToolSchemas`, which _does_ already accept a pre-built `program` —
+  reuse-compatible) but also the live `api` route-tree _object_, imported at
   runtime (`import { api } from "../src/tree.ts"`), which
   `generateClientFromNode(api, schemas)` needs directly — the
   `applyValidation`/schema builders never touch a runtime import, only the
