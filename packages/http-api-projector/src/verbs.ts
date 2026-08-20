@@ -194,9 +194,11 @@ export function moveTo<const P extends string>(path: P): { readonly http: { read
  * extractor (extract.ts) and at client runtime by shape (`isPageShape`), the
  * same two-layer convention `AsyncIterable<T>` uses for streaming. Reach for
  * `paginated()` only to override a default the shape convention can't
- * express on its own — a non-default input field name for the
- * cursor/offset/limit, or an explicit style pin when a response genuinely
- * needs one:
+ * express on its own — a non-default input field name for the cursor/offset
+ * (the limit param has no equivalent: it's never read off the response or
+ * rewritten into a next-page URL, so it needs no override — see
+ * `docs/design/decisions.md`), or an explicit style pin when a response
+ * genuinely needs one:
  *
  * ```ts
  * op(listBooks, http.get, paginated({ style: "cursor", inputCursorParam: "after" }))

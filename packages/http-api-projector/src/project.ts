@@ -155,7 +155,6 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
     readonly style?: "cursor" | "offset";
     readonly inputCursorParam?: string;
     readonly inputOffsetParam?: string;
-    readonly inputLimitParam?: string;
   };
   /**
    * At-most-one — a Standard Schema (https://standardschema.dev/) validator

@@ -233,7 +233,6 @@ function paginatedDirectiveOf(meta: RouteLeafMeta):
       readonly style?: "cursor" | "offset";
       readonly inputCursorParam?: string;
       readonly inputOffsetParam?: string;
-      readonly inputLimitParam?: string;
     }
   | undefined {
   return meta.http?.paginated;

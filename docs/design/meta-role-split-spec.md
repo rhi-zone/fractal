@@ -156,7 +156,6 @@ export interface HttpLeafMetaProperties extends HttpSharedMetaProperties {
     style?: "cursor" | "offset";
     inputCursorParam?: string;
     inputOffsetParam?: string;
-    inputLimitParam?: string;
   };
   validate?: StandardSchemaV1;
   sourceMap?: SourceMap;

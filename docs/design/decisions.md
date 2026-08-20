@@ -5,7 +5,7 @@ Each entry: what was decided, why, and what evidence or prior work grounds it.
 
 ---
 
-## Customizable pagination field names exist to match arbitrary backend naming (2026-08-21)
+## `inputLimitParam` removed — cursor/offset's customizable name doesn't generalize to limit (2026-08-21)
 
 **Context:** `paginated()`'s `inputCursorParam`/`inputOffsetParam`/`inputLimitParam`
 options (`project.ts`'s `HttpLeafMetaProperties.paginated`) were added without any
@@ -16,22 +16,36 @@ and `inputOffsetParam` were wired into both `extensions/pagination.ts` (client,
 declared and documented in `directive-contract.md` but never wired up on either
 side.
 
-**Decision:** The customization exists to let a generated client match whatever
-pagination field names a target backend already uses, when that backend's API
-shape is fixed and not this framework's own choice to make — real-world APIs vary
-widely here: GitHub uses `page`/`per_page`, Stripe uses `starting_after`/`limit`,
-Twitter/X uses `cursor`/`max_results`, Shopify uses `page_info`/`limit`. That
-variance applies equally to the limit field as to cursor/offset — `per_page` vs.
-`limit` vs. `max_results` vs. `page_size` is exactly the same shape of naming
-disagreement `per_page` vs. `page_info` vs. `starting_after` is. There is no
-principled reason to expose the override for two of the three fields and leave the
-third aspirational. Going forward, `inputCursorParam`, `inputOffsetParam`, and
-`inputLimitParam` get equal treatment: all three are real, wired options, none
-selectively excluded.
+**Decision:** `inputCursorParam`/`inputOffsetParam` are customizable because of a
+specific mechanical need: pagination state (`cursor`, or `offset`+`items.length`)
+comes back on the *response*, and the framework has to read that value and write
+it into the *next-page* request under some param name — `nextRequestFor`
+(`extensions/pagination.ts`) and `pageLinkHeader` (`route.ts`) both do exactly
+this `url.searchParams.set(paramName, valueReadFromResponse)`. The param name is
+a free variable at that write site, so it needs a way to be told what name to use.
 
-**Evidence:** `inputLimitParam` wiring landed alongside this entry — see the
-following commit. `directive-contract.md`'s pagination row and
-`extensions/pagination.ts`'s module doc updated accordingly.
+`limit` has no equivalent write site. A next-page request is built by cloning the
+*original* request's URL (`new URL(original.url)` in `nextRequestFor`,
+`new URL(req.url)` in `pageLinkHeader`) and only overwriting the cursor/offset
+param on top — every other query param the caller sent, including whatever name
+they used for limit, survives into every later page automatically, because the
+framework never touches it. There is no response-side limit field to read (a page
+response carries `items`/`cursor`/`hasMore` or `items`/`offset`/`total`/`hasMore`,
+never an echoed limit), and no rewrite step for a name-override to attach to. So
+this isn't a case of picking not to expose the same customization for a third
+field — the mechanism cursor/offset's customization depends on (read off
+response, rewrite into next-page URL) structurally doesn't apply to limit, which
+is never touched by the framework in the first place.
+
+`inputLimitParam` is removed: `project.ts`/`route.ts`'s `paginated` meta type,
+`directive-contract.md`'s pagination row, and `verbs.ts`'s `paginated()` doc
+comment all drop the field.
+
+**Evidence:** `extensions/pagination.ts`'s `nextRequestFor` and `route.ts`'s
+`pageLinkHeader` — both read `page.cursor`/`page.offset` from the decoded
+response and `url.searchParams.set` it under the configurable name, then clone
+the rest of the original URL unchanged. Neither function reads or writes a limit
+param anywhere.
 
 ---
 
