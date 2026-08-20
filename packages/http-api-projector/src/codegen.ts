@@ -489,15 +489,18 @@ function buildTree(
 }
 
 // ============================================================================
-// Internal: naming helpers
+// Naming helpers — also imported by http-framework-projector's express.ts
+// and fastify.ts, which need the identical <Base>Input/<Base>Output naming
+// scheme for their own generated handler types. Exported (not internal) for
+// that reason; http-framework-projector already depends on this package.
 // ============================================================================
 
 /** A valid bare JS identifier, or a quoted string literal key otherwise. */
-function safeKey(key: string): string {
+export function safeKey(key: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
 }
 
-function pascalCase(part: string): string {
+export function pascalCase(part: string): string {
   return part
     .split(/[^A-Za-z0-9]+/)
     .filter((s) => s.length > 0)
@@ -506,7 +509,7 @@ function pascalCase(part: string): string {
 }
 
 /** `"books_bookId_read"` -> `"BooksBookIdRead"` — base name for that op's `<Base>Input`/`<Base>Output`. */
-function typeBaseName(codegenName: string): string {
+export function typeBaseName(codegenName: string): string {
   return codegenName.split("_").map(pascalCase).join("");
 }
 
@@ -516,7 +519,9 @@ function pathTemplateLiteral(path: string): string {
 }
 
 // ============================================================================
-// Internal: JSON Schema -> TypeScript type string
+// JSON Schema -> TypeScript type string — also imported by
+// http-framework-projector's express.ts/fastify.ts (see the naming-helpers
+// note above; same reasoning applies here).
 //
 // Deliberately a subset converter, matching the schema shapes `JsonSchema`
 // (packages/api-tree/src/extract.ts) actually has: primitives, object/array,
@@ -525,7 +530,7 @@ function pathTemplateLiteral(path: string): string {
 // `unknown`/`Record<string, unknown>` rather than guessing a shape.
 // ============================================================================
 
-function schemaToType(schema: JsonSchema | undefined, indent: string): string {
+export function schemaToType(schema: JsonSchema | undefined, indent: string): string {
   if (schema === undefined) return "unknown";
 
   if ("const" in schema) return JSON.stringify(schema.const);

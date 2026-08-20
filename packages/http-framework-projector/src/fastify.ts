@@ -90,6 +90,11 @@ import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector";
 import type { HttpRoute } from "@rhi-zone/fractal-http-api-projector/route";
+import {
+  safeKey,
+  typeBaseName,
+  schemaToType,
+} from "@rhi-zone/fractal-http-api-projector/codegen";
 
 // ============================================================================
 // Public API
@@ -317,26 +322,10 @@ function buildTree(
 }
 
 // ============================================================================
-// Internal: naming helpers — duplicated from express.ts (see its own doc)
+// Internal: naming helpers — safeKey/typeBaseName/schemaToType come from
+// http-api-projector's codegen.ts (identical shape needed here); the two
+// helpers below are specific to this router's own generated call sites.
 // ============================================================================
-
-/** A valid bare JS identifier, or a quoted string literal key otherwise. */
-function safeKey(key: string): string {
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? key : JSON.stringify(key);
-}
-
-function pascalCase(part: string): string {
-  return part
-    .split(/[^A-Za-z0-9]+/)
-    .filter((s) => s.length > 0)
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join("");
-}
-
-/** `"books_bookId_read"` -> `"BooksBookIdRead"` — base name for that op's `<Base>Input`/`<Base>Output`. */
-function typeBaseName(codegenName: string): string {
-  return codegenName.split("_").map(pascalCase).join("");
-}
 
 /** `.books.bookId.read` — dotted accessor chain onto the `handlers` argument. */
 function handlerAccessExpr(pathKeys: readonly string[], memberName: string): string {
@@ -349,69 +338,6 @@ function pathParamNames(path: string): string[] {
     .split("/")
     .filter((seg) => seg.startsWith(":"))
     .map((seg) => seg.slice(1));
-}
-
-// ============================================================================
-// Internal: JSON Schema -> TypeScript type string — duplicated from
-// express.ts (see its own doc: a subset converter matching the shapes
-// JsonSchema actually has; unrecognized shapes degrade to
-// unknown/Record<string, unknown>).
-// ============================================================================
-
-function schemaToType(schema: JsonSchema | undefined, indent: string): string {
-  if (schema === undefined) return "unknown";
-
-  if ("const" in schema) return JSON.stringify(schema.const);
-
-  const enumValues = schema.enum;
-  if (Array.isArray(enumValues)) {
-    if (enumValues.length === 0) return "never";
-    return enumValues.map((v) => JSON.stringify(v)).join(" | ");
-  }
-
-  const anyOf = schema.anyOf ?? schema.oneOf;
-  if (Array.isArray(anyOf)) {
-    if (anyOf.length === 0) return "unknown";
-    return anyOf.map((s) => schemaToType(s, indent)).join(" | ");
-  }
-
-  const allOf = (schema as { allOf?: JsonSchema[] }).allOf;
-  if (Array.isArray(allOf)) {
-    if (allOf.length === 0) return "unknown";
-    return allOf.map((s) => `(${schemaToType(s, indent)})`).join(" & ");
-  }
-
-  const type = schema.type;
-
-  const properties = schema.properties;
-  if (type === "object" || properties !== undefined) {
-    if (properties === undefined || Object.keys(properties).length === 0) {
-      return "Record<string, unknown>";
-    }
-    const required = new Set(schema.required ?? []);
-    const nextIndent = indent + "  ";
-    const lines = Object.entries(properties).map(([key, propSchema]) => {
-      const optional = required.has(key) ? "" : "?";
-      return `${nextIndent}readonly ${safeKey(key)}${optional}: ${schemaToType(propSchema, nextIndent)}`;
-    });
-    return `{\n${lines.join("\n")}\n${indent}}`;
-  }
-
-  const items = schema.items;
-  if (type === "array" || items !== undefined) {
-    return `Array<${schemaToType(items === false ? undefined : items, indent)}>`;
-  }
-
-  switch (type) {
-    case "string":
-      return "string";
-    case "number":
-      return "number";
-    case "boolean":
-      return "boolean";
-    default:
-      return "unknown";
-  }
 }
 
 // ============================================================================
