@@ -201,7 +201,8 @@ function fallbackNameLiteral(
  * Read a string-literal override at `meta.mcp.<key>` off a resolved node
  * TYPE — the type-level mirror of mcp-api-projector's own runtime read
  * (`getMcpMeta(child.meta).name` / `.segment`, project.ts), used here because
- * this walker only ever has a TYPE for a node, never a value. Returns
+ * this walker only ever has a TYPE for a node, never a value. Thin wrapper
+ * over `readMetaStringLiteral` below, fixed to the `mcp` namespace. Returns
  * `undefined` when `meta.mcp` isn't present on the type at all (nothing in
  * the entry file's import graph has declaration-merged it onto `Meta`), the
  * requested key isn't set, or it resolves to a non-literal `string` (e.g. a
@@ -215,21 +216,12 @@ function mcpMetaOverride(
   loc: ts.Node,
   checker: ts.TypeChecker,
 ): string | undefined {
-  const metaProp = checker.getPropertyOfType(nodeType, "meta");
-  if (!metaProp) return undefined;
-  const metaType = checker.getTypeOfSymbolAtLocation(metaProp, loc);
-  const mcpProp = checker.getPropertyOfType(metaType, "mcp");
-  if (!mcpProp) return undefined;
-  const mcpType = checker.getTypeOfSymbolAtLocation(mcpProp, loc);
-  const keyProp = checker.getPropertyOfType(mcpType, key);
-  if (!keyProp) return undefined;
-  const keyType = checker.getTypeOfSymbolAtLocation(keyProp, loc);
-  return keyType.isStringLiteral() ? keyType.value : undefined;
+  return readMetaStringLiteral(nodeType, "mcp", key, loc, checker);
 }
 
 /**
  * Read a string-literal value at `meta.<namespace>.<key>` off a resolved
- * `Node` TYPE — the SAME technique `mcpMetaOverride` above already uses for
+ * `Node` TYPE — the general form `mcpMetaOverride` above delegates to for
  * `meta.mcp.name`/`meta.mcp.segment`, generalized to an arbitrary namespace
  * (`http`, `cli`, ...) and key, for `apply-validation-build.ts`'s wire-
  * profile build path (`meta.http.method`/`meta.http.verb`, an
