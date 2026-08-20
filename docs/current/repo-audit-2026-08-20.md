@@ -1,6 +1,6 @@
 # Repo audit — 2026-08-20
 
-Read-only audit of the `@rhi-zone/fractal-*` monorepo, same lens as the the sibling codebase
+Read-only audit of the `@rhi-zone/fractal-*` monorepo, same lens as the sibling codebase
 sweep: what's there, what's inconsistent, what's broken, what's dead. Findings
 are ordered by severity within each section. Every finding is tagged
 **[evidenced]** (file:line read this session, or command output) or
@@ -35,7 +35,7 @@ fractal's own package location finds nothing. Result: **all 89 of the sibling co
 cache metadata files record `"typeIrVersion": "unknown"`**. Combined with the
 known hole (api-tree's own version isn't in the shape at all, §2.1), there is
 **no signal whatsoever** for "the generator changed" — a fractal-internal
-codegen change is invisible to every the sibling codebase cache check, forever, until a
+codegen change is invisible to every cache check in the sibling codebase, forever, until a
 tracked source file happens to change too.
 
 The tracked closure does incidentally include fractal's `dist/*.d.ts` (verified
@@ -389,7 +389,7 @@ Commands: `build`/`watch`/`check` + `-schema` triplet. Flags: `-o`,
    builders and calls `writeCacheMetadata` without `leafData` → the CLI writes
    cache files with empty `leafFingerprints`/`leafArtifacts`. The library's
    best path (the `*Incremental`/`*Cached` family) is bypassed by fractal's own
-   CLI — the same shape as the the sibling codebase hand-roll, from the other side.
+   CLI — the same shape as the sibling codebase hand-roll, from the other side.
 2. **Header divergence between the CLI and the library wrappers.** The CLI
    writes `GENERATED_HEADER + source` and caches those bytes; the cached
    wrappers write the raw source with **no header**
@@ -460,7 +460,7 @@ Commands: `build`/`watch`/`check` + `-schema` triplet. Flags: `-o`,
 
 ---
 
-## 8. The the sibling codebase boundary
+## 8. The sibling codebase boundary
 
 ### 8.1 the sibling codebase hand-rolls that shadow existing (dead) fractal surface — and why
 
@@ -490,7 +490,7 @@ Other hand-rolls of things fractal-shaped:
   `formatValidationErrors` formats fractal's own `ValidationError[]`; the shape
   was reverse-engineered empirically (per its own doc at :438-457, discovered
   via a failing smoke test, not source).
-- `the sibling codebaseErrors` (`errorEncoder.ts:538`) — documented as "fractal's
+- the sibling codebase's errors export (`errorEncoder.ts:538`) — documented as "fractal's
   `httpErrors` but matching `code`/`kind`/`type` instead of only `.kind`".
 - `wrapScopes`'s tree walk (`scopes.ts:1035-1060`) copies the recursive rebuild
   shape of the since-deleted `wrapValidators`; **[evidenced]** api-tree exports
