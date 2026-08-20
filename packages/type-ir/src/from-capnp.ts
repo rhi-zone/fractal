@@ -147,6 +147,12 @@ export type CapnpGroupMember = {
   readonly name: string;
   readonly ordinal?: number;
   readonly members: readonly CapnpMember[];
+  /** `struct`/`enum` declarations nested directly inside this group's body —
+   * a group is structurally just an inline, unnamed struct (see
+   * `convertMembers`'s doc comment), so it can carry the same nested-type
+   * declarations a struct body can. */
+  readonly nestedStructs: readonly CapnpStructDecl[];
+  readonly nestedEnums: readonly CapnpEnumDecl[];
   readonly annotations: readonly CapnpAnnotation[];
   readonly description?: string;
 };
@@ -449,6 +455,8 @@ class Parser {
         name,
         ...(ordinal !== undefined ? { ordinal } : {}),
         members,
+        nestedStructs,
+        nestedEnums,
         annotations: [],
         ...(description !== undefined ? { description } : {}),
       };
@@ -598,7 +606,13 @@ function registerFromMembers(
   registry: Map<string, RegistryEntry>,
 ): void {
   for (const m of members) {
-    if (m.kind === "group") registerFromMembers(m.members, scope, registry);
+    if (m.kind === "group") {
+      // Same scope as the enclosing struct — a group is transparent for
+      // naming purposes, matching how `registerDecls` qualifies a struct's
+      // own nested decls.
+      registerDecls(m.nestedStructs, m.nestedEnums, scope, registry);
+      registerFromMembers(m.members, scope, registry);
+    }
   }
 }
 

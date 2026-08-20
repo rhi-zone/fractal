@@ -214,6 +214,31 @@ describe("groups", () => {
     expect(inner.street?.shape.kind).toBe("string");
     expect(inner.city?.shape.kind).toBe("string");
   });
+
+  // Regression: a struct/enum declared directly inside a group's body (a
+  // group is structurally just an inline, unnamed struct, so it can carry
+  // the same nested-type declarations a struct body can) must get
+  // registered under the enclosing struct's dotted path, the same as a
+  // struct declared directly inside a struct — see "nested structs" above.
+  test("struct declared inside a group is registered and resolvable via ref", () => {
+    const defs = fromCapnp(`
+      struct Person {
+        contact :group {
+          method @0 :Method;
+
+          struct Method {
+            kind @0 :Text;
+          }
+        }
+      }
+    `);
+    expect(defs["Person.Method"]).toBeDefined();
+    expect(fields(defs["Person.Method"]!).kind?.shape.kind).toBe("string");
+    const contact = field(fields(defs.Person!), "contact");
+    const methodField = field(fields(contact), "method");
+    expect(methodField.shape.kind).toBe("ref");
+    expect((methodField.shape as { target: string }).target).toBe("Person.Method");
+  });
 });
 
 describe("lists", () => {
