@@ -862,7 +862,7 @@ async function __request(
   const signal = __resolveSignal(baseTimeout, baseSignal, callOpts) ?? null
 
   let url: string
-  const init: RequestInit = { method, headers: { ...(headers ?? {}) }, signal }
+  const init: RequestInit = { method, headers: { ...headers }, signal }
 
   if (method === "GET" || method === "HEAD" || method === "DELETE") {
     // Input goes into query params for read-only/deletion ops.

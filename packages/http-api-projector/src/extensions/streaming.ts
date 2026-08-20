@@ -239,7 +239,7 @@ async function* __requestStream(
   const signal = __resolveSignal(baseTimeout, baseSignal, callOpts) ?? null
 
   let url: string
-  const init: RequestInit = { method, headers: { ...(headers ?? {}) }, signal }
+  const init: RequestInit = { method, headers: { ...headers }, signal }
 
   if (method === "GET" || method === "HEAD" || method === "DELETE") {
     const isAbsolute = baseUrl.startsWith("http")
