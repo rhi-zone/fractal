@@ -1433,7 +1433,7 @@ function clusterCompleteLinkage(
   const n = samples.length;
 
   // Base pairwise distance matrix over original sample indices.
-  const base: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  const base: number[][] = Array.from({ length: n }, () => Array.from({ length: n }, () => 0));
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const d = objectSplitDistance(keySets[i]!, keySets[j]!);
@@ -1447,9 +1447,9 @@ function clusterCompleteLinkage(
   // (maintained incrementally via the complete-linkage merge-update rule,
   // rather than recomputed from scratch after every merge).
   const members: number[][] = Array.from({ length: n }, (_, i) => [i]);
-  const active = new Array<boolean>(n).fill(true);
+  const active = Array.from({ length: n }, () => true);
   const dist: number[][] = Array.from({ length: n }, (_, i) => {
-    const row = new Array<number>(n).fill(Infinity);
+    const row = Array.from({ length: n }, () => Infinity);
     for (let j = 0; j < n; j++) if (j !== i) row[j] = base[i]![j]!;
     return row;
   });

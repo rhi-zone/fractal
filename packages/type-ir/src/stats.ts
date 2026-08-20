@@ -39,7 +39,7 @@ export function stddev(values: readonly number[]): number {
 }
 
 function resample<T>(values: readonly T[], rng: Rng): T[] {
-  const out: T[] = new Array(values.length);
+  const out: T[] = Array.from({ length: values.length });
   for (let i = 0; i < values.length; i++) out[i] = values[Math.floor(rng() * values.length)]!;
   return out;
 }
@@ -79,7 +79,7 @@ export function bootstrapCI(
   const point = mean(values);
   if (values.length === 0) return { point, low: point, high: point, level };
   const resamples = options?.resamples ?? 2000;
-  const means: number[] = new Array(resamples);
+  const means: number[] = Array.from({ length: resamples });
   for (let i = 0; i < resamples; i++) means[i] = mean(resample(values, rng));
   means.sort((a, b) => a - b);
   const alpha = (1 - level) / 2;
@@ -130,7 +130,7 @@ export function pairedBootstrapTest(
   }
 
   const resamples = options?.resamples ?? 2000;
-  const resampledMeans: number[] = new Array(resamples);
+  const resampledMeans: number[] = Array.from({ length: resamples });
   for (let i = 0; i < resamples; i++) resampledMeans[i] = mean(resample(diffs, rng));
   resampledMeans.sort((a2, b2) => a2 - b2);
 

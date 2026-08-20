@@ -894,7 +894,7 @@ function levenshteinDistance(a: string, b: string): number {
   const cols = b.length + 1;
   const dp: number[][] = [];
   for (let i = 0; i < rows; i++) {
-    const row = new Array<number>(cols).fill(0);
+    const row = Array.from({ length: cols }, () => 0);
     row[0] = i;
     dp.push(row);
   }
