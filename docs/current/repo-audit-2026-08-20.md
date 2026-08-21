@@ -11,32 +11,48 @@ Context folded in (established before this audit, not re-derived):
 
 - `extractToolSchemas`/`extractToolTypeRefs` had an optional `treeId` nobody
   threaded → same-named leaves in different trees collided; made mandatory in
-  `b20ff00`. The sibling path-keyed fix (`5de8117`) made treeId prefixing
-  automatic and never recurred — the opt-in one did. That contrast (opt-in vs
+  `280ae55` (doc originally cited `b20ff00`, which is not a commit in this
+  repo's history). The path-keyed sibling family (`extractRouteTypeRefs`/
+  `extractRouteSchemas`, fixed in `423b8fa`) made treeId prefixing automatic
+  and never recurred — the opt-in one did. That contrast (opt-in vs
   structural correctness) is used as a template in §4.
 - `buildWireApplyValidationModuleCached`/`writeWireApplyValidationModuleCached`
-  (`packages/api-tree/src/apply-validation-build.ts:1043,1087`) are exported and
-  called by nothing; the sibling codebase hand-reimplements the sequence.
-- `checkCache` gates on `ts.version` + `@rhi-zone/fractal-type-ir`'s version but
-  not `fractal-api-tree`'s own; both pinned at a never-bumped `0.1.0-alpha.0`.
+  (`packages/api-tree/src/apply-validation-build.ts`) were exported and
+  called by nothing at audit time. **Since fixed**: `cli.ts` now calls
+  `buildWireApplyValidationModuleCached` directly (see §6.1, which needs the
+  same update). Whether the sibling codebase still separately
+  hand-reimplements the sequence was not re-checked this pass — no sibling
+  checkout was available.
+- `checkCache` gated on `ts.version` + `@rhi-zone/fractal-type-ir`'s version
+  but not `fractal-api-tree`'s own. **Since fixed**: `cache.ts` now also
+  gates on `apiTreeVersion` (`CacheFileShape.apiTreeVersion`, checked via
+  `resolvePackageVersion("@rhi-zone/fractal-api-tree", entryFile)`), with a
+  doc comment on the field citing this audit's §1.1/§2.1 by name as the
+  reason it was added. Both packages' versions are still pinned at a
+  never-bumped `0.1.0-alpha.0`.
 
 ---
 
 ## 1. Live issues affecting the sibling codebase right now
 
-### 1.1 The cache's only toolchain guard is inert in the sibling codebase — `typeIrVersion` is always `"unknown"`
+### 1.1 The cache's only toolchain guard is inert in the sibling codebase — `typeIrVersion` is always `"unknown"` [**partially stale — see update below**]
 
-**[evidenced]** `resolvePackageVersion` (`packages/api-tree/src/cache.ts:156-177`)
+**[evidenced at audit time]** `resolvePackageVersion` (`packages/api-tree/src/cache.ts`)
 does `require.resolve("@rhi-zone/fractal-type-ir")` from cache.js's own location
 and returns `"unknown"` on failure — documented in-code as
 "stable-but-not-invalidating". In the sibling codebase, the only `@rhi-zone` links live at
 `apps/web/node_modules/@rhi-zone/` (symlinks into this repo); resolution from
-fractal's own package location finds nothing. Result: **all 89 of the sibling codebase's
-cache metadata files record `"typeIrVersion": "unknown"`**. Combined with the
-known hole (api-tree's own version isn't in the shape at all, §2.1), there is
-**no signal whatsoever** for "the generator changed" — a fractal-internal
-codegen change is invisible to every cache check in the sibling codebase, forever, until a
-tracked source file happens to change too.
+fractal's own package location finds nothing. Result at audit time: **all 89 of
+the sibling codebase's cache metadata files recorded `"typeIrVersion": "unknown"`**.
+
+**Update**: the known hole this combined with — api-tree's own version wasn't
+in the cache shape at all — is now closed (§2.1): `checkCache`/`toolchainMatches`
+gate on `apiTreeVersion` too, via the same `resolvePackageVersion` helper.
+**[inferred, not re-verified — no sibling checkout available this pass]** since
+`apiTreeVersion` resolves the same way `typeIrVersion` did, it would plausibly
+also read `"unknown"` under the sibling's symlink layout, meaning the fix adds
+a second inert signal rather than a working one. This needs re-checking
+against the sibling codebase's current cache metadata files before it's stated as fact.
 
 The tracked closure does incidentally include fractal's `dist/*.d.ts` (verified
 by reading `fractalMergedValidators.generated.ts.cache.json` — 3,094 files,
@@ -44,54 +60,70 @@ including `packages/type-ir/dist/derive.d.ts`, `packages/api-tree/dist/tree.d.ts
 so fractal's **type surface** is fingerprinted. Its **runtime codegen logic**
 (the `.js` that actually emits the artifact) is not.
 
-### 1.2 Schema Tier-2 fingerprint omits `description` — silent stale descriptions
+### 1.2 Schema Tier-2 fingerprint omitted `description` — silent stale descriptions [**fixed since audit**]
 
-**[evidenced]** `buildSchemaModuleSourceIncremental`'s per-leaf fingerprint is
-`{input, output}` only (`packages/api-tree/src/schema-build.ts:159-162`), but
-the artifact it carries forward embeds `info.description`
-(`toolSchemaFrom`, `schema-build.ts:121-125`). So on any Tier-1 miss where a
+**[evidenced, historical]** `buildSchemaModuleSourceIncremental`'s per-leaf
+fingerprint was `{input, output}` only, but the artifact it carries forward
+embeds `info.description` (`toolSchemaFrom`). So on any Tier-1 miss where a
 tool's types didn't change but its **description did**, the prior artifact —
-old description included — is reused verbatim, and the generated schema module
-silently keeps the stale text. The CLI's `build-schema` path is immune (it's
-non-incremental), but the sibling codebase's schema codegen runs the incremental sequence
-(`apps/web/scripts/codegen-fractal-validators.ts:485-505`), so this is live
-there. The validator-side fingerprint is more complete
-(`{input, protocol, derivation, hookFields}`,
-`apply-validation-build.ts:990-995`) — the two artifacts' fingerprint
-completeness was hand-maintained separately and diverged.
+old description included — was reused verbatim, and the generated schema
+module silently kept the stale text.
 
-### 1.3 Builder options are not part of the cache key at all
+**This is fixed.** `buildSchemaModuleSourceIncremental`'s fingerprint (in
+`packages/api-tree/src/schema-build.ts`) now includes `description` alongside
+`input`/`output`, with an inline comment citing this audit's §1.2 by name as
+the reason. `toolSchemaFrom` is unchanged in behavior, just moved a few lines.
+The validator-side fingerprint remains more complete
+(`{input, protocol, derivation, hookFields}`, in
+`apply-validation-build.ts`'s leaf-fingerprint computation) — the two
+artifacts' fingerprint completeness was hand-maintained separately and had
+diverged; that divergence is what this fix closed for the schema side.
+Whether the sibling codebase's schema codegen path
+(`apps/web/scripts/codegen-fractal-validators.ts`, incremental sequence) has
+picked up the fix was not re-verified this pass — no sibling checkout
+available.
 
-**[evidenced]** `CacheFileShape` (`cache.ts:244+`) has no field for build
-options, and `checkCache(entryFile, outFile, opts)` consults nothing else.
-Consequences:
+### 1.3 Builder options were not part of the cache key at all [**fixed since audit**]
+
+**[evidenced, historical]** `CacheFileShape` had no field for build options,
+and `checkCache(entryFile, outFile, opts)` consulted nothing else. Consequences
+at audit time:
 
 - `fractal-api-tree build-schema e -o out --tree-id A`, then the same command
   with `--tree-id B`: Tier-1 **hit** — tree B is never built; tree A's artifact
-  is served as "up to date". Same forgotten-parameter family as the `b20ff00`
+  is served as "up to date". Same forgotten-parameter family as the `280ae55`
   treeId collision, one layer up.
 - `runtimeImport` (validator build option): change it between runs → hit → old
   import emitted indefinitely.
 - `shouldShare`: same (fingerprints would move on a miss, but Tier 1 hits first
   since no input file changed).
 
+**This is fixed.** `CacheFileShape` now carries a `buildOptionsKey: string`
+field, checked by both `checkCache` and `toolchainMatches`, with a doc comment
+citing this audit's §1.3/§4 by name as the motivating finding.
+
 ### 1.4 the sibling codebase-side bug found in passing: a documented-at-length argument that doesn't exist
 
-**[evidenced]** `apps/web/scripts/codegen-fractal-validators.ts:146` imports
+<!-- CITATION UNVERIFIED: this whole finding is about apps/web/scripts/codegen-fractal-validators.ts (`defaultShouldShare`, :146, :431-445), which lives in the sibling repo. No sibling checkout was available this pass (checked all sibling directories under ~/git/rhizone/ — no apps/web anywhere on disk), so this could not be re-verified against current sibling-repo state. The fractal-side half of the claim — that `buildSchemaModuleSource`/`buildSchemaModuleSourceIncremental` in packages/api-tree/src/schema-build.ts have no `shouldShare` parameter — was spot-checked and still holds (schema-build.ts, current source). Leaving the original claim below as-is pending a sibling-repo recheck. -->
+
+**[evidenced at audit time]** `apps/web/scripts/codegen-fractal-validators.ts:146` imports
 `defaultShouldShare`, and `:431-445` carries a long comment explaining why it's
 passed for the recursive-`Expr` case — but `buildSchemaModuleSource`
-(`schema-build.ts:64`) and `buildSchemaModuleSourceIncremental` (`:145`) have
-**no `shouldShare` parameter**. The value is never used; the comment asserts a
-falsehood. Nothing catches it: apps/web's tsconfig `include: ["src"]` excludes
-`scripts/`, and `noUnusedLocals` is off. (The merged-validators script is fine —
-it goes through apply-validation-build, which does accept `shouldShare`.)
+and `buildSchemaModuleSourceIncremental` (both in `packages/api-tree/src/schema-build.ts`,
+current source checked) have **no `shouldShare` parameter**. The value is never
+used; the comment asserts a falsehood. Nothing catches it: apps/web's tsconfig
+`include: ["src"]` excludes `scripts/`, and `noUnusedLocals` is off. (The
+merged-validators script is fine — it goes through apply-validation-build,
+which does accept `shouldShare`.)
 
 ### 1.5 the sibling codebase CI checks fractal out at floating `master` with no dist build step
 
-**[evidenced that the step is missing; consequence unverified]** Every api-tree
-export points at `./dist/*.js` (`packages/api-tree/package.json:31-100`,
-`files: ["dist"]`), `dist/` is gitignored and untracked, and there is no
-`prepare` script. the sibling codebase CI (`.github/workflows/ci.yml:56-58`) checks fractal
+<!-- CITATION UNVERIFIED: `.github/workflows/ci.yml:56-58` here refers to the sibling repo's CI workflow (fractal checking itself out makes no sense), which was not available to re-check this pass — no sibling checkout found on disk. -->
+
+**[evidenced that the step is missing at audit time; consequence unverified]** Every api-tree
+export points at `./dist/*.js` (`packages/api-tree/package.json`,
+`files: ["dist"]` — spot-checked, still current), `dist/` is gitignored and
+untracked, and there is no `prepare` script. the sibling codebase CI checks fractal
 out at `ref: master` — floating, not pinned — and runs
 `bun install --frozen-lockfile` with no `build:packages` step found anywhere in
 the workflow. Whether bun's workspace-symlink resolution papers over the missing
@@ -99,7 +131,9 @@ dist was **not** verified this session; flagged as-is.
 
 ### 1.6 The stale merged-validators artifact: real, but NOT cleanly attributable to the cache bug
 
-**[evidenced state, inferred attribution]** At audit time,
+<!-- Note: this finding describes a transient working-tree snapshot in the sibling repo at audit time (mtime ordering, a hand-recomputed hash at that moment) — not a durable citation target even in principle. No sibling checkout was available to re-check it this pass, and nothing more durable to point at exists for this kind of point-in-time observation; left as historical record. -->
+
+**[evidenced state at audit time, inferred attribution]** At audit time,
 `apps/web/src/_generated/fractalMergedValidators.generated.ts` is stale w.r.t.
 the working tree: the uncommitted `api-fractal/classes.ts:322` change
 (`priceCents: number` → `price: { amountMinor; currency }`) is absent — the
