@@ -65,9 +65,9 @@ generated `parse()` a leaf's handler is wrapped with actually _does_.
 universal from-string coercion rule set, applied identically regardless of
 which protocol the value arrived over:
 
-- `booleanLeaf` (compile.ts:504–520): `"true"`/`"false"` string coercion.
-- `numberFamilyLeaf` (compile.ts:480–502): any numeric string via `Number(v)`.
-- `dateLeaf` (compile.ts:458–474): any string via `new Date(v)`.
+- `booleanLeaf` (type-ir/src/compile.ts): `"true"`/`"false"` string coercion.
+- `numberFamilyLeaf` (type-ir/src/compile.ts): any numeric string via `Number(v)`.
+- `dateLeaf` (type-ir/src/compile.ts): any string via `new Date(v)`.
 
 This is wrong because coercion posture is **wire-shaped**, not universal:
 
@@ -88,14 +88,16 @@ Two projectors independently noticed this gap and grew their own divergent
 coercion, each disabling itself where the other's mechanism already ran
 (the `isApplyValidationWrapped` sniff):
 
-- `cli-api-projector/src/cli.ts`'s `coerceInput` (~826–964) walks the JSON
-  Schema and additionally accepts a **loose boolean set**:
-  `"1"`/`"yes"` → `true`, `"0"`/`"no"` → `false` (cli.ts:917–923) — a
-  strictly wider vocabulary than `compile.ts`'s own `"true"`/`"false"`.
-- `mcp-api-projector/src/server.ts`'s `validateAgainstSchema` (~120–205) does
-  the opposite: a bare `typeof` gate, no coercion at all — correct for MCP's
+- `cli-api-projector/src/cli.ts`'s `coerceInput` walked the JSON Schema and
+  additionally accepted a **loose boolean set**: `"1"`/`"yes"` → `true`,
+  `"0"`/`"no"` → `false` (`coerceScalar`) — a strictly wider vocabulary than
+  `compile.ts`'s own `"true"`/`"false"`.
+- `mcp-api-projector/src/server.ts`'s `validateAgainstSchema` did the
+  opposite: a bare `typeof` gate, no coercion at all — correct for MCP's
   typed JSON wire, but a hand-rolled reimplementation of a `type`-kind
   `ValidationError` living outside `compile.ts`'s error taxonomy entirely.
+  (Both fallbacks are gone as of phase C — see "Projector migration" under
+  "Implementation trace (phase C)" below.)
 
 Both fallbacks, and the sniff that makes them mutually exclusive with the
 generated validator, are retired by this design (see "What goes away"
@@ -270,10 +272,13 @@ per-argv dispatch shape actually allows precomputing.
 
 ### Implementation checkpoint — RESOLVED (verified, 2026-08)
 
-`verbs.ts`'s `source()` doc comment (~296–306) stated that `moveTo`/`paginated`
-chose directive-array authoring for "literal-type preservation" reasons
-distinct from `source()`'s own index-signature-recursion reason (see
-`VerbBundle`'s doc comment). Flat scalar keys were assumed, in this design, to
+`http-api-projector/src/verbs.ts`'s `source()` doc comment used to state that
+`moveTo`/`paginated` chose directive-array authoring for "literal-type
+preservation" reasons distinct from `source()`'s own index-signature-recursion
+reason (see `VerbBundle`'s doc comment) — that doc comment has since been
+rewritten to describe the post-migration flat-key `source()` directly (it no
+longer discusses directive-array authoring at all), so this paragraph is now
+a historical record of the question, not a live pointer into the comment. Flat scalar keys were assumed, in this design, to
 fold literal types through `FoldMeta`/`MergeMetaValue` just as cleanly as the
 directive-tuple shape does. Re-verified with an actual `tsc` scratch repro
 (not reasoned from memory) before the migration landed: CONFIRMED — flat
@@ -426,14 +431,15 @@ Per the settled decisions:
    (`numberFamilyLeaf`/`booleanLeaf`/`dateLeaf`'s string-coercion branches)
    — superseded by the profile-driven `validateEncoding`/`decode` stages.
 2. `cli-api-projector/src/cli.ts`'s `coerceInput`/`applyDefaults`/
-   `validateRequired` fallback (~826–1010ish) — its schema-walking coercion,
+   `validateRequired` fallback — its schema-walking coercion,
    its loose boolean set, its defaults-fill, and its required-field check
    all move into the generated layer.
-3. `mcp-api-projector/src/server.ts`'s `validateAgainstSchema` (~120–205)
+3. `mcp-api-projector/src/server.ts`'s `validateAgainstSchema`
    fallback — its hand-rolled `typeof` gate and its parallel, non-taxonomy
    error strings.
-4. `isApplyValidationWrapped` (apply-validation.ts:112–114) and every call
-   site that sniffs it (`cli.ts:1180`, `server.ts:1065`) — the exclusivity
+4. `isApplyValidationWrapped` (`apply-validation.ts`) and every call
+   site that sniffs it (`cli-api-projector/src/cli.ts`,
+   `mcp-api-projector/src/server.ts`) — the exclusivity
    this sniff exists to enforce (generated validator XOR fallback) has no
    reason to exist once there is no fallback to be exclusive WITH. Decode
    and validation run unconditionally on every leaf; nothing overlaps
@@ -457,7 +463,7 @@ not how or where it's wired on.
 
 Decoders are generated code — a fresh checkout with no codegen run yet has
 no decoder to run. The stub module (`applyValidationStubSource`,
-apply-validation-build.ts:435–450) is a pass-through over an empty
+`api-tree/src/apply-validation-build.ts`) is a pass-through over an empty
 validator map; with the fallbacks deleted, a leaf under an unregistered key
 gets NO decode and NO validation until codegen runs once — raw wire values
 reach the handler directly. This is the existing stub's documented
@@ -515,7 +521,7 @@ composition rule (protocol default ⊕ override) differently:
   (`(w: FieldValidWire) => TField`), not JSON-serializable data — the
   scanner doesn't need to EXECUTE it, only find and re-emit a reference to
   it in the generated module, exactly like `guardAnnotation`
-  (compile.ts:863–874) already does for `typeName`/`declarationFile`
+  (`type-ir/src/compile.ts`) already does for `typeName`/`declarationFile`
   cross-references. `traceNodeType`'s own doc comment is explicit that
   cross-file resolution is out of scope for THIS phase ("declare the tree…
   in the entry file, or call `applyValidation` in the file that declares
@@ -638,14 +644,20 @@ option's tradeoff below) for anyone currently relying on it.
 
 - **Strict** (`"true"`/`"false"` only) — smaller surface, no case-sensitivity
   or abbreviation debate (`"y"`/`"yes"`/`"Y"`?), matches JSON boolean
-  literal spelling exactly. This is `compile.ts`'s CURRENT universal
-  behavior (`booleanLeaf`, compile.ts:504–520).
-- **Loose** (`"1"`/`"0"`/`"yes"`/`"no"` in addition) — matches
-  `cli-api-projector`'s OWN divergent coercion being deleted by this design
-  (`coerceScalar`, cli.ts:917–923: `"true"`/`"1"`/`"yes"` → true;
-  `"false"`/`"0"`/`"no"` → false), so choosing loose as the CLI default
-  profile is behavior-preserving for existing CLI consumers; choosing
-  strict is a breaking change for anyone currently passing `--flag=1`.
+  literal spelling exactly. This was `compile.ts`'s universal behavior at the
+  time this decision was made (`booleanLeaf`, `type-ir/src/compile.ts`) — the
+  strict pick landed for argv as its own dedicated wire-decode functions
+  (`argvProfile`'s `argvBoolLeaf`, `queryProfile`'s
+  `strictBoolFromStringLeaf`, both `type-ir/src/compile.ts`), not `booleanLeaf`
+  reused directly, since argv additionally accepts the bare `true`
+  presence-sentinel that `booleanLeaf` doesn't need to know about.
+- **Loose** (`"1"`/`"0"`/`"yes"`/`"no"` in addition) — matched
+  `cli-api-projector`'s OWN divergent coercion, since deleted by this design
+  (`coerceScalar`, `cli-api-projector/src/cli.ts`: `"true"`/`"1"`/`"yes"` →
+  true; `"false"`/`"0"`/`"no"` → false), so choosing loose as the CLI default
+  profile would have been behavior-preserving for existing CLI consumers;
+  strict, the pick actually made, is a breaking change for anyone who was
+  passing `--flag=1`.
 
 Prior art, briefly: zod's `z.coerce.boolean()` is the canonical cautionary
 tale here — it coerces via JS truthiness (`Boolean(v)`), so ANY non-empty
@@ -675,31 +687,42 @@ RESOLVED (see that section). Three more implementation-relevant facts worth
 surfacing for whoever builds the staged decode/validate work itself (not
 conflicts, just detail the settled list assumed but didn't spell out):
 
-- CLI's live-per-dispatch `getCliMeta` read (`cli.ts`, inside `runCli`'s
-  per-request path — e.g. the `getCliMeta` call at `cli.ts:1172`, reading
-  `sourceMap` fresh on every dispatch rather than once at projection time) is
-  confirmed, by direct read, to be exactly what the meta-unification arc's
-  "resolution lifecycle unifies on snapshot-at-projection" item describes —
-  no test or doc reference to this being intentional was found in the same
-  pass, consistent with the settled list's own characterization of it as an
-  artifact rather than a load-bearing behavior.
+- CLI's live-per-dispatch `getCliMeta` read (`cli-api-projector/src/cli.ts`,
+  inside `runCli`'s per-request path, reading `sourceMap` fresh on every
+  dispatch rather than once at projection time) was confirmed, by direct
+  read, to be exactly what the meta-unification arc's "resolution lifecycle
+  unifies on snapshot-at-projection" item describes — no test or doc
+  reference to this being intentional was found in the same pass, consistent
+  with the settled list's own characterization of it as an artifact rather
+  than a load-bearing behavior. That item has since landed (see "Resolution
+  lifecycle unifies on snapshot-at-projection" above): `runCli` now reads
+  `target.sourceMap`, the snapshot `resolveLeaf` populates once per
+  invocation, and `getCliMeta` is no longer called for `sourceMap` on the
+  per-request path at all (its remaining call sites read other leaf-meta
+  fields, e.g. `.paginated`).
 
 - `compile.ts`'s `numberFamilyLeaf`/`booleanLeaf`/`dateLeaf` already draw
   exactly the `type` vs. `coerce` error distinction the staged model wants
   between `validateEncoding` and decode failures — "a string that failed to
   parse as a number is a coercion failure; any other wrong type… is a type
-  error" (compile.ts:493–496 comment). The staged split doesn't need to
-  invent this distinction; it needs to relocate it to the right stage and
-  make it profile-driven instead of hardcoded to one string-coercion rule
-  set.
-- The per-leaf incremental compilation machinery `compile.ts` already has
-  (`compileEntryFragment`/`compileDefsBlock`/`assembleValidatorModule`,
-  compile.ts:1142–1265, used by both `build.ts` and
-  `apply-validation-build.ts`'s Tier-2 caching) is exactly the shape a
-  profile-driven `validateEncoding`+`decode` stage would need to plug into
-  for caching to keep working — a leaf's compiled fragment already caches
-  on the leaf's own IR fingerprint; a wire profile becomes a second
-  fingerprint input alongside it, not a new caching mechanism.
+  error" (`numberFamilyLeaf`'s own comment, `type-ir/src/compile.ts`). The
+  staged split doesn't need to invent this distinction; it needs to relocate
+  it to the right stage and make it profile-driven instead of hardcoded to
+  one string-coercion rule set.
+- The per-leaf incremental compilation machinery `compile.ts` had at the time
+  (`compileEntryFragment`/`compileDefsBlock`/`assembleValidatorModule`, used
+  by both `build.ts` and `apply-validation-build.ts`'s Tier-2 caching) was
+  exactly the shape a profile-driven `validateEncoding`+`decode` stage would
+  need to plug into for caching to keep working — a leaf's compiled fragment
+  already cached on the leaf's own IR fingerprint, with a wire profile
+  becoming a second fingerprint input alongside it, not a new caching
+  mechanism. That's what actually happened: `compileEntryFragment`/
+  `assembleValidatorModule` themselves were later deleted in phase D once the
+  2-arg path retired, but their wire-path siblings
+  (`compileWireEntryFragment`/`compileWireEntryFragmentComposite`/
+  `compileDefsBlock`, `type-ir/src/compile.ts`) are exactly this shape and are
+  what `build.ts` and `apply-validation-build.ts`'s Tier-2 caching
+  (`buildWireApplyValidationModuleSourceIncremental`) use today.
 
 Two known doc-drift fixes made alongside this update, both stale claims that
 predated `http.source()` landing (commit `9bd373a`): `docs/guide/decode.md`
