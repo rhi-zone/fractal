@@ -13,8 +13,8 @@ instead of a type-surface split.
 ## 1. Motivation: the incident this spec exists to prevent
 
 Grounded directly in the consumer repo, `the sibling codebase`
-(`apps/web/src/server/api-fractal/accounting.ts:37-65`, its own module doc,
-read verbatim, not summarized from memory):
+(`apps/web/src/server/api-fractal/accounting.ts`'s own module doc, read
+verbatim, not summarized from memory):
 
 Two independently-authored fractal trees —
 `apps/web/src/server/api-fractal/accounting.ts` and
@@ -26,28 +26,48 @@ base paths (`/api/accounting/nexus-*` and
 `apps/web/src/server/buildApp.ts`'s two separate `app.mount(...)` calls).
 `accounting.ts`'s own doc calls its copy "a byte-identical duplicate of
 `tax-compliance.ts`'s own tree." This went undetected across multiple
-migration passes (`accounting.ts:44-52`: a prior pass believed the
-`/api/accounting/nexus-*` path could be freely deleted, found a real client
-dependency instead, and only then — as a SEPARATE, later pass — resolved the
-duplication itself on 2026-07-31, by migrating the client to the surviving
-path and deleting the copy).
+migration passes (`accounting.ts`'s own "RESOLVED 2026-07-31" module-doc
+section: a prior pass believed the `/api/accounting/nexus-*` path could be
+freely deleted, found a real client dependency instead, and only then — as a
+SEPARATE, later pass — resolved the duplication itself on 2026-07-31, by
+migrating the client to the surviving path and deleting the copy).
 
-**Why fractal's own machinery didn't catch it.** `http-api-projector`'s
-`mergeRoutes` (`packages/http-api-projector/src/route.ts:491-508`) throws on
-a same-method+same-path conflict — but only for method/path collisions
-WITHIN one route tree being assembled by one `applyMoveTo`/`insertAt` walk
-(one mount). Nothing in fractal today looks at more than one tree at once.
-Each `serveX(composed)` in the sibling codebase independently produces a `Fetch`
-(`packages/fractal-support/src/fetch.ts`'s `createThe sibling codebaseFetch`), and
-`buildApp.ts` mounts each `Fetch` at its own base path
-(`app.mount("/api/accounting", serveAccounting(composed))`,
-`app.mount("/api/admin/tax-compliance", serveTaxCompliance(composed))`) —
-by the time two trees are both live, they are two opaque `Fetch` closures at
-two disjoint mount points; there is no shared data structure a check could
-walk to notice the two closures serve the same operation. `buildAccountingTree`
-and `buildTaxComplianceTree` (real exported functions — see §3) DO each still
-return the raw pre-mount `Node`, but nothing in the deployment ever collects
-them into one place to compare.
+**Why fractal's own machinery didn't catch it.** `mergeRoutes`
+(`packages/http-api-projector/src/route.ts`) throws on a same-method+same-path
+conflict — but only for method/path collisions WITHIN one route tree being
+assembled by one `applyMoveTo`/`insertAt` walk. At the time of the incident,
+each `serveX(composed)` in the sibling codebase independently produced a
+`Fetch` (`packages/fractal-support/src/fetch.ts`'s `createThe sibling codebaseFetch`),
+and `buildApp.ts` mounted each `Fetch` at its own base path via a separate
+`app.mount(...)` call — by the time two trees were both live, they were two
+opaque `Fetch` closures at two disjoint mount points, with no shared data
+structure a check could walk to notice the two closures served the same
+operation.
+
+The sibling codebase has since composed ALL of its fractal trees into one
+root (`docs/decisions/one-root-fractal-tree-2026-08-02.md`, now implemented,
+not just proposed): `buildFractalRootTree`
+(`apps/web/src/server/lib/fractalRootTree.ts`) nests every slice's
+`build<Slice>Tree(composed)` output — `accounting` and `admin["tax-compliance"]`
+included — as a branch of ONE composed `Node`, served by a single
+`serveFractalRoot(composed)` mounted once
+(`app.mount("/api", serveFractalRoot(composed))`) in place of the old
+per-slice mounts. Because `mergeRoutes` now runs across that one composed
+walk, a literal same-path collision between two slices throws at compose
+time — a real gain the old per-slice-mount shape didn't have.
+
+This does NOT close the gap that let the accounting/tax-compliance
+duplication through, though — confirmed by that same migration's own
+"effects on existing checks" analysis: `mergeRoutes` only rejects same-PATH
+collisions, and two DIFFERENT paths serving the same underlying operation
+(exactly this incident's shape) stays invisible to it, one root or many.
+Every slice's `Node` is now reachable in one place —
+`buildFractalRootTree`'s own composed return value — but nothing walks that
+structure comparing sibling branches' leaves against each other for a
+duplicated operation; if anything, one root makes that walk EASIER to add
+than the old many-opaque-closures shape did, since the trees are already
+assembled rather than needing to be gathered from many separate mount
+sites.
 
 This is the gap tree-lint is scoped to close: given the SET of trees a
 deployment is about to mount (or already mounts), find operations that
@@ -94,26 +114,26 @@ none of the three existing roles:
 This is the load-bearing design question. Every candidate below is evaluated
 against the ACTUAL incident code (`accounting.ts`'s now-deleted nexus-*
 leaves vs. `tax-compliance.ts`'s surviving ones, and `accounting.ts`'s
-surviving leaves at `apps/web/src/server/api-fractal/accounting.ts:241-338`
-for what a typical leaf's `handler` looks like), not a hypothetical.
+surviving leaves — e.g. `getPnlLeaf`, in `buildAccountingTree` — for what a
+typical leaf's `handler` looks like), not a hypothetical.
 
 ### 3a. Handler reference equality — REJECTED as primary, sound but empirically defeated
 
 The structurally strongest possible signal: if `node.handler` for two
 leaves in two different trees is the SAME function object
 (`===`), they are provably the same operation — no ambiguity, no false
-positive. `isLeaf` (`packages/api-tree/src/node.ts:357`) already tests
+positive. `isLeaf` (`packages/api-tree/src/node.ts`) already tests
 `n.handler !== undefined`, so a walk collecting `(path, node.handler)` pairs
 per tree needs no new machinery to compare handlers by reference.
 
 **Why it fails on the real incident.** Read directly:
-`accounting.ts:241-249`'s `getPnlLeaf` is
+`accounting.ts`'s `getPnlLeaf` is
 `op(async () => { const result = await accounting.useCases.getPnl(); ... },
 http.post, {...})` — a FRESH anonymous closure authored inline at this call
 site, not a reference to `accounting.useCases.getPnl` itself. Every leaf in
 both `accounting.ts` and `tax-compliance.ts` follows this same shape (`op(async
 () => { const result = await taxCompliance.useCases.listNexusCrossings(); ...
-}, ...)`, `tax-compliance.ts:190-200`-ish) — the wrapping closure exists to
+}, ...)`, `tax-compliance.ts`'s `nexusCrossingsLeaf`) — the wrapping closure exists to
 translate the use case's `Result<T,E>` into the tree's `ok()`/`err()`
 envelope, a translation every migrated leaf performs, per
 `docs/artifacts/fractal-migration-2026-07/plan.md`'s established pattern
@@ -137,16 +157,17 @@ on the motivating case is total.
 ### 3b. `meta.http.sourceMap` — REJECTED, near-zero coverage on the real corpus
 
 `meta.http.sourceMap` (the `Sources.sourceMap` field,
-`packages/http-api-projector/src/route.ts:86`; populated by `http.source()`
-directives, resolved per-leaf by `sourceMapOf`, `route.ts:165-183`) records
-how a handler's PARAMETER NAMES map onto
+`packages/http-api-projector/src/route.ts`; populated by `http.source()`
+directives, resolved per-leaf by `sourceMapOf`) records how a handler's
+PARAMETER NAMES map onto
 HTTP stores (query/body/path) — it is a decode-time routing concern, not a
 provenance or identity marker. Two concrete problems, both verified against
 the actual accounting/tax-compliance leaves rather than assumed:
 
 1. **It is absent on the overwhelming majority of leaves, including every
    leaf involved in the incident.** None of `accounting.ts`'s thirteen
-   leaves (`accounting.ts:241-arrivals`) call `http.source()` — the ones
+   leaves (every leaf built in `buildAccountingTree`) call `http.source()` —
+   the ones
    that take input either take none (`getPnl`, `getArAging`, …) or validate
    the whole body positionally (`recordExpenseLeaf`, `valibot`-parsed).
    `tax-compliance.ts`'s three nexus leaves are the same. An `undefined`
@@ -303,39 +324,52 @@ matching every other cross-tree assembly point in this design lineage
 (`typed-store-spec.md` §4's single-shot `serviceStores` registration site;
 the sibling codebase's own CLAUDE.md "select adapters ... by direct import + direct
 injection at the deployment root, never a central catalog/registry" —
-independently arrived at, same shape). Verified against the real gap: today
-NOTHING in the sibling codebase collects its ~18 `buildXTree(composed)` functions into
-one place — `buildApp.ts` imports each `serveX` (the already-projected
-`Fetch`, §1) and never touches the underlying `Node` after building it. Every
-`api-fractal/*.ts` file DOES already export its own `buildXTree(composed)`
-(verified: `accounting.ts:236`'s `export function buildAccountingTree` is
-public, not module-private) — so the raw trees ARE reachable, just never
-assembled together.
+independently arrived at, same shape).
+
+This premise needs a note the original investigation didn't have: the
+sibling codebase has SINCE composed every slice's tree into one root
+(§1's "why fractal's own machinery didn't catch it," `buildFractalRootTree`
+in `apps/web/src/server/lib/fractalRootTree.ts`) — so, unlike when this
+section was first written, every `build<Slice>Tree(composed)` output IS
+already collected in one place today, each nested at the branch key
+matching its URL segment (`accounting: buildAccountingTree(composed)`,
+`admin: api({ ..., "tax-compliance": buildTaxComplianceTree(composed), ... })`,
+and so on for every other slice). What `buildFractalRootTree` does NOT do is
+hand back a labeled array a lint rule could iterate by origin — it returns
+one merged `Node`, assembled for SERVING (one `wrapScopes`/`wrapAudit`/
+validation pass), not for cross-branch analysis. So a `MountedTree[]` still
+needs to be built explicitly for tree-lint's purpose, but building it is now
+simpler than it would have been pre-one-root: a caller can reuse the SAME
+`build<Slice>Tree` imports `buildFractalRootTree` already makes, pairing
+each with the branch key it's already nested at there, rather than needing
+to gather them from many separate mount call sites.
 
 Two call shapes follow from this, both legitimate, differing only in WHEN
 "the set" is assembled and what `composed` it's built against:
 
-- **Boot-time (loud):** the composition root (wherever `buildApp.ts` already
-  constructs one real `ComposedSurface`) additionally builds the array
-  `[{ basePath: "/api/accounting", tree: buildAccountingTree(composed) },
-{ basePath: "/api/admin/tax-compliance", tree: buildTaxComplianceTree(composed) },
-...]` — one entry per existing `app.mount(...)` call, trivially derivable
-  by pairing each `buildXTree` import with the base path already given to
-  its neighboring `app.mount()` call — and passes it to `runTreeLint`,
-  throwing (or logging loud, per the deployment's own choice, mirroring
-  `typed-store-spec.md` §"§8's runtime boot/wire-time coverage check" —
-  precedent: `checkRouteSourceCoverage`, called once from
-  `makeRouterFromRoute`, collects every problem into ONE thrown error rather
-  than failing on the first, `typed-store-spec.md`'s status block) before
-  the app finishes booting.
+- **Boot-time (loud):** the composition root (`fractalRootTree.ts`, wherever
+  it already constructs one real `ComposedSurface`) additionally builds the
+  array `[{ basePath: "/accounting", tree: buildAccountingTree(composed) },
+{ basePath: "/admin/tax-compliance", tree: buildTaxComplianceTree(composed) },
+...]` — one entry per `build<Slice>Tree` import `buildFractalRootTree`
+  already makes, trivially derivable by pairing each import with the branch
+  key it's already nested at in that same file's composed `api({...})` call
+  — and passes it to `runTreeLint`, throwing (or logging loud, per the
+  deployment's own choice, mirroring `typed-store-spec.md` §"§8's runtime
+  boot/wire-time coverage check" — precedent: `checkRouteSourceCoverage`,
+  called once from `makeRouterFromRoute`, collects every problem into ONE
+  thrown error rather than failing on the first, `typed-store-spec.md`'s
+  status block) before the app finishes booting, ahead of
+  `serveFractalRoot`'s own single `app.mount("/api", ...)` call.
 - **Standalone CI command:** the same array, built by a small script that
   constructs trees WITHOUT a live `composed` — collision detection only
   needs tree STRUCTURE (paths, `meta`, `handler` source text via
   `toString()`), never actually INVOKES a handler, so a fake/stub
   `ComposedSurface` (every slice's `useCases` methods present as no-op stubs
   satisfying the type, matching the pattern already established by
-  `accounting.ts:180-182`'s own module doc: "verified via a standalone
-  smoke script ... driving `buildAccountingTree` against a real
+  `accounting.ts`'s own module doc, the paragraph preceding
+  `buildAccountingTree`'s definition: "verified via a standalone smoke
+  script ... driving `buildAccountingTree` against a real
   `createAccounting(...)` instance" — a REAL instance was used there because
   that script was verifying WIRING correctness end to end, a stronger bar
   than lint needs) suffices to build every `buildXTree(stub)` call and run
@@ -460,11 +494,14 @@ piece of analysis machinery being built).**
 own status block notes for its own consumer story). The sibling codebase is where §4b's
 two call shapes land:
 
-- Boot-time: `apps/web/src/server/buildApp.ts` (or a small wrapper it calls)
-  gains an assembled `MountedTree[]` alongside its existing per-slice
-  `buildXTree`/`app.mount()` pairs, and a `runTreeLint(trees)` call whose
-  findings are thrown loud (matching `SourceCoverageError`'s own "collect
-  everything, throw once" shape) before the app finishes booting.
+- Boot-time: `apps/web/src/server/lib/fractalRootTree.ts` (or a small
+  wrapper it calls) — the one place that already imports and nests every
+  slice's `build<Slice>Tree(composed)` output into the one composed root —
+  gains an assembled `MountedTree[]` alongside that existing composition,
+  and a `runTreeLint(trees)` call whose findings are thrown loud (matching
+  `SourceCoverageError`'s own "collect everything, throw once" shape) before
+  the app finishes booting, ahead of `serveFractalRoot`'s own single
+  `app.mount("/api", ...)` call in `buildApp.ts`.
 - CI: a new script (naming and exact location the sibling codebase's own call, matching
   how `codegen-fractal-validators.ts` and other per-repo scripts already
   live under `apps/web/scripts/`) builds the same `MountedTree[]` against a
@@ -498,9 +535,9 @@ implementation pass targets, not as work already done.
   auth requirements — a correctness-relevant variant of collision, not
   just a duplication-cost one). Neither is designed here; both are
   consistent with §5's open rule-list shape whenever someone builds them.
-- **How `MountedTree.basePath` pairing with each `buildXTree`/`app.mount()`
-  call is kept in sync without hand-maintenance** (§4b assumes a human
-  keeps the lint-time array and `buildApp.ts`'s own mount calls
+- **How `MountedTree.basePath` pairing with each `buildXTree` call is kept
+  in sync without hand-maintenance** (§4b assumes a human keeps the
+  lint-time array and `fractalRootTree.ts`'s own composed branch nesting
   consistent; a codegen or single-source-of-truth mechanism that derives
   both from one list is a real follow-on question, not designed here).
 - **Whether/how a stub `ComposedSurface` (§4b's CI path) is generated
