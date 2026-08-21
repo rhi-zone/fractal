@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toRustCAbi, toRustCAbiType } from "./rust-c-abi.ts";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
@@ -82,15 +85,10 @@ describe("toRustCAbi — function", () => {
   });
 });
 
-// Reserved-word collision coverage — string-comparison only. rustc/cargo
-// ARE present in this repo's flake.nix devShell (packages/type-ir/src/
-// compile-check.test.ts already runs a real `cargo build` for rust-serde.ts
-// there), but this package (ffi-ir) has no real-toolchain compile-check
-// suite of its own yet for any of its 13 target projectors — see this
-// file's sibling test files for the same gap noted per-target. Extending
-// real-toolchain verification to ffi-ir's C-ABI-shaped Rust output would be
-// a real follow-up (its own temp-crate harness, mirroring compile-check.test.ts's
-// pattern), not attempted here.
+// Reserved-word collision coverage — string-comparison only here; the same
+// keyword-escaping cases are re-verified against a real `rustc`/`cargo`
+// build in the "real cargo build (compile-check)" describe block at the
+// bottom of this file.
 describe("toRustCAbi — reserved-word (Rust keyword) identifiers get the r#-raw-identifier escape", () => {
   test("a param named after a Rust keyword", () => {
     const fn: FfiRef = f(
@@ -188,4 +186,116 @@ describe("toRustCAbi — module", () => {
     // no "mod fs" or namespace wrapper of any kind
     expect(src).not.toContain("mod fs");
   });
+});
+
+// ============================================================================
+// Real-toolchain compile-check — actually runs the generated Rust source
+// through `cargo build` (rustc/cargo from flake.nix's devShell), not just
+// string-comparison against the output text. This is the bug class the
+// string-comparison tests above cannot see by construction: f0d23bf fixed a
+// standalone function named after a Rust keyword not being escaped, and a
+// string-comparison test only ever checks for the presence of a substring —
+// it has no way to notice the *rest* of the file is invalid Rust.
+//
+// One shared temp Cargo project reused across fixtures (mirrors type-ir's
+// compile-check.test.ts "rust-serde (cargo build)" block): only src/lib.rs
+// is rewritten per test, since even a dependency-free `cargo build` pays a
+// few seconds of fixed cost from an empty target dir on the first build.
+// No crates.io dependency is needed here — rust-c-abi.ts's output is plain
+// `#[no_mangle] extern "C"` functions/`#[repr(C)]` structs over std only, so
+// this doesn't need network access the way the wasm-bindgen target's suite
+// does.
+// ============================================================================
+
+describe("toRustCAbi — real cargo build (compile-check)", () => {
+  const projectDir = mkdtempSync(join(tmpdir(), "ffi-ir-compile-check-rust-c-abi-"));
+  mkdirSync(join(projectDir, "src"));
+  writeFileSync(
+    join(projectDir, "Cargo.toml"),
+    '[package]\nname = "compile-check"\nversion = "0.1.0"\nedition = "2021"\n',
+  );
+  afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+  function build(src: string): { exitCode: number; stderr: string } {
+    writeFileSync(
+      join(projectDir, "src", "lib.rs"),
+      `#![allow(dead_code, non_snake_case, unused_variables)]\n\n${src}\n`,
+    );
+    const proc = Bun.spawnSync({
+      cmd: ["cargo", "build"],
+      cwd: projectDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return { exitCode: proc.exitCode ?? -1, stderr: proc.stderr.toString() };
+  }
+
+  test(
+    "a plain function with copy-discipline params/return compiles",
+    () => {
+      const addFn: FfiRef = f(
+        boundary.function(
+          [
+            { name: "a", type: withOwnership(t(types.integer), ownership.copy()) },
+            { name: "b", type: withOwnership(t(types.integer), ownership.copy()) },
+          ],
+          withOwnership(t(types.integer), ownership.copy()),
+        ),
+      );
+      const result = build(toRustCAbi(addFn, "add"));
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+    30_000,
+  );
+
+  test(
+    "a function and a param both named after Rust keywords compile once escaped",
+    () => {
+      const fn: FfiRef = f(
+        boundary.function(
+          [{ name: "match", type: withOwnership(t(types.integer), ownership.copy()) }],
+          withOwnership(t(types.integer), ownership.copy()),
+        ),
+      );
+      const result = build(toRustCAbi(fn, "type"));
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+    30_000,
+  );
+
+  test(
+    "an opaque-handle resource with a constructor, a method, and an auto-generated destructor compiles",
+    () => {
+      const readMethod: FfiRef = f(
+        boundary.method(
+          [],
+          withOwnership(t(types.array(t(types.integer))), ownership.copy()),
+          "FileHandle",
+        ),
+      );
+      const fileHandle: FfiRef = f(boundary.resource("FileHandle", { read: readMethod }));
+      const openFn: FfiRef = f(
+        boundary.function(
+          [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }],
+          handleRef("FileHandle", "file_handle_free"),
+        ),
+      );
+      const fsModule: FfiRef = f(
+        boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }),
+      );
+      const result = build(toRustCAbi(fsModule));
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+    30_000,
+  );
+
+  test(
+    "a deliberately broken snippet (real type mismatch) fails the build — proves this check isn't vacuous",
+    () => {
+      const result = build('pub extern "C" fn broken() -> i64 { "this is a &str, not an i64" }');
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("mismatched types");
+    },
+    30_000,
+  );
 });

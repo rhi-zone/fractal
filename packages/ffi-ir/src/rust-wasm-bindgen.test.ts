@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toWasmBindgenFfi } from "./rust-wasm-bindgen.ts";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
@@ -35,16 +38,10 @@ describe("toWasmBindgenFfi — function", () => {
   });
 });
 
-// Reserved-word collision coverage — string-comparison only. This is the
-// one ffi-ir target whose identifier rendering is fully delegated to
-// type-ir (packages/type-ir/src/rust-wasm-bindgen.ts's `escapeRustIdent`),
-// but that escape function is not exercised by packages/type-ir/src/
-// compile-check.test.ts's real `cargo build`/`rustc` checks — those only
-// cover rust-serde.ts's struct/enum output, not this file's `#[wasm_bindgen]
-// pub fn` output. rustc/cargo ARE present in flake.nix's devShell, so real
-// verification is possible in principle; wiring up a real `wasm-bindgen`
-// build (needs the wasm-bindgen crate + a wasm32 target, neither currently
-// in flake.nix) is a real follow-up, not attempted here.
+// Reserved-word collision coverage — string-comparison only here; the same
+// keyword-escaping case is re-verified against a real `cargo build` (with
+// the actual wasm-bindgen crate from crates.io) in the "real cargo build
+// (compile-check)" describe block at the bottom of this file.
 describe("toWasmBindgenFfi — reserved-word (Rust keyword) identifiers get the r#-raw-identifier escape", () => {
   test("a param named after a Rust keyword", () => {
     const fn: FfiRef = f(
@@ -218,4 +215,110 @@ describe("toWasmBindgenFfi — module", () => {
     expect(src).toContain("pub struct Greeter {}");
     expect(src).toContain("pub fn hello() -> String {");
   });
+});
+
+// ============================================================================
+// Real-toolchain compile-check — actually runs the generated Rust source
+// through `cargo build` against a real `wasm-bindgen` dependency resolved
+// from crates.io (rustc/cargo from flake.nix's devShell; network access to
+// crates.io at test time, same requirement as type-ir's compile-check.test.ts
+// "rust-serde (cargo build)" block). Catches the bug class string-comparison
+// assertions cannot see — f0e258e fixed a fn-name escaping bug in this exact
+// file that a substring check alone wouldn't have caught if the fix had left
+// the rest of the emitted item invalid.
+//
+// This deliberately builds for the host target, not wasm32 — wasm-bindgen's
+// attribute macro expands and typechecks on any target; the wasm32-specific
+// JS glue it *also* generates for a real wasm32 build isn't needed to prove
+// the emitted Rust is syntactically and type-correct, and adding a wasm32
+// target to flake.nix is out of scope for this check.
+//
+// One shared temp Cargo project reused across fixtures (only src/lib.rs is
+// rewritten per test) for the same reason as the rust-c-abi.test.ts and
+// type-ir suites: a cold build resolving+compiling wasm-bindgen and its
+// proc-macro deps from scratch takes several seconds, well past bun:test's
+// default 5s per-test timeout if repeated per fixture from an empty target
+// dir.
+// ============================================================================
+
+describe("toWasmBindgenFfi — real cargo build (compile-check)", () => {
+  const projectDir = mkdtempSync(join(tmpdir(), "ffi-ir-compile-check-rust-wasm-bindgen-"));
+  mkdirSync(join(projectDir, "src"));
+  writeFileSync(
+    join(projectDir, "Cargo.toml"),
+    '[package]\nname = "compile-check"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\nwasm-bindgen = "0.2"\n',
+  );
+  afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+  function build(src: string): { exitCode: number; stderr: string } {
+    writeFileSync(
+      join(projectDir, "src", "lib.rs"),
+      `#![allow(dead_code, non_snake_case, unused_variables)]\nuse wasm_bindgen::prelude::*;\n\n${src}\n`,
+    );
+    const proc = Bun.spawnSync({
+      cmd: ["cargo", "build"],
+      cwd: projectDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return { exitCode: proc.exitCode ?? -1, stderr: proc.stderr.toString() };
+  }
+
+  test(
+    "a plain function with copy-discipline params/return compiles",
+    () => {
+      const addFn: FfiRef = f(
+        boundary.function(
+          [
+            { name: "a", type: withOwnership(t(types.integer), ownership.copy()) },
+            { name: "b", type: withOwnership(t(types.integer), ownership.copy()) },
+          ],
+          withOwnership(t(types.integer), ownership.copy()),
+        ),
+      );
+      const result = build(toWasmBindgenFfi(addFn, "add"));
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+    60_000,
+  );
+
+  test(
+    "a function and a param both named after Rust keywords compile once escaped",
+    () => {
+      const fn: FfiRef = f(
+        boundary.function(
+          [{ name: "match", type: withOwnership(t(types.integer), ownership.copy()) }],
+          withOwnership(t(types.integer), ownership.copy()),
+        ),
+      );
+      const result = build(toWasmBindgenFfi(fn, "type"));
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+    60_000,
+  );
+
+  test(
+    "a copy-discipline resource with a method compiles",
+    () => {
+      const greetMethod: FfiRef = f(
+        boundary.method([], withOwnership(t(types.string), ownership.copy()), "Greeter"),
+      );
+      const greeter: FfiRef = f(boundary.resource("Greeter", { greet: greetMethod }));
+      const result = build(toWasmBindgenFfi(greeter, "Greeter"));
+      expect(result.exitCode, result.stderr).toBe(0);
+    },
+    60_000,
+  );
+
+  test(
+    "a deliberately broken snippet (real type mismatch) fails the build — proves this check isn't vacuous",
+    () => {
+      const result = build(
+        '#[wasm_bindgen]\npub fn broken() -> i64 { "this is a &str, not an i64" }',
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("mismatched types");
+    },
+    60_000,
+  );
 });
