@@ -43,7 +43,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type ts from "typescript";
-import { createExtractorProgram } from "./extract.ts";
+import { createExtractorProgram, groupEntryFilesByConfig } from "./extract.ts";
 import { hasTreeExport } from "./tree.ts";
 
 /**
@@ -109,10 +109,21 @@ export type FindEntryFilesOptions = {
    * the same whether rooted at one file or many siblings under the same
    * project — so a batch caller should build one Program up front and pass
    * it here (and again into `buildWireApplyValidationModuleSource` for the actual
-   * codegen pass) rather than paying that cost once per candidate. If
-   * omitted, and there's at least one scanned candidate, a Program is built
-   * internally via `createExtractorProgram(candidates)` (the multi-root
-   * form).
+   * codegen pass) rather than paying that cost once per candidate.
+   *
+   * Only meaningful when every scanned candidate belongs to ONE
+   * `tsconfig.json` region — a `ts.Program` has a single `CompilerOptions`
+   * bag for all its roots, so there is no such thing as one Program that is
+   * correct for candidates spanning two projects (see
+   * `createExtractorProgram`'s doc comment). When the scan crosses a region
+   * boundary this option is rejected with an error naming the regions,
+   * rather than silently applying one project's `paths` to another
+   * project's files.
+   *
+   * If omitted, `findEntryFiles` partitions the candidates itself
+   * (`groupEntryFilesByConfig`) and builds one Program per region, one at a
+   * time — the common case for a scan rooted at a monorepo, where every
+   * package carries its own config.
    */
   readonly program?: ts.Program;
 };
@@ -166,6 +177,65 @@ function matches(matcher: PathMatcher, absPath: string): boolean {
 }
 
 /**
+ * Run `hasTreeExport` over every scanned candidate, one `tsconfig.json`
+ * region at a time.
+ *
+ * A directory scan is exactly the batch most likely to cross a project
+ * boundary — pointed at a monorepo root, or at two package `src` trees, it
+ * collects files whose nearest `tsconfig.json` differ, and in this repo every
+ * package's config carries its own `paths` remap over a shared base. Building
+ * one Program over all of them (what this used to do) resolved every
+ * candidate's imports under whichever project the first candidate happened to
+ * belong to, so a candidate from any other package had that project's `paths`
+ * applied to it instead of its own.
+ *
+ * Programs are built and used one region at a time rather than all up front:
+ * each is a multi-GB object graph, so holding one per region simultaneously
+ * would multiply the peak this whole design exists to keep at a single
+ * Program (see `groupEntryFilesByConfig`). Within a region the sharing is
+ * unchanged — one Program still serves every candidate under that project,
+ * which is where the win actually comes from.
+ *
+ * Candidate order is preserved across the region loop, so the detected set is
+ * ordered by the scan, not by which region a file happened to fall into.
+ */
+function detectTreeExports(
+  candidates: readonly string[],
+  sharedProgram: ts.Program | undefined,
+): string[] {
+  if (candidates.length === 0) return [];
+
+  const groups = groupEntryFilesByConfig(candidates);
+
+  if (sharedProgram !== undefined) {
+    if (groups.length > 1) {
+      const regions = groups
+        .map(
+          (g) => `  ${g.configPath ?? "(no tsconfig.json found)"}: ${g.entryFiles.length} file(s)`,
+        )
+        .join("\n");
+      throw new Error(
+        `findEntryFiles: options.program was supplied, but the scanned candidates span ` +
+          `${groups.length} different tsconfig.json regions — one ts.Program cannot be ` +
+          `correct for all of them (see createExtractorProgram). Omit options.program to let ` +
+          `findEntryFiles build one Program per region, or narrow "roots" to a single ` +
+          `project.\n${regions}`,
+      );
+    }
+    return candidates.filter((f) => hasTreeExport(f, sharedProgram));
+  }
+
+  const detected = new Set<string>();
+  for (const group of groups) {
+    const program = createExtractorProgram(group.entryFiles);
+    for (const file of group.entryFiles) {
+      if (hasTreeExport(file, program)) detected.add(file);
+    }
+  }
+  return candidates.filter((f) => detected.has(f));
+}
+
+/**
  * Autodetect a deployment's `api()`/`op()` tree entry files by recursively
  * scanning `options.roots` and keeping the files `hasTreeExport` (tree.ts)
  * confirms actually export a tree — replacing a hand-maintained per-consumer
@@ -187,13 +257,7 @@ export function findEntryFiles(options: FindEntryFilesOptions): string[] {
 
   const candidates = roots.flatMap((root) => scanDir(path.resolve(root), extensions));
 
-  const autodetected =
-    candidates.length === 0
-      ? []
-      : (() => {
-          const program = options.program ?? createExtractorProgram(candidates);
-          return candidates.filter((f) => hasTreeExport(f, program));
-        })();
+  const autodetected = detectTreeExports(candidates, options.program);
 
   const excluded = new Set(
     autodetected.filter((f) => (options.exclude ?? []).some((m) => matches(m, f))),

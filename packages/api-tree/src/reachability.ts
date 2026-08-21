@@ -50,6 +50,39 @@
 // instead of N.
 //
 // ============================================================================
+// Scope: one tsconfig.json region per call
+// ============================================================================
+//
+// Module resolution here is `ts.resolveModuleName` against
+// `program.getCompilerOptions()` — one options bag, applied to every edge in
+// the walk. That is exactly right for a Program whose roots all share one
+// `tsconfig.json`, and exactly wrong for one spanning several: a file under
+// package B would have package A's `paths`/`baseUrl` applied to its imports.
+// Since `createExtractorProgram` now refuses to build a cross-region Program
+// at all (`groupEntryFilesByConfig` is the partition), this function's input
+// is region-homogeneous by construction, and every edge it resolves is
+// resolved under the project that actually owns the importing file.
+//
+// A batch spanning regions therefore calls this once per region and merges
+// the results. The merge is a plain map union with no reconciliation step,
+// because each entry file belongs to exactly one region — the returned maps
+// have disjoint key sets, so nothing can conflict.
+//
+// What deliberately is NOT merged is the per-file view underneath. A file
+// reachable from two regions (a shared dependency both packages import) is
+// walked once per region, and its edges may resolve differently in each,
+// because each region's `paths` are genuinely different. There is no single
+// canonical dependency set for such a file to collapse to — real `tsc` has
+// the same property, resolving a shared file's imports according to whichever
+// Program includes it. Consequently the union-closure sharing above is scoped
+// to a region: the total cost is O(files in this region's closure) per
+// region, summed, rather than one global O(union across all regions). That is
+// still far better than N fully independent per-entry walks, which is the
+// comparison that matters; it just no longer collapses across region
+// boundaries, and collapsing it would mean asserting a shared file has one
+// resolution when it has one per region.
+//
+// ============================================================================
 // What this correctly captures (and what it doesn't)
 // ============================================================================
 //
@@ -140,6 +173,15 @@ function directDependenciesOf(
  * every entry's closure is a BFS over that shared memo — see this module's
  * doc comment for why that keeps the total cost O(files in the union
  * closure) rather than O(entries × files).
+ *
+ * `entryFiles` must all belong to `program`'s own `tsconfig.json` region,
+ * which is automatic when `program` came from `createExtractorProgram` (it
+ * refuses to build a cross-region Program). A batch spanning regions calls
+ * this once per `groupEntryFilesByConfig` group and merges the returned maps
+ * — their key sets are disjoint, so the merge needs no reconciliation. See
+ * this module's doc comment for why a file shared between two regions is
+ * deliberately walked once per region instead of being collapsed to a single
+ * canonical dependency set.
  */
 export function computeEntryClosures(
   entryFiles: readonly string[],
