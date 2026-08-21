@@ -37,11 +37,15 @@ import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "
 //     `usize`/`isize` (`bigint`), `f32`/`f64` (`number`), `void`
 //     (`undefined`), `pointer` (opaque object or `null` — "as of Deno 1.31
 //     the JavaScript representation of `pointer` has become an opaque
-//     pointer object or `null` for null pointers"; the docs' own type table
-//     gives it as `{} | null` and expose no dedicated `Deno.PointerValue`
-//     name on that page, so this file spells the TS annotation out as that
-//     literal union), `buffer` (`TypedArray | null`), `function` (callback
-//     pointer).
+//     pointer object or `null` for null pointers"; the docs' own prose type
+//     table describes it loosely as `{} | null`, but Deno's real ambient
+//     `lib.deno.ns.d.ts` names a dedicated `Deno.PointerValue<T>` for it — a
+//     branded `PointerObject<T> = { readonly [brand]: T } | null` — so this
+//     file's `POINTER_TYPE_ALIAS` aliases straight to `Deno.PointerValue`
+//     rather than hand-spelling the prose description, which doesn't
+//     structurally match the real branded type), `buffer` (`BufferSource |
+//     null` as a parameter — Deno's own `ToNativeType` ambient mapping —
+//     `function` (callback pointer).
 //   - Structs are natively supported by value: `{ struct: [...] }` describes
 //     a C struct's layout as an ordered array of field FFI types, and struct
 //     values cross the boundary as a `TypedArray` whose bytes match that C
@@ -115,10 +119,16 @@ function quote(value: string): string {
 
 /** Deno's documented FFI pointer representation ("as of Deno 1.31 the
  * JavaScript representation of `pointer` has become an opaque pointer
- * object or `null`") — spelled out as this literal union rather than a
- * `Deno.PointerValue` reference, since the docs don't name a dedicated type
- * for it. Emitted once per generated file as a local alias. */
-const POINTER_TYPE_ALIAS = "type Pointer = {} | null";
+ * object or `null`") — aliased directly to Deno's real ambient
+ * `Deno.PointerValue<T>` (declared in `lib.deno.ns.d.ts` as a branded
+ * `PointerObject<T> = { readonly [brand]: T } | null`) rather than
+ * hand-spelling the docs page's prose description as a literal union: a
+ * hand-spelled `{} | null` is missing the `[brand]` property Deno's own
+ * `PointerObject` requires, so it fails to structurally match anywhere a
+ * real `Deno.dlopen` symbol call expects a pointer argument (see
+ * typescript-deno.test.ts's `deno check` compile-check suite). Emitted once
+ * per generated file as a local alias. */
+const POINTER_TYPE_ALIAS = "type Pointer = Deno.PointerValue";
 
 const PRIMITIVE_DENO_TYPES: Readonly<Record<string, string>> = {
   boolean: "u8",
@@ -144,7 +154,13 @@ function tsTypeFor(denoType: string): string {
   if (denoType === "i64" || denoType === "u64" || denoType === "usize" || denoType === "isize")
     return "bigint";
   if (denoType === "void") return "void";
-  if (denoType === "buffer") return "Uint8Array | null";
+  // `BufferSource` (Deno's/the DOM lib's ambient `ArrayBufferView<ArrayBuffer>
+  // | ArrayBuffer`), not `Uint8Array | null`: a `Uint8Array` alone doesn't
+  // structurally match the real symbol call's `buffer`-typed parameter — its
+  // `.buffer` is typed `ArrayBufferLike` (`ArrayBuffer | SharedArrayBuffer`),
+  // which isn't assignable to `BufferSource`'s narrower `ArrayBuffer` (see
+  // typescript-deno.test.ts's `deno check` compile-check suite).
+  if (denoType === "buffer") return "BufferSource | null";
   if (denoType === "pointer") return "Pointer";
   return "number"; // i8/u8/i16/u16/i32/u32/f32/f64
 }

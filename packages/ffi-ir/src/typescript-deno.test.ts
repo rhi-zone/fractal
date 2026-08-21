@@ -143,8 +143,8 @@ describe("toDenoFfi — resource with an opaque-handle method", () => {
     expect(src).toContain('"file_handle_close": { parameters: ["pointer"], result: "void" }');
     expect(src).toContain('"file_handle_free": { parameters: ["pointer"], result: "void" }');
 
-    expect(src).toContain("export function open(path: Uint8Array | null): Pointer {");
-    expect(src).toContain("export function fileHandleRead(handle: Pointer): Uint8Array | null {");
+    expect(src).toContain("export function open(path: BufferSource | null): Pointer {");
+    expect(src).toContain("export function fileHandleRead(handle: Pointer): BufferSource | null {");
     expect(src).toContain("export function fileHandleClose(handle: Pointer): void {");
     expect(src).toContain("export function fileHandleFree(handle: Pointer): void {");
     expect(src).toContain("lib.symbols.file_handle_free(handle)");
@@ -244,27 +244,42 @@ describe("toDenoFfi — deno check (real compile-check)", () => {
     expect(result.ok, result.output).toBe(true);
   });
 
-  // A real bug the real `deno check` pass surfaces that the string-comparison
-  // tests above cannot see: `POINTER_TYPE_ALIAS`'s local `type Pointer = {} |
-  // null` (typescript-deno.ts's own literal spelling of the docs.deno.com FFI
-  // page's *prose* description of the pointer type) does not structurally
-  // match Deno's real ambient type, `Deno.PointerValue<T>` — the actual
-  // `lib.deno.ns.d.ts` declares it as a branded
-  // `PointerObject<T> = { readonly [brand]: T } | null`, and passing this
-  // file's own `Pointer` alias where `Deno.dlopen`'s real symbol signatures
-  // expect `PointerValue` fails with "Property '[brand]' is missing in type
-  // '{}' but required in type 'PointerObject<unknown>'". The `buffer`
-  // parameter type has a matching mismatch: a wrapper typed `Uint8Array |
-  // null` fails against the real symbol call's `BufferSource | null`
-  // parameter ("Type 'Uint8Array<ArrayBufferLike>' is not assignable to type
-  // 'ArrayBufferView<ArrayBuffer>'"). Reproduced directly against `deno
-  // check` 2026-08-21; not fixed here per this suite's own "record, don't
-  // silently fix" convention (see packages/type-ir/src/compile-check.test.ts's
-  // identical use of `test.todo` for its own real-toolchain findings).
-  test.todo(
-    "a resource's pointer/buffer-typed methods and its paired free wrapper really type-check (currently fails — Pointer/buffer alias mismatch vs. Deno's real PointerValue/BufferSource types, see comment above)",
-    () => {},
-  );
+  // A real bug the real `deno check` pass surfaced that the string-comparison
+  // tests above couldn't see: `POINTER_TYPE_ALIAS`'s local `type Pointer =
+  // {} | null` (typescript-deno.ts's own literal spelling of the
+  // docs.deno.com FFI page's *prose* description of the pointer type) did
+  // not structurally match Deno's real ambient type, `Deno.PointerValue<T>`
+  // — the actual `lib.deno.ns.d.ts` declares it as a branded
+  // `PointerObject<T> = { readonly [brand]: T } | null`, and passing that
+  // hand-spelled `Pointer` alias where `Deno.dlopen`'s real symbol
+  // signatures expect `PointerValue` failed with "Property '[brand]' is
+  // missing in type '{}' but required in type 'PointerObject<unknown>'".
+  // The `buffer` parameter type had a matching mismatch: a wrapper typed
+  // `Uint8Array | null` failed against the real symbol call's `BufferSource
+  // | null` parameter ("Type 'Uint8Array<ArrayBufferLike>' is not
+  // assignable to type 'ArrayBufferView<ArrayBuffer>'"). Fixed by aliasing
+  // `Pointer` directly to `Deno.PointerValue` and mapping the `buffer` FFI
+  // type to `BufferSource | null` instead of `Uint8Array | null` (see
+  // typescript-deno.ts's `POINTER_TYPE_ALIAS` and `tsTypeFor`). Verified
+  // against real `deno check` 2026-08-21 with deno 2.6.10.
+  test("a resource's pointer/buffer-typed methods and its paired free wrapper really type-check", () => {
+    const openFnBytes: FfiRef = f(
+      boundary.function([{ name: "path", type: t({ kind: "bytes" }) }], handleRef("FileHandle")),
+      { libPath: "./libfile.so" },
+    );
+    const readMethod: FfiRef = f(boundary.method([], t({ kind: "bytes" }), "FileHandle"));
+    const closeMethod: FfiRef = f(boundary.method([], t(types.void), "FileHandle"));
+    const fileHandle: FfiRef = f(
+      boundary.resource("FileHandle", { read: readMethod, close: closeMethod }),
+    );
+    const fsModule: FfiRef = f(
+      boundary.module("fs", { open: openFnBytes }, { FileHandle: fileHandle }),
+      { libPath: "./libfile.so" },
+    );
+
+    const result = runDenoCheck(toDenoFfi(fsModule));
+    expect(result.ok, result.output).toBe(true);
+  });
 
   // Proves the checks above aren't vacuous: a real type mismatch (declaring
   // a `bigint`-returning symbol call as `string`) is genuinely rejected by
