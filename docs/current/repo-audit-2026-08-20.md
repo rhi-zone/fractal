@@ -686,25 +686,22 @@ pass, same caveat as above):
   `extractRouteSchemas` (`tree.ts:880`) as the real answer, blocked on cache
   logic.
 
-<!-- CITATION UNRESOLVED: the two bullets below cite `packages/fractal-support/src/serviceStores.ts`
-     and `packages/fractal-support/src/errorEncoder.ts`. This package has never
-     existed in this repo's git history at all (checked `git log --all` for the
-     path — no add, delete, or rename, ever), and `withServiceStoresOnInput`/
-     `formatValidationErrors` don't exist anywhere in the codebase either. This
-     may be a sibling-repo path mislabeled as fractal-side (this environment has
-     no sibling checkout to check), or content that's been removed along with
-     the whole package — could not determine which without more context, and
-     guessing a replacement path felt worse than flagging it. Needs a human
-     call. -->
+<!-- Cross-repo citation: the three bullets below cite files in the sibling
+     codebase, not this repo — `packages/fractal-support/src/serviceStores.ts`
+     and `packages/fractal-support/src/errorEncoder.ts` don't exist in
+     fractal's own git history because they were never meant to. Out of scope
+     for this repo's citation-cleanup pass, same as the cross-repo material in
+     `docs/design/prior-art/server-less.md` and
+     `docs/design/operation-layer-spec.md`. -->
 
-- `packages/fractal-support/src/serviceStores.ts:33-42` —
-  `withServiceStoresOnInput` was described as the sibling codebase-free generic
-  store→input plumbing.
-- `packages/fractal-support/src/errorEncoder.ts:404-415` —
-  `formatValidationErrors` was described as formatting fractal's own
-  `ValidationError[]`, its shape reverse-engineered empirically.
-- the sibling codebase's errors export (same phantom `errorEncoder.ts:538`
-  file as above) — documented as "fractal's `httpErrors` but matching
+- `packages/fractal-support/src/serviceStores.ts:33-42` (in the sibling
+  codebase) — `withServiceStoresOnInput` was described as the sibling
+  codebase-free generic store→input plumbing.
+- `packages/fractal-support/src/errorEncoder.ts:404-415` (in the sibling
+  codebase) — `formatValidationErrors` was described as formatting fractal's
+  own `ValidationError[]`, its shape reverse-engineered empirically.
+- the sibling codebase's errors export (`errorEncoder.ts:538`, same file as
+  above) — documented as "fractal's `httpErrors` but matching
   `code`/`kind`/`type` instead of only `.kind`".
 
 `wrapScopes`'s tree walk (sibling-side `scopes.ts:1035-1060`, unverified) was
