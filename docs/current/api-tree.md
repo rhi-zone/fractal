@@ -145,7 +145,7 @@ invisible to a single leaf's own static type.
 
 `assemble()` (`input.ts`) is the one function every projector's request-time input resolution
 funnels through. Its resolution order is exactly three steps, in this order, and is not
-something a caller can reorder per call (`input.ts:687-736`):
+something a caller can reorder per call (`assemble()`'s doc comment in `input.ts`):
 
 1. A path/positional param name match → bound from the `"path"` store.
 2. An explicit `sourceMap` override.
@@ -160,7 +160,7 @@ A related, explicitly-documented imprecision: for an HTTP field with no explicit
 entry, on a non-GET/HEAD/DELETE method, `op()`'s own isolated-leaf view can only report a
 _union_ of possible wire encodings (`WireOf<T,"query"> | WireOf<T,"json">`), because `op()`
 cannot see the tree position it will eventually be mounted at, and a same-named path slug vs.
-a JSON-body field can decode differently (`input.ts:588-635`). This is called out in source as
+a JSON-body field can decode differently (`input.ts`'s `EncodingMapWireOf` type). This is called out in source as
 sound-but-imprecise, and is resolved _exactly_ — not just narrowed — by `wire-derive.ts` at
 codegen time, which has full tree-position visibility (see below). A consumer hand-authoring
 a custom decoder function against `op()`'s own inferred parameter type should expect the
