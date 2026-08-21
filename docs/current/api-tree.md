@@ -282,11 +282,13 @@ elaborate types:
   fallback (exact `{kind:"ok"|"err"}` shape match) only fires for inferred/unannotated return
   types. A handler whose return type is annotated via a renamed local alias with no
   traceable `Result<...>` body in reach of the syntactic patterns will punt to `unknown`
-  (visibly, via `$comment`) rather than error (`extract.ts:320-357`).
+  (visibly, via `$comment`) rather than error (`extract.ts`'s `typeRefFromReturnType` function,
+  which combines the syntactic `resultTypeArgNodeFrom` path with the structural
+  `structuralResultValueType` fallback).
 - A named type's declaration-file provenance (`meta.typeName`/`meta.declarationFile`) is
   attached only to the outer handler-parameter type, never recursively to nested named types
   — a nested field typed `Address` is always inlined structurally with no import-tracing
-  metadata of its own (`extract.ts:204-273`).
+  metadata of its own (`extract.ts`'s `typeProvenanceOf` function).
 
 ## Name-collision safety: `escapeJoin` fixes derived-name collisions, not authored-override ones
 
