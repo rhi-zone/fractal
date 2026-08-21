@@ -137,6 +137,49 @@ const primitiveHandlers: Record<string, string> = {
   void: "void",
 };
 
+/** The real `bun:ffi` argument-side TS type for one `FFIType` token, per
+ * `bun-types`' own `FFITypeToArgsType` ambient interface (verified against
+ * `node_modules/.bun/bun-types@.../bun-types/ffi.d.ts` in this repo). Only
+ * covers the tokens `toBunFfiType`/the hard-coded `"ptr"`/`"void"` literals
+ * above can actually produce — not a general `FFIType` enum walk.
+ *
+ * `"ptr"` narrows to bun's own branded `Pointer` type (`number & {
+ * __pointer__: null }`, re-exported from `"bun:ffi"`) rather than the full
+ * `FFITypeToArgsType[FFIType.ptr]` union (`TypedArray | Pointer | CString |
+ * null`) — every `"ptr"` token this file emits is an opaque-handle/refcount
+ * pointer value (see file header's ownership-discipline scope), never a raw
+ * buffer or CString being passed as a pointer, so the narrower branded type
+ * is both accurate and still structurally assignable into that wider union
+ * wherever bun's own signatures expect it. `"cstring"` keeps the same
+ * `Pointer | CString | NodeJS.TypedArray | null` union bun-types declares —
+ * unlike `"ptr"`, this generator's `"cstring"` token really can carry any of
+ * those representations (it's the general string-marshalling token, not a
+ * handle-only one).
+ */
+function bunTsArgType(token: string): string {
+  switch (token) {
+    case "i64":
+    case "u64":
+    case "i64_fast":
+    case "u64_fast":
+      return "number | bigint";
+    case "bool":
+      return "boolean";
+    case "ptr":
+      return "Pointer";
+    case "cstring":
+      return "Pointer | CString | NodeJS.TypedArray | null";
+    case "buffer":
+      return "NodeJS.TypedArray | DataView";
+    case "void":
+      return "undefined";
+    default:
+      // i8/u8/i16/u16/i32/u32/f32/f64/char — all plain `number` in
+      // FFITypeToArgsType.
+      return "number";
+  }
+}
+
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
   return typeof meta.description === "string" ? [`${indent}// ${meta.description}`] : [];
 }
@@ -182,8 +225,10 @@ function buildWrapper(
   selfParam?: string,
 ): string {
   const params: string[] = [];
-  if (selfParam !== undefined) params.push(`handle: number /* ${selfParam} */`);
-  for (const p of shape.params) params.push(`${escapeJsIdent(p.name)}: unknown`);
+  if (selfParam !== undefined) params.push(`handle: Pointer /* ${selfParam} */`);
+  for (const p of shape.params) {
+    params.push(`${escapeJsIdent(p.name)}: ${bunTsArgType(toBunFfiType(p.type))}`);
+  }
 
   const args = [
     ...(selfParam !== undefined ? ["handle"] : []),
@@ -244,7 +289,7 @@ function collect(ref: FfiRef, name: string): { entries: string[]; wrappers: stri
     entries.push(`  ${quote(freeSymbol)}: { args: [${quote("ptr")}], returns: ${quote("void")} },`);
     wrappers.push(
       [
-        `export function ${escapeJsIdent(shape.name)}_free(handle: number) {`,
+        `export function ${escapeJsIdent(shape.name)}_free(handle: Pointer) {`,
         `  return symbols[${quote(freeSymbol)}](handle)`,
         "}",
       ].join("\n"),
@@ -336,7 +381,7 @@ export function toBun(ref: FfiRef, libPath: string, name?: string): string {
 
 function renderModule(libPath: string, entries: string[], wrappers: string[]): string {
   const lines: string[] = [
-    'import { dlopen } from "bun:ffi"',
+    'import { dlopen, type Pointer, type CString } from "bun:ffi"',
     "",
     `const { symbols } = dlopen(${quote(libPath)}, {`,
     ...entries,

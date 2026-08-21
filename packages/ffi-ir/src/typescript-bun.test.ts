@@ -81,10 +81,10 @@ describe("toBun — function", () => {
     );
     const src = toBun(addFn, "./libmath.so", "add");
 
-    expect(src).toContain('import { dlopen } from "bun:ffi"');
+    expect(src).toContain('import { dlopen, type Pointer, type CString } from "bun:ffi"');
     expect(src).toContain('dlopen("./libmath.so", {');
     expect(src).toContain('"add": { args: ["i64", "i64"], returns: "i64" },');
-    expect(src).toContain("export function add(a: unknown, b: unknown) {");
+    expect(src).toContain("export function add(a: number | bigint, b: number | bigint) {");
     expect(src).toContain('return symbols["add"](a, b)');
   });
 
@@ -123,7 +123,7 @@ describe("toBun — reserved-word (JS keyword) identifiers get escaped", () => {
       ),
     );
     const src = toBun(fn, "./lib.so", "identify");
-    expect(src).toContain("export function identify(class_: unknown) {");
+    expect(src).toContain("export function identify(class_: number | bigint) {");
     // the raw native symbol string stays exactly "identify" — quoted bracket
     // access, never a bare escaped identifier (see buildWrapper's own
     // comment on `symbolName`).
@@ -147,12 +147,12 @@ describe("toBun — resource", () => {
 
     // method: receiver synthesized as a leading "ptr" arg
     expect(src).toContain('"file_handle_read": { args: ["ptr"], returns: "i64" },');
-    expect(src).toContain("export function FileHandle_read(handle: number");
+    expect(src).toContain("export function FileHandle_read(handle: Pointer");
     expect(src).toContain('return symbols["file_handle_read"](handle)');
 
     // paired free function, matching rust-c-abi.ts's `<resource>_free` convention
     expect(src).toContain('"file_handle_free": { args: ["ptr"], returns: "void" },');
-    expect(src).toContain("export function FileHandle_free(handle: number) {");
+    expect(src).toContain("export function FileHandle_free(handle: Pointer) {");
     expect(src).toContain('return symbols["file_handle_free"](handle)');
   });
 
@@ -192,9 +192,11 @@ describe("toBun — module", () => {
     expect(src).toContain('"file_handle_close": { args: ["ptr"], returns: "void" },');
     expect(src).toContain('"file_handle_free": { args: ["ptr"], returns: "void" },');
 
-    expect(src).toContain("export function open(path: unknown) {");
-    expect(src).toContain("export function FileHandle_close(handle: number");
-    expect(src).toContain("export function FileHandle_free(handle: number) {");
+    expect(src).toContain(
+      "export function open(path: Pointer | CString | NodeJS.TypedArray | null) {",
+    );
+    expect(src).toContain("export function FileHandle_close(handle: Pointer");
+    expect(src).toContain("export function FileHandle_free(handle: Pointer) {");
   });
 });
 
@@ -288,42 +290,37 @@ describe("toBun (tsc --noEmit, real bun:ffi ambient types)", () => {
   });
 
   // ==========================================================================
-  // Real bug this real-compiler check surfaces, that the string-comparison
-  // tests above structurally cannot see: `buildWrapper`'s generated wrapper
-  // functions are fundamentally not type-safe against bun:ffi's own real
-  // FFIType-derived TS signatures — confirmed via two independent probes
-  // against the real `bun-types` ambient declarations (bun-types version
-  // pinned by the repo root's `typescript`/`bun-types` lockfile entries,
-  // verified 2026-08-21):
+  // Two real bugs this real-compiler check surfaced, that the string-
+  // comparison tests above structurally could not see: `buildWrapper`'s
+  // generated wrapper functions were not type-safe against bun:ffi's own
+  // real FFIType-derived TS signatures — confirmed via two independent
+  // probes against the real `bun-types` ambient declarations (bun-types
+  // version pinned by the repo root's `typescript`/`bun-types` lockfile
+  // entries, verified 2026-08-21) — both now fixed in `typescript-bun.ts`:
   //
-  //   1. Every non-receiver parameter is typed as bare `unknown`
-  //      (`buildWrapper`: `params.push(`${escapeJsIdent(p.name)}: unknown`)`)
-  //      then passed directly into the strongly-typed `symbols[...]` call.
-  //      `unknown` is never assignable to another type without a narrowing
-  //      check or a cast, so tsc rejects this for *every* FFIType regardless
-  //      of which one — confirmed against `i64` (`args: ["i64", "i64"]`):
-  //        "error TS2345: Argument of type 'unknown' is not assignable to
-  //         parameter of type 'number | bigint'."
+  //   1. Every non-receiver parameter was typed as bare `unknown`
+  //      (`params.push(`${escapeJsIdent(p.name)}: unknown`)`) then passed
+  //      directly into the strongly-typed `symbols[...]` call. Fixed by
+  //      `bunTsArgType`, a token -> real `FFITypeToArgsType` TS type table
+  //      (`i64`/`u64` -> `number | bigint`, `bool` -> `boolean`,
+  //      `cstring` -> bun-types' own `Pointer | CString | NodeJS.TypedArray
+  //      | null` union, etc.), applied to every wrapper param.
   //
-  //   2. A resource method's synthesized receiver parameter is typed as bare
-  //      `number` (`buildWrapper`'s `selfParam` branch:
-  //      `params.push(`handle: number /* ${selfParam} */`)`), but bun:ffi's
-  //      real `FFIType` "ptr" token maps to its own branded `Pointer` type
-  //      (not assignable from a bare `number` without a cast) — confirmed:
-  //        "error TS2345: Argument of type 'number' is not assignable to
-  //         parameter of type 'TypedArray<ArrayBufferLike> | Pointer |
-  //         CString | null'."
-  //
-  // Net effect: essentially every `toBun`-generated function/method that
-  // takes at least one parameter fails `tsc --noEmit --strict` against the
-  // real `bun:ffi` ambient types, today — only zero-parameter functions
-  // (the two tests directly above) currently typecheck cleanly. Recorded
-  // here as `test.todo` (mirroring packages/type-ir/src/compile-check.test.ts's
-  // own convention) rather than silently fixed, since fixing `typescript-bun.ts`
-  // itself is a real, separate change outside this test-coverage task's scope.
+  //   2. A resource method's synthesized receiver parameter was typed as
+  //      bare `number` (`params.push(`handle: number /* ${selfParam} */`)`),
+  //      but bun:ffi's real `FFIType` "ptr" token maps to its own branded
+  //      `Pointer` type (`number & { __pointer__: null }`, re-exported from
+  //      `"bun:ffi"`), not assignable from a bare `number` without a cast.
+  //      Fixed by typing every `"ptr"`-token position — the synthesized
+  //      receiver and the paired `_free` wrapper's `handle` param alike —
+  //      as `Pointer` (narrower than the full `FFITypeToArgsType[FFIType.ptr]`
+  //      union, but every `"ptr"` this file ever emits is an opaque-handle
+  //      pointer, never a raw buffer/CString, so the narrower branded type
+  //      is accurate and still assignable wherever bun's own signatures
+  //      expect the wider union).
   // ==========================================================================
-  test.todo(
-    "a simple function with primitive int params/return (e.g. add(a: int, b: int): int) — FAILS: params typed `unknown` aren't assignable to bun:ffi's real `number | bigint` FFIType parameter type",
+  test(
+    "a simple function with primitive int params/return (e.g. add(a: int, b: int): int) typechecks cleanly — params get bun:ffi's real `number | bigint` FFIType parameter type instead of `unknown`",
     () => {
       const addFn: FfiRef = f(
         boundary.function(
@@ -339,8 +336,8 @@ describe("toBun (tsc --noEmit, real bun:ffi ambient types)", () => {
     },
   );
 
-  test.todo(
-    "a resource method call (opaque-handle receiver) — FAILS: the synthesized `handle: number` receiver isn't assignable to bun:ffi's real branded `Pointer` type for the `ptr` FFIType",
+  test(
+    "a resource method call (opaque-handle receiver) typechecks cleanly — the synthesized receiver is bun:ffi's real branded `Pointer` type instead of bare `number`",
     () => {
       const readMethod: FfiRef = f(
         boundary.method([], withOwnership(t(types.integer), ownership.copy()), "FileHandle"),
