@@ -344,11 +344,11 @@ confirms actually export a tree, replacing a hand-maintained entry-file list (th
 it closes: a new file silently gets no validators until someone remembers to add it to a
 list). `exclude` is applied before `include`, so an explicit `include` always wins on the same
 file — called out in source as an intentional choice to avoid a silent ordering accident, not
-an arbitrary pick (`discover.ts:39-41`). A `string` `include` can force in any file (and throws
+an arbitrary pick (`findEntryFiles`'s doc comment). A `string` `include` can force in any file (and throws
 loudly if it doesn't exist); a `RegExp` `include`/`exclude` can only re-select among files the
-scan under `roots` already found — it cannot reach outside `roots` (`discover.ts:23-38`).
+scan under `roots` already found — it cannot reach outside `roots` (`findEntryFiles`'s doc comment).
 `.d.ts` and `.test.ts`/`.spec.ts` files are excluded from candidacy unconditionally, regardless
-of the `extensions` option passed (`discover.ts:97-99, 138-142`).
+of the `extensions` option passed (`findEntryFiles`'s `extensions` option doc, enforced by `matchesExtension`).
 
 ## Staying at the bottom of the dependency graph
 
