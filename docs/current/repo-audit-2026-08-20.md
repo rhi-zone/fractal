@@ -549,83 +549,94 @@ codebase whose owner used this audit as a punch list.
 
 ---
 
-## 6. The CLI (`packages/api-tree/src/cli.ts`, 339 lines)
+## 6. The CLI (`packages/api-tree/src/cli.ts`, 519 lines)
 
 Commands: `build`/`watch`/`check` + `-schema` triplet. Flags: `-o`,
-`--tree-id`, `--force`, `--cache-file`, `--cache-dir`. **[all evidenced]**
+`--tree-id`, `--force`, `--cache-file`, `--cache-dir`. **[all evidenced at
+audit time — every item below has since been fixed in code, several with
+inline comments explicitly citing this section by name (e.g. "audit §6#1").
+Rewritten per item; file grew from 339 to 519 lines in the process.]**
 
-1. **The CLI never engages Tier 2.** `runBuild` uses the non-incremental
-   builders and calls `writeCacheMetadata` without `leafData` → the CLI writes
-   cache files with empty `leafFingerprints`/`leafArtifacts`. The library's
-   best path (the `*Incremental`/`*Cached` family) is bypassed by fractal's own
-   CLI — the same shape as the sibling codebase hand-roll, from the other side.
-2. **Header divergence between the CLI and the library wrappers.** The CLI
-   writes `GENERATED_HEADER + source` and caches those bytes; the cached
-   wrappers write the raw source with **no header**
-   (`apply-validation-build.ts:1099`, `schema-build.ts:238`). Same artifact,
-   two byte-shapes: alternating paths would thrash `outputHash` forever, and a
-   wrapper-produced file lacks its `@generated` marker. This exact divergence
-   is what forces the sibling codebase's reimplementation (§6.1 below / §1.5 of the
-   boundary section).
-3. **`check` trusts the cache.** `runCheck` prints "up to date" on a Tier-1 hit
-   without rebuilding — a poisoned cache (§1.1/§2.1) fools `check` too. Only a
-   missing cache file or `--force` yields a true from-scratch check.
-4. **`watch` is non-recursive and watches the wrong scope.**
-   `fs.watch(path.dirname(entryFile), …)` (`cli.ts:262`), no `recursive`
-   option — edits to transitively imported files outside the entry's own
-   directory (or in subdirectories) never trigger a rebuild, even though the
-   cache tracks the full closure.
-5. Minor: `runCheck` on a miss builds a full fresh Program and writes no
-   metadata — repeated checks repay the full cost each time.
-6. `writeWireApplyValidationModuleCached`/`writeSchemaModuleCached` use
-   `Bun.write` in an otherwise `node:fs` package — the write helpers are
-   Bun-only. `writeSchemaModuleCached`'s options type also dropped `reachable`
-   while its validator twin kept it — copy drift between the twin wrappers.
+1. **The CLI never engaged Tier 2 — fixed.** At audit time, `runBuild` used
+   the non-incremental builders and called `writeCacheMetadata` without
+   `leafData`. Now: `runBuild` calls `kind.cached(...)`, which delegates to
+   `buildWireApplyValidationModuleCached`/`buildSchemaModuleCached` — the
+   Tier-2 wrappers, not the raw builders.
+2. **Header divergence between the CLI and the library wrappers — fixed.**
+   The CLI wrote `GENERATED_HEADER + source` and cached those bytes while the
+   cached wrappers wrote raw source with no header — same artifact, two
+   byte-shapes. Now: both `apply-validation-build.ts` and `schema-build.ts`
+   take an `options.header` that's prepended and folded into the cache key,
+   and the CLI's `GENERATED_HEADER` flows through as that option instead of
+   being CLI-only.
+3. **`check` trusted the cache — the underlying premise changed.** `runCheck`
+   still takes the Tier-1-hit fast path without rebuilding, which is correct
+   cache-consumer behavior on its own — the finding's actual complaint was
+   that a poisoned cache (§1.1/§2.1, both since fixed) fooled `check` too.
+   With the version-gate hole closed, this item's "only `--force` yields a
+   true check" framing is worth re-evaluating rather than restating as a bug.
+4. **`watch` was non-recursive and watched the wrong scope — fixed.**
+   `runWatch` now computes `watchDirsOf(program)` — every directory in the
+   tracked closure — and sets a non-recursive watcher per directory
+   (deliberately avoiding platform-dependent `recursive: true` rather than
+   relying on it). Edits anywhere in the closure now trigger a rebuild.
+5. **Minor: `runCheck` on a miss wrote no metadata — fixed**, same change as
+   item 1; metadata is now written on the up-to-date branch too.
+6. **`Bun.write` in an otherwise `node:fs` package, and dropped `reachable`
+   on one wrapper's options type — fixed.** Both
+   `apply-validation-build.ts` and `schema-build.ts` now use
+   `node:fs/promises`'s `writeFile`/`mkdir`, with comments explicitly citing
+   "audit §6#6" for the switch away from `Bun.write`. `reachable` is present
+   symmetrically in both wrapper option types now. (Note: the doc originally
+   named these `writeWireApplyValidationModuleCached`/`writeSchemaModuleCached`
+   — current names are `buildWireApplyValidationModuleCached`/
+   `buildSchemaModuleCached`; possibly a naming mixup predating this fix, not
+   verified.)
 
 ---
 
 ## 7. Tests
 
-**[evidenced unless marked]**
+**[evidenced unless marked]** **Update**: item 1 and item 5 below were fixed
+since the audit (both dated the day after); items 2-4 and 6 are unchanged and
+still current.
 
-1. **The cache staleness bug was structurally uncatchable by the suite.**
-   `CacheFileShape` has no api-tree self-version field to assert on. The only
-   test contact with the version fields is `cache-v3.test.ts:282-283` copying
-   them verbatim into a synthesized v2 fixture. **No test writes a different
-   `tsVersion`/`typeIrVersion` and asserts a miss** — both invalidation
-   branches in `checkCache` (`cache.ts:369-376`) have zero coverage. The 17
-   cache test cases (run green this session) are all content-based (dep touch,
-   entry edit, hand-edited output, mtime-only touch, `reachable` scoping,
-   v2→v3).
-2. **No package is test-less; gaps are file-level.** api-tree's `tree.ts`
-   (1,050 lines), `tags.ts`, `schema-build.ts` have no sibling test file
-   (indirect coverage only; schema-build appears once, in `cache.test.ts:186`).
-   type-ir's `kotlin-jackson.ts` (464 loc) and `starlight-reference.ts`
-   (427 loc) get only the generic registry smoke loop
-   (`registry.test.ts:87-97`) — no assertion the output is right. playground UI
+1. **The cache staleness bug was structurally uncatchable by the suite — fixed.**
+   At audit time, `CacheFileShape` had no api-tree self-version field to
+   assert on, and no test wrote a different `tsVersion`/`typeIrVersion` to
+   assert a miss. Now: `cache.ts` has the `apiTreeVersion` self-version field
+   (§2.1), and there's a new test ("a different apiTreeVersion in the
+   recorded metadata is a miss") explicitly citing "audit §1.1/§2.1". Running
+   the suite: **25 tests pass, 0 fail** (was 17 at audit time — the count grew
+   along with the coverage, still fully green).
+2. **No package is test-less; gaps are file-level — still true.** api-tree's
+   `tree.ts` (now 1,042 lines, was 1,050), `tags.ts`, `schema-build.ts` still
+   have no sibling test file. type-ir's `kotlin-jackson.ts` (464 loc, exact
+   match) and `starlight-reference.ts` (427 loc, exact match) still get only
+   the generic registry smoke loop (`registry.test.ts:87-97`, lines
+   unchanged) — no assertion the output is right. playground UI still
    untested.
-3. **ffi-ir is string-assertion-only across all 13 targets** — no equivalent of
-   type-ir's `compile-check.test.ts` (which shells out to real compilers), so
-   12 FFI targets' output has never been fed to a real toolchain.
-   **[inferred]** same bug class `compile-check.test.ts:1-8` itself says
+3. **ffi-ir is string-assertion-only across all 13 targets — still true.** No
+   test shells out to a real compiler (checked for spawnSync/execSync/
+   Bun.spawn/child_process — zero hits across the 13 test files).
+   `compile-check.test.ts:1-8`'s header still makes the same point about what
    string tests can't see.
-4. **Where tests are strong**: zero snapshot tests repo-wide; http/graphql
-   codegen use a 3-tier structural → degraded-input → eval-import-and-drive-a-
-   real-server pattern (`http/codegen.test.ts:1-19`); type-ir compile-checks
-   14 real toolchains from the nix shell, with 6 declared `describe.skip`
-   blocks (:663-668) leaving java/kotlin/newtonsoft/dart/elm/elixir emitters
-   string-only in practice. Weakest tier:
-   `cross-projector.test.ts:188-198` asserts `typeof result === "string" &&
-length > 0`, as its own header admits. mcp/cli `source.test.ts` are
-   type-level only (asserted at `typecheck`, not `bun test`).
-5. **`examples/library-api`'s committed generated artifact has no CI gate.**
-   Its `codegen:check` script (`package.json:17`) is never invoked by
-   `.github/workflows/ci.yml`, so the committed `src/generated/
-apply-validation.ts` (imported for real at `tree.ts:19`, `app.test.ts:32`)
-   is unchecked against current codegen output. **[partly inferred]** a
-   wrap-time fingerprint-mismatch mechanism may catch drift at runtime; not
-   chased.
-6. Fixtures: no stale or orphaned fixtures found.
+4. **Where tests are strong — still true, unchanged.** Zero snapshot tests
+   repo-wide; http/graphql codegen's 3-tier pattern
+   (`http/codegen.test.ts:1-19`) still current; type-ir compile-checks 14 real
+   toolchains, still 6 `describe.skip` blocks at :663-668 leaving
+   java/kotlin/newtonsoft/dart/elm/elixir string-only in practice.
+   `cross-projector.test.ts:188-198` still the weakest tier
+   (`typeof result === "string" && length > 0`); mcp/cli `source.test.ts`
+   still type-level only.
+5. **`examples/library-api`'s committed generated artifact had no CI gate —
+   fixed.** `.github/workflows/ci.yml` now has a "Codegen check (library-api
+   example)" step that runs `bun run codegen:check` in `examples/library-api`,
+   with a comment explaining it catches drift `bun run test` can't see. The
+   `package.json:17` script and `tree.ts:19`/`app.test.ts:32` import
+   citations are still correct locations — only the "never invoked" claim was
+   wrong as of this fix.
+6. Fixtures: no stale or orphaned fixtures found — unchanged.
 
 ---
 
