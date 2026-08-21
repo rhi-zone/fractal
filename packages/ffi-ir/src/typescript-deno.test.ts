@@ -84,6 +84,33 @@ describe("toDenoFfi — simple function", () => {
   });
 });
 
+describe("toDenoFfi — reserved-word (JS keyword) identifiers get escaped", () => {
+  test("a param named after a JS reserved word gets a trailing-underscore escape", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+      { libPath: "./lib.so" },
+    );
+    const src = toDenoFfi(fn, "identify");
+    expect(src).toContain("export function identify(class_: bigint): bigint {");
+    // the raw native symbol key is left untouched — reserved words are
+    // legal in JS's `object.property` dot-access position (unlike a bare
+    // declaration/parameter), so escaping it would only mismatch dlsym for
+    // no benefit; same reasoning `renderWrapper`'s own comment gives.
+    expect(src).toContain("lib.symbols.identify(class_)");
+  });
+
+  test("a wrapper function itself named after a JS reserved word gets a trailing-underscore escape", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())), {
+      libPath: "./lib.so",
+    });
+    const src = toDenoFfi(fn, "delete");
+    expect(src).toContain("export function delete_(): void {");
+  });
+});
+
 describe("toDenoFfi — resource with an opaque-handle method", () => {
   test("methods take/return a pointer-typed handle; a paired free wrapper is synthesized", () => {
     // "string" isn't crossable per denoFfiType's own throw (see the dedicated describe block

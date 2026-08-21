@@ -9,7 +9,10 @@ import type { TypeRef } from "@rhi-zone/fractal-type-ir";
 // wasm-bindgen.ts in this same package establishes the identical convention
 // for the identical reason.
 import "@rhi-zone/fractal-type-ir/kinds/common";
-import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
+import {
+  toSnakeCaseStripSeparators as toSnakeCase,
+  escapeJsIdent,
+} from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiKinds, FfiParam, FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // ffi-ir -> Deno FFI consumer projector — a consumer, not a producer, of the
@@ -241,13 +244,23 @@ function buildCallable(
   const params: { name: string; denoType: string }[] = [];
   if (selfParam !== undefined) params.push({ name: "handle", denoType: "pointer" });
   for (const p of shape.params) {
-    params.push({ name: toCamelCase(p.name), denoType: denoFfiType(p.type) });
+    // `escapeJsIdent`: a wrapper param name is a real JS declaration-position
+    // identifier (unlike `symbolKey` below, which is only ever used as an
+    // object key or dot-property access — see `renderSymbolsObject`'s
+    // comment for why that position needs no escaping).
+    params.push({ name: escapeJsIdent(toCamelCase(p.name)), denoType: denoFfiType(p.type) });
   }
   const resultDenoType = isVoidType(shape.returnType) ? "void" : denoFfiType(shape.returnType);
 
   return {
     symbol: { key: symbolKey, parameters: params.map((p) => p.denoType), result: resultDenoType },
-    wrapper: { exportName, symbolKey, params, resultDenoType, docLines: docComment(ref.meta) },
+    wrapper: {
+      exportName: escapeJsIdent(exportName),
+      symbolKey,
+      params,
+      resultDenoType,
+      docLines: docComment(ref.meta),
+    },
   };
 }
 
@@ -288,7 +301,7 @@ function buildFreeWrapper(resourceName: string): { symbol: SymbolEntry; wrapper:
   return {
     symbol: { key: symbolKey, parameters: ["pointer"], result: "void" },
     wrapper: {
-      exportName: `${toCamelCase(resourceName)}Free`,
+      exportName: escapeJsIdent(`${toCamelCase(resourceName)}Free`),
       symbolKey,
       params: [{ name: "handle", denoType: "pointer" }],
       resultDenoType: "void",
