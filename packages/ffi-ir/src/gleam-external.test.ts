@@ -62,6 +62,30 @@ describe("toGleamFfi — function", () => {
     expect(() => toGleamFfi(fn, "greet")).toThrow(/missing required meta\.jsModule/);
   });
 
+  // Reserved-word collision coverage — string-comparison only (this package
+  // has no real `gleam` compiler wired into `nix develop`'s devShell, unlike
+  // packages/type-ir/src/compile-check.test.ts's real-toolchain checks for
+  // its own targets), so this asserts the escaped shape the Gleam compiler's
+  // documented grammar requires, not an actual `gleam build` pass.
+  test("a param named after a Gleam reserved word gets a trailing-underscore escape", () => {
+    const fn: FfiRef = f(
+      boundary.function([{ name: "type", type: t(types.string) }], t(types.void)),
+      { jsModule: "./x.mjs" },
+    );
+    const src = toGleamFfi(fn, "describe");
+    expect(src).toContain("pub fn describe(type_: String) -> Nil");
+  });
+
+  test("a function itself named after a Gleam reserved word gets a trailing-underscore escape, without changing the default jsName", () => {
+    const fn: FfiRef = f(boundary.function([], t(types.void)), { jsModule: "./x.mjs" });
+    const src = toGleamFfi(fn, "case");
+    expect(src).toContain("pub fn case_() -> Nil");
+    // the JS-side lookup name defaults to the real, unescaped snake_case
+    // name — escaping the Gleam declaration must not retarget which JS
+    // export `@external`'s 3rd argument binds against.
+    expect(src).toContain('@external(javascript, "./x.mjs", "case")');
+  });
+
   test("ownership discipline metadata does not change the emitted declaration at all — JS/Gleam have no", () => {
     // native ownership mechanism for @external to hook into (see gleam.ts's file header).
     const copyFn: FfiRef = f(

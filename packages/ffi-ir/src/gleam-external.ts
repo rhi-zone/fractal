@@ -62,6 +62,44 @@ import type { FfiParam, FfiRef, FfiShape } from "./index.ts";
 // either way, with no code-shape difference to fail to produce and
 // therefore no "unsupported" branch to take.
 
+// Gleam's reserved words, per compiler-core/src/parse/token.rs's
+// `is_reserved_word()` (github.com/gleam-lang/gleam, verified 2026-08-21) —
+// the exact 22-word set the lexer itself rejects as a bare identifier
+// (`as`, `assert`, `auto`, `case`, `const`, `delegate`, `derive`, `echo`,
+// `else`, `fn`, `if`, `implement`, `import`, `let`, `macro`, `opaque`,
+// `panic`, `pub`, `test`, `todo`, `type`, `use`). Gleam has no raw-identifier
+// escape syntax (unlike Rust's `r#ident` or WIT's `%ident`), so a collision
+// is escaped the same "trailing underscore" way typescript-bun.ts's/
+// typescript-deno.ts's `escapeJsIdent` handles JS reserved words.
+const GLEAM_RESERVED = new Set([
+  "as",
+  "assert",
+  "auto",
+  "case",
+  "const",
+  "delegate",
+  "derive",
+  "echo",
+  "else",
+  "fn",
+  "if",
+  "implement",
+  "import",
+  "let",
+  "macro",
+  "opaque",
+  "panic",
+  "pub",
+  "test",
+  "todo",
+  "type",
+  "use",
+]);
+
+function escapeGleamIdent(name: string): string {
+  return GLEAM_RESERVED.has(name) ? `${name}_` : name;
+}
+
 function docComment(meta: Readonly<Record<string, unknown>>): string[] {
   return typeof meta.description === "string" ? [`/// ${meta.description}`] : [];
 }
@@ -95,15 +133,23 @@ function buildFunctionDecl(
   extraParam?: { readonly name: string; readonly type: TypeRef },
 ): string {
   const jsModule = jsModuleOf(meta, where);
+  // `jsName`'s default is derived from the *unescaped* `gleamName` — the
+  // default JS export binding name should track the real snake_case name,
+  // not the Gleam-side reserved-word escape applied below to `declaredName`
+  // (escaping the Gleam declaration must never silently change which JS
+  // export the generated `@external` binds against — same "escaping the
+  // declared identifier shouldn't retarget the lookup name" reasoning
+  // typescript-bun.ts's own escaping comment gives for its symbol keys).
   const jsName = jsNameOf(meta, gleamName);
+  const declaredName = escapeGleamIdent(gleamName);
   const allParams = extraParam === undefined ? params : [extraParam, ...params];
   const paramList = allParams
-    .map((p) => `${toSnakeCaseStripSeparators(p.name)}: ${toGleamType(p.type)}`)
+    .map((p) => `${escapeGleamIdent(toSnakeCaseStripSeparators(p.name))}: ${toGleamType(p.type)}`)
     .join(", ");
   const lines = [
     ...docComment(meta),
     `@external(javascript, ${JSON.stringify(jsModule)}, ${JSON.stringify(jsName)})`,
-    `pub fn ${gleamName}(${paramList}) -> ${toGleamType(returnType)}`,
+    `pub fn ${declaredName}(${paramList}) -> ${toGleamType(returnType)}`,
   ];
   return lines.join("\n");
 }
