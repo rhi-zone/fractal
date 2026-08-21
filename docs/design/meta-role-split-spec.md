@@ -1,19 +1,37 @@
 # Splitting `Meta` into `SharedMeta` / `LeafMeta` / `BranchMeta`
 
-Status: **design spec, settled by the project owner — implemented.** This
-document now describes the shipped architecture, not a proposal: core
-declares `SharedMeta`/`LeafMeta`/`BranchMeta` with no protocol name in
-`node.ts`, every projector exports inert namespaced fragment interfaces
-instead of augmenting core, and zero projector-owned `declare module` blocks
-remain (`http-api-projector/src/project.ts:39` states this directly for that
-package; the same holds across `mcp-api-projector`, `cli-api-projector`,
-`graphql-api-projector`, `json-rpc-api-projector`). §1 below narrates the
+Status: **design spec, settled by the project owner — mostly implemented, with
+one confirmed regression against §9(4) below.** Core declares
+`SharedMeta`/`LeafMeta`/`BranchMeta` with no protocol name in `node.ts`
+(verified directly against current source), and every projector exports
+inert namespaced fragment interfaces instead of augmenting core in its
+production code. `http-api-projector`'s module doc (near the top of
+`project.ts`) states this directly for that package, and `cli-api-projector`
+and `graphql-api-projector` are genuinely clean of any `declare module`
+block. **But `mcp-api-projector` and `json-rpc-api-projector` each still
+carry a live `declare module "@rhi-zone/fractal-api-tree/node"` block**, in
+`src/deployment-meta.test-support.ts` in each package — augmenting
+`LeafMeta`/`BranchMeta` with that package's own fragment. These are
+test-support files, not wired into the packages' public entry points, so
+they may be an intentional test fixture rather than a design violation — but
+as written they're exactly the "projector-owned ambient augmentation"
+§9(4) says this design is supposed to rule out structurally, not just by
+discipline. **Flagged for a human call: is
+`src/deployment-meta.test-support.ts` an acceptable test-only exception, or
+should it be reworked (e.g. moved out of the package, or restructured to not
+use `declare module` at all) to match the "exactly one augmentation file in
+the whole system" invariant §3a and §9(4) rely on?** §1 below narrates the
 PRE-migration shape this spec replaced, kept for the rationale it argues
 from. Scope: `packages/api-tree/src/node.ts`'s `Meta`-role interfaces, every
 projector's namespaced fragment exports (`http-api-projector`,
 `mcp-api-projector`, `cli-api-projector`, `graphql-api-projector`,
 `json-rpc-api-projector`), and the reference deployment (the sibling
-codebase)'s own single augmentation file.
+codebase)'s own single augmentation file. Note: `packages/fractal-support`
+and `apps/web` (referenced in §7's "Consumer story" and elsewhere below as
+"the sibling codebase") do not exist in this repo — they describe a
+separate, external deployment repo, not something checked into
+`rhi-zone/fractal` itself. Citations into those paths can't be verified from
+here and are reproduced as given.
 
 **Invariant (owner-stated, non-negotiable): api-tree core does not know about
 projectors — full stop.** No protocol name (`http`, `cli`, `mcp`, `graphql`,
