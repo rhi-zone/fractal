@@ -40,25 +40,25 @@ the bottom of the dependency graph" below.
 leaf (carries `handler`); `api(children, opts?)` produces a branch (carries `children`).
 Earlier constructor names (`node({children})`, `service()`) were unified away — current code
 has only these two (`docs/design/invariants.md`'s "Stale constructor names" note, confirmed
-current in `node.ts:1-22`).
+current in `node.ts`'s module doc comment).
 
 **A node can carry both `handler` and `children`.** The module doc calls this out explicitly
-as "uncommon but valid" (`node.ts:7`) — nesting is never automatically flattened or merged;
+as "uncommon but valid" (`node.ts`'s module doc comment) — nesting is never automatically flattened or merged;
 the tree is exactly what's authored. A consumer building a generic recursive projection over
 an arbitrary `Node` should not assume leaf-xor-branch; `op()`'s return type does mark
 `handler` as required (narrower than `Node`'s own optional `handler?`) specifically so a
 conditional type can distinguish "produced by `op()`" from "produced by `api()` alone"
-(`node.ts:482-488`) — but that's a discriminator for _construction provenance_, not a
+(`node.ts`'s `op()` doc comment, and `op()`'s/`api()`'s return types) — but that's a discriminator for _construction provenance_, not a
 guarantee that a node lacks the other field.
 
 **Metadata is an open, per-node bag — not a second source of truth.** `meta` holds only
-non-type-expressible projection/taste concerns (verb, idempotency, cache, auth); domain data
-is always inferred TS types + JSDoc, never re-stated in `meta` (`node.ts:32-50`,
+non-type-expressible projection/taste concerns (verb, segment, idempotency, auth); domain data
+is always inferred TS types + JSDoc, never re-stated in `meta` (`node.ts`'s `SharedMeta` interface doc comment,
 `docs/design/invariants.md`). Core itself declares no protocol namespace (no `meta.http`
 etc.) and performs no `declare module` augmentation of its own role interfaces — each
 projector exports its own namespaced fragment as an inert interface, and exactly one
 deployment-owned file is expected to merge them all in via `extends`
-(`node.ts:46-50`; see `docs/design/meta-role-split-spec.md`).
+(same `SharedMeta` doc comment; see `docs/design/meta-role-split-spec.md`).
 
 **Tags do not inherit by tree position.** `meta.tags` (`tags.ts`) is a small, three-valued
 (`true`/`false`/`undefined` — never a default-`false` inference) set of standard behavioral
