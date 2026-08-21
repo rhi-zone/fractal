@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toBun, toBunFfiType } from "./typescript-bun.ts";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
@@ -194,4 +196,158 @@ describe("toBun — module", () => {
     expect(src).toContain("export function FileHandle_close(handle: number");
     expect(src).toContain("export function FileHandle_free(handle: number) {");
   });
+});
+
+// ============================================================================
+// Real-toolchain check — tsc --noEmit against real `bun:ffi` ambient types.
+//
+// Unlike packages/type-ir/src/compile-check.test.ts's own `tscBin` (a local
+// `node_modules/.bin/tsc` symlink, present there because packages/type-ir/
+// package.json lists `typescript` directly as a devDependency), ffi-ir
+// itself lists no `typescript` devDependency and has no local tsc binary —
+// so this reaches up to the repo root's hoisted `node_modules/.bin/tsc`
+// instead (same physical `typescript@6.0.3` binary, just resolved from a
+// different node_modules directory up the tree).
+//
+// `bun-types` (which declares the ambient `declare module "bun:ffi"` this
+// file's own generated `import { dlopen } from "bun:ffi"` needs) is only
+// vendored at the *repo root*'s node_modules, not inside
+// packages/ffi-ir/node_modules — so `--types bun-types` is passed explicitly
+// (tsconfig.json's own `"types": ["bun-types"]` field is unreachable here
+// since `--ignoreConfig` skips tsconfig.json entirely, same reason type-ir's
+// own runTsc passes `--ignoreConfig`). The generated file still has to live
+// inside packages/ffi-ir/ itself (not the OS tmpdir) so tsc's node-style
+// `--types` package resolution walks upward from the file's own directory
+// through packages/ffi-ir/node_modules (not found) to the repo root's
+// node_modules (found) — the exact same "resolution walks up to real
+// node_modules" reasoning type-ir's own file-level comment documents for
+// its typebox check, just one extra directory level up.
+const tscBin = join(import.meta.dir, "..", "..", "..", "node_modules", ".bin", "tsc");
+
+type RunResult = { ok: boolean; output: string };
+
+function runTsc(files: string[]): RunResult {
+  const proc = Bun.spawnSync({
+    cmd: [
+      tscBin,
+      "--noEmit",
+      "--ignoreConfig",
+      "--strict",
+      "--target",
+      "es2022",
+      "--module",
+      "esnext",
+      "--moduleResolution",
+      "bundler",
+      "--types",
+      "bun-types",
+      ...files,
+    ],
+    cwd: import.meta.dir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return {
+    ok: proc.exitCode === 0,
+    output: proc.stdout.toString() + proc.stderr.toString(),
+  };
+}
+
+function checkBunFfi(src: string): RunResult {
+  const dir = mkdtempSync(join(import.meta.dir, ".cc-bun-"));
+  try {
+    const file = join(dir, "generated.ts");
+    writeFileSync(file, src);
+    return runTsc([file]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("toBun (tsc --noEmit, real bun:ffi ambient types)", () => {
+  test("a zero-parameter function typechecks cleanly", () => {
+    const pingFn: FfiRef = f(
+      boundary.function([], withOwnership(t(types.void), ownership.copy())),
+    );
+    const result = checkBunFfi(toBun(pingFn, "./lib.so", "ping"));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("a reserved-word (JS keyword) function name, zero params, typechecks cleanly — proves escapeJsIdent's trailing-underscore escape produces real, valid TS syntax, not just a string that merely looks right", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toBun(fn, "./lib.so", "delete");
+    expect(src).toContain("export function delete_() {");
+    const result = checkBunFfi(src);
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("a hand-written, deliberately-broken TS file is genuinely rejected by tsc (proves this check isn't vacuous)", () => {
+    const result = checkBunFfi("const x: number = 'not a number'\n");
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("error TS2322");
+  });
+
+  // ==========================================================================
+  // Real bug this real-compiler check surfaces, that the string-comparison
+  // tests above structurally cannot see: `buildWrapper`'s generated wrapper
+  // functions are fundamentally not type-safe against bun:ffi's own real
+  // FFIType-derived TS signatures — confirmed via two independent probes
+  // against the real `bun-types` ambient declarations (bun-types version
+  // pinned by the repo root's `typescript`/`bun-types` lockfile entries,
+  // verified 2026-08-21):
+  //
+  //   1. Every non-receiver parameter is typed as bare `unknown`
+  //      (`buildWrapper`: `params.push(`${escapeJsIdent(p.name)}: unknown`)`)
+  //      then passed directly into the strongly-typed `symbols[...]` call.
+  //      `unknown` is never assignable to another type without a narrowing
+  //      check or a cast, so tsc rejects this for *every* FFIType regardless
+  //      of which one — confirmed against `i64` (`args: ["i64", "i64"]`):
+  //        "error TS2345: Argument of type 'unknown' is not assignable to
+  //         parameter of type 'number | bigint'."
+  //
+  //   2. A resource method's synthesized receiver parameter is typed as bare
+  //      `number` (`buildWrapper`'s `selfParam` branch:
+  //      `params.push(`handle: number /* ${selfParam} */`)`), but bun:ffi's
+  //      real `FFIType` "ptr" token maps to its own branded `Pointer` type
+  //      (not assignable from a bare `number` without a cast) — confirmed:
+  //        "error TS2345: Argument of type 'number' is not assignable to
+  //         parameter of type 'TypedArray<ArrayBufferLike> | Pointer |
+  //         CString | null'."
+  //
+  // Net effect: essentially every `toBun`-generated function/method that
+  // takes at least one parameter fails `tsc --noEmit --strict` against the
+  // real `bun:ffi` ambient types, today — only zero-parameter functions
+  // (the two tests directly above) currently typecheck cleanly. Recorded
+  // here as `test.todo` (mirroring packages/type-ir/src/compile-check.test.ts's
+  // own convention) rather than silently fixed, since fixing `typescript-bun.ts`
+  // itself is a real, separate change outside this test-coverage task's scope.
+  // ==========================================================================
+  test.todo(
+    "a simple function with primitive int params/return (e.g. add(a: int, b: int): int) — FAILS: params typed `unknown` aren't assignable to bun:ffi's real `number | bigint` FFIType parameter type",
+    () => {
+      const addFn: FfiRef = f(
+        boundary.function(
+          [
+            { name: "a", type: withOwnership(t(types.integer), ownership.copy()) },
+            { name: "b", type: withOwnership(t(types.integer), ownership.copy()) },
+          ],
+          withOwnership(t(types.integer), ownership.copy()),
+        ),
+      );
+      const result = checkBunFfi(toBun(addFn, "./libmath.so", "add"));
+      expect(result.ok, result.output).toBe(true);
+    },
+  );
+
+  test.todo(
+    "a resource method call (opaque-handle receiver) — FAILS: the synthesized `handle: number` receiver isn't assignable to bun:ffi's real branded `Pointer` type for the `ptr` FFIType",
+    () => {
+      const readMethod: FfiRef = f(
+        boundary.method([], withOwnership(t(types.integer), ownership.copy()), "FileHandle"),
+      );
+      const fileHandle: FfiRef = f(boundary.resource("FileHandle", { read: readMethod }));
+      const result = checkBunFfi(toBun(fileHandle, "./lib.so"));
+      expect(result.ok, result.output).toBe(true);
+    },
+  );
 });

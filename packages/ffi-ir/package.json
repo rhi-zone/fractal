@@ -89,6 +89,9 @@
   "dependencies": {
     "@rhi-zone/fractal-type-ir": "workspace:*"
   },
+  "devDependencies": {
+    "rescript": "^12.3.0"
+  },
   "engines": {
     "node": ">=20"
   }

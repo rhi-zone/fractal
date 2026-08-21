@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toReScriptFfi } from "./rescript-external.ts";
 import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts";
@@ -134,4 +136,124 @@ describe("toReScriptFfi — module", () => {
     expect(src).toContain('external open_: (string) => FileHandle = "open"');
     expect(src).toContain('external fileHandleClose: (FileHandle) => unit = "close"');
   });
+});
+
+// ============================================================================
+// Real-toolchain check — `rescript build` against a real ReScript compiler.
+//
+// Unlike the other two sibling investigations this task covers
+// (typescript-bun.ts: toolchain already present; ocaml-melange.ts: needed a
+// new flake.nix devShell input), the real `rescript`/`bsc` compiler binary is
+// not a nixpkgs derivation at all (only `rescript-language-server` and a
+// tree-sitter grammar are packaged there) — it ships as a prebuilt binary via
+// the npm package `rescript` instead. Investigated as network-dependent and
+// initially expected to stay string-only per this task's own briefing, but a
+// real attempt turned out simple and fast: `rescript@^12.3.0` is now a
+// `devDependency` here (packages/ffi-ir/package.json), giving a real local
+// `node_modules/.bin/rescript` binary the same way `typescript`/`bun-types`
+// give packages/type-ir its own local `tsc` — `bun install` resolves and
+// downloads it in under a second, no fragile scaffolding: v12's build system
+// needs only a minimal `rescript.json` (`sources`, `package-specs`,
+// `suffix`), no legacy `bsconfig.json`. Kept in the same
+// network-at-test-time bucket packages/type-ir/src/compile-check.test.ts's
+// own rust-serde describe block already documents as an accepted precedent
+// for `cargo build` resolving serde/serde_json from crates.io.
+// ============================================================================
+
+type ReScriptRunResult = { ok: boolean; output: string };
+
+const rescriptBin = join(import.meta.dir, "..", "node_modules", ".bin", "rescript");
+
+function checkReScript(src: string): ReScriptRunResult {
+  const dir = mkdtempSync(join(import.meta.dir, ".cc-res-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(
+      join(dir, "rescript.json"),
+      JSON.stringify({
+        name: "compile-check",
+        sources: { dir: "src", subdirs: true },
+        "package-specs": [{ module: "esmodule", "in-source": true }],
+        suffix: ".res.mjs",
+      }),
+    );
+    writeFileSync(join(dir, "src", "Fixture.res"), src);
+    const proc = Bun.spawnSync({
+      cmd: [rescriptBin, "build"],
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return {
+      ok: proc.exitCode === 0,
+      output: proc.stdout.toString() + proc.stderr.toString(),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function assertReScriptCompiles(result: ReScriptRunResult): void {
+  expect(result.ok, result.output).toBe(true);
+}
+
+describe("toReScriptFfi (rescript build, real compiler)", () => {
+  test("a plain free function with int params/return, bound via @val, compiles", () => {
+    const addFn: FfiRef = f(
+      boundary.function(
+        [
+          { name: "a", type: t(types.integer) },
+          { name: "b", type: t(types.integer) },
+        ],
+        t(types.integer),
+      ),
+    );
+    assertReScriptCompiles(checkReScript(toReScriptFfi(addFn, "add")));
+  });
+
+  test("a function named after a ReScript keyword gets a trailing-underscore escape that is real, valid ReScript syntax", () => {
+    const fn: FfiRef = f(boundary.function([], t(types.void)));
+    const src = toReScriptFfi(fn, "type");
+    expect(src).toContain("external type_:");
+    assertReScriptCompiles(checkReScript(src));
+  });
+
+  test("a hand-written, deliberately-broken ReScript file is genuinely rejected by the compiler (proves this check isn't vacuous)", () => {
+    const result = checkReScript('let bad: int = "not an int"\n');
+    expect(result.ok).toBe(false);
+    expect(result.output.length).toBeGreaterThan(0);
+  });
+
+  // ==========================================================================
+  // Real bug this real-compiler check surfaces, that the string-comparison
+  // tests above structurally cannot see: `buildResource` (this file) declares
+  // a resource's opaque type as `type ${toPascalCase(name)}` — i.e. always
+  // capitalized (e.g. `type Greeter`, `type FileHandle`). ReScript type
+  // identifiers must start with a lowercase letter; a capitalized one is a
+  // hard parse error, not a type error — confirmed directly against the real
+  // compiler:
+  //
+  //   type Greeter
+  //
+  //   Syntax error!
+  //   1 │ type Greeter
+  //   Did you mean `greeter` instead of `Greeter`?
+  //
+  // Net effect: every `toReScriptFfi`-generated `resource` (and any
+  // function/method referencing that resource type, e.g. as a parameter or
+  // return type) fails to parse as real ReScript, today. Recorded here as
+  // `test.todo` (mirroring packages/type-ir/src/compile-check.test.ts's own
+  // convention) rather than silently fixed, since fixing `rescript-external.ts`
+  // itself is a real, separate change outside this test-coverage task's scope.
+  // ==========================================================================
+  test.todo(
+    "a resource's opaque type declaration — FAILS: `type Greeter` is capitalized, but ReScript type identifiers must start lowercase (hard parse error, not just a type error)",
+    () => {
+      const greetMethod: FfiRef = f(
+        boundary.method([], withOwnership(t(types.string), ownership.copy()), "Greeter"),
+      );
+      const greeter: FfiRef = f(boundary.resource("Greeter", { greet: greetMethod }));
+      assertReScriptCompiles(checkReScript(toReScriptFfi(greeter, "Greeter")));
+    },
+  );
 });
