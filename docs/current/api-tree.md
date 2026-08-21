@@ -170,7 +170,7 @@ union, not a single resolved type.
 
 `wire-derive.ts`, which computes each leaf's protocol/store binding at codegen time, reads a
 leaf's **local, pre-projection path segments** — never its final, post-`moveTo` mounted
-position — to derive the binding (`wire-derive.ts:9-19`). `http.moveTo` is purely an address
+position — to derive the binding (`wire-derive.ts`'s module doc comment, implemented in `deriveFieldProfiles`). `http.moveTo` is purely an address
 transform; a leaf's field↔store binding is a pure function of its own _authored_ ancestry,
 fixed before `moveTo` ever runs. This supersedes an earlier design where a relocated leaf's
 binding depended on where it ended up mounted — a real "why is it this way and not the
