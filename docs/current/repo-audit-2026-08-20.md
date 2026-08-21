@@ -386,123 +386,166 @@ originally blurred them.
 ## 4. Opt-in vs automatic correctness (the treeId template)
 
 Places where correctness depends on a caller remembering something, where the
-`5de8117`-style structural fix existed as an alternative. **[evidenced
-mechanisms; the "recurrence-prone" framing is inferred]**
+`423b8fa`-style structural fix existed as an alternative (doc originally cited
+`5de8117`, which is not a commit in this repo's history — see intro block).
+**[evidenced mechanisms; the "recurrence-prone" framing is inferred. Several of
+the items below describe holes that have since been closed — noted per item.]**
 
-1. **Builder options outside the cache key** (§1.3) — remembering that a
-   changed `--tree-id`/`runtimeImport`/`shouldShare` needs `--force` is the
-   caller's job; the structural form is options-in-fingerprint.
-2. **The byte-exact write contract** on `withCache`/the cached wrappers (§2.4) —
-   a caller prepending a header defeats the cache silently. This is not
-   hypothetical: it is the documented reason the sibling codebase can't use the wrappers
-   (§6.1).
-3. **The `program`/`reachable` pairing** (§2.3) — pass a `reachable` computed
-   against a different Program and files silently drop out of tracking.
-4. **Per-artifact fingerprint completeness is hand-maintained** (§1.2) —
-   nothing structural forces "everything that affects the emitted artifact is
-   in the fingerprint"; the schema artifact's set drifted.
+1. **Builder options outside the cache key** (§1.3) — **fixed**: this is no
+   longer "remembering that a changed flag needs `--force`", it's now
+   structural (`buildOptionsKey` folded into the fingerprint automatically).
+   Kept here as the historical example of the pattern this section is about.
+2. **The byte-exact write contract** on the cached wrappers (§2.4) — `withCache`
+   itself is gone (deleted, not fixed), but the two remaining
+   `*Cached` wrappers still require callers to write the exact bytes they
+   computed; a header option was added (§6.2) that threads the header through
+   the fingerprint rather than eliminating the byte-exactness requirement.
+   Whether this is still the documented reason the sibling codebase can't use
+   the wrappers was not re-checked — no sibling checkout available.
+3. **The `program`/`reachable` pairing** (§2.3) — unchanged, still true: pass a
+   `reachable` computed against a different Program and files silently drop
+   out of tracking.
+4. **Per-artifact fingerprint completeness is hand-maintained** (§1.2) — the
+   specific instance this pointed at (schema fingerprint omitting
+   `description`) is **fixed**, but the structural point stands: nothing
+   forces "everything that affects the emitted artifact is in the
+   fingerprint" for the *next* artifact someone adds a field to.
 5. **The toolchain gate depends on version bumps that never happen** (§2.1) —
-   correctness delegated to a release habit the repo doesn't have.
+   the gate itself grew (now also checks `apiTreeVersion` and
+   `compilerOptionsHash`), but the conclusion is unchanged: correctness is
+   still delegated to a release habit (bumping `0.1.0-alpha.0`) the repo
+   doesn't have, so the gate remains inert in practice.
 
 For contrast, the automatic mechanisms that never recur as bugs: path-keyed
-treeId prefixing (`5de8117`), `outputHash`, closure-from-Program.
+treeId prefixing (`423b8fa`), `outputHash`, closure-from-Program.
 
 ---
 
 ## 5. Internal consistency
 
-Ordered worst-first. **[evidenced unless marked]**
+Ordered worst-first at audit time. **[evidenced unless marked]** **Update: most
+of this section has since been fixed in code** — items 1-6, 11, 12, 13, 15, and
+part of 14 describe problems that no longer exist, several with fixes dated
+the day after this audit. Rewritten per item below rather than left standing.
 
-1. **The core-blindness invariant is broken in the file that states it.**
-   `docs/design/meta-role-split-spec.md:11-13` (and `node.ts:46`'s own doc
-   comment) say no protocol name may appear in `api-tree/src/node.ts`. But
-   `node.ts:579-593` has literal `"http"`/`"cli"` type args and error markers
-   named `__http_encodingMap_decoder_type_mismatch`/`__cli_…`;
-   `input.ts:630,664` has `NS extends "http" | "cli"`; `tree.ts:212` reads
-   `meta.mcp.name`/`.segment` by name (`mcpMetaOverride`). Core knows about
-   three projectors. Whether the invariant moved or the code drifted, the two
-   are not both current.
-2. **`caller` store: "populated by every projector" is false for two of five.**
-   `input.ts:36,52-53` assert it; graphql (`resolve.ts:136`) and json-rpc
-   (`server.ts:326`) pass `caller: {}`. Middleware written against `caller`
-   silently sees nothing on those two.
-3. **Two implementations of one meta-read, 14 lines apart.** `mcpMetaOverride`
-   (`tree.ts:212-228`) is character-for-character
-   `readMetaStringLiteral(nodeType, "mcp", key, loc, checker)` (`tree.ts:242-259`),
-   whose own doc says it's "the SAME technique".
-4. **The name-derivation tree walk exists ~4½ times**: mcp tools
-   (`mcp/project.ts:527-563`), mcp prompts (:1028-1058, identical modulo the
-   leaf builder), json-rpc (`project.ts:269-299`, delimiter `"."`), a
-   type-level mirror (`api-tree/tree.ts:462-548`), and graphql's camelJoin
-   outlier (`project.ts:249`) which `path.ts:40-46` flags as unfixable under
-   the escape scheme. Only delimiter + meta namespace + leaf builder differ.
-5. **Byte-identical codegen text helpers across a dependency edge.**
-   `schemaToType`+`pascalCase`+`safeKey`+`typeBaseName` identical in
-   `http-api-projector/codegen.ts:496-585`,
-   `http-framework-projector/express.ts:305-392`, and `fastify.ts:323-418`
-   (diffed — no drift yet). `express.ts:330-333` admits the duplication, and
-   `http-framework-projector` **already depends on** `http-api-projector`
-   (`package.json:49`), so no packaging excuse; express/fastify are even in the
-   same package as each other. A 5th `pascalCase` in `graphql/codegen.ts:237`.
-6. **`meta-role-split-spec.md` is future-tense about a shipped change.**
-   Header (:3) says "not yet implemented"; its §2 "today, each projector
-   declaration-merges…" narrative (:38-47) describes a state that's gone
-   (zero projector-owned `declare module` blocks remain;
-   `http/project.ts:39` says so). Every line ref in that passage is dead, as
-   are all five in `typed-store-spec.md:77-81`, and `meta-role-split-spec.md:354`
-   cites `:124-136` for a read now at `:243`. **[inferred]** Of ~485
-   `file.ts:NNN` refs across docs/, a ~14-ref spot-check landed roughly half —
-   the convention is probably decaying generally.
-7. **`inputLimitParam`: accepted, documented as consumed, read by nothing.**
-   Declared (`http/route.ts:236`, `http/project.ts:157`), promised in
-   `paginated()`'s doc (`verbs.ts:197-199`) and in
-   `docs/design/directive-contract.md:87`; `extensions/pagination.ts:263-264`
-   and `route.ts:1108-1109` read only the cursor/offset params. Zero reads.
-8. **json-rpc lacks the middleware + ALS every other projector has.** No
-   `composeMiddleware`, no `AsyncLocalStorage` in its src;
-   `server.ts:478` gestures at it being someone else's job;
-   `docs/guide/framework.md:104` documents the gap as a design.
-9. **Three verbatim `composeMiddleware`s** (`cli/cli.ts:349-358`,
-   `graphql/resolve.ts:155-164`, `mcp/server.ts:682-691`) **and six verbatim
-   three-line `get*Meta`s** (graphql :121, cli :456, http openapi :246,:252,
-   json-rpc :170, http :216, mcp :385) — while api-tree already hosts
-   `assemble`/`composeErrorEncoders` for exactly this reason
-   (`input.ts:8-10` argues the point).
-10. **The wire-key/sourceMap union inlined four ways, with one real semantic
-    divergence.** `[...new Set([...wireKeys, ...Object.keys(sourceMap)])]` at
-    `cli/cli.ts:894-896`, `json-rpc/server.ts:325-327`,
-    `http/route.ts:1054-1066`; only mcp named it (`paramNamesFor`,
-    `server.ts:587-590`). graphql instead uses declared arg names
-    (`project.ts:392-396`) — **[inferred]** it won't assemble an undeclared
-    wire key the others would. The dead-sourceMap-override lint
-    (`http/route.ts:1585-1594`) exists only for http.
-11. **graphql's lookup-key convention derived independently in 3 files**
-    (`project.ts:542`, `codegen.ts:180`, `client.ts:322`), self-described as
-    "independent mirrors"; `underscoreJoin` kept exported "for source
-    compatibility" while documented as something nothing should use.
-12. **`traceState` declared, never touched.** `otel.ts:86` declares it;
-    `parseTraceParent` (:175-195) never sets it, nothing emits it; the module
-    doc (:27) claims `layers.ts`/`extensions/tracing.ts` handle
-    `traceparent`/`tracestate` — they don't handle the latter.
-13. **Two install stories.** `README.md:25` sells `bun add @rhi-zone/fractal`;
-    `docs/guide/getting-started.md:12-14` teaches per-package installs and the
-    docs site never mentions the umbrella once.
-14. **Small drift**: `preset.ts` (http) vs `presets.ts` (mcp, graphql);
-    `source()` lives in `source.ts` in four projectors but in `verbs.ts` for
-    http — the file the other four cite as canonical; ffi-ir has six verbatim
-    `toSnakeCase` copies of type-ir's exported `toSnakeCaseStripSeparators`
-    (`rescript-external.ts:88-94` explains: `codegen-helpers.ts` isn't in
-    type-ir's export map — blocked on one missing subpath, not oversight).
-15. **Stale doc pointers to a phantom function.** `buildValidatorModuleSource`
-    is referenced in doc comments at `cache.ts:2,34`, `discover.ts:4,103,110`,
-    `tree.ts:757,784` — no such function exists; `build.ts` (named as its home)
-    is 40 lines holding only the `GeneratedEntry` type. Presumably the
-    pre-rename name of `buildWireApplyValidationModuleSource`.
+1. **The core-blindness invariant — fixed.** At audit time, `node.ts:579-593`
+   had literal `"http"`/`"cli"` type args and protocol-named error markers,
+   contradicting the no-protocol-names invariant `node.ts:46` and
+   `docs/design/meta-role-split-spec.md:11-13` state for that file. Now: the
+   error marker is generic (`__encodingMap_decoder_type_mismatch`), and the
+   comment above it explicitly says node.ts "reads back only a
+   namespace-generic result, never a namespace literal of its own." The
+   `"http"|"cli"` literals the doc also cited at `input.ts:630,664` do still
+   exist — but `input.ts` isn't `node.ts`, so that was never actually a
+   violation of the node.ts-scoped invariant. `tree.ts`'s
+   `meta.mcp.name`/`.segment` read via `mcpMetaOverride` is called out as a
+   documented, intentional exception in `tree.ts`'s own module comments. The
+   violation this item described in `node.ts` no longer exists.
+2. **`caller` store: "populated by every projector" — fixed.** `input.ts`'s
+   doc comment now documents exactly one exception (json-rpc's WebSocket
+   transport, with rationale) instead of claiming universal population.
+   graphql (`resolve.ts`, `callerFromContext`) and json-rpc (`server.ts`,
+   `callerFromRequestHeaders`) both now populate `caller` from
+   headers/context in their normal paths; only json-rpc's WS transport and
+   graphql's unrecognized-context-shape fallback still pass `{}`, and both are
+   now documented as deliberate.
+3. **Two implementations of one meta-read — fixed.** `mcpMetaOverride`
+   (`tree.ts`) is now a one-line delegate to `readMetaStringLiteral` rather
+   than a character-for-character duplicate.
+4. **The name-derivation tree walk existed ~4½ times — mostly fixed.** A
+   shared `packages/api-tree/src/tree-walk.ts` (`walkNamedTree`) now exists;
+   both mcp's tools/prompts walks and json-rpc's walk call it instead of
+   duplicating. Its module doc explains why graphql's `camelJoin` outlier and
+   the type-level mirror (`walkNodeType`) are deliberately *not* folded in
+   (different escape scheme / different type-vs-value level) — so the
+   duplication is down from ~4½ to 2 documented, irreducible outliers.
+5. **Byte-identical codegen text helpers — fixed.** `express.ts`/`fastify.ts`
+   no longer define their own `schemaToType`/`pascalCase`/`safeKey`/
+   `typeBaseName` — they import them from
+   `@rhi-zone/fractal-http-api-projector/codegen`. Only `http-api-projector`'s
+   own `codegen.ts` still has the real definitions, plus graphql's separate
+   `pascalCase`/`safeKey`/`typeBaseName` (legitimately standalone — different
+   escaping needs).
+6. **`meta-role-split-spec.md` future-tense about a shipped change — fixed.**
+   Its header now reads "Status: … implemented" (was "not yet implemented"),
+   and `typed-store-spec.md`'s header similarly now says "Status: IMPLEMENTED
+   in fractal" with an "as implemented" correction paragraph immediately after
+   its old dead refs. Both docs already got their own updates; this finding is
+   commentary on an already-fixed staleness. **[inferred, unchanged]** the
+   general point — that a ~14-ref spot-check of `file.ts:NNN` refs across
+   `docs/` landed roughly half — is a separate, still-live observation about
+   the citation convention generally (this very audit doc being exhibit A).
+7. **`inputLimitParam` — resolved by removal, not by wiring it up.** The
+   field is gone entirely: zero hits anywhere in `.ts`/`.md` except a new
+   `docs/design/decisions.md` entry explaining it was removed because
+   cursor/offset's customizable name doesn't generalize to limit. The
+   accepted-but-unread param this item flagged no longer exists to be
+   accepted.
+8. **json-rpc lacks the middleware + ALS every other projector has — still
+   true.** No `composeMiddleware`, no `AsyncLocalStorage` in its src; the
+   gesture comment in `server.ts` and the design note in
+   `docs/guide/framework.md` both still exist, just at shifted line numbers
+   (`framework.md`'s paragraph moved to roughly :131-132). The only item in
+   1-8 that's still an open finding as originally described.
+9. **Verbatim `composeMiddleware`s — fixed; `get*Meta` duplication —
+   unchanged.** All three former `composeMiddleware` copies (cli, graphql,
+   mcp) now import a single `composeMiddleware` from
+   `@rhi-zone/fractal-api-tree` — consolidated alongside `assemble`/
+   `composeErrorEncoders`, as `input.ts:8-10` argues they should be. The six
+   verbatim three-line `get*Meta`s (graphql, cli, http openapi ×2, json-rpc,
+   http, mcp) are still duplicated as described, at slightly shifted lines.
+10. **The wire-key/sourceMap union inlined four ways — still true, citation
+    needs a full re-derive.** The pattern still exists at each site (cli.ts,
+    json-rpc's `server.ts`, http's `route.ts`) but none of them literally
+    write the doc's quoted expression — variable names differ per site
+    (`flags`/`slugs`, `paramsObj`, `pathParamNames`/`searchParams`). mcp's
+    named `paramNamesFor` and graphql's declared-arg-names approach are both
+    still current. The dead-sourceMap-override lint is still http-only but
+    has moved substantially (~:1519-1530, not :1585-1594) — this citation in
+    particular needs someone to re-derive the exact current line ranges
+    rather than trust the old ones.
+11. **graphql's lookup-key convention — fixed.** All three former
+    "independent" sites (`project.ts`, `codegen.ts`, `client.ts`) now call a
+    shared `escapeJoin([...path, key], "_")`. `underscoreJoin` is still
+    exported "for source compatibility," but the doc comment right above it
+    already says the three call sites converged on `escapeJoin` — this item's
+    "independently derived in 3 files" framing contradicts current code and
+    should be read as resolved, folded into the "escapeJoin adoption" item in
+    the clean list below.
+12. **`traceState` declared, never touched — fixed by removal.** The field
+    doesn't exist anywhere in `otel.ts` anymore (not just "declared, unused"
+    — the declaration itself is gone). The module doc now plainly states only
+    `traceparent` is handled end to end and `tracestate` is parsed by neither
+    the module nor its HTTP-side callers — the doc no longer claims otherwise,
+    so the contradiction this item flagged is gone along with the field.
+13. **Two install stories — fixed.** `README.md`'s umbrella install (`bun add
+    @rhi-zone/fractal`) is still accurate, and `docs/guide/getting-started.md`
+    now *leads* with the umbrella install too, showing per-package installs
+    only as an alternative after. Both docs agree now.
+14. **Small drift**: `preset.ts` (http) vs `presets.ts` (mcp, graphql) — still
+    true. `source()` in `source.ts` for four projectors, `verbs.ts` for http —
+    still true. ffi-ir's six verbatim `toSnakeCase` copies of type-ir's
+    `toSnakeCaseStripSeparators` — **fixed**: every ffi-ir target now imports
+    `toSnakeCaseStripSeparators` directly from
+    `@rhi-zone/fractal-type-ir/codegen-helpers`, which type-ir's
+    `package.json` now exports. (`rescript-external.ts` now instead flags a
+    *different*, still-real duplication: a `RESERVED` reserved-word set
+    copied because `rescript-native.ts` doesn't export its set — a live
+    replacement finding in the same spot, not chased further this pass.)
+15. **Stale doc pointers to a phantom function — fixed.** Every reference in
+    `cache.ts`/`discover.ts`/`tree.ts` already reads
+    `buildWireApplyValidationModuleSource` (the real name); the phantom
+    `buildValidatorModuleSource` string no longer occurs anywhere in the
+    package. `build.ts` still matches the original description exactly: 40
+    lines holding only the `GeneratedEntry` type.
 
 Explicitly checked and clean: the `source()` helper family, `escapeJoin`
-adoption, type-ir's registry split, error-encoder composition, the per-package
-`deployment-meta.test-support.ts` files. Most of the above is drift at the
-edges of an otherwise disciplined codebase.
+adoption (now also covers item 11 above), type-ir's registry split, error-encoder
+composition, the per-package `deployment-meta.test-support.ts` files (found in
+2 of 5 projector packages on a spot-check, not all five — "per-package"
+wording is generous but not wrong). What was "drift at the edges of an
+otherwise disciplined codebase" at audit time reads, one day later, like a
+codebase whose owner used this audit as a punch list.
 
 ---
 
