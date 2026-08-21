@@ -97,11 +97,11 @@ exempt a leaf from requiring a generated validator.
 
 `op()`/`api()` both accept a variadic list of meta contributions
 (`op(fn, http.get, extraTags)`), deep-merged left-to-right via `mergeMeta`/`mergeRecords`
-(`node.ts:373-458`). The rules:
+(`node.ts`'s `mergeMeta` and `mergeRecords` functions). The rules:
 
 - Later argument wins per key. `undefined` in a later bag _defers_ — it does not clobber an
-  already-set value (`node.ts:406`).
-- Plain objects merge recursively; arrays concatenate, they don't replace (`node.ts:408-423`).
+  already-set value (`mergeMeta`'s doc comment, enforced by `mergeRecords`'s `undefined` check).
+- Plain objects merge recursively; arrays concatenate, they don't replace (`mergeRecords`).
 - **Recursion is capped at depth 2.** A `meta.x.y` collision merges field-by-field, but a
   3-level-deep value (`meta.http.sourceMap.<paramName>`, e.g. two composed `http.source()`
   calls naming the same param) replaces **wholesale** on collision — the later call's
@@ -112,7 +112,7 @@ exempt a leaf from requiring a generated validator.
   `assemble()`'s "defaults to param name" behavior, resurrected the _first_ call's stale `key`
   at runtime while the type checker reported the correct (wholesale-replaced, no-`key`)
   result. The depth cap was added specifically to make the runtime match the type level
-  (`node.ts:378-397`). **Consequence for an author:** composing two `meta.http.sourceMap`
+  (`mergeRecords`'s doc comment on the depth cap). **Consequence for an author:** composing two `meta.http.sourceMap`
   (or any other 3-level-deep keyed-map) contributions on the same node is a full-value
   overwrite per colliding key, never a field-level merge — don't rely on a later contribution
   supplying only the field it wants to change.
