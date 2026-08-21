@@ -180,16 +180,22 @@ and walked back.
 ## Validation wiring: `applyValidation`, not `wrapValidators`
 
 **Comment-rot flag, confirmed by direct read, not carried forward as fact elsewhere in this
-package:** a number of comments across this package (`discover.ts:10-11,32`, `tags.ts:87-91,
-96,120`) still describe validators as wired by a `build.ts` function called `wrapValidators`
-throwing an `UnvalidatedLeafError`. That function no longer exists — `build.ts` currently
-contains only the `GeneratedEntry` type. `build.ts`'s own module doc (`build.ts:1-9`) already
+package:** a number of comments across this package (`discover.ts` near its top and near
+`findEntryFiles`, `tags.ts` near `TAG_UNVALIDATED`, and — checked further while confirming
+this note — also `otel.ts`, `index.ts`, `tree.ts`, `extract.test.ts`,
+`otel.integration.test.ts`, and a couple of test fixture files) still describe validators as
+wired by a `build.ts` function called `wrapValidators` throwing an `UnvalidatedLeafError`.
+This is broader than a single-file comment-rot spot; it's a naming convention that rotted
+package-wide when the mechanism was replaced. That function no longer exists — `build.ts`
+currently contains only the `GeneratedEntry` type. `build.ts`'s own module doc already
 states the current mechanism correctly: `applyValidation(key, projectedTree, protocol?)` in
-`apply-validation.ts` is "the only validation mechanism" (`apply-validation.ts:6-7`) —
-`createFetch`, `createMcpServer`, `runCli`, and `createGraphQLServer` all wire through it. The
-stale `wrapValidators` references are exactly the kind of comment rot this doc effort exists
-to catch; a reader should trust `apply-validation.ts`'s own doc comments over the older
-references still sitting in `discover.ts`/`tags.ts`.
+`apply-validation.ts` is "the only validation mechanism" (`apply-validation.ts`'s module doc
+comment) — `createFetch`, `createMcpServer`, `runCli`, and `createGraphQLServer` all wire
+through it. The current coverage check is `assertValidationCoverage`, which throws
+`UncoveredLeafError` (not `UnvalidatedLeafError`) — a second naming drift alongside the
+`wrapValidators` rot. The stale references are exactly the kind of comment rot this doc
+effort exists to catch; a reader should trust `apply-validation.ts`'s own doc comments over
+the older references still sitting in the files named above.
 
 The current mechanism, as actually implemented:
 
