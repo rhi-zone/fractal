@@ -108,16 +108,7 @@ re-verified against current `cache.ts`). `writeCacheMetadata` now writes a
 Program's parsed source files, instead of silently dropping it from tracking.
 `withCache` — the exported "shared orchestration" nothing actually used —
 was deleted outright in `ae79532` rather than fixed in place; grep finds zero
-occurrences repo-wide, including in comments. One item survives:
-
-### 2.5 A stale status header on the design spec
-
-`docs/design/ir-keyed-cache-spec.md` (522 lines) still opens with "Status:
-design spec, certified by the project owner — not yet implemented," which was
-already an understatement at audit time and is more wrong now: Tier-2
-(`leafFingerprints`, `leafArtifacts`, `defNamesFingerprint`,
-`readCarryForwardState`) has fully shipped. Worth flagging to whoever owns
-that spec file.
+occurrences repo-wide, including in comments.
 
 ---
 

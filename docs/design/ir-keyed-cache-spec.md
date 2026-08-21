@@ -1,21 +1,29 @@
 # IR-keyed build cache: the cache unit is a leaf's type-IR, not a file
 
-Status: **design spec, certified by the project owner — not yet
-implemented.** `cache.ts` at HEAD (v2, commits `63ebb35` "feat(api-tree):
-content-addressed build cache + JSON-Schema codegen artifact", `711dfbb4`
-"perf(api-tree): tier build-cache warm check — mtime+size before content
-hash", `25fa9fc` "perf(api-tree): per-entry module-graph reachability —
-precise cache-key granularity in a shared Program") is FILE-closure-keyed: a
-cache entry's validity is a function of which _files_ an entry's transitive
-import closure contains and their content hashes. This spec supersedes that
-key granularity — the cache unit becomes the _leaf_ (one `op`'s resolved
-input/output type), keyed by a fingerprint of its extracted type-IR, with
-file identity demoted to a cheap pre-filter (§2 Tier 1) rather than the
-source of truth for invalidation. Sibling to `typed-store-spec.md` /
-`meta-role-split-spec.md` in status and in the convention this doc follows:
-code-verified claims, `[verify]` items empirically checked in scratch before
-being asserted as fact (§6), an explicit regression list (§8), open
-questions left open rather than silently resolved (§9).
+Status: **IMPLEMENTED in fractal.** Was: "design spec, certified by the
+project owner — not yet implemented." Tier 2 (the leaf-level IR-keyed cache
+this spec describes) shipped in `1f31a01` "feat(api-tree): IR-keyed build
+cache v3 — leaf-level Tier 2 on top of Tier 1's file gate" (2026-08-02):
+`cache.ts` carries v3 metadata (`leafFingerprints`/`bundleFingerprint`/
+`defNamesFingerprint`/`leafArtifacts` alongside Tier 1's `files`/
+`outputHash`), `buildValidatorModuleSourceIncremental`/
+`buildSchemaModuleSourceIncremental` do the Tier-2 orchestration, and
+`buildValidatorModuleCached`/`buildSchemaModuleCached` compose Tier 1 + Tier
+2. `c84cf26` "fix(api-tree): track tsconfig in cache key, add header option,
+engage CLI Tier-2 caching" (2026-08-21) then wired the CLI onto these
+`*Cached`/`*Incremental` builders and extended the cache key to cover
+`buildOptions`/tsconfig (`compilerOptionsHash`) alongside the header option,
+closing the gap where those changes were silently ignored. The sections
+below are kept as written — they remain the contract this implementation is
+checked against. Note that the motivation section immediately below
+describes `cache.ts` as it stood pre-`1f31a01` (the v2 FILE-closure-keyed
+cache); that description is now historical context for why the leaf-level
+redesign was needed, not a description of current HEAD. Sibling to
+`typed-store-spec.md` / `meta-role-split-spec.md` in status and in the
+convention this doc follows: code-verified claims, `[verify]` items
+empirically checked in scratch before being asserted as fact (§6), an
+explicit regression list (§8), open questions left open rather than
+silently resolved (§9).
 
 ## 1. Motivation — grounded against `cache.ts` as it stands
 
