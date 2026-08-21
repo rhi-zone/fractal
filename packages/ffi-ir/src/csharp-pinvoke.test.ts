@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toDotNet, toDotNetType } from "./csharp-pinvoke.ts";
 import {
@@ -149,11 +152,12 @@ describe("toDotNet — function", () => {
   });
 });
 
-// Reserved-word collision coverage — string-comparison only. dotnet-sdk IS
-// present in flake.nix's devShell and IS used for a real `dotnet build`
-// check in packages/type-ir/src/compile-check.test.ts (csharp-systemtextjson),
-// but this package (ffi-ir) has no equivalent real-toolchain suite for its
-// own C#/P-Invoke output yet — a real follow-up, not attempted here.
+// Reserved-word collision coverage — string-comparison only. See the
+// "toDotNet (dotnet build compile-check)" describe block below for the real
+// `dotnet build`-backed check (dotnet-sdk is present in flake.nix's
+// devShell, same SDK packages/type-ir/src/compile-check.test.ts's
+// csharp-systemtextjson block already uses) covering the same reserved-word
+// escaping plus other targets/broken-input cases.
 describe("toDotNet — reserved-word (C# keyword) identifiers get the @-escape", () => {
   test("a param named after a C# reserved word", () => {
     const fn: FfiRef = f(
@@ -234,5 +238,122 @@ describe("toDotNet — module", () => {
     const src = toDotNet(fsModule, undefined, "custom_lib_name");
     expect(src).toContain("custom_lib_name");
     expect(src).not.toContain('"fs"');
+  });
+});
+
+// ============================================================================
+// Real `dotnet build` compile-check — unlike every string-comparison test
+// above, this shells out to the actual `dotnet` from flake.nix's devShell
+// (dotnet-sdk 8) and asserts the generated C# source genuinely compiles,
+// catching bugs (wrong keyword escaping, invalid attribute combinations,
+// bogus type names, etc.) a string-comparison assertion structurally cannot
+// see. Mirrors packages/type-ir/src/compile-check.test.ts's own
+// csharp-systemtextjson block exactly (throwaway .csproj targeting
+// net8.0/Library, no NuGet package needed — `[LibraryImport]`/
+// `System.Runtime.InteropServices` ship in the .NET runtime itself, and
+// `dotnet build` never actually loads the native library the attribute
+// names, so no native .so/.dll needs to exist for this check).
+// ============================================================================
+
+type RunResult = { ok: boolean; output: string };
+
+function run(cmd: string[], cwd: string): RunResult {
+  const proc = Bun.spawnSync({ cmd, cwd, stdout: "pipe", stderr: "pipe" });
+  return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() };
+}
+
+function withTempDir<T>(fn: (dir: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), "ffi-ir-dotnet-build-"));
+  try {
+    return fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function writeCsproj(dir: string): void {
+  writeFileSync(
+    join(dir, "compile-check.csproj"),
+    '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Library</OutputType><Nullable>disable</Nullable><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup></Project>\n',
+  );
+}
+
+function assertCompiles(result: RunResult): void {
+  expect(result.ok, result.output).toBe(true);
+}
+
+function assertRejected(result: RunResult): void {
+  expect(
+    result.ok,
+    "expected `dotnet build` to reject this deliberately-broken input, but it compiled cleanly",
+  ).toBe(false);
+}
+
+describe("toDotNet (dotnet build compile-check)", () => {
+  test("a module wrapping a free function plus a resource with an opaque-handle method compiles for real", () => {
+    const readMethod: FfiRef = f(
+      boundary.method([], withOwnership(t(types.integer), ownership.copy()), "FileHandle"),
+    );
+    const closeMethod: FfiRef = f(
+      boundary.method([], withOwnership(t(types.void), ownership.copy()), "FileHandle"),
+    );
+    const fileHandle: FfiRef = f(
+      boundary.resource("FileHandle", { read: readMethod, close: closeMethod }),
+    );
+    const openFn: FfiRef = f(
+      boundary.function(
+        [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }],
+        handleRef("FileHandle"),
+      ),
+    );
+    const fsModule: FfiRef = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }));
+
+    // toDotNet(module) already emits its own `using` directives, so this is
+    // a complete, standalone .cs file.
+    const src = toDotNet(fsModule);
+
+    withTempDir((dir) => {
+      writeCsproj(dir);
+      writeFileSync(join(dir, "Root.cs"), src);
+      assertCompiles(run(["dotnet", "build", "-v", "quiet"], dir));
+    });
+  });
+
+  test("reserved-word (C# keyword) parameter and function names — the @-escaping asserted by string comparison above — actually compile", () => {
+    const identifyFn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    const newFn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const mod: FfiRef = f(boundary.module("kw", { identify: identifyFn, new: newFn }, {}));
+
+    const src = toDotNet(mod);
+
+    withTempDir((dir) => {
+      writeCsproj(dir);
+      writeFileSync(join(dir, "Root.cs"), src);
+      assertCompiles(run(["dotnet", "build", "-v", "quiet"], dir));
+    });
+  });
+
+  test("a deliberately broken declaration (bogus, undeclared type name) is genuinely rejected by dotnet build — proves this check is not a rubber stamp", () => {
+    const broken = [
+      "using System;",
+      "using System.Runtime.InteropServices;",
+      "",
+      "internal static partial class Broken",
+      "{",
+      '    [LibraryImport("my_native_lib", EntryPoint = "add")]',
+      "    internal static partial Frobnicate add(long a, long b);",
+      "}",
+    ].join("\n");
+
+    withTempDir((dir) => {
+      writeCsproj(dir);
+      writeFileSync(join(dir, "Root.cs"), broken);
+      assertRejected(run(["dotnet", "build", "-v", "quiet"], dir));
+    });
   });
 });

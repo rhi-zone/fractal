@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toJniFfi, toJniType } from "./java-jni.ts";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
@@ -96,12 +99,10 @@ describe("toJniFfi — function", () => {
   });
 });
 
-// Reserved-word collision coverage — string-comparison only. This package
-// has no real `javac` compile-check suite (jdk IS present in flake.nix's
-// devShell, used elsewhere for the Java/Kotlin toolchain, but not wired
-// into a real-toolchain test the way packages/type-ir/src/
-// compile-check.test.ts's `dotnet build`/`ghc`/etc. checks are for their
-// own targets) — extending that here would be a real follow-up.
+// Reserved-word collision coverage — string-comparison only. See the
+// "toJniFfi (javac compile-check)" describe block below for the real
+// `javac`-backed check (jdk is present in flake.nix's devShell) covering the
+// same reserved-word escaping plus other targets/broken-input cases.
 describe("toJniFfi — reserved-word (Java keyword) identifiers get a trailing-underscore escape", () => {
   test("a param named after a Java reserved word", () => {
     const fn: FfiRef = f(
@@ -202,5 +203,111 @@ describe("toJniFfi — module", () => {
     expect(src).toContain("public static native long open(String path);");
     expect(src).toContain("public static class FileHandle {");
     expect(src).toContain("public native void close();");
+  });
+});
+
+// ============================================================================
+// Real javac compile-check — unlike every string-comparison test above, this
+// shells out to the actual `javac` from flake.nix's devShell (openjdk 21)
+// and asserts the generated Java source genuinely compiles, catching bugs
+// (wrong keyword escaping, invalid identifiers, bogus type names, etc.) that
+// a string-comparison assertion structurally cannot see. Mirrors packages/
+// type-ir/src/compile-check.test.ts's pattern (temp dir, real toolchain
+// invocation, assert exit code). No external jar is needed — a JNI `native`
+// declaration is plain java.lang vocabulary, so this needs nothing beyond
+// the JDK itself.
+// ============================================================================
+
+function withTempDir<T>(fn: (dir: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), "ffi-ir-javac-"));
+  try {
+    return fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+type RunResult = { ok: boolean; output: string };
+
+function runJavac(file: string, dir: string): RunResult {
+  const proc = Bun.spawnSync({
+    cmd: ["javac", "-d", dir, file],
+    cwd: dir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() };
+}
+
+function assertCompiles(result: RunResult): void {
+  expect(result.ok, result.output).toBe(true);
+}
+
+function assertRejected(result: RunResult): void {
+  expect(
+    result.ok,
+    "expected javac to reject this deliberately-broken input, but it compiled cleanly",
+  ).toBe(false);
+}
+
+describe("toJniFfi (javac compile-check)", () => {
+  test("a module wrapping a free function plus a resource with an opaque-handle method compiles for real", () => {
+    const readMethod: FfiRef = f(
+      boundary.method([], withOwnership(t({ kind: "bytes" }), ownership.copy()), "FileHandle"),
+    );
+    const closeMethod: FfiRef = f(
+      boundary.method([], withOwnership(t(types.void), ownership.copy()), "FileHandle"),
+    );
+    const fileHandle: FfiRef = f(
+      boundary.resource("FileHandle", { read: readMethod, close: closeMethod }),
+    );
+    const openFn: FfiRef = f(
+      boundary.function(
+        [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }],
+        handleRef("FileHandle"),
+      ),
+    );
+    const fsModule: FfiRef = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }));
+
+    const src = toJniFfi(fsModule, "fs");
+
+    withTempDir((dir) => {
+      const file = join(dir, "Fs.java");
+      writeFileSync(file, src);
+      assertCompiles(runJavac(file, dir));
+    });
+  });
+
+  test("reserved-word (Java keyword) parameter and function names — the escaping asserted by string comparison above — actually compile", () => {
+    const identifyFn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.void), ownership.copy()),
+      ),
+    );
+    const newFn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const mod: FfiRef = f(boundary.module("kw", { identify: identifyFn, new: newFn }, {}));
+
+    const src = toJniFfi(mod, "kw");
+
+    withTempDir((dir) => {
+      const file = join(dir, "Kw.java");
+      writeFileSync(file, src);
+      assertCompiles(runJavac(file, dir));
+    });
+  });
+
+  test("a deliberately broken declaration (bogus, undeclared type name) is genuinely rejected by javac — proves this check is not a rubber stamp", () => {
+    const broken = [
+      "public class Broken {",
+      "    public static native Frobnicate add(long a, long b);",
+      "}",
+    ].join("\n");
+
+    withTempDir((dir) => {
+      const file = join(dir, "Broken.java");
+      writeFileSync(file, broken);
+      assertRejected(runJavac(file, dir));
+    });
   });
 });
