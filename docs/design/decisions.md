@@ -155,7 +155,7 @@ opt-in. No heuristic-driven auto-selection is required.
 defaults to `mapCharRouter` (the hybrid), not `makeRouterFromRoute`. The "no
 heuristic-driven auto-selection" call still stands: the static/dynamic split inside
 `mapCharRouter` itself is the resolution, not a runtime choice between whole-router
-strategies. See `preset.ts:116-125` and `bench-results/route-bench-2026-07-17T07-29-08-288Z.json`
+strategies. See `createFetch`'s `PresetOptions.router` default (`preset.ts`) and `bench-results/route-bench-2026-07-17T07-29-08-288Z.json`
 (build cost: 1.9ms for the hybrid vs 13.3ms for full `compiledCharRouter`, alongside
 near-best dispatch times) for why the hybrid was promoted to default.
 

@@ -5,12 +5,13 @@
 ### `packages/type-ir` — the type IR package
 
 - **28 `TypeKind`s** in the `TypeKinds` augmentable interface
-  (`packages/type-ir/src/index.ts:1-30`): `boolean`, `number`, `integer`,
+  (`packages/type-ir/src/index.ts`): `boolean`, `number`, `integer`,
   `int32`, `int64`, `float32`, `float64`, `string`, `uuid`, `uri`, `datetime`,
   `date`, `time`, `duration`, `bytes`, `null`, `void`, `unknown`, `never`,
   `object`, `array`, `tuple`, `map`, `union`, `literal`, `enum`, `ref`,
   `intersection`.
-- **Subtyping hierarchy + `resolve()` fallback** (`index.ts:39-93`): a
+- **Subtyping hierarchy + `resolve()` fallback** (the `parents` map and the
+  `ancestors()`/`resolve()` functions in `index.ts`): a
   `parents` map (e.g. `int32 → integer → number`, `uuid → string`) walked by
   `ancestors()`; `resolve(kind, handlers)` looks up the exact kind first, then
   walks ancestors until a handler matches. `registerParent()` lets consumers

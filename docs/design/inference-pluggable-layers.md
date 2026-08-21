@@ -20,7 +20,7 @@ per-record results afterward," building N complete per-record trees. **That is n
 code does**, and the correction matters because it removes most of the motivation for the
 rewrite.
 
-`collectEvidence` → `buildEvidenceNode` (`from-json-corpus.ts:253`) takes _all_ values at a
+`collectEvidence` → `buildEvidenceNode` (`from-json-corpus.ts`) takes _all_ values at a
 position at once and folds them into a single `EvidenceNode` — counts, distinct-value sets,
 per-field sub-evidence, per-index and index-agnostic array buckets. There is one accumulator
 per tree position, not one tree per record. The architecture is already:
