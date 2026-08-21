@@ -66,29 +66,31 @@ tags (`readOnly`, `idempotent`, `destructive`, `openWorld`, `streaming`, `deprec
 fixed implication/conflict pass, `resolveTags`:
 
 - `readOnly ⇒ idempotent`: lifts `idempotent` from unset to `true`, never overrides an
-  explicit value (`tags.ts:171-183`).
+  explicit value (`resolveTags`).
 - `readOnly ∧ destructive` (both asserted `true`) resolves to a `conflict` string on the
   result — not thrown, not auto-corrected; the caller decides what to do with it
-  (`tags.ts:185-189`).
+  (`resolveTags`).
 - A derived-return-type `stream` shape (`AsyncIterable<T>`) implies `streaming: true` only
   when the tag is unasserted either way; an explicit `true` or `false` always wins over the
-  derivation (`tags.ts:171-178`).
+  derivation (`resolveTags`).
 - `openWorld` is declared as a "standard" tag alongside the others but its only defined effect
-  is forwarding to MCP's `openWorldHint` — it has no HTTP projection at all (`tags.ts:52-62`).
+  is forwarding to MCP's `openWorldHint` — it has no HTTP projection at all (`TAG_OPEN_WORLD`'s
+  doc comment in `tags.ts`).
   A reader treating all "standard" tags as protocol-agnostic by default would be surprised by
   this one asymmetry.
 
 Tag inheritance-by-position (a node picking up its nearest ancestor's tags) was deliberately
 _removed_: "a node's tags are exactly what's on the node — they do not depend on ancestors.
 Inheritance-by-position would break composability: moving a subtree would silently change its
-behavior" (`tags.ts:206-212`). `mapNodes`, a pre-order tree visitor, is the documented
+behavior" (`tags.ts`, near `resolveTags`). `mapNodes`, a pre-order tree visitor, is the documented
 replacement primitive for a transform that explicitly wants to propagate something downward —
 this is a real design reversal a reader of `tags.ts`'s exports alone would have no way to
 know had ever been tried the other way.
 
 `unvalidated` is a seventh entry in the `Tags` bag but is **not part of the implication
 lattice** — `resolveTags` never reads it. It's a build-time-only escape hatch, read directly
-off `meta.tags` by the validation-coverage check (`tags.ts:86-100`, `apply-validation.ts`) to
+off `meta.tags` by the validation-coverage check (`TAG_UNVALIDATED`'s doc comment in `tags.ts`,
+`apply-validation.ts`) to
 exempt a leaf from requiring a generated validator.
 
 ## `mergeMeta`: the precedence rule a caller composing contributions must know
