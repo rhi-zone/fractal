@@ -375,7 +375,7 @@ state as fact, flagged here rather than guessed:
 
 - Exactly how `DirectApi`/`TypedClient`/`TreeManifest` behave at runtime if they're handed a
   genuine hybrid node (both `handler` and `children` set) — their type-level shapes treat
-  leaf/branch as mutually exclusive, but the runtime discriminator (`isLeaf`, `node.ts:367`)
+  leaf/branch as mutually exclusive, but the runtime discriminator (`isLeaf` in `node.ts`)
   is a simple `handler !== undefined` check that doesn't itself special-case the hybrid case
   one way or the other. Not traced through `direct.ts`'s `buildApi` closely enough to state
   what actually happens.
