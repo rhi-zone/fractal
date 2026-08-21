@@ -5,6 +5,43 @@
 **Date:** 2026-07-09  
 **Status:** Read-only audit; no source changes.
 
+> **Archive note (2026-08-21):** This audit describes the direct tree-walk
+> dispatcher (`buildRoutes()` / `matchConditions()` / the closed `DispatchMarker`
+> union, all formerly in `packages/http-api-projector/src/project.ts`) as it
+> stood on 2026-07-09. That dispatcher was deleted eight days later, in commit
+> `18c5195` ("retire the direct tree-walk dispatcher, consolidate on
+> `HttpRoute`"), and replaced with a different pipeline: `naiveTransform` →
+> rewriters (`applyMethods`/`applyMoveTo`/`applyResponse`) → `makeRouterFromRoute`,
+> all in the new `packages/http-api-projector/src/route.ts`. Current design
+> docs for that pipeline: `docs/design/router-model.md`,
+> `docs/design/routing-and-transforms.md`, `docs/design/meta-role-split-spec.md`.
+>
+> This audit's own Priority 1 proposal (an open `DispatchPlugin` registry,
+> §3) was in fact pursued as a follow-on design —
+> `docs/design/dispatch-extensibility.md` — but that design was itself marked
+> **Retired** the same day the dispatcher it extended was deleted. Attribute
+> (header/query/contentType) dispatch was subsequently parked outright as
+> "not a routing-tree concern" (`docs/design/decisions.md`, dated 2026-07-17)
+> rather than reimplemented on the new pipeline.
+>
+> Consequently, most `project.ts:NNN` / `layers.ts:NNN` / `tags.ts:NNN`
+> citations below point at functions that no longer exist anywhere in the
+> codebase — not moved, not renamed, structurally deleted along with the
+> dispatcher. Line numbers are left as originally written throughout this
+> document, since it is a snapshot of code as it stood on 2026-07-09 and
+> retrofitting current symbol names onto deleted functions would misrepresent
+> what those citations meant at the time. The **Appendix** at the bottom
+> carries a per-citation resolution check done on 2026-08-21 — consult it
+> before following any citation in this document. Summary: of the ~16
+> distinct symbols/blocks cited, 5 still exist today in some recognizable
+> form (`verbFromTags`, `resolveTags`, `jsonResponse`, `getHttpMeta`,
+> `autoMethodLayer`/`corsLayer`) and the rest — `buildRoutes`,
+> `matchConditions`, `DispatchMarker`/`MatchCondition`, `inferSegment`,
+> `parsePath`, `effectiveTags`, the old `HttpMeta` type, and the collision-
+> detection blocks — are gone. One trap: `route.ts` (the new pipeline) has its
+> own private `matchRoute` — a different, trie-based function unrelated to the
+> one this audit cites; the two must not be conflated.
+
 ---
 
 ## 1. Concern-by-Concern Analysis
@@ -340,21 +377,23 @@ The condition factory block (`project.ts:257-263`, `292-299`) is replaced by a p
 
 ## Appendix: File-Line Reference Summary
 
-| Claim                                | File:Line                       |
-| ------------------------------------ | ------------------------------- |
-| `buildRoutes` signature              | `project.ts:181-186`            |
-| Method-dispatch branch               | `project.ts:194-231`            |
-| Non-method attribute dispatch branch | `project.ts:233-307`            |
-| Closed condition factory             | `project.ts:257-263`, `292-299` |
-| `matchConditions` closed evaluator   | `project.ts:356-371`            |
-| `DispatchMarker` closed union        | `project.ts:470-474`            |
-| `HttpMeta` key definitions           | `project.ts:476-489`            |
-| `getHttpMeta` parser                 | `project.ts:492-521`            |
-| `verbFromTags` standalone            | `project.ts:77-94`              |
-| Input assembly in `makeRouter`       | `project.ts:400-419`            |
-| `jsonResponse` standalone            | `project.ts:433-439`            |
-| `autoMethodLayer` composable wrapper | `layers.ts:34-82`               |
-| `corsLayer` composable factory       | `layers.ts:113-169`             |
-| `createFetch` composition sequence   | `preset.ts:46-61`               |
-| `effectiveTags` tag inheritance      | `tags.ts:158-170`               |
-| `resolveTags` lattice                | `tags.ts:117-142`               |
+Original citations, unchanged, plus a resolution check done 2026-08-21 (see the archive note at the top of this document).
+
+| Claim                                 | File:Line (2026-07-09)          | Status as of 2026-08-21 |
+| -------------------------------------- | -------------------------------- | ------------------------ |
+| `buildRoutes` signature                | `project.ts:181-186`             | **Gone.** No `buildRoutes` anywhere in the repo; deleted with the tree-walk dispatcher (commit `18c5195`). |
+| Method-dispatch branch                 | `project.ts:194-231`             | **Gone.** Was inside `buildRoutes`. |
+| Non-method attribute dispatch branch   | `project.ts:233-307`             | **Gone.** Was inside `buildRoutes`; attribute dispatch itself was later parked rather than ported (`docs/design/decisions.md` § "Attribute dispatch is not a routing-tree concern"). |
+| Closed condition factory               | `project.ts:257-263`, `292-299`  | **Gone.** `DispatchMarker`/condition-factory logic deleted wholesale. |
+| `matchConditions` closed evaluator     | `project.ts:356-371`             | **Gone.** No symbol of this name remains anywhere in the codebase. |
+| `DispatchMarker` closed union          | `project.ts:470-474`             | **Gone.** Zero references repo-wide. The open-plugin successor design this audit proposed (`docs/design/dispatch-extensibility.md`) was itself marked Retired on 2026-07-17. |
+| `HttpMeta` key definitions             | `project.ts:476-489`             | **Gone as described.** Current `project.ts` has `HttpSharedMetaProperties`/`HttpLeafMetaProperties` instead — a differently-shaped role-split type, not a drop-in rename. |
+| `getHttpMeta` parser                   | `project.ts:492-521`             | **Symbol survives, role changed.** `getHttpMeta()` still exists in the current `project.ts`, but per its own doc comment it is now "a thin pass-through, not a resolver" — no longer the 4x-called monolith reading `segment`/`legacyPath`/`dispatch`/`when` this audit describes. Those four keys have no typed home in the current module at all. |
+| `verbFromTags` standalone              | `project.ts:77-94`               | **Resolvable, moved.** Now `verbFromTags()` in `packages/http-api-projector/src/tags.ts`, re-exported from `project.ts` for import-path compatibility. Same override-then-lattice shape. |
+| Input assembly in `makeRouter`         | `project.ts:400-419`             | **Gone.** Current `makeRouter()` is a thin wrapper over `makeRouterFromRoute` (`route.ts`); the flat path/query/body merge described here is not how input assembly works in the new pipeline. |
+| `jsonResponse` standalone              | `project.ts:433-439`             | **Resolvable, unchanged.** Still `jsonResponse()` in the current `project.ts`. Its former caller (`makeRouter`'s throw→500 wrapping) is gone with the old router; error-to-response handling now lives in `route.ts`'s `runRoute` catch path. |
+| `autoMethodLayer` composable wrapper   | `layers.ts:34-82`                | **Resolvable, signature changed.** Still `autoMethodLayer()` in `layers.ts`, still droppable/composable, but now takes an `HttpRoute` (route.ts's type) instead of the old `Route[]`. |
+| `corsLayer` composable factory         | `layers.ts:113-169`              | **Resolvable, unchanged in shape.** Still `corsLayer()` in `layers.ts`, still `(opts) => (inner: Fetch) => Fetch`. |
+| `createFetch` composition sequence     | `preset.ts:46-61`                | **Gone as described.** `preset.ts` still composes `autoMethodLayer`/`corsLayer` at the end, but the stages before them (`buildRoutes → makeRouter`) are replaced by the `toHttpRoutes`/rewriter/`makeRouterFromRoute` pipeline — not the same sequence. |
+| `effectiveTags` tag inheritance        | `tags.ts:158-170`                | **Gone.** Zero references anywhere in the repo. How tag inheritance works in the current pipeline wasn't traced further — out of scope for this citation pass. |
+| `resolveTags` lattice                  | `tags.ts:117-142`                | **Resolvable, moved within file.** Still `resolveTags()` in `packages/api-tree/src/tags.ts`, now around line 171; same three-valued lattice role. |
