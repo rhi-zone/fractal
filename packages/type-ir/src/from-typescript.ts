@@ -1527,7 +1527,33 @@ const FALLBACK_COMPILER_OPTIONS: ts.CompilerOptions = {
  * repo-audit-2026-08-20.md §2.2).
  */
 export function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOptions {
-  const configPath = ts.findConfigFile(path.dirname(entryFile), ts.sys.fileExists);
+  return loadCompilerOptionsForConfig(nearestConfigFileForEntry(entryFile));
+}
+
+/**
+ * The `tsconfig.json` a normal `tsc` invocation would resolve for
+ * `entryFile` — `ts.findConfigFile` walking up from the file's OWN directory,
+ * exactly how `tsc`/editors locate a loose file's project. `undefined` when
+ * the walk reaches the filesystem root without finding one (a bare fixture
+ * outside any project), which is the case `FALLBACK_COMPILER_OPTIONS` covers.
+ *
+ * Exported as its own step, rather than staying folded inside
+ * `loadCompilerOptionsForFile`, because "which config region does this file
+ * belong to" is the grouping key `groupEntryFilesByConfig` needs — and asking
+ * it directly is far cheaper than resolving the full options bag just to
+ * compare `configFilePath` afterwards.
+ */
+export function nearestConfigFileForEntry(entryFile: string): string | undefined {
+  return ts.findConfigFile(path.dirname(path.resolve(entryFile)), ts.sys.fileExists);
+}
+
+/** Resolve one already-located `tsconfig.json` to the options an extraction
+ * pass should run under — the second half of `loadCompilerOptionsForFile`,
+ * split out so a batch grouping pass can parse each DISTINCT config exactly
+ * once instead of once per entry file that happens to share it. See
+ * `loadCompilerOptionsForFile`'s doc comment for why `noEmit`/`skipLibCheck`
+ * are forced and why the fallback is total rather than throwing. */
+function loadCompilerOptionsForConfig(configPath: string | undefined): ts.CompilerOptions {
   if (!configPath) return FALLBACK_COMPILER_OPTIONS;
 
   const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile);
@@ -1537,6 +1563,105 @@ export function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOption
   if (parsed.errors.length > 0) return FALLBACK_COMPILER_OPTIONS;
 
   return { ...parsed.options, noEmit: true, skipLibCheck: true };
+}
+
+/**
+ * One config region's share of a batch: the entry files whose nearest
+ * `tsconfig.json` is `configPath`, plus the options that config resolves to.
+ * A group is exactly the granularity at which ONE `ts.Program` is both
+ * correct (every root gets the options its own project would give it) and
+ * worth sharing (roots under one project overwhelmingly share a dependency
+ * closure).
+ */
+export interface EntryFileGroup {
+  /** The nearest `tsconfig.json` for every file in `entryFiles`, or
+   * `undefined` for the "no discoverable project" group (see
+   * `FALLBACK_COMPILER_OPTIONS`). */
+  readonly configPath: string | undefined;
+  /** `configPath` resolved — the exact bag to hand `ts.createProgram`. */
+  readonly compilerOptions: ts.CompilerOptions;
+  /** The subset of the input batch belonging to this region, in input order
+   * (spelled as the caller spelled them — a `ts.Program` root and a later
+   * `program.getSourceFile(...)` lookup have to agree on spelling). */
+  readonly entryFiles: readonly string[];
+}
+
+/**
+ * Partition a batch of entry files into config regions — the fix for one
+ * shared `ts.Program` being built over a whole batch but configured from only
+ * the FIRST entry file's `tsconfig.json`, which silently gave every other
+ * file in the batch someone else's `paths`/`baseUrl`/`strict` settings. Real
+ * `tsc` resolves each file's nearest config independently; so does this.
+ *
+ * ## Granularity: the config file's path, not its resolved options
+ *
+ * Two entry files group together iff `nearestConfigFileForEntry` returns the
+ * same path for both. The alternative — grouping by structural equality of
+ * the RESOLVED `ts.CompilerOptions`, so that two distinct-but-identical
+ * configs could still share a Program — buys nothing here: `ts.parseJson
+ * ConfigFileContent` stamps `configFilePath` and `pathsBasePath` into the
+ * resolved bag, and both are per-config-file absolute paths, so two different
+ * config files essentially never compare equal anyway. Path identity is the
+ * cheaper key (one `findConfigFile` walk per file, no options parse needed to
+ * decide the grouping) and it is correct by construction: nearest-config is a
+ * function of the containing directory, so two files in one directory can
+ * never land in different groups.
+ *
+ * ## Why this returns groups instead of pre-built Programs
+ *
+ * A `ts.Program` is a multi-GB object graph (see `createExtractorProgram`).
+ * Handing back a Program per group would hold ALL of them live at once —
+ * turning the one-Program peak this design is built around into an
+ * N-regions-times peak. Returning the partition instead lets a caller loop
+ * one group at a time, building that group's Program, using it, and dropping
+ * it before the next group's is built, so peak memory stays at one Program
+ * while correctness is per-region:
+ *
+ * ```ts
+ * for (const group of groupEntryFilesByConfig(entryFiles)) {
+ *   const program = createExtractorProgram(group.entryFiles);
+ *   for (const file of group.entryFiles) …use program…
+ * }
+ * ```
+ *
+ * Groups come back in first-appearance order of their `configPath`, and each
+ * group's `entryFiles` in input order, so a caller's output ordering is a
+ * deterministic function of its input ordering.
+ */
+export function groupEntryFilesByConfig(entryFiles: readonly string[]): readonly EntryFileGroup[] {
+  // Sentinel: `undefined` (no discoverable project) is a real group, and a
+  // `Map` key of `undefined` would be indistinguishable from "absent" via
+  // `.get`, so key on the string form and carry the real value in the group.
+  const NO_CONFIG = "\0no-config";
+  const order: string[] = [];
+  const byKey = new Map<string, { configPath: string | undefined; entryFiles: string[] }>();
+
+  for (const entryFile of entryFiles) {
+    const configPath = nearestConfigFileForEntry(entryFile);
+    const key = configPath ?? NO_CONFIG;
+    let group = byKey.get(key);
+    if (group === undefined) {
+      group = { configPath, entryFiles: [] };
+      byKey.set(key, group);
+      order.push(key);
+    }
+    group.entryFiles.push(entryFile);
+  }
+
+  // Each DISTINCT config is parsed exactly once, not once per entry file that
+  // shares it. Deliberately scoped to this call rather than a module-level
+  // memo: `loadCompilerOptionsForFile` is also the cache layer's
+  // tsconfig-edit detector (`compilerOptionsFingerprint`, api-tree's
+  // cache.ts), and a process-lifetime memo would make a long-running watch
+  // build blind to a tsconfig edit it is specifically supposed to notice.
+  return order.map((key) => {
+    const group = byKey.get(key)!;
+    return {
+      configPath: group.configPath,
+      compilerOptions: loadCompilerOptionsForConfig(group.configPath),
+      entryFiles: group.entryFiles,
+    };
+  });
 }
 
 /** Create a read-only Program over a single entry file, resolving modules
@@ -1559,12 +1684,55 @@ export function loadCompilerOptionsForFile(entryFile: string): ts.CompilerOption
  * hits without multi-root support, reaching 20+GB RSS and OOM-killing
  * unrelated processes on the host. See `build.ts`'s
  * `buildValidatorModuleSource` `program` parameter for the batch-reuse entry
- * point. */
+ * point.
+ *
+ * ## Multi-root batches must share ONE config region
+ *
+ * A `ts.Program` carries a single `ts.CompilerOptions` bag for all of its
+ * roots — there is no per-root options in TypeScript's model. So a batch
+ * spanning two `tsconfig.json` regions cannot be one Program without some
+ * file being compiled under a project that isn't its own: this function used
+ * to resolve options from `entryFiles[0]` alone and apply them to everything,
+ * which silently handed every other file in the batch the first file's
+ * `paths`/`baseUrl`/`strict` settings. In a monorepo where each package has
+ * its own `paths` remap over a shared base config, that is wrong the moment a
+ * batch crosses a package boundary — not hypothetically.
+ *
+ * Rather than continue to pick a region and be quietly wrong for the rest,
+ * this now throws: multi-root batches must already be region-homogeneous.
+ * `groupEntryFilesByConfig` produces exactly that partition, and its doc
+ * comment shows the loop a batch caller wants (one group at a time, so peak
+ * memory stays at one Program rather than one per region). Single-file calls
+ * are unaffected and always were correct — one file is trivially one region.
+ *
+ * The tradeoff taken here is loudness over convenience: a caller whose batch
+ * spans regions gets an error naming the regions instead of a Program, and
+ * has to pick the grouped loop. Auto-grouping inside this function was the
+ * alternative, and was rejected because its return type would have to stop
+ * being a `ts.Program` — a `ts.TypeChecker` is permanently bound to the one
+ * Program that made it, so there is no facade that can transparently serve
+ * "the right checker for this file" across several Programs, and every
+ * existing caller holds the returned Program directly. */
 export function createExtractorProgram(entryFile: string): ts.Program;
 export function createExtractorProgram(entryFiles: readonly string[]): ts.Program;
 export function createExtractorProgram(entryFile: string | readonly string[]): ts.Program {
   const files = Array.isArray(entryFile) ? entryFile : [entryFile as string];
   if (files.length === 0)
     throw new Error("createExtractorProgram: at least one entry file required");
-  return ts.createProgram(files as string[], loadCompilerOptionsForFile(files[0]!));
+
+  const groups = groupEntryFilesByConfig(files);
+  if (groups.length > 1) {
+    const regions = groups
+      .map((g) => `  ${g.configPath ?? "(no tsconfig.json found)"}: ${g.entryFiles.length} file(s)`)
+      .join("\n");
+    throw new Error(
+      `createExtractorProgram: entry files span ${groups.length} different tsconfig.json ` +
+        `regions, but one ts.Program has one CompilerOptions bag for all of its roots — ` +
+        `building one anyway would compile every file outside the first region under the ` +
+        `wrong project's paths/baseUrl. Group the batch with groupEntryFilesByConfig() and ` +
+        `build one Program per group instead.\n${regions}`,
+    );
+  }
+
+  return ts.createProgram(files as string[], groups[0]!.compilerOptions);
 }
