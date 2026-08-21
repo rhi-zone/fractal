@@ -269,70 +269,117 @@ checked for any consumer outside the defining file. 651 exports checked
 
 ### 3.1 Packages nothing imports at all
 
-- **`auth-oidc`** — zero importers; the one grep hit (`api-tree/src/auth.ts:2`)
-  is a comment. All 5 subpaths unimported.
-- **`http-framework-projector`** — zero importers anywhere; even its own `src/`
-  never imports its `.` entry.
-- **`ffi-ir`** (49 files, ~8.2k lines) — all 13 subpaths unimported; every
-  `to*Ffi` projector referenced only by its own test.
-- **`fractal`** (umbrella) — 6 pure `export *` facade files; only exercised by
-  its own `module-graph.test.ts`. Not imported by fractal, examples, spike, or
-  the sibling codebase. Note the doc split in §5.13: README sells the umbrella, the docs
-  site never mentions it.
-- **`api-explorer`** — a real 588-line React component, reached only as a
-  **string** emitted by codegen (`http-api-projector/src/http-route-reference.ts:259`)
-  and by `examples/doc-site-verification/*` (out-of-workspace, `file:` deps).
-- **`playground`** — private demo, consumed by nothing, not run in CI.
+- **`auth-oidc`** — still zero importers; the one grep hit
+  (`api-tree/src/auth.ts:2`) is still a comment. All 5 subpaths unimported.
+- **`http-framework-projector`** — still zero importers anywhere; even its own
+  `express.ts`/`fastify.ts` never import its `.` entry (they do import from
+  `api-tree` and `http-api-projector`, just not from themselves).
+- **`ffi-ir`** — count corrected: **26 files** in `src/` (13 impl + 13 test),
+  not 49; ~7,700 lines, close to the doc's "~8.2k" estimate. Subpath count in
+  `package.json` is **41**, not 13. "every `to*Ffi` projector referenced only
+  by its own test" still holds — zero outside importers found.
+- **`fractal`** (umbrella) — still 6 pure `export *` facade files
+  (`cli.ts`, `json-rpc.ts`, `mcp.ts`, `graphql.ts`, `http.ts`, `index.ts`),
+  still only exercised by its own `module-graph.test.ts`. Still not imported
+  by fractal, examples, spike, or the sibling codebase. Note the doc split in
+  §5.13: README sells the umbrella, `docs/guide/getting-started.md` now leads
+  with the umbrella install too — that split is fixed, see §5.13.
+- **`api-explorer`** — reached only as a **string** emitted by codegen
+  (`http-api-projector/src/http-route-reference.ts:259`, citation still
+  correct) and by `examples/doc-site-verification/*` (out-of-workspace, `file:`
+  deps, still confirmed). Size claim corrected: the actual component
+  (`api-explorer.tsx`) is **183 lines**; 588 was the sum of the whole `src/`
+  directory including tests.
+- **`playground`** — private demo, consumed by nothing as a package import.
+  "Not run in CI" is now **wrong**: `.github/workflows/ci.yml` builds it, and
+  `deploy-docs.yml` copies its dist output into the docs site.
 
 Consumed only inside fractal: `json-rpc-api-projector` (solely via the unused
 `fractal` facade — so effectively zero real consumers), `graphql-api-projector`
 (two api-tree test files + facade), `mcp-api-projector` (tests + example +
-facade). `cli-api-projector` has exactly one the sibling codebase import.
-Load-bearing: `api-tree` (the sibling codebase: `/tree` ×76, `/node` ×46, plus 7 more
-subpaths), `http-api-projector` (`/preset` ×41, `/verbs` ×36, `/route`,
-`/decode`), `type-ir` (via api-tree + projectors + 1 direct the sibling codebase import).
+facade). `cli-api-projector`'s "exactly one the sibling codebase import" claim
+is now **wrong**: it has several in-repo consumers —
+`api-tree/otel.integration.test.ts`, `context.test.ts`, `extract.test.ts`
+(dynamic import), a fixture-file type import, plus the `fractal/cli.ts`
+facade. Load-bearing: `api-tree`, `http-api-projector`, `type-ir` — the sibling
+codebase's per-subpath import counts (`/tree` ×76 etc.) were not re-verified
+this pass, no sibling checkout available.
 
-### 3.2 Dead exports — 89 symbols with no consumer anywhere
+### 3.2 Dead exports — 89 symbols with no consumer anywhere [**citations updated, several no longer dead**]
 
-- **api-tree: 45**, including in `index.ts` itself: `Fn` (:81), `isErr` (:111 —
-  zero uses anywhere, prose mentions only), `composeK` (:292, own test only);
-  plus `isNode` (`node.ts:364`), `mapNodes` (`tags.ts:230`), `schemaFromType`
-  (`extract.ts:174`), `opFunctionNode` (`extract.ts:622`), all five `TAG_*`
-  constants (`tags.ts:36-84`), `withCache` (`cache.ts:630`),
-  `computeBundleFingerprint` (`cache.ts:546`), `getActiveSpan` (`otel.ts:215`),
-  `affectedEntries` (`reachability.ts:203`), `writeSchemaModule`
-  (`schema-build.ts:93`) + `writeSchemaModuleCached` (:228), both
-  `*WireApplyValidationModuleCached` wrappers + ~7 sibling option/result types.
+- **api-tree: 45**, including in `index.ts` itself: `Fn` (:81, unchanged),
+  `isErr` (now :135, not :111 — still zero uses anywhere, prose mentions
+  only), `composeK` (now :316, not :292 — still own-test only); plus `isNode`
+  (`node.ts`, now :380 — **not actually dead**: it's called internally from
+  `node.ts:777` in addition to its test, so "dead export" overstates it —
+  it's an unused-externally-but-used-internally export), `mapNodes`
+  (`tags.ts:230`, unchanged — own test + internal recursive self-calls only),
+  `schemaFromType` (`extract.ts`, now :180), `opFunctionNode` (`extract.ts`,
+  now :628), the `TAG_*` constants (`tags.ts` — there are actually **7**, at
+  :36/:43/:50/:62/:73/:84/:100, not 5; `TAG_IDEMPOTENT` and `TAG_UNVALIDATED`
+  are referenced outside their own file — `TAG_UNVALIDATED` is used within
+  api-tree itself, in `apply-validation.ts`, so not dead), `withCache`
+  (**removed entirely**, see §2.4 — the `cache.ts:630` citation is now a dead
+  pointer to a deleted symbol, not a dead-but-present export),
+  `computeBundleFingerprint` (`cache.ts`, now :672 — **not actually dead**:
+  called internally from `writeCacheMetadata` at :601, no external caller
+  though), `getActiveSpan` (`otel.ts`, now :216 — test-only, no non-test
+  caller), `affectedEntries` (`reachability.ts`, now :245 — test-only),
+  `writeSchemaModule` (`schema-build.ts`, now :106 — confirmed genuinely dead,
+  zero references anywhere besides its own definition and a doc-comment
+  mention) + `writeSchemaModuleCached` (now :283 — **not dead**: heavily used
+  across `cache.test.ts`), both `*WireApplyValidationModuleCached` wrappers
+  (see intro block and §6.1 — no longer dead, `cli.ts` calls them now) + ~7
+  sibling option/result types.
 - **http-api-projector: 23**, including the **entire `./webhook` module**
   (`computeWebhookSignature` :143, `webhookSignatureLayer` :162,
-  `createInMemoryReplayStore` :242, `replayPreventionLayer` :282 — tests only)
-  and every non-Bun/Node platform adapter (`serveDeno` `adapter.ts:83`,
-  `toCloudflareWorker` :96, `toVercelEdge` :109, `serveFastlyCompute` :118,
-  `toAwsLambdaHandler` :169); also `restCrud` (`dx.ts:125`), `toHttpRoutes`
-  (`project.ts:97`).
+  `createInMemoryReplayStore` :242, `replayPreventionLayer` :282 — all
+  confirmed still tests-only) and every non-Bun/Node platform adapter
+  (`serveDeno` `adapter.ts:83`, `toCloudflareWorker` :96, `toVercelEdge` :109,
+  `serveFastlyCompute` :118, `toAwsLambdaHandler` :169 — all still confirmed
+  no callers); also `restCrud` (`dx.ts:125`), `toHttpRoutes` (`project.ts`,
+  now :98).
 - **ffi-ir: 18** (essentially every entry point), **auth-oidc: 2** more
   symbols, **mcp: 1** (`SamplingMessage`).
 
 **[inferred]** Split between "intended public API awaiting external consumers"
 (platform adapters, `./webhook`, ffi-ir, auth-oidc, the umbrella, api-explorer —
-all have real tests and docs mentions) and "actually dead" (`isErr`, `composeK`,
-the `*Cached` wrapper family in both build files, `spike/scale`).
+all have real tests and docs mentions) and "actually dead" (`isErr`,
+`composeK`, `writeSchemaModule`, `spike/scale`). Several items originally
+filed under "actually dead" (the `*Cached` wrapper family, `isNode`,
+`computeBundleFingerprint`, `writeSchemaModuleCached`) turned out on
+re-check to have live internal or in-repo callers, or to have since gained
+one — "no external consumer" and "dead" are not the same claim, and this list
+originally blurred them.
 
-### 3.3 Broken-as-published subpaths and other inventory rot
+### 3.3 Broken-as-published subpaths and other inventory rot [**both findings fixed since audit**]
 
-- **[evidenced]** `type-ir/package.json`: 5 subpaths point at `./src/*.ts`
-  instead of `./dist/*.js` (`./rescript` :314, `./rescript-native` :318,
-  `./gleam` :330, `./gleam-native` :334, `./rust-wasm-bindgen` :338) while
-  `files: ["dist"]` — broken in any published tarball; 251 sibling subpaths
-  use dist. `rescript-native.ts`/`gleam-native.ts` are also not registered in
-  `registry.ts`, unlike their non-native siblings. 24 of 129 type-ir subpaths
-  are never imported externally.
-- **[evidenced]** `spike/scale` imports `@rhi-zone/fractal-client-api-projector`
-  (`spike/scale/correctness.ts:9`, `gen/generate.ts:72`, all generated files) —
-  a package merged into http-api-projector on 2026-07-18 per
-  `docs/api/index.md:9`. Unresolvable → dead. (the sibling codebase's
-  `tooling/fractal-spike/tax-compliance/tree.ts:24` likewise names a
-  `@rhi-zone/fractal-core` that never existed.)
+- **[evidenced, historical]** `type-ir/package.json` had 5 subpaths pointing
+  at `./src/*.ts` instead of `./dist/*.js` (`./rescript`, `./rescript-native`,
+  `./gleam`, `./gleam-native`, `./rust-wasm-bindgen`) while `files: ["dist"]`
+  — broken in any published tarball. `rescript-native.ts`/`gleam-native.ts`
+  were also not registered in `registry.ts`, unlike their non-native
+  siblings.
+
+  **This is fixed.** All 5 subpaths now point at `./dist/*.js`/`./dist/*.d.ts`
+  (commit `e9f861e`, "fix(type-ir): point rescript/gleam/rust-wasm-bindgen
+  subpaths at dist, register the two natives", dated the same day as this
+  audit). `rescript-native.ts` and `gleam-native.ts` are now registered in
+  `registry.ts` (imports at :123-124, entries at :697-698, alias map at
+  :812-813). "24 of 129 type-ir subpaths never imported externally" was not
+  re-verified this pass.
+- **[evidenced, historical]** `spike/scale` imported
+  `@rhi-zone/fractal-client-api-projector` — a package merged into
+  http-api-projector on 2026-07-18 per `docs/api/index.md:9` (citation still
+  correct) — making the import unresolvable and dead.
+
+  **This is fixed.** `spike/scale/correctness.ts` and `spike/scale/gen/generate.ts`
+  now both import `@rhi-zone/fractal-http-api-projector` directly; the dead
+  import is gone, the migration this finding was waiting on already happened.
+  The sibling codebase's `tooling/fractal-spike/tax-compliance/tree.ts:24`
+  claim (naming a `@rhi-zone/fractal-core` that never existed) was not
+  re-verified this pass — no sibling checkout available, and no
+  `tooling/fractal-spike` directory exists in this repo either.
 
 ---
 
