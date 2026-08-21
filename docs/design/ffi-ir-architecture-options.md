@@ -24,12 +24,13 @@ The user's framing (verbatim): "really we'd want to design and build something l
 type-ir for ffi _in general_, not just `* -> js`, but also at least `* -> c`,
 possibly (?) also `* -> wasm/wit`." Since the parent survey was written, a concrete
 data point was added to the codebase:
-[VERIFIED-LOCAL] `packages/type-ir/src/wasm-bindgen.ts` (455 lines, read in full) is
+[VERIFIED-LOCAL] `packages/type-ir/src/rust-wasm-bindgen.ts` (500 lines, read in
+full) is
 a real, working type-ir → Rust `#[wasm_bindgen]` codegen projector. It is narrow by
 explicit design: plain functions, structs, and fieldless/string-discriminant enums
 only — `union`, `tuple`, `map`, `intersection`, and `method`/`interface` (receiver
 types) all throw rather than degrade, because (per the file's own header comment,
-`wasm-bindgen.ts:1-51`) wasm-bindgen's ABI is "a hard wall, not a best-effort data
+`rust-wasm-bindgen.ts`) wasm-bindgen's ABI is "a hard wall, not a best-effort data
 shape" and a silent lossy degrade there would be a _compiled, wrong_ output, not
 just an imprecise one — a materially different risk than the lossy degrades every
 other projector in the package uses for pure-data formats. This is the concrete
@@ -174,7 +175,8 @@ func(...) -> result<response, error-code>;`), signaling the call may suspend;
   discriminated object — is **[UNVERIFIED, not confirmed this fetch]**).
 - **Composition units — `interface`, `world`, `package` — are a separate layer
   above the type vocabulary,** roughly analogous to type-ir's own
-  `TypeRefDocument`/`defs` layering (parent survey §1, `index.ts:297-305`) but
+  `TypeRefDocument`/`defs` layering (parent survey §1, type-ir's `TypeRefDocument`
+  type) but
   richer: an `interface` groups named types+functions; a `world` declares a
   component's contract via `import`/`export` and can `include` another world's
   imports/exports; a `package` namespaces interfaces/worlds across files with
@@ -206,10 +208,10 @@ implementation choice.
 
 ## 3. Cross-referencing all five tools against the parent survey's open axes
 
-| Axis                | cbindgen (C)                                                                         | WIT                                                                                                             | uniffi (parent §3)                                    | wasm-bindgen (parent §3 + `wasm-bindgen.ts`)                                                              | diplomat (parent §3)                                                    |
+| Axis                | cbindgen (C)                                                                         | WIT                                                                                                             | uniffi (parent §3)                                    | wasm-bindgen (parent §3 + `rust-wasm-bindgen.ts`)                                                          | diplomat (parent §3)                                                    |
 | ------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Ownership           | opaque pointer + hand-written free fn; no in-tool convention **[VERIFIED, partial]** | `resource` type + `borrow<T>` qualifier, first-class **[VERIFIED]**                                             | opaque handle + generated destructor **[UNVERIFIED]** | `JsValue` index-table indirection **[VERIFIED, partial]**                                                 | "borrow-safety" named as a goal, mechanism unconfirmed **[UNVERIFIED]** |
-| Enums-with-data     | tagged union, strategy fixed by source `#[repr(...)]` **[VERIFIED]**                 | `variant` (payload-bearing), `enum` = payload-free special case **[VERIFIED]**                                  | not confirmed this session                            | THROWS — out of scope, no dynamic-union mapping attempted **[VERIFIED-LOCAL, `wasm-bindgen.ts:172-175`]** | not confirmed this session                                              |
+| Enums-with-data     | tagged union, strategy fixed by source `#[repr(...)]` **[VERIFIED]**                 | `variant` (payload-bearing), `enum` = payload-free special case **[VERIFIED]**                                  | not confirmed this session                            | THROWS — out of scope, no dynamic-union mapping attempted **[VERIFIED-LOCAL, `rust-wasm-bindgen.ts`'s `handlers.union` entry]** | not confirmed this session                                              |
 | Generics            | monomorphize manually per instantiation; no generic functions at all **[VERIFIED]**  | no generics in the fetched type vocabulary **[not addressed in this fetch — absence, not confirmed exclusion]** | not confirmed this session                            | not modeled; type-ir itself has no generic node (parent §1)                                               | not confirmed this session                                              |
 | Async               | not applicable (C has no async calling convention)                                   | `async` function qualifier + `stream<T>`/`future<T>` as separate data types **[VERIFIED]**                      | not confirmed this session                            | not confirmed this session (parent §3 flags this explicitly unresolved)                                   | not confirmed this session                                              |
 | Errors              | not modeled — C convention (error code / out-param) left to author                   | `result<T, E>` as ordinary data; per-language idiom mapping unconfirmed **[VERIFIED type, UNVERIFIED mapping]** | `Result<T,E>` → native exception **[UNVERIFIED]**     | not confirmed this session                                                                                | not confirmed this session                                              |
@@ -240,7 +242,8 @@ Each fork lists options with costs; none is picked.
 - **A1. Extend type-ir's existing metadata bag.** New `meta` keys
   (`meta.ownership`, `meta.layoutKind`, `meta.abiTarget`, ...) following the
   `nullable`/`readonly` convention-not-contract precedent
-  (parent survey §4 Q1-b, `index.ts:135-172`). _Cost:_ zero new package/repo
+  (parent survey §4 Q1-b, the `meta` conventions documented on type-ir's `TypeRef`
+  type). _Cost:_ zero new package/repo
   surface, reuses the exact mechanism 118 existing projectors already read. _Cost
   against:_ parent survey §4 Q1-b already names the core risk — an incorrect
   ownership/layout value here is a memory-safety bug in generated C/Rust output,
@@ -336,7 +339,7 @@ Each fork lists options with costs; none is picked.
   closing observation already named ("every tool that does more than
   data-shape-only picks its own fixed strategy... rather than exposing a
   general-purpose IR surface") — lowest design risk, ships incrementally, and the
-  existing `wasm-bindgen.ts` projector is already exactly this shape (a
+  existing `rust-wasm-bindgen.ts` projector is already exactly this shape (a
   self-contained target-specific converter, per its own file header comment,
   "each projector file in this package is self-contained"). _Cost against:_
   explicitly forfeits the "one IR, many projectors" value proposition for the
@@ -449,7 +452,7 @@ that support solves a different problem (WASM-guest C, not native-C-ABI C).
   axis, not the open-bag side.
 - **Closed/complete vs. incremental partial support:** nothing in the fetched
   pages suggests a WIT consumer is expected to handle "this construct isn't
-  supported, throw" the way `wasm-bindgen.ts` explicitly does for
+  supported, throw" the way `rust-wasm-bindgen.ts` explicitly does for
   union/tuple/map/intersection/method/interface. WIT's own model is that a
   `.wit` file is a complete, closed contract — every construct in it is
   meaningful to every conforming `wit-bindgen` backend (modulo that backend's
@@ -511,7 +514,7 @@ not just repeats.
   vocabulary, then define per-target lowering rules: C lowers `resource` to
   cbindgen's opaque-pointer-plus-explicit-free-function pattern (§1), JS lowers
   it to something wasm-bindgen-shaped (`JsValue`-table indirection or a class
-  wrapping an opaque handle — the existing `wasm-bindgen.ts` projector doesn't yet
+  wrapping an opaque handle — the existing `rust-wasm-bindgen.ts` projector doesn't yet
   have a `resource`-equivalent kind to lower from, so this is new work, not a
   refactor of existing handlers), and WIT itself lowers to a no-op (already
   native). _Cost:_ reuses a real, externally-vetted ownership primitive instead of
@@ -534,7 +537,7 @@ not just repeats.
   copyable when only one of the three targets can actually treat it that way, and
   the IR has no way to flag the mismatch before a target-specific codegen throws
   (or worse, silently produces unsound output, which is exactly the risk
-  `wasm-bindgen.ts`'s throw-not-degrade design (§0) was built to avoid for its one
+  `rust-wasm-bindgen.ts`'s throw-not-degrade design (§0) was built to avoid for its one
   target).
 
 > **User input (2026-08-03):** Needs more information before any decision --
@@ -581,7 +584,7 @@ interpretation]` mark on the same claim to directly confirmed: cbindgen is
    its side of a callback while Rust still holds the `Arc<dyn Trait>` handle — this
    specific hazard remains **[UNVERIFIED]**, not found in the fetched pages.
 3. **wasm-bindgen does have a zero-copy path, but it is a separate, unsafe escape
-   hatch outside the safe struct/fn surface `wasm-bindgen.ts` targets** —
+   hatch outside the safe struct/fn surface `rust-wasm-bindgen.ts` targets** —
    correcting this document's earlier framing (§0, §3's table) that copying is the
    _only_ path. [VERIFIED-EXTERNAL: docs.rs/js-sys, `Uint8Array::view`/
    `view_mut_raw`, fetched 2026-08-03]: `js_sys::Uint8Array::view()` returns a
@@ -595,7 +598,7 @@ interpretation]` mark on the same claim to directly confirmed: cbindgen is
    not hypothetical — but it is `unsafe`, is invalidated by any subsequent Rust-side
    allocation with no compiler or runtime check, and is a different code path
    entirely from the `#[wasm_bindgen(getter_with_clone)]` + `Clone` convention
-   `wasm-bindgen.ts` implements (`wasm-bindgen.ts:20-23, 316-321`) — the projector's
+   `rust-wasm-bindgen.ts` implements (its header comment plus `buildStruct`) — the projector's
    existing behavior is accurately described as "the safe subset of wasm-bindgen
    defaults to copy-only," not "wasm-bindgen itself has no zero-copy option."
 4. **WIT's Canonical ABI resource mechanism confirmed: not reference counting — a
@@ -628,17 +631,17 @@ field (e.g. a `Vec<u8>` byte buffer) crossing each system's boundary:**
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | C (cbindgen)                                                                    | Whichever side the author's hand-written convention says (cbindgen prescribes nothing — §1, confirmed above) | Same — author-defined free function, or raw `free()`/`libc::free` if the convention says so                | Either a full value copy (struct passed/returned by value into caller-provided storage) or an opaque pointer decomposed via `slice::from_raw_parts` for the buffer; no compiler-checked distinction | **Undetected UB** — double-free, use-after-free, or leak are all possible and cbindgen has no mechanism to catch any of them; the generated header is silent on which failure a given misuse produces                                 |
 | uniffi                                                                          | Rust, via `Arc::new`                                                                                         | Rust's own `Arc` drop glue, triggered by the _last_ dropped reference (foreign destructors only decrement) | Shared ownership by reference count — the buffer field is not re-copied per access, it lives inside the `Arc`'d object                                                                              | **Leak only** (bounded, not UB) — a foreign side that never calls its generated destructor keeps the refcount above zero forever; memory-safety (no UAF/double-free) is preserved by construction                                     |
-| wasm-bindgen (safe path, `wasm-bindgen.ts`'s actual behavior)                   | Rust allocates; JS receives a `Clone`d copy wrapped as a `JsValue`-tracked object                            | JS's own GC frees the JS-side copy; Rust's original is unaffected/independently dropped                    | **Full copy**, always, for the `Vec<u8>` field (`getter_with_clone` requires `Clone`) — no sharing                                                                                                  | **None, memory-safety-wise** — the two copies are fully independent; cost is duplicated memory/CPU, not a safety bug                                                                                                                  |
-| wasm-bindgen (unsafe path, `Uint8Array::view()`, not used by `wasm-bindgen.ts`) | Rust allocates the buffer once                                                                               | Rust frees it (or reallocates it) whenever it chooses                                                      | **Zero-copy borrow** — a live typed-array view directly into wasm linear memory                                                                                                                     | **Use-after-free / read of invalid memory**, undetected — any subsequent allocation on the Rust side can silently invalidate the JS-held view with no error at the point of misuse                                                    |
+| wasm-bindgen (safe path, `rust-wasm-bindgen.ts`'s actual behavior)                   | Rust allocates; JS receives a `Clone`d copy wrapped as a `JsValue`-tracked object                            | JS's own GC frees the JS-side copy; Rust's original is unaffected/independently dropped                    | **Full copy**, always, for the `Vec<u8>` field (`getter_with_clone` requires `Clone`) — no sharing                                                                                                  | **None, memory-safety-wise** — the two copies are fully independent; cost is duplicated memory/CPU, not a safety bug                                                                                                                  |
+| wasm-bindgen (unsafe path, `Uint8Array::view()`, not used by `rust-wasm-bindgen.ts`) | Rust allocates the buffer once                                                                               | Rust frees it (or reallocates it) whenever it chooses                                                      | **Zero-copy borrow** — a live typed-array view directly into wasm linear memory                                                                                                                     | **Use-after-free / read of invalid memory**, undetected — any subsequent allocation on the Rust side can silently invalidate the JS-held view with no error at the point of misuse                                                    |
 | WIT (Canonical ABI `resource`)                                                  | Guest/host code, via its own constructor, registered under a handle in the per-instance handle table         | Explicit guest/host-supplied destructor, invoked by `canon resource.drop`                                  | **Handle** (`own` = ownership transfer, `borrow<T>` = scoped reference) — the underlying buffer is never copied by the ABI itself, only the handle crosses                                          | **Runtime-detected trap** (safe abort) if an `own` handle is dropped while `num_lends > 0`; the underlying allocation is still whatever the guest's destructor implementation is (a bug there is out of the Canonical ABI's coverage) |
 
 **Named options, reframed with this session's per-target evidence (extends,
 does not replace, C1-C3 above — none recommended):**
 
 - **Option 1 — Copy-only, always clone across the boundary** (matches C1's
-  "inline" case narrowed to "never opaque"; matches `wasm-bindgen.ts`'s current,
+  "inline" case narrowed to "never opaque"; matches `rust-wasm-bindgen.ts`'s current,
   shipped default). _Cross-checked:_ **JS** — proven, this is exactly what
-  `wasm-bindgen.ts` does today (`getter_with_clone` + `Clone`, confirmed by direct
+  `rust-wasm-bindgen.ts` does today (`getter_with_clone` + `Clone`, confirmed by direct
   read). **WIT** — a legitimate native subset: non-`resource` types (`record`,
   `list`, etc.) already cross the Canonical ABI by value/copy, so "copy-only" is
   simply "never emit a `resource`," which works but forecloses using WIT's own
@@ -682,7 +685,7 @@ does not replace, C1-C3 above — none recommended):**
   **uniffi's own domain** — proven at scale (Firefox mobile/desktop). **JS** — a
   genuinely natural fit: JS's `FinalizationRegistry` can decrement a Rust-side
   `Arc` when a JS wrapper object is collected, giving a real (if not yet
-  implemented in `wasm-bindgen.ts`, which uses the Clone path instead) path to
+  implemented in `rust-wasm-bindgen.ts`, which uses the Clone path instead) path to
   shared rather than copied ownership. **C** — expressible (a manually
   incremented/decremented count field, freed at zero) but, like Option 2, entirely
   author-maintained; cbindgen generates and verifies none of it, so C's failure
@@ -721,7 +724,7 @@ lean:
   separate axis: a target resolves the structural shape independently, then
   separately decides whether it supports that specific value's ownership
   requirement, throwing scoped to just that requirement (the same
-  explicit-throw-on-unsupported pattern `wasm-bindgen.ts` already uses for
+  explicit-throw-on-unsupported pattern `rust-wasm-bindgen.ts` already uses for
   kinds it can't handle) rather than failing the whole type.
 - This reuses the existing per-TypeRef metadata bag mechanism — the same one
   `optional`/`nullable` already use — rather than introducing new mechanism;
@@ -763,7 +766,7 @@ applies to which target — is now decided.
     generate a full handle-table runtime from scratch, real uncosted work,
     excluded.
   - **JS/wasm-bindgen:** Option 1 (copy) — already shipped in
-    `wasm-bindgen.ts` via `Clone` — + Option 4 (`Arc`-refcounting via
+    `rust-wasm-bindgen.ts` via `Clone` — + Option 4 (`Arc`-refcounting via
     `FinalizationRegistry`), not yet implemented but a natural, native-feeling
     fit: `FinalizationRegistry` is a real JS-native GC hook. Explicitly
     **not** Option 2 (opaque-handle+free-fn) as a distinct mechanism: JS has
@@ -780,7 +783,7 @@ applies to which target — is now decided.
   express all four disciplines in its vocabulary (per the
   representation-as-metadata decision above), but each target's projector
   only implements the subset it can realize, and errors explicitly — same
-  pattern as `wasm-bindgen.ts` today — on ownership metadata values it can't
+  pattern as `rust-wasm-bindgen.ts` today — on ownership metadata values it can't
   support.
 - With both the representation-shape decision and this per-target discipline
   decision made, **Fork C as a whole is now resolved.**
@@ -803,18 +806,21 @@ itself contestable and downstream of Forks A-C:
   evidence, whichever of Fork C's options ultimately encodes it.
 - **Plausibly target-specific, resists forcing into one model:** C's requirement
   that _every_ crossed type have an explicit, source-declared layout
-  (`#[repr(C)]-equivalent) with no fallback opaque-value primitive at the
-language level (§1) — C literally cannot receive "any value" the way JS's
-`JsValue`or WIT's Canonical ABI implicitly can, so an IR node meaning
-"opaque/unknown, figure it out at the boundary" (type-ir's own`unknown`kind,
-which`wasm-bindgen.ts`maps straight to`JsValue`, per `wasm-bindgen.ts:139`)
-has no honest C equivalent — it would have to be an error, not a degrade, for a
-C target specifically. Async calling convention is a second strong
-candidate: WIT has a first-class `async`qualifier plus dedicated`stream`/`future`types (§2); C has no language-level async calling convention
-at all (callback-based or poll-based conventions are a library/generator
-choice, not something C-the-ABI expresses); JS has`Promise`natively. Forcing
-one shared "async" IR construct across a target that has no async primitive
-(C) and two that do but via different mechanisms (native`Promise`vs. WIT's`async`+`stream`/`future` pairing) is a real risk of the shared construct being
+  (`#[repr(C)]`-equivalent) with no fallback opaque-value primitive at the
+  language level (§1) — C literally cannot receive "any value" the way JS's
+  `JsValue` or WIT's Canonical ABI implicitly can, so an IR node meaning
+  "opaque/unknown, figure it out at the boundary" (type-ir's own `unknown` kind,
+  which `rust-wasm-bindgen.ts` maps straight to `JsValue`, per the `unknown` entry
+  in its `handlers` map) has no honest C equivalent — it would have to be an
+  error, not a degrade, for a
+  C target specifically. Async calling convention is a second strong
+  candidate: WIT has a first-class `async` qualifier plus dedicated `stream`/
+  `future` types (§2); C has no language-level async calling convention
+  at all (callback-based or poll-based conventions are a library/generator
+  choice, not something C-the-ABI expresses); JS has `Promise` natively. Forcing
+  one shared "async" IR construct across a target that has no async primitive
+  (C) and two that do but via different mechanisms (native `Promise` vs. WIT's
+  `async` + `stream`/`future` pairing) is a real risk of the shared construct being
   either C-target-inapplicable or a lowest-common-denominator that loses WIT's
   stream/future distinction.
 - **Genuinely unresolved by this session's research (neither bucket, needs its
@@ -829,7 +835,7 @@ one shared "async" IR construct across a target that has no async primitive
 > worth recording as the working assumption: the full IR vocabulary is shared
 > across all targets, but not every target has to support every construct --
 > individual target projectors can support a subset and reject/error on the rest,
-> same pattern already used by wasm-bindgen.ts today (throws on union/map/tuple/
+> same pattern already used by rust-wasm-bindgen.ts today (throws on union/map/tuple/
 > intersection rather than approximating). Not the same as constructs being
 > "target-specific" by design -- it's uniform vocabulary with per-target coverage
 > gaps.
@@ -857,11 +863,12 @@ one shared "async" IR construct across a target that has no async primitive
   risks under-testing against C's much harsher constraints (no generics, no
   async, no opaque-value fallback) until later, potentially requiring rework once
   C is actually attempted.
-- **E3. Generalize outward from the existing `wasm-bindgen.ts` projector.**
+- **E3. Generalize outward from the existing `rust-wasm-bindgen.ts` projector.**
   Lowest-risk incremental path — take the one real, working, narrow-scope
   projector already in the codebase (§0) and its documented failure boundary
   (union/tuple/map/intersection/method/interface all explicitly unsupported,
-  `wasm-bindgen.ts:1-51,172-209`) as the concrete list of gaps a general IR would
+  the `unsupported()`-wrapped entries in `rust-wasm-bindgen.ts`'s `handlers` map)
+  as the concrete list of gaps a general IR would
   need to close for even its _first_ target, then widen. _Cost:_ grounds the
   design in a real artifact rather than three tools' documentation, but JS/
   wasm-bindgen is arguably the _least_ representative of the three targets for
@@ -886,7 +893,7 @@ in a later correction pass: the original C++ entry (item 6) had answered a
 different question than this section asks — "can C++ _expose_ itself via a stable
 ABI" rather than "does generated C++ _consume_ a plain C ABI" — and was rewritten
 in place; Rust-as-consumer was entirely missing from the original inventory (which
-only covered Rust-as-source, `wasm-bindgen.ts`) and is added here as a new entry.
+only covered Rust-as-source, `rust-wasm-bindgen.ts`) and is added here as a new entry.
 This section answers one narrow, factual question per
 target — **does it consume a plain, ordinary C ABI dynamic library (the shape a C
 compiler produces from `extern "C"`, no name mangling, no special binary format), or
@@ -1043,7 +1050,7 @@ avoiding cgo in hot loops) even though the ABI itself requires no special shape.
 
 **8. Rust as a consumer of a plain C ABI (idiomatic binding codegen).** Missing
 from the original inventory, which only covered Rust-as-_source_
-(`packages/type-ir/src/wasm-bindgen.ts`, type-ir → Rust exposing JS — the opposite
+(`packages/type-ir/src/rust-wasm-bindgen.ts`, type-ir → Rust exposing JS — the opposite
 direction). The well-established, real prior art here is `bindgen`
 (rust-lang/rust-bindgen): [VERIFIED-EXTERNAL: WebSearch results for
 rust-lang/rust-bindgen's documented scope and the ecosystem's `*-sys`-crate
