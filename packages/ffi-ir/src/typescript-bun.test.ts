@@ -112,6 +112,29 @@ describe("toBun — function", () => {
   });
 });
 
+describe("toBun — reserved-word (JS keyword) identifiers get escaped", () => {
+  test("a param named after a JS reserved word gets a trailing-underscore escape", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    const src = toBun(fn, "./lib.so", "identify");
+    expect(src).toContain("export function identify(class_: unknown) {");
+    // the raw native symbol string stays exactly "identify" — quoted bracket
+    // access, never a bare escaped identifier (see buildWrapper's own
+    // comment on `symbolName`).
+    expect(src).toContain('return symbols["identify"](class_)');
+  });
+
+  test("a wrapper function itself named after a JS reserved word gets a trailing-underscore escape", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toBun(fn, "./lib.so", "delete");
+    expect(src).toContain("export function delete_() {");
+  });
+});
+
 describe("toBun — resource", () => {
   test("opaque-handle method receiver, plus an auto-generated free wrapper", () => {
     const readMethod: FfiRef = f(

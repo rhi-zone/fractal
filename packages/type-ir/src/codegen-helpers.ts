@@ -147,6 +147,61 @@ export function quoteKey(name: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) ? name : JSON.stringify(name);
 }
 
+/** JS/TS reserved words (ECMA-262 keywords, reserved words, and strict-mode
+ * future reserved words) — bare identifiers a parameter/function/variable
+ * name can't be. Shared by the `typescript-bun`/`typescript-deno` FFI
+ * projectors in packages/ffi-ir/src/ (both bind against a `dlopen`-style
+ * native symbol table and need to render arbitrary ffi-ir names as real JS
+ * declaration-position identifiers). */
+export const JS_RESERVED_WORDS = new Set([
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "export",
+  "extends",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  "let",
+  "static",
+  "await",
+  "async",
+]);
+
+/** Suffixes `name` with `_` when it collides with a JS reserved word
+ * (`JS_RESERVED_WORDS`), otherwise returns it unchanged — the standard
+ * "reserved word plus trailing underscore" escape convention (JS has no
+ * raw-identifier escape syntax the way Rust's `r#ident` or WIT's `%ident`
+ * do). Shared by typescript-bun.ts and typescript-deno.ts. */
+export function escapeJsIdent(name: string): string {
+  return JS_RESERVED_WORDS.has(name) ? `${name}_` : name;
+}
+
 /** Single-quotes `value` for Dart string-literal syntax, backslash-escaping
  * `\`, `'`, and `$` (Dart string interpolation's sigil — an unescaped `$`
  * in a single-quoted Dart string is still an interpolation trigger).

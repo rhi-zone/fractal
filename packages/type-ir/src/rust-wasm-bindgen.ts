@@ -397,8 +397,20 @@ function buildFunction(name: string, ref: TypeRef, decls: string[]): string {
     returnType: TypeRef;
   };
   const fnName = toSnakeCaseStripSeparators(name);
+  // `escapeRustIdent` here (not just on params below) — a function's own
+  // name is a bare `pub fn <ident>` declaration position exactly like a
+  // param is, so an ffi-ir/type-ir name shaped like a Rust keyword (e.g.
+  // "type"/"match") needs the identical `r#`-raw-identifier escape a
+  // colliding param already gets. `js_name` is added whenever escaping (not
+  // just casing) changed the identifier, mirroring the param loop's own
+  // `ident !== rustName` condition below — wasm-bindgen's default exported
+  // JS name already matches a raw identifier's un-prefixed spelling, so this
+  // is redundant for a keyword-only collision, but kept for the same
+  // "explicit rather than relying on an implementation detail of the raw-
+  // identifier stripping rule" reasoning the casing branch already follows.
+  const ident = escapeRustIdent(fnName);
   const attrs: string[] = [];
-  if (fnName !== name) attrs.push(`js_name = ${quote(name)}`);
+  if (fnName !== name || ident !== fnName) attrs.push(`js_name = ${quote(name)}`);
 
   const params = shape.params.map((p) => {
     const bare = bareType(toPascalCaseStripSeparators(p.name), p.type, decls);
@@ -421,8 +433,8 @@ function buildFunction(name: string, ref: TypeRef, decls: string[]): string {
 
   const lines: string[] = [...docComment("", ref.meta)];
   lines.push(attrs.length > 0 ? `#[wasm_bindgen(${attrs.join(", ")})]` : "#[wasm_bindgen]");
-  lines.push(`pub fn ${fnName}(${params.join(", ")})${returnType} {`);
-  lines.push(`    todo!(${quote(`implement ${fnName}`)})`);
+  lines.push(`pub fn ${ident}(${params.join(", ")})${returnType} {`);
+  lines.push(`    todo!(${quote(`implement ${name}`)})`);
   lines.push("}");
   return lines.join("\n");
 }

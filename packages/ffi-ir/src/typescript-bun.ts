@@ -1,5 +1,8 @@
 import { resolve, type TypeRef } from "@rhi-zone/fractal-type-ir";
-import { toSnakeCaseStripSeparators as toSnakeCase } from "@rhi-zone/fractal-type-ir/codegen-helpers";
+import {
+  toSnakeCaseStripSeparators as toSnakeCase,
+  escapeJsIdent,
+} from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 
 // Bun (`bun:ffi`) consumer projector — the JS-side counterpart to
@@ -64,50 +67,9 @@ import type { FfiRef, FfiShape, OwnershipDiscipline } from "./index.ts";
 // must match `rust-c-abi.ts`'s symbol-naming convention exactly, since this
 // file's whole job is binding against symbols that convention produced in
 // the compiled library — both now share the same canonical implementation.
-
-const JS_RESERVED = new Set([
-  "break",
-  "case",
-  "catch",
-  "class",
-  "const",
-  "continue",
-  "debugger",
-  "default",
-  "delete",
-  "do",
-  "else",
-  "export",
-  "extends",
-  "finally",
-  "for",
-  "function",
-  "if",
-  "import",
-  "in",
-  "instanceof",
-  "new",
-  "return",
-  "super",
-  "switch",
-  "this",
-  "throw",
-  "try",
-  "typeof",
-  "var",
-  "void",
-  "while",
-  "with",
-  "yield",
-  "let",
-  "static",
-  "await",
-  "async",
-]);
-
-function escapeJsIdent(name: string): string {
-  return JS_RESERVED.has(name) ? `${name}_` : name;
-}
+// `escapeJsIdent` (also imported above) is shared with typescript-deno.ts
+// for the identical reason: both projectors render arbitrary ffi-ir names as
+// real JS declaration-position identifiers.
 
 function quote(value: string): string {
   return JSON.stringify(value);
