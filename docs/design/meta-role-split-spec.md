@@ -383,26 +383,26 @@ this spec.
 
 | Key                              | Exported on         | Evidence                                                                             |
 | -------------------------------- | ------------------- | ------------------------------------------------------------------------------------ |
-| `jsonrpc.{name,errorDataSchema}` | `JsonRpcLeafMeta`   | `JsonRpcMeta` fields, read per method during the tree walk (`project.ts:227-241`)    |
-| `jsonrpc.description`            | `JsonRpcLeafMeta`   | leaf-only override, ranked above `meta.description` (`project.ts:208-213`)           |
-| `jsonrpc.sourceMap`              | `JsonRpcLeafMeta`   | `Dispatch.sourceMap` per leaf (`project.ts:226`); **not read at branch position**    |
-| `jsonrpc.segment`                | `JsonRpcBranchMeta` | wired: `project.ts:229` — a static child's own contribution to the dot-joined prefix |
+| `jsonrpc.{name,errorDataSchema}` | `JsonRpcLeafMeta`   | read per method during the tree walk in `project.ts`'s `buildMethod`    |
+| `jsonrpc.description`            | `JsonRpcLeafMeta`   | leaf-only override, ranked above `meta.description`, in `buildMethod`           |
+| `jsonrpc.sourceMap`              | `JsonRpcLeafMeta`   | `Dispatch.sourceMap` per leaf, in `buildMethod`; **not read at branch position**    |
+| `jsonrpc.segment`                | `JsonRpcBranchMeta` | wired, same indirection as mcp's `segment` row above: consumed via the shared `walkNamedTree` tree-walk helper, not inlined directly in `buildMethod` — a static child's own contribution to the dot-joined prefix |
 
 ### graphql-api-projector
 
 | Key                                   | Exported on         | Evidence                                                                                                                                                                                                                                                    |
 | ------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `graphql.{operation,name,deprecated}` | `GraphQLLeafMeta`   | `deriveOperationType` (`project.ts`, precedence step 1), field-name override, deprecation override — all per-field (leaf)                                                                                                                                   |
-| `graphql.deprecatedReason`            | `GraphQLLeafMeta`   | only meaningful alongside `deprecated`, same leaf scope (`directive-contract.md` §GraphQL)                                                                                                                                                                  |
-| `graphql.description`                 | `GraphQLLeafMeta`   | leaf-only override, ranked above `meta.description` (`project.ts:310-314`)                                                                                                                                                                                  |
-| `graphql.sourceMap`                   | `GraphQLLeafMeta`   | `GraphQLMeta.sourceMap`, resolved per field's arg assembly; **not read at branch position**                                                                                                                                                                 |
-| `graphql.namespace`                   | `GraphQLBranchMeta` | declared (`GraphQLMeta.namespace`, `project.ts:73-74`) but **currently unwired** — the leaf-centric Query walk explicitly doesn't visit branch nodes to read it (`project.ts:483-488`: "branch-level `meta.graphql.namespace` is a later-phase refinement") |
+| `graphql.{operation,name,deprecated}` | `GraphQLLeafMeta`   | `deriveOperationType` in `project.ts` (precedence step 1), field-name override, deprecation override — all per-field (leaf)                                                                                                                                   |
+| `graphql.deprecatedReason`            | `GraphQLLeafMeta`   | only meaningful alongside `deprecated`, same leaf scope (`directive-contract.md` §GraphQL — confirmed present and consistent)                                                                                                                                                                  |
+| `graphql.description`                 | `GraphQLLeafMeta`   | leaf-only override, ranked above `meta.description`, in `project.ts`'s field-building path                                                                                                                                                                  |
+| `graphql.sourceMap`                   | `GraphQLLeafMeta`   | resolved per field's arg assembly in `project.ts`; **not read at branch position**                                                                                                                                                                 |
+| `graphql.namespace`                   | `GraphQLBranchMeta` | declared on `GraphQLBranchMetaProperties.namespace` in `project.ts` but **still currently unwired** (re-verified) — the leaf-centric Query walk explicitly doesn't visit branch nodes to read it; a comment noting "branch-level `meta.graphql.namespace` is a later-phase refinement" is still present in `project.ts` |
 
 ### `description` itself (core `SharedMeta`, not a projector key)
 
 | Key           | Read at         | Evidence                                                                                                                                                    |
 | ------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `description` | leaf and branch | `cli.ts:487-492`'s `descriptionFrom` is called on the current node at `buildHelp` top (branch, `cli.ts:502`) AND on leaf/branch children (`cli.ts:516,532`) |
+| `description` | leaf and branch | `cli.ts`'s `descriptionFrom` is called on the current node at `buildHelp`'s top (branch) AND on leaf/branch children |
 
 ## 5. Consumer-facing effects
 
