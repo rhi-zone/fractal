@@ -87,7 +87,7 @@ describe("records", () => {
   test("required + optional fields", () => {
     const ref = t(types.object({ id: t(types.string), age: t(types.number, { optional: true }) }));
     const out = toReScript(ref, "User");
-    expect(out).toBe(["type User = {", "  id: string,", "  age: option<float>,", "}"].join("\n"));
+    expect(out).toBe(["type user = {", "  id: string,", "  age: option<float>,", "}"].join("\n"));
   });
 
   test("field name that isn't a valid ReScript label gets @as", () => {
@@ -103,23 +103,23 @@ describe("records", () => {
     expect(out).not.toContain("@as");
   });
 
-  test("type name PascalCased from a snake/kebab hint", () => {
+  test("type name camelCased from a snake/kebab hint (ReScript type identifiers must start lowercase)", () => {
     const ref = t(types.object({ id: t(types.string) }));
     const out = toReScript(ref, "account_summary");
-    expect(out).toContain("type AccountSummary = {");
+    expect(out).toContain("type accountSummary = {");
   });
 
   test("fields-less object degrades to unit, not an invalid empty record", () => {
     const ref = t(types.object({}));
-    expect(toReScript(ref, "Empty")).toBe("type Empty = unit");
+    expect(toReScript(ref, "Empty")).toBe("type empty = unit");
   });
 
   test("nested object field is hoisted to its own named record", () => {
     const ref = t(types.object({ address: t(types.object({ city: t(types.string) })) }));
     const out = toReScript(ref, "Person");
-    expect(out).toContain("type Person = {");
-    expect(out).toContain("address: PersonAddress,");
-    expect(out).toContain("type PersonAddress = {");
+    expect(out).toContain("type person = {");
+    expect(out).toContain("address: personAddress,");
+    expect(out).toContain("type personAddress = {");
     expect(out).toContain("city: string,");
   });
 });
@@ -128,7 +128,7 @@ describe("enum -> nominal variant", () => {
   test("no-payload constructors, one per member", () => {
     const ref = t(types.enum(["active", "inactive"]));
     const out = toReScript(ref, "Status");
-    expect(out).toBe(["type Status =", "  | Active", "  | Inactive"].join("\n"));
+    expect(out).toBe(["type status =", "  | Active", "  | Inactive"].join("\n"));
   });
 
   test("member that doesn't round-trip through PascalCase gets @as on the constructor", () => {
@@ -142,7 +142,7 @@ describe("string-literal unions render like enums", () => {
   test("union of string literals", () => {
     const ref = t(types.union([t(types.literal("a")), t(types.literal("b"))]));
     const out = toReScript(ref, "Letter");
-    expect(out).toBe(["type Letter =", "  | A", "  | B"].join("\n"));
+    expect(out).toBe(["type letter =", "  | A", "  | B"].join("\n"));
   });
 });
 
@@ -156,7 +156,7 @@ describe("discriminated union -> tagged variant with inline-record payloads", ()
       { discriminator: "type" },
     );
     const out = toReScript(ref, "Shape");
-    expect(out).toContain("type Shape =");
+    expect(out).toContain("type shape =");
     expect(out).toContain("Circle({radius: float})");
     expect(out).toContain("Square({side: float})");
     // The discriminator field itself is dropped from the payload — it's
@@ -178,15 +178,15 @@ describe("untagged union -> positional variant fallback", () => {
   test("one Variant1/Variant2/... constructor per member", () => {
     const ref = t(types.union([t(types.string), t(types.number)]));
     const out = toReScript(ref, "StringOrNumber");
-    expect(out).toContain("type StringOrNumber =");
+    expect(out).toContain("type stringOrNumber =");
     expect(out).toContain("Variant1(string)");
     expect(out).toContain("Variant2(float)");
   });
 });
 
 describe("recursive types via ref", () => {
-  test("ref renders as a PascalCased type reference", () => {
-    expect(toReScriptType(t(types.ref("tree_node")))).toBe("TreeNode");
+  test("ref renders as a camelCased type reference (ReScript type identifiers must start lowercase)", () => {
+    expect(toReScriptType(t(types.ref("tree_node")))).toBe("treeNode");
   });
 
   test("self-referential field renders through array<T>/ref without infinite recursion", () => {
@@ -194,19 +194,19 @@ describe("recursive types via ref", () => {
       types.object({ value: t(types.integer), children: t(types.array(t(types.ref("Tree")))) }),
     );
     const out = toReScript(ref, "Tree");
-    expect(out).toContain("children: array<Tree>");
+    expect(out).toContain("children: array<tree>");
   });
 });
 
 describe("doc comments and deprecation", () => {
   test("meta.description renders as a doc comment", () => {
     const ref = t(types.string, { description: "A display name" });
-    expect(toReScript(ref, "DisplayName")).toBe("/** A display name */\ntype DisplayName = string");
+    expect(toReScript(ref, "DisplayName")).toBe("/** A display name */\ntype displayName = string");
   });
 
   test("meta.deprecated: true renders a @deprecated attribute", () => {
     const ref = t(types.string, { deprecated: true });
-    expect(toReScript(ref, "Old")).toBe("@deprecated\ntype Old = string");
+    expect(toReScript(ref, "Old")).toBe("@deprecated\ntype old = string");
   });
 
   test("meta.deprecated with a reason string carries the reason", () => {
@@ -217,13 +217,13 @@ describe("doc comments and deprecation", () => {
 
 describe("toReScript with a default name", () => {
   test("defaults to Value when no name is given", () => {
-    expect(toReScript(t(types.string))).toBe("type Value = string");
+    expect(toReScript(t(types.string))).toBe("type value = string");
   });
 });
 
 describe("toReScriptType standalone", () => {
   test("an object ref itself hoists and returns just the reference name, no declaration text", () => {
     const ref = t(types.object({ tag: t(types.enum(["a", "b"])) }));
-    expect(toReScriptType(ref)).toBe("Anonymous");
+    expect(toReScriptType(ref)).toBe("anonymous");
   });
 });

@@ -243,9 +243,13 @@ function buildMethod(
  * lives with (it wraps every entry in `methods` as a `&self`-receiving impl
  * method too, no constructor concept).
  *
- * Naming: `type` is named `toPascalCase(name)` to match exactly how
- * `toReScriptType`'s `ref` handler renders a `{ kind: "ref", target }`
- * TypeRef (`toPascalCaseFromWords`-equivalent) — this is what lets a
+ * Naming: `type` is named `decapitalize(toPascalCase(name))` — a
+ * lowercase-leading camelCase identifier, since ReScript type identifiers
+ * (unlike module/variant/constructor names) must start with a lowercase
+ * letter or underscore; a capitalized one is a hard parse error, not just an
+ * unidiomatic style choice — to match exactly how `toReScriptType`'s `ref`
+ * handler renders a `{ kind: "ref", target }` TypeRef
+ * (`toCamelCaseFromWords`-equivalent) — this is what lets a
  * `resourceRef(name, ...)` used as a parameter/return type elsewhere resolve
  * to the same identifier this opaque type declares, with no string-patching
  * needed to bridge the two. Method binding identifiers are prefixed with the
@@ -260,7 +264,9 @@ function buildResource(
   shape: FfiShape & { kind: "resource" },
   meta: Readonly<Record<string, unknown>>,
 ): string {
-  const typeName = toPascalCase(name);
+  // Lowercase-leading: ReScript type identifiers must start lowercase
+  // (unlike module/variant names) — see the naming note above.
+  const typeName = decapitalize(toPascalCase(name));
   const description = typeof meta.description === "string" ? [`/** ${meta.description} */`] : [];
   const typeDecl = [...description, `type ${typeName}`].join("\n");
   const methodDecls = Object.entries(shape.methods).map(([methodName, methodRef]) => {

@@ -55,13 +55,13 @@ describe("toReScriptFfi — method", () => {
     const src = toReScriptFfi(readMethod, "read");
 
     expect(src).toContain("@send");
-    expect(src).toContain('external read: (FileHandle, int) => array<int> = "read"');
+    expect(src).toContain('external read: (fileHandle, int) => array<int> = "read"');
   });
 
   test("a no-arg method still gets the receiver as its sole parameter", () => {
     const closeMethod: FfiRef = f(boundary.method([], t(types.void), "FileHandle"));
     const src = toReScriptFfi(closeMethod, "close");
-    expect(src).toContain('external close: (FileHandle) => unit = "close"');
+    expect(src).toContain('external close: (fileHandle) => unit = "close"');
   });
 });
 
@@ -77,9 +77,9 @@ describe("toReScriptFfi — resource", () => {
 
     const src = toReScriptFfi(fileHandle, "FileHandle");
 
-    expect(src).toContain("type FileHandle");
-    expect(src).toContain('external fileHandleRead: (FileHandle) => array<int> = "read"');
-    expect(src).toContain('external fileHandleClose: (FileHandle) => unit = "close"');
+    expect(src).toContain("type fileHandle");
+    expect(src).toContain('external fileHandleRead: (fileHandle) => array<int> = "read"');
+    expect(src).toContain('external fileHandleClose: (fileHandle) => unit = "close"');
     // no invented constructor — ffi-ir's `resource` kind has no constructor
     // field, only a methods map (same gap wasm-bindgen.ts's buildResource
     // lives with).
@@ -112,8 +112,8 @@ describe("toReScriptFfi — resource", () => {
     const openFn: FfiRef = f(boundary.function(openParams, openReturn));
     const fnDecl = toReScriptFfi(openFn, "open_");
 
-    expect(resourceDecl).toContain("type FileHandle");
-    expect(fnDecl).toContain("=> FileHandle");
+    expect(resourceDecl).toContain("type fileHandle");
+    expect(fnDecl).toContain("=> fileHandle");
   });
 });
 
@@ -129,12 +129,12 @@ describe("toReScriptFfi — module", () => {
     const src = toReScriptFfi(fsModule, "fs");
 
     expect(src).toContain("module Fs = {");
-    expect(src).toContain("type FileHandle");
+    expect(src).toContain("type fileHandle");
     expect(src).toContain('@module("fs")');
     // "open" is a ReScript reserved word — sanitized to "open_" on the
     // ReScript side; the JS-side literal stays "open".
-    expect(src).toContain('external open_: (string) => FileHandle = "open"');
-    expect(src).toContain('external fileHandleClose: (FileHandle) => unit = "close"');
+    expect(src).toContain('external open_: (string) => fileHandle = "open"');
+    expect(src).toContain('external fileHandleClose: (fileHandle) => unit = "close"');
   });
 });
 
@@ -225,13 +225,13 @@ describe("toReScriptFfi (rescript build, real compiler)", () => {
   });
 
   // ==========================================================================
-  // Real bug this real-compiler check surfaces, that the string-comparison
-  // tests above structurally cannot see: `buildResource` (this file) declares
-  // a resource's opaque type as `type ${toPascalCase(name)}` — i.e. always
-  // capitalized (e.g. `type Greeter`, `type FileHandle`). ReScript type
-  // identifiers must start with a lowercase letter; a capitalized one is a
-  // hard parse error, not a type error — confirmed directly against the real
-  // compiler:
+  // Real bug this real-compiler check surfaced, that the string-comparison
+  // tests above structurally could not see: `buildResource` (this file) used
+  // to declare a resource's opaque type as `type ${toPascalCase(name)}` —
+  // i.e. always capitalized (e.g. `type Greeter`, `type FileHandle`).
+  // ReScript type identifiers must start with a lowercase letter; a
+  // capitalized one is a hard parse error, not a type error — confirmed
+  // directly against the real compiler:
   //
   //   type Greeter
   //
@@ -239,21 +239,32 @@ describe("toReScriptFfi (rescript build, real compiler)", () => {
   //   1 │ type Greeter
   //   Did you mean `greeter` instead of `Greeter`?
   //
-  // Net effect: every `toReScriptFfi`-generated `resource` (and any
-  // function/method referencing that resource type, e.g. as a parameter or
-  // return type) fails to parse as real ReScript, today. Recorded here as
-  // `test.todo` (mirroring packages/type-ir/src/compile-check.test.ts's own
-  // convention) rather than silently fixed, since fixing `rescript-external.ts`
-  // itself is a real, separate change outside this test-coverage task's scope.
+  // Fixed: `buildResource` now emits `type ${decapitalize(toPascalCase(name))}`
+  // (a lowercase-leading camelCase identifier), and type-ir's
+  // `rescript-native.ts` `ref` handler (used to render every reference to
+  // that type, e.g. a method receiver or a function's return type) was fixed
+  // the same way so declaration and every reference agree. This test — no
+  // longer `test.todo` — is the module-level, end-to-end case: a resource's
+  // `type` decl, its methods' receivers, and a free function returning the
+  // resource type all compile together as real ReScript.
   // ==========================================================================
-  test.todo(
-    "a resource's opaque type declaration — FAILS: `type Greeter` is capitalized, but ReScript type identifiers must start lowercase (hard parse error, not just a type error)",
-    () => {
-      const greetMethod: FfiRef = f(
-        boundary.method([], withOwnership(t(types.string), ownership.copy()), "Greeter"),
-      );
-      const greeter: FfiRef = f(boundary.resource("Greeter", { greet: greetMethod }));
-      assertReScriptCompiles(checkReScript(toReScriptFfi(greeter, "Greeter")));
-    },
-  );
+  test("a resource's opaque type declaration compiles, lowercase-leading per ReScript's type-identifier rule", () => {
+    const greetMethod: FfiRef = f(
+      boundary.method([], withOwnership(t(types.string), ownership.copy()), "Greeter"),
+    );
+    const greeter: FfiRef = f(boundary.resource("Greeter", { greet: greetMethod }));
+    assertReScriptCompiles(checkReScript(toReScriptFfi(greeter, "Greeter")));
+  });
+
+  test("a module wrapping a resource and a function returning that resource type compiles end to end", () => {
+    const closeMethod: FfiRef = f(boundary.method([], t(types.void), "FileHandle"));
+    const fileHandle: FfiRef = f(boundary.resource("FileHandle", { close: closeMethod }));
+    const openParams = [{ name: "path", type: t(types.string) }];
+    const openReturn = withOwnership(resourceRef("FileHandle", "own"), ownership.resource("own"));
+    const openFn: FfiRef = f(boundary.function(openParams, openReturn));
+    const fsModule: FfiRef = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }));
+
+    const src = toReScriptFfi(fsModule, "fs");
+    assertReScriptCompiles(checkReScript(src));
+  });
 });

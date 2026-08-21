@@ -34,7 +34,7 @@
 // union/enum is (elm-json.ts didn't need this because Elm's `{ field : T }`
 // is a valid anonymous inline type).
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
-import { toPascalCaseFromWords } from "./codegen-helpers.ts";
+import { toCamelCaseFromWords, toPascalCaseFromWords } from "./codegen-helpers.ts";
 
 // ============================================================================
 // naming
@@ -127,7 +127,10 @@ function newCtx(): Ctx {
 }
 
 function freshName(ctx: Ctx, hint: string): string {
-  const base = toPascalCaseFromWords(hint) || "Anonymous";
+  // Lowercase-leading: ReScript type identifiers (unlike module/variant
+  // names) must start with a lowercase letter or underscore — a capitalized
+  // one is a hard parse error, not just an unidiomatic style choice.
+  const base = toCamelCaseFromWords(hint) || "anonymous";
   if (!ctx.used.has(base)) {
     ctx.used.add(base);
     return base;
@@ -268,7 +271,10 @@ const typeHandlers: Record<string, Converter> = {
   // uses (the literal's actual value only matters at the JSON boundary,
   // which this projector doesn't generate).
   literal: () => "unit",
-  ref: (shape) => toPascalCaseFromWords((shape as TypeShape & { kind: "ref" }).target),
+  // Lowercase-leading, matching `generateNamedType`'s own type-identifier
+  // casing below — a `ref` renders the same identifier the target's own
+  // `type` declaration uses.
+  ref: (shape) => toCamelCaseFromWords((shape as TypeShape & { kind: "ref" }).target),
   // ReScript has no structural intersection-type operator. Object members
   // merge fields (mirroring elm-json.ts's/flow-native.ts's own intersection
   // handling, hoisted as a merged record); anything else degrades to the
@@ -426,7 +432,10 @@ function deprecatedAttr(meta: Readonly<Record<string, unknown>>): string {
  * else. Used both for the top-level `toReScript` call and (recursively, via
  * `hoistedName`) for nested objects/unions/enums/intersections. */
 function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
-  const typeName = toPascalCaseFromWords(name);
+  // Lowercase-leading: this is a ReScript *type* identifier (`type
+  // typeName = ...`), not a variant constructor — see the RESERVED/casing
+  // note near `ref` above for why this can't be PascalCase.
+  const typeName = toCamelCaseFromWords(name);
   const kind = ref.shape.kind;
   const header = docComment(ref.meta) + deprecatedAttr(ref.meta);
 
@@ -498,7 +507,7 @@ function generateNamedType(ref: TypeRef, name: string, ctx: Ctx): string {
  */
 export function toReScript(ref: TypeRef, name = "Value"): string {
   const ctx = newCtx();
-  const typeName = toPascalCaseFromWords(name);
+  const typeName = toCamelCaseFromWords(name);
   ctx.used.add(typeName);
   const main = generateNamedType(ref, typeName, ctx);
   return [main, ...ctx.decls].join("\n\n");
