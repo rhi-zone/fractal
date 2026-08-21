@@ -333,30 +333,33 @@ on inside the projector package, ready for a deployment to name in its own
 
 | Key                                        | Exported on                                                                      | Evidence                                                                                                                                                   |
 | ------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http.moveTo`                              | `HttpSharedMeta`                                                                 | `route.ts` §2b `applyMoveTo` (`route.ts:379-524`) relocates both single method-entries and whole subtrees — see §8 for the open question this still raises |
-| `http.method`                              | `HttpLeafMeta`                                                                   | `applyMethods` rewriter, per method-entry (`project.ts:214-227`)                                                                                           |
+| `http.moveTo`                              | `HttpSharedMeta`                                                                 | `route.ts`'s `applyMoveTo`, delegating to `detach`/`insertAt`, relocates both single method-entries and whole subtrees — see §8 for the open question this still raises |
+| `http.method`                              | `HttpLeafMeta`                                                                   | `applyMethods` rewriter in `route.ts`, per method-entry                                                                                           |
 | `http.verb`                                | `HttpLeafMeta`                                                                   | `verbFromTags` precedence step 1 (`tags.ts`)                                                                                                               |
-| `http.response`                            | `HttpLeafMeta`                                                                   | `applyResponse` rewriter, per method-entry                                                                                                                 |
-| `http.paginated`                           | `HttpLeafMeta`                                                                   | `extensions/pagination.ts:253-256` reads `getHttpMeta(ctx.meta).paginated` off the matched (leaf) route                                                    |
-| `http.validate`                            | `HttpLeafMeta`                                                                   | `validateOf`/`route.ts:170-177` resolves the last `validate` directive off a leaf/method-entry's meta into `sources.validate`                              |
-| `http.sourceMap`                           | `HttpLeafMeta`                                                                   | `sourceMapOf` resolves `meta.http`'s `source` directives per leaf (`route.ts:145`); **not read at branch position anywhere**                               |
-| `openapi.security`                         | `HttpLeafMeta` — leaf-only now (§6 fixes the prior dual meaning)                 | field doc `openapi.ts:178-184`; per-operation read at `openapi.ts:461-467`                                                                                 |
-| `openapi.securitySchemes`                  | `HttpSharedMeta`/`HttpLeafMeta` (read at both — collected across the whole tree) | `collectSecuritySchemes` walks the whole tree, methods included (`openapi.ts:221-238`; merges every node's and every method entry's bag)                   |
-| `openapi.{operationId,summary,deprecated}` | `HttpLeafMeta`                                                                   | per-operation fields, destructured per method-entry (`openapi.ts:461-467`)                                                                                 |
-| `openapi.description`                      | `HttpLeafMeta`                                                                   | per-operation override, same destructure (`openapi.ts:464,482`)                                                                                            |
-| `openapi.tags`                             | `HttpLeafMeta`                                                                   | per-operation override, same destructure (`openapi.ts:465,483`)                                                                                            |
+| `http.response`                            | `HttpLeafMeta`                                                                   | `applyResponse` rewriter in `route.ts`, per method-entry                                                                                                 |
+| `http.paginated`                           | `HttpLeafMeta`                                                                   | `extensions/pagination.ts` reads `getHttpMeta(ctx.meta).paginated` off the matched (leaf) route                                                    |
+| `http.validate`                            | `HttpLeafMeta`                                                                   | `validateOf` in `route.ts` resolves the last `validate` directive off a leaf/method-entry's meta into `sources.validate`                              |
+| `http.sourceMap`                           | `HttpLeafMeta`                                                                   | `sourceMapOf` in `route.ts` resolves `meta.http`'s `source` directives per leaf; **not read at branch position anywhere**                               |
+| `openapi.security`                         | `HttpLeafMeta` — leaf-only now (§6 fixes the prior dual meaning)                 | field doc on `OpenApiLeafMetaProperties.security` in `openapi.ts`; per-operation read in the per-operation destructure inside `openapi.ts`'s document-building function                                                                                 |
+| `openapi.securitySchemes`                  | `HttpSharedMeta`/`HttpLeafMeta` (read at both — collected across the whole tree) | `collectSecuritySchemes` in `openapi.ts` walks the whole tree, methods included (merges every node's and every method entry's bag)                   |
+| `openapi.{operationId,summary,deprecated}` | `HttpLeafMeta`                                                                   | per-operation fields, destructured per method-entry in `openapi.ts`'s document-building function                                                                                 |
+| `openapi.description`                      | `HttpLeafMeta`                                                                   | per-operation override, same destructure                                                                            |
+| `openapi.tags`                             | `HttpLeafMeta`                                                                   | per-operation override, same destructure                                                                            |
 
 Dead `http` directive kinds (`segment`, `when`, `legacyPath`) and the
-`dispatch` marker are parsed by `getHttpMeta` (`project.ts:243-296`) but
-read by no current projector or consumer anywhere in the tree — verified by
-searching every package for a read of `.segment`, `.when`, `.legacyPath`,
-or the resolved `.dispatch` field outside `getHttpMeta`'s own body: none
-exists. `project.ts`'s own module doc already documents `dispatch` markers
-and the `legacyPath`/`segment`/`when` directives as retired in favor of the
-`HttpRoute` pipeline (`project.ts:14-19`). This spec orders their deletion rather
-than typed placement in either `HttpSharedMeta` or `HttpLeafMeta` — dead
-code with a typed home is still dead code, and giving it one would let a
-future author read it as live surface.
+`dispatch` marker: **this spec's deletion order has already been carried
+out for the directive kinds.** `getHttpMeta` today is a two-line
+pass-through (`readMetaBag<HttpLeafMetaProperties>(meta.http)`) — it no
+longer parses `segment`/`when`/`legacyPath` at all, and a search of the
+package turns up no remaining read of any of those three outside comments
+noting they're retired. **The `dispatch` marker is a different story than
+this spec's original framing implied:** `project.ts`'s own module doc
+doesn't call it retired — it says `dispatch`/`segment`/`when`/`legacyPath`
+"have no typed home in this module" and specifically flags `dispatch` itself
+as "an open design question," tracked in `TODO.md`, not settled dead code.
+So the directive-kind deletion this spec ordered has landed; `dispatch`'s
+disposition is still genuinely open and shouldn't be read as resolved by
+this spec.
 
 ### cli-api-projector
 
