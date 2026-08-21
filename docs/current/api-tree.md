@@ -326,16 +326,16 @@ dispatch. It's a build-time TypeScript **module-graph** reachability utility: gi
 `ts.Program` spanning many entry files (a batch-codegen setup — one entry per domain slice), it
 computes each entry's own transitive _import closure_ so the incremental build cache
 (`cache.ts`) can invalidate only the entries whose source actually changed, not the whole
-shared batch (`reachability.ts:1-11`). It works by reading `ts.SourceFile.imports` — an
+shared batch (`reachability.ts`'s module doc comment). It works by reading `ts.SourceFile.imports` — an
 internal, undocumented field, not part of the public `SourceFile` interface, but verified
 present at runtime against the pinned TypeScript version and isolated behind one narrow cast
 specifically so a future TypeScript upgrade that removes or renames it fails loudly (every
 cache entry permanently misses, visible as "always rebuilds") rather than silently
-miscompiling (`reachability.ts:85-95`). A known, explicitly-flagged gap: triple-slash
+miscompiling (`reachability.ts`'s `moduleSpecifiersOf` function). A known, explicitly-flagged gap: triple-slash
 reference directives and ambient `.d.ts` files reached only through tsconfig `types`/`include`
 (never a real `import`) are not captured — verified not to currently matter in this monorepo
 (no triple-slash directives exist under `packages/`), but flagged in source as a real
-limitation if that ever changes (`reachability.ts:66-79`).
+limitation if that ever changes (`reachability.ts`'s module doc comment, "Not captured" section).
 
 ## `discover.ts`: autodetection with a deliberate include/exclude order
 
