@@ -363,20 +363,21 @@ this spec.
 
 ### cli-api-projector
 
-| Key                          | Exported on     | Evidence                                                                                                |
-| ---------------------------- | --------------- | ------------------------------------------------------------------------------------------------------- |
-| `cli.hidden`                 | `CliSharedMeta` | `cli.ts:515` (leaf child), `cli.ts:531,537` (branch child, and the fallback subtree)                    |
-| `cli.{name,alias,paginated}` | `CliLeafMeta`   | leaf-only display/behavior overrides (`cli.ts:517-520`, `CliMeta.paginated` doc `cli.ts:339-354`)       |
-| `cli.sourceMap`              | `CliLeafMeta`   | `getCliMeta(target.leafMeta).sourceMap` (`cli.ts:1103`) — resolved against the matched LEAF's meta only |
+| Key                | Exported on     | Evidence                                                                                                |
+| ------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `cli.hidden`       | `CliSharedMeta` | `cli.ts`'s `buildHelp`, read on the leaf child, the branch child, and the fallback subtree               |
+| `cli.{name,alias}` | `CliLeafMeta`   | leaf-only display overrides, read in `buildHelp`                                                        |
+| `cli.paginated`    | `CliLeafMeta`   | leaf-only behavior override, read separately during dispatch/pagination handling (not in `buildHelp`) — field doc on `CliLeafMetaProperties.paginated` |
+| `cli.sourceMap`    | `CliLeafMeta`   | resolved once per matched leaf inside `resolveLeaf` (via `getCliMeta(child.meta).sourceMap`, including its fallback-branch case) and snapshotted onto `Resolved.sourceMap` — resolved against the matched LEAF's meta only |
 
 ### mcp-api-projector
 
 | Key                                            | Exported on     | Evidence                                                                                                                       |
 | ---------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `mcp.{name,title,annotations,as,uri,mimeType}` | `McpLeafMeta`   | `getMcpMeta(child.meta)` in the three per-surface leaf walks (`project.ts` `projectTools`/`projectResources`/`projectPrompts`) |
-| `mcp.description`                              | `McpLeafMeta`   | leaf-only override, ranked above `meta.description`: `project.ts:396-404,645-648,817-825`                                      |
-| `mcp.sourceMap`                                | `McpLeafMeta`   | `Dispatch.sourceMap` built per leaf handler (`project.ts:449,674,841`); **not read at branch position**                        |
-| `mcp.segment`                                  | `McpBranchMeta` | wired: `project.ts:452-454,691,845` — a static child's own contribution to the name/URI prefix                                 |
+| `mcp.{name,title,annotations,as,uri,mimeType}` | `McpLeafMeta`   | `getMcpMeta(child.meta)` in the three per-surface leaf walks (`project.ts`'s `projectTools`/`projectResources`/`projectPrompts`) |
+| `mcp.description`                              | `McpLeafMeta`   | leaf-only override, ranked above `meta.description`, read in each of `projectTools`/`projectResources`/`projectPrompts`                                      |
+| `mcp.sourceMap`                                | `McpLeafMeta`   | `Dispatch.sourceMap` built per leaf handler in each of the three per-surface walks; **not read at branch position**                        |
+| `mcp.segment`                                  | `McpBranchMeta` | wired, but one level more indirectly than the other rows: consumed via the shared `walkNamedTree` tree-walk helper (in `api-tree`) for tools/methods, and inlined directly inside `projectResources`'s own walk as a static child's contribution to the name/URI prefix                                 |
 
 ### json-rpc-api-projector
 
