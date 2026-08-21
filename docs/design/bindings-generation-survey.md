@@ -2,8 +2,10 @@
 
 > Research artifact, not a design decision or a recommendation. Per this project's
 > disposition, design choices are laid out as tradeoffs for the user to weigh, not
-> resolved here. Claims about fractal's own codebase cite `file:line` and were read
-> directly (**[VERIFIED-LOCAL]**). Claims about external tools come from web search
+> resolved here. Claims about fractal's own codebase cite symbol/type names (or a
+> bare file path when no specific symbol applies) rather than line numbers, since
+> line numbers rot as source shifts; cited claims were read directly
+> (**[VERIFIED-LOCAL]**). Claims about external tools come from web search
 > results and general knowledge and are marked **[VERIFIED-EXTERNAL]** when a
 > specific fact was directly confirmed by a search result, or **[UNVERIFIED]**
 > when it is reported from background knowledge / plausible inference that this
@@ -14,33 +16,37 @@
 
 ## 1. What type-ir currently models (the gap, precisely)
 
-Source: `packages/type-ir/src/index.ts` (452 lines, read in full).
+Source: `packages/type-ir/src/index.ts` (491 lines, read in full).
 
-**`TypeKinds`** (`index.ts:8-126`) is an open, augmentable interface of _data-shape_
+**`TypeKinds`** (`index.ts`) is an open, augmentable interface of _data-shape_
 constructors only: `boolean`, `number`, `integer`, `string`, `null`, `void`,
-`unknown`, `never`, `object` (`:17`), `instance` (`:35-39`, nominal class identity,
-no methods), `array` (`:40`), `stream` (`:41-55`, async sequence), `page` (`:56-69`,
-paginated collection), `tuple`, `map`, `union`, `literal`, `enum` (`:74-83`, closed
-string-member set), `ref` (`:84`, resolved against a `TypeRefDocument`'s `defs`, see
-`:297-305`), `intersection`, `function` (`:93-98`), `method` (`:108-113`, a
-`function` subtype for interface members), and `interface` (`:122-125`, a named
-bag of `method`-kind members — "the equivalent of Protobuf's `service`," per its own
-comment at `:114-115`).
+`unknown`, `never`, `object` (`TypeKinds.object`), `instance`
+(`TypeKinds.instance`, nominal class identity, no methods), `array`
+(`TypeKinds.array`), `stream` (`TypeKinds.stream`, async sequence), `page`
+(`TypeKinds.page`, paginated collection), `tuple`, `map`, `union`, `literal`,
+`enum` (`TypeKinds.enum`, closed string-member set), `ref` (`TypeKinds.ref`,
+resolved against a `TypeRefDocument`'s `defs`, see the `TypeRefDocument` type),
+`intersection`, `function` (`TypeKinds.function`), `method`
+(`TypeKinds.method`, a `function` subtype for interface members), and
+`interface` (`TypeKinds.interface`, a named bag of `method`-kind members —
+"the equivalent of Protobuf's `service`," per its own doc comment).
 
 **What's already present that's binding-adjacent:**
 
 - `function`/`method` kinds carry ordered `params: {name, type}[]`, a `returnType`,
-  and an optional `thisType` (`:93-98`, `:108-113`) — this is a _call signature_,
-  not a binding: no notion of how the call crosses a language boundary.
-- `interface` (`:122-126`) models a service/contract surface — closest existing
-  analogue to what a bindings IR needs for "the thing exposed across the boundary,"
-  but it is nominal/structural only; it has no ABI, ownership, or async-transport
-  information.
-- The open `meta: Readonly<Record<string, unknown>>` bag (`:130-133`, documented
-  conventions at `:135-172`) is the extension point every existing semantic
-  refinement (`optional`, `nullable`, `readonly`, `typeName`/`declarationFile`,
-  `additionalProperties`) rides on, via declaration merging into `TypeKinds` from
-  `src/kinds/*` extension modules (per the file's own header comment, `:1-7`).
+  and an optional `thisType` (`TypeKinds.function`, `TypeKinds.method`) — this is a
+  _call signature_, not a binding: no notion of how the call crosses a language
+  boundary.
+- `interface` (`TypeKinds.interface`) models a service/contract surface — closest
+  existing analogue to what a bindings IR needs for "the thing exposed across the
+  boundary," but it is nominal/structural only; it has no ABI, ownership, or
+  async-transport information.
+- The open `meta: Readonly<Record<string, unknown>>` bag (`TypeRef.meta`,
+  documented conventions in the comment block above `const parents`) is the
+  extension point every existing semantic refinement (`optional`, `nullable`,
+  `readonly`, `typeName`/`declarationFile`, `additionalProperties`) rides on, via
+  declaration merging into `TypeKinds` from `src/kinds/*` extension modules (per
+  the file's own module header comment).
 
 **What is absent — confirmed by full read, not inferred:**
 
@@ -51,7 +57,7 @@ comment at `:114-115`).
   invoked at the boundary (C ABI extern "C", WASM import/export table, JNI, a
   process/IPC boundary). `function`/`method` describe a _signature_, not a
   _calling convention_.
-- **Async transport across the boundary.** `stream` (`:41-55`) models an
+- **Async transport across the boundary.** `stream` (`TypeKinds.stream`) models an
   in-language async iterable's _data shape_ (the element type), not how an async
   call or callback is dispatched across an FFI boundary (polling, callback
   registration, promise/future bridging, thread-pool marshaling).
@@ -78,13 +84,13 @@ entirely.
 
 ## 2. Design-philosophy precedent that bears on this (from `docs/design/design-philosophy.md`)
 
-- **"Open metadata bag over fixed schema"** (`design-philosophy.md:15-25`): metadata
+- **"Open metadata bag over fixed schema"** (`design-philosophy.md`): metadata
   is a plain object with conventional keys; projections read what they recognize,
   ignore the rest; no blessed set of fields. This is the mechanism every existing
   semantic refinement (nullable, optional, readonly, typeName) already rides on —
   and it is the same mechanism a first pass at ownership/ABI annotations _could_
   ride on, if that route were chosen (see §4).
-- **"Conventions, not contracts"** (`:27-34`): where the metadata bag has expected
+- **"Conventions, not contracts"** (`design-philosophy.md`): where the metadata bag has expected
   keys, they are documented conventions, not IR-enforced contracts — "if you violate
   conventions, no guarantees it works." This matters directly for ownership/lifetime
   metadata specifically, because unlike `nullable`/`readonly` (whose worst failure
@@ -95,8 +101,8 @@ entirely.
   question, not a foregone conclusion — the philosophy's precedent doesn't disqualify
   it, but it doesn't underwrite it either without a specific answer to "how wrong can
   this data cost you."
-- **"Hierarchy via subtyping, not taxonomy"** (`:36-46`) and **"Extensible DU +
-  interpreter pattern"** (`:5-13`): both describe how new _type_ kinds are meant to
+- **"Hierarchy via subtyping, not taxonomy"** and **"Extensible DU +
+  interpreter pattern"** (both `design-philosophy.md`): both describe how new _type_ kinds are meant to
   be added (subtype relationships, augmentable interfaces) — relevant if a bindings
   layer wanted new `TypeKinds` entries (e.g. a `callback` kind distinct from
   `function`) rather than only metadata annotations on existing kinds. This is the
@@ -105,8 +111,8 @@ entirely.
   specifically — the precedent exists for data-shape kinds, and whether the same
   reasoning transfers cleanly to calling-convention/ownership concepts is exactly
   the open question.
-- **"Three independent layers"** (`:48-55`) and **"Type projection is separate from
-  routing"** (`:65-70`): fractal already treats routing (API structure) and type
+- **"Three independent layers"** and **"Type projection is separate from
+  routing"** (both `design-philosophy.md`): fractal already treats routing (API structure) and type
   projection (data shape) as independent concerns that share structural patterns but
   operate on different data. A "bindings" concern — which needs _both_ a call
   signature (routing-like) _and_ ownership/ABI annotations on the types crossing the
@@ -114,7 +120,7 @@ entirely.
   this is itself relevant to the "new layer vs. extend existing layer" open question
   in §4.
 
-`docs/design/type-ir-survey.md`'s own scope statement (`type-ir-survey.md:1-11`)
+`docs/design/type-ir-survey.md`'s own scope statement (its opening blockquote)
 frames type-ir as explicitly a _data-shape_ IR — "a superset of all projection
 targets" for structural/nominal type constructors. It surveys 12 systems
 (JSON Schema, JTD, serde, TypeScript, OCaml, Haskell, protobuf, SQL, GraphQL,
@@ -253,8 +259,9 @@ scope), that dependency is called out explicitly rather than guessed.
   is a fundamentally narrower problem than what uniffi/wasm-bindgen/diplomat solve.
 - **(b) Add ownership/borrow annotations to type-ir's existing open metadata bag**
   (e.g. `meta.ownership: "owned" | "borrowed" | "shared"`, following the same
-  convention-not-contract pattern as `meta.nullable`/`meta.readonly`,
-  `index.ts:135-172`). _Cost:_ follows established precedent (design-philosophy.md
+  convention-not-contract pattern as `meta.nullable`/`meta.readonly`, see the
+  meta-bag conventions comment above `const parents` in `index.ts`). _Cost:_
+  follows established precedent (design-philosophy.md
   §"open metadata bag"), no new IR surface to design from scratch — but as noted in
   §2, an incorrect value here is a memory-safety bug in generated code, not a
   wrong-shape bug; "conventions, not contracts" (no IR-level enforcement) is a
@@ -267,8 +274,8 @@ scope), that dependency is called out explicitly rather than guessed.
 - **(c) A separate bindings-only IR layered on top of type-ir** (a new document/kind
   that references `TypeRef`s for data shape but carries its own
   ownership/ABI/async/error vocabulary, structurally parallel to how
-  `TypeRefDocument`/`defs` layers over bare `TypeRef` today, `index.ts:297-305`).
-  _Cost:_ cleanest separation of concerns (data-shape stays exactly as stable as it
+  `TypeRefDocument`/`defs` layers over bare `TypeRef` today, see the
+  `TypeRefDocument` type). _Cost:_ cleanest separation of concerns (data-shape stays exactly as stable as it
   is today, zero risk of memory-safety-relevant metadata leaking into the existing
   118 projectors' inputs) — but is a wholly new surface to design, document, and
   maintain, on top of an already-nontrivial existing system, and duplicates
@@ -314,7 +321,7 @@ no clean prior-art transplant available here.
 
 ### Q3. Async calling convention across the boundary
 
-Type-ir already has `stream` (`index.ts:41-55`) for async _iterables_ as a data
+Type-ir already has `stream` (`TypeKinds.stream`) for async _iterables_ as a data
 shape, but nothing for "this function call itself is asynchronous and the
 async-ness must be bridged across the boundary" (JS `Promise` ↔ Rust `Future` ↔
 Kotlin `suspend fun` ↔ Swift `async`, each with different threading/executor
@@ -342,7 +349,7 @@ fact, and is flagged accordingly.
 ### Q5. Callbacks / higher-order boundary functions
 
 Not covered by any option above: a parameter that is itself a `function`-kind
-TypeRef (`index.ts:93-98`), once it crosses the boundary, acquires its own
+TypeRef (`TypeKinds.function`), once it crosses the boundary, acquires its own
 lifetime/threading/re-entrancy obligations (who may call it, from what thread, how
 long it may be retained, whether it may itself call back into the original
 language). None of Q1-Q4's options address this directly — it may be a
@@ -361,7 +368,8 @@ document deliberately does not guess an answer.
 
 ### Q7. Scope: "fractal itself" vs. delegated to a sibling project
 
-`TODO.md:37` (verified read) records the precedent for exactly this kind of
+`TODO.md`'s "General-purpose source-language ingestion (beyond TypeScript) —
+deferred indefinitely" entry (verified read) records the precedent for exactly this kind of
 scoping decision: general-purpose non-TypeScript source ingestion was deferred
 indefinitely from fractal itself and handed to `rhi-zone/normalize`, a separate,
 active, substantial sibling project (3,570+ commits at the time of that decision),
