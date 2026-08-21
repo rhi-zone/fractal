@@ -76,7 +76,7 @@ assume either way. Verified this session by reading source, not inferred:
 **`TypeRef`'s `ref` kind (`packages/type-ir/src/index.ts`) is a purely
 structural/recursive-type marker, not a data-relation concept.**
 `{ kind: "ref"; target: string }` resolves against a `TypeRefDocument`'s
-`defs: Record<string, TypeRef>` (`resolveRef`, index.ts) — it exists so a
+`defs: Record<string, TypeRef>` (`resolveRef`) — it exists so a
 type can refer to another _named type definition_ (e.g. a recursive type
 referring to itself, or shared substructure), the same thing OpenAPI's
 `$ref`/JSON Schema's `$ref` do. It says nothing about _data_ identity —
@@ -95,22 +95,30 @@ schema is keyed on entity X" or relates one operation's schema to another's.
 There is no entity concept above the level of individual request/response
 `TypeRef`s at all; api-tree models _routes_, not a schema-wide entity graph.
 
-**One directly relevant, currently-inert precedent: `from-sql.ts` already
-parses real foreign-key constraints, but nothing consumes them.**
-`packages/type-ir/src/from-sql.ts` parses `REFERENCES` clauses from `CREATE
-TABLE` DDL (both inline column constraints and table-level `FOREIGN KEY ...
-REFERENCES ...`) and attaches the result as `meta.references: { table:
-string; column?: string }` on the referencing field's `TypeRef` (see the
-`TABLE_CONSTRAINT_RE`/`REFERENCES` handling around from-sql.ts:412–590).
-This is exactly the "field references another entity's identity" fact the
-mock generator would need — captured today, for SQL input only. Grepping the
-rest of the codebase for `.references` confirms it is written in exactly one
-place (`from-sql.ts`) and read in **zero** places: the corresponding `sql.ts`
-projector (TypeRef → `CREATE TABLE` text) never reads `meta.references` back
-out to re-emit a `REFERENCES` clause, and no other package (api-tree,
-http-api-projector, any other type-ir projector) reads it either. It is
-parsed, attached to `meta`, and then never consumed — a one-way capture, not
-a round-tripped or cross-package concept.
+**One directly relevant precedent: `from-sql.ts` already parses real
+foreign-key constraints, and `sql.ts` round-trips them — but only for DDL
+fidelity, not as a general relation concept.** `packages/type-ir/src/from-sql.ts`
+parses `REFERENCES` clauses from `CREATE TABLE` DDL (both inline column
+constraints and table-level `FOREIGN KEY ... REFERENCES ...`, in
+`parseColumnConstraints`/`parseColumnListItem`) and attaches the result as
+`meta.references: { table: string; column?: string }` on the referencing
+field's `TypeRef`. This is exactly the "field references another entity's
+identity" fact the mock generator would need — captured today, for SQL input
+only. Grepping the rest of the codebase for `.references` confirms it is
+written in exactly one place (`from-sql.ts`) and read in exactly one other:
+the corresponding `sql.ts` projector's `buildReferences` reads
+`meta.references` back out and `columnDef` re-emits it as a `REFERENCES`
+clause, so a SQL → `TypeRef` → SQL round trip through this importer/projector
+pair preserves FOREIGN KEY constraints rather than silently dropping them.
+(This was fixed same-day as the original draft of this section — see
+`sql.ts`'s `buildReferences`/`columnDef`; earlier drafts of this doc claimed
+the capture was one-way, which is no longer accurate.) That round-trip is
+still narrowly scoped, though: no package outside this one importer/projector
+pair reads `meta.references` at all — api-tree, http-api-projector, and every
+other type-ir projector ignore it — so nothing today treats it as a
+general, cross-package relation graph a mock generator could consume
+directly; it's DDL-fidelity plumbing between two SQL-specific modules, not
+yet a reusable relation concept.
 
 **Net finding: the concept is absent as a first-class IR feature, but there
 is prior art for exactly where it would hang.** The IR's own design
@@ -118,9 +126,11 @@ philosophy is an open metadata bag over a fixed schema (`meta:
 Record<string, unknown>` on every `TypeRef`, per `docs/design/design-
 philosophy.md`) specifically so conventions like this don't need a `TypeKinds`
 change — `from-sql.ts`'s `meta.references` shape is already exactly that
-kind of convention, just currently scoped to one importer with no consumer.
-Whether the mock generator should (a) standardize and generalize
-`meta.references` into a cross-importer, cross-projector convention, (b)
+kind of convention, just currently scoped to one importer/projector pair
+(from-sql.ts writes it, sql.ts reads it back for DDL round-tripping) with no
+consumer outside SQL projection. Whether the mock generator should (a)
+generalize `meta.references` into a cross-importer, cross-projector
+convention that other packages (api-tree, http-api-projector) also read, (b)
 invent a separate, mock-generator-specific metadata key so it doesn't take
 on and depend on `from-sql.ts`'s SQL-specific parsing behavior, or (c)
 require relations to be declared out-of-band (e.g. a side config the
@@ -152,10 +162,11 @@ Findings:
 type is represented as an ordinary base-shape `TypeRef` carrying
 `meta.brand: string` — a flat key in the same generic meta bag as
 `optional`/`nullable`/`readonly`, not a wrapping IR node. It's produced by
-`typeRefFromBrandedIntersection` in `from-typescript.ts` (~line 822) when
+`typeRefFromBrandedIntersection` in `from-typescript.ts` when
 extracting a TS type like `type UserId = string & { __brand: "UserId" }` or
 the `unique symbol`-tagged form fractal itself uses for `Uuid`/`Uri`/`Email`
-(`packages/type-ir/src/kinds/semantic-strings.ts:23-56`). Those three names
+(the `BrandTag`-keyed pattern in `packages/type-ir/src/kinds/semantic-strings.ts`).
+Those three names
 specifically get _promoted_ to real registered `TypeKinds` (`uuid`, `uri`,
 `email`, subtyped under `string`); every other brand name, including a
 hypothetical `UserId`, falls through to the generic `meta.brand` string with
@@ -168,8 +179,9 @@ collision.
 SQL/CQL DDL importer, and it is unrelated to brands: `from-sql.ts` sets
 `meta.primaryKey: boolean` on a column's `TypeRef` and `meta.primaryKey:
 string[]` on the table's own `TypeRef` when parsing `CREATE TABLE ...
-PRIMARY KEY` (documented at `from-sql.ts:26-38`, exercised by
-`from-sql.test.ts:108-112`). This is the same family of convention as the
+PRIMARY KEY` (documented in `from-sql.ts`'s column-level meta-convention
+comments, exercised by the `describe("primary key")` block in
+`from-sql.test.ts`). This is the same family of convention as the
 `meta.references` finding above — real, tested, but scoped to one importer
 and never cross-referenced against `meta.brand` anywhere in the codebase.
 
@@ -370,8 +382,10 @@ owner's call, not resolved:
    whatever mechanism is chosen is opt-in and lives in a toolkit of
    utilities fractal ships, not a `TypeKinds` addition. Within that
    constraint, still open: generalize/formalize `from-sql.ts`'s existing
-   (currently inert) `meta.references` convention across all importers and
-   projectors (one FK annotation per referencing field); generalize
+   `meta.references` convention (currently round-tripped only between
+   `from-sql.ts` and `sql.ts`, for DDL fidelity — not read by any other
+   importer or projector) across all importers and projectors (one FK
+   annotation per referencing field); generalize
    `from-sql.ts`'s `meta.primaryKey` outside the SQL importer and pair it
    with the existing `meta.brand` newtype convention so brand-string
    matching does the relation-detection work (one ownership marker per
@@ -430,20 +444,23 @@ owner's call, not resolved:
   (structural/recursive-type reference), `resolveRef`/`walkTypeRef`; source
   of this session's "no data-relation concept" finding.
 - `packages/type-ir/src/from-sql.ts` — `meta.references` FK-constraint
-  parsing (currently inert; see the IR-verification section above) and
+  parsing (round-tripped by `sql.ts` for DDL fidelity, but read by no
+  package outside that pair; see the IR-verification section above) and
   `meta.primaryKey`, the SQL-scoped precedent the newtype/brand follow-up
   section proposes generalizing.
-- `packages/type-ir/src/sql.ts` — the TypeRef→SQL projector that does _not_
-  currently read `meta.references` back out; confirms the capture is
-  one-way today.
+- `packages/type-ir/src/sql.ts` — the TypeRef→SQL projector whose
+  `buildReferences`/`columnDef` read `meta.references` back out to re-emit a
+  `REFERENCES` clause, round-tripping FK constraints within this
+  importer/projector pair — but still not a cross-package relation concept,
+  since no other package reads `meta.references`.
 - `packages/type-ir/src/kinds/semantic-strings.ts` — `uuid`/`email`/etc.
   semantically-tagged kinds a data fabricator could key sample-value
   generation off directly for the non-relational part of the problem; also
   the `Uuid`/`Uri`/`Email` `unique symbol`-brand pattern examined in the
   newtype/brand follow-up section.
-- `packages/type-ir/src/from-typescript.ts` — `typeRefFromBrandedIntersection`
-  (~line 822), where an arbitrary TS branded type becomes `meta.brand` on
-  extraction; source of the newtype/brand follow-up section's findings.
+- `packages/type-ir/src/from-typescript.ts` — `typeRefFromBrandedIntersection`,
+  where an arbitrary TS branded type becomes `meta.brand` on extraction;
+  source of the newtype/brand follow-up section's findings.
 - `docs/design/design-philosophy.md` — the open-metadata-bag-over-fixed-
   schema principle the `meta.references`-generalization option (open
   question 2) would extend rather than break from.
