@@ -250,12 +250,25 @@ function buildFunction(
     shape.returnType.shape.kind === "void" || shape.returnType.shape.kind === "null";
   const restype = isVoidReturn ? "None" : toCtypesType(shape.returnType);
 
+  // `getattr(lib, "<fnName>")`, not a bare `lib.<fnName>` dot-access — unlike
+  // JS (where a reserved word is a legal property name after a dot, see
+  // typescript-deno.ts's `symbolKey` comment for that case), Python's own
+  // grammar rejects a keyword in attribute-access position too (`lib.class`
+  // is a `SyntaxError`, not just an identifier-declaration error) — so the
+  // native-symbol access needs the same "never render the raw name as a bare
+  // identifier" treatment `typescript-bun.ts`'s quoted symbol-table keys use,
+  // for a Python-specific reason. `fnName` itself is left unescaped here
+  // (unlike `escapePyIdent(fnName)` below, used for the `def` line) so the
+  // real native symbol `getattr` looks up is never altered by escaping.
+  const symbolAccess = `getattr(lib, ${quote(fnName)})`;
+  const defName = escapePyIdent(fnName);
+
   const lines: string[] = [...docComment("", ref.meta)];
-  lines.push(`lib.${fnName}.argtypes = [${argtypes.join(", ")}]`);
-  lines.push(`lib.${fnName}.restype = ${restype}`);
+  lines.push(`${symbolAccess}.argtypes = [${argtypes.join(", ")}]`);
+  lines.push(`${symbolAccess}.restype = ${restype}`);
   lines.push("");
-  lines.push(`def ${fnName}(${paramNames.join(", ")}):`);
-  lines.push(`    return lib.${fnName}(${paramNames.join(", ")})`);
+  lines.push(`def ${defName}(${paramNames.join(", ")}):`);
+  lines.push(`    return ${symbolAccess}(${paramNames.join(", ")})`);
   return lines.join("\n");
 }
 

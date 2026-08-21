@@ -91,10 +91,10 @@ describe("toCtypes — function", () => {
     );
     const src = toCtypes(addFn, "add");
 
-    expect(src).toContain("lib.add.argtypes = [c_int64, c_int64]");
-    expect(src).toContain("lib.add.restype = c_int64");
+    expect(src).toContain('getattr(lib, "add").argtypes = [c_int64, c_int64]');
+    expect(src).toContain('getattr(lib, "add").restype = c_int64');
     expect(src).toContain("def add(a, b):");
-    expect(src).toContain("return lib.add(a, b)");
+    expect(src).toContain('return getattr(lib, "add")(a, b)');
   });
 
   test("a function requires a name", () => {
@@ -110,8 +110,35 @@ describe("toCtypes — function", () => {
       ),
     );
     const src = toCtypes(closeFn, "close");
-    expect(src).toContain("lib.close.argtypes = [POINTER(FileHandle)]");
-    expect(src).toContain("lib.close.restype = None");
+    expect(src).toContain('getattr(lib, "close").argtypes = [POINTER(FileHandle)]');
+    expect(src).toContain('getattr(lib, "close").restype = None');
+  });
+});
+
+// Reserved-word collision coverage — string-comparison only. python3 IS
+// present in flake.nix's devShell and IS used for real pydantic/attrs
+// imports in packages/type-ir/src/compile-check.test.ts, but this package
+// (ffi-ir) has no equivalent real-toolchain suite of its own for ctypes
+// output — a real follow-up, not attempted here.
+describe("toCtypes — reserved-word (Python keyword) identifiers get a trailing-underscore escape", () => {
+  test("a param named after a Python reserved word", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    const src = toCtypes(fn, "identify");
+    expect(src).toContain("def identify(class_):");
+    expect(src).toContain('return getattr(lib, "identify")(class_)');
+  });
+
+  test("a standalone/module-level function itself named after a Python reserved word — the native-symbol access stays getattr(lib, ...), never a bare lib.<keyword> (a SyntaxError in Python)", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toCtypes(fn, "class");
+    expect(src).toContain('getattr(lib, "class").argtypes = []');
+    expect(src).toContain("def class_():");
+    expect(src).toContain('return getattr(lib, "class")()');
   });
 });
 
@@ -137,15 +164,18 @@ describe("toCtypes — resource, opaque-handle discipline", () => {
     expect(src).toContain("    pass");
 
     // constructor returns a pointer to the opaque struct
-    expect(src).toContain("lib.open.restype = POINTER(FileHandle)");
+    expect(src).toContain('getattr(lib, "open").restype = POINTER(FileHandle)');
     expect(src).toContain("def open(path):");
 
     // method wiring, receiver-prefixed with a synthesized handle parameter
-    expect(src).toContain("lib.file_handle_read.argtypes = [POINTER(FileHandle)]");
-    expect(src).toContain("lib.file_handle_read.restype = c_int64");
+    expect(src).toContain('getattr(lib, "file_handle_read").argtypes = [POINTER(FileHandle)]');
+    expect(src).toContain('getattr(lib, "file_handle_read").restype = c_int64');
     expect(src).toContain("def file_handle_read(handle):");
 
-    // auto-generated free-function wiring
+    // auto-generated free-function wiring — `buildFreeFunction` (not
+    // `buildFunction`) synthesizes this one, and its `<resource>_free` name
+    // is always concatenated (never a bare keyword collision risk), so it
+    // stays a plain `lib.` dot-access rather than `getattr(lib, ...)`.
     expect(src).toContain("lib.file_handle_free.argtypes = [POINTER(FileHandle)]");
     expect(src).toContain("lib.file_handle_free.restype = None");
 
@@ -209,9 +239,9 @@ describe("toCtypes — resource, other ownership disciplines (refcount / resourc
       const resourceSrc = toCtypes(resourceFn, "borrow_use");
       const opaqueSrc = toCtypes(opaqueFn, "close");
 
-      expect(refcountSrc).toContain("lib.release.argtypes = [POINTER(FileHandle)]");
-      expect(resourceSrc).toContain("lib.borrow_use.argtypes = [POINTER(FileHandle)]");
-      expect(opaqueSrc).toContain("lib.close.argtypes = [POINTER(FileHandle)]");
+      expect(refcountSrc).toContain('getattr(lib, "release").argtypes = [POINTER(FileHandle)]');
+      expect(resourceSrc).toContain('getattr(lib, "borrow_use").argtypes = [POINTER(FileHandle)]');
+      expect(opaqueSrc).toContain('getattr(lib, "close").argtypes = [POINTER(FileHandle)]');
     },
   );
 });
