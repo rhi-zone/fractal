@@ -344,13 +344,19 @@ function docComment(meta: Readonly<Record<string, unknown>>): string {
 
 /**
  * Free function -> a plain `external` with no receiver, one arrow per
- * parameter, `[@@mel.val]` when no enclosing JS module is named (global
- * function) — verified against melange.re's own documented default
- * (a bare `external` with no module/scope attribute binds a global value by
- * its OCaml name, e.g. `external setTimeout : (unit -> unit) -> int ->
- * timeoutId = "setTimeout"` from the fetched examples) — or `[@@mel.module
- * "<jsModule>"]` when `jsModule` is given (this module's own JS import),
- * matching `[@@mel.module "path"]` verbatim from the same page.
+ * parameter, no attribute at all when no enclosing JS module is named
+ * (global function) — verified against both melange.re's own documented
+ * default (a bare `external` with no module/scope attribute binds a global
+ * value by its OCaml name, e.g. `external setTimeout : (unit -> unit) -> int
+ * -> timeoutId = "setTimeout"` from the fetched examples) and directly
+ * against the installed Melange 6.0.1-54 toolchain's own
+ * `ast_external_process.ml` attribute table, which has no `mel.val` case at
+ * all (`[@@mel.val]` — this file's previous, real-compiler-refuted
+ * output — trips "Alert unused: Unused attribute [@mel.val]" followed by a
+ * hard "attributes found in external declaration" error, since `kind = Val`
+ * is already the unconditional default for an unattributed `external`) — or
+ * `[@@mel.module "<jsModule>"]` when `jsModule` is given (this module's own
+ * JS import), matching `[@@mel.module "path"]` verbatim from the same page.
  */
 function buildFunction(
   name: string,
@@ -367,9 +373,8 @@ function buildFunction(
   const returnType = paramType(shape.returnType, ctx, `${name}Result`);
   const arrowChain = [...paramTypes, returnType.length > 0 ? returnType : "unit"];
   const signature = arrowChain.length === 1 ? `unit -> ${arrowChain[0]}` : arrowChain.join(" -> ");
-  const attr =
-    jsModule === undefined ? "[@@mel.val]" : `[@@mel.module ${JSON.stringify(jsModule)}]`;
-  return `${docComment(meta)}external ${label} : ${signature} = ${JSON.stringify(name)} ${attr}`;
+  const attr = jsModule === undefined ? "" : ` [@@mel.module ${JSON.stringify(jsModule)}]`;
+  return `${docComment(meta)}external ${label} : ${signature} = ${JSON.stringify(name)}${attr}`;
 }
 
 /**

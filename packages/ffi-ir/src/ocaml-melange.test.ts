@@ -6,7 +6,7 @@ import { toMelangeFfi } from "./ocaml-melange.ts";
 import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts";
 
 describe("toMelangeFfi — function", () => {
-  test("a simple free function with copy-discipline params/return emits a plain [@@mel.val] external", () => {
+  test("a simple free function with copy-discipline params/return emits a plain (unattributed) external", () => {
     const addFn: FfiRef = f(
       boundary.function(
         [
@@ -18,7 +18,7 @@ describe("toMelangeFfi — function", () => {
     );
     const src = toMelangeFfi(addFn, "add");
 
-    expect(src).toBe(`external add : int -> int -> int = "add" [@@mel.val]`);
+    expect(src).toBe(`external add : int -> int -> int = "add"`);
   });
 
   test("a function with no ownership meta at all also emits (unannotated = copy-by-value default)", () => {
@@ -26,7 +26,7 @@ describe("toMelangeFfi — function", () => {
       boundary.function([{ name: "n", type: t(types.integer) }], t(types.string)),
     );
     const src = toMelangeFfi(fn, "greet");
-    expect(src).toBe(`external greet : int -> string = "greet" [@@mel.val]`);
+    expect(src).toBe(`external greet : int -> string = "greet"`);
   });
 
   test("a function requires a name", () => {
@@ -49,7 +49,7 @@ describe("toMelangeFfi — reserved-word (OCaml keyword) function names get a tr
   test("a function itself named after an OCaml keyword", () => {
     const fn: FfiRef = f(boundary.function([], t(types.void)));
     const src = toMelangeFfi(fn, "type");
-    expect(src).toBe('external type_ : unit -> unit = "type" [@@mel.val]');
+    expect(src).toBe('external type_ : unit -> unit = "type"');
   });
 
   // No param-name escaping test: an OCaml `external` declaration has no bare
@@ -83,7 +83,7 @@ describe("toMelangeFfi — ownership gating", () => {
       ),
     );
     const src = toMelangeFfi(fn, "use");
-    expect(src).toBe(`external use : int -> unit = "use" [@@mel.val]`);
+    expect(src).toBe(`external use : int -> unit = "use"`);
   });
 });
 
@@ -263,21 +263,20 @@ describe("toMelangeFfi (dune build, real melange.ppx + melange.emit)", () => {
   });
 
   // ==========================================================================
-  // Real bug this real-compiler check surfaces, that the string-comparison
-  // tests above structurally cannot see: `buildFunction`'s no-`jsModule`
-  // branch (every standalone, non-module-nested "function"/"resource" kind —
-  // i.e. `toMelangeFfi`'s single most basic documented case, "a simple free
-  // function... emits a plain [@@mel.val] external") emits `[@@mel.val]`.
-  // `[@@mel.val]` is not a recognized attribute in the installed Melange
-  // 6.0.1-54 toolchain at all — confirmed by reading
+  // Real bug this real-compiler check surfaced (now fixed): `buildFunction`'s
+  // no-`jsModule` branch (every standalone, non-module-nested
+  // "function"/"resource" kind — i.e. `toMelangeFfi`'s single most basic
+  // documented case, "a simple free function... emits a plain external")
+  // used to emit `[@@mel.val]`. `[@@mel.val]` is not a recognized attribute
+  // in the installed Melange 6.0.1-54 toolchain at all — confirmed by reading
   // ast_external_process.ml's own attribute-matching table (`site-lib/
   // melange/ppx/ast_external_process.ml`), which recognizes `mel.module`,
   // `mel.scope`, `mel.variadic`, `mel.send`, `mel.send.pipe`, `mel.set`,
   // `mel.get`, `mel.new`, `mel.set_index`, `mel.get_index`, `mel.obj`, and
   // `mel.return` — no `mel.val` case exists; a *plain* `external` with *no*
   // attribute at all is what already binds a global value (`kind = Val` is
-  // the unconditional default), so no attribute should be emitted here at
-  // all when `jsModule` is undefined. Confirmed directly:
+  // the unconditional default), so no attribute is emitted at all when
+  // `jsModule` is undefined. Confirmed directly, before the fix:
   //
   //   external add : int -> int -> int = "add" [@@mel.val]
   //
@@ -287,25 +286,19 @@ describe("toMelangeFfi (dune build, real melange.ppx + melange.emit)", () => {
   //   Error (alert unprocessed): `[@mel.*]' attributes found in external
   //   declaration. Did you forget to preprocess with `melange.ppx'?
   //
-  // Net effect: every standalone `toMelangeFfi` function/resource NOT nested
-  // inside a `module` fails real dune/melange compilation, today. Recorded
-  // here as `test.todo` (mirroring packages/type-ir/src/compile-check.test.ts's
-  // own convention) rather than silently fixed, since fixing `ocaml-melange.ts`
-  // itself is a real, separate change outside this test-coverage task's scope.
+  // `buildFunction` now emits no attribute at all in the no-`jsModule` case,
+  // and this real-toolchain check confirms the fix compiles.
   // ==========================================================================
-  test.todo(
-    "a standalone (non-module-nested) free function — FAILS: emits `[@@mel.val]`, which is not a real Melange 6 attribute (a bare `external` with no attribute is already the correct/default global-value binding)",
-    () => {
-      const addFn: FfiRef = f(
-        boundary.function(
-          [
-            { name: "a", type: withOwnership(t(types.integer), ownership.copy()) },
-            { name: "b", type: withOwnership(t(types.integer), ownership.copy()) },
-          ],
-          withOwnership(t(types.integer), ownership.copy()),
-        ),
-      );
-      assertMelangeCompiles(checkMelange(toMelangeFfi(addFn, "add")));
-    },
-  );
+  test("a standalone (non-module-nested) free function — a bare `external` with no attribute is the correct/default global-value binding, and compiles", () => {
+    const addFn: FfiRef = f(
+      boundary.function(
+        [
+          { name: "a", type: withOwnership(t(types.integer), ownership.copy()) },
+          { name: "b", type: withOwnership(t(types.integer), ownership.copy()) },
+        ],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    assertMelangeCompiles(checkMelange(toMelangeFfi(addFn, "add")));
+  });
 });
