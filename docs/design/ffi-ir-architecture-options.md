@@ -16,6 +16,20 @@
 > independently confirmed this session. Nothing here should be read as settled
 > without its marker.
 
+> **Status update (2026-08-21):** this document was written while `ffi-ir` was
+> still "decided but not built" (see the decision record in §Fork A below). It has
+> since been built: `packages/ffi-ir/src/` now has real, non-stub implementations
+> for target-language projectors covering Rust (`rust-c-abi.ts`,
+> `rust-wasm-bindgen.ts`), Python (`python-ctypes.ts`), Ruby (`ruby-ffi.ts`), Java
+> (`java-jni.ts`), C# (`csharp-pinvoke.ts`), OCaml (`ocaml-melange.ts`), ReScript
+> (`rescript-external.ts`), Gleam (`gleam-external.ts`), TypeScript runtimes
+> (`typescript-bun.ts`, `typescript-deno.ts`), and WIT (`wit.ts`), each with a
+> corresponding `.test.ts`. The architectural forks discussed below (package
+> boundary, shared-vs-per-pair boundary IR, etc.) reflect the design reasoning
+> that shaped what got built, but the rest of this document is left as-written —
+> it was not swept for tense/status after the fact, so later sections may still
+> read as forward-looking about things that now exist.
+
 ---
 
 ## 0. Trigger for this document
