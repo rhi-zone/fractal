@@ -117,6 +117,7 @@
     "@rhi-zone/fractal-cli-api-projector": "workspace:*",
     "@rhi-zone/fractal-graphql-api-projector": "workspace:*",
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
+    "@rhi-zone/fractal-json-rpc-api-projector": "workspace:*",
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
     "fast-check": "^4.9.0",
     "typescript": "^6.0.3"

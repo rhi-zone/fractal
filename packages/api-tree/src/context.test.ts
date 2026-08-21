@@ -15,11 +15,25 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { runCli } from "@rhi-zone/fractal-cli-api-projector";
 import { createGraphQLServer } from "@rhi-zone/fractal-graphql-api-projector";
 import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createJsonRpcHttpHandler } from "@rhi-zone/fractal-json-rpc-api-projector";
 import { createMcpServer } from "@rhi-zone/fractal-mcp-api-projector";
 import { createContext } from "./context.ts";
 import { api as api_, op } from "./node.ts";
 
 type Ctx = { readonly source: string };
+
+function postJsonRpc(
+  handler: (req: Request) => Promise<Response>,
+  body: unknown,
+): Promise<Response> {
+  return handler(
+    new Request("http://localhost/rpc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
 
 describe("createContext", () => {
   it("only includes projector configs for extractors that were provided", () => {
@@ -27,30 +41,35 @@ describe("createContext", () => {
     expect(httpOnly.http).toBeDefined();
     expect(httpOnly.cli).toBeUndefined();
     expect(httpOnly.mcp).toBeUndefined();
+    expect(httpOnly.jsonrpc).toBeUndefined();
 
     const all = createContext<Ctx>({
       http: () => ({ source: "http" }),
       cli: () => ({ source: "cli" }),
       mcp: () => ({ source: "mcp" }),
       graphql: () => ({ source: "graphql" }),
+      jsonrpc: () => ({ source: "jsonrpc" }),
     });
     expect(all.http).toBeDefined();
     expect(all.cli).toBeDefined();
     expect(all.mcp).toBeDefined();
     expect(all.graphql).toBeDefined();
+    expect(all.jsonrpc).toBeDefined();
   });
 
-  it("all four configs share one AsyncLocalStorage instance", () => {
+  it("all five configs share one AsyncLocalStorage instance", () => {
     const context = createContext<Ctx>({
       http: () => ({ source: "http" }),
       cli: () => ({ source: "cli" }),
       mcp: () => ({ source: "mcp" }),
       graphql: () => ({ source: "graphql" }),
+      jsonrpc: () => ({ source: "jsonrpc" }),
     });
     expect(context.http?.storage).toBe(context.storage);
     expect(context.cli?.storage).toBe(context.storage);
     expect(context.mcp?.storage).toBe(context.storage);
     expect(context.graphql?.storage).toBe(context.storage);
+    expect(context.jsonrpc?.storage).toBe(context.storage);
   });
 
   it("http config drops directly into createFetch's PresetOptions.als", async () => {
@@ -125,12 +144,27 @@ describe("createContext", () => {
     expect(context.getStore()).toBeUndefined();
   });
 
-  it("getStore() reflects whichever surface most recently entered its context, across all four", async () => {
+  it("jsonrpc config drops directly into createJsonRpcHttpHandler's CreateJsonRpcServerOptions.als", async () => {
+    const context = createContext<Ctx>({
+      jsonrpc: (ctx) => ({ source: `jsonrpc:${ctx.method}` }),
+    });
+    const tree = api_({
+      whoami: op((_: unknown) => ({ seen: context.getStore()?.source ?? "none" })),
+    });
+    const handler = createJsonRpcHttpHandler(tree, { als: context.jsonrpc! });
+    const res = await postJsonRpc(handler, { jsonrpc: "2.0", method: "whoami", id: 1 });
+    const body = (await res.json()) as { result: { seen: string } };
+    expect(body.result).toEqual({ seen: "jsonrpc:whoami" });
+    expect(context.getStore()).toBeUndefined();
+  });
+
+  it("getStore() reflects whichever surface most recently entered its context, across all five", async () => {
     const context = createContext<Ctx>({
       http: () => ({ source: "http" }),
       cli: (ctx) => ({ source: `cli:${ctx.leafName}` }),
       mcp: (ctx) => ({ source: `mcp:${ctx.name}` }),
       graphql: (ctx) => ({ source: `graphql:${ctx.fieldName}` }),
+      jsonrpc: (ctx) => ({ source: `jsonrpc:${ctx.method}` }),
     });
 
     // HTTP
@@ -187,7 +221,20 @@ describe("createContext", () => {
     expect(graphqlResult.errors).toBeUndefined();
     expect(graphqlResult.data).toEqual({ whoami: { seen: "graphql:whoami" } });
 
-    // No leakage after all four have run.
+    // JSON-RPC
+    const jsonRpcTree = api_({
+      whoami: op((_: unknown) => ({ seen: context.getStore()?.source })),
+    });
+    const jsonRpcHandler = createJsonRpcHttpHandler(jsonRpcTree, { als: context.jsonrpc! });
+    const jsonRpcRes = await postJsonRpc(jsonRpcHandler, {
+      jsonrpc: "2.0",
+      method: "whoami",
+      id: 1,
+    });
+    const jsonRpcBody = (await jsonRpcRes.json()) as { result: { seen: string } };
+    expect(jsonRpcBody.result).toEqual({ seen: "jsonrpc:whoami" });
+
+    // No leakage after all five have run.
     expect(context.getStore()).toBeUndefined();
   });
 });

@@ -39,7 +39,9 @@ export {
 
 export type {
   CreateJsonRpcServerOptions,
+  JsonRpcAlsContext,
   JsonRpcErrorEncoder,
+  JsonRpcMiddleware,
   JsonRpcSocket,
   JsonRpcWebSocketHandlers,
 } from "./server.ts";

@@ -25,6 +25,13 @@
 // `undefined`, and each transport's own adapter maps that to "no body sent"
 // (HTTP: 204 No Content; WebSocket: nothing sent).
 //
+// Middleware + ALS: `CreateJsonRpcServerOptions.middleware`/`.als` mirror
+// HTTP/MCP/CLI/GraphQL's own options (docs/guide/framework.md §3) — an
+// around-hook composed outermost-first over the handler call, and an opt-in
+// `AsyncLocalStorage` scope computed per dispatch from `JsonRpcAlsContext`.
+// Both wrap `dispatch.handler` inside `dispatchRequest`, shared by both
+// transports the same as the rest of dispatch semantics.
+//
 // Streaming (settled design decision — see project.ts's `JsonRpcMethod
 // .streaming` doc): a handler returning an `AsyncIterable` is drained
 // differently per transport, since only one of them has a push channel to
@@ -70,6 +77,7 @@
 import {
   assemble,
   composeErrorEncoders,
+  composeMiddleware,
   isResultShape,
   isStreamChunk,
   isStreamProgress,
@@ -81,7 +89,8 @@ import type {
   ProjectorStores,
   Store,
 } from "@rhi-zone/fractal-api-tree";
-import type { Node } from "@rhi-zone/fractal-api-tree/node";
+import type { AlsConfig } from "@rhi-zone/fractal-api-tree/context";
+import type { LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import { projectMethods } from "./project.ts";
 import type { Dispatch, ProjectMethodsOptions, SchemaMap } from "./project.ts";
 import {
@@ -259,20 +268,74 @@ async function drainToArray(iterable: AsyncIterable<unknown>): Promise<unknown[]
 // Dispatch core — shared by both transports
 // ============================================================================
 
+/**
+ * A JSON-RPC middleware wraps the handler-invoking function `next` (itself
+ * `F => F`). Composes like every other projector's middleware — onion-shaped,
+ * first entry outermost — see CLI's `CliMiddleware` (cli-api-projector/src/
+ * cli.ts) and docs/guide/framework.md §3. `stores` is the raw pre-assembly
+ * `JsonRpcStoreBag` (`params` + `caller`); the handler itself never sees it,
+ * structurally, the same as every sibling projector's base case.
+ */
+export type JsonRpcMiddleware = (
+  next: (input: Record<string, unknown>, stores: JsonRpcStoreBag) => unknown | Promise<unknown>,
+) => (input: Record<string, unknown>, stores: JsonRpcStoreBag) => unknown | Promise<unknown>;
+
+/**
+ * Dispatch context `CreateJsonRpcServerOptions.als`'s `init` receives — the
+ * dispatched method's own `LeafMeta`, its name, and whether this call is a
+ * Notification (§4.1: never gets a response, so a Notification's ALS context
+ * is still established — a handler often behaves identically either way —
+ * but nothing downstream can rely on ever reading a `JsonRpcResponse` back
+ * out for it). Mirrors MCP's `McpAlsContext` (mcp-api-projector/src/server.ts)
+ * and CLI's `CliAlsContext` (cli-api-projector/src/cli.ts).
+ */
+export type JsonRpcAlsContext = {
+  readonly meta: LeafMeta;
+  readonly method: string;
+  readonly isNotification: boolean;
+};
+
 /** Options shared by both transport adapters (`createJsonRpcHttpHandler`/`createJsonRpcWebSocketHandlers`). */
-export type CreateJsonRpcServerOptions = {
+export type CreateJsonRpcServerOptions<T = unknown> = {
   /** Method-name -> derived params/result schema + description (from codegen). Forwarded to `projectMethods`. */
   readonly schemas?: SchemaMap;
   /** Opt-in return-value detection, mirroring HTTP/MCP/CLI's own `detection` option — `result` gates `Result`-shape unwrapping, `streaming` gates `AsyncIterable` draining. Both default `true`. */
   readonly detection?: DetectionOptions;
   /** Maps a handler's `Result.err(E)` value to a JSON-RPC error object — see `JsonRpcErrorEncoder`/`jsonRpcErrors`. `undefined` (including when omitted) falls back to `JSON_RPC_INVALID_PARAMS` carrying the raw error as `data`. */
   readonly errorEncoder?: JsonRpcErrorEncoder;
+  /**
+   * Wrap the handler call so it runs inside its own `AsyncLocalStorage`
+   * context. `init` computes the per-invocation context value from
+   * `JsonRpcAlsContext`. Mirrors HTTP's `PresetOptions.als`, CLI's
+   * `CliOpts.als`, and MCP's `CreateMcpServerOptions.als`. ALS is the
+   * innermost wrapper — closer to the handler than `opts.middleware` — so
+   * the store is active only while `dispatch.handler` (and anything it
+   * calls, transitively) runs; a `JsonRpcMiddleware`'s own code, before or
+   * after calling `next`, is not itself inside the ALS context —
+   * `AsyncLocalStorage` doesn't propagate back out through an `await`'d
+   * call once it settles. A middleware that needs cross-cutting context
+   * should read it from `stores` (the second parameter every
+   * `JsonRpcMiddleware` receives), or read the ALS store from code it
+   * invokes synchronously inside `next`. Absent by default (no ALS
+   * wrapping).
+   */
+  readonly als?: AlsConfig<JsonRpcAlsContext, T>;
+  /**
+   * Around-hooks wrapping the handler call — `F => F` where
+   * `F = (input, stores) => result` (see `JsonRpcMiddleware` and
+   * docs/guide/framework.md §3). Composes like an onion: the first entry in
+   * the array is the outermost wrapper. When omitted (or empty), the
+   * handler is called directly — zero overhead.
+   */
+  readonly middleware?: readonly JsonRpcMiddleware[];
 };
 
-type RunOptions = {
+type RunOptions<T = unknown> = {
   readonly detectResult: boolean;
   readonly detectStreaming: boolean;
   readonly errorEncoder: JsonRpcErrorEncoder | undefined;
+  readonly als: AlsConfig<JsonRpcAlsContext, T> | undefined;
+  readonly middleware: readonly JsonRpcMiddleware[];
   /** Present only for the WebSocket transport — enables the notification-streaming path (see `streamViaNotifications`) instead of HTTP's drain-to-array degrade. */
   readonly sendNotification: ((n: JsonRpcNotification) => void | Promise<void>) | undefined;
   /**
@@ -297,10 +360,10 @@ type RunOptions = {
  * one; the caller (`dispatchBody`) is responsible for turning `undefined`
  * into "send nothing."
  */
-async function dispatchRequest(
+async function dispatchRequest<T>(
   handlers: ReadonlyMap<string, Dispatch>,
   raw: unknown,
-  opts: RunOptions,
+  opts: RunOptions<T>,
 ): Promise<JsonRpcResponse | undefined> {
   if (!isJsonRpcRequestShape(raw)) {
     const id =
@@ -338,7 +401,29 @@ async function dispatchRequest(
     ];
     const input = assemble(stores, paramNames, dispatch.sourceMap, "params");
 
-    let result: unknown = await dispatch.handler(input);
+    // Call handler — wrapped (innermost-first) by ALS (see
+    // CreateJsonRpcServerOptions.als), then by any configured middleware
+    // (outermost-first; see CreateJsonRpcServerOptions.middleware). With
+    // neither configured, `callHandler` is just `dispatch.handler` itself
+    // (zero overhead) — matching CLI's `runCli`/MCP's `server.ts`.
+    const alsContext: JsonRpcAlsContext = { meta: dispatch.meta, method: req.method, isNotification };
+    const alsHandler =
+      opts.als !== undefined
+        ? (input: Record<string, unknown>) => {
+            const store = opts.als!.init(alsContext);
+            return store instanceof Promise
+              ? store.then((resolved) => opts.als!.storage.run(resolved, () => dispatch.handler(input)))
+              : opts.als!.storage.run(store, () => dispatch.handler(input));
+          }
+        : dispatch.handler;
+    // Bridge the plain handler `(input) => result` into `F => F`'s base case
+    // `(input, stores) => handler(input)` — the handler never sees `stores`,
+    // structurally (see JsonRpcMiddleware's doc above).
+    const base = (input: Record<string, unknown>, _stores: JsonRpcStoreBag) => alsHandler(input);
+    const callHandler =
+      opts.middleware.length === 0 ? base : composeMiddleware(opts.middleware, base);
+
+    let result: unknown = await callHandler(input, stores);
 
     if (opts.detectStreaming && isAsyncIterable(result)) {
       result =
@@ -376,10 +461,10 @@ async function dispatchRequest(
  * when nothing should be sent back (a lone Notification, or a batch made
  * entirely of Notifications).
  */
-async function dispatchBody(
+async function dispatchBody<T>(
   handlers: ReadonlyMap<string, Dispatch>,
   body: unknown,
-  opts: RunOptions,
+  opts: RunOptions<T>,
 ): Promise<JsonRpcResponse | JsonRpcResponse[] | undefined> {
   if (Array.isArray(body)) {
     if (body.length === 0)
@@ -391,15 +476,17 @@ async function dispatchBody(
   return dispatchRequest(handlers, body, opts);
 }
 
-function resolveRunOptions(
-  opts: CreateJsonRpcServerOptions,
-  sendNotification: RunOptions["sendNotification"],
+function resolveRunOptions<T>(
+  opts: CreateJsonRpcServerOptions<T>,
+  sendNotification: RunOptions<T>["sendNotification"],
   caller: Record<string, unknown>,
-): RunOptions {
+): RunOptions<T> {
   return {
     detectResult: opts.detection?.result ?? true,
     detectStreaming: opts.detection?.streaming ?? true,
     errorEncoder: opts.errorEncoder,
+    als: opts.als,
+    middleware: opts.middleware ?? [],
     sendNotification,
     caller,
   };
@@ -437,9 +524,9 @@ function jsonResponse(value: unknown, status = 200): Response {
  * (§4.2, code -32600). See module doc for batch/streaming/error-mapping
  * behavior.
  */
-export function createJsonRpcHttpHandler(
+export function createJsonRpcHttpHandler<T = unknown>(
   tree: Node,
-  opts: CreateJsonRpcServerOptions = {},
+  opts: CreateJsonRpcServerOptions<T> = {},
 ): (req: Request) => Promise<Response> {
   const { handlers } = projectMethods(tree, toProjectOptions(opts));
 
@@ -498,9 +585,9 @@ function decodeMessage(raw: string | ArrayBufferLike | Uint8Array): string {
  * docs/design/middleware-and-caller-context.md), not this transport, which
  * stays a thin message pump.
  */
-export function createJsonRpcWebSocketHandlers(
+export function createJsonRpcWebSocketHandlers<T = unknown>(
   tree: Node,
-  opts: CreateJsonRpcServerOptions = {},
+  opts: CreateJsonRpcServerOptions<T> = {},
 ): JsonRpcWebSocketHandlers {
   const { handlers } = projectMethods(tree, toProjectOptions(opts));
 
@@ -521,6 +608,6 @@ export function createJsonRpcWebSocketHandlers(
   };
 }
 
-function toProjectOptions(opts: CreateJsonRpcServerOptions): ProjectMethodsOptions {
+function toProjectOptions<T>(opts: CreateJsonRpcServerOptions<T>): ProjectMethodsOptions {
   return opts.schemas !== undefined ? { schemas: opts.schemas } : {};
 }

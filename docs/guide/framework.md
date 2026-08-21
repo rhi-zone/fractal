@@ -104,10 +104,10 @@ naming.
 ## 3. Middleware
 
 Middleware is **not** MCP/CLI-specific — it's a shared shape (`docs/design/middleware-and-caller-context.md`)
-implemented independently by HTTP, MCP, CLI, and GraphQL, all with the identical signature:
-an around-hook `F => F` wrapping the handler-invoking function, composed outermost-first
-(the first entry in the `middleware` array wraps every other entry, and runs closest to the
-edge of the request):
+implemented independently by HTTP, MCP, CLI, GraphQL, and JSON-RPC, all with the identical
+signature: an around-hook `F => F` wrapping the handler-invoking function, composed
+outermost-first (the first entry in the `middleware` array wraps every other entry, and
+runs closest to the edge of the request):
 
 ```ts
 // packages/mcp-api-projector/src/server.ts
@@ -117,21 +117,27 @@ export type McpMiddleware = (
 ```
 
 `CliMiddleware` (`packages/cli-api-projector/src/cli.ts`), `HttpHandlerMiddleware`
-(`packages/http-api-projector/src/route.ts`), and `GraphQLHandlerMiddleware`
-(`packages/graphql-api-projector/src/resolve.ts`) are structurally identical —
+(`packages/http-api-projector/src/route.ts`), `GraphQLHandlerMiddleware`
+(`packages/graphql-api-projector/src/resolve.ts`), and `JsonRpcMiddleware`
+(`packages/json-rpc-api-projector/src/server.ts`) are structurally identical —
 `(input, stores) => result` in, same shape out. Each is wired through its own options object
 (`CreateMcpServerOptions.middleware`, `CliOpts.middleware`,
-`PresetOptions.handlerMiddleware`, `ResolverOptions.middleware`) and composed by the same
+`PresetOptions.handlerMiddleware`, `ResolverOptions.middleware`,
+`CreateJsonRpcServerOptions.middleware`) and composed by the same
 `composeMiddleware`-shaped reducer, first-listed outermost. It sits _inside_ the
 handler-invocation boundary — closer to the handler than protocol-level wrapping like
 HTTP's `layers.ts` (`autoMethodLayer`, CORS) — and is the place to hang cross-cutting
 concerns that need the assembled `input` and the shared `stores` (caller context, tracing,
 auth) rather than raw wire bytes.
 
-**JSON-RPC has no equivalent** — grepping `packages/json-rpc-api-projector/src` turns up no
-`Middleware` type or `middleware` option; it only references the shared design doc in a
-comment about caller-context, staying "a thin message pump." A JSON-RPC-specific
-cross-cutting concern has to be baked into the tree's own handlers.
+JSON-RPC's dispatch is shared by both its transports (`createJsonRpcHttpHandler`,
+`createJsonRpcWebSocketHandlers`) — one `middleware` list wraps every call regardless of
+which transport it arrived over. It also carries the same opt-in `AsyncLocalStorage` option
+(`CreateJsonRpcServerOptions.als`) the other four surfaces have, computed per dispatch from
+`JsonRpcAlsContext` (the leaf's `LeafMeta`, the method name, and whether the call is a
+Notification). Per-connection identity for the WebSocket transport (auth, session) is still
+outside middleware's reach — a `message` handler has no per-message `Request`/headers to
+read stores from — and has to be baked into the tree's own handlers, same as before.
 
 ## 4. Extensions
 

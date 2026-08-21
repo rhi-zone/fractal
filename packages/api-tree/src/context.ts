@@ -2,8 +2,10 @@
 // `{ storage, init }` config objects that plug directly into each
 // projector's `als` option (`PresetOptions.als` in http-api-projector,
 // `CliOpts.als` in cli-api-projector, `CreateMcpServerOptions.als` in
-// mcp-api-projector). Lets a consumer author ONE context type + one
-// extractor per surface, instead of wiring three separate
+// mcp-api-projector, `CreateGraphQLServerOptions.als` in
+// graphql-api-projector, `CreateJsonRpcServerOptions.als` in
+// json-rpc-api-projector). Lets a consumer author ONE context type + one
+// extractor per surface, instead of wiring five separate
 // `AsyncLocalStorage` instances by hand and keeping them in sync.
 //
 // Lives here (the protocol-neutral base package) rather than in any single
@@ -62,6 +64,13 @@ export type GraphQLContextShape = {
   readonly operationType: "query" | "mutation" | "subscription";
 };
 
+/** Structural mirror of json-rpc-api-projector's `JsonRpcAlsContext`. */
+export type JsonRpcContextShape = {
+  readonly meta: LeafMeta;
+  readonly method: string;
+  readonly isNotification: boolean;
+};
+
 // ============================================================================
 // createContext
 // ============================================================================
@@ -91,6 +100,8 @@ export type ContextBuilder<T> = {
   readonly mcp?: AlsConfig<McpContextShape, T>;
   /** Present iff a `graphql` extractor was provided — drop directly into `CreateGraphQLServerOptions.als`. */
   readonly graphql?: AlsConfig<GraphQLContextShape, T>;
+  /** Present iff a `jsonrpc` extractor was provided — drop directly into `CreateJsonRpcServerOptions.als`. */
+  readonly jsonrpc?: AlsConfig<JsonRpcContextShape, T>;
 };
 
 /**
@@ -111,12 +122,13 @@ export type ContextBuilder<T> = {
  * runCli(tree, argv, io, { als: context.cli })
  * createMcpServer(tree, { name, version, als: context.mcp })
  * createGraphQLServer(tree, { als: context.graphql })
+ * createJsonRpcHttpHandler(tree, { als: context.jsonrpc })
  *
- * // anywhere downstream of a dispatched request, from any of the four surfaces:
+ * // anywhere downstream of a dispatched request, from any of the five surfaces:
  * context.getStore()?.requestId
  * ```
  *
- * All four configs share the SAME `AsyncLocalStorage` instance (`.storage`)
+ * All five configs share the SAME `AsyncLocalStorage` instance (`.storage`)
  * — `getStore()` returns whichever surface's context is currently active,
  * regardless of which one entered it.
  */
@@ -125,6 +137,7 @@ export function createContext<T>(extractors: {
   readonly cli?: (context: CliContextShape) => T;
   readonly mcp?: (context: McpContextShape) => T;
   readonly graphql?: (context: GraphQLContextShape) => T;
+  readonly jsonrpc?: (context: JsonRpcContextShape) => T;
 }): ContextBuilder<T> {
   const storage = new AsyncLocalStorage<T>();
   const getStore = (): T | undefined => storage.getStore();
@@ -136,5 +149,6 @@ export function createContext<T>(extractors: {
     ...(extractors.cli !== undefined ? { cli: { storage, init: extractors.cli } } : {}),
     ...(extractors.mcp !== undefined ? { mcp: { storage, init: extractors.mcp } } : {}),
     ...(extractors.graphql !== undefined ? { graphql: { storage, init: extractors.graphql } } : {}),
+    ...(extractors.jsonrpc !== undefined ? { jsonrpc: { storage, init: extractors.jsonrpc } } : {}),
   };
 }

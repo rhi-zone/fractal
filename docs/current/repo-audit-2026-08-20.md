@@ -255,17 +255,6 @@ treeId prefixing (`423b8fa`), `outputHash`, closure-from-Program.
    not investigate what the §9(4) regression actually is — flagging rather
    than asserting it's nothing, since the spec file itself is claiming an
    open problem this audit hasn't looked at.
-8. **json-rpc lacks the middleware + ALS every other projector has — still
-   true.** No `composeMiddleware`, no `AsyncLocalStorage` anywhere in its
-   `src/`; the gesture comment in `server.ts` and the design note in
-   `docs/guide/framework.md` both still exist, just at shifted line numbers
-   (`framework.md`'s paragraph moved to roughly :131-132).
-9. **`get*Meta` duplication — unchanged.** The six verbatim three-line
-   `get*Meta`s (graphql, cli, http openapi ×2, json-rpc, http, mcp) are still
-   duplicated as described, at slightly shifted lines. (The verbatim
-   `composeMiddleware` copies this item originally paired with this are
-   fixed — cli, graphql, and mcp all now import a single `composeMiddleware`
-   from `@rhi-zone/fractal-api-tree`.)
 10. **The wire-key/sourceMap union inlined four ways — still true, citation
     needs a full re-derive.** The pattern still exists at each site (cli.ts,
     json-rpc's `server.ts`, http's `route.ts`) but none of them literally
