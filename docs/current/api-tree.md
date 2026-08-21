@@ -203,26 +203,27 @@ The current mechanism, as actually implemented:
   `applyValidation(key, tree, protocol?)`, that structurally walks a _projected_ tree (an
   `HttpRoute`, or the raw `Node` tree for protocols with no separate projected type) and wraps
   each matching leaf's handler to run a generated `parse` before the real handler
-  (`apply-validation.ts:1-34`).
+  (`apply-validation.ts`'s module doc comment).
 - **2-arg vs. 3-arg calls resolve against different maps, and the precedence is a real
   contract, not just documentation:** a 2-arg call (`protocol` omitted) resolves first against
   the hand-authored `ValidatorMap`, and only if absent there, falls back to `WireValidatorMap`
   tagged `"identity"` — an omitted `protocol` argument is sugar for `"identity"` _at the
-  codegen layer itself_, not merely a documentation convention (`apply-validation.ts:416-441`).
+  codegen layer itself_, not merely a documentation convention (`resolveForKey`).
   A hand-authored `ValidatorMap` entry for a key always takes precedence over generated
   `identity`-profile coverage for that same key, even after codegen has run. A 3-arg call
   resolves exclusively against `WireValidatorMap`.
 - **Each `key` may be used at most once per `createApplyValidation` result, regardless of
   `protocol`.** A second `applyValidation(sameKey, …)` call throws — `usedKeys` is tracked by
   key alone, not key+protocol, specifically so reusing one key under two different protocols
-  is an error rather than a silent last-write-wins (`apply-validation.ts:458-464, 472-483`). A
+  is an error rather than a silent last-write-wins (`createApplyValidation`'s doc comment and
+  body). A
   tree that needs validation under two protocols must use two distinct keys.
 - **The pass-through stub (`createApplyValidation({})`) is silent by design.** A freshly
   scaffolded project's stub generated module leaves every tree unchanged with no error — this
   lets the one import compile and run before codegen has ever produced anything. Coverage is
   enforced only by a separate, explicitly-called `assertValidationCoverage`
   (`UncoveredLeafError`) — never automatically by `applyValidation` itself
-  (`apply-validation.ts:448-456`). A consumer who forgets to call
+  (`createApplyValidation`'s doc comment). A consumer who forgets to call
   `assertValidationCoverage` in their build gets silently-unvalidated leaves with no runtime
   signal.
 - **Function-form `encodingMap` decoders are checked eagerly, at wrap time, not lazily at
