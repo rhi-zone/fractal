@@ -29,7 +29,7 @@ itself or built directly on it:
    than from AST pattern-matching on `op(...)`/`api(...)` call shapes.
 
 A protocol projector (HTTP, CLI, MCP, GraphQL) never lives in this package — it depends on
-`api-tree`, never the reverse (`apply-validation.ts:24-28`). That asymmetry is why several
+`api-tree`, never the reverse (`apply-validation.ts`'s module doc comment). That asymmetry is why several
 mechanisms here (validation wiring, context shapes, OTel/auth adapters) are built to work
 _structurally_, without importing a single type from any projector package — see "Staying at
 the bottom of the dependency graph" below.
@@ -120,7 +120,7 @@ exempt a leaf from requiring a generated validator.
 When `op()`'s contributions declare required `LeafMeta` fields (e.g. a deployment that
 declaration-merges a required `scopes` field onto `LeafMeta`), the check runs against the
 `mergeMeta`'d result of all contributions together, not against each one separately
-(`node.ts:499-517` — see the surrounding doc comment). This is why a verb bundle
+(`node.ts`'s `op()` doc comment and parameter type — see the surrounding doc comment). This is why a verb bundle
 (`http.get`) that carries no `scopes` of its own can still compose with a _sibling_
 contribution that does — checking each contribution in isolation would reject that
 composition even though the combined meta is valid.
@@ -128,8 +128,8 @@ composition even though the combined meta is valid.
 ## Static param-coverage checking is real but has a documented blind spot
 
 `op()` statically rejects (a compile error naming the offending param) a `source()`-declared
-param name the handler doesn't actually take as input (`node.ts:545-601`, `input.ts:441-462`
-— `UncoveredSourceParams`). This check **only fires when the handler's input keys are
+param name the handler doesn't actually take as input (`node.ts`'s `CheckedContributions` type, `input.ts`'s
+`UncoveredSourceParams` type). This check **only fires when the handler's input keys are
 statically known**; a handler typed against `Record<string, unknown>`, or with no typed input
 at all, makes the check vacuous. A consumer relying on this to catch a `sourceMap` typo needs
 a concretely-typed handler input — an untyped one gets no such protection.
