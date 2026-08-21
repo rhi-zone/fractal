@@ -42,7 +42,7 @@
 //   packages/api-tree/src/tree.ts — extractToolSchemas, SchemaMap
 //   docs/artifacts/fc-op-kinds/projection-cli.md — CLI concept inventory
 
-import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
@@ -438,9 +438,7 @@ export type CliLeafMeta = {
  * and branch meta (reading only `.hidden`, always via `CliLeafMeta`'s
  * inherited `CliSharedMetaProperties` shape) at different call sites below.
  */
-export function getCliMeta(meta: CliLeafMeta): CliLeafMetaProperties {
-  return readMetaBag<CliLeafMetaProperties>(meta.cli);
-}
+export const getCliMeta = metaBagGetter<CliLeafMeta, "cli", CliLeafMetaProperties>("cli");
 
 // ============================================================================
 // Resolution: walk the Node tree along argv segments

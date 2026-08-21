@@ -29,7 +29,7 @@
 //   packages/api-tree/src/tree.ts               — extractToolSchemas, SchemaMap
 //   packages/api-tree/src/node.ts               — Node, Handler, fallback
 
-import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
@@ -243,13 +243,11 @@ export interface OpenApiLeafMeta {
 /** Public alias kept for the exported "resolved per-operation openapi meta" shape — see `getOpenApiMeta`. */
 export type OpenApiMeta = OpenApiLeafMetaProperties;
 
-function getOpenApiSharedMeta(meta: OpenApiSharedMeta): OpenApiSharedMetaProperties {
-  return readMetaBag<OpenApiSharedMetaProperties>(meta.openapi);
-}
+const getOpenApiSharedMeta = metaBagGetter<OpenApiSharedMeta, "openapi", OpenApiSharedMetaProperties>(
+  "openapi",
+);
 
-function getOpenApiMeta(meta: OpenApiLeafMeta): OpenApiLeafMetaProperties {
-  return readMetaBag<OpenApiLeafMetaProperties>(meta.openapi);
-}
+const getOpenApiMeta = metaBagGetter<OpenApiLeafMeta, "openapi", OpenApiLeafMetaProperties>("openapi");
 
 // ============================================================================
 // Internal: security scheme collection — walks the whole HttpRoute tree

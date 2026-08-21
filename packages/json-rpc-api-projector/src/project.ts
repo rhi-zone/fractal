@@ -50,7 +50,7 @@
 //   docs/design/router-model.md                       — Node Shape, Dispatch, fallback
 
 import { jsonRpcErrorSchema } from "@rhi-zone/fractal-type-ir/json-rpc";
-import { readMetaBag } from "@rhi-zone/fractal-api-tree/node";
+import { metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import { walkNamedTree } from "@rhi-zone/fractal-api-tree/tree-walk";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
@@ -167,11 +167,11 @@ export type JsonRpcBranchMeta = {
  * (reading `.segment`) at different call sites below; the intersection is
  * safe because the two roles' field sets don't overlap.
  */
-export function getJsonRpcMeta(
-  meta: JsonRpcLeafMeta & JsonRpcBranchMeta,
-): JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties {
-  return readMetaBag<JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties>(meta.jsonrpc);
-}
+export const getJsonRpcMeta = metaBagGetter<
+  JsonRpcLeafMeta & JsonRpcBranchMeta,
+  "jsonrpc",
+  JsonRpcLeafMetaProperties & JsonRpcBranchMetaProperties
+>("jsonrpc");
 
 // ============================================================================
 // Tag -> metadata

@@ -47,7 +47,7 @@
 // field's `args` object is structurally the same "flat named-value bag" a
 // tool call's `arguments` is.
 
-import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
@@ -118,9 +118,9 @@ export type GraphQLBranchMeta = {
 };
 
 /** Safely extract the open `meta.graphql` bag — leaf position (every currently-wired read site is a per-field/leaf walk). */
-export function getGraphQLMeta(meta: GraphQLLeafMeta): GraphQLLeafMetaProperties {
-  return readMetaBag<GraphQLLeafMetaProperties>(meta.graphql);
-}
+export const getGraphQLMeta = metaBagGetter<GraphQLLeafMeta, "graphql", GraphQLLeafMetaProperties>(
+  "graphql",
+);
 
 // ============================================================================
 // Derived-from-type facts — supplied by the caller (codegen), same convention

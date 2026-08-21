@@ -53,7 +53,7 @@
 //                                                and which of those concepts recur
 //                                                across projections
 
-import { isLeaf, readMetaBag } from "@rhi-zone/fractal-api-tree/node";
+import { isLeaf, metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import { assertUniqueName } from "@rhi-zone/fractal-api-tree/tree";
@@ -383,11 +383,11 @@ export type McpBranchMeta = {
  * two roles share no key, so no field can mean one thing at a leaf and another
  * at a branch.
  */
-export function getMcpMeta(
-  meta: McpLeafMeta & McpBranchMeta,
-): McpLeafMetaProperties & McpBranchMetaProperties {
-  return readMetaBag<McpLeafMetaProperties & McpBranchMetaProperties>(meta.mcp);
-}
+export const getMcpMeta = metaBagGetter<
+  McpLeafMeta & McpBranchMeta,
+  "mcp",
+  McpLeafMetaProperties & McpBranchMetaProperties
+>("mcp");
 
 // ============================================================================
 // Tree walk

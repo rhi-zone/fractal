@@ -51,7 +51,7 @@
 
 import { makeRouterFromRoute, naiveTransform } from "./route.ts";
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts";
-import { readMetaBag } from "@rhi-zone/fractal-api-tree/node";
+import { metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import type { Node } from "@rhi-zone/fractal-api-tree/node";
 import type { EncodingMap, SourceMap, StandardSchemaV1 } from "./decode.ts";
 // `Fetch` is layers.ts's own type (`(req: Request) => Promise<Response>`) —
@@ -213,9 +213,7 @@ export interface HttpLeafMeta {
  * `collectRoutes`, verbs.test.ts, …) depend on, and for the `null`/non-object
  * guard a plain field read wouldn't give for free.
  */
-export function getHttpMeta(meta: HttpLeafMeta): HttpLeafMetaProperties {
-  return readMetaBag<HttpLeafMetaProperties>(meta.http);
-}
+export const getHttpMeta = metaBagGetter<HttpLeafMeta, "http", HttpLeafMetaProperties>("http");
 
 // ============================================================================
 // Response helpers

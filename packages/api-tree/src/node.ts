@@ -85,6 +85,24 @@ export function readMetaBag<Properties extends object>(
 }
 
 /**
+ * Build a projector's `get<Namespace>Meta(meta)` accessor: reads
+ * `meta[namespace]` through `readMetaBag`. `readMetaBag` itself already
+ * dedups the guard logic; this dedups the wrapper shape every projector
+ * repeated around it — `export function get<Namespace>Meta(meta: X): Y {
+ * return readMetaBag<Y>(meta.<namespace>); }` — down to one call, e.g.
+ * `export const getHttpMeta = metaBagGetter<HttpLeafMeta, "http",
+ * HttpLeafMetaProperties>("http")`. `Meta` and `Properties` don't infer from
+ * `namespace` alone, so callers spell out all three type arguments; each
+ * call site keeps its own JSDoc on the resulting `const`, since the role-
+ * intersection nuance (leaf vs. branch meta) is namespace-specific.
+ */
+export function metaBagGetter<Meta, Namespace extends keyof Meta, Properties extends object>(
+  namespace: Namespace,
+): (meta: Meta) => Properties | Record<string, never> {
+  return (meta: Meta) => readMetaBag<Properties>(meta[namespace]);
+}
+
+/**
  * True when `T` has at least one required key. `{}` is assignable from (and
  * to) any object type with only optional keys, so `{} extends T` is false
  * exactly when `T` has a required key.
