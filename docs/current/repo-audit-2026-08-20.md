@@ -153,31 +153,51 @@ the §1.1/§2.1 version-gate hole. That hole is real in the code and real in the
 
 ---
 
-## 2. The cache design (`packages/api-tree/src/cache.ts`, 649 lines)
+## 2. The cache design (`packages/api-tree/src/cache.ts`, 734 lines)
 
-### 2.1 The version-gate hole extends to Tier 2 — carried-forward artifacts included
+**Update**: three commits landed after this audit and fixed nearly everything
+below — `c60cdd08` (close the version/options blind spots), `c84cf26` (track
+tsconfig in the cache key, add a header option, engage CLI Tier-2 caching),
+and `ae79532` (remove `withCache`, a dead reference implementation). §2.1-2.4
+are rewritten below to describe what was found *and* what changed; only §2.5
+(the sound parts) was never broken.
 
-**[evidenced]** Known: `checkCache` gates on `tsVersion` + `typeIrVersion`,
-never api-tree's own version; both packages pinned `0.1.0-alpha.0`
-(`packages/api-tree/package.json:3`, `packages/type-ir/package.json:3`), never
-bumped. Additionally: `toolchainMatches` — the gate `readCarryForwardState`
-uses for Tier-2 carry-forward — checks the **identical** signal set
-(`version === 3`, `entryFile`, `tsVersion`, `typeIrVersion`). Carried-forward
-leaf **artifacts** (compiled validator fragments, `ToolSchema` values, stored
-verbatim in `leafArtifacts`) are therefore reused verbatim across api-tree
-codegen-template changes — so even a full Tier-1-miss rebuild emits stale
-generated code for every unchanged-fingerprint leaf. Tier 2 widens the hole.
+### 2.1 The version-gate hole extended to Tier 2 — carried-forward artifacts included [**fixed since audit**]
 
-### 2.2 tsconfig / compilerOptions are not tracked
+**[evidenced, historical]** `checkCache` gated on `tsVersion` + `typeIrVersion`,
+never api-tree's own version. Additionally: `toolchainMatches` — the gate
+`readCarryForwardState` uses for Tier-2 carry-forward — checked the
+**identical** signal set (`version === 3`, `entryFile`, `tsVersion`,
+`typeIrVersion`). Carried-forward leaf **artifacts** (compiled validator
+fragments, `ToolSchema` values, stored verbatim in `leafArtifacts`) were
+therefore reused verbatim across api-tree codegen-template changes — so even a
+full Tier-1-miss rebuild emitted stale generated code for every
+unchanged-fingerprint leaf.
 
-**[evidenced]** The module doc admits it ("compiler options embedded in
-tsconfig.json resolution … out of scope"). `tsconfig.json` is not in
-`program.getSourceFiles()`, so not in `files`. An edit to `paths`/`types`/
-`strict` can change extraction output; the cache still hits. Acknowledged only
-in an internal comment — the CLI's USAGE text says the cache covers "entry file
+**This is fixed.** Both `checkCache` and `toolchainMatches` now also gate on
+`apiTreeVersion` (`resolvePackageVersion("@rhi-zone/fractal-api-tree", ...)`),
+plus `compilerOptionsHash` and `buildOptionsKey` (§2.2, §1.3) — the signal set
+grew well past what this section originally described. `leafArtifacts` itself
+is unchanged in shape and still carried forward verbatim by
+`readCarryForwardState`. Both packages' versions are still pinned at a
+never-bumped `0.1.0-alpha.0` (`packages/api-tree/package.json:3`,
+`packages/type-ir/package.json:3`), so the gate exists now but is still inert
+in practice until a version bump actually happens — the mechanism changed,
+the practical consequence (nothing invalidates on a fractal-internal release)
+may not have.
 
-- every source file its extraction reads + TypeScript/fractal-type-ir versions"
-  with no caveat.
+### 2.2 tsconfig / compilerOptions were not tracked [**fixed since audit**]
+
+**[evidenced, historical]** The module doc admitted it ("compiler options
+embedded in tsconfig.json resolution … out of scope"). `tsconfig.json` was not
+in `program.getSourceFiles()`, so not in `files`. An edit to `paths`/`types`/
+`strict` could change extraction output while the cache still hit.
+
+**This is fixed.** A new `computeCompilerOptionsFingerprint` (`cache.ts`)
+sha256's `loadCompilerOptionsForFile(entryFile)`, tracked as
+`compilerOptionsHash` on the cache-metadata shape and checked in both
+`checkCache` and `toolchainMatches`. tsconfig changes are now a real cache
+miss. The out-of-scope comment is gone.
 
 ### 2.3 `writeCacheMetadata` silently untracks mismatched `reachable` paths
 
@@ -185,33 +205,57 @@ in an internal comment — the CLI's USAGE text says the cache covers "entry fil
 skipped — the doc comment frames this as "a caller bug worth surfacing as
 'this file never got tracked', not a thrown exception". Nothing surfaces it;
 the symptom is permanent stale hits for edits to the untracked files, invisible
-until a wrong artifact. (Also: a `statSync` failure at write time records
-`size: -1, mtimeMs: -1`, making every warm check content-hash that file —
-perf-only, correctness unaffected.)
+until a wrong artifact. Still true, unchanged by the recent fixes.
 
-### 2.4 `withCache` — the exported "shared orchestration" that nothing uses, including its claimed users
+(A related but distinct point the original write-up conflated: a `statSync`
+failure inside `writeCacheMetadata`'s write-time stat does fall back to
+`size: -1, mtimeMs: -1`, forcing a content hash on that file at the next warm
+check — perf-only, correctness unaffected. `checkCache`'s own *read-time* stat
+helper is a separate code path that returns `undefined` on failure and treats
+a missing stat as `hit: false` outright, not as "content-hash forever".)
 
-**[evidenced]** `withCache`'s doc comment: "the shared orchestration both
-build.ts and schema-build.ts use". False on both counts: grep finds **no
-non-test caller anywhere** (fractal, examples, spike, the sibling codebase).
-`buildWireApplyValidationModuleCached` (`apply-validation-build.ts:1043`),
-`buildSchemaModuleCached` (`schema-build.ts:200`), and `cli.ts`'s `runBuild`
-each hand-inline the same `checkCache → build → writeCacheMetadata` sequence —
-three copies of the orchestration plus one dead exported "shared" one. Its
-contract is also opt-in-correctness: "callers MUST write those exact same
-bytes to `outFile`" — writing anything else (e.g. a header) means perpetual
-silent misses.
+### 2.4 `withCache` — the exported "shared orchestration" that nothing used, including its claimed users [**removed since audit, not just fixed**]
+
+**[evidenced, historical]** `withCache`'s doc comment claimed: "the shared
+orchestration both build.ts and schema-build.ts use". False on both counts:
+grep found **no non-test caller anywhere** (fractal, examples, spike, the
+sibling codebase). `buildWireApplyValidationModuleCached`,
+`buildSchemaModuleCached`, and `cli.ts`'s `runBuild` each hand-inlined the same
+`checkCache → build → writeCacheMetadata` sequence — copies of the
+orchestration plus one dead exported "shared" one.
+
+**`withCache` no longer exists.** It was deleted outright in `ae79532`
+("refactor: remove withCache, a dead reference implementation") rather than
+fixed in place — grep across the whole repo now finds zero occurrences,
+including in comments. `cli.ts`'s `runBuild` no longer hand-inlines its own
+sequence either: it now delegates to `buildWireApplyValidationModuleCached`/
+`buildSchemaModuleCached` via a `kind.cached(...)` call (see §6.1, also fixed).
+`cli.ts`'s `runCheck` still does its own inline `checkCache`/
+`writeCacheMetadata` pair, so the "two-plus copies of the same orchestration"
+shape survives in reduced form — just without the third, dead "shared" export
+alongside it. The byte-exact-write hazard this section used as its worst
+example (§4 item 2) is now moot as an example citing `withCache` specifically,
+since that symbol is gone — but the underlying hazard still applies to the two
+remaining `*Cached` wrappers, which still require callers to write the exact
+bytes they computed.
 
 ### 2.5 Fingerprint machinery that is otherwise sound
 
 **[evidenced]** For contrast: `outputHash` catches hand-edited outputs; the
 closure is content-addressed from the Program's own file set; mtime+size falls
-back to a content hash (touch-tolerant); def-name-set fingerprinting for leaf
-carry-forward is sound (def bodies are recompiled unconditionally each build;
-leaves reference defs by name). The spec
-(`docs/design/ir-keyed-cache-spec.md`) matches the implementation on
-mechanism; it does not specify the per-artifact fingerprint input set, which is
-where §1.2 slipped through.
+back to a content hash (touch-tolerant); def-name-set fingerprinting
+(`computeDefNamesFingerprint`) for leaf carry-forward is sound (def bodies are
+recompiled unconditionally each build; leaves reference defs by name). Still
+current, unchanged by the recent fixes.
+
+The spec (`docs/design/ir-keyed-cache-spec.md`, still 522 lines) still opens
+with "Status: design spec, certified by the project owner — not yet
+implemented" — which was already an understatement at audit time and is more
+wrong now: Tier-2 (`leafFingerprints`, `leafArtifacts`,
+`defNamesFingerprint`, `readCarryForwardState`) has fully shipped. This is a
+separate stale-doc finding from the fingerprint-completeness gap the original
+sentence was pointing at (§1.2, itself now fixed) and is worth flagging to
+whoever owns that spec file.
 
 ---
 
