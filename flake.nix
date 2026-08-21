@@ -126,6 +126,31 @@
             gnustep-base
             gnustep-make
 
+            # Gleam (ffi-ir's gleam-external `@external` projector) — real
+            # `gleam build` check for ffi-ir's compile-check suite.
+            gleam
+
+            # Deno (ffi-ir's typescript-deno Deno.dlopen-based projector) —
+            # real `deno check`/`deno run --check` check for ffi-ir's
+            # compile-check suite.
+            deno
+
+            # wasm-tools (ffi-ir's wit projector) — `wasm-tools component wit`
+            # gives a real WIT-source parse/validate check for ffi-ir's
+            # compile-check suite, without needing a full component-model
+            # toolchain (wit-bindgen etc., not packaged in nixpkgs).
+            wasm-tools
+
+            # OCaml + dune + Melange (ffi-ir's ocaml-melange `external`
+            # projector) — `dune build` against a real `(melange.emit)`
+            # stanza gives a real compile check for ffi-ir's compile-check
+            # suite. ocamlPackages.melange pulls in Melange's own PPX/runtime;
+            # dune drives the actual build.
+            ocamlPackages.ocaml
+            ocamlPackages.dune_3
+            ocamlPackages.melange
+            ocamlPackages.findlib
+
             # Elixir (Jason projector) — staged for a future real compile
             # check, not wired up yet: unlike Ruby's `ruby -c` (a true
             # parse-only check that never expands macros), Elixir has no
