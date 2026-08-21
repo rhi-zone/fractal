@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { toGleamFfi } from "./gleam-external.ts";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
@@ -182,5 +185,87 @@ describe("toGleamFfi — module (Gleam modules are files, not an inline construc
     expect(src).toContain("// module: fs (place these declarations in fs.gleam)");
     expect(src).toContain("pub type FileHandle");
     expect(src).toContain("pub fn open(path: String) -> FileHandle");
+  });
+});
+
+// ============================================================================
+// Real `gleam build` compile-check — proves the string-comparison assertions
+// above against gleam's real compiler, not just shape matching. Gleam
+// requires a real project (gleam.toml + src/<module>.gleam), unlike a bare
+// single-file compile, per `gleam new --help`/`gleam build --help` (verified
+// 2026-08-21 against gleam 1.14.0 in this repo's devShell). The scaffold
+// below is trimmed to the smallest project gleam will actually accept:
+// `gleam new` seeds gleam_stdlib/gleeunit dependencies neither generated
+// fixture here needs, so this hand-writes a `gleam.toml` with an empty
+// `[dependencies]` table instead — `gleam build` then never needs
+// network/Hex resolution. `--target javascript` is required explicitly:
+// gleam.toml has no target field, and `gleam build`'s default (erlang)
+// rejects a `pub fn` with no body ("doesn't have an implementation for the
+// Erlang target") since every `@external(javascript, ...)` declaration this
+// file emits is JS-only by construction.
+// ============================================================================
+
+function runGleamBuild(source: string): { ok: boolean; output: string } {
+  const dir = mkdtempSync(join(tmpdir(), "gleam-external-cc-"));
+  try {
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "gleam.toml"), 'name = "cc"\nversion = "1.0.0"\n\n[dependencies]\n');
+    writeFileSync(join(dir, "src", "cc.gleam"), source);
+    const proc = Bun.spawnSync({
+      cmd: ["gleam", "build", "--target", "javascript"],
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("toGleamFfi — gleam build (real compile-check)", () => {
+  test("a simple free function really compiles with `gleam build --target javascript`", () => {
+    const addFn: FfiRef = f(
+      boundary.function(
+        [
+          { name: "a", type: t(types.integer) },
+          { name: "b", type: t(types.integer) },
+        ],
+        t(types.integer),
+      ),
+      { jsModule: "./math.mjs" },
+    );
+    const result = runGleamBuild(toGleamFfi(addFn, "add"));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("reserved-word escaping (a param and the function itself named after a Gleam keyword) really compiles", () => {
+    const fn: FfiRef = f(
+      boundary.function([{ name: "type", type: t(types.string) }], t(types.void)),
+      { jsModule: "./x.mjs" },
+    );
+    const result = runGleamBuild(toGleamFfi(fn, "case"));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("a resource's external type declaration plus its receiver-first method really compiles", () => {
+    const greetMethod: FfiRef = f(boundary.method([], t(types.string), "Greeter"), {
+      jsModule: "./greeter.mjs",
+    });
+    const greeter: FfiRef = f(boundary.resource("Greeter", { greet: greetMethod }));
+    const result = runGleamBuild(toGleamFfi(greeter, "Greeter"));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  // Proves the check above isn't vacuous: an unescaped reserved-word
+  // identifier (what toGleamFfi's own escaping exists to prevent — see
+  // escapeGleamIdent) is a genuine gleam parse error, verified directly
+  // against `gleam build` rather than asserted from string shape.
+  test("an unescaped reserved-word identifier is genuinely rejected by gleam build", () => {
+    const result = runGleamBuild(
+      ['@external(javascript, "./x.mjs", "type")', "pub fn type(a: Int) -> Int"].join("\n"),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("reserved word");
   });
 });

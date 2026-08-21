@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { boundary, f, ownership, withOwnership, type FfiRef } from "./index.ts";
 import { denoFfiType, toDenoFfi } from "./typescript-deno.ts";
@@ -181,5 +184,103 @@ describe("toDenoFfi — refcount/resource disciplines produce identical codegen 
     expect(srcRefcount).toBe(srcResource);
     expect(srcRefcount).toContain('"node_share": { parameters: ["pointer"], result: "pointer" }');
     expect(srcRefcount).toContain("export function nodeShare(handle: Pointer): Pointer {");
+  });
+});
+
+// ============================================================================
+// Real `deno check` compile-check — proves the string-comparison assertions
+// above against Deno's own type-checker, not just shape matching.
+// `Deno.dlopen`/its FFI type vocabulary are ambient globals in Deno's own lib
+// (`lib.deno.ns.d.ts`), so no import is needed for a generated file to
+// type-check — this is a genuinely different checking pass from
+// typescript-deno.ts's sibling typescript-bun.ts (Bun's own dlopen typings
+// are a different ambient surface entirely), verified 2026-08-21 against
+// deno 2.6.10 in this repo's devShell. `--no-lock` avoids deno looking for/
+// writing a `deno.lock` next to each disposable temp file.
+// ============================================================================
+
+function runDenoCheck(source: string): { ok: boolean; output: string } {
+  const dir = mkdtempSync(join(tmpdir(), "typescript-deno-cc-"));
+  try {
+    const file = join(dir, "generated.ts");
+    writeFileSync(file, source);
+    const proc = Bun.spawnSync({
+      cmd: ["deno", "check", "--no-lock", file],
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("toDenoFfi — deno check (real compile-check)", () => {
+  test("a simple free function with copy-discipline primitive params/return really type-checks", () => {
+    const addFn: FfiRef = f(
+      boundary.function(
+        [
+          { name: "a", type: withOwnership(t(types.integer), ownership.copy()) },
+          { name: "b", type: withOwnership(t(types.integer), ownership.copy()) },
+        ],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+      { libPath: "./libmath.so" },
+    );
+    const result = runDenoCheck(toDenoFfi(addFn, "add"));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("reserved-word escaping (a param and the wrapper function itself named after a JS keyword) really type-checks", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+      { libPath: "./lib.so" },
+    );
+    const result = runDenoCheck(toDenoFfi(fn, "delete"));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  // A real bug the real `deno check` pass surfaces that the string-comparison
+  // tests above cannot see: `POINTER_TYPE_ALIAS`'s local `type Pointer = {} |
+  // null` (typescript-deno.ts's own literal spelling of the docs.deno.com FFI
+  // page's *prose* description of the pointer type) does not structurally
+  // match Deno's real ambient type, `Deno.PointerValue<T>` — the actual
+  // `lib.deno.ns.d.ts` declares it as a branded
+  // `PointerObject<T> = { readonly [brand]: T } | null`, and passing this
+  // file's own `Pointer` alias where `Deno.dlopen`'s real symbol signatures
+  // expect `PointerValue` fails with "Property '[brand]' is missing in type
+  // '{}' but required in type 'PointerObject<unknown>'". The `buffer`
+  // parameter type has a matching mismatch: a wrapper typed `Uint8Array |
+  // null` fails against the real symbol call's `BufferSource | null`
+  // parameter ("Type 'Uint8Array<ArrayBufferLike>' is not assignable to type
+  // 'ArrayBufferView<ArrayBuffer>'"). Reproduced directly against `deno
+  // check` 2026-08-21; not fixed here per this suite's own "record, don't
+  // silently fix" convention (see packages/type-ir/src/compile-check.test.ts's
+  // identical use of `test.todo` for its own real-toolchain findings).
+  test.todo(
+    "a resource's pointer/buffer-typed methods and its paired free wrapper really type-check (currently fails — Pointer/buffer alias mismatch vs. Deno's real PointerValue/BufferSource types, see comment above)",
+    () => {},
+  );
+
+  // Proves the checks above aren't vacuous: a real type mismatch (declaring
+  // a `bigint`-returning symbol call as `string`) is genuinely rejected by
+  // `deno check`, not just asserted from string shape.
+  test("a deliberate type mismatch is genuinely rejected by deno check", () => {
+    const broken = [
+      'const lib = Deno.dlopen("./libmath.so", {',
+      '    "add": { parameters: ["i64", "i64"], result: "i64" },',
+      "})",
+      "",
+      "export function add(a: bigint, b: bigint): string {",
+      "  return lib.symbols.add(a, b) as bigint",
+      "}",
+    ].join("\n");
+    const result = runDenoCheck(broken);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("error");
   });
 });

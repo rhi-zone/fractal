@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { t, types } from "@rhi-zone/fractal-type-ir";
 import { boundary, f, ownership, resourceRef, withOwnership, type FfiRef } from "./index.ts";
 import { toWit } from "./wit.ts";
@@ -179,5 +182,107 @@ describe("toWit — error cases", () => {
     const module = f(boundary.module("m", { bad: fn }, {}));
 
     expect(() => toWit(module)).toThrow(/requires a \{ kind: "ref" \} TypeRef/);
+  });
+});
+
+// ============================================================================
+// Real `wasm-tools component wit` compile-check — proves the string-
+// comparison assertions above against a real WIT parser/validator, not just
+// shape matching. `toWit`'s own `module` output is already a bare
+// `interface name { ... }` block, which per `wasm-tools component wit
+// --help`'s own documented single-`*.wit`-file input is a complete WIT
+// *document* on its own — but a WIT *package* additionally requires a
+// leading `package <namespace>:<name>;` header ("no `package` header was
+// found in any WIT file for this package", confirmed directly against
+// wasm-tools 1.245.1 in this repo's devShell, 2026-08-21); that header names
+// information no ffi-ir `FfiRef`/`FfiShape` carries (ffi-ir's own `module`
+// name maps to a WIT `interface`, not a WIT `package`), so this test file's
+// own helper supplies a throwaway one, the same "consuming file's
+// responsibility, not the codegen snippet's" split
+// packages/type-ir/src/compile-check.test.ts's Go/Rust import-line helpers
+// already use for their own targets.
+// ============================================================================
+
+function runWasmToolsWit(witSource: string): { ok: boolean; output: string } {
+  const dir = mkdtempSync(join(tmpdir(), "wit-cc-"));
+  try {
+    const file = join(dir, "package.wit");
+    writeFileSync(file, `package fractal:cc;\n\n${witSource}\n`);
+    const proc = Bun.spawnSync({
+      cmd: ["wasm-tools", "component", "wit", file],
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return { ok: proc.exitCode === 0, output: proc.stdout.toString() + proc.stderr.toString() };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("toWit — wasm-tools component wit (real compile-check)", () => {
+  test("a module with a simple copy-discipline function really parses/validates", () => {
+    const params = [
+      { name: "path", type: withOwnership(t(types.string), ownership.copy()) },
+      { name: "mode", type: withOwnership(t(types.string), ownership.copy()) },
+    ];
+    const returnType = withOwnership(t(types.boolean), ownership.copy());
+    const existsFn = f(boundary.function(params, returnType));
+    const fsModule = f(boundary.module("fs", { fileExists: existsFn }, {}));
+
+    const result = runWasmToolsWit(toWit(fsModule));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("a resource with own/borrow-style methods really parses/validates", () => {
+    const readMethod = f(
+      boundary.method(
+        [],
+        withOwnership(t(types.array(t(types.integer))), ownership.copy()),
+        "FileHandle",
+      ),
+    );
+    const closeMethod = f(boundary.method([], t(types.void), "FileHandle"));
+    const fileHandle = f(boundary.resource("FileHandle", { read: readMethod, close: closeMethod }));
+    const openParams = [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }];
+    const openReturn = withOwnership(resourceRef("FileHandle", "own"), ownership.resource("own"));
+    const openFn = f(boundary.function(openParams, openReturn));
+    const fsModule = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }));
+
+    const result = runWasmToolsWit(toWit(fsModule));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("%-escaped keyword-collision function and param names really parse/validate", () => {
+    const typeFn = f(boundary.function([], t(types.void)));
+    const listParamFn = f(
+      boundary.function(
+        [{ name: "list", type: withOwnership(t(types.string), ownership.copy()) }],
+        t(types.void),
+      ),
+    );
+    const module = f(boundary.module("m", { type: typeFn, process: listParamFn }, {}));
+
+    const result = runWasmToolsWit(toWit(module));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  test("a %-escaped keyword-collision resource name really parses/validates", () => {
+    const closeMethod = f(boundary.method([], t(types.void), "resource"));
+    const resourceShape = f(boundary.resource("resource", { close: closeMethod }));
+    const module = f(boundary.module("m", {}, { resource: resourceShape }));
+
+    const result = runWasmToolsWit(toWit(module));
+    expect(result.ok, result.output).toBe(true);
+  });
+
+  // Proves the checks above aren't vacuous: a real WIT syntax error is
+  // genuinely rejected by wasm-tools, not just asserted from string shape.
+  test("deliberately malformed WIT (a missing comma between params) is genuinely rejected", () => {
+    const result = runWasmToolsWit(
+      ["interface broken {", "  bad: func(a: string b: string);", "}"].join("\n"),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("error");
   });
 });
