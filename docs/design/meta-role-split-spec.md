@@ -471,38 +471,46 @@ current implementation directly:
 - **Every projector's existing `declare module` block moves out** of
   `project.ts`/`openapi.ts`/`cli.ts` into plain exported interfaces (§2),
   and the reference deployment gains the single augmentation file
-  described in §3. This touches all five projector packages
-  (`http-api-projector/src/project.ts:67-71` and
-  `http-api-projector/src/openapi.ts:199-203`,
-  `cli-api-projector/src/cli.ts:361-365`,
-  `mcp-api-projector/src/project.ts:320-324`,
-  `json-rpc-api-projector/src/project.ts:139-143`,
-  `graphql-api-projector/src/project.ts:95-99`) plus every deploying
-  consumer.
-- `mergeMeta`'s erasure casts (`node.ts:280-287`) — `mergeMeta` currently
-  returns the erased `Meta`; with `Meta` retired in favor of the three role
-  interfaces, either three merge functions (one per return role) or one
-  merge function whose return type is threaded from the call site (§ open
-  in the prior draft, not decided here either — see the note at the end of
-  this section).
-- `httpRoute`'s `meta: {}` placeholder nodes (`route.ts:110-125`,
-  specifically `meta: def.meta ?? {}` at `route.ts:122`) — an empty object
-  literal must satisfy whichever interface is asked for at that call site;
-  trivial while every relevant key stays optional, but every such
-  placeholder needs its type re-checked once the interface it satisfies is
-  no longer always the single `Meta`.
+  described in §3. **Re-verified against current source: done for
+  `http-api-projector`, `cli-api-projector`, and `graphql-api-projector` —
+  no `declare module` block remains in any of their production code. NOT
+  fully done for `mcp-api-projector` and `json-rpc-api-projector` — see the
+  Status line at the top of this doc for the confirmed regression
+  (`src/deployment-meta.test-support.ts` in each still augments
+  `LeafMeta`/`BranchMeta`).**
+- `mergeMeta`'s return type — **this migration step is done, and the open
+  question §7/§8 originally left here is resolved.** `mergeMeta` (`node.ts`)
+  no longer returns an erased `Meta`; it now returns
+  `Simplify<FoldMetaList<T>>`, a type threaded from the call site's own
+  argument types — the "one merge function whose return type is threaded
+  from the call site" option, not "three merge functions." See §8, updated
+  to match.
+- `httpRoute`'s `meta: {}` placeholder nodes (`route.ts`'s `httpRoute`
+  function, `meta: def.meta ?? {}`, plus the equivalent placeholder
+  construction inside `insertAt`'s mkdir-p intermediate-node logic) — an
+  empty object literal must satisfy whichever interface is asked for at
+  that call site; trivial while every relevant key stays optional, but
+  every such placeholder needs its type re-checked once the interface it
+  satisfies is no longer always the single `Meta`.
 - `dx.ts`'s `crud()` (`http-api-projector/src/dx.ts`) composes multiple
   `op(handler, http.get, ...)`-style calls, each contributing a `VerbBundle`
-  (`verbs.ts:87-160`) through `op()`'s folded rest parameter — this is
+  (`verbs.ts`, the type and its verb-const family) through `op()`'s folded
+  rest parameter — note `op()` itself is imported from `@rhi-zone/fractal-api-tree`
+  core, not defined in this package. This is
   exactly the composition path §2a shows breaking today when `LeafMeta`
   gains a required member, since each individual `VerbBundle` contribution
   doesn't itself carry that member.
-- Test fixtures using bare `api({})` (`node.test.ts:61,203`,
-  `project.test.ts` across the http/mcp/graphql/json-rpc projector
-  packages) — `{}` must satisfy `BranchMeta` at these call sites; still
-  trivial while every `BranchMeta` key stays optional, but worth
-  enumerating since these are exactly the call sites `HasRequiredKeys`
-  changes the arity of.
+- Test fixtures using bare `api({})` — confirmed in `packages/api-tree/src/node.test.ts`
+  (2 call sites, line numbers have drifted from an earlier check) and in
+  `http-api-projector`'s `project.test.ts` (2 call sites). **Narrower than
+  previously stated:** a spot-check of `project.test.ts` in `mcp-api-projector`,
+  `graphql-api-projector`, and `json-rpc-api-projector` found no bare
+  `api({})` calls in any of them, only comments mentioning `api({...})`
+  conceptually — so this collateral is currently `api-tree` + `http-api-projector`
+  only, not all four/five projector packages as the earlier wording implied.
+  `{}` must satisfy `BranchMeta` at these call sites; still trivial while
+  every `BranchMeta` key stays optional, but worth enumerating since these
+  are exactly the call sites `HasRequiredKeys` changes the arity of.
 
 ### Consumer story: the sibling codebase
 
