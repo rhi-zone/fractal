@@ -58,12 +58,77 @@ import type { FfiKinds, FfiParam, FfiRef, OwnershipDiscipline } from "./index.ts
 // only implements what ffi-ir's own function/method/resource/module
 // projection needs.
 
+// WIT's reserved keywords, verified 2026-08-21 against the `keyword`
+// production in WebAssembly/component-model's design/mvp/WIT.md (the
+// authoritative WIT grammar) — every one of these is illegal as a bare
+// identifier. Unlike Gleam/JS (which have no raw-identifier escape and need
+// a trailing-underscore convention), WIT has a real escape mechanism of its
+// own: "An identifier may be preceded by a single `%` sign. This is
+// _required_ if the identifier would otherwise be a WIT keyword" (same doc,
+// "Identifiers" section) — e.g. `interface` is illegal but `%interface` is
+// legal. `toKebabCase` below applies it, since the WIT grammar's own escape
+// is scoped to the identifier form specifically, not a generic string
+// operation this file would otherwise need to bolt on separately.
+const WIT_KEYWORDS = new Set([
+  "as",
+  "async",
+  "bool",
+  "borrow",
+  "char",
+  "constructor",
+  "enum",
+  "export",
+  "f32",
+  "f64",
+  "flags",
+  "from",
+  "func",
+  "future",
+  "import",
+  "include",
+  "interface",
+  "list",
+  "map",
+  "option",
+  "own",
+  "package",
+  "record",
+  "resource",
+  "result",
+  "s16",
+  "s32",
+  "s64",
+  "s8",
+  "static",
+  "stream",
+  "string",
+  "tuple",
+  "type",
+  "u16",
+  "u32",
+  "u64",
+  "u8",
+  "use",
+  "variant",
+  "with",
+  "world",
+]);
+
+/** kebab-cases `name` (WIT identifiers are "sequences of words, separated by
+ * single hyphens", per wit.html) and applies WIT's own `%`-prefix escape
+ * (see `WIT_KEYWORDS` above) when the kebab-cased result collides with a
+ * reserved word — every call site in this file uses the result as a bare
+ * WIT identifier (a func/param/record/field/resource/interface name, or a
+ * `ref` type name used at a type-position identifier), so folding the
+ * escape in here covers all of them from one place rather than needing a
+ * separate wrapper at each call site. */
 function toKebabCase(name: string): string {
-  return name
+  const kebab = name
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/[^a-zA-Z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
+  return WIT_KEYWORDS.has(kebab) ? `%${kebab}` : kebab;
 }
 
 function isVoidType(ref: TypeRef): boolean {

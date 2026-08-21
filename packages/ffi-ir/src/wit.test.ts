@@ -96,6 +96,46 @@ describe("toWit — resource with own/borrow-style methods", () => {
   });
 });
 
+// Reserved-word collision coverage — string-comparison only (no real `wit`/
+// `wasm-tools` toolchain is wired into `nix develop`'s devShell for this
+// package, unlike packages/type-ir/src/compile-check.test.ts's real-compiler
+// checks for its own targets), so these assert the `%`-escaped shape the
+// WIT grammar's own documented keyword-escape mechanism requires
+// (component-model.bytecodealliance.org's WIT.md — "An identifier may be
+// preceded by a single `%` sign... required if the identifier would
+// otherwise be a WIT keyword"), not an actual `wasm-tools` parse.
+describe("toWit — reserved-word (WIT keyword) identifiers get the %-escape", () => {
+  test("a function named after a WIT keyword", () => {
+    const fn = f(boundary.function([], t(types.void)));
+    const wit = toWit(fn, "type");
+    expect(wit).toBe("%type: func();");
+  });
+
+  test("a param named after a WIT keyword", () => {
+    const fn = f(
+      boundary.function(
+        [{ name: "list", type: withOwnership(t(types.string), ownership.copy()) }],
+        t(types.void),
+      ),
+    );
+    const wit = toWit(fn, "process");
+    expect(wit).toBe("process: func(%list: string);");
+  });
+
+  test("a resource named after a WIT keyword", () => {
+    const closeMethod = f(boundary.method([], t(types.void), "resource"));
+    const resource = f(boundary.resource("resource", { close: closeMethod }));
+    const wit = toWit(resource);
+    expect(wit).toContain("resource %resource {");
+  });
+
+  test("an interface (module) named after a WIT keyword", () => {
+    const module = f(boundary.module("interface", {}, {}));
+    const wit = toWit(module);
+    expect(wit).toContain("interface %interface {");
+  });
+});
+
 describe("toWit — unsupported ownership disciplines throw for this target", () => {
   test("opaque-handle ownership throws", () => {
     const params = [
