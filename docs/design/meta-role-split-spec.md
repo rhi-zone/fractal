@@ -210,7 +210,7 @@ changes that.
 
 ### 2a. Enforcement machinery, generalized per-interface
 
-`FoldMeta`/`MergeTwoMeta` (`node.ts:155-193`) are unchanged in kind — they
+`FoldMeta`/`MergeTwoMeta` (`node.ts`) are unchanged in kind — they
 still fold a tuple of contributions right-to-left with the same
 optional/required-key logic. What changes is what they're checked against:
 
@@ -226,10 +226,10 @@ optional/required-key logic. What changes is what they're checked against:
   right-to-left fold `FoldMeta<C>` already computes to run BEFORE the
   `extends LeafMeta` check, not per-element — the composed result must
   satisfy `LeafMeta`, not each ingredient.
-- `api()`'s `opts.meta` (`node.ts:441-443`) is single-valued (no fold), so
+- `api()`'s `opts.meta` (`node.ts`'s `api()` function) is single-valued (no fold), so
   its `HasRequiredKeys<BranchMeta>` check is unchanged in kind, just
   retargeted from `Meta` to `BranchMeta`.
-- `HasRequiredKeys<T>` (`node.ts:65`) itself is already generic over `T` —
+- `HasRequiredKeys<T>` (`node.ts`) itself is already generic over `T` —
   nothing about it needs to change; it's simply invoked twice, once per role
   interface, instead of once against a single `Meta`.
 
