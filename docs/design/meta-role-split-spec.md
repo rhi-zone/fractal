@@ -437,28 +437,31 @@ this spec.
 
 ## 6. `openapi.security`: one meaning, not two
 
-Today `openapi.security` means two different things depending on WHERE it's
-read, not just where it's authored — this is a dual-meaning key, the exact
-defect §9(5) rules out:
+**Verified shipped, not just designed:** before this spec, `openapi.security`
+meant two different things depending on WHERE it was read, not just where
+it was authored — a dual-meaning key, the exact defect §9(5) rules out:
 
 - Per-operation (leaf/method-entry position): a requirement on that one
-  operation. Doc comment `openapi.ts:178-184`; read per-operation at
-  `openapi.ts:461-467`.
-- Root position: read as the SPEC-LEVEL DEFAULT (`OpenApiDoc.security`),
-  applied at `openapi.ts:414-416` (`const rootSecurity =
-getOpenApiMeta(route.meta).security`).
+  operation. Field doc on `OpenApiLeafMetaProperties.security` in
+  `openapi.ts`; read per-operation in the document-builder's per-operation
+  destructure.
+- Root position: read as the SPEC-LEVEL DEFAULT (`OpenApiDoc.security`).
 
 This spec keeps only the per-operation (leaf) meaning as `openapi.security`
 on `HttpLeafMeta`. The spec-level default moves out of `meta` entirely, into
 the OpenAPI document builder's own OPTIONS parameter (a plain function
-argument to `buildDoc`/`toOpenApi`, not a tree-authored value) — a document
-has exactly one spec-level default security requirement, and it belongs
-with the other document-level choices (title, servers, …) the builder
-already takes as options, not smuggled onto the root node's meta where it
-reads exactly like a per-operation override that happens to be authored one
-level up. One key never means two things by position after this change;
-the caller who wants a default now passes it explicitly to the builder
-call, and every remaining `security` read is unambiguously per-operation.
+argument, not a tree-authored value) — a document has exactly one spec-level
+default security requirement, and it belongs with the other document-level
+choices (title, servers, …) the builder already takes as options, not
+smuggled onto the root node's meta where it reads exactly like a
+per-operation override that happens to be authored one level up. **This is
+implemented exactly as described:** `openapi.ts`'s document-building
+function reads the spec-level default from `opts.defaultSecurity` (an
+explicit `OpenApiOpts` field), with a doc comment reading "an explicit
+builder option now, not read off any node's meta" and citing this section
+by name — one key never means two things by position anymore, and every
+remaining `security` read off a node's `meta` is unambiguously
+per-operation.
 
 ## 7. Migration surface
 
