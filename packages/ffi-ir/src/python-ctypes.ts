@@ -120,6 +120,22 @@ function quote(value: string): string {
   return JSON.stringify(value);
 }
 
+/** The internal opaque `Structure` class name for a resource, distinct from
+ * the public wrapper class of the same resource name (see `buildResource`):
+ * `buildResourceClass` binds the bare resource name (e.g. `FileHandle`) to
+ * the friendly Python wrapper class, so the opaque `Structure` itself — the
+ * thing every `POINTER(...)` reference (method argtypes, the free function,
+ * and any external reference built via a `ref` TypeRef pointing at this
+ * resource, e.g. a constructor's return type) actually needs to resolve —
+ * must live under a different name or it gets permanently shadowed by the
+ * wrapper class for any code emitted after the resource block (`buildModule`
+ * always emits resources before functions). The leading underscore follows
+ * this module's own convention (see file header) of a name that is never
+ * meant to be spelled by calling code directly. */
+function opaqueStructName(resourceName: string): string {
+  return `_${resourceName}Struct`;
+}
+
 function docComment(indent: string, meta: Readonly<Record<string, unknown>>): string[] {
   return typeof meta.description === "string" ? [`${indent}# ${meta.description}`] : [];
 }
@@ -152,7 +168,17 @@ export function toCtypesType(ref: TypeRef): string {
     discipline.kind === "refcount" ||
     discipline.kind === "resource"
   ) {
-    return `POINTER(${base})`;
+    // A pointer-discipline `ref` TypeRef names a resource by its friendly
+    // name (e.g. `handleRef("FileHandle")`'s `target: "FileHandle"`), which
+    // `buildResource` binds to the public wrapper class, not the opaque
+    // `Structure` — so the POINTER() here must resolve through the same
+    // `opaqueStructName` rename `buildResource` applies (see that function
+    // and `opaqueStructName`'s own comment), or it hits the exact
+    // wrapper-shadows-struct collision this indirection exists to avoid.
+    // Non-`ref` bases (e.g. a pointer to a primitive/object shape) carry no
+    // such resource wrapper class and are left untouched.
+    const target = ref.shape.kind === "ref" ? opaqueStructName(base) : base;
+    return `POINTER(${target})`;
   }
   // Exhaustiveness guard — OwnershipDiscipline is a closed union in index.ts;
   // this branch is unreachable for any value constructible via `ownership.*`.
@@ -279,7 +305,9 @@ function buildFunction(
  * convention that `rust-c-abi.ts`'s `buildOpaqueStruct` implements on the
  * producer side. */
 function buildOpaqueStruct(name: string, ref: FfiRef): string {
-  return [...docComment("", ref.meta), `class ${name}(Structure):`, "    pass"].join("\n");
+  return [...docComment("", ref.meta), `class ${opaqueStructName(name)}(Structure):`, "    pass"].join(
+    "\n",
+  );
 }
 
 /** A resource's method surface projected as a Python class: `__init__`
@@ -335,7 +363,7 @@ function buildResource(
   for (const [methodName, methodRef] of Object.entries(shape.methods)) {
     const methodShape = methodRef.shape as FfiShape & { kind: "method" };
     const fnName = `${resourceSnake}_${toSnakeCase(methodName)}`;
-    decls.push(buildFunction(fnName, methodRef, methodShape, name));
+    decls.push(buildFunction(fnName, methodRef, methodShape, opaqueStructName(name)));
   }
 
   // The paired free function's own argtypes/restype — no ffi-ir shape backs
@@ -344,7 +372,7 @@ function buildResource(
   // emitted inline rather than routed through `buildFunction`.
   decls.push(
     [
-      `lib.${resourceSnake}_free.argtypes = [POINTER(${name})]`,
+      `lib.${resourceSnake}_free.argtypes = [POINTER(${opaqueStructName(name)})]`,
       `lib.${resourceSnake}_free.restype = None`,
       "",
       `def ${resourceSnake}_free(handle):`,

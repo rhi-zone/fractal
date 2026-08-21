@@ -56,8 +56,8 @@ describe("toCtypesType — ownership discipline", () => {
     expect(toCtypesType(withOwnership(t(types.boolean), ownership.copy()))).toBe("c_bool");
   });
 
-  test("opaque-handle discipline becomes POINTER(<T>)", () => {
-    expect(toCtypesType(handleRef("FileHandle"))).toBe("POINTER(FileHandle)");
+  test("opaque-handle discipline becomes POINTER(<T>), naming the internal opaque struct (see opaqueStructName) — not the bare resource name, which buildResource binds to the public wrapper class", () => {
+    expect(toCtypesType(handleRef("FileHandle"))).toBe("POINTER(_FileHandleStruct)");
   });
 
   test(
@@ -66,17 +66,17 @@ describe("toCtypesType — ownership discipline", () => {
     () => {
       expect(
         toCtypesType(withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.refcount())),
-      ).toBe("POINTER(FileHandle)");
+      ).toBe("POINTER(_FileHandleStruct)");
       expect(
         toCtypesType(
           withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.resource("own")),
         ),
-      ).toBe("POINTER(FileHandle)");
+      ).toBe("POINTER(_FileHandleStruct)");
       expect(
         toCtypesType(
           withOwnership(t({ kind: "ref", target: "FileHandle" }), ownership.resource("borrow")),
         ),
-      ).toBe("POINTER(FileHandle)");
+      ).toBe("POINTER(_FileHandleStruct)");
     },
   );
 });
@@ -113,7 +113,7 @@ describe("toCtypes — function", () => {
       ),
     );
     const src = toCtypes(closeFn, "close");
-    expect(src).toContain('getattr(lib, "close").argtypes = [POINTER(FileHandle)]');
+    expect(src).toContain('getattr(lib, "close").argtypes = [POINTER(_FileHandleStruct)]');
     expect(src).toContain('getattr(lib, "close").restype = None');
   });
 });
@@ -161,16 +161,24 @@ describe("toCtypes — resource, opaque-handle discipline", () => {
     const fsModule: FfiRef = f(boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }));
     const src = toCtypes(fsModule);
 
-    // opaque Structure, permanently incomplete (no _fields_)
-    expect(src).toContain("class FileHandle(Structure):");
+    // opaque Structure, permanently incomplete (no _fields_) — declared
+    // under the internal opaqueStructName, distinct from the public
+    // wrapper class of the same resource name below (see python-ctypes.ts's
+    // opaqueStructName comment for why: buildResourceClass binds the bare
+    // resource name to the wrapper, so anything after it in the module that
+    // needs POINTER() to the opaque struct would otherwise resolve to the
+    // wrapper instead).
+    expect(src).toContain("class _FileHandleStruct(Structure):");
     expect(src).toContain("    pass");
 
     // constructor returns a pointer to the opaque struct
-    expect(src).toContain('getattr(lib, "open").restype = POINTER(FileHandle)');
+    expect(src).toContain('getattr(lib, "open").restype = POINTER(_FileHandleStruct)');
     expect(src).toContain("def open(path):");
 
     // method wiring, receiver-prefixed with a synthesized handle parameter
-    expect(src).toContain('getattr(lib, "file_handle_read").argtypes = [POINTER(FileHandle)]');
+    expect(src).toContain(
+      'getattr(lib, "file_handle_read").argtypes = [POINTER(_FileHandleStruct)]',
+    );
     expect(src).toContain('getattr(lib, "file_handle_read").restype = c_int64');
     expect(src).toContain("def file_handle_read(handle):");
 
@@ -178,7 +186,7 @@ describe("toCtypes — resource, opaque-handle discipline", () => {
     // `buildFunction`) synthesizes this one, and its `<resource>_free` name
     // is always concatenated (never a bare keyword collision risk), so it
     // stays a plain `lib.` dot-access rather than `getattr(lib, ...)`.
-    expect(src).toContain("lib.file_handle_free.argtypes = [POINTER(FileHandle)]");
+    expect(src).toContain("lib.file_handle_free.argtypes = [POINTER(_FileHandleStruct)]");
     expect(src).toContain("lib.file_handle_free.restype = None");
 
     // wrapper class: stores the handle, delegates read(), frees on __del__
@@ -194,7 +202,7 @@ describe("toCtypes — resource, opaque-handle discipline", () => {
   test("resource emission ignores an explicit name argument in favor of the shape's own name", () => {
     const fileHandle: FfiRef = f(boundary.resource("FileHandle", {}));
     const src = toCtypes(fileHandle, "SomeOtherName");
-    expect(src).toContain("class FileHandle(Structure):");
+    expect(src).toContain("class _FileHandleStruct(Structure):");
     expect(src).not.toContain("SomeOtherName");
   });
 });
@@ -241,9 +249,13 @@ describe("toCtypes — resource, other ownership disciplines (refcount / resourc
       const resourceSrc = toCtypes(resourceFn, "borrow_use");
       const opaqueSrc = toCtypes(opaqueFn, "close");
 
-      expect(refcountSrc).toContain('getattr(lib, "release").argtypes = [POINTER(FileHandle)]');
-      expect(resourceSrc).toContain('getattr(lib, "borrow_use").argtypes = [POINTER(FileHandle)]');
-      expect(opaqueSrc).toContain('getattr(lib, "close").argtypes = [POINTER(FileHandle)]');
+      expect(refcountSrc).toContain(
+        'getattr(lib, "release").argtypes = [POINTER(_FileHandleStruct)]',
+      );
+      expect(resourceSrc).toContain(
+        'getattr(lib, "borrow_use").argtypes = [POINTER(_FileHandleStruct)]',
+      );
+      expect(opaqueSrc).toContain('getattr(lib, "close").argtypes = [POINTER(_FileHandleStruct)]');
     },
   );
 });
@@ -265,12 +277,12 @@ describe("toCtypes — module", () => {
     const src = toCtypes(fsModule);
     expect(src).toContain("from ctypes import *");
     expect(src).toContain('lib = CDLL("./libfs.so")');
-    expect(src).toContain("class FileHandle(Structure):");
+    expect(src).toContain("class _FileHandleStruct(Structure):");
     expect(src).toContain("def open(path):");
     expect(src).toContain("def file_handle_close(handle):");
 
     // opaque struct/resource block appears before the module-level open() function
-    expect(src.indexOf("class FileHandle(Structure):")).toBeLessThan(
+    expect(src.indexOf("class _FileHandleStruct(Structure):")).toBeLessThan(
       src.indexOf("def open(path):"),
     );
   });
@@ -428,13 +440,12 @@ describe("toCtypes — real python3 execution against a compiled stub .so", () =
     // `make_handle` is test scaffolding only (hand-written glue calling a
     // manually-declared ctypes function), standing in for a real
     // constructor so this test can obtain a genuine pointer to call methods
-    // against. It deliberately reads the already-resolved pointer TYPE back
-    // off `file_handle_read.argtypes[0]` rather than writing `POINTER(FileHandle)`
-    // again — see the `test.todo` below this block: the bare name
-    // `FileHandle` is already shadowed by that point (the wrapper class of
-    // the same name, emitted as the LAST line of `buildResource`'s own
-    // output), so re-evaluating `POINTER(FileHandle)` after it would hit the
-    // exact same real bug this scaffolding is working around, not testing.
+    // against. It reads the already-resolved pointer TYPE back off
+    // `file_handle_read.argtypes[0]` rather than re-spelling
+    // `POINTER(_FileHandleStruct)` — either works now that the opaque struct
+    // is declared under its own internal name (see the module-level test
+    // below, which exercises re-spelling `POINTER(...)` after the resource
+    // block directly), but this keeps the scaffolding minimal.
     withTempDir((dir) => {
       const soFile = buildStubLib(
         dir,
@@ -484,32 +495,79 @@ describe("toCtypes — real python3 execution against a compiled stub .so", () =
     });
   });
 
-  // `buildResource` itself has a real, standing name-collision bug: it emits
-  // the opaque `class FileHandle(Structure): pass` declaration, then (inside
-  // the SAME resource block) the plain wrapper `class FileHandle:` — both
-  // bound to the identical name `FileHandle`, the wrapper permanently
-  // shadowing the Structure at module scope from that line on. This is
-  // harmless for anything already resolved *before* the shadow (e.g. each
-  // method's own `POINTER(FileHandle)` argtype, built earlier in the same
-  // block — see the isolated-resource test above, which works around
-  // exactly this by reading that already-resolved pointer type back off
-  // `argtypes[0]` instead of re-evaluating `POINTER(FileHandle)`), but it
-  // breaks any code emitted or written *after* the resource block that
-  // needs to spell `POINTER(FileHandle)` again — most realistically a
-  // constructor function elsewhere in the same module returning
-  // `handleRef("FileHandle")` (e.g. an `open` function whose restype is
-  // `POINTER(FileHandle)`), since `buildModule` emits every contained
-  // function after every contained resource. Reproduced directly:
+  // `buildResource` used to have a real, standing name-collision bug: it
+  // emitted the opaque `class FileHandle(Structure): pass` declaration,
+  // then (inside the SAME resource block) the plain wrapper `class
+  // FileHandle:` — both bound to the identical name `FileHandle`, the
+  // wrapper permanently shadowing the Structure at module scope from that
+  // line on. This was harmless for anything already resolved *before* the
+  // shadow (e.g. each method's own `POINTER(FileHandle)` argtype, built
+  // earlier in the same block), but broke any code emitted or written
+  // *after* the resource block that needed to spell `POINTER(FileHandle)`
+  // again — most realistically a constructor function elsewhere in the
+  // same module returning `handleRef("FileHandle")` (e.g. an `open`
+  // function whose restype is `POINTER(FileHandle)`), since `buildModule`
+  // emits every contained function after every contained resource:
   //   TypeError: _type_ must have storage info
-  // at `getattr(lib, "open").restype = POINTER(FileHandle)`. Not fixed here
-  // per this suite's own "record, don't silently fix" convention (see
-  // packages/type-ir/src/compile-check.test.ts's identical use of
-  // `test.todo`, and this package's own typescript-deno.test.ts for the
-  // same convention already established in ffi-ir).
-  test.todo(
-    "a module containing both a resource and a function returning a handle to that resource really runs (currently fails — the resource's own wrapper class shadows its opaque Structure class of the same name, see comment above)",
-    () => {},
-  );
+  // at `getattr(lib, "open").restype = POINTER(FileHandle)`.
+  //
+  // Fixed by giving the opaque Structure its own internal name
+  // (`opaqueStructName`, e.g. `_FileHandleStruct`) distinct from the public
+  // wrapper class, which keeps the bare resource name (`FileHandle`) — so
+  // the wrapper's binding no longer shadows anything a later `POINTER(...)`
+  // reference needs.
+  test("a module containing both a resource and a function returning a handle to that resource really runs", () => {
+    withTempDir((dir) => {
+      const soFile = buildStubLib(
+        dir,
+        [
+          "#include <stdint.h>",
+          "#include <stdlib.h>",
+          "typedef struct { int64_t value; } FileHandleImpl;",
+          "void* open(const char* path) {",
+          "  FileHandleImpl* h = malloc(sizeof(FileHandleImpl));",
+          "  h->value = 99;",
+          "  return h;",
+          "}",
+          "int64_t file_handle_read(void* handle) {",
+          "  return ((FileHandleImpl*)handle)->value;",
+          "}",
+          "void file_handle_free(void* handle) {",
+          "  free(handle);",
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      const readMethod: FfiRef = f(
+        boundary.method([], withOwnership(t(types.integer), ownership.copy()), "FileHandle"),
+      );
+      const fileHandle: FfiRef = f(boundary.resource("FileHandle", { read: readMethod }));
+      const openFn: FfiRef = f(
+        boundary.function(
+          [{ name: "path", type: withOwnership(t(types.string), ownership.copy()) }],
+          handleRef("FileHandle"),
+        ),
+      );
+      const fsModule: FfiRef = f(
+        boundary.module("fs", { open: openFn }, { FileHandle: fileHandle }),
+      );
+      const generated = toCtypes(fsModule, undefined, soFile);
+
+      const file = join(dir, "root.py");
+      writeFileSync(
+        file,
+        [
+          generated,
+          "",
+          "h = FileHandle(open(b'ignored'))",
+          "assert h.read() == 99, f'h.read() == {h.read()}'",
+          "del h",
+        ].join("\n"),
+      );
+      assertRuns(run(["python3", file], dir));
+    });
+  });
 
   // CRITICAL: proves the check above is a real check, not a vacuous one — a
   // deliberately-broken FfiRef input (an "object" TypeRef naming a
