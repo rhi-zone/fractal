@@ -1,8 +1,11 @@
 # Subtree layers: per-branch middleware scoping via the meta channel
 
-Status: **implemented** (project.ts's `HttpDirective` `middleware`/
-`handlerMiddleware` kinds + `getHttpMeta` resolution, verbs.ts's
-`http.middleware(...)`/`http.handlerMiddleware(...)`, compile.ts's
+Status: **implemented** (project.ts's `HttpSharedMetaProperties.middleware`/
+`.handlerMiddleware` flat-array fields — see §3's correction note: the
+originally-designed `HttpDirective` DU shape was superseded project-wide by
+the "directive dissolution" migration before this landed, so the shape as
+implemented is a flat array under a key, not a directive kind —
+verbs.ts's `http.middleware(...)`/`http.handlerMiddleware(...)`, compile.ts's
 `collectRoutes` ancestor-chain composition threaded through `toRouter` and
 all four built-in router compilers — `radixMatcher`, `compiledCharMatcher`,
 `mapMatcher`, `mapCharRouter`). §9's two open questions are resolved below;
@@ -15,8 +18,8 @@ DELIBERATELY OUT OF SCOPE, matching §5's own text ("every built-in router
 compiler IN COMPILE.TS"): it does not apply subtree layers, a documented,
 tested limitation (`subtree-layers.test.ts`), not a silent gap.
 Scope: `packages/http-api-projector/src/{project,verbs,route,compile,preset}.ts`
-(new `HttpDirective` kinds + `getHttpMeta` resolution + router-compiler
-threading), zero changes to `packages/api-tree/src/node.ts` (core stays
+(new flat `meta.http.middleware`/`meta.http.handlerMiddleware` array fields +
+router-compiler threading), zero changes to `packages/api-tree/src/node.ts` (core stays
 protocol-blind — verified, not just claimed, §6). Sibling in kind to
 `docs/design/meta-role-split-spec.md` and `docs/design/typed-store-spec.md`:
 same "core declares the open, generic meta bag; a projector owns its own
@@ -31,36 +34,67 @@ semantics and projectors only interpreting layer _content_. The owner
 rejected that shape: **no new core attach slot, no new combinator.** A
 wrapper belongs in the EXISTING meta channel, the same place `mcp.segment`
 already lives — a branch-position (or leaf-position) member on a
-projector-owned meta fragment (`HttpBranchMetaProperties`/
-`HttpLeafMetaProperties`), read structurally by that projector's own walk.
+projector-owned meta fragment (`HttpSharedMetaProperties`/
+`HttpLeafMetaProperties` — there is no separate `HttpBranchMetaProperties`;
+a field valid at both positions lives on `HttpSharedMetaProperties`, per §3),
+read structurally by that projector's own walk.
 This revision reflects that ruling throughout; §2 records why the rejected
 shape and the accepted one both satisfy "value-attached, not
 position-registered" (the invariant that survives from the original brief),
 and §7 records a real, empirically-verified authoring-shape constraint the
 meta-channel approach imposes that the rejected shape would not have had.
 
+**Later drift, flagged here rather than silently absorbed below**: §3 as
+originally written designed `middleware`/`handlerMiddleware` as new
+`HttpDirective` DU kinds, collected at `getHttpMeta` read time. The
+codebase-wide "directive dissolution" migration (`docs/design/
+wire-profiles-and-staged-validation.md`'s "Prerequisite: meta unification"
+section, landed 2026-08) subsequently deleted `HttpDirective`/
+`meta.http.directives`/the fold-by-`kind` `getHttpMeta` switch entirely —
+HTTP now authors flat `meta.http.*` keys directly, the same shape every
+other protocol already used. `middleware`/`handlerMiddleware` landed as
+**plain arrays under a flat `meta.http.middleware`/`meta.http.handlerMiddleware`
+key** (`verbs.ts`'s `middleware`/`handlerMiddleware` functions), not as
+directive-tagged entries — the array-not-bare-function safety property §6/§9
+established still holds and was the reason this shape was kept array-valued,
+but the mechanism that gets there changed. §3, §5, §6, and §9 below are
+corrected to describe the shape as implemented; each correction is marked
+inline.
+
 ## 1. Motivation — grounded in code, not restated from a diagnosis
 
-`PresetOptions.middleware` (`packages/http-api-projector/src/preset.ts:156-166`)
+`PresetOptions.middleware` (`preset.ts`'s `PresetOptions.middleware` field)
 wraps the WHOLE compiled `Fetch` — read directly, `createFetch`'s
-composition chain (`preset.ts:345-348`) applies every `middleware` entry
-around `withContext` (the ALS-wrapped compiled router) before
-`autoMethodLayer`/`corsLayer`, with no notion of "this entry only applies to
-requests under branch X." `PresetOptions.handlerMiddleware`
-(`preset.ts:168-184`) is the other existing hook — it wraps the HANDLER call
-itself, `F => F` where `F = (input, stores) => result`, threaded into
-`runRoute` (route.ts) — also global: every built-in router compiler
-(`compile.ts`'s `toRouter`) applies the SAME `handlerMiddleware` array to
-EVERY matched route (`toRouter`'s `runRoute(req, match.handler, match.meta,
-match.sources, match.slugs, handlerMiddleware, ...)`, `compile.ts:67` — one
-array, no per-route variation).
+composition chain (its `reduceRight` over `opts.middleware`) applies every
+`middleware` entry around `withContext` (the ALS-wrapped compiled router)
+before `autoMethodLayer`/`corsLayer`, with no notion of "this entry only
+applies to requests under branch X." This is still true today — it is the
+global preset hook the subtree-scoped mechanism below is layered on top of,
+not a replacement for it. `PresetOptions.handlerMiddleware` (`preset.ts`'s
+`PresetOptions.handlerMiddleware` field) is the other existing hook — it
+wraps the HANDLER call itself, `F => F` where `F = (input, stores) =>
+result`, threaded into `runRoute` (route.ts).
+
+**Pre-implementation baseline, now resolved by this spec's own mechanism**:
+at the time this motivation was written, every built-in router compiler
+(`compile.ts`'s `toRouter`) applied the SAME `handlerMiddleware` array to
+EVERY matched route, with no per-route variation. That is no longer true of
+`toRouter` as implemented — its `combinedHandlerMiddleware` now merges the
+global array with each match's own `handlerMiddleware` (`compile.ts`'s
+`CollectedRoute`/`collectRoutes`, §5 below) — so `toRouter` itself is now an
+instance of the fix, not an example of the gap. The gap this motivation
+describes was real and is preserved here as the reason the mechanism below
+exists.
 
 The sibling codebase's own `packages/fractal-support/src/rawRequest.ts` is the
 motivating real consumer: `captureRawRequest` is a `PresetOptions.middleware`
 entry that clones the incoming `Request` and reads its full body into a
 `Buffer` on EVERY request that reaches the `Fetch` it wraps, so a webhook
 leaf can verify a provider's HMAC signature over the exact pre-decode bytes
-(`rawRequest.ts:8-45`, read in full). `docs/decisions/
+(`captureRawRequest`, `rawRequest.ts`, the sibling codebase — not
+independently re-checked this session, since the sibling codebase isn't
+present in this tree; read in full at the time this spec was written).
+`docs/decisions/
 one-root-fractal-tree-2026-08-02.md` §3.3/§7 (the sibling codebase) already names the
 consequence directly, quoted: "Composing all 23 trees under one root Fetch
 would make `captureRawRequest` apply to every request across the entire
@@ -72,16 +106,18 @@ doc's own §7 lists three unevaluated options, the third being "propose a
 genuine per-branch-middleware capability to fractal upstream" — this spec is
 that proposal.
 
-Confirmed empirically (not assumed): `packages/http-api-projector/src/
-compile.ts`'s `collectRoutes` (lines 96-116) walks an `HttpRoute` tree and
-flattens it into `CollectedRoute { path, method, handler, meta, sources }` —
-each entry carries only the matched LEAF's own `meta`; no ancestor-branch
-information survives the flatten. Every router compiler (`radixMatcher`,
-`compiledCharMatcher`, `mapMatcher`, `mapCharRouter`) builds its match
-structure from this flat list, and `toRouter` (`compile.ts:55-69`) applies
-ONE global `handlerMiddleware` array to whichever entry matches. There is
-structurally nothing today a branch could declare that would reach only its
-own descendants' dispatch.
+Confirmed empirically (not assumed), against the pre-implementation baseline:
+`compile.ts`'s `collectRoutes` walked an `HttpRoute` tree and flattened it
+into `CollectedRoute { path, method, handler, meta, sources }` — each entry
+carried only the matched LEAF's own `meta`; no ancestor-branch information
+survived the flatten. Every router compiler (`radixMatcher`,
+`compiledCharMatcher`, `mapMatcher`, `mapCharRouter`) built its match
+structure from this flat list, and `toRouter` applied ONE global
+`handlerMiddleware` array to whichever entry matched. There was structurally
+nothing a branch could declare that would reach only its own descendants'
+dispatch — this is exactly the gap §5's implementation closes:
+`CollectedRoute` (`compile.ts`) now carries its own `middleware`/
+`handlerMiddleware` fields, composed ancestor-to-leaf by `collectRoutes`.
 
 ## 2. Why the meta channel, and why this still satisfies "value-attached, not position-registered"
 
@@ -89,25 +125,27 @@ The invariant that survives from the original framing, restated precisely:
 **a wrapper must travel with the node when the node moves**, never be
 registered against a path pattern that lives separately from the tree. The
 rejected precedent this guards against is documented at
-`packages/api-tree/src/tags.ts:210-220`: the FORMER "closest-wins tag
-inheritance" walk let a node's effective behavior depend on its ANCESTOR's
-declared tags, resolved by tree POSITION at read time — "inheritance-by-
-position breaks composability: moving a subtree would silently change its
-behavior." `tags.ts`'s own fix was to make every tag exactly what's declared
+`packages/api-tree/src/tags.ts` (the comment block immediately preceding
+`mapNodes`): the FORMER "closest-wins tag inheritance" walk let a node's
+effective behavior depend on its ANCESTOR's declared tags, resolved by tree
+POSITION at read time — "Inheritance-by-position would break composability:
+moving a subtree would silently change its behavior." `tags.ts`'s own fix was to make every tag exactly what's declared
 ON that node, with `mapNodes` as the general "push a value down explicitly"
 primitive for a caller that wants that shape deliberately, never an implicit
 ancestor lookup.
 
 The meta-channel design honors this exactly: a branch (or leaf) declares its
-own `meta.http.directives` entries (via `http.middleware(...)`/
-`http.handlerMiddleware(...)`, §3) on ITS OWN node — an ordinary `api()`
+own `meta.http.middleware`/`meta.http.handlerMiddleware` array entries (via
+`http.middleware(...)`/`http.handlerMiddleware(...)`, §3) on ITS OWN node —
+an ordinary `api()`
 call's `opts.meta`, or an `op()` contribution — no different in kind from
 `mcp.segment` (a branch-position field mcp-api-projector already reads
 structurally during its own walk, per `meta-role-split-spec.md` §4's table)
 or `http.moveTo` (leaf-or-branch, resolved relative to the node's OWN
 position). Moving the branch value to a different parent moves its
-`meta.http.directives` with it, unchanged — no separate registry, no path
-string authored apart from the node. What makes this "not inheritance" in
+`meta.http.middleware`/`meta.http.handlerMiddleware` array with it,
+unchanged — no separate registry, no path string authored apart from the
+node. What makes this "not inheritance" in
 the sense `tags.ts` rules out: **no node ever reads an ANCESTOR's meta.**
 Composition happens at the PROJECTOR's own compile-time tree walk (§4) —
 the same mechanism that already threads `moveTo`'s relative-path resolution
@@ -123,60 +161,72 @@ to own) where an EXISTING, already-precedented mechanism (a projector's own
 namespaced meta fragment, read structurally by that projector's own walk)
 already suffices and keeps core at zero protocol knowledge.
 
-## 3. Shape — new `HttpDirective` kinds, not a bare meta field
+## 3. Shape — a flat, array-valued `meta.http` field, not a directive DU
 
-**Authored via the existing directive-array convention, never a bare
-function-valued meta field.** This is not a style preference — §7's
+**[Superseded from the original design below, by the codebase-wide
+"directive dissolution" migration — corrected here to describe what
+actually shipped.]** This spec originally designed `middleware`/
+`handlerMiddleware` as new `HttpDirective` DU kinds, collected into a
+resolved field by a fold-by-`kind` step inside `getHttpMeta`. That whole
+mechanism — `HttpDirective`, `meta.http.directives`, and `getHttpMeta`'s
+read-time switch over it — was deleted project-wide by the "directive
+dissolution" migration (`docs/design/wire-profiles-and-staged-
+validation.md`'s "Prerequisite: meta unification" section, landed 2026-08,
+phase 1: "`meta.http.directives`/`HttpDirective`/the fold-by-`kind`
+`getHttpMeta` read-time switch are deleted; HTTP now authors flat
+`meta.http.*` keys directly, matching cli/mcp/graphql/json-rpc's existing
+shape"). `project.ts` no longer exports an `HttpDirective` type at all.
+
+**What actually shipped instead is a plain array under a flat key** —
+`HttpSharedMetaProperties.middleware`/`.handlerMiddleware` (`project.ts`,
+the interface `HttpSharedMeta` wraps under the `http` key), populated by
+`verbs.ts`'s `middleware(...fns)`/`handlerMiddleware(...fns)` functions,
+each returning a bare `{ http: { middleware: fns } }` /
+`{ http: { handlerMiddleware: fns } }` contribution — a plain array value,
+not a directive-tagged array element. Composing two separate `middleware()`
+contributions on the same node concatenates their arrays via
+`MergeMetaValue`'s array branch (`node.ts`); `getHttpMeta` (`project.ts`) is
+now a thin pass-through with no read-time collection step — `meta.http.
+middleware` already IS the resolved array the moment `op()`'s fold
+completes.
+
+**The array-not-bare-function safety property survives the migration
+unchanged, for the same reason.** This was never a style preference — §6's
 `[verify]` finding is that a bare (non-array) function-valued property
 folded across two `op()` meta contributions loses its call signature at the
-type level. The `source` directive (`project.ts:107-117`, quoted in full
-here because it is the exact precedent this design follows) already
-documents the sibling class of this problem and its fix: _"Deliberately a
-directive — appended to the array — rather than a plain merged object...
-Arrays dodge it entirely: `MergeMetaValue`'s array branch concatenates
-without recursing into elements."_ Two new `HttpDirective` variants, added
-to the DU at `project.ts:155-178`:
+type level. `http.source()`'s own doc comment (`verbs.ts`) documents the
+sibling class of this problem for a different field shape and states the
+fix directly: representing a value as a key-merged map or a concatenated
+array, "rather than a directive array" (its own words, now that directives
+are gone) — arrays dodge the hazard because `MergeMetaValue`'s array branch
+concatenates without recursing into elements, never taking the object-merge
+branch (`MergeTwoMeta`) that strips a bare function's call signature.
+`middleware()`/`handlerMiddleware()`'s own doc comments (`verbs.ts`) restate
+this explicitly as load-bearing for their own flat-array shape.
 
-```ts
-export type HttpDirective<...> =
-  | ... // existing variants unchanged
-  | { readonly kind: "middleware"; readonly value: (inner: Fetch) => Fetch }
-  | { readonly kind: "handlerMiddleware"; readonly value: HttpHandlerMiddleware }
-```
-
-(`Fetch`/`HttpHandlerMiddleware` are the SAME types `PresetOptions.middleware`/
-`PresetOptions.handlerMiddleware` already use — layers.ts's `Fetch`,
-route.ts's `HttpHandlerMiddleware` — no new type, only a new place to attach
-a value of a type that already exists.)
-
-New `verbs.ts` helpers, matching `http.source()`'s own shape (one directive
-per call, `directives` array element, not a merged object):
+Actual current signatures (`verbs.ts`):
 
 ```ts
 export function middleware(...fns: readonly ((inner: Fetch) => Fetch)[]): {
-  readonly http: { readonly directives: readonly HttpDirective[] };
+  readonly http: { readonly middleware: readonly ((inner: Fetch) => Fetch)[] };
 };
 export function handlerMiddleware(...fns: readonly HttpHandlerMiddleware[]): {
-  readonly http: { readonly directives: readonly HttpDirective[] };
+  readonly http: { readonly handlerMiddleware: readonly HttpHandlerMiddleware[] };
 };
 ```
 
-`getHttpMeta` (`project.ts:242-...`) gains a THIRD resolution shape,
-alongside its existing "last-wins scalar" (`method`, `verb`, `moveTo`) and
-"collect-and-merge" (`sourceMap`) shapes: **collect every `middleware`/
-`handlerMiddleware` directive in the resolved `directives` array, in array
-order, into `resolved.middleware: readonly ((inner: Fetch) => Fetch)[]` /
-`resolved.handlerMiddleware: readonly HttpHandlerMiddleware[]`** —
-structurally identical to how `sourceMap` is already collected from every
-`source` directive (`project.ts:114-117`: "resolves the array of `source`
-directives into a single `sourceMap` field, in array order"), substituting
-"compose into an ordered wrap list" for "merge keys with later-wins."
+(`Fetch`/`HttpHandlerMiddleware` are the SAME types `PresetOptions.middleware`/
+`PresetOptions.handlerMiddleware` already use — `layers.ts`'s `Fetch`,
+`route.ts`'s `HttpHandlerMiddleware` — no new type, only a new place to
+attach a value of a type that already exists.)
 
-`HttpSharedMetaProperties`/`HttpLeafMetaProperties` (`project.ts:192-224`)
-each gain the two resolved fields — `middleware`/`handlerMiddleware` are
-valid at BOTH leaf and branch position (a leaf can scope a wrapper to just
-itself; a branch scopes it to its whole subtree), so both land on
+`HttpSharedMetaProperties`/`HttpLeafMetaProperties` (`project.ts`) carry the
+two resolved fields — `middleware`/`handlerMiddleware` are valid at BOTH
+leaf and branch position (a leaf can scope a wrapper to just itself; a
+branch scopes it to its whole subtree), so both land on
 `HttpSharedMetaProperties`, the same interface `moveTo` already lives on.
+There is no separate `HttpBranchMetaProperties` — a field valid at both
+positions has never needed one.
 
 ## 4. Two phases, kept genuinely distinct
 
@@ -184,9 +234,10 @@ itself; a branch scopes it to its whole subtree), so both land on
 
 Wraps at the SAME point `PresetOptions.middleware` wraps today: BEFORE
 `runRoute` — before decode, before `sources.validate` runs, before the
-handler is ever called. This is the phase `captureRawRequest` needs
-(`rawRequest.ts`'s own doc: the clone must happen before `defaultDecode`'s
-body-consuming parse). A subtree-scoped `middleware` entry does everything
+handler is ever called. This is the phase `captureRawRequest` needs (per
+`rawRequest.ts`'s own doc, the sibling codebase: the clone must happen
+before `defaultDecode`'s body-consuming parse). A subtree-scoped
+`middleware` entry does everything
 `PresetOptions.middleware` does, at the granularity of "requests whose
 matched leaf sits under this declaring node," never the whole tree.
 
@@ -197,43 +248,51 @@ handlerMiddleware` already threads into `runRoute` — AFTER decode (and any
 `sources.validate` Standard Schema check), BEFORE the handler runs, seeing
 the assembled input and the raw pre-assembly stores. This phase is the one
 genuinely protocol-agnostic piece: CLI's `CliOpts.middleware` and MCP's
-`CreateMcpServerOptions.middleware` (referenced in `preset.ts:172-176`'s own
-doc) already provide the identical handler-scoped hook for their own
-protocols — a subtree-scoped `handlerMiddleware` on `HttpLeafMeta`/
-`HttpBranchMeta` is HTTP's own instance of a pattern each projector would
-declare independently (§8), never a shared core mechanism (core still never
-sees "handler-around" as a concept — each projector's own meta fragment
-names it in that projector's own vocabulary).
+`CreateMcpServerOptions.middleware` (referenced in `PresetOptions.
+handlerMiddleware`'s own doc comment, `preset.ts`) already provide the
+identical handler-scoped hook for their own protocols — a subtree-scoped
+`handlerMiddleware` on `HttpLeafMeta`/`HttpSharedMeta` is HTTP's own
+instance of a pattern each projector would declare independently (§8),
+never a shared core mechanism (core still never sees "handler-around" as a
+concept — each projector's own meta fragment names it in that projector's
+own vocabulary).
 
 ### Relation to `mapNodes`
 
-`mapNodes` (`tags.ts:236-251`) is the general PRE-ORDER TREE-TRANSFORM
-primitive: `(tree, fn) => tree'`, visiting every node once, producing a NEW
-tree with `fn` applied per node. A caller COULD already hand-write "wrap
-every leaf under this branch's handler with X" as a `mapNodes` pass that
-rewrites `node.handler` — and this is not hypothetical: `wrapValidators`
-(`build.ts`) and `wrapScopes` (the sibling codebase's `scopes.ts`) are both exactly this
-shape, a recursive walk rewriting every leaf's handler. What `http.
-handlerMiddleware`/`http.middleware` ADD beyond what a bespoke `mapNodes`
-pass already does:
+`mapNodes` (`tags.ts`) is the general PRE-ORDER TREE-TRANSFORM primitive:
+`(tree, fn) => tree'`, visiting every node once, producing a NEW tree with
+`fn` applied per node. A caller COULD already hand-write "wrap every leaf
+under this branch's handler with X" as a `mapNodes` pass that rewrites
+`node.handler` — and this is not hypothetical: `wrapScopes` (the sibling
+codebase's `scopes.ts`) is exactly this shape, a recursive walk rewriting
+every leaf's handler. (`wrapValidators`, cited here in the original design as
+a sibling example, no longer exists — see §6/§7 below: validation now runs
+through the keyed `applyValidation(key, projectedTree)` mechanism instead of
+a `mapNodes`-shaped handler-rewrite pass.) What `http.handlerMiddleware`/
+`http.middleware` ADD beyond what a bespoke `mapNodes` pass already does:
 
 - **Ordering guarantees relative to the REST of the pipeline.** A hand-rolled
   `mapNodes` pass runs whenever its author calls it — nothing enforces where
-  in `createFetch`'s stage list (validators → projection → rewriters →
-  router → als → middleware → autoMethodLayer, `preset.ts`'s own module doc)
-  it executes relative to decode/validation. `handlerMiddleware`'s wire
-  point (inside `runRoute`, after decode/validate, before handler) and
+  it executes relative to decode/validation. `preset.ts`'s own module doc
+  currently numbers `createFetch`'s stages as httpProjection → rewriters →
+  router → als → autoMethodLayer (optionally corsLayer); validation is not a
+  dedicated stage — it's wired in via a `rewriters` entry calling
+  `applyValidation` (see §6/§7) — and `PresetOptions.middleware` sits between
+  `als` and `autoMethodLayer` inside `createFetch`'s body, composed via
+  `reduceRight`, without being called out as a numbered stage. `handlerMiddleware`'s
+  wire point (inside `runRoute`, after decode/validate, before handler) and
   `middleware`'s wire point (before the router even matches) are FIXED by
-  where `runRoute`/`toRouter` read the resolved directive lists — a
-  subtree's author declares WHAT to wrap with, never WHERE in the pipeline
-  it runs, which is exactly what a hand-rolled pass cannot promise without
-  re-deriving `createFetch`'s own stage ordering itself.
+  where `runRoute`/`toRouter` read the resolved `meta.http.middleware`/
+  `meta.http.handlerMiddleware` arrays — a subtree's author declares WHAT to
+  wrap with, never WHERE in the pipeline it runs, which is exactly what a
+  hand-rolled pass cannot promise without re-deriving `createFetch`'s own
+  stage ordering itself.
 - **Composability with phase (b) without hand-coordinating two walks.** A
   bespoke `mapNodes` pass rewriting `handler` directly can only express
   handler-around wrapping — it has no access to the pre-decode `Request`
   (phase (a)'s whole reason to exist), because by the time ANY `Node`-level
   transform runs, there is no `Request` yet; decode happens per-protocol,
-  downstream of the `Node` tree entirely. `middleware`'s directive lives on
+  downstream of the `Node` tree entirely. `middleware`'s meta field lives on
   the SAME node as `handlerMiddleware`'s, and the router compiler (§5)
   resolves both from the same walk — a subtree author composes both phases
   through one declaration site instead of splitting the concern across a
@@ -248,21 +307,29 @@ pass already does:
 
 `mapNodes` is NOT superseded or duplicated by this design — it remains the
 general primitive for "rewrite every node a certain way," and this spec's
-mechanism is implemented USING it in one place (§5's `resolveDirectiveChain`
-is itself expressible as, though not necessarily literally built from,
-`mapNodes`-shaped recursion over `HttpRoute`). The two coexist the way
-`wrapValidators`/`wrapScopes` (bespoke `mapNodes`-shaped passes, run once,
-globally, over a whole tree) coexist with per-subtree declarative meta
-today (`meta.scopes` itself, read per-leaf by `wrapScopes`'s walk) — this
-spec adds the SAME "declare on the node, let the walk compose it" shape for
-middleware that `scopes` already has for authorization.
+mechanism is implemented USING an equivalent recursion in one place (§5's
+`collectRoutes`, `compile.ts` — a `mapNodes`-shaped walk over `HttpRoute`,
+though not literally built from `mapNodes` itself, which walks `Node`, not
+`HttpRoute`). The two coexist the way `wrapScopes` (a bespoke
+`mapNodes`-shaped pass, run once, globally, over a whole tree) coexists with
+per-subtree declarative meta today (`meta.scopes` itself, read per-leaf by
+`wrapScopes`'s walk) — this spec adds the SAME "declare on the node, let the
+walk compose it" shape for middleware that `scopes` already has for
+authorization. (Validation's own `wrapValidators`-shaped pass, cited here in
+the original design as a second example, has since been replaced entirely
+by `applyValidation` — see §6/§7.)
 
 ## 5. Composition mechanism — ancestor-chain resolution at router-compile time
 
-`collectRoutes` (`compile.ts:96-116`) must change from flattening
+`collectRoutes` (`compile.ts`) changed from flattening
 `{path, method, handler, meta, sources}` to ALSO threading the ordered list
 of ancestor branches' resolved `middleware`/`handlerMiddleware` past to the
-leaf, so each `CollectedRoute` carries its own fully-composed wrap chain:
+leaf, so each `CollectedRoute` carries its own fully-composed wrap chain.
+Simplified illustration of the shape (the actual implementation additionally
+dedupes a leaf's own contribution against its ancestor accumulation via a
+`dedupeAppend` helper, to avoid double-counting a plain `op()` leaf whose
+branch-position and method-entry `meta` start as the same object — see
+`collectRoutes`'s own doc comment in `compile.ts` for the full reasoning):
 
 ```ts
 function collectRoutes(
@@ -274,7 +341,8 @@ function collectRoutes(
   const { middleware = [], handlerMiddleware = [] } = getHttpMeta(route.meta);
   const mw = [...ancestorMiddleware, ...middleware];
   const hmw = [...ancestorHandlerMiddleware, ...handlerMiddleware];
-  // ...each method entry ALSO composes its own (leaf-position) directives on top of `mw`/`hmw`...
+  // ...each method entry ALSO composes its own (leaf-position) meta.http
+  // fields on top of `mw`/`hmw`...
   // ...recursive calls into children/fallback pass `mw`/`hmw` down...
 }
 ```
@@ -283,16 +351,16 @@ function collectRoutes(
 `middleware` entries (if any) sit OUTERMOST, then each descending branch's
 own entries wrap progressively tighter around the leaf, matching
 `PresetOptions.middleware`'s existing convention ("first entry is the
-outermost wrapper," `preset.ts:156-166`) — a branch's own array is composed
-in ARRAY order (first entry outermost WITHIN that branch's own
+outermost wrapper," its own doc comment, `preset.ts`) — a branch's own array
+is composed in ARRAY order (first entry outermost WITHIN that branch's own
 contribution), then the whole per-branch chain is composed root-to-leaf
 (earliest-declared/outermost ancestor's chain wraps around each
 descendant's). Concretely, for `root(mwR) → admin(mwA) → webhooks(mwW) →
 leaf`, the leaf's final dispatch is `mwR[0](mwR[1](...mwA[0](...mwW[0]
 (...leaf...)...)...))` — reduce with `reduceRight` exactly the way
-`createFetch`'s own `(opts.middleware ?? []).reduceRight(...)`
-(`preset.ts:345-348`) already composes its flat array, just seeded per-leaf
-with the CONCATENATED root→leaf chain instead of one global array.
+`createFetch`'s own `(opts.middleware ?? []).reduceRight(...)` (`preset.ts`)
+already composes its flat array, just seeded per-leaf with the CONCATENATED
+root→leaf chain instead of one global array.
 
 Each `CollectedRoute`'s pre-composed `mw`/`hmw` is then applied at the
 per-route dispatch this compiler already builds (`toRouter`'s `runRoute`
@@ -311,20 +379,22 @@ pre-wrapped for exactly its own ancestor chain. For webhooks specifically,
 this means `captureRawRequest`, scoped to the `webhooks` branch, still runs
 BEFORE that leaf's own decode (same requirement `rawRequest.ts` states) —
 it now also runs strictly AFTER the router has matched the request to a
-`webhooks`-subtree leaf, which is stronger than today's global placement
-(today's `PresetOptions.middleware` runs on EVERY request, including a 404;
-a subtree-scoped one only runs on requests that actually reach that
-subtree) and does not change the byte-capture semantics `rawRequest.ts`
-depends on (the clone still happens before `runRoute`'s own decode call for
-that route).
+`webhooks`-subtree leaf, which is stronger than the prior global placement
+(`PresetOptions.middleware` runs on EVERY request, including a 404; a
+subtree-scoped one only runs on requests that actually reach that subtree)
+and does not change the byte-capture semantics `rawRequest.ts` (the sibling
+codebase) depends on (the clone still happens before `runRoute`'s own decode
+call for that route).
 
-This is a real, load-bearing implementation change to every built-in router
+This was a real, load-bearing implementation change to every built-in router
 compiler in `compile.ts` (`radixMatcher`, `compiledCharMatcher`,
-`mapMatcher`, `mapCharRouter`) — each currently discards ancestor
-information at `collectRoutes` time; this spec requires each to carry the
-per-route composed chain through to wherever it currently calls `runRoute`.
-Not designed to the byte here (an implementation-order question, §9), but
-the MECHANISM (compile-time ancestor-chain composition, applied once per
+`mapMatcher`, `mapCharRouter`) — each previously discarded ancestor
+information at `collectRoutes` time; this spec required each to carry the
+per-route composed chain through to wherever it calls `runRoute`, which is
+now done (§9's last bullet: all four were edited together, in one pass).
+Not designed to the byte in this section originally (an implementation-order
+question, §9 records it as resolved) — the MECHANISM (compile-time
+ancestor-chain composition, applied once per
 leaf, zero added per-request cost beyond calling through however many
 wrapper closures that leaf's own chain has) is certified as sound by the
 above trace through `collectRoutes`/`toRouter`'s actual current code.
@@ -333,7 +403,7 @@ above trace through `collectRoutes`/`toRouter`'s actual current code.
 
 Per the coordinator's specific ask: **function-valued meta members are new**
 (every existing meta value has been JSON-serializable data — strings,
-booleans, arrays of directive DU values). Checked directly against real
+booleans, arrays and maps of scalar values). Checked directly against real
 code (`packages/api-tree/src/__scratch_verify__/` and `packages/
 http-api-projector/src/__scratch_verify__/`, created and deleted this
 session, never committed), not reasoned about from memory.
@@ -345,34 +415,57 @@ whose leaf meta carried `{ http: { middleware: [fn] } }` (via the open
 index-signature widening every meta value already gets, `node.ts`'s
 `Widen<T>`) produced the correct input/output `TypeRef`s, untouched by the
 function-valued member — confirmed by running it, not just reading the
-code. This holds STRUCTURALLY, not by luck: `walkNodeType` (`tree.ts:195-
-285`) only ever reads `children`, `handler`, `fallback`, and two SPECIFIC
-literal-string keys off `meta.mcp` (`name`/`segment`, via `mcpMetaOverride`,
-which itself bails to `undefined` on any non-string-literal type,
-`tree.ts:152-167`) — it has no code path that enumerates `meta.http`'s
-contents at all, so a new member there is invisible by construction, not by
-this spec's discipline.
+code. This holds STRUCTURALLY, not by luck: `walkNodeType` (`tree.ts`) only
+ever reads `children`, `handler`, `fallback`, and two SPECIFIC literal-string
+keys off `meta.mcp` (`name`/`segment`, via `mcpMetaOverride`, which itself
+bails to `undefined` on any non-string-literal type) — it has no code path
+that enumerates `meta.http`'s contents at all, so a new member there is
+invisible by construction, not by this spec's discipline. This still holds
+as of this revision (spot-checked directly against current `tree.ts`,
+2026-08-21) — `mcpMetaOverride`/`walkNodeType` are unchanged in shape, only
+in line position.
 
-### Validator/schema codegen (`build.ts`) — CONFIRMED inert
+### Validator/schema codegen — `wrapValidators`/`build.ts` no longer exists; superseded by `applyValidation`, re-checked directly against current source
 
-`wrapValidators` run against the same tree (with a real generated-entry map
-for the one leaf) completed without error and returned a working wrapped
-handler. `build.ts`'s own leaf walk (per its module doc, `build.ts:1-20`
-region) keys off `meta.tags.unvalidated` and the caller-supplied
-per-path `GeneratedEntry` map — neither reads `meta.http` at all.
+**[Superseded, flagged rather than silently updated]** At the time this
+`[verify]` finding was written, validators were wired onto a tree by
+`wrapValidators` (`packages/api-tree/src/build.ts`), a `mapNodes`-shaped walk
+over the `Node` tree. `wrapValidators` (along with `isValidatorWrapped` and
+`UnvalidatedLeafError`) was subsequently deleted entirely — see
+`docs/design/routing-and-transforms.md`'s "Dispatch is not an interceptable
+multi-stage pipeline" section, phase 2 (2026-08): "phase 3 migrated MCP/CLI/
+GraphQL and deleted `wrapValidators`/`isValidatorWrapped`/
+`UnvalidatedLeafError` (`build.ts`) entirely." The current, sole mechanism is
+the keyed, call-site-anchored `applyValidation(key, projectedTree)`
+(`packages/api-tree/src/apply-validation.ts`); `build.ts` itself now holds
+only the shared `GeneratedEntry` type, no runtime walk.
 
-### `HttpManifest<N>`/`TreeManifest<N>` type computations — inert by construction, not independently re-run
+This spec's own claim — that validator wiring never reads `meta.http` and so
+can't be disturbed by adding `middleware`/`handlerMiddleware` there — was
+not re-run as a scratch `tsc`/runtime repro this session, but IS grounded in
+a direct read of the current `apply-validation.ts` source just now: its leaf
+walk reads only `meta.tags[TAG_UNVALIDATED]` (`tags.ts`'s `TAG_UNVALIDATED`)
+and the caller-supplied per-key `GeneratedEntry` map; grepping the file for
+`meta.http` returns no matches. The conclusion (inert with respect to
+`meta.http`) still holds under the new mechanism, for the same structural
+reason as before — just via a different function.
 
-Not re-verified via a fresh scratch `tsc` repro this session (flagged, not
-overclaimed) — but the code-level reasoning is direct: `HttpManifest<N>`
-(`http-manifest.ts`) computes PATH from tree shape + `moveTo` directives,
-and METHOD from `meta.http.directives`' FIRST `{kind:"method"}` entry
-(module doc, `http-manifest.ts:8-21`) — a purely STRUCTURAL, kind-tagged
-pattern match over the `directives` tuple's DU members, never a generic
-enumeration of `meta.http`'s keys. A `{kind:"middleware", value: fn}` entry
-added to that same tuple is simply never matched by the `{kind:"method"}`/
-`{kind:"moveTo"}` conditional-type patterns `HttpManifest` already runs —
-inert for the identical structural reason the extractor is.
+### `HttpManifest<N>`/`TreeManifest<N>` type computations — inert by construction, and now MORE directly so than originally written
+
+**[Superseded, corrected]** The original `[verify]` text described
+`HttpManifest<N>` computing METHOD from `meta.http.directives`' FIRST
+`{kind:"method"}` entry, via a kind-tagged pattern match over a directive
+tuple. That directive tuple no longer exists (§3's "directive dissolution").
+Read directly against current `http-manifest.ts`'s own module doc: METHOD
+now comes from "the leaf's own flat `meta.http.method` scalar key — already
+the single, fully-resolved value `op()`'s own `mergeMeta` fold produces...
+No directive-tuple walk is needed: the fold already happened, by
+construction, the moment `op()`'s [contributions merge]." This is, if
+anything, a STRONGER inertness guarantee than the original directive-tuple
+argument: `HttpManifest<N>` reads one named scalar key (`method`) off the
+resolved meta shape and nothing else — a `middleware`/`handlerMiddleware`
+array sitting alongside it is simply a different, unread key, the same
+reason the extractor above is inert.
 
 ### `listRoutes`/`toOpenApi` — CONFIRMED, no leakage into the document
 
@@ -381,7 +474,7 @@ inert for the identical structural reason the extractor is.
 middleware: [fn] } }` produced a valid OpenAPI document
 (`{"openapi":"3.1.0",...}`, checked directly) whose serialized JSON does
 NOT contain the substring `"function"` anywhere — confirmed by string
-search on the actual output, not inferred. `openapi.ts`'s own per-operation
+search on the actual output, not inferred. `openapi.ts`'s per-operation
 field reads (`operationId`, `summary`, `deprecated`, `security`, …, per
 `meta-role-split-spec.md` §4's table) destructure NAMED fields off the
 resolved `HttpLeafMetaProperties`, never spread or `JSON.stringify` the
@@ -393,11 +486,11 @@ unread `sourceMap` entry already is today.
 Two scratch checks, both against real `op()`/`FoldMeta` code (not a
 simplified stand-in):
 
-1. **Array-valued member (the shape §3 mandates)**: `op(fn, { http: {
-middleware: [mw1] } }, { http: { middleware: [mw2] } })` — the folded
-   type's `middleware` member type-checked cleanly against `readonly
-((inner: Fetch) => Fetch)[]`. `MergeMetaValue`'s ARRAY branch
-   (`node.ts:177-180`) fires first (both sides are tuples), concatenating
+1. **Array-valued member (the shape §3 describes as implemented)**:
+   `op(fn, { http: { middleware: [mw1] } }, { http: { middleware: [mw2] } })`
+   — the folded type's `middleware` member type-checked cleanly against
+   `readonly ((inner: Fetch) => Fetch)[]`. `MergeMetaValue`'s ARRAY branch
+   (`node.ts`) fires first (both sides are tuples), concatenating
    `readonly [mw1, mw2]` — the function values inside the array are never
    individually merged as "objects," only the array itself is spread.
 2. **Bare (non-array) function member — BREAKS**: `op(fn, { http: { onError:
@@ -408,10 +501,10 @@ mw1 } }, { http: { onError: mw2 } })` — the folded type's `onError`
    diagnostic). Forcing TypeScript to print the unevaluated type showed it
    stuck as `MergeTwoMeta<(inner: Fetch) => Fetch, (inner: Fetch) => Fetch,
 [unknown, unknown]>` — i.e. `MergeMetaValue` took the OBJECT-merge branch
-   (`A extends object`, `node.ts:181-189`) for a bare function member,
+   (`A extends object`, `node.ts`) for a bare function member,
    because a function type structurally satisfies `extends object` in
    TypeScript. `MergeTwoMeta`'s own mechanism (`Omit<A, keyof B> & Omit<B,
-keyof A> & {...mapped over keyof A & keyof B...}`, `node.ts:213-231`) is
+keyof A> & {...mapped over keyof A & keyof B...}`, `node.ts`) is
    built from MAPPED TYPES (`Omit`/`Pick`), which structurally strip a call
    signature — `keyof` a plain function type is empty, so every piece of the
    intersection reduces toward `{}`, losing callability. (A value was still
@@ -421,18 +514,19 @@ keyof A> & {...mapped over keyof A & keyof B...}`, `node.ts:213-231`) is
    `extends (fn-type) ? true : false` check, not a plain assignment.)
 
 **This is the real argument the owner asked to surface, not paper over —
-and `project.ts`'s own `source`-directive doc comment (§3, quoted above)
-already independently discovered the SAME class of hazard for a different
-field shape (`Record<string,ParamSource>` index signatures) and fixed it
-the identical way.** The finding does not indict the meta-channel design as
-a whole; it fixes WHICH authoring shape is safe: **a function-valued meta
-member MUST be authored as (or resolved into) an array, appended-to via a
-directive-per-call convention, never declared as a bare single-value field
-that two separate `op()` contributions could both set.** §3's design
-already follows this (directive-array authoring, `getHttpMeta`
-collect-into-array resolution) — this `[verify]` result is WHY that shape is
-mandatory, not incidental, and is recorded in the regression checklist
-(§10.4) so a future edit doesn't "simplify" `middleware`/`handlerMiddleware`
+and `http.source()`'s own doc comment (`verbs.ts`) already independently
+documents the SAME class of hazard for a different field shape
+(`Record<string,ParamSource>` index signatures) and fixes it the identical
+way.** The finding does not indict the meta-channel design as a whole; it
+fixes WHICH authoring shape is safe: **a function-valued meta member MUST be
+authored as (or resolved into) a plain array under a flat key, never
+declared as a bare single-value field that two separate `op()` contributions
+could both set.** §3's implemented design follows this (`middleware()`/
+`handlerMiddleware()` in `verbs.ts` each return a plain array under a flat
+key; `getHttpMeta` no longer does any collection at all, array or otherwise
+— it is a thin pass-through) — this `[verify]` result is WHY that shape is
+mandatory, not incidental, and is recorded in the regression checklist (§10,
+item 3) so a future edit doesn't "simplify" `middleware`/`handlerMiddleware`
 back into a bare field.
 
 ## 7. Interaction with the rest of the machinery
@@ -477,18 +571,26 @@ is UNCHANGED from `PresetOptions.middleware`'s existing wire point, just
 narrowed to a subtree. `handlerMiddleware` (handler-around) resolves and
 runs at the SAME point `PresetOptions.handlerMiddleware` already runs today
 — inside `runRoute`, strictly AFTER decode and `sources.validate`, before
-the handler — again unchanged in ORDER, only in SCOPE. Neither phase gives a
-subtree author a way to skip or reorder `wrapValidators`'s AOT-generated
-`parse()` (which wraps the handler itself, upstream of ALL of this, at
-`createFetch`'s `workingNode` step, `preset.ts:317-322`) or `sources.
-validate`'s Standard Schema check — both continue to run at their existing
-fixed points regardless of what any subtree declares.
+the handler — again unchanged in ORDER, only in SCOPE. **[Corrected — the
+original text here cited a `createFetch` "`workingNode` step" that does not
+exist in the current or, as far as a direct search of the codebase turns up,
+any prior source; this looks like a stray/fabricated reference and is
+replaced below with what the current code actually does.]** Neither phase
+gives a subtree author a way to skip or reorder AOT-compiled validation:
+`applyValidation(key, projectedTree, "http")` (`packages/api-tree/src/
+apply-validation.ts`) is wired in as a `PresetOptions.rewriters` entry,
+which runs BEFORE router compilation (`createFetch`'s `rewriters` stage,
+`preset.ts`) — upstream of both `middleware` (pre-match) and
+`handlerMiddleware` (pre-handler, post-match) — or `sources.validate`'s
+Standard Schema check (`http.validate()`, run inside `runRoute`) — both
+continue to run at their existing fixed points regardless of what any
+subtree declares.
 
 ### Extraction / codegen / IR cache
 
 Covered exhaustively in §6: the extractor is TYPE-LEVEL (walks a source
-file's resolved TYPES via the checker, `tree.ts`'s own module doc,
-lines 3-18), never touches a runtime meta VALUE at all, and its only reads
+file's resolved TYPES via the checker, per `tree.ts`'s own module doc
+header), never touches a runtime meta VALUE at all, and its only reads
 of `meta`'s CONTENTS are two named string-literal keys under `meta.mcp` —
 structurally blind to anything under `meta.http`. `docs/design/
 ir-keyed-cache-spec.md`'s leaf-fingerprint mechanism (§6 of that spec) keys
@@ -504,20 +606,20 @@ document's `paths`/`operationId`/method set is IDENTICAL to what an
 unlayered tree with the same shape produces — `middleware`/
 `handlerMiddleware` change WHAT WRAPS a matched leaf's dispatch, never
 WHICH leaves exist or what path/method they're reachable at. `listRoutes`
-(`openapi.ts:393-410`, called internally by `toOpenApi`) walks the same
-`HttpRoute` tree `collectRoutes` (§5) does, reading `path`/`method`/`meta`
-per entry — the NEW ancestor-composed `mw`/`hmw` fields this spec adds to
-that walk's internal bookkeeping are additively threaded through, never
+(`openapi.ts`, called internally by `toOpenApi`) walks the same `HttpRoute`
+tree `collectRoutes` (§5) does, reading `path`/`method`/`meta` per entry —
+the ancestor-composed `middleware`/`handlerMiddleware` fields this spec adds
+to `CollectedRoute`'s bookkeeping are additively threaded through, never
 substituted for the fields `listRoutes` already reads.
 
 ### tree-lint — no new position dependence
 
 `docs/design/tree-lint-spec.md`'s collision rule (§3e, source-text
-fingerprint of `node.handler`) and its own regression checklist (§9(3))
-both hinge on: a moved subtree must not silently change identity or
-behavior by virtue of NEW tree position. Under this spec, a branch's
-`meta.http.directives` (including any `middleware`/`handlerMiddleware`
-entries) travels WITH the branch value when it's moved — §2 already
+fingerprint of `node.handler`) and its own regression checklist (§9) both
+hinge on: a moved subtree must not silently change identity or behavior by
+virtue of NEW tree position. Under this spec, a branch's `meta.http.
+middleware`/`meta.http.handlerMiddleware` array travels WITH the branch
+value when it's moved — §2 already
 establishes this is exactly what "value-attached, not position-registered"
 guarantees. What DOES change when a layered branch is moved is which
 ANCESTOR chain it composes with (§5's root-to-leaf composition is a
@@ -542,8 +644,9 @@ opts into by where its author places it).
 Per the "core is blind, protocol-specific layer types are projector-owned
 inert exports" doctrine (`meta-role-split-spec.md` §2's "every projector
 exports inert plain interfaces... never wrapped in a `declare module`
-block," applied here to `HttpDirective`'s two new kinds, which live entirely
-in `http-api-projector`, never in core): an MCP or CLI analogue of
+block," applied here to `middleware`/`handlerMiddleware`, the two new
+`HttpSharedMetaProperties` fields, which live entirely in
+`http-api-projector`, never in core): an MCP or CLI analogue of
 dispatch-around/handler-around is each of THOSE projectors' own call to
 make, in their own vocabulary, on their own `McpLeafMeta`/`CliLeafMeta`
 fragments — HTTP's `before-decode`/`after-decode-before-handler` split does
@@ -551,9 +654,9 @@ not obviously map onto MCP's tool-dispatch or CLI's arg-parse pipeline
 one-for-one (MCP has no "raw body" concept the way an HTTP `Request` does;
 CLI's closest analogue to "before decode" would be before `argv` parsing).
 This spec designs HTTP's own two phases to the byte (§3-§5) and states the
-GENERAL shape other projectors would follow (a directive-array-authored,
-branch/leaf-position meta member, resolved into an ordered wrap list,
-composed root-to-leaf at that projector's own compile step) without
+GENERAL shape other projectors would follow (a flat-array-authored,
+branch/leaf-position meta member, composed root-to-leaf at that projector's
+own compile step) without
 prescribing MCP's or CLI's concrete phase names — that is real,
 un-scoped-here future work (§9).
 
@@ -626,7 +729,8 @@ Any future edit to this spec, or its implementation, MUST NOT reintroduce:
    today (verified: no edit to `node.ts` is in this spec's scope at all).
 2. **Ancestor-position INHERITANCE at read time** — a node's own behavior
    depending on an ancestor's declared meta the way the REMOVED closest-wins
-   tag walk did (`tags.ts:210-220`). §5's ancestor-CHAIN COMPOSITION at
+   tag walk did (`tags.ts`, the comment block preceding `mapNodes`). §5's
+   ancestor-CHAIN COMPOSITION at
    router-COMPILE time is not this: it composes explicitly-declared,
    value-attached wrap lists via the projector's own walk, never has a leaf
    read an ancestor's `meta` directly, and moving a subtree correctly
@@ -636,18 +740,19 @@ Any future edit to this spec, or its implementation, MUST NOT reintroduce:
 3. **A bare (non-array) function-valued meta member.** §6/§7's empirically
    confirmed break: `FoldMeta`/`MergeTwoMeta`'s mapped-type merge strips a
    function's call signature when two `op()` contributions both set the same
-   bare-function key. `middleware`/`handlerMiddleware` MUST stay
-   directive-array-authored (§3), matching the `source` directive's own
-   established precedent for the identical class of hazard.
+   bare-function key. `middleware`/`handlerMiddleware` MUST stay authored as
+   a plain array under a flat key (§3), matching `http.source()`'s own
+   established precedent (`verbs.ts`) for the identical class of hazard.
 4. **A runtime path-string check standing in for structural composition.**
    §5's mechanism composes each leaf's wrap chain from its ACTUAL ancestor
    ARRAY, walked once at compile time — not a `req.url.startsWith(branchPath)`
    runtime check (one of the un-evaluated options
-   `one-root-fractal-tree-2026-08-02.md` §7 names and this spec does NOT
-   adopt). A future "simplification" that replaces compile-time ancestor
-   composition with a runtime path-prefix test reintroduces exactly the
-   "path-pattern registration, disconnected from the node" shape the
-   original brief's constraint (and `tags.ts`'s own precedent) rules out.
+   `docs/decisions/one-root-fractal-tree-2026-08-02.md` §7, the sibling
+   codebase, names and this spec does NOT adopt). A future "simplification"
+   that replaces compile-time ancestor composition with a runtime
+   path-prefix test reintroduces exactly the "path-pattern registration,
+   disconnected from the node" shape the original brief's constraint (and
+   `tags.ts`'s own precedent) rules out.
 5. **Changing the route surface.** `middleware`/`handlerMiddleware` must
    never add, remove, or rename a path/method `listRoutes`/`toOpenApi`
    reports (§6/§7, confirmed empirically for a representative tree) — a
