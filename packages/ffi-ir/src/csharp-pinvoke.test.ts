@@ -149,6 +149,31 @@ describe("toDotNet — function", () => {
   });
 });
 
+// Reserved-word collision coverage — string-comparison only. dotnet-sdk IS
+// present in flake.nix's devShell and IS used for a real `dotnet build`
+// check in packages/type-ir/src/compile-check.test.ts (csharp-systemtextjson),
+// but this package (ffi-ir) has no equivalent real-toolchain suite for its
+// own C#/P-Invoke output yet — a real follow-up, not attempted here.
+describe("toDotNet — reserved-word (C# keyword) identifiers get the @-escape", () => {
+  test("a param named after a C# reserved word", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    const src = toDotNet(fn, "identify", "my_native_lib");
+    expect(src).toContain("internal static partial long identify(long @class);");
+  });
+
+  test("a function itself named after a C# reserved word — the EntryPoint stays the real, unescaped native symbol name", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toDotNet(fn, "new", "my_native_lib");
+    expect(src).toContain('EntryPoint = "new"');
+    expect(src).toContain("internal static partial void @new();");
+  });
+});
+
 describe("toDotNet — resource", () => {
   test("a resource with an opaque-handle method gets an IntPtr receiver plus an auto-generated free declaration", () => {
     const readMethod: FfiRef = f(

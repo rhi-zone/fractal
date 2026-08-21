@@ -39,6 +39,27 @@ describe("toMelangeFfi — function", () => {
   });
 });
 
+// Reserved-word collision coverage — string-comparison only. No OCaml/
+// Melange toolchain is wired into flake.nix's devShell at all (unlike
+// rustc/dotnet-sdk/python3/etc., which packages/type-ir/src/
+// compile-check.test.ts already runs real compiles against for their own
+// targets) — extending real-toolchain verification here would need adding
+// an OCaml/Melange derivation to the flake first, a larger lift than the
+// other targets' gap, not attempted here.
+describe("toMelangeFfi — reserved-word (OCaml keyword) function names get a trailing-underscore escape", () => {
+  test("a function itself named after an OCaml keyword", () => {
+    const fn: FfiRef = f(boundary.function([], t(types.void)));
+    const src = toMelangeFfi(fn, "type");
+    expect(src).toBe('external type_ : unit -> unit = "type" [@@mel.val]');
+  });
+
+  // No param-name escaping test: an OCaml `external` declaration has no bare
+  // param identifiers at all (a curried type-only arrow signature, per this
+  // file's own `buildFunction`), so there is no param-name collision surface
+  // to test — matches this task's ruby-ffi.ts precedent (a target with no
+  // bare-identifier surface for a different structural reason).
+});
+
 describe("toMelangeFfi — ownership gating", () => {
   test("refcount discipline on a parameter throws — no Arc-equivalent in Melange", () => {
     const fn: FfiRef = f(

@@ -96,6 +96,31 @@ describe("toJniFfi — function", () => {
   });
 });
 
+// Reserved-word collision coverage — string-comparison only. This package
+// has no real `javac` compile-check suite (jdk IS present in flake.nix's
+// devShell, used elsewhere for the Java/Kotlin toolchain, but not wired
+// into a real-toolchain test the way packages/type-ir/src/
+// compile-check.test.ts's `dotnet build`/`ghc`/etc. checks are for their
+// own targets) — extending that here would be a real follow-up.
+describe("toJniFfi — reserved-word (Java keyword) identifiers get a trailing-underscore escape", () => {
+  test("a param named after a Java reserved word", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "class", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.void), ownership.copy()),
+      ),
+    );
+    const src = toJniFfi(fn, "identify");
+    expect(src).toBe("public static native void identify(long class_);");
+  });
+
+  test("a method itself named after a Java reserved word", () => {
+    const fn = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toJniFfi(fn, "new");
+    expect(src).toBe("public static native void new_();");
+  });
+});
+
 describe("toJniFfi — method", () => {
   test("a resource method becomes a public (non-static) native method with no explicit receiver parameter", () => {
     const read: FfiRef = f(

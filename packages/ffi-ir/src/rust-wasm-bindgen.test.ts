@@ -35,6 +35,36 @@ describe("toWasmBindgenFfi — function", () => {
   });
 });
 
+// Reserved-word collision coverage — string-comparison only. This is the
+// one ffi-ir target whose identifier rendering is fully delegated to
+// type-ir (packages/type-ir/src/rust-wasm-bindgen.ts's `escapeRustIdent`),
+// but that escape function is not exercised by packages/type-ir/src/
+// compile-check.test.ts's real `cargo build`/`rustc` checks — those only
+// cover rust-serde.ts's struct/enum output, not this file's `#[wasm_bindgen]
+// pub fn` output. rustc/cargo ARE present in flake.nix's devShell, so real
+// verification is possible in principle; wiring up a real `wasm-bindgen`
+// build (needs the wasm-bindgen crate + a wasm32 target, neither currently
+// in flake.nix) is a real follow-up, not attempted here.
+describe("toWasmBindgenFfi — reserved-word (Rust keyword) identifiers get the r#-raw-identifier escape", () => {
+  test("a param named after a Rust keyword", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "match", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    const src = toWasmBindgenFfi(fn, "identify");
+    expect(src).toContain("r#match: i64");
+  });
+
+  test("a function itself named after a Rust keyword gets escaped, with #[wasm_bindgen(js_name = ...)] preserving the original exported JS name", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toWasmBindgenFfi(fn, "type");
+    expect(src).toContain("pub fn r#type()");
+    expect(src).toContain('js_name = "type"');
+  });
+});
+
 describe("toWasmBindgenFfi — resource, copy discipline", () => {
   test("emits #[derive(Clone)] struct + impl block with methods, no ownership meta needed (copy is the default)", () => {
     const greetMethod: FfiRef = f(
