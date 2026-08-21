@@ -251,20 +251,21 @@ pattern-matching `op(...)`/`api(...)` call expressions in the AST — because `o
 return types are themselves literal-preserving (`const` type params), so the checker's
 resolved type of an exported tree already carries the full leaf/branch/meta-literal structure
 without needing to trace intermediate local variables or generic instantiations
-(`tree.ts:1-38`). The leaf/branch discriminator this walker uses is structural: a required
+(`tree.ts`'s `walkNodeType` function). The leaf/branch discriminator this walker uses is structural: a required
 `handler` on the resolved type means leaf, a required `children` means branch — which is
 exactly why `op()`'s return type deliberately narrows `handler` from `Node`'s
-declared-optional to required (`node.ts:482-488`).
+declared-optional to required (`node.ts`'s `op()`/`api()` return types).
 
 A small amount of AST access is still unavoidable: a leaf's underlying function _node_ (for
 JSDoc text and parameter/return annotations) has to come from the handler type's call
 signature's own `.declaration`, since the type system alone only ever gives back a resolved
-type, never the original source node (`tree.ts:19-24`).
+type, never the original source node (`tree.ts`'s `functionNodeOfHandler` function).
 
 **Only two exported-tree shapes are recognized:** a top-level `export const x = api(...)`, or
 a top-level `export function f(...)` whose _last statement_ is an unconditional return. Any
 other export shape — conditional returns, a multi-branch body — silently doesn't count as a
-tree export. A consumer writing a more elaborate tree-factory function needs to keep it to
+tree export (`tree.ts`'s `returnExpressionOfFactoryBody` and `forEachTreeCandidate` functions,
+which `hasTreeExport` builds on). A consumer writing a more elaborate tree-factory function needs to keep it to
 this shape or it won't be picked up by `hasTreeExport`/discovery at all.
 
 `extract.ts` genuinely takes only TS types + JSDoc as input — there is no hand-authored
