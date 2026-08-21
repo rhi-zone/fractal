@@ -297,25 +297,26 @@ completion levels) needs to join tree-position segments into one string. A naive
 `prefix + delimiter + segment` join is not injective: two structurally different trees can
 collide on the same string whenever an authored segment itself contains the delimiter
 character (e.g. delimiter `"_"`: branch `"books"` → leaf `"get"` joins to `"books_get"`, the
-same string a leaf literally named `"books_get"` at the root also produces) — `path.ts:1-19`.
+same string a leaf literally named `"books_get"` at the root also produces) — `path.ts`'s module doc comment (see `escapeJoin`).
 `escapeJoin` closes this with backslash-escaping, proven injective by a round-trip test
 (`unescapeJoin(escapeJoin(x)) === x`) rather than merely asserted. The delimiter is
 constrained to exactly one character — a multi-character delimiter breaks the scheme's own
-injectivity (concrete counterexample in `path.ts:76-91`); every real caller in the codebase
+injectivity (concrete counterexample in `assertValidDelimiter`'s doc comment in `path.ts`); every real caller in the codebase
 uses a single character, so this is a real but currently-inert constraint.
 
 **This closes only derived-name collisions, not authored-override collisions.**
-`assertUniqueName` (`tree.ts:143-161`) still exists and still throws when two tree positions'
+`assertUniqueName` (`tree.ts`) still exists and still throws when two tree positions'
 _authored_ overrides (`meta.mcp.name`/`meta.mcp.segment`/`meta.mcp.uri`) collide, because an
 override supplies a final string outright, bypassing `escapeJoin` entirely
-(`tree.ts:485-490, 500-508`). A reader might assume `escapeJoin`'s injectivity makes
+(`assertUniqueName`'s doc comment in `tree.ts`, and the leaf-name-override call sites
+`nameOverride ?? escapeJoin(...)`). A reader might assume `escapeJoin`'s injectivity makes
 `assertUniqueName` redundant; it does not — they cover two different collision sources.
 
 Also worth knowing: a bare tool/leaf name recovered by `extractToolSchemas`/
 `extractToolTypeRefs` is unique only _within one standalone tree_, "by convention" — it is not
 safe to merge names across multiple files' trees composed into one root.
 `extractRouteSchemas`/`extractRouteTypeRefs`'s `treeId`-prefixed path keying exists
-specifically for that composed-root case (`tree.ts:833-871`); a first-time consumer building
+specifically for that composed-root case (`extractRouteSchemas`'s doc comment in `tree.ts`); a first-time consumer building
 a multi-file composed tree needs the path-keyed variant, not the name-keyed one.
 
 ## `reachability.ts` is build-tooling reachability, not tree/routing reachability
