@@ -1596,16 +1596,32 @@ export interface EntryFileGroup {
  * ## Granularity: the config file's path, not its resolved options
  *
  * Two entry files group together iff `nearestConfigFileForEntry` returns the
- * same path for both. The alternative — grouping by structural equality of
- * the RESOLVED `ts.CompilerOptions`, so that two distinct-but-identical
- * configs could still share a Program — buys nothing here: `ts.parseJson
- * ConfigFileContent` stamps `configFilePath` and `pathsBasePath` into the
- * resolved bag, and both are per-config-file absolute paths, so two different
- * config files essentially never compare equal anyway. Path identity is the
- * cheaper key (one `findConfigFile` walk per file, no options parse needed to
- * decide the grouping) and it is correct by construction: nearest-config is a
- * function of the containing directory, so two files in one directory can
- * never land in different groups.
+ * same path for both. This is the conservative key, and the choice is a real
+ * tradeoff rather than a forced one.
+ *
+ * The alternative is grouping by structural equality of the RESOLVED
+ * `ts.CompilerOptions`, letting two distinct config files that happen to
+ * resolve identically share one Program. That would genuinely merge groups
+ * here — several packages in this repo extend the shared base config and add
+ * nothing that survives resolution, and the resolved bag carries no
+ * config-file identity to keep them apart (`parseJsonConfigFileContent` is
+ * called without a `configFileName`, so no `configFilePath` is stamped, and
+ * `pathsBasePath` only appears when the config actually declares `paths`).
+ * Merging those would be sound in principle — module resolution is a function
+ * of the options bag plus the importing file's own path, nothing else — and
+ * would save a Program per redundant region.
+ *
+ * It is rejected because its soundness rests on the structural comparison
+ * being exact and TOTAL over every option that can affect resolution. Any
+ * field the comparison fails to account for silently merges two regions that
+ * should have stayed apart, which is precisely the bug this function exists
+ * to fix, reintroduced in a form that is harder to see. Path identity needs
+ * no such audit to stay correct, is the cheaper key (one `findConfigFile`
+ * walk per file; no options parse needed to decide the grouping at all), and
+ * is correct by construction — nearest-config is a function of the containing
+ * directory, so two files in one directory can never land in different
+ * groups. The accepted cost is extra Programs when two packages' configs
+ * really are identical.
  *
  * ## Why this returns groups instead of pre-built Programs
  *
