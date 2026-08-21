@@ -263,7 +263,9 @@ clause pulling in an imported projector fragment, PLUS a required member of
 the deployment's own, behaves exactly like an ordinary interface
 declaration with that heritage — confirmed three ways against a
 minimal repro mirroring `op()`'s `HasRequiredKeys`-driven arity flip
-(`node.ts:357-361`):
+(the repro itself was a scratch `tsc` file, deleted after verification per
+the note above; the mirrored mechanism now lives in `op()`'s own rest-parameter
+conditional type in `node.ts`):
 
 1. Once the augmented `LeafMeta` carries a required member (`scopes`), a
    zero-argument `op(fn)` call fails to typecheck — `HasRequiredKeys<LeafMeta>`
