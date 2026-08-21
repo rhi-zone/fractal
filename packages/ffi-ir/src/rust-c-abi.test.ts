@@ -82,6 +82,43 @@ describe("toRustCAbi — function", () => {
   });
 });
 
+// Reserved-word collision coverage — string-comparison only. rustc/cargo
+// ARE present in this repo's flake.nix devShell (packages/type-ir/src/
+// compile-check.test.ts already runs a real `cargo build` for rust-serde.ts
+// there), but this package (ffi-ir) has no real-toolchain compile-check
+// suite of its own yet for any of its 13 target projectors — see this
+// file's sibling test files for the same gap noted per-target. Extending
+// real-toolchain verification to ffi-ir's C-ABI-shaped Rust output would be
+// a real follow-up (its own temp-crate harness, mirroring compile-check.test.ts's
+// pattern), not attempted here.
+describe("toRustCAbi — reserved-word (Rust keyword) identifiers get the r#-raw-identifier escape", () => {
+  test("a param named after a Rust keyword", () => {
+    const fn: FfiRef = f(
+      boundary.function(
+        [{ name: "match", type: withOwnership(t(types.integer), ownership.copy()) }],
+        withOwnership(t(types.integer), ownership.copy()),
+      ),
+    );
+    const src = toRustCAbi(fn, "identify");
+    expect(src).toContain("r#match: i64");
+  });
+
+  test("a standalone/module-level function itself named after a Rust keyword", () => {
+    const fn: FfiRef = f(boundary.function([], withOwnership(t(types.void), ownership.copy())));
+    const src = toRustCAbi(fn, "type");
+    expect(src).toContain('pub extern "C" fn r#type()');
+  });
+
+  test("a method/resource-generated function name never collides (always <receiver>_<method>-concatenated), so it's never escaped", () => {
+    const matchMethod: FfiRef = f(
+      boundary.method([], withOwnership(t(types.void), ownership.copy()), "Type"),
+    );
+    const resource: FfiRef = f(boundary.resource("Type", { match: matchMethod }));
+    const src = toRustCAbi(resource);
+    expect(src).toContain('pub extern "C" fn type_match(');
+  });
+});
+
 describe("toRustCAbi — resource", () => {
   test("a resource with a constructor, methods, and an auto-generated destructor", () => {
     const readMethod: FfiRef = f(

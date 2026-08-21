@@ -261,7 +261,15 @@ export function toRustCAbi(ref: FfiRef, name?: string): string {
       );
     }
     const shape = ref.shape as FfiShape & { kind: "function" };
-    return buildFunction(toSnakeCase(name), ref, shape);
+    // `escapeRustIdent` here (not just on params, see `buildFunction` above)
+    // — a standalone/module-level free function's own name is a bare
+    // `pub extern "C" fn <name>` declaration position too, so an
+    // ffi-ir name shaped like a Rust keyword (e.g. "type"/"match") needs the
+    // same `r#`-raw-identifier escape a param of that name already gets.
+    // The `method`/`resource` cases below don't need this: their generated
+    // names are always `<receiver>_<method>`-concatenated, which can never
+    // collide with a single-word keyword.
+    return buildFunction(escapeRustIdent(toSnakeCase(name)), ref, shape);
   }
 
   if (kind === "method") {
