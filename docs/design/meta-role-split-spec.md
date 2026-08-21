@@ -514,6 +514,11 @@ current implementation directly:
 
 ### Consumer story: the sibling codebase
 
+*(`packages/fractal-support` and `apps/web` referenced below live in the
+external sibling deployment repo, not in `rhi-zone/fractal` — see the Status
+line at the top of this doc. Reproduced as originally written; not
+independently verifiable from this repo.)*
+
 `packages/fractal-support/src/meta.ts` today augments the single `Meta`
 with an OPTIONAL `scopes?: readonly string[]`, and its module doc says so
 explicitly ("Absent ⇒ no scope required"). `packages/fractal-support/src/scopes.ts`'s
@@ -547,7 +552,11 @@ is the sibling codebase's own call, not decided by this spec.
   "placement-of-self," a different axis than "placement-of-descendants"
   (which nothing currently expresses). No alternative placement is
   proposed here.
-- Whether `mergeMeta` becomes three functions or one generic one.
+- ~~Whether `mergeMeta` becomes three functions or one generic one.~~
+  **Resolved (verified against current source): one generic function,
+  `mergeMeta<const T>(...metas: T): Simplify<FoldMetaList<T>>`, its return
+  type threaded from the call site's own argument types. Not three
+  per-role functions.**
 - Implementation order / rollout sequencing across the five projector
   packages.
 - The exact shape of the sibling codebase's "explicitly no scope required" marker
@@ -583,7 +592,13 @@ future edit to this spec MUST NOT reintroduce any of the following:
    be transitively imported by a given compilation — a change nobody
    intended could flip on by adding an unrelated import. §2/§3 fix this:
    projectors export inert interfaces only; the deployment is the sole
-   place any augmentation happens.
+   place any augmentation happens. **This regression is currently back,
+   partially: see the Status line at the top of this doc —
+   `mcp-api-projector` and `json-rpc-api-projector` each carry a live
+   `declare module` block in `src/deployment-meta.test-support.ts`, inside
+   the package. Whether that counts as a live instance of this exact
+   regression (vs. an acceptable test-only exception) is the open question
+   flagged there.**
 5. **Dual-meaning keys.** `openapi.security` meant a per-operation
    requirement at leaf position and a spec-level default at root position —
    the same key, two different meanings depending on where it was
