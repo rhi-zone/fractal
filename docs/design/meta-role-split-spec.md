@@ -604,12 +604,16 @@ future edit to this spec MUST NOT reintroduce any of the following:
    the same key, two different meanings depending on where it was
    authored. §6 gives it one meaning (per-operation) and moves the other
    use out of `meta` entirely, into the document builder's own options.
-6. **Handling code for retired directives.** `segment`, `when`,
-   `legacyPath`, and the `dispatch` marker are parsed by `getHttpMeta` but
-   read by no projector or consumer anywhere (§4's http-api-projector
-   section) — this spec orders their parsing/resolution code deleted, not
-   given a typed home that would let a future reader mistake them for live
-   surface.
+6. **Handling code for retired directives.** `segment`, `when`, and
+   `legacyPath` were parsed by `getHttpMeta` but read by no projector or
+   consumer anywhere (§4's http-api-projector section) — this spec ordered
+   their parsing/resolution code deleted rather than given a typed home
+   that would let a future reader mistake them for live surface. **Verified
+   done:** `getHttpMeta` no longer parses any of the three. The `dispatch`
+   marker is excluded from this item on re-check — see §4, it's an open
+   design question tracked in `TODO.md`, not settled dead code, so it isn't
+   something this regression item's "don't give it a typed home" rule
+   should be read as covering.
 7. **A generic meta parameter threaded through `Node`.** Rejected: the
    augmentation mechanism in §3 makes it unnecessary — a deployment gets
    its own concrete, fully-merged `LeafMeta`/`BranchMeta`/`SharedMeta`
