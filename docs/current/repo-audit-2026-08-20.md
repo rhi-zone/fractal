@@ -315,11 +315,6 @@ wrong).
    `starlight-reference.ts` (427 loc) still get only the generic registry
    smoke loop (`registry.test.ts:87-97`) — no assertion the output is right.
    playground UI still untested.
-3. **ffi-ir is string-assertion-only across all 13 targets — still true.** No
-   test shells out to a real compiler (checked for spawnSync/execSync/
-   Bun.spawn/child_process — zero hits across the 13 test files).
-   `compile-check.test.ts:1-8`'s header still makes the same point about what
-   string tests can't see.
 4. **Where tests are strong — still true, unchanged.** Zero snapshot tests
    repo-wide; http/graphql codegen's 3-tier pattern
    (`http/codegen.test.ts:1-19`) still current; type-ir compile-checks 14 real
