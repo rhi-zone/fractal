@@ -644,58 +644,103 @@ still current.
 
 ### 8.1 the sibling codebase hand-rolls that shadow existing (dead) fractal surface — and why
 
-**[evidenced]** `apps/web/scripts/codegen-fractal-merged-validators.ts:100-125`
-is the near-exact body of `writeWireApplyValidationModuleCached`;
-`codegen-fractal-validators.ts:485-505` likewise shadows
-`buildSchemaModuleCached`/`writeSchemaModuleCached`. The blocking reason is
-written down at `codegen-fractal-validators.ts:466-474`: the fractal wrappers
-hash the header-**less** source while the sibling codebase prepends a `@generated` header
-before writing — the recorded `outputHash` would permanently mismatch disk and
-defeat the cache. The header string itself is a private const in fractal
-(`cli.ts:13`) that the sibling codebase copy-pastes verbatim in two scripts (:246 and
-merged:79). So the dead-wrapper finding and the header-divergence finding
-(§6.2) are one story: the exported wrappers are unusable by the one consumer
-that wants them, for a reason fractal's own CLI works around privately.
+<!-- CITATION UNVERIFIED (sibling-repo side): the whole opening paragraph plus the
+     findEntryFilesCached/directoryListingSignature/findTreeTargetsCached and
+     fractalMergedSchemas.ts bullets cite apps/web/scripts/*.ts and
+     apps/web/src/server/lib/*.ts. No sibling checkout exists anywhere on this
+     disk (checked every sibling directory under ~/git/rhizone/ and beyond) —
+     none of these could be re-verified this pass. Note also: the
+     buildWireApplyValidationModuleCached/buildSchemaModuleCached wrappers this
+     paragraph says are "unusable by the one consumer that wants them" are the
+     same wrappers the intro block and §6.1 now confirm are used by fractal's
+     own cli.ts — worth checking on next sibling-repo access whether the
+     header-fix (§6.2, also since landed) changed this story too. -->
 
-Other hand-rolls of things fractal-shaped:
+**[evidenced at audit time; not re-verified this pass]** `apps/web/scripts/codegen-fractal-merged-validators.ts:100-125`
+was the near-exact body of `writeWireApplyValidationModuleCached`;
+`codegen-fractal-validators.ts:485-505` likewise shadowed
+`buildSchemaModuleCached`/`writeSchemaModuleCached`. The blocking reason
+written down at `codegen-fractal-validators.ts:466-474`: the fractal wrappers
+hashed the header-**less** source while the sibling codebase prepends a `@generated` header
+before writing — the recorded `outputHash` would permanently mismatch disk and
+defeat the cache. The header string itself was a private const in fractal
+(`cli.ts:13`) that the sibling codebase copy-pastes verbatim in two scripts. So
+the dead-wrapper finding and the header-divergence finding (§6.2) were one
+story: the exported wrappers were unusable by the one consumer that wanted
+them, for a reason fractal's own CLI worked around privately. **Both halves of
+this have since changed on the fractal side** — the wrappers now have a
+non-Bun-only write path and an explicit `header` option folded into the cache
+key (§6.2, §6.6) — whether that unblocks the sibling's hand-roll needs
+checking against the sibling repo directly.
+
+Other hand-rolls of things fractal-shaped (sibling-repo side, unverified this
+pass, same caveat as above):
 
 - `findEntryFilesCached` + `directoryListingSignature`
   (`codegen-fractal-validators.ts:181-217`) and `findTreeTargetsCached`
   (:466ff) — mtime-signature caches bolted around `findEntryFiles`/
   `forEachTreeCandidate` because `discover.ts` unconditionally builds its own
   `ts.Program`.
-- `packages/fractal-support/src/serviceStores.ts:33-42` —
-  `withServiceStoresOnInput` is the sibling codebase-free generic store→input plumbing.
-- `packages/fractal-support/src/errorEncoder.ts:404-415` —
-  `formatValidationErrors` formats fractal's own `ValidationError[]`; the shape
-  was reverse-engineered empirically (per its own doc at :438-457, discovered
-  via a failing smoke test, not source).
-- the sibling codebase's errors export (`errorEncoder.ts:538`) — documented as "fractal's
-  `httpErrors` but matching `code`/`kind`/`type` instead of only `.kind`".
-- `wrapScopes`'s tree walk (`scopes.ts:1035-1060`) copies the recursive rebuild
-  shape of the since-deleted `wrapValidators`; **[evidenced]** api-tree exports
-  no generic leaf-mapping primitive, so every consumer transform re-implements
-  the recursion.
 - `apps/web/src/server/lib/fractalMergedSchemas.ts:20-36` reimplements
   `buildNameMap`'s underscore-joined name computation; its own doc names
   `extractRouteSchemas` (`tree.ts:880`) as the real answer, blocked on cache
   logic.
 
+<!-- CITATION UNRESOLVED: the two bullets below cite `packages/fractal-support/src/serviceStores.ts`
+     and `packages/fractal-support/src/errorEncoder.ts`. This package has never
+     existed in this repo's git history at all (checked `git log --all` for the
+     path — no add, delete, or rename, ever), and `withServiceStoresOnInput`/
+     `formatValidationErrors` don't exist anywhere in the codebase either. This
+     may be a sibling-repo path mislabeled as fractal-side (this environment has
+     no sibling checkout to check), or content that's been removed along with
+     the whole package — could not determine which without more context, and
+     guessing a replacement path felt worse than flagging it. Needs a human
+     call. -->
+
+- `packages/fractal-support/src/serviceStores.ts:33-42` —
+  `withServiceStoresOnInput` was described as the sibling codebase-free generic
+  store→input plumbing.
+- `packages/fractal-support/src/errorEncoder.ts:404-415` —
+  `formatValidationErrors` was described as formatting fractal's own
+  `ValidationError[]`, its shape reverse-engineered empirically.
+- the sibling codebase's errors export (same phantom `errorEncoder.ts:538`
+  file as above) — documented as "fractal's `httpErrors` but matching
+  `code`/`kind`/`type` instead of only `.kind`".
+
+`wrapScopes`'s tree walk (sibling-side `scopes.ts:1035-1060`, unverified) was
+said to copy the recursive rebuild shape of the since-deleted `wrapValidators`.
+**[evidenced, fractal-side half confirmed]** `wrapValidators` really was
+deleted (commit `ffa08d4`, "migrate cli/mcp/graphql to applyValidation, delete
+wrapValidators (phase 3)") — it survives only in comments now. api-tree still
+exports no generic leaf-mapping primitive (`walkTree`/`walkTreePositions` in
+`tree.ts`/`apply-validation.ts` are internal, unexported), so the underlying
+claim — every consumer transform has to re-implement the recursion — still
+holds on the fractal side.
+
 ### 8.2 What fractal assumes about its consumer
 
-- **`dist/` exists** (§1.5) — nothing in the package or the consumer's CI
-  guarantees it.
-- **Version resolution works from fractal's own location** (§1.1) — false
-  under the sibling codebase's symlink layout; degrades to `"unknown"` silently.
-- **Bun** — `Bun.write` in the write helpers (§6.6).
-- **tsconfig: nearest-to-entry-file wins** (`type-ir/from-typescript.ts:1517`,
-  `ts.findConfigFile(path.dirname(entryFile))`). the sibling codebase's entries resolve
-  `apps/web/tsconfig.json` — standalone, without `noUncheckedIndexedAccess`/
-  `exactOptionalPropertyTypes` — while the `packages/*` code being extracted
-  lives under `tooling/tsconfig.lib.json`. Codegen therefore resolves types
-  under a different strictness than the code's own config. **[evidenced
-  mechanism; whether it changes any extracted type was not tested.]**
-- **cwd** — `discover.ts:52,77` resolves relative roots against
-  `process.cwd()`; the sibling codebase sidesteps it by deriving `APP_ROOT` from
-  `import.meta.url`, and the root script's `--cwd apps/web` satisfies the
-  contract by convention. Low risk.
+- **`dist/` exists** (§1.5) — confirmed still true: `packages/api-tree/package.json`
+  has no `prepare` script, root `.gitignore` still excludes `dist/`, and
+  nothing in the package or (as far as checkable from here) the consumer's CI
+  guarantees the build step ran.
+- **Version resolution works from fractal's own location** (§1.1) — was false
+  under the sibling codebase's symlink layout; degrades to `"unknown"`
+  silently. Not re-verified against current sibling state, but the mechanism
+  (`resolvePackageVersion`) is unchanged — see updated §1.1 for the follow-on
+  wrinkle now that `apiTreeVersion` uses the same resolution path.
+- **Bun** (§6.6) — **fixed**: the write helpers now use `node:fs/promises`
+  instead of `Bun.write`, so this assumption no longer holds; a Node-only
+  consumer should be unblocked here (unverified against the sibling directly).
+- **tsconfig: nearest-to-entry-file wins** — citation drifted:
+  `type-ir/src/from-typescript.ts:1547` (not :1517), and the call is
+  `ts.findConfigFile(path.dirname(path.resolve(entryFile)), ts.sys.fileExists)`
+  — the doc's quoted form dropped the `path.resolve()` wrap and the
+  `ts.sys.fileExists` argument. Mechanism claim (nearest-to-entry-file tsconfig
+  resolution, sibling's split-strictness consequence) not re-checked against
+  sibling repo. **[evidenced mechanism; whether it changes any extracted type
+  was not tested.]**
+- **cwd** — confirmed still current: `discover.ts:52,77` still resolve
+  relative roots against `process.cwd()` (actual `path.resolve()` calls at
+  :175/:258/:269 in the same file). Sibling-side mitigation (`APP_ROOT` from
+  `import.meta.url`, `--cwd apps/web`) not re-verified. Low risk, as
+  originally noted.
