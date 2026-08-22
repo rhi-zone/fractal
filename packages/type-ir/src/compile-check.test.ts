@@ -61,6 +61,7 @@ import { toTypeBoxDeclaration } from "./typescript-typebox.ts";
 import { toFlow } from "./flow-native.ts";
 import { toElm } from "./elm-json.ts";
 import { toElixir } from "./elixir-jason.ts";
+import { toKotlin } from "./kotlin-kotlinx.ts";
 
 // ============================================================================
 // Shared helpers
@@ -812,9 +813,105 @@ describe("elixir-jason (mix compile, real Jason Hex package)", () => {
 });
 
 // ============================================================================
+// Kotlin (kotlinx.serialization projector) — kotlinx-serialization-core and
+// kotlinx-datetime (the projector's own choice for datetime/date fields —
+// see kotlin-kotlinx.ts's `datetime`/`date` mapping) are resolved for real
+// from repo1.maven.org at test time as plain jars (fetched once, reused
+// across fixtures), rather than standing up a full Gradle/Maven project per
+// test run — the generated code here is just `@Serializable`-annotated
+// declarations, not a runnable build, so classpath jars are the
+// lighter-weight equivalent of rust-serde's/csharp-newtonsoft's
+// network-resolved dependency above. Real `@Serializable`/`@SerialName`
+// processing (not just annotation presence) needs kotlinc's own
+// kotlinx.serialization compiler plugin — nixpkgs' `kotlin` package already
+// bundles it alongside `kotlinc` itself
+// (`<kotlin store path>/lib/kotlinx-serialization-compiler-plugin.jar`), so
+// no extra flake.nix buildInput is needed for it; its path is derived from
+// `kotlinc`'s own location (`which kotlinc`) rather than a second `nix eval`
+// (see the nlohmann_json comment above for that pattern) so the plugin
+// always matches the exact kotlinc binary already on PATH, instead of
+// risking a version drift against whatever nixpkgs revision `nix eval
+// nixpkgs#...` resolves against.
+// ============================================================================
+
+const kotlincDir = run(["bash", "-c", "dirname $(which kotlinc)"], process.cwd()).output.trim();
+const kotlinxSerializationPluginJar = join(kotlincDir, "..", "lib", "kotlinx-serialization-compiler-plugin.jar");
+
+describe("kotlin-kotlinx (kotlinc, real kotlinx-serialization-core + kotlinx-datetime jars + compiler plugin)", () => {
+  // Real bugs this network-resolved check surfaced in kotlin-kotlinx.ts
+  // (fix belongs in that projector, out of scope here): the `datetime`
+  // field mapping emits a bare `kotlinx.datetime.Instant` with no serializer
+  // annotation, but kotlinx-datetime's `Instant` isn't itself `@Serializable`
+  // by default — it needs an explicit `@Serializable(with =
+  // InstantIso8601Serializer::class)` (or `@Contextual`) the same way the
+  // `unknown` mapping's bare `Any` would. Both "E-commerce Order" (a
+  // `datetime` field) and "Kitchen Sink" (`datetime` + `unknown` fields) hit
+  // this.
+  const todo = new Set<string>(["E-commerce Order", "Kitchen Sink"]);
+  const projectDir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-kotlin-"));
+  const coreJarPath = join(projectDir, "kotlinx-serialization-core-jvm.jar");
+  const datetimeJarPath = join(projectDir, "kotlinx-datetime-jvm.jar");
+  const fetchCoreResult = run(
+    [
+      "curl",
+      "-sL",
+      "--fail",
+      "-o",
+      coreJarPath,
+      "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-serialization-core-jvm/1.7.3/kotlinx-serialization-core-jvm-1.7.3.jar",
+    ],
+    projectDir,
+  );
+  const fetchDatetimeResult = run(
+    [
+      "curl",
+      "-sL",
+      "--fail",
+      "-o",
+      datetimeJarPath,
+      "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-datetime-jvm/0.7.1/kotlinx-datetime-jvm-0.7.1.jar",
+    ],
+    projectDir,
+  );
+  afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+  for (const { name, ref } of fixtures) {
+    const runner = todo.has(name) ? test.todo : test;
+    runner(
+      name,
+      () => {
+        expect(fetchCoreResult.ok, fetchCoreResult.output).toBe(true);
+        expect(fetchDatetimeResult.ok, fetchDatetimeResult.output).toBe(true);
+        withTempDir((dir) => {
+          const file = join(dir, "root.kt");
+          writeFileSync(
+            file,
+            `import kotlinx.serialization.Serializable\nimport kotlinx.serialization.SerialName\nimport kotlinx.serialization.Contextual\n\n${toKotlin(ref, rootNameFor(name))}\n`,
+          );
+          assertCompiles(
+            run(
+              [
+                "kotlinc",
+                `-Xplugin=${kotlinxSerializationPluginJar}`,
+                "-cp",
+                `${coreJarPath}:${datetimeJarPath}`,
+                file,
+                "-d",
+                join(dir, "out"),
+              ],
+              dir,
+            ),
+          );
+        });
+      },
+      30_000,
+    );
+  }
+});
+
+// ============================================================================
 // Explicitly out of scope (see the module comment for why):
 //   java-jackson / java-gson / java-moshi   — need Maven Central jars
-//   kotlin-kotlinx                          — needs the kotlinx-serialization jar
 //   dart-json-serializable / dart-freezed   — need build_runner-generated
 //                                             `*.g.dart`/`*.freezed.dart` companions
 // None of these are single, plain, offline nixpkgs derivations the way
@@ -822,5 +919,4 @@ describe("elixir-jason (mix compile, real Jason Hex package)", () => {
 // is a real follow-up, not something to fake with a stub.
 // ============================================================================
 describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
-describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {});
 describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {});

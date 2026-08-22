@@ -67,11 +67,17 @@
             cargo
 
             # Java (Jackson, Gson, Moshi projectors) + Kotlin (kotlinx projector)
-            # NOTE: compile-check.test.ts does NOT compile these against the real
-            # Jackson/Gson/Moshi/kotlinx-serialization libraries — those aren't
-            # single nixpkgs derivations (they're Maven/Gradle-resolved jars) and
-            # aren't otherwise vendored here, so those checks are `test.skip` with
-            # a comment. jdk/kotlin stay for the toolchain's other consumers.
+            # NOTE: compile-check.test.ts does NOT compile the Java variants
+            # against the real Jackson/Gson/Moshi libraries — those are
+            # Maven-resolved jars and wiring them up (a full Maven/Gradle temp
+            # project per test, or a direct jar-fetch+classpath check per
+            # library) is a real follow-up, not something to fake with a stub,
+            # so those checks stay `test.skip` with a comment. Kotlin's
+            # kotlinx-serialization *is* wired up: kotlin-kotlinx's
+            # compile-check.test.ts block fetches kotlinx-serialization-core
+            # as a plain jar from repo1.maven.org and compiles against it using
+            # the kotlinx.serialization compiler plugin this `kotlin` package
+            # already bundles (`<store path>/lib/kotlinx-serialization-compiler-plugin.jar`).
             jdk
             kotlin
 
