@@ -364,11 +364,36 @@ wrong).
    `starlight-reference.ts` (427 loc) still get only the generic registry
    smoke loop (`registry.test.ts:87-97`) — no assertion the output is right.
    playground UI still untested.
-4. **Where tests are strong — still true, unchanged.** Zero snapshot tests
-   repo-wide; http/graphql codegen's 3-tier pattern
-   (`http/codegen.test.ts:1-19`) still current; type-ir compile-checks 14 real
-   toolchains, still 6 `describe.skip` blocks at :663-668 leaving
-   java/kotlin/newtonsoft/dart/elm/elixir string-only in practice.
+4. **Where tests are strong — still true except the `describe.skip` count.**
+   Zero snapshot tests repo-wide; http/graphql codegen's 3-tier pattern
+   (`http/codegen.test.ts:1-19`) still current. **Since investigated
+   (2026-08-22): 5 of the original 6 `describe.skip` blocks are now real
+   network-resolved compiler checks, not string-only.** The "not vendored"
+   framing on all 6 undersold what was actually available: this repo's
+   `nix develop` shell has working network access at test time, the same way
+   `rust-serde`'s pre-existing check already resolves `serde`/`serde_json`
+   from crates.io for real — that precedent just hadn't been extended to the
+   other 6 yet. csharp-newtonsoft (real `dotnet add package` against
+   nuget.org) and elixir-jason (real `mix deps.get` against hex.pm) now pass
+   for real, no `test.todo`s. elm-json (real `elm make` against
+   package.elm-lang.org) and kotlin-kotlinx (real jar fetch from Maven
+   Central + the `kotlin` package's own serialization compiler plugin) and
+   java-jackson/java-gson/java-moshi (real jar fetch from Maven Central) are
+   unskipped but mostly land on `test.todo`, each with the literal compiler
+   error as proof of a real, previously-invisible bug: elm-json chokes on a
+   self-referential type alias, a field literally named `type`, and a
+   shadowed lambda param; kotlin-kotlinx emits an unannotated
+   `kotlinx.datetime.Instant` kotlinx.serialization rejects; the Java trio
+   surfaces a structural fixture problem, not a one-line bug — `test-fixtures.ts`'s
+   shared nested `obj(...)` fixtures aren't named, but all three Java
+   projectors require a caller-supplied name for any nested object with no
+   `meta.typeName`, so fixtures with more than one distinct anonymous nested
+   object collapse onto one unresolvable identifier. Only dart-json-serializable
+   and dart-freezed are still `describe.skip` — a different kind of blocker
+   than the other 5 (build_runner code generation, not a missing dependency,
+   so network access at test time doesn't resolve it). See
+   `compile-check.test.ts`'s per-language comments and `flake.nix`'s matching
+   buildInput comments for the current detail on each.
    `cross-projector.test.ts:188-198` still the weakest tier
    (`typeof result === "string" && length > 0`); mcp/cli `source.test.ts`
    still type-level only.
