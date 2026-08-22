@@ -841,16 +841,24 @@ const kotlincDir = run(["bash", "-c", "dirname $(which kotlinc)"], process.cwd()
 const kotlinxSerializationPluginJar = join(kotlincDir, "..", "lib", "kotlinx-serialization-compiler-plugin.jar");
 
 describe("kotlin-kotlinx (kotlinc, real kotlinx-serialization-core + kotlinx-datetime jars + compiler plugin)", () => {
-  // Real bugs this network-resolved check surfaced in kotlin-kotlinx.ts
-  // (fix belongs in that projector, out of scope here): the `datetime`
-  // field mapping emits a bare `kotlinx.datetime.Instant` with no serializer
-  // annotation, but kotlinx-datetime's `Instant` isn't itself `@Serializable`
-  // by default — it needs an explicit `@Serializable(with =
-  // InstantIso8601Serializer::class)` (or `@Contextual`) the same way the
-  // `unknown` mapping's bare `Any` would. Both "E-commerce Order" (a
-  // `datetime` field) and "Kitchen Sink" (`datetime` + `unknown` fields) hit
-  // this.
-  const todo = new Set<string>(["E-commerce Order", "Kitchen Sink"]);
+  // Real bug this network-resolved check surfaced in kotlin-kotlinx.ts (fixed
+  // — the `datetime` field mapping now annotates its `kotlinx.datetime.Instant`
+  // field with `@Contextual`; see toDataClass's field-emission comment for
+  // why `@Contextual` rather than `@Serializable(with =
+  // InstantIso8601Serializer::class)`: recent kotlinx-datetime releases
+  // dropped their own Instant serializers entirely, so the pinned
+  // kotlinx-datetime-jvm 0.7.1 jar above has no `InstantIso8601Serializer` to
+  // reference at all — confirmed by inspecting its jar contents directly
+  // rather than trusting docs written against older releases).
+  //
+  // "Kitchen Sink" still hits a *different*, still-open bug: its `unknown`
+  // field maps to a bare `Any`, which kotlinx.serialization rejects the same
+  // way it rejected unannotated `Instant` ("serializer has not been found for
+  // type 'Any'") — the `unknown` mapping needs its own fix (out of scope
+  // here; the `object` mapping's `Map<String, @Contextual Any?>` fallback
+  // above is presumably the intended shape of that fix, but that's a
+  // separate defect from the datetime one this test.todo used to document).
+  const todo = new Set<string>(["Kitchen Sink"]);
   const projectDir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-kotlin-"));
   const coreJarPath = join(projectDir, "kotlinx-serialization-core-jvm.jar");
   const datetimeJarPath = join(projectDir, "kotlinx-datetime-jvm.jar");

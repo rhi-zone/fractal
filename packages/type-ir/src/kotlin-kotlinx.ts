@@ -208,7 +208,20 @@ function toDataClass(name: string, ref: TypeRef): string {
     const fieldDoc = kotlinDocComment(fieldRef.meta, "    ");
     const keyword = readonly ? "val" : "var";
     const suffix = optional ? " = null" : "";
-    return `${fieldDoc}    @SerialName(${quote(fieldName)}) ${keyword} ${fieldName}: ${type}${suffix}`;
+    // kotlinx-datetime's `Instant` (the `datetime` mapping above) has no
+    // default kotlinx.serialization serializer of its own to fall back on:
+    // recent kotlinx-datetime releases moved `Instant` to the stdlib
+    // (`kotlin.time.Instant`) and dropped their own bundled Instant
+    // serializers (e.g. `InstantIso8601Serializer`) entirely, so a bare
+    // `@Serializable` data class with an unannotated Instant field fails to
+    // compile ("serializer has not been found for type 'Instant'"). The
+    // portable fix that works across that version split is `@Contextual`
+    // (Kotlin/kotlinx.serialization's documented fallback), which defers
+    // resolution to a `SerializersModule` the caller registers at runtime —
+    // same "annotation only, caller wires the real serializer" convention
+    // `instance`'s bare `className` fallback documents above.
+    const contextual = isA(fieldRef.shape.kind, "datetime") ? "@Contextual " : "";
+    return `${fieldDoc}    @SerialName(${quote(fieldName)}) ${contextual}${keyword} ${fieldName}: ${type}${suffix}`;
   });
 
   const lines = [
