@@ -67,17 +67,19 @@
             cargo
 
             # Java (Jackson, Gson, Moshi projectors) + Kotlin (kotlinx projector)
-            # NOTE: compile-check.test.ts does NOT compile the Java variants
-            # against the real Jackson/Gson/Moshi libraries — those are
-            # Maven-resolved jars and wiring them up (a full Maven/Gradle temp
-            # project per test, or a direct jar-fetch+classpath check per
-            # library) is a real follow-up, not something to fake with a stub,
-            # so those checks stay `test.skip` with a comment. Kotlin's
-            # kotlinx-serialization *is* wired up: kotlin-kotlinx's
-            # compile-check.test.ts block fetches kotlinx-serialization-core
-            # as a plain jar from repo1.maven.org and compiles against it using
-            # the kotlinx.serialization compiler plugin this `kotlin` package
-            # already bundles (`<store path>/lib/kotlinx-serialization-compiler-plugin.jar`).
+            # — all four compile against their real library for real:
+            # compile-check.test.ts fetches each of jackson-annotations/gson/
+            # moshi/kotlinx-serialization-core (plus jspecify for the Java
+            # trio's `@Nullable`, kotlinx-datetime for Kotlin's datetime
+            # fields) as plain jars from repo1.maven.org, rather than standing
+            # up a full Maven/Gradle project per test — none of these
+            # projectors' output calls back into the library's own runtime
+            # (ObjectMapper/Gson/Moshi instance, `.serializer()`), only its
+            # annotation types, so a bare classpath jar is enough for a real
+            # javac/kotlinc check. Kotlin's kotlinx-serialization additionally
+            # compiles through the kotlinx.serialization compiler plugin this
+            # `kotlin` package already bundles
+            # (`<store path>/lib/kotlinx-serialization-compiler-plugin.jar`).
             jdk
             kotlin
 

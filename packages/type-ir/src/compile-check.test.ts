@@ -62,6 +62,9 @@ import { toFlow } from "./flow-native.ts";
 import { toElm } from "./elm-json.ts";
 import { toElixir } from "./elixir-jason.ts";
 import { toKotlin } from "./kotlin-kotlinx.ts";
+import { toJavaDeclaration } from "./java-jackson.ts";
+import { toGsonDeclaration } from "./java-gson.ts";
+import { toMoshiDeclaration } from "./java-moshi.ts";
 
 // ============================================================================
 // Shared helpers
@@ -910,13 +913,125 @@ describe("kotlin-kotlinx (kotlinc, real kotlinx-serialization-core + kotlinx-dat
 });
 
 // ============================================================================
+// Java (Jackson, Gson, Moshi projectors) — each library's annotation jar
+// (jackson-annotations, gson, moshi) plus org.jspecify:jspecify (all three
+// projectors' `@Nullable` on optional fields comes from jspecify, not a
+// library-specific annotation) are resolved for real from repo1.maven.org
+// at test time as plain classpath jars, fetched once per library and reused
+// across fixtures — same lighter-weight-than-Gradle rationale as
+// kotlin-kotlinx's jar fetch above; none of these projectors' generated
+// declarations call back into the library's runtime (ObjectMapper/Gson/
+// Moshi instance, `.serializer()`-equivalent), only its annotation types, so
+// a bare classpath jar is enough for a real javac check.
+//
+// Only "Recursive Tree" is checked as a real pass. All three projectors
+// document (see each file's `object` case comment) that a nested object
+// with no `meta.typeName` renders as a bare, literal `Anonymous` type
+// reference — "callers that need a real declaration for an inline object
+// route through `toJavaDeclaration` with an explicit name instead of
+// nesting it" — and a tuple similarly renders as a bare `TupleN<...>`
+// reference the caller is documented to supply. That convention assumes
+// each nested object/tuple gets its own distinct name from the caller; the
+// shared `test-fixtures.ts` (deliberately identical across every projector
+// in this suite, per its own header comment) doesn't carry `meta.typeName`
+// on its nested `obj(...)` calls, so "E-commerce Order" and "Kitchen Sink"
+// each reference *multiple, structurally different* nested objects that
+// all collapse onto the same unresolvable `Anonymous` identifier — no
+// single companion declaration this test file could supply would satisfy
+// more than one of them at once, so this isn't a wiring gap to patch here,
+// it's a real limitation of the "single bare name" convention when driven
+// by nested types that were never given their own name. "Discriminated
+// Union API Response" hits the same issue via its "data" field, compounded
+// by a second real issue: a union's declaration string bundles multiple
+// `public` top-level types (the sealed interface plus one `public record`
+// per variant) in one string, which real per-file javac compilation
+// requires split across separate files. All three are left as `test.todo`
+// with the literal javac error as proof (fix belongs in each projector, out
+// of scope here).
+// ============================================================================
+
+function checkJava(
+  fn: (name: string, ref: TypeRef) => string,
+  libraryName: string,
+  libraryJarUrl: string,
+  libraryJarFile: string,
+): void {
+  describe(`java-${libraryName} (javac, real ${libraryName} + jspecify jars)`, () => {
+    const todo = new Set<string>([
+      "E-commerce Order",
+      "Discriminated Union API Response",
+      "Kitchen Sink",
+    ]);
+    const projectDir = mkdtempSync(join(tmpdir(), `type-ir-compile-check-java-${libraryName}-`));
+    const libraryJarPath = join(projectDir, libraryJarFile);
+    const jspecifyJarPath = join(projectDir, "jspecify.jar");
+    const fetchLibraryResult = run(
+      ["curl", "-sL", "--fail", "-o", libraryJarPath, libraryJarUrl],
+      projectDir,
+    );
+    const fetchJspecifyResult = run(
+      [
+        "curl",
+        "-sL",
+        "--fail",
+        "-o",
+        jspecifyJarPath,
+        "https://repo1.maven.org/maven2/org/jspecify/jspecify/1.0.1/jspecify-1.0.1.jar",
+      ],
+      projectDir,
+    );
+    afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+    for (const { name, ref } of fixtures) {
+      const runner = todo.has(name) ? test.todo : test;
+      runner(
+        name,
+        () => {
+          expect(fetchLibraryResult.ok, fetchLibraryResult.output).toBe(true);
+          expect(fetchJspecifyResult.ok, fetchJspecifyResult.output).toBe(true);
+          withTempDir((dir) => {
+            const rootName = rootNameFor(name);
+            const file = join(dir, `${rootName}.java`);
+            writeFileSync(file, fn(rootName, ref));
+            assertCompiles(
+              run(
+                ["javac", "-cp", `${libraryJarPath}:${jspecifyJarPath}`, file, "-d", join(dir, "out")],
+                dir,
+              ),
+            );
+          });
+        },
+        30_000,
+      );
+    }
+  });
+}
+
+checkJava(
+  toJavaDeclaration,
+  "jackson",
+  "https://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.22/jackson-annotations-2.22.jar",
+  "jackson-annotations.jar",
+);
+checkJava(
+  toGsonDeclaration,
+  "gson",
+  "https://repo1.maven.org/maven2/com/google/code/gson/gson/2.14.0/gson-2.14.0.jar",
+  "gson.jar",
+);
+checkJava(
+  toMoshiDeclaration,
+  "moshi",
+  "https://repo1.maven.org/maven2/com/squareup/moshi/moshi/1.15.2/moshi-1.15.2.jar",
+  "moshi.jar",
+);
+
+// ============================================================================
 // Explicitly out of scope (see the module comment for why):
-//   java-jackson / java-gson / java-moshi   — need Maven Central jars
 //   dart-json-serializable / dart-freezed   — need build_runner-generated
 //                                             `*.g.dart`/`*.freezed.dart` companions
-// None of these are single, plain, offline nixpkgs derivations the way
-// pydantic/attrs/aeson/nlohmann_json/System.Text.Json are, so wiring them up
+// This isn't a single, plain, offline nixpkgs derivation the way
+// pydantic/attrs/aeson/nlohmann_json/System.Text.Json are, so wiring it up
 // is a real follow-up, not something to fake with a stub.
 // ============================================================================
-describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
 describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {});
