@@ -65,9 +65,30 @@ type Rendering = {
   readonly imports: readonly string[];
 };
 
-type Ctx = { readonly options: Required<JavaOptions>; readonly imports: Set<string> };
+// `decls` accumulates every declaration discovered while walking nested
+// object/enum/union TypeRefs that have no `meta.typeName` of their own (see
+// the `object`/`enum`/`union` handlers below and `renderRecordOrClass`/
+// `renderEnum`/`renderSealedInterface`'s `isPublic` parameter) — the same
+// "ctx.decls accumulates every nested declaration, named via meta.typeName
+// or a suggested name threaded down from the caller" convention
+// csharp-systemtextjson.ts's `Ctx`/`emitObjectType`/`emitEnumType`/
+// `emitUnionType` use, adapted for Java's added constraint that only one
+// top-level type per file may be `public` (and it must match the file name)
+// — so unlike C#, every declaration this walk pushes onto `decls` is
+// rendered *non*-public; only the root declaration `toJavaDeclaration`
+// builds directly keeps `public`.
+type Ctx = {
+  readonly options: Required<JavaOptions>;
+  readonly imports: Set<string>;
+  readonly decls: string[];
+};
 
-type Converter = (shape: TypeShape, meta: Readonly<Record<string, unknown>>, ctx: Ctx) => Rendering;
+type Converter = (
+  shape: TypeShape,
+  meta: Readonly<Record<string, unknown>>,
+  ctx: Ctx,
+  suggestedName: string,
+) => Rendering;
 
 const leaf =
   (boxed: string, primitive?: string, imports: readonly string[] = []): Converter =>
@@ -119,14 +140,20 @@ const handlers: Record<string, Converter> = {
   void: leaf("Void"),
   unknown: leaf("Object"),
   never: leaf("Void"),
-  object: (shape, meta, _ctx) => {
+  object: (shape, meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "object" };
-    const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous";
     // An inline (unnamed) object has no Java equivalent expressible as a type
-    // reference — Java has no anonymous record/struct type. Callers that need
-    // a real declaration for an inline object route through
-    // `toJavaDeclaration` with an explicit name instead of nesting it.
-    void s;
+    // reference — Java has no anonymous record/struct type. Named via
+    // `meta.typeName` when the extractor recorded one, else the
+    // `suggestedName` threaded down from the enclosing field/element/variant
+    // (see `javaFieldType`/`javaType`'s call sites) — either way a full
+    // record/class declaration is synthesized as a package-private sibling
+    // declaration (`isPublic: false` — see the `Ctx.decls` doc comment) and
+    // pushed onto `ctx.decls`, so distinct anonymous objects never collide on
+    // a single unresolvable name.
+    const name = typeof meta.typeName === "string" ? meta.typeName : suggestedName;
+    const ref: TypeRef = { shape: s, meta };
+    ctx.decls.push(renderRecordOrClass(name, ref, ctx, [], false));
     return { boxed: name, imports: [] };
   },
   // A class instance carries only nominal identity (className/source), never
@@ -137,14 +164,14 @@ const handlers: Record<string, Converter> = {
     boxed: (shape as TypeShape & { kind: "instance" }).className,
     imports: [],
   }),
-  array: (shape, _meta, ctx) => {
+  array: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "array" };
-    const element = javaType(s.element, ctx);
+    const element = javaType(s.element, ctx, `${suggestedName}Item`);
     return { boxed: `List<${element}>`, imports: ["java.util.List"] };
   },
-  tuple: (shape, _meta, ctx) => {
+  tuple: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "tuple" };
-    const elements = s.elements.map((e) => javaType(e, ctx));
+    const elements = s.elements.map((e, i) => javaType(e, ctx, `${suggestedName}Item${i + 1}`));
     // Java has no structural tuple type. Rendered as a reference to a
     // conventional `TupleN<T1, ..., TN>` record — this projector does not
     // define that support type itself (out of scope for a single TypeRef ->
@@ -157,36 +184,39 @@ const handlers: Record<string, Converter> = {
   // No native async-sequence type in Java's standard type system — degrades
   // to `List<T>` of the element type, the same degrade convention every
   // other data-only projector (Zod, protobuf, ...) applies to `stream`.
-  stream: (shape, _meta, ctx) => {
+  stream: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "stream" };
-    const element = javaType(s.element, ctx);
+    const element = javaType(s.element, ctx, `${suggestedName}Item`);
     return { boxed: `List<${element}>`, imports: ["java.util.List"] };
   },
   // Same degrade as `stream` — a page is one window over a larger collection
   // (see TypeKinds.page's doc comment), and Java has no pagination-window
   // type of its own to target.
-  page: (shape, _meta, ctx) => {
+  page: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "page" };
-    const element = javaType(s.element, ctx);
+    const element = javaType(s.element, ctx, `${suggestedName}Item`);
     return { boxed: `List<${element}>`, imports: ["java.util.List"] };
   },
-  map: (shape, _meta, ctx) => {
+  map: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "map" };
-    const key = javaType(s.key, ctx);
-    const value = javaType(s.value, ctx);
+    const key = javaType(s.key, ctx, `${suggestedName}Key`);
+    const value = javaType(s.value, ctx, `${suggestedName}Value`);
     return { boxed: `Map<${key}, ${value}>`, imports: ["java.util.Map"] };
   },
-  union: (_shape, meta) => {
+  union: (shape, meta, ctx, suggestedName) => {
     // A union's idiomatic Java rendering is a top-level sealed interface
     // (see `renderSealedInterface` below) — as a bare type expression (this
     // path, used when a union appears nested inside a field/generic
-    // position) it's rendered as a reference to that interface's name, which
-    // must come from `meta.typeName` (there is no other name to reach for:
-    // unlike `object`, which at least has "Anonymous" as a last resort, an
-    // inline anonymous sealed interface can't be expressed as a type
-    // reference at all).
-    if (typeof meta.typeName === "string") return { boxed: meta.typeName, imports: [] };
-    return { boxed: "Object", imports: [] };
+    // position) it's rendered as a reference to that interface's name, named
+    // via `meta.typeName` when present else the `suggestedName` threaded
+    // down (same convention as the `object`/`enum` handlers), with the full
+    // sealed-interface-plus-variants declaration synthesized as a
+    // package-private sibling and pushed onto `ctx.decls`.
+    const s = shape as TypeShape & { kind: "union" };
+    const name = typeof meta.typeName === "string" ? meta.typeName : suggestedName;
+    const ref: TypeRef = { shape: s, meta };
+    ctx.decls.push(renderSealedInterface(name, ref, ctx, false));
+    return { boxed: name, imports: [] };
   },
   literal: (shape) => {
     const s = shape as TypeShape & { kind: "literal" };
@@ -201,32 +231,34 @@ const handlers: Record<string, Converter> = {
       ? { boxed: "Integer", primitive: "int", imports: [] }
       : { boxed: "Double", primitive: "double", imports: [] };
   },
-  enum: (shape, meta) => {
-    const name = typeof meta.typeName === "string" ? meta.typeName : "Anonymous";
-    void shape;
+  enum: (shape, meta, ctx, suggestedName) => {
+    const s = shape as TypeShape & { kind: "enum" };
+    const name = typeof meta.typeName === "string" ? meta.typeName : suggestedName;
+    const ref: TypeRef = { shape: s, meta };
+    ctx.decls.push(renderEnum(name, ref, ctx, false));
     return { boxed: name, imports: [] };
   },
   ref: (shape) => ({ boxed: (shape as TypeShape & { kind: "ref" }).target, imports: [] }),
   // Java has no intersection/mixin type — lossy: falls back to the first
   // member's type, dropping the rest (same fallback protobuf.ts uses for the
   // same reason).
-  intersection: (shape, _meta, ctx) => {
+  intersection: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "intersection" };
     const [first] = s.members;
     return first === undefined
       ? { boxed: "Object", imports: [] }
-      : { boxed: javaType(first, ctx), imports: [] };
+      : { boxed: javaType(first, ctx, suggestedName), imports: [] };
   },
   // `java.util.function` has fixed-arity functional interfaces for 0-2
   // params (Supplier/Function/BiFunction); arities above that have no
   // standard-library equivalent (Java, unlike some ecosystems, doesn't
   // define TriFunction+) and degrade to Object, the same degrade convention
   // protobuf.ts applies to its own uncoverable cases.
-  function: (shape, _meta, ctx) => {
+  function: (shape, _meta, ctx, suggestedName) => {
     const s = shape as TypeShape & { kind: "function" };
-    const returnType = javaType(s.returnType, ctx);
+    const returnType = javaType(s.returnType, ctx, `${suggestedName}Return`);
     const isVoid = s.returnType.shape.kind === "void";
-    const params = s.params.map((p) => javaType(p.type, ctx));
+    const params = s.params.map((p, i) => javaType(p.type, ctx, `${suggestedName}Param${i + 1}`));
     if (params.length === 0) {
       return isVoid
         ? { boxed: "Runnable", imports: [] }
@@ -258,12 +290,12 @@ const handlers: Record<string, Converter> = {
  * position that isn't itself a top-level field (see `javaFieldType`, which
  * additionally applies primitive-unboxing and nullable rendering). Collects
  * required imports into `ctx.imports` as a side effect. */
-export function javaType(ref: TypeRef, ctx: Ctx): string {
+export function javaType(ref: TypeRef, ctx: Ctx, suggestedName: string): string {
   const converter = resolve(ref.shape.kind, handlers);
   const rendering =
     converter === undefined
       ? { boxed: "Object", imports: [] }
-      : converter(ref.shape, ref.meta, ctx);
+      : converter(ref.shape, ref.meta, ctx, suggestedName);
   for (const imp of rendering.imports) ctx.imports.add(imp);
   return rendering.boxed;
 }
@@ -279,12 +311,12 @@ type FieldRendering = {
  * generic; boxed type — optionally wrapped in `Optional<T>` or annotated
  * `@Nullable`, per `options.optionalStyle` — when the field is optional/
  * nullable. */
-function javaFieldType(ref: TypeRef, ctx: Ctx): FieldRendering {
+function javaFieldType(ref: TypeRef, ctx: Ctx, suggestedName: string): FieldRendering {
   const converter = resolve(ref.shape.kind, handlers);
   const rendering =
     converter === undefined
       ? { boxed: "Object", imports: [] }
-      : converter(ref.shape, ref.meta, ctx);
+      : converter(ref.shape, ref.meta, ctx, suggestedName);
   for (const imp of rendering.imports) ctx.imports.add(imp);
   const optional = ref.meta.optional === true || ref.meta.nullable === true;
   if (!optional) {
@@ -313,28 +345,40 @@ function variantName(variant: TypeRef, unionName: string, index: number): string
 }
 
 /** Renders one `object`-shaped variant of a discriminated/plain union as a
- * Java record implementing the union's sealed interface. */
+ * Java record implementing the union's sealed interface — always
+ * package-private (`isPublic: false`): a variant record's name never matches
+ * the enclosing file's name (see `variantName`), so it can never be the
+ * file's sole `public` type (see the `Ctx.decls` doc comment above). */
 function renderVariantRecord(name: string, interfaceName: string, ref: TypeRef, ctx: Ctx): string {
-  const body = renderRecordOrClass(name, ref, ctx, [interfaceName]);
+  const body = renderRecordOrClass(name, ref, ctx, [interfaceName], false);
   return body;
 }
 
+/**
+ * `isPublic` (default `true`) controls whether the declaration carries the
+ * `public` modifier — a single Java file may have at most one `public`
+ * top-level type, and it must match the file name, so every declaration this
+ * projector synthesizes for a nested (non-root) type — see the `object`
+ * handler above — is rendered with `isPublic: false`.
+ */
 function renderRecordOrClass(
   name: string,
   ref: TypeRef,
   ctx: Ctx,
   implementsList: readonly string[] = [],
+  isPublic = true,
 ): string {
   const shape = ref.shape as TypeShape & { kind: "object" };
   const fields = Object.entries(shape.fields);
   const implementsClause =
     implementsList.length === 0 ? "" : ` implements ${implementsList.join(", ")}`;
   const doc = javaDocComment(ref.meta, "");
+  const modifier = isPublic ? "public " : "";
 
   if (ctx.options.style === "record") {
     const components = fields.map(([fieldName, fieldRef]) => {
-      const { type, annotations } = javaFieldType(fieldRef, ctx);
       const javaName = toJavaIdentifier(fieldName);
+      const { type, annotations } = javaFieldType(fieldRef, ctx, `${name}${capitalize(javaName)}`);
       const jsonAnnotation =
         ctx.options.jackson && javaName !== fieldName
           ? [`@JsonProperty(${quote(fieldName)}) `]
@@ -342,7 +386,7 @@ function renderRecordOrClass(
       const annotationPrefix = [...annotations.map((a) => `${a} `), ...jsonAnnotation].join("");
       return `${annotationPrefix}${type} ${javaName}`;
     });
-    return `${doc}public record ${name}(${components.join(", ")})${implementsClause} {}`;
+    return `${doc}${modifier}record ${name}(${components.join(", ")})${implementsClause} {}`;
   }
 
   // Classic POJO: private final fields + an `@JsonCreator`-annotated
@@ -350,10 +394,10 @@ function renderRecordOrClass(
   // immutable objects: https://github.com/FasterXML/jackson-databind/wiki/Deserialization-Features
   // -> "Creator properties") + `getX()` accessors.
   const lines: string[] = [];
-  lines.push(`${doc}public final class ${name}${implementsClause} {`);
+  lines.push(`${doc}${modifier}final class ${name}${implementsClause} {`);
   const rendered = fields.map(([fieldName, fieldRef]) => {
-    const { type, annotations } = javaFieldType(fieldRef, ctx);
     const javaName = toJavaIdentifier(fieldName);
+    const { type, annotations } = javaFieldType(fieldRef, ctx, `${name}${capitalize(javaName)}`);
     return { fieldName, javaName, type, annotations };
   });
   for (const f of rendered) {
@@ -395,8 +439,15 @@ function renderRecordOrClass(
  * arbitrary variants, so deserialization of that case is left to the caller
  * (e.g. a custom deserializer), same as the degrade convention used
  * elsewhere in this projector for constructs Java/Jackson can't express.
+ *
+ * `isPublic` (default `true`, see `renderRecordOrClass`'s doc comment for
+ * why) controls only the interface's own modifier — the per-variant records
+ * `variantDecls` builds are always package-private (`renderVariantRecord`
+ * always passes `isPublic: false`; the inline non-object-variant wrapper
+ * record below carries no `public` either), since a variant's name is never
+ * the file's root name.
  */
-function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
+function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx, isPublic = true): string {
   const shape = ref.shape as TypeShape & { kind: "union" };
   const discriminator = discriminatorOf(ref.meta);
   const names = shape.variants.map((v, i) => variantName(v, name, i));
@@ -415,7 +466,8 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
     );
     lines.push("})");
   }
-  lines.push(`public sealed interface ${name} permits ${names.join(", ")} {}`);
+  const modifier = isPublic ? "public " : "";
+  lines.push(`${modifier}sealed interface ${name} permits ${names.join(", ")} {}`);
 
   const variantDecls = shape.variants.map((variant, i) => {
     const variantRef = variant;
@@ -424,10 +476,10 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
       // no fields to carry as record components — wrapped in a single-field
       // "value" record, the degrade a discriminated union with a scalar
       // variant needs to stay a valid `implements` target.
-      const inner = javaFieldType(variantRef, ctx);
+      const inner = javaFieldType(variantRef, ctx, `${names[i]}Value`);
       const annotationPrefix =
         inner.annotations.length > 0 ? `${inner.annotations.join(" ")} ` : "";
-      return `${javaDocComment(variantRef.meta, "")}public record ${names[i]}(${annotationPrefix}${inner.type} value) implements ${name} {}`;
+      return `${javaDocComment(variantRef.meta, "")}record ${names[i]}(${annotationPrefix}${inner.type} value) implements ${name} {}`;
     }
     return renderVariantRecord(names[i]!, name, variantRef, ctx);
   });
@@ -435,9 +487,10 @@ function renderSealedInterface(name: string, ref: TypeRef, ctx: Ctx): string {
   return [lines.join("\n"), ...variantDecls].join("\n\n");
 }
 
-function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
+function renderEnum(name: string, ref: TypeRef, ctx: Ctx, isPublic = true): string {
   const shape = ref.shape as TypeShape & { kind: "enum" };
   const doc = javaDocComment(ref.meta, "");
+  const modifier = isPublic ? "public " : "";
   const constants = shape.members.map((member) => ({ member, constant: javaEnumConstant(member) }));
   const needsBackingValue = constants.some(({ member, constant }) => member !== constant);
   // Even when constant names round-trip cleanly to the original string,
@@ -447,7 +500,7 @@ function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
   // when Jackson support is requested.
   if (ctx.options.jackson || needsBackingValue) {
     const lines: string[] = [];
-    lines.push(`${doc}public enum ${name} {`);
+    lines.push(`${doc}${modifier}enum ${name} {`);
     lines.push(
       `  ${constants.map(({ member, constant }) => `${constant}(${quote(member)})`).join(", ")};`,
     );
@@ -475,7 +528,7 @@ function renderEnum(name: string, ref: TypeRef, ctx: Ctx): string {
     lines.push("}");
     return lines.join("\n");
   }
-  return `${doc}public enum ${name} {\n  ${constants.map((c) => c.constant).join(", ")}\n}`;
+  return `${doc}${modifier}enum ${name} {\n  ${constants.map((c) => c.constant).join(", ")}\n}`;
 }
 
 const JACKSON_IMPORTS = [
@@ -493,7 +546,11 @@ function assembleSource(body: string, ctx: Ctx, options: Required<JavaOptions>):
   if (imports.length > 0) {
     lines.push(...imports.map((i) => `import ${i};`), "");
   }
-  lines.push(body);
+  // `ctx.decls` holds every package-private declaration synthesized for a
+  // nested object/enum/union that had no `meta.typeName` of its own (see the
+  // `object`/`enum`/`union` handlers) — appended after the root declaration
+  // so the emitted file compiles as a single translation unit.
+  lines.push([body, ...ctx.decls].join("\n\n"));
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
@@ -506,7 +563,11 @@ function assembleSource(body: string, ctx: Ctx, options: Required<JavaOptions>):
  */
 export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOptions): string {
   const resolved = resolveOptions(defaultOptions, options);
-  const ctx: Ctx = { options: resolved, imports: new Set(resolved.jackson ? JACKSON_IMPORTS : []) };
+  const ctx: Ctx = {
+    options: resolved,
+    imports: new Set(resolved.jackson ? JACKSON_IMPORTS : []),
+    decls: [],
+  };
 
   let body: string;
   if (ref.shape.kind === "object") {
@@ -519,14 +580,14 @@ export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOpti
     const shape = ref.shape as TypeShape & { kind: "tuple" };
     const ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
     const components = shape.elements.map((element, i) => {
-      const { type } = javaFieldType(element, ctx);
+      const { type } = javaFieldType(element, ctx, `${name}Item${i + 1}`);
       return `${type} ${ordinals[i] ?? `field${i + 1}`}`;
     });
     body = `${javaDocComment(ref.meta, "")}public record ${name}(${components.join(", ")}) {}`;
   } else {
     // A wrapper class is the closest Java equivalent to a bare type alias
     // over a scalar/collection type (Java has no `type X = ...` construct).
-    const { type, annotations } = javaFieldType(ref, ctx);
+    const { type, annotations } = javaFieldType(ref, ctx, name);
     const annotationLine = annotations.length > 0 ? `${annotations.join(" ")} ` : "";
     const doc = javaDocComment(ref.meta, "");
     body =
@@ -560,7 +621,11 @@ export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOpti
 export function toJava(ref: TypeRef, name?: string, options?: JavaOptions): string {
   if (name !== undefined) return toJavaDeclaration(name, ref, options);
   const resolved = resolveOptions(defaultOptions, options);
-  const ctx: Ctx = { options: resolved, imports: new Set() };
-  const { type } = javaFieldType(ref, ctx);
+  // No name context to seed nested declarations with, and (unlike
+  // `toJavaDeclaration`) nothing below reads `ctx.decls` back out — this bare
+  // expression mode is documented as inline-only (see the doc comment
+  // above), same scope boundary it had before nested declarations existed.
+  const ctx: Ctx = { options: resolved, imports: new Set(), decls: [] };
+  const { type } = javaFieldType(ref, ctx, "Value");
   return type;
 }

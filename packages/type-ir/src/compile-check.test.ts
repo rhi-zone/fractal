@@ -833,7 +833,12 @@ describe("elixir-jason (mix compile, real Jason Hex package)", () => {
 // ============================================================================
 
 const kotlincDir = run(["bash", "-c", "dirname $(which kotlinc)"], process.cwd()).output.trim();
-const kotlinxSerializationPluginJar = join(kotlincDir, "..", "lib", "kotlinx-serialization-compiler-plugin.jar");
+const kotlinxSerializationPluginJar = join(
+  kotlincDir,
+  "..",
+  "lib",
+  "kotlinx-serialization-compiler-plugin.jar",
+);
 
 describe("kotlin-kotlinx (kotlinc, real kotlinx-serialization-core + kotlinx-datetime jars + compiler plugin)", () => {
   // Real bug this network-resolved check surfaced in kotlin-kotlinx.ts (fixed
@@ -927,30 +932,35 @@ describe("kotlin-kotlinx (kotlinc, real kotlinx-serialization-core + kotlinx-dat
 // Moshi instance, `.serializer()`-equivalent), only its annotation types, so
 // a bare classpath jar is enough for a real javac check.
 //
-// Only "Recursive Tree" is checked as a real pass. All three projectors
-// document (see each file's `object` case comment) that a nested object
-// with no `meta.typeName` renders as a bare, literal `Anonymous` type
-// reference — "callers that need a real declaration for an inline object
-// route through `toJavaDeclaration` with an explicit name instead of
-// nesting it" — and a tuple similarly renders as a bare `TupleN<...>`
-// reference the caller is documented to supply. That convention assumes
-// each nested object/tuple gets its own distinct name from the caller; the
-// shared `test-fixtures.ts` (deliberately identical across every projector
-// in this suite, per its own header comment) doesn't carry `meta.typeName`
-// on its nested `obj(...)` calls, so "E-commerce Order" and "Kitchen Sink"
-// each reference *multiple, structurally different* nested objects that
-// all collapse onto the same unresolvable `Anonymous` identifier — no
-// single companion declaration this test file could supply would satisfy
-// more than one of them at once, so this isn't a wiring gap to patch here,
-// it's a real limitation of the "single bare name" convention when driven
-// by nested types that were never given their own name. "Discriminated
-// Union API Response" hits the same issue via its "data" field, compounded
-// by a second real issue: a union's declaration string bundles multiple
-// `public` top-level types (the sealed interface plus one `public record`
-// per variant) in one string, which real per-file javac compilation
-// requires split across separate files. All three are left as `test.todo`
-// with the literal javac error as proof (fix belongs in each projector, out
-// of scope here).
+// "Recursive Tree", "E-commerce Order", and "Discriminated Union API
+// Response" are checked as real passes. All three java projectors now
+// auto-derive a name for a nested object/enum/union TypeRef with no
+// `meta.typeName` of its own (a `suggestedName` threaded down from the
+// enclosing field/element/variant — see each file's `Ctx.decls` doc comment
+// and the `object`/`enum`/`union` handlers) and synthesize a real,
+// package-private sibling declaration for it instead of colliding on a bare
+// `Anonymous`/`Object` reference — the same "ctx.decls accumulates named
+// nested declarations" convention csharp-systemtextjson.ts uses, adapted for
+// Java's added "only one `public` top-level type per file, matching the file
+// name" constraint (every synthesized nested declaration, including a
+// nested union's per-variant records, is rendered package-private).
+//
+// "Kitchen Sink" stays `test.todo`: unrelated to the anonymous-naming fix
+// above, it hits a second, pre-existing defect none of the three java
+// projectors' `tuple` handler addresses — a tuple TypeRef renders as a bare
+// reference to a conventional `TupleN<T1, ..., TN>` record (see each file's
+// `tuple` case comment) that no projector or test fixture in this repo ever
+// defines, so javac fails with "cannot find symbol: class TupleN". Unlike
+// the anonymous-naming defect, no other target in this test suite has
+// established a convention to mirror here: every other tuple-lacking-syntax
+// target (kotlin-kotlinx's `Pair`/`Triple`/lossy-`List` degrade aside) either
+// has native tuple syntax to fall back to (rust-serde, swift-codable,
+// csharp-systemtextjson, python-pydantic) or simply isn't exercised against
+// a tuple-bearing fixture through a real compiler here. Deciding how java
+// should close this gap — actually emit `TupleN` record declarations, or
+// pick some other lossy degrade — is a real design choice, not something to
+// force through as a byproduct of the anonymous-naming fix, so it's left
+// `test.todo` with the literal javac error as proof.
 // ============================================================================
 
 function checkJava(
@@ -960,11 +970,7 @@ function checkJava(
   libraryJarFile: string,
 ): void {
   describe(`java-${libraryName} (javac, real ${libraryName} + jspecify jars)`, () => {
-    const todo = new Set<string>([
-      "E-commerce Order",
-      "Discriminated Union API Response",
-      "Kitchen Sink",
-    ]);
+    const todo = new Set<string>(["Kitchen Sink"]);
     const projectDir = mkdtempSync(join(tmpdir(), `type-ir-compile-check-java-${libraryName}-`));
     const libraryJarPath = join(projectDir, libraryJarFile);
     const jspecifyJarPath = join(projectDir, "jspecify.jar");
@@ -998,7 +1004,14 @@ function checkJava(
             writeFileSync(file, fn(rootName, ref));
             assertCompiles(
               run(
-                ["javac", "-cp", `${libraryJarPath}:${jspecifyJarPath}`, file, "-d", join(dir, "out")],
+                [
+                  "javac",
+                  "-cp",
+                  `${libraryJarPath}:${jspecifyJarPath}`,
+                  file,
+                  "-d",
+                  join(dir, "out"),
+                ],
                 dir,
               ),
             );

@@ -156,8 +156,12 @@ describe("union -> sealed interface", () => {
     const ref = t(types.union([a, b]));
     const out = toMoshiDeclaration("ApiError", ref);
     expect(out).toContain("public sealed interface ApiError permits NotFound, ServerError {}");
-    expect(out).toContain("public record NotFound(String code) implements ApiError {}");
-    expect(out).toContain("public record ServerError(String message) implements ApiError {}");
+    // Variant records are always package-private — a Java file may have at
+    // most one `public` top-level type, and it's the sealed interface.
+    expect(out).toContain("record NotFound(String code) implements ApiError {}");
+    expect(out).not.toContain("public record NotFound");
+    expect(out).toContain("record ServerError(String message) implements ApiError {}");
+    expect(out).not.toContain("public record ServerError");
     expect(out).toContain("PolymorphicJsonAdapterFactory");
     expect(out).toContain('.withSubtype(NotFound.class, "NotFound")');
     expect(out).toContain('.withSubtype(ServerError.class, "ServerError")');
@@ -198,8 +202,10 @@ describe("union -> sealed interface", () => {
     const b = t(types.string);
     const ref = t(types.union([a, b]));
     const out = toMoshiDeclaration("MaybeKnown", ref);
+    // Package-private, same reasoning as above — only the sealed interface
+    // stays `public`.
     expect(out).toMatch(
-      /public record MaybeKnownVariant2\(String value\) implements MaybeKnown \{\}/,
+      /(?<!public )record MaybeKnownVariant2\(String value\) implements MaybeKnown \{\}/,
     );
   });
 });
