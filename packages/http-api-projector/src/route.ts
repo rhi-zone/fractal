@@ -1313,8 +1313,19 @@ export async function runRoute(
     const decoded = await defaultDecode(req, slugs, sources, serviceStores);
     input = decoded.input;
     stores = decoded.stores;
-  } catch {
-    return jsonRouteResponse({ error: "invalid request body" }, { status: 400 });
+  } catch (error) {
+    // Same `{ error, issues }` shape the 422 Standard Schema rejection below
+    // uses (`StandardSchemaV1.Issue[]`-like: `{ message }`, `path` omitted —
+    // a decode failure (most commonly `JSON.parse` throwing inside
+    // `parseRequestBody`, decode.ts) has no field path to report, just the
+    // underlying error's own message) — one convention for "here's what was
+    // wrong with the request body" instead of a bare string here and a
+    // structured shape there.
+    const message = error instanceof Error ? error.message : String(error);
+    return jsonRouteResponse(
+      { error: "invalid request body", issues: [{ message }] },
+      { status: 400 },
+    );
   }
 
   try {

@@ -664,7 +664,7 @@ describe("runRoute — default decode/encode", () => {
     expect(seenGet).toEqual({});
   });
 
-  it("invalid JSON body → 400", async () => {
+  it("invalid JSON body → 400 with the underlying parse error as a structured issue", async () => {
     const route = httpRoute({
       methods: { POST: { handler: (input: unknown) => input, meta: {} } },
       meta: {},
@@ -678,6 +678,14 @@ describe("runRoute — default decode/encode", () => {
       }),
     );
     expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; issues: { message: string }[] };
+    expect(body.error).toBe("invalid request body");
+    // Same `{ issues: [{ message }] }` shape the 422 Standard Schema
+    // rejection uses — one param whose value is the underlying `JSON.parse`
+    // error's own message, not a generic string.
+    expect(body.issues).toHaveLength(1);
+    expect(typeof body.issues[0]!.message).toBe("string");
+    expect(body.issues[0]!.message.length).toBeGreaterThan(0);
   });
 
   it("handler throwing → 500", async () => {
