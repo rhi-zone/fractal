@@ -15,12 +15,16 @@
 // are covered here. Schema/interchange *formats* with no traditional
 // "compiler" in the same sense (json-schema, openapi, jtd, graphql, sql,
 // standard-schema) are exercised structurally by cross-projector.test.ts
-// instead. Projector variants whose target library isn't obtainable as a
-// plain, offline, single nixpkgs derivation (Jackson/Gson/Moshi jars,
-// kotlinx-serialization, Newtonsoft.Json, Dart's build_runner-generated
-// `*.g.dart`/`*.freezed.dart` companions, Elm's package registry) are
+// instead. Some target libraries aren't a plain, offline, single nixpkgs
+// derivation the way pydantic/aeson/nlohmann_json are — those are instead
+// resolved for real over the network at test time via each language's own
+// package manager (nuget for Newtonsoft.Json, same pattern rust-serde
+// already used for crates.io — see each such describe block's comment for
+// the exact mechanism). Projector variants where that path isn't feasible
+// (Jackson/Gson/Moshi/kotlinx-serialization jars off Maven Central, Dart's
+// build_runner-generated `*.g.dart`/`*.freezed.dart` companions) are
 // `test.skip` — see the comment on each skip block for exactly what's
-// missing and why it isn't vendored here.
+// missing and why.
 //
 // Pre-existing bugs this suite's real-compiler checks surface in specific
 // projectors are recorded as `test.todo` with the literal compiler error
@@ -41,6 +45,7 @@ import { toCpp } from "./cpp-nlohmann.ts";
 import { toCrystal } from "./crystal-json-serializable.ts";
 import { toHaskell } from "./haskell-aeson.ts";
 import { toCSharp } from "./csharp-systemtextjson.ts";
+import { toCSharpNewtonsoft } from "./csharp-newtonsoft.ts";
 import { toRuby } from "./ruby-sorbet.ts";
 import { toDry } from "./ruby-dry-types.ts";
 import { toPhp } from "./php-native.ts";
@@ -428,6 +433,38 @@ describe("csharp-systemtextjson (dotnet build)", () => {
 });
 
 // ============================================================================
+// C# (Newtonsoft.Json) — Newtonsoft.Json is resolved for real from
+// nuget.org (dotnet-sdk already includes the NuGet client, same network
+// precedent as rust-serde's crates.io resolve above). One shared project is
+// restored once (`dotnet add package` + first `dotnet build`) and reused
+// across fixtures — only Root.cs is rewritten per test — since a cold
+// restore+build pays NuGet's resolve/download cost that a per-fixture temp
+// project would repeat every time.
+// ============================================================================
+
+describe("csharp-newtonsoft (dotnet build, real Newtonsoft.Json NuGet package)", () => {
+  const projectDir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-newtonsoft-"));
+  writeFileSync(
+    join(projectDir, "compile-check.csproj"),
+    '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net8.0</TargetFramework><OutputType>Library</OutputType><Nullable>disable</Nullable></PropertyGroup></Project>\n',
+  );
+  const addResult = run(["dotnet", "add", "package", "Newtonsoft.Json"], projectDir);
+  afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+  for (const { name, ref } of fixtures) {
+    test(
+      name,
+      () => {
+        expect(addResult.ok, addResult.output).toBe(true);
+        writeFileSync(join(projectDir, "Root.cs"), toCSharpNewtonsoft(ref, rootNameFor(name)));
+        assertCompiles(run(["dotnet", "build", "-v", "quiet"], projectDir));
+      },
+      30_000,
+    );
+  }
+});
+
+// ============================================================================
 // Ruby — `ruby -c` is a syntax-only check (it parses but never executes, so
 // it never runs the `require`s), which is enough to give both the Sorbet
 // and dry-types variants a real check without needing sorbet-runtime/dry-types
@@ -638,7 +675,6 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 // Explicitly out of scope (see the module comment for why):
 //   java-jackson / java-gson / java-moshi   — need Maven Central jars
 //   kotlin-kotlinx                          — needs the kotlinx-serialization jar
-//   csharp-newtonsoft                       — needs the Newtonsoft.Json NuGet package
 //   dart-json-serializable / dart-freezed   — need build_runner-generated
 //                                             `*.g.dart`/`*.freezed.dart` companions
 //   elm-json                                — needs Elm's own package registry
@@ -662,7 +698,6 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 // ============================================================================
 describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
 describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {});
-describe.skip("csharp-newtonsoft — needs the Newtonsoft.Json NuGet package, not vendored", () => {});
 describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {});
 describe.skip("elm-json — needs Elm's own package registry, not vendored", () => {});
 describe.skip("elixir-jason — needs the Jason hex package, not vendored (elixirc has no syntax-only mode)", () => {});

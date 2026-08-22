@@ -77,8 +77,9 @@
 
             # C#/.NET — System.Text.Json ships in the runtime itself (no NuGet
             # package needed), so csharp-systemtextjson gets a real `dotnet build`
-            # check. csharp-newtonsoft needs the Newtonsoft.Json NuGet package,
-            # which isn't vendored here, so it's `test.skip`.
+            # check. csharp-newtonsoft resolves Newtonsoft.Json for real from
+            # nuget.org at test time (`dotnet add package`) — dotnet-sdk already
+            # bundles the NuGet client, so no extra buildInput is needed for it.
             dotnet-sdk
 
             # Ruby (Sorbet, dry-types projectors) — `ruby -c` is a syntax-only
