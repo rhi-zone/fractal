@@ -26,9 +26,9 @@ Context folded in (established before this audit, not re-derived):
 - `buildWireApplyValidationModuleCached`/`writeWireApplyValidationModuleCached`
   (`packages/api-tree/src/apply-validation-build.ts`) were exported and
   called by nothing at audit time. **Since fixed**: `cli.ts` now calls
-  `buildWireApplyValidationModuleCached` directly. Whether the sibling
-  codebase still separately hand-reimplements the sequence was not
-  re-checked this pass — no sibling checkout was available.
+  `buildWireApplyValidationModuleCached` directly. **Checked directly against
+  the sibling codebase this pass**: it still separately hand-reimplements the
+  sequence rather than calling the wrapper — see §8.1.
 - `checkCache` gated on `ts.version` + `@rhi-zone/fractal-type-ir`'s version
   but not `fractal-api-tree`'s own. **Since fixed**: `cache.ts` now also
   gates on `apiTreeVersion` (`CacheFileShape.apiTreeVersion`, checked via
@@ -41,24 +41,31 @@ Context folded in (established before this audit, not re-derived):
 
 ## 1. Live issues affecting the sibling codebase right now
 
-### 1.1 The cache's only toolchain guard is inert in the sibling codebase — `typeIrVersion` is always `"unknown"` [**partially stale — see update below**]
+### 1.1 The cache's only toolchain guard was inert in the sibling codebase — `typeIrVersion` used to always resolve `"unknown"` [**resolved**]
 
-**[evidenced at audit time]** `resolvePackageVersion` (`packages/api-tree/src/cache.ts`)
-does `require.resolve("@rhi-zone/fractal-type-ir")` from cache.js's own location
-and returns `"unknown"` on failure — documented in-code as
-"stable-but-not-invalidating". In the sibling codebase, the only `@rhi-zone` links live at
-`apps/web/node_modules/@rhi-zone/` (symlinks into this repo); resolution from
-fractal's own package location finds nothing. Result at audit time: **all 89 of
-the sibling codebase's cache metadata files recorded `"typeIrVersion": "unknown"`**.
-
-**Update**: the known hole this combined with — api-tree's own version wasn't
-in the cache shape at all — is now closed: `checkCache`/`toolchainMatches`
-gate on `apiTreeVersion` too, via the same `resolvePackageVersion` helper.
-**[inferred, not re-verified — no sibling checkout available this pass]** since
-`apiTreeVersion` resolves the same way `typeIrVersion` did, it would plausibly
-also read `"unknown"` under the sibling's symlink layout, meaning the fix adds
-a second inert signal rather than a working one. This needs re-checking
-against the sibling codebase's current cache metadata files before it's stated as fact.
+**[evidenced]** `resolvePackageVersion` (`packages/api-tree/src/cache.ts:183-205`)
+now resolves via `createRequire(path.resolve(fromFile))` — `fromFile` is the
+caller's own `entryFile`, not cache.ts's/`dist/cache.js`'s location — per
+`60cdd08` ("fix(api-tree): close the cache's version/options blind spots").
+Confirmed against the sibling codebase directly: `apps/web/node_modules/@rhi-zone/`
+holds real symlinks into this repo's `packages/*` (`fractal-api-tree`,
+`fractal-http-api-projector`, `fractal-type-ir`), and every call site that
+matters (`codegen-fractal-validators.ts`, `codegen-fractal-merged-validators.ts`)
+passes an `entryFile`/`ROOT_TREE_FILE` that lives under `apps/web/src/...` —
+i.e. a sibling of `apps/web/node_modules`, so Node's upward `node_modules`
+walk from that file reaches the real symlinks. `apiTreeVersion` was added in
+the *same* commit (`60cdd08`) that fixed the resolution mechanism, calling
+the identical `resolvePackageVersion(pkgName, entryFile)` — there is no
+separate resolution path for it to inherit a stale bug from; both fields now
+resolve the same way, from the same fixed mechanism. The only on-disk cache
+file checked this pass (`apps/web/src/_generated/fractalMergedValidators.generated.ts.cache.json`,
+mtime Aug 20 20:20) still shows `"typeIrVersion":"unknown"` and no
+`apiTreeVersion` field at all — but that file predates `60cdd08` (22:45 the
+same day) and is gitignored/untracked local build output, so it's stale
+evidence of the pre-fix state, not a live counter-example; the next real
+build regenerates it under the fixed mechanism. No sibling rebuild was run
+this pass (read-only), so this is a code-level confirmation, not an observed
+fresh cache file.
 
 The tracked closure does incidentally include fractal's `dist/*.d.ts` (verified
 by reading `fractalMergedValidators.generated.ts.cache.json` — 3,094 files,
@@ -66,32 +73,22 @@ including `packages/type-ir/dist/derive.d.ts`, `packages/api-tree/dist/tree.d.ts
 so fractal's **type surface** is fingerprinted. Its **runtime codegen logic**
 (the `.js` that actually emits the artifact) is not.
 
-### 1.4 the sibling codebase-side bug found in passing: a documented-at-length argument that doesn't exist
+### 1.5 the sibling codebase CI checks fractal out at floating `master` [**"no build step" half is now wrong — a build step exists**]
 
-<!-- CITATION UNVERIFIED: this whole finding is about apps/web/scripts/codegen-fractal-validators.ts (`defaultShouldShare`, :146, :431-445), which lives in the sibling repo. No sibling checkout was available this pass (checked all sibling directories under ~/git/rhizone/ — no apps/web anywhere on disk), so this could not be re-verified against current sibling-repo state. The fractal-side half of the claim — that `buildSchemaModuleSource`/`buildSchemaModuleSourceIncremental` in packages/api-tree/src/schema-build.ts have no `shouldShare` parameter — was spot-checked and still holds (schema-build.ts, current source). Leaving the original claim below as-is pending a sibling-repo recheck. -->
-
-**[evidenced at audit time]** `apps/web/scripts/codegen-fractal-validators.ts:146` imports
-`defaultShouldShare`, and `:431-445` carries a long comment explaining why it's
-passed for the recursive-`Expr` case — but `buildSchemaModuleSource`
-and `buildSchemaModuleSourceIncremental` (both in `packages/api-tree/src/schema-build.ts`,
-current source checked) have **no `shouldShare` parameter**. The value is never
-used; the comment asserts a falsehood. Nothing catches it: apps/web's tsconfig
-`include: ["src"]` excludes `scripts/`, and `noUnusedLocals` is off. (The
-merged-validators script is fine — it goes through apply-validation-build,
-which does accept `shouldShare`.)
-
-### 1.5 the sibling codebase CI checks fractal out at floating `master` with no dist build step
-
-<!-- CITATION UNVERIFIED: `.github/workflows/ci.yml:56-58` here refers to the sibling repo's CI workflow (fractal checking itself out makes no sense), which was not available to re-check this pass — no sibling checkout found on disk. -->
-
-**[evidenced that the step is missing at audit time; consequence unverified]** Every api-tree
-export points at `./dist/*.js` (`packages/api-tree/package.json`,
-`files: ["dist"]` — spot-checked, still current), `dist/` is gitignored and
-untracked, and there is no `prepare` script. the sibling codebase CI checks fractal
-out at `ref: master` — floating, not pinned — and runs
-`bun install --frozen-lockfile` with no `build:packages` step found anywhere in
-the workflow. Whether bun's workspace-symlink resolution papers over the missing
-dist was **not** verified this session; flagged as-is.
+**[evidenced]** `dist/` is still gitignored/untracked with no `prepare` script
+(`packages/api-tree/package.json` unchanged: `files: ["dist"]`, `main`/`exports`
+all point at `./dist/*`). the sibling codebase's `.github/workflows/ci.yml` still checks
+fractal out at `ref: master` (floating, not pinned) as a sibling checkout
+under `$GITHUB_WORKSPACE/rhizone/fractal`. But contrary to the audit-time
+claim, there **is** a build step now: a `Build fractal packages` step runs
+`bun run build:packages` (`tsc -b`) with `working-directory: rhizone/fractal`,
+immediately after `bun install --frozen-lockfile` in that same directory and
+before the sibling repo's own install — the step's own comment names exactly
+the reason the audit flagged ("each fractal package's `main`/`exports` point
+at `dist/*`, which is gitignored in fractal, so anything that imports
+`@rhi-zone/fractal-*` ... needs `dist/` built first"). So the "floating ref"
+half of this finding still holds; the "no dist build step" half is resolved
+and should be treated as fixed, not merely unverified.
 
 ---
 
@@ -221,8 +218,25 @@ Places where correctness depends on a caller remembering something, where the
    still require callers to write the exact bytes they computed as the cache
    key. A `header` option was later added that threads the header through
    the fingerprint rather than eliminating the byte-exactness requirement.
-   Whether this is still the documented reason the sibling codebase can't use
-   the wrappers was not re-checked — no sibling checkout available.
+   **Checked against the sibling codebase directly: it's possible now but
+   still unused.** Both scripts (`codegen-fractal-validators.ts`,
+   `codegen-fractal-merged-validators.ts`) still hand-roll a
+   `GENERATED_HEADER + built.source` prepend and call the lower-level
+   `checkCache`/`readCarryForwardState`/`writeCacheMetadata` primitives
+   directly, bypassing the `*Cached` wrappers entirely — not just missing the
+   new `header` option, never went through the wrapper at all.
+   `codegen-fractal-validators.ts`'s own in-repo comment (around its
+   `rebuild` function) still gives the *pre-`header`-option* reason
+   ("using the higher-level `buildSchemaModuleCached` wrapper directly here
+   would hash the header-LESS `build()` return value instead, permanently
+   mismatching the header-ful file this script writes and defeating the
+   cache") — that comment is now stale relative to fractal's current
+   `header` option, which exists specifically to close this gap
+   (`schema-build.ts:220-227`, `apply-validation-build.ts:1044-1057`: "the
+   reason a header-wanting consumer previously had to hand-roll its own
+   write/hash orchestration around its own prepend step"). Fractal's own
+   `cli.ts` has adopted it (`header: GENERATED_HEADER` passed to the cached
+   wrapper); the sibling codebase has not.
 2. **Per-artifact fingerprint completeness is hand-maintained** — the
    specific instance this pointed at (the schema Tier-2 fingerprint omitting
    `description`, so a description-only edit silently kept stale text) is
@@ -244,17 +258,32 @@ treeId prefixing (`423b8fa`), `outputHash`, closure-from-Program.
 
 **[evidenced unless marked]**
 
-6. **`meta-role-split-spec.md`'s status header — [flagged, not fully
-   resolved].** The original finding here (future-tense "not yet
-   implemented" language about an already-shipped change) is fixed: the
-   header now reads "Status: design spec, settled by the project owner —
-   mostly implemented, with one confirmed regression against §9(4) below."
-   `typed-store-spec.md`'s header similarly now says "Status: IMPLEMENTED in
-   fractal." **But** that "mostly implemented, with one confirmed regression"
-   phrasing is new since this section was last rewritten, and this pass did
-   not investigate what the §9(4) regression actually is — flagging rather
-   than asserting it's nothing, since the spec file itself is claiming an
-   open problem this audit hasn't looked at.
+6. **`meta-role-split-spec.md`'s status header — [investigated this pass;
+   still a human call, not a bug].** The §9(4) regression the header points
+   at is item 4 of the "Regression checklist" ("Projector-owned ambient
+   augmentation") — and the spec's own Status header (lines 3-24) and §9(4)
+   itself (lines 595-601) already name the concrete instance and flag it as
+   an open question, not something this audit needed to discover fresh:
+   `mcp-api-projector` and `json-rpc-api-projector` each carry a
+   `declare module "@rhi-zone/fractal-api-tree/node"` block in
+   `src/deployment-meta.test-support.ts`
+   (`packages/mcp-api-projector/src/deployment-meta.test-support.ts`,
+   `packages/json-rpc-api-projector/src/deployment-meta.test-support.ts`,
+   both read this pass). Re-verified this pass: neither file is reachable
+   from outside its own package — `deployment-meta.test-support.ts` is not
+   listed in either package's `package.json#exports`, and grepping both
+   packages' `src/` finds it imported only by their own `*.test.ts` files
+   (`project.test.ts` in both, plus `client.test.ts` in json-rpc-api-projector)
+   — so the exact hazard §9(4) rules out (an unrelated import silently
+   flipping on ambient augmentation for a consumer who didn't ask for it)
+   does not reach a real consumer through this path; it's scoped to each
+   package's own test compilation. That's evidence toward "acceptable
+   test-only exception," but the spec's Status header already says this
+   verdict is **"flagged for a human call"** on the record (whether to also
+   rework the file to not use `declare module` at all, to match the "exactly
+   one augmentation file in the whole system" invariant literally) — a
+   documentation fact-check doesn't settle a call the spec's author
+   explicitly reserved. Left open pending that call.
 10. **The wire-key/sourceMap union inlined four ways — still true, citation
     needs a full re-derive.** The pattern still exists at each site (cli.ts,
     json-rpc's `server.ts`, http's `route.ts`) but none of them literally
@@ -312,100 +341,113 @@ time, consistent with the coverage additions noted above.)
 
 ## 8. The sibling codebase boundary
 
-### 8.1 the sibling codebase hand-rolls that shadow existing (dead) fractal surface — and why
+### 8.1 the sibling codebase hand-rolls that shadow existing fractal surface — and why [**re-checked directly against the sibling repo this pass**]
 
-<!-- CITATION UNVERIFIED (sibling-repo side): the whole opening paragraph plus the
-     findEntryFilesCached/directoryListingSignature/findTreeTargetsCached and
-     fractalMergedSchemas.ts bullets cite apps/web/scripts/*.ts and
-     apps/web/src/server/lib/*.ts. No sibling checkout exists anywhere on this
-     disk (checked every sibling directory under ~/git/rhizone/ and beyond) —
-     none of these could be re-verified this pass. Note also: the
-     buildWireApplyValidationModuleCached/buildSchemaModuleCached wrappers this
-     paragraph says are "unusable by the one consumer that wants them" are the
-     same wrappers the intro block confirms are used by fractal's own cli.ts. -->
+**[evidenced]** Checked live against the sibling codebase's checkout. Both scripts
+still hand-roll the wrapper's job instead of calling
+`buildWireApplyValidationModuleCached`/`buildSchemaModuleCached`:
+`codegen-fractal-merged-validators.ts` builds `source = GENERATED_HEADER +
+built.source` (:91, :121) then calls `writeCacheMetadata` directly (:126);
+`codegen-fractal-validators.ts`'s `rebuild` function (:474-498) does the same
+(`withHeader = GENERATED_HEADER + built.source` at :486, `writeCacheMetadata`
+at :490) — both go through the lower-level `checkCache`/
+`readCarryForwardState`/`writeCacheMetadata` primitives, never the `*Cached`
+wrappers. Line numbers have drifted from the original citation (:100-125,
+:485-505) but the shape is unchanged. The blocking reason is still written
+down verbatim in `codegen-fractal-validators.ts` (its `rebuild` doc comment,
+:462-469): using the wrapper directly "would hash the header-LESS `build()`
+return value instead, permanently mismatching the header-ful file this script
+writes and defeating the cache" — **this comment is now stale**: fractal's
+`header` option (`schema-build.ts:220-227`, `apply-validation-build.ts:1044-1057`)
+exists specifically to close this gap by folding the header into the hash
+before the wrapper writes. The header string itself is still a private const
+independently redefined in both sibling scripts
+(`codegen-fractal-validators.ts:250`, `codegen-fractal-merged-validators.ts:78`,
+both `"// @generated by @rhi-zone/fractal-api-tree — do not edit\n"`, matching
+fractal's own `cli.ts:31`) rather than imported from anywhere. **Fractal's own
+`cli.ts` has adopted the `header` option** (`header: GENERATED_HEADER` passed
+to the cached wrapper, `cli.ts:289/421`); **the sibling codebase has not** —
+the option exists and would mechanically resolve the documented blocker, but
+is unused there. See §4.1 item 1.
 
-**[evidenced at audit time; not re-verified this pass]** `apps/web/scripts/codegen-fractal-merged-validators.ts:100-125`
-was the near-exact body of `writeWireApplyValidationModuleCached`;
-`codegen-fractal-validators.ts:485-505` likewise shadowed
-`buildSchemaModuleCached`/`writeSchemaModuleCached`. The blocking reason
-written down at `codegen-fractal-validators.ts:466-474`: the fractal wrappers
-hashed the header-**less** source while the sibling codebase prepends a `@generated` header
-before writing — the recorded `outputHash` would permanently mismatch disk and
-defeat the cache. The header string itself was a private const in fractal
-(`cli.ts:13`) that the sibling codebase copy-pastes verbatim in two scripts. So
-the dead-wrapper finding and the header-divergence finding were one story: the
-exported wrappers were unusable by the one consumer that wanted them, for a
-reason fractal's own CLI worked around privately. **Both halves of this have
-since changed on the fractal side** — the wrappers now have a non-Bun-only
-write path and an explicit `header` option folded into the cache key — whether
-that unblocks the sibling's hand-roll needs checking against the sibling repo
-directly.
-
-Other hand-rolls of things fractal-shaped (sibling-repo side, unverified this
-pass, same caveat as above):
+Other hand-rolls of things fractal-shaped, re-checked directly:
 
 - `findEntryFilesCached` + `directoryListingSignature`
-  (`codegen-fractal-validators.ts:181-217`) and `findTreeTargetsCached`
-  (:466ff) — mtime-signature caches bolted around `findEntryFiles`/
-  `forEachTreeCandidate` because `discover.ts` unconditionally builds its own
-  `ts.Program`.
-- `apps/web/src/server/lib/fractalMergedSchemas.ts:20-36` reimplements
-  `buildNameMap`'s underscore-joined name computation; its own doc names
-  `extractRouteSchemas` (`tree.ts:880`) as the real answer, blocked on cache
-  logic.
+  (`codegen-fractal-validators.ts:191-217`) and `findTreeTargetsCached`
+  (:390-410) — still current, still mtime-signature caches bolted around
+  entry/target discovery.
+- `apps/web/src/server/lib/fractalMergedSchemas.ts` reimplements
+  `buildNameMap`'s underscore-joined name computation — still true, but
+  **the framing has changed**: its current header comment (:1-45) documents
+  this as a considered, deliberate choice, not a stuck/blocked state.
+  Switching the codegen pipeline to the path-keyed `extractRouteSchemas` is
+  called out explicitly as "a real option but a bigger, separate change
+  ... not needed for this migration to be correct" — the file is doing this
+  on purpose for now, not blocked on fractal-side cache logic the way the
+  original citation implied.
 
-<!-- Cross-repo citation: the three bullets below cite files in the sibling
-     codebase, not this repo — `packages/fractal-support/src/serviceStores.ts`
-     and `packages/fractal-support/src/errorEncoder.ts` don't exist in
-     fractal's own git history because they were never meant to. Out of scope
-     for this repo's citation-cleanup pass, same as the cross-repo material in
-     `docs/design/prior-art/server-less.md` and
-     `docs/design/operation-layer-spec.md`. -->
+- `packages/fractal-support/src/serviceStores.ts` (in the sibling codebase)
+  — `withServiceStoresOnInput` (now :34-42, close to the original :33-42) —
+  still matches: generic store→input plumbing, sibling-codebase-free.
+- `packages/fractal-support/src/errorEncoder.ts` (in the sibling codebase) —
+  **citation drifted substantially**: the file is now only 233 lines total
+  (the original cited :404-415 and :538, both past EOF). `formatValidationErrors`
+  now lives at :60; the errors-export comment ("the sibling codebase's shape,
+  counterpart to fractal's own `httpErrors`") is now at :163. The underlying
+  claims still hold, just at much earlier line numbers — the file was
+  significantly shortened since the original citation.
+- `packages/fractal-support/src/scopes.ts` (in the sibling codebase) —
+  same drift: file is now 252 lines total (original cited :1035-1060, past
+  EOF). `wrapScopes` is now at :227, and its header comment (:3-22) still
+  explicitly names `wrapValidators` (`@rhi-zone/fractal-api-tree/build`) as
+  the shape it copies — the underlying claim holds, citation was stale.
 
-- `packages/fractal-support/src/serviceStores.ts:33-42` (in the sibling
-  codebase) — `withServiceStoresOnInput` was described as the sibling
-  codebase-free generic store→input plumbing.
-- `packages/fractal-support/src/errorEncoder.ts:404-415` (in the sibling
-  codebase) — `formatValidationErrors` was described as formatting fractal's
-  own `ValidationError[]`, its shape reverse-engineered empirically.
-- the sibling codebase's errors export (`errorEncoder.ts:538`, same file as
-  above) — documented as "fractal's `httpErrors` but matching
-  `code`/`kind`/`type` instead of only `.kind`".
-
-`wrapScopes`'s tree walk (sibling-side `scopes.ts:1035-1060`, unverified) was
-said to copy the recursive rebuild shape of the since-deleted `wrapValidators`.
-**[evidenced, fractal-side half confirmed]** `wrapValidators` really was
-deleted (commit `ffa08d4`, "migrate cli/mcp/graphql to applyValidation, delete
-wrapValidators (phase 3)") — it survives only in comments now. api-tree still
-exports no generic leaf-mapping primitive (`walkTree`/`walkTreePositions` in
-`tree.ts`/`apply-validation.ts` are internal, unexported), so the underlying
-claim — every consumer transform has to re-implement the recursion — still
-holds on the fractal side.
+`wrapScopes`'s tree walk was said to copy the recursive rebuild shape of the
+since-deleted `wrapValidators`. **[evidenced, both halves now confirmed]**
+`wrapValidators` really was deleted (commit `ffa08d4`, "migrate cli/mcp/graphql
+to applyValidation, delete wrapValidators (phase 3)") — it survives only in
+comments now. api-tree still exports no generic leaf-mapping primitive
+(`walkTree`/`walkTreePositions` in `tree.ts`/`apply-validation.ts` are
+internal, unexported), so the underlying claim — every consumer transform has
+to re-implement the recursion — still holds on the fractal side, and the
+sibling's `scopes.ts` comment (above) confirms it still holds on the sibling
+side too.
 
 ### 8.2 What fractal assumes about its consumer
 
-- **`dist/` exists** (§1.5) — confirmed still true: `packages/api-tree/package.json`
-  has no `prepare` script, root `.gitignore` still excludes `dist/`, and
-  nothing in the package or (as far as checkable from here) the consumer's CI
-  guarantees the build step ran.
+- **`dist/` exists** (§1.5) — confirmed still true on fractal's side
+  (`packages/api-tree/package.json` has no `prepare` script, root `.gitignore`
+  still excludes `dist/`), but the sibling codebase's CI now explicitly builds it
+  (`rhi-zone/fractal` checkout gets its own `bun install --frozen-lockfile` +
+  `bun run build:packages` step — see updated §1.5) — the assumption is
+  still real, but the sibling side now satisfies it structurally in CI rather
+  than leaving it to chance.
 - **Version resolution works from fractal's own location** (§1.1) — was false
-  under the sibling codebase's symlink layout; degrades to `"unknown"`
-  silently. Not re-verified against current sibling state, but the mechanism
-  (`resolvePackageVersion`) is unchanged — see updated §1.1 for the follow-on
-  wrinkle now that `apiTreeVersion` uses the same resolution path.
+  under the sibling codebase's symlink layout; now fixed (`60cdd08`) to resolve
+  from the caller's own entry file instead — confirmed directly against the
+  sibling repo's symlink layout (`apps/web/node_modules/@rhi-zone/*` real
+  symlinks into this repo, entry files under `apps/web/src/...`) — see
+  updated §1.1.
 - **Bun** — **fixed**: the write helpers now use `node:fs/promises` instead
-  of `Bun.write`, so this assumption no longer holds; a Node-only consumer
-  should be unblocked here (unverified against the sibling directly).
+  of `Bun.write`; the sibling codebase's own codegen scripts already used plain
+  `node:fs` (`writeFileSync`/`mkdirSync`/`readFileSync`) for their own writes
+  regardless, so this was never a live blocker there — confirmed, not just
+  inferred.
 - **tsconfig: nearest-to-entry-file wins** — citation drifted:
   `type-ir/src/from-typescript.ts:1547` (not :1517), and the call is
   `ts.findConfigFile(path.dirname(path.resolve(entryFile)), ts.sys.fileExists)`
   — the doc's quoted form dropped the `path.resolve()` wrap and the
   `ts.sys.fileExists` argument. Mechanism claim (nearest-to-entry-file tsconfig
   resolution, sibling's split-strictness consequence) not re-checked against
-  sibling repo. **[evidenced mechanism; whether it changes any extracted type
+  sibling repo — no sibling tsconfig behavior was tested this pass either.
+  **[evidenced mechanism; whether it changes any extracted type
   was not tested.]**
 - **cwd** — confirmed still current: `discover.ts:52,77` still resolve
   relative roots against `process.cwd()` (actual `path.resolve()` calls at
-  :175/:258/:269 in the same file). Sibling-side mitigation (`APP_ROOT` from
-  `import.meta.url`, `--cwd apps/web`) not re-verified. Low risk, as
+  :175/:258/:269 in the same file). Sibling-side mitigation confirmed directly:
+  `codegen-fractal-merged-validators.ts:68` computes `APP_ROOT` from
+  `dirname(dirname(fileURLToPath(import.meta.url)))`, and the sibling
+  codebase's root `package.json` runs every relevant script via
+  `bun run --cwd apps/web ...` (codegen, dev, build, test, db scripts all use
+  it). Low risk, as
   originally noted.
