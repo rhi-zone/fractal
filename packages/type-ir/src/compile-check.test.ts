@@ -715,12 +715,7 @@ describe("elm-json (elm make, real elm/json + elm-community/json-extra packages)
   //     or an `encodeMaybe (\v -> ...) v.field` call's own field-lookup
   //     shares the same `v` its lambda parameter uses ("SHADOWING ... These
   //     variables cannot have the same name").
-  const todo = new Set<string>([
-    "Recursive Tree",
-    "Discriminated Union API Response",
-    "Kitchen Sink",
-    "E-commerce Order",
-  ]);
+  const todo = new Set<string>([]);
   for (const { name, ref } of fixtures) {
     const runner = todo.has(name) ? test.todo : test;
     runner(

@@ -82,7 +82,7 @@ describe("records (type alias)", () => {
       'userDecoder =\n    Decode.succeed User\n        |> andMap (Decode.field "id" Decode.string)\n        |> andMap (Decode.maybe (Decode.field "age" Decode.float))',
     );
     expect(out).toContain(
-      'encodeUser value =\n    Encode.object\n        [ ( "id", Encode.string value.id )\n        , ( "age", encodeMaybe (\\v -> Encode.float v) value.age )\n        ]',
+      'encodeUser value =\n    Encode.object\n        [ ( "id", Encode.string value.id )\n        , ( "age", encodeMaybe (\\v1 -> Encode.float v1) value.age )\n        ]',
     );
     // The shared Maybe-encoding helper is only emitted once, and only when needed.
     expect(out).toContain("encodeMaybe : (a -> Encode.Value) -> Maybe a -> Encode.Value");
