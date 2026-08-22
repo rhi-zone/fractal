@@ -60,6 +60,7 @@ import { toTypeDeclaration } from "./typescript-native.ts";
 import { toTypeBoxDeclaration } from "./typescript-typebox.ts";
 import { toFlow } from "./flow-native.ts";
 import { toElm } from "./elm-json.ts";
+import { toElixir } from "./elixir-jason.ts";
 
 // ============================================================================
 // Shared helpers
@@ -762,30 +763,64 @@ describe("elm-json (elm make, real elm/json + elm-community/json-extra packages)
 });
 
 // ============================================================================
+// Elixir (Jason projector) — unlike Ruby's `ruby -c` (a true parse-only
+// check that never expands macros), Elixir has no syntax-only mode:
+// `@derive Jason.Encoder` is a compile-time macro that dispatches into the
+// real `Jason.Encoder` protocol during compilation, so `mix compile` needs
+// the actual `jason` Hex package resolvable on the code path — resolved
+// for real from hex.pm at test time (`mix deps.get`), same
+// network-resolved-dependency pattern as rust-serde/csharp-newtonsoft/
+// elm-json above. One shared Mix project is used across fixtures (only
+// lib/root.ex is rewritten per test) for the same reason rust-serde reuses
+// one Cargo project: the first `mix deps.get` + `mix compile` pays Hex's
+// resolve/download/compile cost once instead of once per fixture.
+// ============================================================================
+
+describe("elixir-jason (mix compile, real Jason Hex package)", () => {
+  const projectDir = mkdtempSync(join(tmpdir(), "type-ir-compile-check-elixir-"));
+  mkdirSync(join(projectDir, "lib"));
+  writeFileSync(
+    join(projectDir, "mix.exs"),
+    [
+      "defmodule CompileCheck.MixProject do",
+      "  use Mix.Project",
+      "",
+      "  def project do",
+      '    [app: :compile_check, version: "0.1.0", elixir: "~> 1.18", deps: deps()]',
+      "  end",
+      "",
+      "  defp deps do",
+      '    [{:jason, "~> 1.4"}]',
+      "  end",
+      "end",
+    ].join("\n"),
+  );
+  const getResult = run(["mix", "deps.get"], projectDir);
+  afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+  for (const { name, ref } of fixtures) {
+    test(
+      name,
+      () => {
+        expect(getResult.ok, getResult.output).toBe(true);
+        writeFileSync(join(projectDir, "lib", "root.ex"), toElixir(ref, rootNameFor(name)));
+        assertCompiles(run(["mix", "compile", "--force"], projectDir));
+      },
+      30_000,
+    );
+  }
+});
+
+// ============================================================================
 // Explicitly out of scope (see the module comment for why):
 //   java-jackson / java-gson / java-moshi   — need Maven Central jars
 //   kotlin-kotlinx                          — needs the kotlinx-serialization jar
 //   dart-json-serializable / dart-freezed   — need build_runner-generated
 //                                             `*.g.dart`/`*.freezed.dart` companions
-//   elixir-jason                            — needs the Jason hex package
 // None of these are single, plain, offline nixpkgs derivations the way
 // pydantic/attrs/aeson/nlohmann_json/System.Text.Json are, so wiring them up
 // is a real follow-up, not something to fake with a stub.
-//
-// elixir-jason specifically: unlike Ruby's `ruby -c` (a true parse-only
-// check that never expands macros, so `ruby-sorbet.ts`'s output needs no
-// gems installed), Elixir has no such syntax-only mode — `@derive
-// Jason.Encoder` is a compile-time macro that dispatches into the real
-// `Jason.Encoder` protocol during compilation itself, so `elixirc` cannot
-// even parse-check the generated struct module without the actual `Jason`
-// hex package resolvable on the code path. nixpkgs ships a plain `elixir`
-// derivation (unlike a curated Hex package set the way
-// `haskellPackages.ghcWithPackages` curates Haskell's), so `Jason` would
-// need `mix`-based dependency fetching (network access plus a `mix.exs`
-// project, similar in kind to Rust's `cargo build` step above), which isn't
-// currently vendored/wired up here.
 // ============================================================================
 describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
 describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {});
 describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {});
-describe.skip("elixir-jason — needs the Jason hex package, not vendored (elixirc has no syntax-only mode)", () => {});

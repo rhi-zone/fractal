@@ -152,19 +152,16 @@
             ocamlPackages.melange
             ocamlPackages.findlib
 
-            # Elixir (Jason projector) — staged for a future real compile
-            # check, not wired up yet: unlike Ruby's `ruby -c` (a true
+            # Elixir (Jason projector) — unlike Ruby's `ruby -c` (a true
             # parse-only check that never expands macros), Elixir has no
             # syntax-only mode — `@derive Jason.Encoder` is a compile-time
             # macro that dispatches into the real `Jason.Encoder` protocol
-            # during compilation, so `elixirc` can't even parse-check the
-            # generated struct module without the `jason` Hex package
-            # resolvable on the code path. nixpkgs ships plain `elixir` here
-            # (no curated Hex package set the way `haskellPackages.ghcWithPackages`
-            # curates Haskell's), so `jason` would need `mix`-based dependency
-            # fetching (network access + a `mix.exs` project) that isn't
-            # vendored/wired up here yet — see compile-check.test.ts's
-            # elixir-jason skip comment for the exact follow-up.
+            # during compilation, so `mix compile` needs the `jason` Hex
+            # package resolvable on the code path. Resolved for real from
+            # hex.pm at test time via a temp `mix.exs` project (`mix
+            # deps.get`); plain `elixir` already bundles `mix`, and `mix`
+            # itself bootstraps the Hex archive on first use, so no extra
+            # buildInput is needed for it.
             beamPackages.elixir
 
             # Schema/IDL compilers used to validate generated wire-format code
