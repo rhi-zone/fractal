@@ -1,5 +1,5 @@
 import React from "react";
-import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { ApiExplorerFetchProvider } from "@rhi-zone/fractal-api-explorer";
 import { api } from "../fixture-tree.ts";
 

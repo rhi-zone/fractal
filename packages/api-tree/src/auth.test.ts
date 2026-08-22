@@ -10,7 +10,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { describe, expect, it } from "bun:test";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { composeFetch } from "@rhi-zone/fractal-http-api-projector/extension";
 import { api, op } from "./node.ts";
 import { authExtension, authLayer, authMiddleware } from "./auth.ts";

@@ -382,7 +382,7 @@ describe("FoldMeta array-shape hazard — why middleware/handlerMiddleware are p
 // (`PresetOptions`) throw, per a deliberate ruling that both paths behave the
 // same way. `toRouter` (compile.ts) catches a subtree
 // `http.middleware()` throw where it composes `match.middleware` around
-// `runRoute`'s dispatch; `createFetch` (preset.ts) applies the analogous
+// `runRoute`'s dispatch; `createFetch` (presets.ts) applies the analogous
 // catch around the global `PresetOptions.middleware` array, which wraps
 // outside the compiled router entirely (see preset.test.ts's
 // middleware-throw tests for that baseline). Both paths funnel through the

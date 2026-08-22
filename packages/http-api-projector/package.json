@@ -37,9 +37,9 @@
       "types": "./dist/dx.d.ts",
       "import": "./dist/dx.js"
     },
-    "./preset": {
-      "types": "./dist/preset.d.ts",
-      "import": "./dist/preset.js"
+    "./presets": {
+      "types": "./dist/presets.d.ts",
+      "import": "./dist/presets.js"
     },
     "./project": {
       "types": "./dist/project.d.ts",

@@ -24,9 +24,9 @@
 // interceptable multi-stage one. AOT-compiled validation runs via
 // `@rhi-zone/fractal-api-tree/apply-validation`'s `applyValidation(key,
 // projectedTree, "http")` — the recommended, wire-profile-driven 3-arg form
-// (see preset.ts's module doc for what it buys over the still-supported
+// (see presets.ts's module doc for what it buys over the still-supported
 // 2-arg `applyValidation(key, projectedTree)` form) — wired onto the
-// already-projected `HttpRoute`, typically as a `preset.ts` `rewriters`
+// already-projected `HttpRoute`, typically as a `presets.ts` `rewriters`
 // entry. The same `applyValidation` call also applies at the `Node` level,
 // before this file's transforms run, for a tree shared with MCP/CLI.
 //
@@ -1208,7 +1208,7 @@ function encodeHttpError(response: HttpErrorResponse): Response {
  * block (below) has always used. Exported so every OTHER place a thrown
  * error needs the identical encode-or-fall-back behavior — `toRouter`
  * (compile.ts, wrapping a subtree's `http.middleware()` throw) and
- * `createFetch` (preset.ts, wrapping a global `PresetOptions.middleware`
+ * `createFetch` (presets.ts, wrapping a global `PresetOptions.middleware`
  * throw) — calls this one function instead of re-deriving the same two-line
  * fallback three times. No route context (meta/path) is available to any of
  * these callers when a PRE-decode middleware throws before a route is even
@@ -1229,7 +1229,7 @@ export function encodeThrownError(
 // ============================================================================
 // Handler-level middleware — around-hooks wrapping the handler call itself,
 // distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
-// preset.ts (`PresetOptions.middleware`). Mirrors CliMiddleware
+// presets.ts (`PresetOptions.middleware`). Mirrors CliMiddleware
 // (cli-api-projector/src/cli.ts) and McpMiddleware
 // (mcp-api-projector/src/server.ts): all three projectors share the same
 // shape — `F => F` where `F = (input, stores) => result` (see
@@ -1289,7 +1289,7 @@ function composeHandlerMiddleware(
  * error, not a `Result`) — both fall back to their own default (400 / 500
  * respectively) when the encoder is absent or returns `undefined`.
  * `serviceStores` (default `{}`) is the deployment's registered `ServiceStores`
- * value (`PresetOptions.serviceStores`, preset.ts) — threaded straight through
+ * value (`PresetOptions.serviceStores`, presets.ts) — threaded straight through
  * to `defaultDecode`/`httpStores` so the per-request `stores` bag a handler
  * middleware sees has every registered service store already merged in.
  */
@@ -1626,7 +1626,7 @@ export function checkRouteSourceCoverage(root: HttpRoute, opts?: SourceCoverageO
 
 /**
  * `serviceStores` (default `{}`) — the deployment's registered `ServiceStores`
- * value (`PresetOptions.serviceStores`, preset.ts) — is threaded straight
+ * value (`PresetOptions.serviceStores`, presets.ts) — is threaded straight
  * through to every `runRoute` call the returned dispatcher makes, exactly
  * like `toRouter` (compile.ts) does for the other router compilers.
  */

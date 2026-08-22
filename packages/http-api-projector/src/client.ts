@@ -65,7 +65,7 @@ export type ClientOptions = {
   readonly baseUrl?: string;
   /**
    * Fetch implementation to use. Defaults to global `fetch`.
-   * Inject `createFetch(tree)` from @rhi-zone/fractal-http-api-projector/preset for in-process
+   * Inject `createFetch(tree)` from @rhi-zone/fractal-http-api-projector/presets for in-process
    * round-trip tests without a network.
    */
   readonly fetch?: (req: Request) => Promise<Response>;

@@ -280,7 +280,7 @@ real in-process execution — no fabricated data, same as `createFetch`
 itself; only the outer call signature changes. Usage:
 
 ```ts
-import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 
 const fetch = toDropInFetch(createFetch(tree));
 const res = await fetch("/books/list"); // string + no Request construction, like real fetch
@@ -463,7 +463,7 @@ fractal-api-tree/tree")` call sites). `preset.ts`'s `createFetch`
    Result: `docusaurus build` failed outright with `Reading from
 "node:path" is not handled by plugins (Unhandled scheme)` for EVERY
    page, confirmed via bisection (isolated to `Root.tsx`'s import of
-   `@rhi-zone/fractal-http-api-projector/preset`, reproduced with a minimal
+   `@rhi-zone/fractal-http-api-projector/presets`, reproduced with a minimal
    `createFetch`/`toDropInFetch` call and no other site code). Fixed with a
    `/* webpackIgnore: true */` magic comment (Rspack honors the
    webpack-prefixed spelling — verified against Rspack's own docs before

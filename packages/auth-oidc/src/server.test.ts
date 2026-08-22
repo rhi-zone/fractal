@@ -307,7 +307,7 @@ describe("oidcServer", () => {
 
 describe("oidcServer wired through authLayer/authMiddleware", () => {
   it("rejects unauthenticated requests at the http-api-projector layer", async () => {
-    const { createFetch } = await import("@rhi-zone/fractal-http-api-projector/preset");
+    const { createFetch } = await import("@rhi-zone/fractal-http-api-projector/presets");
     const { api, op } = await import("@rhi-zone/fractal-api-tree/node");
     const { AsyncLocalStorage } = await import("node:async_hooks");
 

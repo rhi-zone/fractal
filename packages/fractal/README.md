@@ -21,7 +21,7 @@ fronts.
 | `@rhi-zone/fractal/mcp`      | [`@rhi-zone/fractal-mcp-api-projector`](../mcp-api-projector) — optional peer         |
 
 Each subpath re-exports its projector's **root** surface only. The fronted
-packages' own deeper subpaths (`@rhi-zone/fractal-http-api-projector/preset`,
+packages' own deeper subpaths (`@rhi-zone/fractal-http-api-projector/presets`,
 `/layers`, `/extensions/*`, ...) are not mirrored — import the projector package
 directly for those. It is already installed as a dependency of this one.
 

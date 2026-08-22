@@ -6,7 +6,7 @@ import type { Node } from "@rhi-zone/fractal-api-tree/node";
 import { api } from "@rhi-zone/fractal-api-tree";
 import { crud, httpProjection, restCrud } from "./dx.ts";
 import { naiveTransform, routeCandidatesForUrl } from "./route.ts";
-import { createFetch } from "./preset.ts";
+import { createFetch } from "./presets.ts";
 
 function methodDirective(n: Node): string | undefined {
   const http_ = n.meta.http as { method?: string } | undefined;

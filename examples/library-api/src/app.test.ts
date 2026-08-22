@@ -12,7 +12,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { beforeEach, describe, expect, it } from "bun:test";
 import { api, clearStore, httpRoutes, validatedApi } from "./tree.ts";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import {
   httpRoute,
   makeRouterFromRoute,

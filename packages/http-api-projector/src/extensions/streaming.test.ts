@@ -22,7 +22,7 @@ import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import type { JsonSchema } from "@rhi-zone/fractal-api-tree/extract";
 import { createClient } from "../client.ts";
-import { createFetch } from "../preset.ts";
+import { createFetch } from "../presets.ts";
 import { httpProjection } from "../dx.ts";
 import { generateClient } from "../codegen.ts";
 import { serveBun } from "../adapter.ts";

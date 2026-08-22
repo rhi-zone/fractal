@@ -254,7 +254,7 @@ const mapLikeHandler: ProxyHandler<{ get(key: string): unknown }> = {
  * job, not this factory's — see docs/design/middleware-and-caller-context.md.
  *
  * `serviceStores` — the deployment's registered `ServiceStores` value
- * (`PresetOptions.serviceStores`, preset.ts, threaded down through
+ * (`PresetOptions.serviceStores`, presets.ts, threaded down through
  * `createFetch` → the router compiler → `runRoute` → `defaultDecode`, route.ts)
  * — is spread into the returned bag FIRST, so HTTP's own per-request members
  * (`path`/`body`/`caller`/`query`/`header`) always win on a name collision

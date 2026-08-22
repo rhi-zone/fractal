@@ -344,7 +344,7 @@ export function validate(schema: StandardSchemaV1): {
 /**
  * `http.middleware(...fns)` — subtree-scoped, dispatch-around request
  * wrapping (`Fetch => Fetch`, the same shape `PresetOptions.middleware`
- * already uses globally, see preset.ts). Attach to a branch to scope every
+ * already uses globally, see presets.ts). Attach to a branch to scope every
  * leaf under it, or to a leaf to scope just that operation. Wraps BEFORE the
  * router matches, before decode, before `sources.validate` — the same wire
  * point `PresetOptions.middleware` already runs at, narrowed to a subtree

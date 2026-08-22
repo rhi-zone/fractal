@@ -40,7 +40,7 @@ import { ApiExplorerFetchProvider } from "./fetch-context.tsx";
 
 import { api, op } from "../../api-tree/src/index.ts";
 import { http } from "../../http-api-projector/src/verbs.ts";
-import { createFetch, toDropInFetch } from "../../http-api-projector/src/preset.ts";
+import { createFetch, toDropInFetch } from "../../http-api-projector/src/presets.ts";
 import { toOpenApi } from "../../http-api-projector/src/openapi.ts";
 import { toDocusaurusRouteReference } from "../../http-api-projector/src/http-route-reference.ts";
 

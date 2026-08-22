@@ -10,7 +10,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { api, clearStore } from "../../../examples/library-api/src/tree.ts";
 import { createClient } from "./client.ts";
-import { createFetch } from "./preset.ts";
+import { createFetch } from "./presets.ts";
 import { retry } from "./extensions/retry.ts";
 import { errors, InternalServerError, NotFoundError, RateLimitError } from "./extensions/errors.ts";
 

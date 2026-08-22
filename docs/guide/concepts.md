@@ -313,6 +313,6 @@ leading JSDoc text. The resulting `SchemaMap` is passed to `toTools` as `opts.sc
 | `crud(handlers)`                | `@rhi-zone/fractal-http-api-projector/dx`     | Convention constructor for the 5-op REST resource                     |
 | `verbFromTags(meta)`            | `@rhi-zone/fractal-http-api-projector/tags`   | Derive HTTP verb from the tag lattice                                 |
 | `makeRouterFromRoute(route)`    | `@rhi-zone/fractal-http-api-projector/route`  | Zero-build-cost `HttpRoute` dispatcher                                |
-| `createFetch(node, opts?)`      | `@rhi-zone/fractal-http-api-projector/preset` | OOTB HTTP handler (WHATWG `Request→Response`)                         |
+| `createFetch(node, opts?)`      | `@rhi-zone/fractal-http-api-projector/presets` | OOTB HTTP handler (WHATWG `Request→Response`)                         |
 | `toTools(node, opts?)`          | `@rhi-zone/fractal-mcp-api-projector/project` | Enumerate tree → flat `McpTool[]`                                     |
 | `runCli(node, opts?)`           | `@rhi-zone/fractal-cli-api-projector/cli`     | Dispatch the tree as a CLI                                            |

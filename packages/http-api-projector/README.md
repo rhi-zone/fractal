@@ -32,7 +32,7 @@ AWS Lambda.
 import { api, op } from "@rhi-zone/fractal-api-tree";
 import { http } from "@rhi-zone/fractal-http-api-projector/verbs";
 import { httpProjection } from "@rhi-zone/fractal-http-api-projector/dx";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 
 const tree = api({
   books: api({

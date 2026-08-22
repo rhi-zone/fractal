@@ -26,7 +26,7 @@ import { pathToFileURL } from "node:url";
 import { generateClient, generateClientFromNode } from "./codegen.ts";
 import { errors } from "./extensions/errors.ts";
 import { httpProjection } from "./dx.ts";
-import { createFetch } from "./preset.ts";
+import { createFetch } from "./presets.ts";
 import { serveBun } from "./adapter.ts";
 import { api, clearStore, type Book } from "../../../examples/library-api/src/tree.ts";
 import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree";

@@ -26,7 +26,7 @@
 // MDX (src/fixture-tree.ts), reached through Astro's per-directive island
 // model instead of Docusaurus's single-React-tree app shell.
 
-import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch, toDropInFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { api } from "./fixture-tree.ts";
 
 const dropInFetch = toDropInFetch(createFetch(api));

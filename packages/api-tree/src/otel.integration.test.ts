@@ -13,7 +13,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { runCli } from "@rhi-zone/fractal-cli-api-projector";
 import { createGraphQLServer } from "@rhi-zone/fractal-graphql-api-projector";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { createMcpServer } from "@rhi-zone/fractal-mcp-api-projector";
 import { api as api_, op } from "./node.ts";
 import { getActiveSpan, wrapTracing } from "./otel.ts";

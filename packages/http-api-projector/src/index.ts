@@ -124,7 +124,7 @@ export { tracing } from "./extensions/tracing.ts";
 export type { TracingOptions } from "./extensions/tracing.ts";
 export { tracingLayer } from "./tracing.ts";
 export type { HttpTracingOptions } from "./tracing.ts";
-export { createFetch, httpErrors, toDropInFetch } from "./preset.ts";
+export { createFetch, httpErrors, toDropInFetch } from "./presets.ts";
 export type {
   CorsOptions,
   DropInFetch,
@@ -134,4 +134,4 @@ export type {
   HttpHandlerMiddleware,
   PresetOptions,
   ThrownErrorEncoder,
-} from "./preset.ts";
+} from "./presets.ts";

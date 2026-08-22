@@ -47,7 +47,7 @@ subtree }` option on the node captures any other path segment as `bookId`
 
 ```ts
 import { api, httpRoutes } from "./src/tree.ts";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
 
 const fetch = createFetch(api);

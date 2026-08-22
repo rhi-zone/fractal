@@ -1066,7 +1066,7 @@ describe("runRoute — per-route sources", () => {
 // ============================================================================
 // runRoute — handler-level middleware (makeRouterFromRoute's second param).
 // Distinct from the protocol-level `Fetch => Fetch` middleware in layers.ts/
-// preset.ts: this wraps the handler call itself, inside `runRoute`, after
+// presets.ts: this wraps the handler call itself, inside `runRoute`, after
 // decode and before encode/Result-unwrapping — the HTTP counterpart of
 // `CliMiddleware` (cli-api-projector) and `McpMiddleware` (mcp-api-projector).
 // ============================================================================

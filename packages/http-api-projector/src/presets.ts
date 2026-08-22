@@ -1,4 +1,4 @@
-// packages/http-api-projector/src/preset.ts — @rhi-zone/fractal-http-api-projector
+// packages/http-api-projector/src/presets.ts — @rhi-zone/fractal-http-api-projector
 //
 // OOTB preset: composes the full HTTP stack into a ready-to-use fetch handler.
 //

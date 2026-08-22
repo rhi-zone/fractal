@@ -14,7 +14,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { runCli } from "@rhi-zone/fractal-cli-api-projector";
 import { createGraphQLServer } from "@rhi-zone/fractal-graphql-api-projector";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { createJsonRpcHttpHandler } from "@rhi-zone/fractal-json-rpc-api-projector";
 import { createMcpServer } from "@rhi-zone/fractal-mcp-api-projector";
 import { createContext } from "./context.ts";

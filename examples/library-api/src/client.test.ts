@@ -7,7 +7,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { serveBun } from "@rhi-zone/fractal-http-api-projector/adapter";
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 import { api, clearStore } from "./tree.ts";
 import { createClient } from "./client.generated.ts";
 import type { Client } from "./client.generated.ts";

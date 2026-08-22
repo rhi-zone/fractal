@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { generateClientFromNode } from "./codegen.ts";
-import { createFetch } from "./preset.ts";
+import { createFetch } from "./presets.ts";
 import { serveBun } from "./adapter.ts";
 import { api, clearStore } from "../../../examples/library-api/src/tree.ts";
 import { retry } from "./extensions/retry.ts";

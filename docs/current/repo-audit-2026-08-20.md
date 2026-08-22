@@ -304,9 +304,28 @@ treeId prefixing (`423b8fa`), `outputHash`, closure-from-Program.
     *path-store* override check inside the same function
     (`findRouteSourceCoverageProblems`, doc comment :1441-1490), a related
     but different branch of the same lint, not the unused-override one.
-14. **Small drift**: `preset.ts` (http) vs `presets.ts` (mcp, graphql) — still
-    true. `source()` in `source.ts` for four projectors, `verbs.ts` for http —
-    still true. (ffi-ir's six verbatim `toSnakeCase` copies of type-ir's
+14. **Small drift**: `source()` in `source.ts` for four projectors, `verbs.ts`
+    for http — still true (http's `verbs.ts` is 455 lines bundling `source()`
+    with `httpVerbBundle`, `moveTo`, `paginated`, `validate`, `middleware`,
+    `handlerMiddleware` — genuinely broader scope, not naming drift; the other
+    four packages' `source.ts` files are ~50-line, `source()`-only). The
+    `preset.ts` (http) vs `presets.ts` (mcp, graphql) drift is **fixed this
+    pass**: confirmed it was pure naming drift first (http's `preset.ts` has 1
+    exported preset function, graphql's `presets.ts` has 1, mcp's `presets.ts`
+    has 2 — the plural isn't tied to preset count). Renamed
+    `http-api-projector/src/preset.ts` → `presets.ts` (`git mv`, history
+    preserved) and its test file, updated the package's `./preset` →
+    `./presets` public subpath export in `package.json`, and propagated the
+    rename through every relative import in http-api-projector (including
+    `extensions/`), the cross-package `api-explorer` imports, every
+    `@rhi-zone/fractal-http-api-projector/preset` subpath reference repo-wide,
+    and the in-source prose comments inside http-api-projector's own files.
+    This changes the public subpath
+    `@rhi-zone/fractal-http-api-projector/preset` → `/presets` — a breaking
+    change for anyone importing it directly, but the package is
+    `0.1.0-alpha.0` with no changeset tooling, so pre-1.0 breaking changes are
+    fine. Workspace typecheck/lint/tests all pass after the change. (ffi-ir's
+    six verbatim `toSnakeCase` copies of type-ir's
     `toSnakeCaseStripSeparators` are fixed — every ffi-ir target now imports
     it directly from `@rhi-zone/fractal-type-ir/codegen-helpers`.) The
     `rescript-external.ts`/`rescript-native.ts` `RESERVED` duplication is

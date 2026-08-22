@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, expectTypeOf, it } from "bun:test";
 import { api, clearStore, type Book } from "../../../examples/library-api/src/tree.ts";
 import { httpProjection } from "./dx.ts";
-import { createFetch } from "./preset.ts";
+import { createFetch } from "./presets.ts";
 import { createClient, createClientFromRoute } from "./client.ts";
 import { ClientError } from "./client-error.ts";
 import type { CallOptions } from "./client.ts";

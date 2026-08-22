@@ -46,7 +46,7 @@ const tree = api({
 Project to HTTP, with OpenAPI served for free:
 
 ```ts
-import { createFetch } from "@rhi-zone/fractal-http-api-projector/preset";
+import { createFetch } from "@rhi-zone/fractal-http-api-projector/presets";
 
 const fetch = createFetch(tree);
 await fetch(new Request("http://localhost/books/list"));

@@ -620,7 +620,7 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
     // bundled in (api-tree's tree.ts -> extract.ts -> type-ir's
     // from-typescript.ts, which imports the real `typescript` package and
     // Node's `node:fs`/`node:path`) even though the import only fires when a
-    // caller passes `opts.sourceFile` — which `preset.ts`'s `createFetch`/
+    // caller passes `opts.sourceFile` — which `presets.ts`'s `createFetch`/
     // `toDropInFetch` (usable client-side for a doc-embedded live playground
     // with no deployed server yet, per docs/design/mocked-fetch-backend.md)
     // never does. `sourceFile` extraction is inherently Node-only (real

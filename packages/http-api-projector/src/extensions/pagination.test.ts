@@ -4,7 +4,7 @@ import { describe, expect, it } from "bun:test";
 import { api, op } from "@rhi-zone/fractal-api-tree/node";
 import type { CursorPage, OffsetPage } from "@rhi-zone/fractal-api-tree";
 import { createClient } from "../client.ts";
-import { createFetch } from "../preset.ts";
+import { createFetch } from "../presets.ts";
 import { http, paginated } from "../verbs.ts";
 import { pagination } from "./pagination.ts";
 import type { PageIterator } from "./pagination.ts";

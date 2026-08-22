@@ -78,11 +78,11 @@ export type CompiledRouter = (req: Request) => Promise<Response>;
  *
  * `match.middleware` (dispatch-around, subtree-scoped only — there is no
  * global counterpart threaded through this compiler; `PresetOptions
- * .middleware` wraps the whole compiled router externally, in preset.ts's
+ * .middleware` wraps the whole compiled router externally, in presets.ts's
  * `createFetch`, entirely orthogonal to per-route matching) is composed
  * around the per-route `runRoute` dispatch itself, via `reduceRight` with
  * the first entry outermost — the same composition `createFetch` uses for
- * the global array (preset.ts). It wraps after matching has already
+ * the global array (presets.ts). It wraps after matching has already
  * happened (subtree scope, no per-request path-prefix check) but before
  * `runRoute`'s own decode/validate (dispatch-around, the same wire point
  * the global `middleware` option runs at).
@@ -94,7 +94,7 @@ export type CompiledRouter = (req: Request) => Promise<Response>;
  * `runRoute`'s catch block uses for a `handlerMiddleware` throw. Every
  * thrown error this package can observe, pre-decode or handler-around, ends
  * up as an encoded `Response` rather than an uncaught exception out of the
- * returned `CompiledRouter` — see `createFetch` (preset.ts) for the
+ * returned `CompiledRouter` — see `createFetch` (presets.ts) for the
  * identical treatment of the global `PresetOptions.middleware` array, which
  * wraps outside this function entirely.
  */

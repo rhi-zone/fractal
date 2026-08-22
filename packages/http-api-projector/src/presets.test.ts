@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test";
 import { api as api_, op } from "@rhi-zone/fractal-api-tree/node";
 import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation";
 import type { GeneratedEntry } from "@rhi-zone/fractal-api-tree/apply-validation";
-import { createFetch, toDropInFetch } from "./preset.ts";
+import { createFetch, toDropInFetch } from "./presets.ts";
 import { compiledCharRouter, mapCharRouter, radixRouter } from "./compile.ts";
 import type { HttpHandlerMiddleware, HttpRoute } from "./route.ts";
 import type { Fetch } from "./layers.ts";

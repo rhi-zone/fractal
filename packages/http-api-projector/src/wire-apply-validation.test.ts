@@ -17,7 +17,7 @@ import { describe, expect, it } from "bun:test";
 import ts from "typescript";
 import { buildWireApplyValidationModuleSource } from "@rhi-zone/fractal-api-tree/apply-validation-build";
 import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validation";
-import { createFetch } from "./preset.ts";
+import { createFetch } from "./presets.ts";
 import type { HttpRoute } from "./route.ts";
 import { booksTree } from "./__fixtures__/wire-apply-validation-http.fixture.ts";
 
