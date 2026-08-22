@@ -945,22 +945,23 @@ describe("kotlin-kotlinx (kotlinc, real kotlinx-serialization-core + kotlinx-dat
 // name" constraint (every synthesized nested declaration, including a
 // nested union's per-variant records, is rendered package-private).
 //
-// "Kitchen Sink" stays `test.todo`: unrelated to the anonymous-naming fix
-// above, it hits a second, pre-existing defect none of the three java
-// projectors' `tuple` handler addresses — a tuple TypeRef renders as a bare
-// reference to a conventional `TupleN<T1, ..., TN>` record (see each file's
-// `tuple` case comment) that no projector or test fixture in this repo ever
-// defines, so javac fails with "cannot find symbol: class TupleN". Unlike
-// the anonymous-naming defect, no other target in this test suite has
-// established a convention to mirror here: every other tuple-lacking-syntax
-// target (kotlin-kotlinx's `Pair`/`Triple`/lossy-`List` degrade aside) either
-// has native tuple syntax to fall back to (rust-serde, swift-codable,
-// csharp-systemtextjson, python-pydantic) or simply isn't exercised against
-// a tuple-bearing fixture through a real compiler here. Deciding how java
-// should close this gap — actually emit `TupleN` record declarations, or
-// pick some other lossy degrade — is a real design choice, not something to
-// force through as a byproduct of the anonymous-naming fix, so it's left
-// `test.todo` with the literal javac error as proof.
+// "Kitchen Sink" now checked as a real pass too. It used to be `test.todo`
+// for a second, pre-existing defect unrelated to the anonymous-naming fix
+// above: a tuple TypeRef rendered as a bare reference to a conventional
+// `TupleN<T1, ..., TN>` record (see each file's `tuple` case comment) that
+// no projector or test fixture in this repo ever defined, so javac failed
+// with "cannot find symbol: class TupleN". No other target in this test
+// suite had an established convention to mirror for this (every other
+// tuple-lacking-syntax target either has native tuple syntax to fall back to,
+// or simply isn't exercised against a tuple-bearing fixture through a real
+// compiler here) — so all three java projectors' `tuple` handler now
+// synthesizes a generic `record TupleN<T1, ..., TN>(T1 first, ..., TN nth)
+// {}` support declaration (`javaSyntheticTupleRecord` in
+// codegen-helpers.ts) as a package-private sibling the first time a given
+// arity is seen in the file, and reuses it for any later tuple of the same
+// arity — the same "ctx.decls accumulates named nested declarations"
+// convention the anonymous-naming fix above already established, just keyed
+// by arity instead of by TypeRef identity/suggestedName.
 // ============================================================================
 
 function checkJava(
@@ -970,7 +971,7 @@ function checkJava(
   libraryJarFile: string,
 ): void {
   describe(`java-${libraryName} (javac, real ${libraryName} + jspecify jars)`, () => {
-    const todo = new Set<string>(["Kitchen Sink"]);
+    const todo = new Set<string>([]);
     const projectDir = mkdtempSync(join(tmpdir(), `type-ir-compile-check-java-${libraryName}-`));
     const libraryJarPath = join(projectDir, libraryJarFile);
     const jspecifyJarPath = join(projectDir, "jspecify.jar");

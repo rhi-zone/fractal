@@ -1,5 +1,12 @@
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
-import { capitalize, javaDocComment, quote, resolveOptions } from "./codegen-helpers.ts";
+import {
+  capitalize,
+  javaDocComment,
+  javaSyntheticTupleRecord,
+  javaTupleComponentName,
+  quote,
+  resolveOptions,
+} from "./codegen-helpers.ts";
 
 // ============================================================================
 // Java projector — TypeRef -> idiomatic Java 16+ source (records by default,
@@ -81,6 +88,12 @@ type Ctx = {
   readonly options: Required<JavaOptions>;
   readonly imports: Set<string>;
   readonly decls: string[];
+  // Arities (2, 3, ...) for which a generic `TupleN<T1, ..., TN>` support
+  // record (see `javaSyntheticTupleRecord`) has already been pushed onto
+  // `decls` — tracked separately from `decls` itself so a second tuple of
+  // the same arity elsewhere in the same file reuses the one declaration
+  // instead of emitting a duplicate `TupleN` and colliding at compile time.
+  readonly tupleArities: Set<number>;
 };
 
 type Converter = (
@@ -173,13 +186,18 @@ const handlers: Record<string, Converter> = {
     const s = shape as TypeShape & { kind: "tuple" };
     const elements = s.elements.map((e, i) => javaType(e, ctx, `${suggestedName}Item${i + 1}`));
     // Java has no structural tuple type. Rendered as a reference to a
-    // conventional `TupleN<T1, ..., TN>` record — this projector does not
-    // define that support type itself (out of scope for a single TypeRef ->
-    // type-expression call), so the caller assembling the emitted module is
-    // responsible for providing (or importing) `Tuple2`/`Tuple3`/... records
-    // with components named `first`/`second`/... — the same "caller wires
-    // the import" convention `instance`/`ref` rely on above.
-    return { boxed: `Tuple${elements.length}<${elements.join(", ")}>`, imports: [] };
+    // generic `TupleN<T1, ..., TN>` record with components named
+    // `first`/`second`/... — synthesized as a package-private sibling
+    // declaration (same `ctx.decls` convention `object`/`union` use above)
+    // the first time this arity is seen in the file; a later tuple of the
+    // same arity reuses that one declaration instead of emitting a
+    // colliding duplicate (see `Ctx.tupleArities`'s doc comment).
+    const arity = elements.length;
+    if (!ctx.tupleArities.has(arity)) {
+      ctx.tupleArities.add(arity);
+      ctx.decls.push(javaSyntheticTupleRecord(arity));
+    }
+    return { boxed: `Tuple${arity}<${elements.join(", ")}>`, imports: [] };
   },
   // No native async-sequence type in Java's standard type system — degrades
   // to `List<T>` of the element type, the same degrade convention every
@@ -567,6 +585,7 @@ export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOpti
     options: resolved,
     imports: new Set(resolved.jackson ? JACKSON_IMPORTS : []),
     decls: [],
+    tupleArities: new Set(),
   };
 
   let body: string;
@@ -578,10 +597,9 @@ export function toJavaDeclaration(name: string, ref: TypeRef, options?: JavaOpti
     body = renderSealedInterface(name, ref, ctx);
   } else if (ref.shape.kind === "tuple") {
     const shape = ref.shape as TypeShape & { kind: "tuple" };
-    const ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
     const components = shape.elements.map((element, i) => {
       const { type } = javaFieldType(element, ctx, `${name}Item${i + 1}`);
-      return `${type} ${ordinals[i] ?? `field${i + 1}`}`;
+      return `${type} ${javaTupleComponentName(i)}`;
     });
     body = `${javaDocComment(ref.meta, "")}public record ${name}(${components.join(", ")}) {}`;
   } else {
@@ -625,7 +643,7 @@ export function toJava(ref: TypeRef, name?: string, options?: JavaOptions): stri
   // `toJavaDeclaration`) nothing below reads `ctx.decls` back out — this bare
   // expression mode is documented as inline-only (see the doc comment
   // above), same scope boundary it had before nested declarations existed.
-  const ctx: Ctx = { options: resolved, imports: new Set(), decls: [] };
+  const ctx: Ctx = { options: resolved, imports: new Set(), decls: [], tupleArities: new Set() };
   const { type } = javaFieldType(ref, ctx, "Value");
   return type;
 }

@@ -320,6 +320,33 @@ export function javaDocComment(meta: Meta, indent: string): string {
   return `${lines.join("\n")}\n${indent}`;
 }
 
+/** Ordinal component names ("first", "second", ...) for a Java record
+ * synthesized from a tuple TypeRef — shared naming convention across every
+ * "tuple -> Java record" path in java-gson.ts, java-jackson.ts,
+ * java-jsonb.ts, and java-moshi.ts (both the top-level "tuple is the root
+ * declaration" case and the nested `TupleN<...>` support-record case).
+ * Falls back to `fieldN` past the eighth component, same fallback each call
+ * site already used before this was factored out. */
+export function javaTupleComponentName(index: number): string {
+  const ordinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
+  return ordinals[index] ?? `field${index + 1}`;
+}
+
+/** Source for a generic `record TupleN<T1, ..., TN>(T1 first, ..., TN
+ * nth) {}` declaration — the support type a nested tuple TypeRef's `TupleN<
+ * ...>` reference needs defined somewhere to compile, since Java has no
+ * structural tuple type of its own. Generic and keyed only by arity (not by
+ * the concrete element types at any one use site) so every tuple of the same
+ * arity in a file shares one declaration; callers are responsible for
+ * synthesizing it at most once per arity (e.g. via a `Set<number>` of
+ * arities already emitted) and pushing it onto `ctx.decls` package-private,
+ * same as every other synthesized sibling declaration. */
+export function javaSyntheticTupleRecord(arity: number): string {
+  const typeParams = Array.from({ length: arity }, (_, i) => `T${i + 1}`);
+  const components = typeParams.map((tp, i) => `${tp} ${javaTupleComponentName(i)}`);
+  return `record Tuple${arity}<${typeParams.join(", ")}>(${components.join(", ")}) {}`;
+}
+
 /** Kotlin-style `/** … *&#47;` doc comment: collapses to a single line
  * (`/** description *&#47;`) when only a description or only `@deprecated` is
  * present, multiline only when both are. `indent` is prepended to every
