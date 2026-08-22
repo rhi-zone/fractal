@@ -104,9 +104,9 @@
             # references but doesn't itself emit, so both are `test.skip`.
             dart
 
-            # Elm (json projector) — `elm make` resolves `elm/json` through
-            # Elm's own package registry, which isn't vendored here, so this is
-            # `test.skip`.
+            # Elm (json projector) — `elm make` resolves `elm/json` and
+            # `elm-community/json-extra` for real through Elm's own package
+            # registry (package.elm-lang.org) at test time.
             elmPackages.elm
 
             # Crystal (json-serializable projector) — JSON::Serializable is

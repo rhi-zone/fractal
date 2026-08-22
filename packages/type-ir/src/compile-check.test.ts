@@ -59,6 +59,7 @@ import { toObjC } from "./objc-foundation.ts";
 import { toTypeDeclaration } from "./typescript-native.ts";
 import { toTypeBoxDeclaration } from "./typescript-typebox.ts";
 import { toFlow } from "./flow-native.ts";
+import { toElm } from "./elm-json.ts";
 
 // ============================================================================
 // Shared helpers
@@ -672,12 +673,100 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 });
 
 // ============================================================================
+// Elm (json projector) — `elm/json` and `elm-community/json-extra` are
+// resolved for real from Elm's own package registry
+// (package.elm-lang.org), same network-resolved-dependency pattern as
+// rust-serde's crates.io resolve and csharp-newtonsoft's nuget.org resolve
+// above. A "package"-type elm.json (rather than "application") is used
+// deliberately: it lets elm itself solve compatible dependency versions
+// from a version *range* instead of requiring exact pinned versions the
+// way an application's elm.json does, and needs no elm/browser or
+// elm/html — this suite only compiles a library module, not a runnable
+// app. `import Dict exposing (Dict)` is added here (not by elm-json.ts's
+// output itself) only when the rendered body actually references `Dict`,
+// same "codegen snippet vs. consumer's file" split as Go/Rust/Crystal
+// above.
+// ============================================================================
+
+function elmImportsFor(body: string): string {
+  return /\bDict\b/.test(body) ? "import Dict exposing (Dict)\n" : "";
+}
+
+describe("elm-json (elm make, real elm/json + elm-community/json-extra packages)", () => {
+  // Real bugs this network-resolved check surfaced in elm-json.ts (fix
+  // belongs in that projector, out of scope here):
+  //   - "Recursive Tree": a self-referential object renders as a plain
+  //     `type alias`, which Elm rejects as an infinite type ("ALIAS
+  //     PROBLEM ... This type alias is recursive, forming an infinite
+  //     type!"; elm's own suggested fix is a `type TreeNode = TreeNode
+  //     { ... }` wrapper).
+  //   - "Discriminated Union API Response": a field literally named `type`
+  //     is emitted as a record field name verbatim, but `type` is an Elm
+  //     reserved word ("RESERVED WORD ... It looks like you are trying to
+  //     use `type` as a field name").
+  //   - "Kitchen Sink" and "E-commerce Order": array/optional-field encoders
+  //     each bind their element parameter as the literal name `v`, so it
+  //     shadows an outer `v` whenever an array nests inside another array,
+  //     or an `encodeMaybe (\v -> ...) v.field` call's own field-lookup
+  //     shares the same `v` its lambda parameter uses ("SHADOWING ... These
+  //     variables cannot have the same name").
+  const todo = new Set<string>([
+    "Recursive Tree",
+    "Discriminated Union API Response",
+    "Kitchen Sink",
+    "E-commerce Order",
+  ]);
+  for (const { name, ref } of fixtures) {
+    const runner = todo.has(name) ? test.todo : test;
+    runner(
+      name,
+      () => {
+        withTempDir((dir) => {
+          mkdirSync(join(dir, "src"));
+          writeFileSync(
+            join(dir, "elm.json"),
+            JSON.stringify({
+              type: "package",
+              name: "type-ir/compile-check",
+              summary: "compile check",
+              license: "BSD-3-Clause",
+              version: "1.0.0",
+              "exposed-modules": ["Main"],
+              "elm-version": "0.19.0 <= v < 0.20.0",
+              dependencies: {
+                "elm/core": "1.0.0 <= v < 2.0.0",
+                "elm/json": "1.0.0 <= v < 2.0.0",
+                "elm-community/json-extra": "4.0.0 <= v < 5.0.0",
+              },
+              "test-dependencies": {},
+            }),
+          );
+          const body = toElm(ref, rootNameFor(name));
+          writeFileSync(
+            join(dir, "src", "Main.elm"),
+            // `Json.Decode` is imported both bare and as `Decode`: elm-json.ts's
+            // `unknown`/fallback type mapping emits the fully-qualified
+            // `Json.Decode.Value` (not the aliased `Decode.Value`) for any
+            // type it can't otherwise represent (e.g. Kitchen Sink's "unknown"
+            // field, class instances, functions/methods/interfaces).
+            `module Main exposing (..)\n\nimport Json.Decode\nimport Json.Decode as Decode exposing (Decoder)\nimport Json.Decode.Extra exposing (andMap)\nimport Json.Encode as Encode\n${elmImportsFor(body)}\n${body}\n`,
+          );
+          assertCompiles(
+            run(["elm", "make", join(dir, "src", "Main.elm"), "--output=/dev/null"], dir),
+          );
+        });
+      },
+      30_000,
+    );
+  }
+});
+
+// ============================================================================
 // Explicitly out of scope (see the module comment for why):
 //   java-jackson / java-gson / java-moshi   — need Maven Central jars
 //   kotlin-kotlinx                          — needs the kotlinx-serialization jar
 //   dart-json-serializable / dart-freezed   — need build_runner-generated
 //                                             `*.g.dart`/`*.freezed.dart` companions
-//   elm-json                                — needs Elm's own package registry
 //   elixir-jason                            — needs the Jason hex package
 // None of these are single, plain, offline nixpkgs derivations the way
 // pydantic/attrs/aeson/nlohmann_json/System.Text.Json are, so wiring them up
@@ -699,5 +788,4 @@ describe("objc-foundation (clang -c, GNUstep Foundation)", () => {
 describe.skip("java-jackson / java-gson / java-moshi — needs Maven Central jars, not vendored", () => {});
 describe.skip("kotlin-kotlinx — needs the kotlinx-serialization jar, not vendored", () => {});
 describe.skip("dart-json-serializable / dart-freezed — need build_runner-generated companions, not vendored", () => {});
-describe.skip("elm-json — needs Elm's own package registry, not vendored", () => {});
 describe.skip("elixir-jason — needs the Jason hex package, not vendored (elixirc has no syntax-only mode)", () => {});
