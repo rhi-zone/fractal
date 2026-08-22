@@ -34,7 +34,11 @@
 // union/enum is (elm-json.ts didn't need this because Elm's `{ field : T }`
 // is a valid anonymous inline type).
 import { resolve, type TypeRef, type TypeShape } from "./index.ts";
-import { toCamelCaseFromWords, toPascalCaseFromWords } from "./codegen-helpers.ts";
+import {
+  RESCRIPT_RESERVED_WORDS as RESERVED,
+  toCamelCaseFromWords,
+  toPascalCaseFromWords,
+} from "./codegen-helpers.ts";
 
 // ============================================================================
 // naming
@@ -46,48 +50,9 @@ import { toCamelCaseFromWords, toPascalCaseFromWords } from "./codegen-helpers.t
 // with an explicit `@as("original")` attribute plus a sanitized label, the
 // standard ReScript escape hatch for "the JS/JSON key doesn't look like a
 // ReScript identifier" (https://rescript-lang.org/docs/manual/latest/bind-to-js-function#object).
-const RESERVED = new Set([
-  "and",
-  "as",
-  "assert",
-  "constraint",
-  "else",
-  "exception",
-  "external",
-  "false",
-  "for",
-  "fun",
-  "function",
-  "functor",
-  "if",
-  "in",
-  "include",
-  "inherit",
-  "initializer",
-  "lazy",
-  "let",
-  "module",
-  "mutable",
-  "new",
-  "of",
-  "open",
-  "or",
-  "private",
-  "rec",
-  "sig",
-  "struct",
-  "then",
-  "to",
-  "true",
-  "try",
-  "type",
-  "val",
-  "virtual",
-  "when",
-  "while",
-  "with",
-  "switch",
-]);
+// The reserved-word set itself (`RESERVED`, aliased from
+// `RESCRIPT_RESERVED_WORDS`) now lives in codegen-helpers.ts — see that
+// export's doc comment.
 
 function sanitizeLabel(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9_]/g, "_");

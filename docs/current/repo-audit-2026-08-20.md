@@ -285,23 +285,44 @@ treeId prefixing (`423b8fa`), `outputHash`, closure-from-Program.
    documentation fact-check doesn't settle a call the spec's author
    explicitly reserved. Left open pending that call.
 10. **The wire-key/sourceMap union inlined four ways — still true, citation
-    needs a full re-derive.** The pattern still exists at each site (cli.ts,
-    json-rpc's `server.ts`, http's `route.ts`) but none of them literally
-    write the doc's quoted expression — variable names differ per site
-    (`flags`/`slugs`, `paramsObj`, `pathParamNames`/`searchParams`). mcp's
-    named `paramNamesFor` and graphql's declared-arg-names approach are both
-    still current. The dead-sourceMap-override lint is still http-only but
-    has moved substantially (~:1519-1530, not :1585-1594) — this citation in
-    particular needs someone to re-derive the exact current line ranges
-    rather than trust the old ones.
+    re-derived this pass.** The pattern still exists at each site, with
+    variable names differing per site (not the same expression copy-pasted):
+    `cli-api-projector/src/cli.ts:875-876`
+    (`...new Set([...Object.keys(flags), ...Object.keys(slugs), ...Object.keys(sourceMap)])`),
+    `json-rpc-api-projector/src/server.ts:399-400`
+    (`...new Set([...Object.keys(paramsObj), ...Object.keys(dispatch.sourceMap)])`),
+    `http-api-projector/src/route.ts:1053-1064` (the widest of the four —
+    unions `pathParamNames`, `url.searchParams.keys()`, the parsed body's own
+    keys when it's an object, and `Object.keys(sourceMap)`). mcp's named
+    `paramNamesFor` helper (`mcp-api-projector/src/server.ts:588`) and
+    graphql's declared-arg-names approach are both still current (not
+    inlined the same way). The dead-sourceMap-override lint (`kind:
+    "unused-override"`, the diagnostic for a `sourceMap` entry whose param
+    isn't in `paramNames`) is still http-only, and its **actual** current
+    location is `http-api-projector/src/route.ts:1583-1592` — the previous
+    re-check's `~:1519-1530` guess was itself wrong: that range is the
+    *path-store* override check inside the same function
+    (`findRouteSourceCoverageProblems`, doc comment :1441-1490), a related
+    but different branch of the same lint, not the unused-override one.
 14. **Small drift**: `preset.ts` (http) vs `presets.ts` (mcp, graphql) — still
     true. `source()` in `source.ts` for four projectors, `verbs.ts` for http —
     still true. (ffi-ir's six verbatim `toSnakeCase` copies of type-ir's
     `toSnakeCaseStripSeparators` are fixed — every ffi-ir target now imports
-    it directly from `@rhi-zone/fractal-type-ir/codegen-helpers`.)
-    `rescript-external.ts` still has a live replacement duplication: a
-    `RESERVED` reserved-word set copied because `rescript-native.ts` doesn't
-    export its set — not chased further this pass.
+    it directly from `@rhi-zone/fractal-type-ir/codegen-helpers`.) The
+    `rescript-external.ts`/`rescript-native.ts` `RESERVED` duplication is
+    **fixed the same way this pass**: scoped the duplication first (grepped
+    for the literal `"constraint"` member across `packages/*/src` — the two
+    ReScript-targeting sets in `type-ir/src/rescript-native.ts` and
+    `ffi-ir/src/rescript-external.ts` were byte-identical 39-word sets, both
+    unexported, no `export` keyword on either; `ffi-ir/src/ocaml-melange.ts`
+    also has a `RESERVED` set but it's a genuinely different keyword list for
+    OCaml, not a copy of this one, so out of scope). Added
+    `RESCRIPT_RESERVED_WORDS` to `type-ir/src/codegen-helpers.ts` (same file
+    `JS_RESERVED_WORDS` already lives in, same pattern as the `toSnakeCase`
+    fix above); both `rescript-native.ts` and `rescript-external.ts` now
+    import it (`type-ir`'s own `./rescript-native` subpath was already
+    exported via `package.json#exports`, just the constant inside it wasn't).
+    Workspace typecheck/lint/tests all pass after the change.
 
 Explicitly checked and clean: the `source()` helper family, `escapeJoin`
 adoption across graphql's three lookup-key call sites (`project.ts`,

@@ -1,4 +1,5 @@
 import { t, type TypeRef } from "@rhi-zone/fractal-type-ir";
+import { RESCRIPT_RESERVED_WORDS as RESERVED } from "@rhi-zone/fractal-type-ir/codegen-helpers";
 import { toReScriptType } from "@rhi-zone/fractal-type-ir/rescript";
 import { ancestors, type FfiParam, type FfiRef, type FfiShape } from "./index.ts";
 
@@ -86,52 +87,10 @@ function decapitalize(name: string): string {
 }
 
 // ReScript reserved words that cannot be used as an `external`'s binding
-// identifier (the left-hand name) — mirrors type-ir's `rescript-native.ts`
-// RESERVED set, duplicated here because that file doesn't export its set
-// (unlike `codegen-helpers.ts`'s helpers, which this package now imports
-// directly via `@rhi-zone/fractal-type-ir/codegen-helpers`).
-const RESERVED = new Set([
-  "and",
-  "as",
-  "assert",
-  "constraint",
-  "else",
-  "exception",
-  "external",
-  "false",
-  "for",
-  "fun",
-  "function",
-  "functor",
-  "if",
-  "in",
-  "include",
-  "inherit",
-  "initializer",
-  "lazy",
-  "let",
-  "module",
-  "mutable",
-  "new",
-  "of",
-  "open",
-  "or",
-  "private",
-  "rec",
-  "sig",
-  "struct",
-  "then",
-  "to",
-  "true",
-  "try",
-  "type",
-  "val",
-  "virtual",
-  "when",
-  "while",
-  "with",
-  "switch",
-]);
+// identifier (the left-hand name) — same set type-ir's `rescript-native.ts`
+// uses for field/variant labels; both now import it from
+// `@rhi-zone/fractal-type-ir/codegen-helpers` instead of each keeping their
+// own copy.
 
 /** A valid ReScript lowercase-leading identifier for `name`, used as the
  * left-hand binding identifier of an `external` declaration — the JS-side

@@ -202,6 +202,55 @@ export function escapeJsIdent(name: string): string {
   return JS_RESERVED_WORDS.has(name) ? `${name}_` : name;
 }
 
+/** ReScript reserved words — cannot be used bare as a variant/record-field
+ * label or an `external`'s binding identifier. Shared by this package's own
+ * rescript-native.ts (nominal-variant/record type projector) and ffi-ir's
+ * rescript-external.ts (the `external`-declaration projector for the
+ * ReScript/JS FFI boundary) — previously duplicated verbatim in both files;
+ * this is the single source now. */
+export const RESCRIPT_RESERVED_WORDS = new Set([
+  "and",
+  "as",
+  "assert",
+  "constraint",
+  "else",
+  "exception",
+  "external",
+  "false",
+  "for",
+  "fun",
+  "function",
+  "functor",
+  "if",
+  "in",
+  "include",
+  "inherit",
+  "initializer",
+  "lazy",
+  "let",
+  "module",
+  "mutable",
+  "new",
+  "of",
+  "open",
+  "or",
+  "private",
+  "rec",
+  "sig",
+  "struct",
+  "then",
+  "to",
+  "true",
+  "try",
+  "type",
+  "val",
+  "virtual",
+  "when",
+  "while",
+  "with",
+  "switch",
+]);
+
 /** Single-quotes `value` for Dart string-literal syntax, backslash-escaping
  * `\`, `'`, and `$` (Dart string interpolation's sigil — an unescaped `$`
  * in a single-quoted Dart string is still an interpolation trigger).
