@@ -246,7 +246,7 @@ describe("OOTB preset — validation via applyValidation + rewriters", () => {
     expect(await res.json()).toMatchObject({ validated: true });
   });
 
-  it("a rejecting generated validator's err Result surfaces as a 400 with the structured errors — no dedicated 500 special-case needed", async () => {
+  it("a rejecting generated validator's err Result surfaces as a 422 with the structured errors — no dedicated 500 special-case needed", async () => {
     const echoNode = api_({
       widgets: op((input: Record<string, unknown>) => input, {
         http: { method: "GET" },
@@ -258,7 +258,7 @@ describe("OOTB preset — validation via applyValidation + rewriters", () => {
       rewriters: [(routes) => applyValidation("test", routes)],
     });
     const res = await f(new Request("http://localhost/widgets"));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     const body = (await res.json()) as { error: unknown };
     expect(body.error).toEqual([{ kind: "type", path: [], expected: "n/a", actual: "n/a" }]);
   });

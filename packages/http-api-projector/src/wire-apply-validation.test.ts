@@ -67,7 +67,7 @@ describe('3-arg applyValidation("http") end-to-end — query-param decode', () =
     expect(await res.json()).toEqual({ page: 3, doubled: 6 });
   });
 
-  it('a non-numeric "page" query value is rejected with a 400 (validateEncoding failure, not a silent NaN)', async () => {
+  it('a non-numeric "page" query value is rejected with a 422 (validateEncoding failure, not a silent NaN)', async () => {
     const source = buildWireApplyValidationModuleSource(FIXTURE, {
       runtimeImport: "@rhi-zone/fractal-api-tree/apply-validation",
     });
@@ -80,6 +80,6 @@ describe('3-arg applyValidation("http") end-to-end — query-param decode', () =
     });
 
     const res = await f(new Request("http://localhost/list?page=notanumber"));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
   });
 });

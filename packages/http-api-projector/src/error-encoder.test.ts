@@ -4,7 +4,7 @@
 //
 // Covers: a handler returns `err({ kind, ... })`; `httpErrors` maps `kind` to
 // an HTTP status; unmatched kinds and an absent `errorEncoder` fall back to
-// the existing default (400 wrapping `{ error }`). Also covers a handler that
+// the existing default (422 wrapping `{ error }`). Also covers a handler that
 // THROWS: `thrownErrorEncoder` maps the caught value to an `HttpErrorResponse`;
 // an absent encoder, or one returning `undefined`, falls back to the existing
 // default (500 wrapping `{ error: "internal server error" }`). See
@@ -76,7 +76,7 @@ describe("httpErrors", () => {
     expect(res.status).toBe(409);
   });
 
-  it("unknown error kind (no match) falls back to the default 400", async () => {
+  it("unknown error kind (no match) falls back to the default 422", async () => {
     const route = naiveTransform(tree());
     const router = makeRouterFromRoute(
       route.children!.getBook!,
@@ -91,12 +91,12 @@ describe("httpErrors", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     const body = await res.json();
     expect(body).toEqual({ error: { kind: "somethingElse", message: "???" } });
   });
 
-  it("no errorEncoder configured — current 400 default behavior unchanged", async () => {
+  it("no errorEncoder configured — current 422 default behavior unchanged", async () => {
     const route = naiveTransform(tree());
     const router = makeRouterFromRoute(route.children!.getBook!);
     const res = await router(
@@ -106,7 +106,7 @@ describe("httpErrors", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     const body = await res.json();
     expect(body).toEqual({ error: { kind: "notFound", message: "Book not found" } });
   });

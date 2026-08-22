@@ -1128,9 +1128,16 @@ function defaultEncode(output: unknown, req?: Request, meta?: RouteLeafMeta): Re
   return jsonRouteResponse(output, { status: 200 });
 }
 
-/** Default error encode: a 400 JSON response wrapping the error value. */
+/**
+ * Default error encode: a 422 JSON response wrapping the error value. 422,
+ * not 400 — an `err` Result is the handler signaling well-formed-but-
+ * semantically-invalid input (e.g. a wire-profile-driven rejection like
+ * `?page=notanumber`), the same category `http.validate()`'s Standard Schema
+ * rejection lands on below. `defaultDecode`'s own catch block (runRoute,
+ * below) stays 400 — that path is a malformed request body, not this one.
+ */
 function defaultEncodeError(error: unknown): Response {
-  return jsonRouteResponse({ error }, { status: 400 });
+  return jsonRouteResponse({ error }, { status: 422 });
 }
 
 // ============================================================================
@@ -1140,7 +1147,7 @@ function defaultEncodeError(error: unknown): Response {
 // `{ kind: "notFound", message: "Book not found" }`). `errorEncoder` (see
 // `PresetOptions.errorEncoder`/`runRoute`'s parameter below) maps `E` to an
 // `HttpErrorResponse`; `undefined` means "not recognized," which falls back
-// to `defaultEncodeError`'s 400. `thrownErrorEncoder` is the parallel hook
+// to `defaultEncodeError`'s 422. `thrownErrorEncoder` is the parallel hook
 // for a THROWN error (a handler that throws instead of returning
 // `Result.err`) — same `(error: unknown) => HttpErrorResponse | undefined`
 // shape, called from `runRoute`'s catch block; `undefined` (including when
@@ -1286,7 +1293,7 @@ function composeHandlerMiddleware(
  * never gated — see its own doc comment above for why. `errorEncoder` maps a
  * `Result.err(E)` value to an `HttpErrorResponse`; `thrownErrorEncoder` is
  * its parallel for whatever the catch block below actually caught (a thrown
- * error, not a `Result`) — both fall back to their own default (400 / 500
+ * error, not a `Result`) — both fall back to their own default (422 / 500
  * respectively) when the encoder is absent or returns `undefined`.
  * `serviceStores` (default `{}`) is the deployment's registered `ServiceStores`
  * value (`PresetOptions.serviceStores`, presets.ts) — threaded straight through
@@ -1370,9 +1377,11 @@ export async function runRoute(
     if (detectStreaming && isAsyncIterable(output)) return streamAsSse(output);
 
     // Result unwrapping: if the handler returned a Result<T, E>, separate
-    // the success and error paths before encoding — a 400, not the catch
-    // block's 500, since an err Result is an expected outcome the handler
-    // chose to signal, not an unexpected failure. This is also how an
+    // the success and error paths before encoding — a 422 (well-formed
+    // request, semantically invalid content — same category the Standard
+    // Schema rejection above lands on), not the catch block's 500, since an
+    // err Result is an expected outcome the handler chose to signal, not an
+    // unexpected failure. This is also how an
     // `applyValidation`-wrapped handler (@rhi-zone/fractal-api-tree/apply-validation)
     // signals a validation rejection: it returns `err(validationErrors)`
     // rather than throwing, so it lands here as a discriminated-union check

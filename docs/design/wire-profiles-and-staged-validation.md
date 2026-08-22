@@ -1003,14 +1003,17 @@ Per protocol, migrated to `applyValidation(key, tree, protocol)`:
   alongside the still-supported 2-arg form.
 - **http-api-projector**: never had a projector-local coercion fallback
   either (the old `compileValidatorModule` path already covered HTTP via the
-  2-arg call) — verified `route.ts`'s existing Result→400 mapping already
+  2-arg call) — verified `route.ts`'s existing Result→error mapping already
   handles a wire-validator-rejected leaf with zero route.ts changes needed.
   Docs now show `applyValidation(key, routes, "http")` as the recommended
   form (per-field query/path/header coercion via `queryProfile`, JSON-body
   `Date` coercion via `jsonProfile`, composite per-field derivation via
   phase B's `compileWireEntryFragmentComposite`/`wire-derive.ts`), alongside
   a new end-to-end test proving `?page=3` decodes to the number `3` and
-  `?page=notanumber` gets a 400.
+  `?page=notanumber` gets a 422 (`defaultEncodeError`'s default for an `err`
+  Result was later moved from 400 to 422 — well-formed request,
+  semantically-invalid content, the same category `http.validate()`'s
+  Standard Schema rejection already used).
 - Every projector's `isApplyValidationWrapped` sniff site is deleted, along
   with the export itself and its backing `appliedHandlerBrand` `WeakSet`
   (`apply-validation.ts`) — decode+validation now run unconditionally on

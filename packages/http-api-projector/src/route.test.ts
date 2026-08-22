@@ -718,7 +718,7 @@ describe("runRoute — default decode/encode", () => {
     expect(await res.json()).toEqual({ id: 1 });
   });
 
-  it("handler returning Result err → 400 with the error body", async () => {
+  it("handler returning Result err → 422 with the error body", async () => {
     const route = httpRoute({
       methods: {
         GET: { handler: (_: unknown) => ({ kind: "err", error: { message: "nope" } }), meta: {} },
@@ -727,7 +727,7 @@ describe("runRoute — default decode/encode", () => {
     });
     const router = makeRouterFromRoute(route);
     const res = await router(new Request("http://localhost/"));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { message: string } };
     expect(body.error.message).toBe("nope");
   });
@@ -1207,7 +1207,7 @@ describe("runRoute — handler-level middleware", () => {
     expect(body.authorization).toBeUndefined();
   });
 
-  it("runs before Result-unwrapping — an err Result from the middleware chain still maps to 400", async () => {
+  it("runs before Result-unwrapping — an err Result from the middleware chain still maps to 422", async () => {
     const rejecting: HttpHandlerMiddleware = () => async () => ({
       kind: "err",
       error: "rejected by middleware",
@@ -1219,7 +1219,7 @@ describe("runRoute — handler-level middleware", () => {
     });
     const router = makeRouterFromRoute(applyMethods(naiveTransform(tree)), [rejecting]);
     const res = await router(new Request("http://localhost/echo?x=1"));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ error: "rejected by middleware" });
   });
 });
