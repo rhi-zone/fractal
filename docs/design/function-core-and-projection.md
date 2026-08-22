@@ -1,26 +1,53 @@
-> **Status: Partially superseded** — [`invariants.md`](./invariants.md) is the
-> authoritative model, mined verbatim from the design conversation, and supersedes
-> this doc wherever they conflict — specifically the authored-verb/placement
-> framing, the two-tree split, and the verb-convention scheme are superseded.
-> Everything not touched by `invariants.md` (the function-category core, one-
-> directional transforms, producer model, package boundaries) remains current.
+> **Status: Superseded, retained for reasoning history.** This doc (2026-06-29) was
+> superseded piecemeal by later docs, most of which are themselves now superseded in
+> turn:
+>
+> - **Routing/node model** — [`invariants.md`](./invariants.md) (2026-06-30) claimed
+>   authority over this doc's verb/placement framing and two-tree split, but
+>   `invariants.md` was itself superseded by [`converged-model.md`](./converged-model.md)
+>   (2026-07-06/07), which was itself superseded by
+>   [`router-model.md`](./router-model.md) (2026-07-09/10) for the node shape and
+>   dispatch model — `{handler?, children?, fallback?, meta}`, attribute-dispatch DU,
+>   no compilation step. `router-model.md` is current for this.
+> - **Output / response model — the "typed construct" scheme below (`Stream<X>` /
+>   `Bytes` / `Redirect`, "no raw `Response` escape hatch") was never built and is
+>   ABANDONED.** What actually shipped is the opposite: a raw-`Response`-passthrough
+>   handler return (body may be a `ReadableStream` / `ArrayBuffer` / `Uint8Array` /
+>   `Blob` / a `Response` instance / `null`), plus a `meta.http.response` directive
+>   (`{status?, headers?}`) materialized via `applyResponse` into a `ResponseOverride`
+>   (`packages/http-api-projector/src/route.ts`). Streaming ships as SSE over an
+>   async-iterable handler return (`StreamProgress`/`StreamChunk` tags), not a
+>   `Stream<X>` typed construct. This mechanism is documented and actively maintained
+>   in [`directive-contract.md`](./directive-contract.md) and
+>   [`meta-role-split-spec.md`](./meta-role-split-spec.md) (both edited 2026-08-21,
+>   after this doc's last substantive edit) and is covered by real tests
+>   (`packages/http-api-projector/src/route.test.ts`). Nothing elsewhere in the repo
+>   (design docs, TODO.md, roadmap.md, or partial implementation) treats the typed
+>   `Stream<X>`/`Bytes`/`Redirect` scheme as a live plan — it does not appear outside
+>   this doc and `invariants.md`'s verbatim-mined quote of the original design
+>   conversation ("why not a canonical stream construct?"), which was never restated
+>   as certified or open in `converged-model.md`'s later [CERTIFIED]/[OPEN] lists.
+>
+> **Still current from this doc:** the function-category core, one-directional
+> transforms, the "operation = pure typed function" model, the producer concept, and
+> package boundaries — none of these were touched by any of the above.
 
-# Function core and projection — the converged architecture
+# Function core and projection — the converged architecture (historical)
 
 ## Status
 
-**Canonical.** This is the spec the rewrite builds to. It supersedes the
-`Handler<R>` / `req.ctx` / `.meta` model documented in
+**Superseded — retained for reasoning history, not a current build target.** See the
+banner above for what supersedes which part. At the time this was written it
+superseded the `Handler<R>` / `req.ctx` / `.meta` model documented in
 [`handler-model.md`](./handler-model.md) and the optic-pair direction in
-[`optics-direction.md`](./optics-direction.md). Those docs are retained for
-reasoning history and carry superseded banners pointing here.
+[`optics-direction.md`](./optics-direction.md); that part of its role still holds.
 
 Written for implementers and future sessions. Each section states the model and a
 short rationale; TS sketches are illustrative, not final API. The routing-tree
-**authoring syntax** — previously the one OPEN item — is now **resolved** (the
-verified "Candidate D" syntax; see [Routing tree](#routing--an-explicit-protocol-neutral-tree)).
-One sub-question remains deferred: the producer representation, entangled with open
-tensions #1/#2.
+**authoring syntax** section below (including the "Candidate D" syntax) reflects
+2026-06-29 thinking; **`router-model.md` is current for node shape/dispatch** — read
+this section as historical record of how that syntax was arrived at, not as the
+current authoring surface.
 
 ---
 
@@ -194,6 +221,14 @@ special-case in every projection (the accretion that
 ---
 
 ## Output
+
+> **ABANDONED — never built; see the status banner at the top of this doc.** The
+> shipped mechanism is the opposite of what this section describes: raw
+> `Response`-shaped values ARE a supported handler return (passthrough), plus a
+> `meta.http.response` directive for status/header overrides. See
+> [`directive-contract.md`](./directive-contract.md) and
+> [`meta-role-split-spec.md`](./meta-role-split-spec.md) for the current model.
+> Kept below as historical record of the rejected alternative.
 
 The handler returns `Result<T, E>`, where `T` is a **typed construct**, each with
 its own encoder `T => Response`:
@@ -588,11 +623,12 @@ tensions #1/#2 below. The unresolved tensions are:
    between "what the runtime tree records" and "what the compiler-API walk reads" needs
    to be drawn precisely in the spike (and is entangled with provenance, point 1).
 
-3. **Streaming returns in the typed client.** `Stream<X>` projects cleanly to SSE on
-   the HTTP wire, but the exact-mirror typed client and the in-process call must agree
-   on how a streaming return is represented (an async iterable? a callback?). Minor, but
-   the "client mirrors the signature exactly" promise needs a concrete answer for
-   non-record `T`.
+3. ~~**Streaming returns in the typed client.**~~ — moot: the `Stream<X>` typed
+   construct this question was framed around was never built (see status banner).
+   What shipped instead is an async-iterable handler return, detected and streamed as
+   SSE (`StreamProgress`/`StreamChunk` tags, `packages/http-api-projector/src/route.ts`).
+   Whether the generated typed client represents that as an async iterable is a
+   question for whatever doc currently owns client codegen, not this one.
 
 4. **OpenAPI: output vs intermediate.** This doc relocates OpenAPI from _intermediate_
    (old: `.meta` → OpenAPI → codegen reads it back) to _output_ (new: types → OpenAPI,
