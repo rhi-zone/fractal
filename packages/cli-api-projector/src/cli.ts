@@ -720,7 +720,11 @@ function describeFieldType(fieldSchema: JsonSchema): string | undefined {
     }
     return "array";
   }
-  return fieldSchema.type;
+  // A nullable leaf whose base schema is a plain `{ type: <name> }` unions
+  // in `"null"` as a second array entry (`json-schema.ts`'s `withMeta`,
+  // `meta.nullable === true` branch) rather than a bare string — render it
+  // the same shape as an enum hint (`"string|null"`).
+  return Array.isArray(fieldSchema.type) ? fieldSchema.type.join("|") : fieldSchema.type;
 }
 
 // ============================================================================

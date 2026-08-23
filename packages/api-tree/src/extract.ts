@@ -98,8 +98,16 @@ const puntRef = (reason: string): TypeRef =>
  * `export const schemas: SchemaMap = <object literal>` — will catch a drift
  * here that the loose `as`-cast path does not.
  */
+/** A single JSON-Schema primitive type name (draft 2020-12 §4.2.1). */
+type JsonSchemaTypeName = "string" | "number" | "boolean" | "array" | "object" | "null";
+
 export type JsonSchema = {
-  type?: "string" | "number" | "boolean" | "array" | "object";
+  // `withMeta` (`json-schema.ts`, `meta.nullable === true` branch) unions in
+  // `"null"` alongside a simple string `type` — `["string", "null"]` — for
+  // any nullable leaf whose base schema is a plain `{ type: <name> }` (the
+  // `complex` case instead wraps in `anyOf`, which needs no `type` entry
+  // here). A bare string stays valid for the non-nullable case.
+  type?: JsonSchemaTypeName | JsonSchemaTypeName[];
   properties?: Record<string, JsonSchema>;
   required?: string[];
   items?: JsonSchema | false;

@@ -516,6 +516,16 @@ function isReadonly(prop: ts.Symbol): boolean {
   });
 }
 
+/** True when `type` includes `null` as a constituent — either directly
+ * (`type X = null`) or as one member of a union (`T | null`). Checked on the
+ * RAW property type, before `getNonNullableType()` strips it (that call
+ * removes `null` right alongside `undefined`, so the null-ness has to be
+ * read off first or it's unrecoverable — see the property loop below). */
+function containsNull(type: ts.Type): boolean {
+  if ((type.flags & ts.TypeFlags.Null) !== 0) return true;
+  return type.isUnion() && type.types.some((m) => (m.flags & ts.TypeFlags.Null) !== 0);
+}
+
 /**
  * A property symbol's own JSDoc comment (the `/** … *\/` text, excluding
  * `@tag` lines), flattened to a single trimmed string. Uses
@@ -1392,8 +1402,9 @@ function typeRefFromTypeStructural(
 
       const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
       const readonly = isReadonly(prop);
-      // Strip `| undefined` so `field?: string` lowers as a plain string —
-      // except for `unknown`/`any` fields, which skip this narrowing (see
+      // Strip `| undefined` (and `| null`, recorded separately below) so
+      // `field?: string` lowers as a plain string — except for
+      // `unknown`/`any` fields, which skip this narrowing (see
       // `packages/api-tree/src/extract.test.ts` for the regression coverage).
       //
       // `ts.Type#getNonNullableType()` applied to a field typed `unknown`
@@ -1414,10 +1425,16 @@ function typeRefFromTypeStructural(
       // `typeRefFromType` call below, which lowers it to `types.unknown`
       // via the ordinary punt path.
       const rawPropType = checker.getTypeOfSymbolAtLocation(prop, loc);
-      const propType =
-        (rawPropType.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) !== 0
-          ? rawPropType
-          : rawPropType.getNonNullableType();
+      const isUnknownOrAny = (rawPropType.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) !== 0;
+      // `getNonNullableType()` strips `null` right alongside `undefined`
+      // with nothing left behind to say it happened — read the null-ness
+      // off the raw type first (`containsNull`) or it's gone for good, and
+      // a leaf like `description?: string | null` silently loses its
+      // "clear this field" case at the transport-validator layer (the
+      // union collapses to plain `string`, so `description: null` fails an
+      // enum/type check that the domain layer was always fine with).
+      const nullable = !isUnknownOrAny && containsNull(rawPropType);
+      const propType = isUnknownOrAny ? rawPropType : rawPropType.getNonNullableType();
 
       // Method-shaped fields (call signature) lower to `types.function` —
       // e.g. `callback: (x: number) => void` — same as any other callable
@@ -1434,6 +1451,7 @@ function typeRefFromTypeStructural(
 
       const extraMeta: Record<string, unknown> = { ...refinementMeta };
       if (optional) extraMeta.optional = true;
+      if (nullable) extraMeta.nullable = true;
       if (readonly) extraMeta.readonly = true;
       if (description !== undefined) extraMeta.description = description;
       if (defaultValue !== undefined) extraMeta.default = defaultValue;

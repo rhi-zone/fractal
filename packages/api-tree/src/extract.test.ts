@@ -1629,6 +1629,26 @@ describe("typeRefFromType gap fixes", () => {
     expect(fn.params.map((p) => p.type.shape.kind)).toEqual(["string"]);
     expect(fn.returnType.shape.kind).toBe("number");
   });
+
+  // End-to-end regression for the from-typescript.ts nullable fix: a TS
+  // `string | null` field must carry `meta.nullable` all the way through
+  // extraction AND survive toJsonSchema's projection (json-schema.ts's
+  // `withMeta`, `meta.nullable === true` branch) as the JSON-Schema
+  // array-type shape `{ type: ["string", "null"] }` — not just set the meta
+  // flag in isolation (from-typescript.test.ts already covers that).
+  it("a `T | null` field's meta.nullable survives toJsonSchema as { type: [\"string\", \"null\"] }", () => {
+    const ref = typeRefFromType(typeOf("NullableField"), checker, source);
+    const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
+    const note = fields.note!;
+    expect(note.shape).toEqual({ kind: "string" });
+    expect(note.meta.nullable).toBe(true);
+    expect(toJsonSchema(note)).toEqual({ type: ["string", "null"] });
+    expect(toJsonSchema(ref)).toEqual({
+      type: "object",
+      properties: { note: { type: ["string", "null"] } },
+      required: ["note"],
+    });
+  });
 });
 
 // ============================================================================

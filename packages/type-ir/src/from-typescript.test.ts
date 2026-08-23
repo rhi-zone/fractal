@@ -125,6 +125,26 @@ describe("objects", () => {
     expect(fields.nickname!.shape).toEqual({ kind: "string" });
   });
 
+  it("nullable fields (`T | null`) record `meta.nullable`, distinct from `meta.optional`", () => {
+    const ref = typeRefOf(
+      `type X = { description?: string | null; note: string | null }`,
+      "X",
+    );
+    const fields = (
+      ref.shape as { fields: Record<string, { shape: unknown; meta: Record<string, unknown> }> }
+    ).fields;
+    // `description?: string | null` — both optional (may be omitted) and
+    // nullable (may be explicitly `null`); the field's own shape narrows to
+    // plain string, with both facts preserved as separate meta flags.
+    expect(fields.description!.shape).toEqual({ kind: "string" });
+    expect(fields.description!.meta.optional).toBe(true);
+    expect(fields.description!.meta.nullable).toBe(true);
+    // `note: string | null` — required, but still nullable.
+    expect(fields.note!.shape).toEqual({ kind: "string" });
+    expect(fields.note!.meta.optional).toBeUndefined();
+    expect(fields.note!.meta.nullable).toBe(true);
+  });
+
   it("nested objects + arrays", () => {
     const ref = typeRefOf(`type X = { tags: string[]; address: { city: string } }`, "X");
     const fields = (ref.shape as { fields: Record<string, { shape: Record<string, unknown> }> })

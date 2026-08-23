@@ -70,6 +70,11 @@ export type ReadonlyField = { readonly id: string; name: string };
 /** A field that is both optional and `readonly`. */
 export type ReadonlyOptionalField = { readonly id?: string };
 
+/** A required field typed `T | null` — must record `meta.nullable`, not
+ * silently drop the null-ness (the from-typescript.ts fix this fixture
+ * covers end-to-end through extract.ts's JSON-Schema projection). */
+export type NullableField = { note: string | null };
+
 /** A class with mixed visibility + a method — lowers to a purely nominal types.instance. */
 export class SampleClass {
   public name: string = "";
