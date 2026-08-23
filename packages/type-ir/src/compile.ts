@@ -37,7 +37,7 @@ import { defTypeAliasName, sanitizeDefName, toTypeScript } from "./typescript-na
 // ============================================================================
 
 export type ValidationError =
-  | { kind: "type"; path: string[]; expected: TypeRef; actual: TypeRef }
+  | { kind: "type"; path: string[]; expected: string; actual: string }
   | { kind: "missing"; path: string[] }
   | { kind: "literal"; path: string[]; expected: unknown; actual: unknown }
   | { kind: "enum"; path: string[]; expected: readonly unknown[]; actual: unknown }
@@ -78,6 +78,56 @@ export type ValidationError =
 /** Display string for a TypeRef — reuses the TypeScript projector's rendering. */
 export function typeRefToString(ref: TypeRef): string {
   return toTypeScript(ref);
+}
+
+/**
+ * A SHORT, one-line display name for a TypeRef — what `ValidationError`'s
+ * `type` variant carries as `expected` (paired with `__describeType(value)`
+ * as `actual`).
+ *
+ * Deliberately NOT `typeRefToString`/`toTypeScript`: that rendering is fully
+ * recursive, so a `type` error against a 40-field object carried (and, in
+ * generated code, hoisted a const for) the object's whole structural
+ * TypeScript text at every single check site. This renders ONE level of
+ * structure and then falls back to bare kind names, which is what a `type`
+ * error actually needs — the error already carries `path`, so the caller
+ * knows WHERE; `expected` only has to say WHAT SHAPE was wanted there. A
+ * `ref` renders as its `defs` target name (the most informative thing
+ * available, and already short).
+ */
+function summarizeRef(ref: TypeRef, depth: number): string {
+  const shape = ref.shape as TypeShape & Record<string, unknown>;
+  const kind = shape.kind;
+  let base: string;
+  if (kind === "ref") {
+    base = String(shape.target);
+  } else if (kind === "literal") {
+    base = JSON.stringify(shape.value);
+  } else if (depth <= 0) {
+    base = kind;
+  } else if (kind === "array") {
+    base = `array<${summarizeRef(shape.element as TypeRef, depth - 1)}>`;
+  } else if (kind === "map") {
+    base = `map<${summarizeRef(shape.key as TypeRef, depth - 1)}, ${summarizeRef(shape.value as TypeRef, depth - 1)}>`;
+  } else if (kind === "tuple") {
+    base = `tuple[${(shape.elements as readonly TypeRef[]).length}]`;
+  } else if (kind === "union") {
+    const variants = shape.variants as readonly TypeRef[];
+    base =
+      variants.length > 4
+        ? `union[${variants.length}]`
+        : `union<${variants.map((variant) => summarizeRef(variant, 0)).join(" | ")}>`;
+  } else {
+    base = kind;
+  }
+  return ref.meta.nullable === true ? `${base} | null` : base;
+}
+
+/** See `summarizeRef` — the exported entry point, rendering one level of
+ * structure. Used both by the codegen (`typeErrorStmt`) and by any consumer
+ * that wants the same short rendering for a TypeRef it holds. */
+export function typeRefSummary(ref: TypeRef): string {
+  return summarizeRef(ref, 1);
 }
 
 // ============================================================================
@@ -162,23 +212,13 @@ function defFnName(name: string, facet: "check" | "errors" | "parse"): string {
   return `__def_${sanitizeDefName(name)}_${facet}`;
 }
 
-/** A JSON-serializable TypeRef literal, hoisted to a shared const (via `ctx`)
- * so a TypeRef checked at multiple call sites — check/errors/parse each walk
- * the same tree, and a shape can recur under a union/array/object — emits its
- * `JSON.stringify` literal once rather than inlining it at every site.
- * `as any`: the literal's inferred object-literal type (`{ kind: string }`,
- * a widened string, not the exact `TypeKinds` discriminant it structurally
- * is) doesn't satisfy `ValidationError`'s `expected`/`actual: TypeRef` field
- * without a full recursive `TypeRef`-shaped type annotation reproduced
- * inline — `any` sidesteps that without weakening `ValidationError` itself,
- * whose real definition (imported from type-ir, see `assembleWireModule`
- * and this file's own `ValidationError` export) still requires `TypeRef`. */
-function refLiteral(ref: TypeRef, ctx: GenCtx): string {
-  return ctx.addConst("ref", `${JSON.stringify(ref)} as any`);
-}
-
-function typeErrorStmt(pathExpr: string, expected: TypeRef, v: string, ctx: GenCtx): string {
-  return `errs.push({ kind: "type", path: ${pathExpr}, expected: ${refLiteral(expected, ctx)}, actual: __inferTypeRef(${v}) });`;
+/** The `type`-kind ValidationError push statement. `expected` is a
+ * COMPILE-TIME constant (`typeRefSummary` — a short display name, inlined as
+ * a string literal rather than hoisted to a const, since the literal is
+ * already smaller than the identifier that would name it); `actual` is a
+ * runtime call into the shared `__describeType` helper. */
+function typeErrorStmt(pathExpr: string, expected: TypeRef, v: string): string {
+  return `errs.push({ kind: "type", path: ${pathExpr}, expected: ${JSON.stringify(typeRefSummary(expected))}, actual: __describeType(${v}) });`;
 }
 
 // A kind is "stringlike"/"numericlike" if it (or an ancestor) is "string" /
@@ -487,7 +527,7 @@ function nonCoercingLeaf(cond: (v: string, ctx: GenCtx) => string): ValidateHand
   return (ref, v, pathExpr, ctx) => {
     const c = cond(v, ctx);
     const stmts = [
-      `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+      `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`,
       ...metaConstraintStmts(ref, v, pathExpr, ctx, c),
     ];
     return { stmts, outExpr: v };
@@ -498,7 +538,7 @@ function formatLeaf(formatName: keyof typeof FORMAT_PATTERNS): ValidateHandler {
   return (ref, v, pathExpr, ctx) => {
     const re = ctx.addRegex(FORMAT_PATTERNS[formatName]!);
     const stmts = [
-      `if (typeof ${v} !== "string") { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+      `if (typeof ${v} !== "string") { ${typeErrorStmt(pathExpr, ref, v)} }`,
       `else if (!${re}.test(${v})) { errs.push({ kind: "format", path: ${pathExpr}, expected: ${JSON.stringify(formatName)}, actual: ${v} }); }`,
       ...metaConstraintStmts(ref, v, pathExpr, ctx, `typeof ${v} === "string"`),
     ];
@@ -517,14 +557,14 @@ function dateLeaf(): ValidateHandler {
   return (ref, v, pathExpr, ctx, mode) => {
     const c = isValidDate(v);
     if (mode === "errors") {
-      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
+      return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`], outExpr: v };
     }
     const out = ctx.fresh("d");
     const stmts = [
       `let ${out};`,
       `if (${c}) { ${out} = ${v}; }`,
       `else if (typeof ${v} === "string") { const __d = new Date(${v}); if (!Number.isNaN(__d.getTime())) { ${out} = __d; } else { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; } }`,
-      `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
+      `else { ${typeErrorStmt(pathExpr, ref, v)} ${out} = ${v}; }`,
     ];
     return { stmts, outExpr: out };
   };
@@ -542,7 +582,7 @@ function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
     if (mode === "errors") {
       return {
         stmts: [
-          `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+          `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`,
           ...metaConstraintStmts(ref, v, pathExpr, ctx, c),
         ],
         outExpr: v,
@@ -553,12 +593,12 @@ function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
     const stmts = [
       `let ${out};`,
       `if (${c}) { ${out} = ${v}; }`,
-      `else if (typeof ${v} === "string" && ${v}.trim() !== "" && !Number.isNaN(Number(${v}))) { ${out} = Number(${v}); if (!(${coercedOk})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } }`,
+      `else if (typeof ${v} === "string" && ${v}.trim() !== "" && !Number.isNaN(Number(${v}))) { ${out} = Number(${v}); if (!(${coercedOk})) { ${typeErrorStmt(pathExpr, ref, v)} } }`,
       // A string that failed to parse as a number is a coercion failure; any
       // other wrong type (boolean, array, object, null) is a type error —
       // same kind errors() would report, so the two modes agree.
       `else if (typeof ${v} === "string") { errs.push({ kind: "coerce", path: ${pathExpr}, expected: ${JSON.stringify(ref.shape.kind)}, actual: ${v} }); ${out} = ${v}; }`,
-      `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
+      `else { ${typeErrorStmt(pathExpr, ref, v)} ${out} = ${v}; }`,
       ...metaConstraintStmts(ref, out, pathExpr, ctx, `typeof ${out} === "number"`),
     ];
     return { stmts, outExpr: out };
@@ -568,7 +608,7 @@ function numberFamilyLeaf(extra?: (v: string) => string): ValidateHandler {
 const booleanLeaf: ValidateHandler = (ref, v, pathExpr, ctx, mode) => {
   const c = `typeof ${v} === "boolean"`;
   if (mode === "errors")
-    return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
+    return { stmts: [`if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`], outExpr: v };
   const out = ctx.fresh("b");
   const stmts = [
     `let ${out};`,
@@ -579,7 +619,7 @@ const booleanLeaf: ValidateHandler = (ref, v, pathExpr, ctx, mode) => {
     // wrong type (number, array, object, null) is a type error — same kind
     // errors() would report, so the two modes agree.
     `else if (typeof ${v} === "string") { errs.push({ kind: "coerce", path: ${pathExpr}, expected: "boolean", actual: ${v} }); ${out} = ${v}; }`,
-    `else { ${typeErrorStmt(pathExpr, ref, v, ctx)} ${out} = ${v}; }`,
+    `else { ${typeErrorStmt(pathExpr, ref, v)} ${out} = ${v}; }`,
   ];
   return { stmts, outExpr: out };
 };
@@ -587,7 +627,7 @@ const booleanLeaf: ValidateHandler = (ref, v, pathExpr, ctx, mode) => {
 const stringLeaf: ValidateHandler = (ref, v, pathExpr, ctx) => {
   const c = `typeof ${v} === "string"`;
   const stmts = [
-    `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`,
+    `if (!(${c})) { ${typeErrorStmt(pathExpr, ref, v)} }`,
     ...metaConstraintStmts(ref, v, pathExpr, ctx, c),
   ];
   return { stmts, outExpr: v };
@@ -624,7 +664,7 @@ function objectValidate(
   const out = mode === "parse" ? ctx.fresh("o") : undefined;
   const stmts: string[] = [];
   if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`);
-  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`);
   const body: string[] = [];
   for (const [name, field] of Object.entries(s.fields)) {
     const fv = `${v}[${JSON.stringify(name)}]`;
@@ -669,7 +709,7 @@ function arrayValidate(
   const out = mode === "parse" ? ctx.fresh("a") : undefined;
   const stmts: string[] = [];
   if (out !== undefined) stmts.push(`let ${out}: any[] = [];`);
-  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`);
   const idx = ctx.fresh("i");
   const ev = ctx.fresh("e");
   const epath = ctx.fresh("p");
@@ -698,7 +738,7 @@ function tupleValidate(
   const out = mode === "parse" ? ctx.fresh("t") : undefined;
   const stmts: string[] = [];
   if (out !== undefined) stmts.push(`let ${out}: any[] = [];`);
-  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  stmts.push(`if (!Array.isArray(${v})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`);
   const body: string[] = [
     `if (${v}.length !== ${s.elements.length}) { errs.push({ kind: "tuple_length", path: ${pathExpr}, expected: ${s.elements.length}, actual: ${v}.length }); }`,
   ];
@@ -726,7 +766,7 @@ function mapValidate(
   const out = mode === "parse" ? ctx.fresh("m") : undefined;
   const stmts: string[] = [];
   if (out !== undefined) stmts.push(`let ${out}: Record<string, any> = {};`);
-  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`);
+  stmts.push(`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`);
   const key = ctx.fresh("k");
   const ev = ctx.fresh("e");
   const epath = ctx.fresh("p");
@@ -825,17 +865,17 @@ function intersectionValidate(
   return { stmts, outExpr: out ?? v };
 }
 
-function interfaceValidate(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx): ValidateResult {
+function interfaceValidate(ref: TypeRef, v: string, pathExpr: string): ValidateResult {
   const s = ref.shape as TypeShape & { kind: "interface" };
   const baseCond = `typeof ${v} === "object" && ${v} !== null`;
-  const stmts = [`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} } else {`];
+  const stmts = [`if (!(${baseCond})) { ${typeErrorStmt(pathExpr, ref, v)} } else {`];
   const body: string[] = [];
   for (const name of Object.keys(s.methods)) {
     const fv = `${v}[${JSON.stringify(name)}]`;
     const fpath = `${pathExpr}.concat([${JSON.stringify(name)}])`;
     body.push(
       `if (typeof ${fv} === "undefined") { errs.push({ kind: "missing", path: ${fpath} }); }`,
-      `else if (typeof ${fv} !== "function") { ${typeErrorStmt(fpath, ref, fv, ctx)} }`,
+      `else if (typeof ${fv} !== "function") { ${typeErrorStmt(fpath, ref, fv)} }`,
     );
   }
   stmts.push(...indentLines(body, 2), `}`);
@@ -873,7 +913,7 @@ const validateHandlers: Record<string, ValidateHandler> = {
   // "fresh output, never mutates the input" contract (see this file's header
   // comment): there's nothing to copy from, so aliasing is the only option.
   unknown: (_ref, v) => ({ stmts: [], outExpr: v }),
-  never: (ref, v, pathExpr, ctx) => ({ stmts: [typeErrorStmt(pathExpr, ref, v, ctx)], outExpr: v }),
+  never: (ref, v, pathExpr) => ({ stmts: [typeErrorStmt(pathExpr, ref, v)], outExpr: v }),
   instance: (_ref, v) => ({ stmts: [], outExpr: v }),
   // `ref` delegates to the target def's generated `errors`/`parse` function
   // (see the `checkHandlers.ref` doc comment above) when the target is in
@@ -952,29 +992,24 @@ function genValidate(
 }
 
 // ============================================================================
-// Runtime helper embedded once per compiled entry — infers a best-effort
-// TypeRef "shape" for an arbitrary runtime value, used as the `actual` field
-// of a `type` ValidationError (paired with `expected`, the TypeRef that was
-// checked against — see typeRefToString for turning either into display text).
+// Runtime helper embedded once per compiled entry/module — a SHORT display
+// name for an arbitrary runtime value's type, used as the `actual` field of a
+// `type` ValidationError (paired with `expected`, `typeRefSummary` of the
+// TypeRef that was checked against).
 // ============================================================================
 
-// `: any` return type: like `refLiteral`'s `as any` above, the inferred
-// per-branch object-literal type doesn't satisfy `ValidationError`'s
-// `actual: TypeRef` field without reproducing the full recursive `TypeRef`
-// type inline — `any` sidesteps that.
 /** Exported so a caller assembling its own module out of individually-
  * compiled `CompiledWireEntryFragment`s (`apply-validation-build.ts`'s
  * per-protocol wire build path, whose entries don't share one uniform
  * profile set the way `assembleWireModule`'s own per-entry-per-profile loop
- * assumes) can emit the shared `__inferTypeRef` helper every fragment's
+ * assumes) can emit the shared `__describeType` helper every fragment's
  * `type`-kind error path references, without re-deriving its source. */
-export const INFER_TYPE_REF_SOURCE = `function __inferTypeRef(v: any): any {
-  if (v === null) return { shape: { kind: "null" }, meta: {} };
-  if (v === undefined) return { shape: { kind: "void" }, meta: {} };
-  if (Array.isArray(v)) return { shape: { kind: "array", element: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
-  if (typeof v === "object") return { shape: { kind: "object", fields: {} }, meta: {} };
-  if (typeof v === "function") return { shape: { kind: "function", params: [], returnType: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
-  return { shape: { kind: typeof v }, meta: {} };
+export const DESCRIBE_TYPE_SOURCE = `function __describeType(v: any): string {
+  if (v === null) return "null";
+  if (v === undefined) return "undefined";
+  if (Array.isArray(v)) return "array";
+  if (typeof v === "object") return "object";
+  return typeof v;
 }`;
 
 // ============================================================================
@@ -1068,7 +1103,7 @@ function compileDefs(defs: Record<string, TypeRef>, ctx: GenCtx): string[] {
 
 /** Emits the `{ check, errors, parse }` triple's body lines (no wrapping
  * IIFE/braces — the caller supplies those) for a single TypeRef. `withHelper`
- * controls whether the `__inferTypeRef` runtime helper and the
+ * controls whether the `__describeType` runtime helper and the
  * `ValidationError` type (used by `type`-kind ValidationErrors) are declared
  * inline, versus assumed to already be in scope at module level — the only
  * current caller (`compileValidator`) always passes `true`.
@@ -1107,7 +1142,7 @@ function compileEntryBody(
   const lines: string[] = [];
   // `withHelper` is true for `compileValidator`'s single-expression,
   // truly-standalone output — there's no module scope to hoist a shared
-  // `ValidationError` type/`__inferTypeRef` helper to, so both are declared
+  // `ValidationError` type/`__describeType` helper to, so both are declared
   // locally inside the IIFE (erased at runtime, no cost). This is the only
   // case `compileEntryBody` currently compiles; a module-scope caller
   // sharing one copy across entries would pass `false` here instead.
@@ -1115,7 +1150,7 @@ function compileEntryBody(
     // A local `type` declaration inside the IIFE body; module-level `export
     // type` syntax is invalid inside a function body.
     lines.push(VALIDATION_ERROR_TYPE_SOURCE.replace(/^export /, ""));
-    lines.push(INFER_TYPE_REF_SOURCE);
+    lines.push(DESCRIBE_TYPE_SOURCE);
   }
   lines.push(...ctx.declarations());
   lines.push(...defLines);
@@ -1182,7 +1217,7 @@ export function compileValidator(ref: TypeRef, defs?: Record<string, TypeRef>): 
 }
 
 const VALIDATION_ERROR_TYPE_SOURCE = `export type ValidationError =
-  | { kind: "type"; path: string[]; expected: unknown; actual: unknown }
+  | { kind: "type"; path: string[]; expected: string; actual: string }
   | { kind: "missing"; path: string[] }
   | { kind: "literal"; path: string[]; expected: unknown; actual: unknown }
   | { kind: "enum"; path: string[]; expected: readonly unknown[]; actual: unknown }
@@ -1313,7 +1348,7 @@ function defaultWireLeaf(ref: TypeRef, v: string, pathExpr: string, ctx: GenCtx)
   // emitting `if (!(true))` would be dead code that oxlint's
   // `no-constant-condition` then flags, so skip the guard entirely.
   if (cond === "true") return { stmts: [], outExpr: v };
-  return { stmts: [`if (!(${cond})) { ${typeErrorStmt(pathExpr, ref, v, ctx)} }`], outExpr: v };
+  return { stmts: [`if (!(${cond})) { ${typeErrorStmt(pathExpr, ref, v)} }`], outExpr: v };
 }
 
 function defaultWireType(ref: TypeRef): string {
@@ -2448,6 +2483,76 @@ export function compileWireEntryFragmentComposite(
     : { code, wireType, typeImport, hookFields: hookFieldsArr };
 }
 
+/**
+ * Splice a run of per-entry `CompiledConstraintsFn.lines` into one module
+ * scope, collapsing byte-identical hoisted const DECLARATIONS to a single
+ * canonical declaration and rewriting the duplicate names away in the
+ * function bodies that referenced them.
+ *
+ * Why here and not in `GenCtx`: `compileConstraintsFn` compiles ONE leaf in
+ * isolation, and that isolation is load-bearing — api-tree's Tier-2
+ * incremental build carries a leaf's compiled artifact forward VERBATIM when
+ * its fingerprint is unchanged (`apply-validation-build.ts`'s
+ * `readCarryForwardState`/`leafArtifacts`), which is only sound while a
+ * leaf's generated text depends on that leaf alone. Making `GenCtx` aware of
+ * other leaves (a shared const pool across `compileConstraintsFn` calls)
+ * would break that reproducibility. Deduping at the ASSEMBLY splice point
+ * instead — after every fragment exists, purely by content — keeps each leaf
+ * independently reproducible and still emits each distinct regex/enum-member
+ * array/known-field Set/… exactly once per module.
+ *
+ * Relies on `compileConstraintsFn`'s own layout: `ctx.declarations()` (each
+ * a single `const __NAME = <expr>;` line) always precede the `function` line,
+ * so the leading run of const lines is exactly the hoisted pool. Every
+ * declaration is emitted BEFORE every function body, which is strictly safer
+ * than the previous interleaving (a `const` is TDZ-sensitive; a `function`
+ * declaration is hoisted, so moving declarations earlier can never break a
+ * reference that used to resolve).
+ */
+export function spliceConstraintsLines(fns: readonly CompiledConstraintsFn[]): string[] {
+  const canonicalByExpr = new Map<string, string>();
+  const rename = new Map<string, string>();
+  const declarations: string[] = [];
+  const bodies: (readonly string[])[] = [];
+  for (const fn of fns) {
+    let i = 0;
+    for (; i < fn.lines.length; i++) {
+      const match = HOISTED_CONST_RE.exec(fn.lines[i]!);
+      if (match === null) break;
+      const name = match[1]!;
+      const expr = match[2]!;
+      const canonical = canonicalByExpr.get(expr);
+      if (canonical === undefined) {
+        canonicalByExpr.set(expr, name);
+        declarations.push(fn.lines[i]!);
+      } else if (canonical !== name) {
+        rename.set(name, canonical);
+      }
+    }
+    bodies.push(fn.lines.slice(i));
+  }
+  const out = [...declarations];
+  for (const body of bodies) {
+    for (const line of body) {
+      out.push(
+        rename.size === 0 ? line : line.replace(HOISTED_IDENT_RE, (id) => rename.get(id) ?? id),
+      );
+    }
+  }
+  return out;
+}
+
+/** One hoisted-const declaration line as `GenCtx.addConst` emits it — the
+ * name and the (always single-line: `JSON.stringify` output, a `new
+ * RegExp(...)`, a `new Set([...])`) initializer expression. */
+const HOISTED_CONST_RE = /^const (__[A-Za-z0-9_$]+) = (.+);$/;
+
+/** A `__`-prefixed identifier OCCURRENCE — the lookbehind keeps it from
+ * matching a `__`-containing tail inside a longer identifier or string
+ * (`"a__b_re0"`), and the greedy tail keeps `__x_re1` from matching the
+ * prefix of `__x_re10`. */
+const HOISTED_IDENT_RE = /(?<![A-Za-z0-9_$])__[A-Za-z0-9_$]+/g;
+
 /** The key `assembleWireModule`'s `wireValidators` map uses for one
  * (entry, profile) pair — the exact surface the design doc asks for
  * ("design the emitted module surface so apply-validation-build can request
@@ -2486,15 +2591,17 @@ export function assembleWireModule(
   const imports = new Map<string, Set<string>>();
   imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]));
 
-  const constraintsLines: string[] = [];
-  for (const { name } of entries) {
-    const fn = constraintsFns[name];
-    if (!fn)
-      throw new Error(
-        `assembleWireModule: missing constraints fn for entry ${JSON.stringify(name)}`,
-      );
-    constraintsLines.push(...fn.lines);
-  }
+  const constraintsLines = spliceConstraintsLines(
+    entries.map(({ name }) => {
+      const fn = constraintsFns[name];
+      if (!fn) {
+        throw new Error(
+          `assembleWireModule: missing constraints fn for entry ${JSON.stringify(name)}`,
+        );
+      }
+      return fn;
+    }),
+  );
 
   const entryLines: string[] = [];
   for (const { name } of entries) {
@@ -2524,7 +2631,7 @@ export function assembleWireModule(
     lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`);
   }
   if (imports.size > 0) lines.push("");
-  lines.push(INFER_TYPE_REF_SOURCE);
+  lines.push(DESCRIBE_TYPE_SOURCE);
   lines.push("");
   lines.push(...defsBlockLines);
   if (defsBlockLines.length > 0) lines.push("");

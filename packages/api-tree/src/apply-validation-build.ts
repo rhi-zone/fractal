@@ -74,7 +74,8 @@ import {
   compileWireEntryFragmentComposite,
   createWireDefsRegistry,
   identityProfile,
-  INFER_TYPE_REF_SOURCE,
+  DESCRIBE_TYPE_SOURCE,
+  spliceConstraintsLines,
   jsonProfile,
   queryProfile,
   wireValidatorKey,
@@ -736,15 +737,24 @@ function assembleWireApplyValidationModule(
   const imports = new Map<string, Set<string>>();
   imports.set("@rhi-zone/fractal-type-ir", new Set(["ValidationError"]));
 
-  const constraintsLines: string[] = [];
-  entries.forEach(({ name }) => {
-    const fn = constraintsFns[name];
-    if (!fn)
-      throw new Error(
-        `buildWireApplyValidationModuleSource: missing constraints fn for entry ${JSON.stringify(name)}`,
-      );
-    constraintsLines.push(...fn.lines);
-  });
+  // `spliceConstraintsLines` (type-ir), not a plain concatenation: it
+  // collapses byte-identical hoisted const declarations across every leaf's
+  // fragment to one canonical declaration per module. See that function's own
+  // doc comment for why this dedup lives at the assembly splice point rather
+  // than inside `compileConstraintsFn`'s per-leaf `GenCtx` (Tier-2
+  // carry-forward reuses a leaf's artifact verbatim, so a leaf's generated
+  // text must stay a function of that leaf alone).
+  const constraintsLines = spliceConstraintsLines(
+    entries.map(({ name }) => {
+      const fn = constraintsFns[name];
+      if (!fn) {
+        throw new Error(
+          `buildWireApplyValidationModuleSource: missing constraints fn for entry ${JSON.stringify(name)}`,
+        );
+      }
+      return fn;
+    }),
+  );
 
   const entryLines: string[] = [];
   for (const { name, protocol } of entries) {
@@ -776,7 +786,7 @@ function assembleWireApplyValidationModule(
     lines.push(`import type { ${[...names].sort().join(", ")} } from ${JSON.stringify(from)}`);
   }
   if (imports.size > 0) lines.push("");
-  lines.push(INFER_TYPE_REF_SOURCE);
+  lines.push(DESCRIBE_TYPE_SOURCE);
   lines.push("");
   lines.push(...defsBlockLines);
   if (defsBlockLines.length > 0) lines.push("");

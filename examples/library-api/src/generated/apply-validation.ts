@@ -4,13 +4,12 @@ import { createApplyValidation } from "@rhi-zone/fractal-api-tree/apply-validati
 
 import type { ValidationError } from "@rhi-zone/fractal-type-ir"
 
-function __inferTypeRef(v: any): any {
-  if (v === null) return { shape: { kind: "null" }, meta: {} };
-  if (v === undefined) return { shape: { kind: "void" }, meta: {} };
-  if (Array.isArray(v)) return { shape: { kind: "array", element: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
-  if (typeof v === "object") return { shape: { kind: "object", fields: {} }, meta: {} };
-  if (typeof v === "function") return { shape: { kind: "function", params: [], returnType: { shape: { kind: "unknown" }, meta: {} } }, meta: {} };
-  return { shape: { kind: typeof v }, meta: {} };
+function __describeType(v: any): string {
+  if (v === null) return "null";
+  if (v === undefined) return "undefined";
+  if (Array.isArray(v)) return "array";
+  if (typeof v === "object") return "object";
+  return typeof v;
 }
 
 function __constraints_books_books_list(value: any): ValidationError[] {
@@ -20,142 +19,125 @@ function __constraints_books_books_list(value: any): ValidationError[] {
   const errs: ValidationError[] = [];
   return errs;
 }
-const __books_books_add_ref0 = {"shape":{"kind":"object","fields":{"title":{"shape":{"kind":"string"},"meta":{}},"author":{"shape":{"kind":"string"},"meta":{}},"genre":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
-const __books_books_add_ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
 function __constraints_books_books_add(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_books_add_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["title"] === undefined) { errs.push({ kind: "missing", path: path.concat(["title"]) }); }
     else {
-      if (!(typeof value["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: __books_books_add_ref1, actual: __inferTypeRef(value["title"]) }); }
+      if (!(typeof value["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: "string", actual: __describeType(value["title"]) }); }
     }
     if (value["author"] === undefined) { errs.push({ kind: "missing", path: path.concat(["author"]) }); }
     else {
-      if (!(typeof value["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: __books_books_add_ref1, actual: __inferTypeRef(value["author"]) }); }
+      if (!(typeof value["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: "string", actual: __describeType(value["author"]) }); }
     }
     if (value["genre"] === undefined) { errs.push({ kind: "missing", path: path.concat(["genre"]) }); }
     else {
-      if (!(typeof value["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: __books_books_add_ref1, actual: __inferTypeRef(value["genre"]) }); }
+      if (!(typeof value["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: "string", actual: __describeType(value["genre"]) }); }
     }
   }
   return errs;
 }
-const __books_books__bookId_read_ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
-const __books_books__bookId_read_ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
 function __constraints_books_books__bookId_read(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_books__bookId_read_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
     else {
-      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __books_books__bookId_read_ref1, actual: __inferTypeRef(value["bookId"]) }); }
+      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(value["bookId"]) }); }
     }
   }
   return errs;
 }
-const __books_books__bookId_replace_ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}},"title":{"shape":{"kind":"string"},"meta":{"optional":true}},"author":{"shape":{"kind":"string"},"meta":{"optional":true}},"genre":{"shape":{"kind":"string"},"meta":{"optional":true}}}},"meta":{}} as any;
-const __books_books__bookId_replace_ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
-const __books_books__bookId_replace_ref2 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
 function __constraints_books_books__bookId_replace(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_books__bookId_replace_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
     else {
-      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __books_books__bookId_replace_ref1, actual: __inferTypeRef(value["bookId"]) }); }
+      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(value["bookId"]) }); }
     }
     if (value["title"] !== undefined) {
-      if (!(typeof value["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: __books_books__bookId_replace_ref2, actual: __inferTypeRef(value["title"]) }); }
+      if (!(typeof value["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: "string", actual: __describeType(value["title"]) }); }
     }
     if (value["author"] !== undefined) {
-      if (!(typeof value["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: __books_books__bookId_replace_ref2, actual: __inferTypeRef(value["author"]) }); }
+      if (!(typeof value["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: "string", actual: __describeType(value["author"]) }); }
     }
     if (value["genre"] !== undefined) {
-      if (!(typeof value["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: __books_books__bookId_replace_ref2, actual: __inferTypeRef(value["genre"]) }); }
+      if (!(typeof value["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: "string", actual: __describeType(value["genre"]) }); }
     }
   }
   return errs;
 }
-const __books_books__bookId_remove_ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
-const __books_books__bookId_remove_ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
 function __constraints_books_books__bookId_remove(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_books__bookId_remove_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
     else {
-      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __books_books__bookId_remove_ref1, actual: __inferTypeRef(value["bookId"]) }); }
+      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(value["bookId"]) }); }
     }
   }
   return errs;
 }
-const __books_books__bookId_checkout_start_ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
-const __books_books__bookId_checkout_start_ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
 function __constraints_books_books__bookId_checkout_start(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_books__bookId_checkout_start_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
     else {
-      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __books_books__bookId_checkout_start_ref1, actual: __inferTypeRef(value["bookId"]) }); }
+      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(value["bookId"]) }); }
     }
   }
   return errs;
 }
-const __books_books__bookId_checkout_reserve_ref0 = {"shape":{"kind":"object","fields":{"bookId":{"shape":{"kind":"string"},"meta":{}},"patronId":{"shape":{"kind":"string"},"meta":{}}}},"meta":{}} as any;
-const __books_books__bookId_checkout_reserve_ref1 = {"shape":{"kind":"string"},"meta":{}} as any;
 function __constraints_books_books__bookId_checkout_reserve(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_books__bookId_checkout_reserve_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["bookId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["bookId"]) }); }
     else {
-      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __books_books__bookId_checkout_reserve_ref1, actual: __inferTypeRef(value["bookId"]) }); }
+      if (!(typeof value["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(value["bookId"]) }); }
     }
     if (value["patronId"] === undefined) { errs.push({ kind: "missing", path: path.concat(["patronId"]) }); }
     else {
-      if (!(typeof value["patronId"] === "string")) { errs.push({ kind: "type", path: path.concat(["patronId"]), expected: __books_books__bookId_checkout_reserve_ref1, actual: __inferTypeRef(value["patronId"]) }); }
+      if (!(typeof value["patronId"] === "string")) { errs.push({ kind: "type", path: path.concat(["patronId"]), expected: "string", actual: __describeType(value["patronId"]) }); }
     }
   }
   return errs;
 }
-const __books_catalog_search_ref0 = {"shape":{"kind":"object","fields":{"q":{"shape":{"kind":"string"},"meta":{"optional":true}}}},"meta":{}} as any;
-const __books_catalog_search_ref1 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
 function __constraints_books_catalog_search(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_catalog_search_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["q"] !== undefined) {
-      if (!(typeof value["q"] === "string")) { errs.push({ kind: "type", path: path.concat(["q"]), expected: __books_catalog_search_ref1, actual: __inferTypeRef(value["q"]) }); }
+      if (!(typeof value["q"] === "string")) { errs.push({ kind: "type", path: path.concat(["q"]), expected: "string", actual: __describeType(value["q"]) }); }
     }
   }
   return errs;
 }
-const __books_catalog_genres_ref0 = {"shape":{"kind":"object","fields":{"prefix":{"shape":{"kind":"string"},"meta":{"optional":true}}}},"meta":{}} as any;
-const __books_catalog_genres_ref1 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
 function __constraints_books_catalog_genres(value: any): ValidationError[] {
   void value;
   const path: string[] = [];
   void path;
   const errs: ValidationError[] = [];
-  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: __books_catalog_genres_ref0, actual: __inferTypeRef(value) }); } else {
+  if (!(typeof value === "object" && value !== null && !Array.isArray(value))) { errs.push({ kind: "type", path: path, expected: "object", actual: __describeType(value) }); } else {
     if (value["prefix"] !== undefined) {
-      if (!(typeof value["prefix"] === "string")) { errs.push({ kind: "type", path: path.concat(["prefix"]), expected: __books_catalog_genres_ref1, actual: __inferTypeRef(value["prefix"]) }); }
+      if (!(typeof value["prefix"] === "string")) { errs.push({ kind: "type", path: path.concat(["prefix"]), expected: "string", actual: __describeType(value["prefix"]) }); }
     }
   }
   return errs;
@@ -179,7 +161,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000books/add http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -187,15 +168,15 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["title"] !== undefined) {
-          if (!(typeof wire["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: __ref0, actual: __inferTypeRef(wire["title"]) }); }
+          if (!(typeof wire["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: "string", actual: __describeType(wire["title"]) }); }
           __o0["title"] = wire["title"];
         }
         if (wire["author"] !== undefined) {
-          if (!(typeof wire["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: __ref0, actual: __inferTypeRef(wire["author"]) }); }
+          if (!(typeof wire["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: "string", actual: __describeType(wire["author"]) }); }
           __o0["author"] = wire["author"];
         }
         if (wire["genre"] !== undefined) {
-          if (!(typeof wire["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: __ref0, actual: __inferTypeRef(wire["genre"]) }); }
+          if (!(typeof wire["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: "string", actual: __describeType(wire["genre"]) }); }
           __o0["genre"] = wire["genre"];
         }
       }
@@ -211,7 +192,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000books/:bookId/read http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -219,7 +199,7 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["bookId"] !== undefined) {
-          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __ref0, actual: __inferTypeRef(wire["bookId"]) }); }
+          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(wire["bookId"]) }); }
           __o0["bookId"] = wire["bookId"];
         }
       }
@@ -235,8 +215,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000books/:bookId/replace http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{}} as any;
-    const __ref1 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -244,19 +222,19 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["bookId"] !== undefined) {
-          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __ref0, actual: __inferTypeRef(wire["bookId"]) }); }
+          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(wire["bookId"]) }); }
           __o0["bookId"] = wire["bookId"];
         }
         if (wire["title"] !== undefined) {
-          if (!(typeof wire["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: __ref1, actual: __inferTypeRef(wire["title"]) }); }
+          if (!(typeof wire["title"] === "string")) { errs.push({ kind: "type", path: path.concat(["title"]), expected: "string", actual: __describeType(wire["title"]) }); }
           __o0["title"] = wire["title"];
         }
         if (wire["author"] !== undefined) {
-          if (!(typeof wire["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: __ref1, actual: __inferTypeRef(wire["author"]) }); }
+          if (!(typeof wire["author"] === "string")) { errs.push({ kind: "type", path: path.concat(["author"]), expected: "string", actual: __describeType(wire["author"]) }); }
           __o0["author"] = wire["author"];
         }
         if (wire["genre"] !== undefined) {
-          if (!(typeof wire["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: __ref1, actual: __inferTypeRef(wire["genre"]) }); }
+          if (!(typeof wire["genre"] === "string")) { errs.push({ kind: "type", path: path.concat(["genre"]), expected: "string", actual: __describeType(wire["genre"]) }); }
           __o0["genre"] = wire["genre"];
         }
       }
@@ -272,7 +250,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000books/:bookId/remove http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -280,7 +257,7 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["bookId"] !== undefined) {
-          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __ref0, actual: __inferTypeRef(wire["bookId"]) }); }
+          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(wire["bookId"]) }); }
           __o0["bookId"] = wire["bookId"];
         }
       }
@@ -296,7 +273,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000books/:bookId/checkout/start http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -304,7 +280,7 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["bookId"] !== undefined) {
-          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __ref0, actual: __inferTypeRef(wire["bookId"]) }); }
+          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(wire["bookId"]) }); }
           __o0["bookId"] = wire["bookId"];
         }
       }
@@ -320,7 +296,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000books/:bookId/checkout/reserve http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -328,11 +303,11 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["bookId"] !== undefined) {
-          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: __ref0, actual: __inferTypeRef(wire["bookId"]) }); }
+          if (!(typeof wire["bookId"] === "string")) { errs.push({ kind: "type", path: path.concat(["bookId"]), expected: "string", actual: __describeType(wire["bookId"]) }); }
           __o0["bookId"] = wire["bookId"];
         }
         if (wire["patronId"] !== undefined) {
-          if (!(typeof wire["patronId"] === "string")) { errs.push({ kind: "type", path: path.concat(["patronId"]), expected: __ref0, actual: __inferTypeRef(wire["patronId"]) }); }
+          if (!(typeof wire["patronId"] === "string")) { errs.push({ kind: "type", path: path.concat(["patronId"]), expected: "string", actual: __describeType(wire["patronId"]) }); }
           __o0["patronId"] = wire["patronId"];
         }
       }
@@ -348,7 +323,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000catalog/search http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -356,7 +330,7 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["q"] !== undefined) {
-          if (!(typeof wire["q"] === "string")) { errs.push({ kind: "type", path: path.concat(["q"]), expected: __ref0, actual: __inferTypeRef(wire["q"]) }); }
+          if (!(typeof wire["q"] === "string")) { errs.push({ kind: "type", path: path.concat(["q"]), expected: "string", actual: __describeType(wire["q"]) }); }
           __o0["q"] = wire["q"];
         }
       }
@@ -372,7 +346,6 @@ export const wireValidators = {
     };
   })(),
   "books\u0000catalog/genres http": (function () {
-    const __ref0 = {"shape":{"kind":"string"},"meta":{"optional":true}} as any;
     function parse(wire: any, _hooks?: Readonly<Record<string, (w: any) => any>>) {
       const path: string[] = [];
       void path;
@@ -380,7 +353,7 @@ export const wireValidators = {
       let __o0: Record<string, any> = {};
       if (!(typeof wire === "object" && wire !== null && !Array.isArray(wire))) { errs.push({ kind: "encoding", path: path, expected: "object", actual: wire }); } else {
         if (wire["prefix"] !== undefined) {
-          if (!(typeof wire["prefix"] === "string")) { errs.push({ kind: "type", path: path.concat(["prefix"]), expected: __ref0, actual: __inferTypeRef(wire["prefix"]) }); }
+          if (!(typeof wire["prefix"] === "string")) { errs.push({ kind: "type", path: path.concat(["prefix"]), expected: "string", actual: __describeType(wire["prefix"]) }); }
           __o0["prefix"] = wire["prefix"];
         }
       }

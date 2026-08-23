@@ -139,6 +139,52 @@ export interface SharingRegistry {
   readonly useCounts: Map<string, number>;
   readonly defs: Map<string, TypeRef>;
   readonly recursive: Set<string>;
+  /** Canonical STRUCTURE key (`structureKey`) -> the `defs` name that owns
+   * that structure. `names` alone keys on `ts.Type` IDENTITY, which the
+   * checker hands out per declaration site, not per shape — so two
+   * structurally identical types (two aliases of the same object shape, or
+   * the same anonymous object literal written at N call sites) never
+   * collapsed, and each emitted its own inlined copy of every validator.
+   * This index is what makes sharing structural: the second type with an
+   * already-seen structure resolves to the FIRST one's def instead of
+   * minting a second. Additive — `names`/`recursive` keep their existing
+   * roles, and a self-recursive name is never merged away (its body refers
+   * to itself BY that name). */
+  readonly byStructure: Map<string, string>;
+}
+
+/** Canonical serialization of a TypeRef's structure, used as `byStructure`'s
+ * key. `JSON.stringify` is sound here because every TypeRef in this
+ * extractor is built through `t(shape, meta)`, so two refs built by the same
+ * code path for the same shape serialize with the same key order — equal
+ * text therefore means equal structure. A key-order difference can only ever
+ * cause a MISSED merge (an extra def, the pre-existing behavior), never a
+ * wrong one. */
+function structureKey(ref: TypeRef): string {
+  return JSON.stringify(ref);
+}
+
+/** The `defs` base name an anonymous (object-literal) type shares under.
+ * Anonymous types have no source name to borrow, and the emitted identifier
+ * (`__def_Anon_check`) is an implementation detail of the generated module —
+ * the useful identity is the STRUCTURE, which `byStructure` supplies. */
+const ANON_DEF_BASE = "Anon";
+
+/** Whether an unnamed type is still worth sharing structurally: a plain
+ * anonymous OBJECT literal with at least one property (`__type` is the
+ * checker's synthesized symbol name for one). Deliberately narrow —
+ * call/construct-signature types (function shapes), index-signature-only
+ * types and everything with an `aliasSymbol` (which includes every
+ * `NON_SHAREABLE_SYMBOL_NAMES` structural-convention name, e.g.
+ * `Record<K, V>`/`Promise<T>`) stay out, so this only adds the case that
+ * actually dominated the emitted output: op input/output types written
+ * inline at the call site. */
+function isAnonymousShareableObject(type: ts.Type): boolean {
+  if (!(type.flags & ts.TypeFlags.Object)) return false;
+  if (type.aliasSymbol) return false;
+  if (type.symbol?.name !== "__type") return false;
+  if (type.getCallSignatures().length > 0 || type.getConstructSignatures().length > 0) return false;
+  return type.getProperties().length > 0;
 }
 
 export function createSharingRegistry(): SharingRegistry {
@@ -148,6 +194,7 @@ export function createSharingRegistry(): SharingRegistry {
     useCounts: new Map(),
     defs: new Map(),
     recursive: new Set(),
+    byStructure: new Map(),
   };
 }
 
@@ -246,7 +293,34 @@ function substituteRefs(ref: TypeRef, replace: (target: string) => TypeRef | und
   if (ref.shape.kind === "ref") {
     const target = (ref.shape as TypeShape & { kind: "ref"; target: string }).target;
     const replacement = replace(target);
-    if (replacement !== undefined) return substituteRefs(replacement, replace);
+    if (replacement !== undefined) {
+      const inlined = substituteRefs(replacement, replace);
+      // The REF NODE's own meta is site-specific — `optional`/`nullable`/
+      // `description`/`default`/`readonly` are recorded by the field loop
+      // (`typeRefFromTypeStructural`) ON THE REF, never on the shared body,
+      // since the same body is referenced from sites that disagree about
+      // them. Inlining the body without re-applying it silently turned an
+      // optional field into a required one (and dropped a nullable field's
+      // null case). Body meta first, ref-site meta wins.
+      //
+      // `typeName`/`declarationFile` (NAMED-TYPE PROVENANCE, attached by
+      // api-tree's `typeRefFromFunctionNode`) are deliberately NOT carried
+      // across: they say "this node IS the named type X, importable from Y",
+      // which stops being true the moment the def is demoted and the shape is
+      // inlined structurally. Carrying them makes a consumer
+      // (`guardAnnotation`) emit `import type { X } from Y` for a node that
+      // no longer has a shared declaration — and two DIFFERENT modules
+      // exporting the same type name then collide on one local binding in the
+      // assembled module (TS2300), since the import list has no aliasing.
+      // A KEPT def's ref survives untouched and keeps its provenance, which
+      // is the case the import path was built for.
+      const carried = { ...ref.meta };
+      delete (carried as Record<string, unknown>).typeName;
+      delete (carried as Record<string, unknown>).declarationFile;
+      return Object.keys(carried).length === 0
+        ? inlined
+        : t(inlined.shape, { ...inlined.meta, ...carried });
+    }
     return ref;
   }
   return t(
@@ -899,6 +973,56 @@ function typeRefFromBrandedIntersection(
 }
 
 /**
+ * Register `type` in the sharing registry and return the `{ kind: "ref" }`
+ * that stands in for it — the shared body of the named
+ * (`shareableTypeName`) and anonymous (`isAnonymousShareableObject`) cases,
+ * which differ only in the base name they share under.
+ *
+ * The name is reserved BEFORE the body is descended (so a self-referential
+ * type re-entering itself resolves through `seen`/`registry.names` to a
+ * `ref` rather than recursing forever), and the STRUCTURAL merge happens
+ * after — a body whose `structureKey` was already claimed by an earlier def
+ * resolves to that earlier name and never becomes a second def. A
+ * self-recursive name is exempt: its body contains a `ref` to its own
+ * reserved name, so merging it into a differently-named def would leave that
+ * inner ref dangling.
+ */
+function shareStructurally(
+  type: ts.Type,
+  baseName: string,
+  checker: ts.TypeChecker,
+  loc: ts.Node,
+  seen: Set<ts.Type>,
+  registry: SharingRegistry,
+  budget: Budget,
+): TypeRef {
+  const existing = registry.names.get(type);
+  if (existing !== undefined) {
+    bumpUseCount(registry, existing);
+    return t(types.ref(existing));
+  }
+  const assignedName = uniqueRegistryName(registry, baseName);
+  registry.names.set(type, assignedName);
+  const nextSeen = new Set(seen).add(type);
+  const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry, budget);
+  const key = structureKey(bodyRef);
+  const canonical = registry.byStructure.get(key);
+  if (canonical !== undefined && !registry.recursive.has(assignedName)) {
+    // Same structure as an already-registered def: point this `ts.Type` at
+    // it instead of minting a second copy. `assignedName` stays burned in
+    // `usedNames` (never reused, never emitted) — releasing it would make
+    // later names depend on merge order for no benefit.
+    registry.names.set(type, canonical);
+    bumpUseCount(registry, canonical);
+    return t(types.ref(canonical));
+  }
+  registry.byStructure.set(key, assignedName);
+  registry.defs.set(assignedName, bodyRef);
+  bumpUseCount(registry, assignedName);
+  return t(types.ref(assignedName));
+}
+
+/**
  * Lower a resolved `ts.Type` to a TypeRef.
  *
  * Handles the obvious cases; punts everything else to `t(types.unknown, …)`
@@ -950,19 +1074,16 @@ export function typeRefFromType(
 
   if (registry) {
     const shareName = shareableTypeName(type);
-    if (shareName) {
-      const existing = registry.names.get(type);
-      if (existing !== undefined) {
-        bumpUseCount(registry, existing);
-        return t(types.ref(existing));
-      }
-      const assignedName = uniqueRegistryName(registry, shareName);
-      registry.names.set(type, assignedName);
-      bumpUseCount(registry, assignedName);
-      const nextSeen = new Set(seen).add(type);
-      const bodyRef = typeRefFromTypeStructural(type, checker, loc, nextSeen, registry, budget);
-      registry.defs.set(assignedName, bodyRef);
-      return t(types.ref(assignedName));
+    if (shareName !== undefined || isAnonymousShareableObject(type)) {
+      return shareStructurally(
+        type,
+        shareName ?? ANON_DEF_BASE,
+        checker,
+        loc,
+        seen,
+        registry,
+        budget,
+      );
     }
   }
 

@@ -1636,7 +1636,7 @@ describe("typeRefFromType gap fixes", () => {
   // `withMeta`, `meta.nullable === true` branch) as the JSON-Schema
   // array-type shape `{ type: ["string", "null"] }` — not just set the meta
   // flag in isolation (from-typescript.test.ts already covers that).
-  it("a `T | null` field's meta.nullable survives toJsonSchema as { type: [\"string\", \"null\"] }", () => {
+  it('a `T | null` field\'s meta.nullable survives toJsonSchema as { type: ["string", "null"] }', () => {
     const ref = typeRefFromType(typeOf("NullableField"), checker, source);
     const fields = (ref.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields;
     const note = fields.note!;
@@ -1734,7 +1734,46 @@ describe("structural sharing", () => {
 
   it("a predicate that always returns true shares every named type encountered", () => {
     const { defs } = extractToolTypeRefs(SHARING_FIXTURE, "tree", { shouldShare: () => true });
-    expect(Object.keys(defs).sort()).toEqual(["Address", "Category"]);
+    // The two named types, plus one `Anon` def per DISTINCT anonymous object
+    // literal in the fixture: the three ops' shared `{ id: string }` input
+    // (one def, see the structural-collapse test below) and their three
+    // different output literals.
+    expect(Object.keys(defs).sort()).toEqual([
+      "Address",
+      "Anon",
+      "Anon_2",
+      "Anon_4",
+      "Anon_6",
+      "Category",
+    ]);
+  });
+
+  it("structurally identical ANONYMOUS object literals collapse to one shared def", () => {
+    // All three ops take `{ id: string }` — three separate type-literal
+    // declarations, so three distinct `ts.Type` identities. Sharing keyed on
+    // `ts.Type` identity alone kept them three separate inlined copies;
+    // keying on STRUCTURE collapses them to one def every op refs.
+    const { types: shared, defs } = extractToolTypeRefs(SHARING_FIXTURE, "tree", {
+      shouldShare: () => true,
+    });
+    const inputTargets = ["getUser", "getOrder", "getProduct"].map(
+      (opName) => (shared[opName]!.input!.shape as { kind: "ref"; target: string }).target,
+    );
+    expect(new Set(inputTargets).size).toBe(1);
+    expect(defs[inputTargets[0]!]!.shape).toEqual({
+      kind: "object",
+      fields: { id: { shape: { kind: "string" }, meta: {} } },
+    });
+  });
+
+  it("the default shouldShare still inlines a small anonymous literal back", () => {
+    // `{ id: string }` is reused 3x but only 2 nodes deep — under
+    // `defaultShouldShare`'s `nodeCount > 5` floor, so it is demoted back to
+    // an inline object exactly as it was before anonymous sharing existed.
+    const { types: shared } = extractToolTypeRefs(SHARING_FIXTURE, "tree", {
+      shouldShare: defaultShouldShare,
+    });
+    expect(shared.getUser!.input!.shape.kind).toBe("object");
   });
 
   it("extractRouteTypeRefs supports the same shouldShare opt-in, keyed by treeId-prefixed route path", () => {
@@ -1743,6 +1782,37 @@ describe("structural sharing", () => {
     });
     expect(Object.keys(shared)).toEqual(["tree/getUser", "tree/getOrder", "tree/getProduct"]);
     expect(Object.keys(defs)).toContain("Address");
+  });
+
+  it("finalizeSharedDefs: inlining a demoted def keeps the REF SITE's own meta", () => {
+    // `optional`/`nullable`/`description`/`default` are recorded on the REF
+    // node by the object-field loop, never on the shared body — the same body
+    // is referenced from sites that disagree about them. Inlining used to
+    // return the body as-is, so a demoted def turned `field?: T` into a
+    // REQUIRED field at the generated-validator layer.
+    const registry = createSharingRegistry();
+    const body = {
+      shape: { kind: "object", fields: { a: { shape: { kind: "string" }, meta: {} } } },
+      meta: {},
+    } as TypeRef;
+    registry.defs.set("Body", body);
+    registry.useCounts.set("Body", 1);
+    const root = {
+      shape: {
+        kind: "object",
+        fields: {
+          thing: { shape: { kind: "ref", target: "Body" }, meta: { optional: true } },
+        },
+      },
+      meta: {},
+    } as TypeRef;
+
+    const { roots, defs } = finalizeSharedDefs(registry, { r: root }, () => false);
+    expect(Object.keys(defs)).toEqual([]);
+    const inlined = (roots.r!.shape as { kind: "object"; fields: Record<string, TypeRef> }).fields
+      .thing!;
+    expect(inlined.shape.kind).toBe("object");
+    expect(inlined.meta).toEqual({ optional: true });
   });
 
   it("finalizeSharedDefs: recursive names are always kept even when shouldShare rejects everything", () => {

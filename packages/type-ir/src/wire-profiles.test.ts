@@ -45,7 +45,7 @@ function evalWireModule(source: string): Record<string, WireTriple> {
 
 /** Compile+evaluate one (entry, profile) pair via the full `compileWireModule`
  * assembly (not a hand-rolled harness) — realistic end-to-end, and exercises
- * `assembleWireModule`'s module-scope wiring (the shared `__inferTypeRef`
+ * `assembleWireModule`'s module-scope wiring (the shared `__describeType`
  * helper, the `ValidationError` type, the by-name `constraintsFn` call) the
  * same way a real generated module would. */
 function evalWireEntry(name: string, ref: TypeRef, profile: WireProfile): WireTriple {
@@ -267,15 +267,16 @@ describe("wire profiles — shared constraint validator reused across profiles",
   });
 
   it("two DIFFERENT entries' constraints fns don't collide on hoisted const names when spliced into one module (regression, phase A/B bug)", () => {
-    // Both entries' `age`-shaped field triggers a `type`-kind error referencing a
-    // hoisted `refLiteral` const inside `compileConstraintsFn`'s own `GenCtx`. Two
-    // entries' independently-fresh `GenCtx`es can each mint the same `__ref0` name,
-    // producing a duplicate `const __ref0 = ...` when spliced into one module's
+    // Both entries hoist a const (the `pattern` regex). Two entries'
+    // independently-fresh `GenCtx`es would each mint the same `__re0` name,
+    // producing a duplicate `const __re0 = ...` when spliced into one module's
     // shared scope (`assembleWireModule`) — evaluating the module (not just
     // generating its source text) is the real assertion here, since a duplicate
-    // `const` is a SyntaxError at eval/transpile time.
-    const refA = t(types.object({ age: t(types.number, { minimum: 0 }) }));
-    const refB = t(types.object({ age: t(types.number, { minimum: 0 }) }));
+    // `const` is a SyntaxError at eval/transpile time. Per-`GenCtx`
+    // namespacing keeps the names apart; `spliceConstraintsLines` then
+    // collapses the two identical declarations back to one.
+    const refA = t(types.object({ code: t(types.string, { pattern: "^[a-z]+$" }) }));
+    const refB = t(types.object({ code: t(types.string, { pattern: "^[a-z]+$" }) }));
     const source = compileWireModule(
       [
         { name: "PersonA", ref: refA },
@@ -285,10 +286,16 @@ describe("wire profiles — shared constraint validator reused across profiles",
     );
     expect(() => evalWireModule(source)).not.toThrow();
     const mod = evalWireModule(source);
-    const okA = mod[wireValidatorKey("PersonA", "argv")]!.parse({ age: "5" });
-    const okB = mod[wireValidatorKey("PersonB", "argv")]!.parse({ age: "5" });
-    expect(okA).toEqual({ kind: "ok", value: { age: 5 } });
-    expect(okB).toEqual({ kind: "ok", value: { age: 5 } });
+    const okA = mod[wireValidatorKey("PersonA", "argv")]!.parse({ code: "abc" });
+    const okB = mod[wireValidatorKey("PersonB", "argv")]!.parse({ code: "abc" });
+    expect(okA).toEqual({ kind: "ok", value: { code: "abc" } });
+    expect(okB).toEqual({ kind: "ok", value: { code: "abc" } });
+    // Deduped at assembly, not merely non-colliding: one declaration, shared.
+    expect(source.split('new RegExp("^[a-z]+$")').length - 1).toBe(1);
+    // ...and the entry that lost its own copy still REFERENCES the survivor.
+    expect(mod[wireValidatorKey("PersonB", "argv")]!.parse({ code: "ABC" })).toMatchObject({
+      kind: "err",
+    });
   });
 
   it("wireValidatorKey joins with a real space, not a NUL byte (regression, phase A byte-level bug)", () => {

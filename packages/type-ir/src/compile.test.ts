@@ -14,7 +14,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
-import { compileValidator, type ValidationError } from "./compile.ts";
+import { compileValidator, typeRefSummary, type ValidationError } from "./compile.ts";
 import { t, types } from "./index.ts";
 import { bytes, date, datetime, duration, email, int32, time, uri, uuid } from "./kinds/common.ts";
 import { int64 } from "./kinds/int-widths.ts";
@@ -748,5 +748,68 @@ describe("compileDefs — a shared/recursive def gets a real static type alias, 
     expect(v.check(invalidValue)).toBe(false);
     const parsed = v.parse(validValue);
     expect(parsed).toEqual({ kind: "ok", value: validValue });
+  });
+});
+
+describe("type-error descriptor (expected/actual)", () => {
+  // `expected`/`actual` used to be full `TypeRef` JSON — a whole structural
+  // tree per check site, hoisted to a const in generated code and read by
+  // nobody. They are now SHORT display strings: `typeRefSummary` at compile
+  // time, `__describeType(value)` at runtime.
+  it("expected is a short one-line name and actual is the runtime value's type", () => {
+    const triple = evalValidator(compileValidator(t(types.object({ name: t(types.string) }))));
+    const [err] = triple.errors({ name: 42 }) as [ValidationError];
+    expect(err.kind).toBe("type");
+    expect(err).toMatchObject({ path: ["name"], expected: "string", actual: "number" });
+  });
+
+  it("a whole-shape mismatch names the container kind, not its structure", () => {
+    const big = t(
+      types.object(
+        Object.fromEntries(
+          Array.from({ length: 30 }, (_, i) => [`f${i}`, t(types.string)] as const),
+        ),
+      ),
+    );
+    const [err] = evalValidator(compileValidator(big)).errors("nope") as [ValidationError];
+    expect(err).toMatchObject({ kind: "type", expected: "object", actual: "string" });
+  });
+
+  it("__describeType distinguishes null/undefined/array/object", () => {
+    const triple = evalValidator(compileValidator(t(types.object({ a: t(types.string) }))));
+    const actualFor = (value: unknown) =>
+      (triple.errors(value)[0] as { actual?: unknown } | undefined)?.actual;
+    expect(actualFor(null)).toBe("null");
+    expect(actualFor([])).toBe("array");
+    expect(actualFor(123)).toBe("number");
+    expect(actualFor({ a: [] })).toBe("array");
+    expect(actualFor({ a: null })).toBe("null");
+  });
+
+  it("typeRefSummary renders one level of structure, then bare kinds", () => {
+    expect(typeRefSummary(t(types.string))).toBe("string");
+    expect(typeRefSummary(t(types.array(t(types.object({ a: t(types.string) })))))).toBe(
+      "array<object>",
+    );
+    expect(typeRefSummary(t(types.object({ a: t(types.string) }), { nullable: true }))).toBe(
+      "object | null",
+    );
+    expect(typeRefSummary(t(types.ref("Address")))).toBe("Address");
+    expect(typeRefSummary(t(types.tuple([t(types.string), t(types.number)])))).toBe("tuple[2]");
+    expect(typeRefSummary(t(types.union([t(types.string), t(types.number)])))).toBe(
+      "union<string | number>",
+    );
+    expect(typeRefSummary(t(types.union(Array.from({ length: 9 }, () => t(types.string)))))).toBe(
+      "union[9]",
+    );
+  });
+
+  it("no compiled validator hoists a TypeRef literal any more", () => {
+    const source = compileValidator(
+      t(types.object({ a: t(types.string), b: t(types.array(t(types.number))) })),
+    );
+    expect(source).not.toContain("__ref");
+    expect(source).not.toContain("__inferTypeRef");
+    expect(source).toContain("__describeType");
   });
 });

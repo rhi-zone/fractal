@@ -449,7 +449,12 @@ export function walkTypeRef(
 // concern, not type-ir's.
 // ============================================================================
 
-export { compileValidator, typeRefToString, type ValidationError } from "./compile.ts";
+export {
+  compileValidator,
+  typeRefSummary,
+  typeRefToString,
+  type ValidationError,
+} from "./compile.ts";
 
 // Wire profiles + staged validation (Wire -> ValidWire -> T -> valid T) — see
 // docs/design/wire-profiles-and-staged-validation.md and compile.ts's own
@@ -468,7 +473,8 @@ export {
   compileWireModule,
   createWireDefsRegistry,
   identityProfile,
-  INFER_TYPE_REF_SOURCE,
+  DESCRIBE_TYPE_SOURCE,
+  spliceConstraintsLines,
   jsonProfile,
   queryProfile,
   type CompiledConstraintsFn,
