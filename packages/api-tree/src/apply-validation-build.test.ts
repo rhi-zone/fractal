@@ -517,6 +517,55 @@ describe("wire-profile build path — shouldShare/defs structural sharing (phase
     })) as unknown;
     expect((rejected as { kind: string }).kind).toBe("err");
   });
+
+  // Regression (2026-08-23): a WARM Tier-2 rebuild — every leaf reused
+  // verbatim from `prior`, nothing recompiled — used to silently drop the
+  // shared `__wiredecode_*`/`__wiretype_*` block from the output while the
+  // reused leaves' own code kept calling those names by reference (a real
+  // TS2304 at typecheck, not just a line-count diff). Root cause: the shared
+  // `WireDefsRegistry` that emits those declarations is populated lazily, as
+  // a SIDE EFFECT of actually compiling a leaf's fragment
+  // (`compileWireEntryFragment`/`compileWireEntryFragmentComposite` calling
+  // `registry.decodeFnName`/`typeAliasName`) — a leaf served from carry-
+  // forward skips that compile entirely, so on a run where every leaf is
+  // reused, the registry is queried zero times and `registry.moduleLines()`
+  // is empty, even though the reused leaves' cached `code` still calls into
+  // it. See `WireDefsRegistry.replay` (type-ir/compile.ts) for the fix: each
+  // fragment now records which `(defName, profile)` pairs it touched
+  // (`usedDefs`), and a carry-forward reuse replays those into the fresh
+  // registry instead of skipping it.
+  it("a fully warm rebuild (every leaf carried forward) still emits the shared defs block — regression for the dropped-__wiredecode_*/dangling-reference corruption", () => {
+    const program = createExtractorProgram(WIRE_SHARING_FIXTURE);
+    const first = buildWireApplyValidationModuleSourceIncremental(WIRE_SHARING_FIXTURE, {
+      program,
+      shouldShare: defaultShouldShare,
+      runtimeImport: "../apply-validation.ts",
+    });
+    expect(first.changedLeaves.length).toBeGreaterThan(0);
+    expect(first.source).toContain("function __wiredecode_Address_json(");
+
+    // Second build: identical input, `prior` = the first build's own result
+    // — the exact "warm carry-forward run" repro (codegen twice in a row,
+    // nothing touched in between).
+    const second = buildWireApplyValidationModuleSourceIncremental(WIRE_SHARING_FIXTURE, {
+      program,
+      shouldShare: defaultShouldShare,
+      runtimeImport: "../apply-validation.ts",
+      prior: first,
+    });
+    expect(second.changedLeaves).toEqual([]); // fully warm — nothing recompiled
+    expect(second.source).toContain("function __wiredecode_Address_json(");
+    // Byte-identical to the cold build — the actual bug produced a shorter,
+    // reference-dangling file here instead.
+    expect(second.source).toBe(first.source);
+
+    // Every `__wiredecode_Address_json(` CALL site in the reused leaves'
+    // code has a matching function DECLARATION — this is the shape the bug
+    // broke: calls survived, the declaration didn't.
+    const declarationCount = (second.source.match(/function __wiredecode_Address_json\(/g) ?? [])
+      .length;
+    expect(declarationCount).toBe(1);
+  });
 });
 
 describe("wire-profile build path — caching (fingerprint incorporates protocol)", () => {

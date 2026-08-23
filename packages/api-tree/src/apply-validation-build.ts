@@ -953,7 +953,18 @@ function isCompiledWireFragment(value: unknown): value is CompiledWireEntryFragm
     typeof value === "object" &&
     value !== null &&
     typeof (value as { code?: unknown }).code === "string" &&
-    typeof (value as { wireType?: unknown }).wireType === "string"
+    typeof (value as { wireType?: unknown }).wireType === "string" &&
+    // `usedDefs` must be present (an array, possibly empty) for a fragment
+    // to be carry-forward-reusable — see the reuse branch below, which
+    // replays it into this run's `WireDefsRegistry` so a shared decode
+    // fn/type alias this fragment's `code` calls by name still gets emitted.
+    // A `.cache.json` written before `usedDefs` existed lacks the field
+    // entirely; rejecting it here (forcing a full recompile of that leaf,
+    // self-healing the cache on the next write) is deliberate — replaying
+    // `undefined` as "no defs used" would silently reproduce the exact
+    // dangling-reference corruption this field exists to prevent, for any
+    // leaf whose fragment actually does reference a shared def.
+    Array.isArray((value as { usedDefs?: unknown }).usedDefs)
   );
 }
 
@@ -1014,6 +1025,14 @@ export function buildWireApplyValidationModuleSourceIncremental(
       isCompiledWireFragment(priorArtifact);
     if (reusable && isCompiledWireFragment(priorArtifact)) {
       leafArtifacts[fingerprintKey] = priorArtifact;
+      // The reused fragment's own `code` was compiled in a PRIOR run and may
+      // call a shared `__wiredecode_*`/`__wiretype_*` name by reference —
+      // this run's `registry` has never seen this leaf (compileWireLeafFragment
+      // below is skipped entirely on this branch), so without this replay
+      // those shared decode fns/type aliases would silently never make it
+      // into `registry.moduleLines()`, dropping the block this leaf's code
+      // still calls into. See `WireDefsRegistry.replay`'s doc comment.
+      registry.replay(priorArtifact.usedDefs);
     } else {
       leafArtifacts[fingerprintKey] = compileWireLeafFragment(
         ref,

@@ -1493,6 +1493,18 @@ export const argvProfile: WireProfile = {
   },
 };
 
+/** Every `WireProfile` this module produces, by name — the fixed, closed set
+ * (wire profiles aren't a caller extension point). Used by `WireDefsRegistry.
+ * replay` to resolve a persisted `WireDefUsage.profileName` (a plain string,
+ * safe to round-trip through the JSON cache file) back to the real profile
+ * object `decodeFnName`/`typeAliasName` need. */
+export const WIRE_PROFILES_BY_NAME: Readonly<Record<string, WireProfile>> = {
+  identity: identityProfile,
+  json: jsonProfile,
+  query: queryProfile,
+  argv: argvProfile,
+};
+
 const STRUCTURAL_WIRE_KINDS = new Set([
   "object",
   "array",
@@ -1525,6 +1537,23 @@ const STRUCTURAL_WIRE_KINDS = new Set([
  * `compileWireEntryFragment`/`compileWireEntryFragmentComposite` call for
  * that module) so dedup spans every entry, not just one.
  */
+/** One (defName, profile) pair a fragment's compile touched — recorded by
+ * `WireDefsRegistry.startRecording`/`stopRecording` so a Tier-2 carry-forward
+ * caller (api-tree's `apply-validation-build.ts`) can persist which shared
+ * decode functions / type aliases a leaf's cached artifact depends on, then
+ * replay exactly those into a FRESH registry on a later warm run where that
+ * leaf is reused verbatim and never recompiled — see `WireDefsRegistry.
+ * replay`'s doc comment for why this is needed at all. `profileName`, not the
+ * `WireProfile` object itself: this crosses the JSON cache-file boundary
+ * (`CompiledWireEntryFragment.usedDefs` is persisted verbatim in
+ * `leafArtifacts`), and a `WireProfile`'s `leafHandlers` are functions,
+ * which don't survive `JSON.stringify`/`parse`. */
+export type WireDefUsage = {
+  readonly kind: "decode" | "type";
+  readonly defName: string;
+  readonly profileName: string;
+};
+
 export class WireDefsRegistry {
   private readonly defs: Readonly<Record<string, TypeRef>>;
   /** Names with a `defs` entry in scope for this compile — a `ref` whose
@@ -1535,6 +1564,59 @@ export class WireDefsRegistry {
   private readonly decodeFnNames = new Map<string, string>();
   private readonly typeAliasNames = new Map<string, string>();
   private readonly lines: string[] = [];
+  /** Set by `startRecording`, read/appended by `decodeFnName`/`typeAliasName`
+   * (on EVERY call, hit or miss — see those methods' bodies), cleared by
+   * `stopRecording`. `undefined` outside a recording session (the default —
+   * every call site that doesn't opt in pays nothing). */
+  private recording: WireDefUsage[] | undefined;
+
+  /** Begin recording every `decodeFnName`/`typeAliasName` request against
+   * this registry — including ones already memoized from an earlier request
+   * in the SAME recording session or an earlier one, since a fragment that
+   * references an already-shared def still depends on it just as much as the
+   * fragment that first caused it to compile. Nesting is not supported
+   * (a second `startRecording` before `stopRecording` silently discards
+   * whatever was recorded so far) — callers compile one fragment per
+   * recording session, never overlapping. */
+  startRecording(): void {
+    this.recording = [];
+  }
+
+  /** End the current recording session and return everything touched since
+   * `startRecording` — `[]` if nothing was ever recorded, including when
+   * `startRecording` was never called. */
+  stopRecording(): readonly WireDefUsage[] {
+    const recorded = this.recording ?? [];
+    this.recording = undefined;
+    return recorded;
+  }
+
+  /** Force emission of the shared decode fn / type alias for each
+   * `(kind, defName, profileName)` triple in `usages` — used to replay a
+   * carried-forward leaf's def dependencies into a registry that never
+   * compiled that leaf THIS run (Tier-2 carry-forward reuses the leaf's
+   * cached fragment text verbatim, so nothing about compiling that leaf ever
+   * calls `decodeFnName`/`typeAliasName` this run; without this replay, the
+   * shared def that fragment's text still calls by name would silently never
+   * get emitted into `moduleLines()` — the corruption this type exists to
+   * prevent). `profileName` is resolved back to the real `WireProfile`
+   * object via `WIRE_PROFILES_BY_NAME` — safe because every profile that can
+   * ever appear in a `WireDefUsage` is one of the fixed set of base profiles
+   * (`identity`/`json`/`query`/`argv`) that module exports, never a
+   * caller-defined one (a wire profile isn't an extension point). */
+  replay(usages: readonly WireDefUsage[]): void {
+    for (const usage of usages) {
+      const profile = WIRE_PROFILES_BY_NAME[usage.profileName];
+      if (!profile) {
+        throw new Error(
+          `WireDefsRegistry.replay: unknown wire profile ${JSON.stringify(usage.profileName)} ` +
+            `for def ${JSON.stringify(usage.defName)}`,
+        );
+      }
+      if (usage.kind === "decode") this.decodeFnName(usage.defName, profile);
+      else this.typeAliasName(usage.defName, profile);
+    }
+  }
 
   // `defs` is assigned explicitly in the constructor body rather than via a
   // parameter property (`private readonly defs: ...` in the constructor
@@ -1555,6 +1637,7 @@ export class WireDefsRegistry {
    * comment for why NOT constraints, which stay the constraints fn's job) on
    * first request. */
   decodeFnName(defName: string, profile: WireProfile): string {
+    this.recording?.push({ kind: "decode", defName, profileName: profile.name });
     const key = `${defName}\0${profile.name}`;
     const existing = this.decodeFnNames.get(key);
     if (existing !== undefined) return existing;
@@ -1586,6 +1669,7 @@ export class WireDefsRegistry {
    * `compileDefs`'s own `type __def_NAME = ...` alias, profile-qualified
    * since `ValidWire` (unlike `T`) varies per profile. */
   typeAliasName(defName: string, profile: WireProfile): string {
+    this.recording?.push({ kind: "type", defName, profileName: profile.name });
     const key = `${defName}\0${profile.name}`;
     const existing = this.typeAliasNames.get(key);
     if (existing !== undefined) return existing;
@@ -2093,6 +2177,18 @@ export type CompiledWireEntryFragment = {
    * `apply-validation.ts` reads it off the runtime generated entry, which
    * never sees this TypeScript-only wrapper type. */
   readonly hookFields: readonly string[];
+  /** Every `(defName, profile)` pair this fragment's compile referenced via
+   * `registry` — `[]` when no `registry` was passed (nothing shared) or when
+   * the fragment references no shared def. Persisted verbatim into
+   * `leafArtifacts` by Tier-2 carry-forward (api-tree's
+   * `apply-validation-build.ts`) so a LATER warm run that reuses this
+   * fragment without recompiling it can still replay these into a fresh
+   * `WireDefsRegistry` (`WireDefsRegistry.replay`) — without this, a reused
+   * leaf's shared decode fn/type alias would never get re-emitted into
+   * `moduleLines()`, silently dropping code this fragment's own `code` still
+   * calls by name. See `WireDefsRegistry.startRecording`'s doc comment for
+   * the mechanism. */
+  readonly usedDefs: readonly WireDefUsage[];
 };
 
 export function compileWireEntryFragment(
@@ -2102,6 +2198,7 @@ export function compileWireEntryFragment(
   resolveImport?: (declarationFile: string) => string,
   registry?: WireDefsRegistry,
 ): CompiledWireEntryFragment {
+  registry?.startRecording();
   const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames);
   const wireType = wireTypeText(ref, profile, registry);
   const ctx = new GenCtx();
@@ -2130,9 +2227,10 @@ export function compileWireEntryFragment(
   lines.push(`  hookFields: readonly string[];`);
   lines.push(`};`);
   const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n");
+  const usedDefs = registry?.stopRecording() ?? [];
   return typeImport === undefined
-    ? { code, wireType, hookFields: [] }
-    : { code, wireType, typeImport, hookFields: [] };
+    ? { code, wireType, hookFields: [], usedDefs }
+    : { code, wireType, typeImport, hookFields: [], usedDefs };
 }
 
 /** True when `ref` (accounting for `meta.nullable` and `page`, the same
@@ -2426,6 +2524,7 @@ export function compileWireEntryFragmentComposite(
       registry,
     );
   }
+  registry?.startRecording();
   const { annotation, typeImport } = guardAnnotation(ref, resolveImport, registry?.defNames);
   const wireType = wireTypeTextComposite(ref, fieldProfiles, defaultProfile, registry);
   const ctx = new GenCtx();
@@ -2478,9 +2577,10 @@ export function compileWireEntryFragmentComposite(
   lines.push(`};`);
   const code = ["(function () {", ...indentLines(lines, 2), "})()"].join("\n");
   const hookFieldsArr = [...hookFields];
+  const usedDefs = registry?.stopRecording() ?? [];
   return typeImport === undefined
-    ? { code, wireType, hookFields: hookFieldsArr }
-    : { code, wireType, typeImport, hookFields: hookFieldsArr };
+    ? { code, wireType, hookFields: hookFieldsArr, usedDefs }
+    : { code, wireType, typeImport, hookFields: hookFieldsArr, usedDefs };
 }
 
 /**
