@@ -934,8 +934,13 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
 }
 
 /**
- * Encode a `ResponseOverride` into a `Response` — the counterpart to
- * `jsonRouteResponse` for the override path. The body's shape decides how it's
+ * Encode a body value into a `Response` — the counterpart to
+ * `jsonRouteResponse` for any path that hands back a raw handler-produced
+ * value rather than a plain JSON-able one. Used by both `encodeOverride`
+ * (the `ResponseOverride`/`meta.http.response` path) and `defaultEncode`
+ * (the plain-return path) so a handler gets the same treatment either way —
+ * whether it opted into response overriding or not shouldn't change how its
+ * own `Response`/stream/blob is encoded. The body's shape decides how it's
  * encoded, so binary responses, streams, and handler-serialized bodies each
  * get their own correct treatment instead of a blanket `JSON.stringify`:
  *
@@ -945,7 +950,7 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
  *   - `ReadableStream` / `ArrayBuffer` / `Uint8Array` / `Blob` / `null` /
  *     `undefined` — already a valid `BodyInit` (or an intentionally empty
  *     body); passed straight to `new Response()` with `init` untouched, so
- *     whatever Content-Type the handler set on `init.headers` survives
+ *     whatever Content-Type the caller set on `init.headers` survives
  *     unmangled.
  *   - `string` — ambiguous: could be a plain-text/HTML body the handler
  *     already serialized, or a `Node` handler's raw JSON-shaped output that
@@ -956,9 +961,7 @@ function jsonRouteResponse(value: unknown, init?: ResponseInit): Response {
  *   - anything else (objects, numbers, arrays, …) — JSON-encoded via
  *     `jsonRouteResponse`.
  */
-function encodeOverride(override: ResponseOverride): Response {
-  const { body, init } = override;
-
+function encodeBody(body: unknown, init?: ResponseInit): Response {
   if (body instanceof Response) return body;
 
   if (
@@ -980,6 +983,11 @@ function encodeOverride(override: ResponseOverride): Response {
   }
 
   return jsonRouteResponse(body, init);
+}
+
+/** Encode a `ResponseOverride` into a `Response` via `encodeBody` (see there for the body-shape rules). */
+function encodeOverride(override: ResponseOverride): Response {
+  return encodeBody(override.body, override.init);
 }
 
 /**
@@ -1118,14 +1126,23 @@ function pageLinkHeader(
   return `<${url.toString()}>; rel="next"`;
 }
 
-/** Default `encode`: a 200 JSON response, with a `Link: ...; rel="next"` header attached when `output` is page-shaped and has a next page (see `pageLinkHeader`). */
+/**
+ * Default `encode`: a 200 JSON response, with a `Link: ...; rel="next"`
+ * header attached when `output` is page-shaped and has a next page (see
+ * `pageLinkHeader`). A handler that returns a raw `Response` (or a stream /
+ * `ArrayBuffer` / `Uint8Array` / `Blob`) passes through via `encodeBody`
+ * unmangled — this doesn't require `meta.http.response` to be set, since
+ * that flag governs the `ResponseOverride`-wrapping path (status/header
+ * overrides), not whether a `Response` the handler already built gets
+ * respected.
+ */
 function defaultEncode(output: unknown, req?: Request, meta?: RouteLeafMeta): Response {
   if (req !== undefined && meta !== undefined && isPageShape(output)) {
     const link = pageLinkHeader(req, output, meta);
     if (link !== undefined)
       return jsonRouteResponse(output, { status: 200, headers: { Link: link } });
   }
-  return jsonRouteResponse(output, { status: 200 });
+  return encodeBody(output, { status: 200 });
 }
 
 /**

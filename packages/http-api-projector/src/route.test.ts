@@ -947,6 +947,34 @@ describe("runRoute — ResponseOverride body passthrough", () => {
 });
 
 // ============================================================================
+// runRoute — raw Response passthrough via defaultEncode (no meta.http.response
+// set). A handler can build its own Response directly without opting into the
+// response-override machinery; defaultEncode must hand it back unmangled via
+// the same encodeBody logic encodeOverride uses, rather than JSON.stringify-ing
+// it as a plain object.
+// ============================================================================
+
+describe("runRoute — raw Response passthrough via defaultEncode", () => {
+  it("a handler-returned Response with a non-200 status and a custom header passes through unmangled, with no meta.http.response set", async () => {
+    const tree = api_({
+      teapot: op((_: unknown) => new Response("i'm a teapot", { status: 418, headers: { "X-Kind": "teapot" } })),
+    });
+    const router = makeRouter(toHttpRoutes(tree));
+
+    const res = await router(
+      new Request("http://localhost/teapot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
+    expect(res.status).toBe(418);
+    expect(res.headers.get("X-Kind")).toBe("teapot");
+    expect(await res.text()).toBe("i'm a teapot");
+  });
+});
+
+// ============================================================================
 // runRoute — per-route `sources` (declarative decode configuration; a direct
 // field on the method entry, not a Pipeline slot)
 // ============================================================================
