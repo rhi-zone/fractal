@@ -135,10 +135,38 @@ fi
 # ── cost-tier enforcement: Agent / Workflow ──────────────────────────────────
 # Cheapest-adequate-model discipline: no silent default to a frontier tier.
 # COST_MSG text matches the marker checked for below ([frontier-approved]).
-COST_MSG="you need explicit model tier (e.g. haiku for mechanical/extraction, sonnet for scripted implementation)! opus/fable needs [frontier-approved] in the prompt to run, BUT only do that if {{user}} explicitly tells you it's allowed for this specific agent!"
+COST_MSG="you need explicit model tier (e.g. haiku for mechanical/extraction, sonnet as execution hands)! for implementation, dispatch the design/judgment to the impl-orchestrator subagent_type WITH NO model param (its pinned claude-opus-4-6 is pre-approved, no marker needed) and let it direct sonnet hands. any OTHER opus/fable — including passing an explicit model to impl-orchestrator — still needs [frontier-approved] in the prompt to run, BUT only do that if {{user}} explicitly tells you it's allowed for this specific agent!"
 
 if [[ "$tool_name" == "Agent" ]]; then
     model_val=$(printf '%s' "$rest" | awk -v field="model" -f "$dir/lib/extract-field.awk")
+
+    # subagent_type is needed both for the frontmatter-pin fallback below and
+    # for the impl-orchestrator whitelist immediately after. Extract it once
+    # here (same sed require-explicit-agent-type.sh uses).
+    subagent_type=$(printf '%s' "$rest" \
+        | tr '\n' ' ' \
+        | sed -nE 's/.*"subagent_type"[[:space:]]*:[[:space:]]*"((\\\\|\\"|[^"])*)".*/\1/p' \
+        | head -1)
+
+    # ── impl-orchestrator whitelist ──────────────────────────────────────────
+    # Exactly ONE named role is pre-approved to run opus WITHOUT a per-call
+    # [frontier-approved] marker: the impl-orchestrator (owns implementation
+    # design/judgment, delegates mechanical execution to sonnet "hands"). Its
+    # opus is pre-approved by standing owner policy. This is a whitelist of ONE
+    # role keyed on subagent_type — NOT a general opus opening: every other
+    # opus/fable path (ad-hoc model param, any other/absent subagent_type)
+    # stays gated by the [frontier-approved] check below, unchanged.
+    #
+    # The exemption fires ONLY on the no-explicit-model path: subagent_type is
+    # the role AND the call passed no model param, so it falls through to the
+    # role def's own frontmatter pin (claude-opus-4-6). A call that passes the
+    # role WITH an explicit model param does NOT ride the exemption — it drops
+    # to the normal gate below. So the role can only ever run its pinned 4-6,
+    # never an arbitrary frontier model (opus/fable) smuggled via explicit param.
+    IMPL_ORCHESTRATOR_ROLE="impl-orchestrator"
+    if [[ "$subagent_type" == "$IMPL_ORCHESTRATOR_ROLE" && -z "$model_val" ]]; then
+        exit 0  # named role on its frontmatter 4-6 pin — pre-approved, skip gate
+    fi
 
     # No model param on the call: an agent definition file can still pin a
     # tier in its own frontmatter (model: claude-opus-4-6 in
@@ -148,11 +176,6 @@ if [[ "$tool_name" == "Agent" ]]; then
     # require-explicit-agent-type.sh locates subagent_type (same sed), and
     # $dir the same way this script locates its own lib/ resources.
     if [[ -z "$model_val" ]]; then
-        subagent_type=$(printf '%s' "$rest" \
-            | tr '\n' ' ' \
-            | sed -nE 's/.*"subagent_type"[[:space:]]*:[[:space:]]*"((\\\\|\\"|[^"])*)".*/\1/p' \
-            | head -1)
-
         pinned_model=""
         if [[ -n "$subagent_type" ]]; then
             agent_def="$dir/../../.claude/agents/${subagent_type}.md"
