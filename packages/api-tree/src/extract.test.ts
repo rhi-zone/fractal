@@ -697,6 +697,36 @@ describe("typeRefFromType / typeRefFromFunctionNode / typeRefFromReturnType, cal
     expect(inputRef.shape.kind).toBe("object");
   });
 
+  // Regression: a bare type parameter (the `T` of a handler's own `<T
+  // extends Searchable>`) is nameable the same way as a real named type
+  // (`type.getSymbol()!.name === "T"`, declared in whichever real project
+  // file the generic lives in) but is never importable — a type parameter is
+  // scoped to the declaration that introduced it, not exported from that
+  // file. An unguarded symbol lookup here yields that nameable `T`, so
+  // codegen emitted a bogus non-compiling `import type { T } from
+  // ".../typeref.fixture.ts"`. `typeProvenanceOf` must exclude it the same
+  // way `typeRefFromType` already does (`type.isTypeParameter()`), so the
+  // structural lowering's own constraint handling — which already tags
+  // `meta.generic` — is what survives underneath, not an overwritten name.
+  it("typeRefFromFunctionNode carries NO typeName/declarationFile for a constrained type-parameter (`T extends Searchable`) parameter type", () => {
+    const constrainedFn = findExportedFn(source, "interfaceConstraintFn");
+    const inputRef = typeRefFromFunctionNode(constrainedFn, checker);
+    expect(inputRef.meta.typeName).toBeUndefined();
+    expect(inputRef.meta.declarationFile).toBeUndefined();
+    // The constraint's structural lowering still survives underneath.
+    expect(inputRef.shape.kind).toBe("object");
+    expect(inputRef.meta.generic).toBe(true);
+  });
+
+  it("typeRefFromFunctionNode carries NO typeName/declarationFile for an unconstrained type-parameter (`T`) parameter type", () => {
+    const unconstrainedFn = findExportedFn(source, "unconstrainedFn");
+    const inputRef = typeRefFromFunctionNode(unconstrainedFn, checker);
+    expect(inputRef.meta.typeName).toBeUndefined();
+    expect(inputRef.meta.declarationFile).toBeUndefined();
+    // No bound to extract, so it punts to types.unknown underneath.
+    expect(inputRef.shape.kind).toBe("unknown");
+  });
+
   it("typeRefFromType matches schemaFromType for the same resolved parameter type", () => {
     const fnType = checker.getTypeAtLocation(fn);
     const [sig] = checker.getSignaturesOfType(fnType, ts.SignatureKind.Call);

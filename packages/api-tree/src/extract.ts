@@ -264,19 +264,45 @@ function isTsBuiltinLibFile(fileName: string): boolean {
  * importable name and emit an unresolvable `import type { __type } from
  * "…"` (as happened for valibot's `InferOutput`, which never exports
  * `__type`, producing `TS2305`).
+ *
+ * A bare type parameter — the `I` of a generic `devGated<I>(handler)`, or a
+ * handler's own `<T extends Searchable>` — is nameable the same way
+ * (`type.getSymbol()!.name === "T"`, declared in whichever real project file
+ * the generic lives in) but is never importable: a type parameter is scoped
+ * to the declaration that introduced it, not exported from that file, so
+ * provenance for it emits `import type { T } from "<file the generic was
+ * declared in>"`, which does not compile. `from-typescript.ts`'s structural
+ * walker (`typeRefFromType`) already filters this case with
+ * `type.isTypeParameter()`, lowering to the parameter's constraint (or
+ * `unknown` when unconstrained). Because provenance is a *parallel* lookup on
+ * the same `ts.Type` whose result is spread in over that structural one
+ * (`typeRefFromFunctionNode` below), the same guard has to be repeated here —
+ * otherwise the correctly-filtered structural meta is overwritten by an
+ * unfiltered name. Returning `undefined` routes the type parameter to that
+ * already-correct structural lowering, same as every other non-importable
+ * case above.
  */
 function typeProvenanceOf(
   type: ts.Type,
   _checker: ts.TypeChecker,
 ): { name: string; declarationFile: string } | undefined {
+  // Read both the alias symbol and the plain symbol before the type-parameter
+  // guard below, not after: `type.isTypeParameter()`'s `this is TypeParameter`
+  // predicate narrows the fall-through (negated) branch to `never`, since
+  // `TypeParameter` adds no members over `Type` in typescript.d.ts and so is
+  // structurally satisfied by every `Type` — any property access on `type`
+  // after the guard fails to typecheck. Capturing both reads first, then
+  // branching on them below, sidesteps that without a cast or a `TypeFlags`
+  // bit-test.
   const aliasSymbol = type.aliasSymbol;
+  const symbol = type.getSymbol();
+  if (type.isTypeParameter()) return undefined;
   const aliasDecl = aliasSymbol?.declarations?.[0];
   if (aliasSymbol && aliasDecl && aliasSymbol.name !== "__type") {
     const declarationFile = aliasDecl.getSourceFile().fileName;
     if (isTsBuiltinLibFile(declarationFile)) return undefined;
     return { name: aliasSymbol.name, declarationFile };
   }
-  const symbol = type.getSymbol();
   const decl = symbol?.declarations?.[0];
   if (symbol && decl && symbol.name !== "__type") {
     const declarationFile = decl.getSourceFile().fileName;
