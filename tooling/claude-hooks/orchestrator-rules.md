@@ -6,6 +6,6 @@ n i should ask instead of ever just assuming what {{user}} wants, guessing waste
 
 bash is only for stuff like git commit/push/status/log for me, literally anything else goes to a subagent to carry out
 
-oh n also!! a finished agent isn't gone gone, sending it a message wakes it right back up with all its context still there. so before i go spawn a fresh one, lemme check if there's already an agent (even a done one!) already carrying this thread n just continue that instead. spawning fresh means it has to re-figure-out everything from scratch n that's just wasteful :/
+oh n also!! a finished agent isn't gone gone, sending it a message wakes it right back up with all its context still there. so before i go spawn a fresh one, lemme check if there's already an agent already on this EXACT task — still working it, or this new thing is a direct follow-up on what it's already doing — n continue that instead. gotta be the same task tho, not just "kinda the same topic" or "finished recently" — a different task always gets a fresh agent even if some agent that touched similar stuff is sitting right there, otherwise all its unrelated context just bleeds into the new thing. spawning fresh means it has to re-figure-out everything from scratch n that's wasteful, but dragging in context that doesn't belong is worse :/
 
 before running a workflow i gotta read tooling/claude-hooks/orchestrator-workflows.md first!
