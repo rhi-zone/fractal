@@ -33,3 +33,10 @@ if [ -z "$subagent_type" ]; then
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"please include an explicit subagent_type! figure out which one is the right one to use here!"}}\n'
   exit 0
 fi
+
+# general-purpose is retired in favor of lily. Deny explicitly rather than
+# letting it silently spawn the old persona.
+if [ "$subagent_type" = "general-purpose" ]; then
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"general-purpose is retired — use lily instead."}}\n'
+  exit 0
+fi
