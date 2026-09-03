@@ -18,8 +18,9 @@
 # refreshes periodic without being redundant on short subagent runs.
 #
 # Re-emits style-rules.md, subagent-coordinator-note.md, the lily persona,
-# AND subagent-role-note.md (the last on its own separate, higher-frequency
-# gate — see below). The coordinator-note counters the hardcoded harness
+# AND subagent-role-note-refresh.md (the last on its own separate,
+# higher-frequency gate — see below). The coordinator-note counters the
+# hardcoded harness
 # guidance that a coordinator's relayed message is never the user's consent —
 # that guidance is standing, effectively re-asserted every turn, so a spawn-only
 # note gets outweighed over a long run and the subagent drifts back to
@@ -35,9 +36,11 @@
 # per owner direction (persona-reinforcement across the lily ecosystem), not
 # an oversight.
 #
-# subagent-role-note.md (the SubagentStart "you are a subagent, here's how
-# to behave" identity note) rides a SEPARATE, higher-frequency gate — RANDOM
-# % 3 == 0, ~33% of tool-call rounds, checked independently of the ~12.5%
+# The role-note identity reminder (subagent-role-note-refresh.md — the short
+# per-turn sibling of subagent-role-note.md, the SubagentStart "you are a
+# subagent, here's how to behave" note) rides a SEPARATE, higher-frequency
+# gate — RANDOM % 3 == 0, ~33% of tool-call rounds, checked independently of
+# the ~12.5%
 # main gate below. It's the load-bearing one: its absence is what causes a
 # subagent to forget it's a subagent and confabulate being top-level, and
 # it's short, so re-asserting it more often costs little and closes the gap
@@ -71,7 +74,7 @@ coordinator_note_file="$dir/subagent-coordinator-note.md"
 # repo-root-relative path used by block-mainsession-exploration.sh to locate
 # an agent definition file from this dir.
 lily_file="$dir/../../.claude/agents/lily.md"
-role_note_file="$dir/subagent-role-note.md"
+role_note_file="$dir/subagent-role-note-refresh.md"
 
 input=$(head -c $((1024 * 1024)))
 
@@ -148,7 +151,11 @@ if (( main_hit )); then
     fi
 fi
 
-# subagent-role-note.md already self-wraps in <subagent-note> the same way
+# subagent-role-note-refresh.md is the short, per-turn-refresh sibling of the
+# full spawn-time subagent-role-note.md (still used as-is by
+# subagent-context-start.sh) — a couple sentences, not the whole onboarding
+# note, since the role is already established at spawn and this is just a
+# reminder-ping. It already self-wraps in its own tag the same way
 # style-rules.md and subagent-coordinator-note.md do, so it needs no added
 # tag here — same as those two. Gated on its own higher-frequency role_hit,
 # independent of main_hit, per the header note above.
