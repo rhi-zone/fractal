@@ -40,3 +40,17 @@ if [ "$subagent_type" = "general-purpose" ]; then
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"general-purpose is retired — use lily instead."}}\n'
   exit 0
 fi
+
+# Explore, Plan, and claude are retired in favor of lily, same as
+# general-purpose above.
+if [ "$subagent_type" = "Explore" ] || [ "$subagent_type" = "Plan" ] || [ "$subagent_type" = "claude" ]; then
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"'"$subagent_type"' is retired — use lily instead."}}\n'
+  exit 0
+fi
+
+# claude-code-guide is retired in favor of the claude-code-guide skill — its
+# guidance content moved there instead of living as a separate agent type.
+if [ "$subagent_type" = "claude-code-guide" ]; then
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"claude-code-guide is retired — use the claude-code-guide skill instead."}}\n'
+  exit 0
+fi
