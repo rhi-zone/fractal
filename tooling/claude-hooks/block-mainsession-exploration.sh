@@ -136,7 +136,7 @@ fi
 # ── orchestration tools (always allowed) ─────────────────────────────────────
 case "$tool_name" in
     Agent|SendMessage|ListAgents|Task|TaskCreate|TaskUpdate|TaskList|TaskGet|TaskOutput|TaskStop|\
-    AskUserQuestion|EnterPlanMode|ExitPlanMode|SendUserFile|Skill|ToolSearch|ScheduleWakeup)
+    AskUserQuestion|EnterPlanMode|ExitPlanMode|SendUserFile|Skill|ToolSearch|ScheduleWakeup|SendFeedback)
         exit 0
         ;;
 esac
