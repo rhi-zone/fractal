@@ -99,6 +99,18 @@
     "./auth": {
       "types": "./dist/auth.d.ts",
       "import": "./dist/auth.js"
+    },
+    "./api-description": {
+      "types": "./dist/api-description.d.ts",
+      "import": "./dist/api-description.js"
+    },
+    "./lower": {
+      "types": "./dist/lower.d.ts",
+      "import": "./dist/lower.js"
+    },
+    "./from-openapi": {
+      "types": "./dist/from-openapi.d.ts",
+      "import": "./dist/from-openapi.js"
     }
   },
   "publishConfig": {
