@@ -57,8 +57,18 @@
         "@rhi-zone/fractal-json-rpc-api-projector": "workspace:*",
         "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
         "fast-check": "^4.9.0",
+        "graphql": "^16.9.0",
+        "protobufjs": "^8.7.1",
         "typescript": "^6.0.3",
       },
+      "peerDependencies": {
+        "graphql": "^16.9.0",
+        "protobufjs": "^8.7.1",
+      },
+      "optionalPeers": [
+        "graphql",
+        "protobufjs",
+      ],
     },
     "packages/auth-oidc": {
       "name": "@rhi-zone/fractal-auth-oidc",
