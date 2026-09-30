@@ -387,3 +387,160 @@ describe("round-trip against capnp.ts's projector", () => {
     expect(fields(reparsed[target]!).value?.shape.kind).toBe("int32");
   });
 });
+
+describe("interfaces", () => {
+  const source = `
+    @0xdbb9ad1f14bf0b36;
+
+    # A key-value store.
+    interface Store @0xabcdef0123456789 {
+      # Fetch a value.
+      get @0 (key :Text, fallback :Int32 = -1 $note("n")) -> (value :Text, found :Bool) $deprecatedish;
+      put @1 (key :Text, value :Text);
+      clear @2 () -> ();
+      watch @3 (key :Text) -> stream;
+      lookup @4 Store.LookupParams -> Store.LookupResults;
+
+      struct LookupParams { key @0 :Text; }
+      struct LookupResults { hits @0 :List(Text); }
+      enum Mode { fast @0; slow @1; }
+    }
+  `;
+
+  test("parses methods with ordinals, params, results, defaults and descriptions", () => {
+    const file = parseCapnpSchema(source);
+    expect(file.id).toBe("0xdbb9ad1f14bf0b36");
+    const store = file.interfaces[0]!;
+    expect(store.name).toBe("Store");
+    expect(store.id).toBe("0xabcdef0123456789");
+    expect(store.description).toBe("A key-value store.");
+    expect(store.methods.map((m) => [m.name, m.ordinal])).toEqual([
+      ["get", 0],
+      ["put", 1],
+      ["clear", 2],
+      ["watch", 3],
+      ["lookup", 4],
+    ]);
+    const get = store.methods[0]!;
+    expect(get.description).toBe("Fetch a value.");
+    expect(get.annotations).toEqual([{ name: "deprecatedish" }]);
+    if (get.params.kind !== "list" || get.results.kind !== "list") throw new Error("lists");
+    expect(get.params.params.map((p) => p.name)).toEqual(["key", "fallback"]);
+    expect(get.params.params[1]!.default).toBe(-1);
+    expect(get.params.params[1]!.annotations).toEqual([{ name: "note", value: "n" }]);
+    expect(get.results.params.map((p) => p.type.name)).toEqual(["Text", "Bool"]);
+  });
+
+  test("an omitted `->` is an empty result list; `-> stream` is its own result kind", () => {
+    const methods = parseCapnpSchema(source).interfaces[0]!.methods;
+    expect(methods[1]!.results).toEqual({ kind: "list", params: [] });
+    expect(methods[3]!.results).toEqual({ kind: "stream" });
+  });
+
+  test("a method side may name a struct type", () => {
+    const lookup = parseCapnpSchema(source).interfaces[0]!.methods[4]!;
+    expect(lookup.params).toEqual({ kind: "type", type: { name: "Store.LookupParams" } });
+    expect(lookup.results).toEqual({ kind: "type", type: { name: "Store.LookupResults" } });
+  });
+
+  test("nested structs and enums are registered under the interface path", () => {
+    const defs = fromCapnp(source);
+    expect(Object.keys(defs).sort()).toEqual([
+      "Store.LookupParams",
+      "Store.LookupResults",
+      "Store.Mode",
+    ]);
+  });
+
+  test("extends, generic parameters and method generics", () => {
+    const store = parseCapnpSchema(`
+      interface Box(T) extends(Base, Other(Text)) {
+        take @0 [U] (a :T, b :U) -> (c :U);
+      }
+    `).interfaces[0]!;
+    expect(store.typeParams).toEqual(["T"]);
+    expect(store.extends).toEqual([{ name: "Base" }, { name: "Other", args: [{ name: "Text" }] }]);
+    expect(store.methods[0]!.typeParams).toEqual(["U"]);
+  });
+
+  test("nested interfaces, inside interfaces and inside structs", () => {
+    const file = parseCapnpSchema(`
+      interface Outer { interface Inner { ping @0 (); } make @0 () -> (inner :Inner); }
+      struct Holder { interface Held { pong @0 (); } n @0 :Int32; }
+    `);
+    expect(file.interfaces[0]!.nestedInterfaces[0]!.name).toBe("Inner");
+    expect(file.structs[0]!.nestedInterfaces[0]!.name).toBe("Held");
+    expect(file.structs[0]!.members).toHaveLength(1);
+  });
+
+  test("struct and enum ids and generic parameters are parsed", () => {
+    const file = parseCapnpSchema(`
+      struct Pair(A, B) @0x1234 { a @0 :A; b @1 :B; }
+      enum E @0x99 { x @0; }
+    `);
+    expect(file.structs[0]!.typeParams).toEqual(["A", "B"]);
+    expect(file.structs[0]!.id).toBe("0x1234");
+    expect(file.enums[0]!.id).toBe("0x99");
+  });
+
+  test("a malformed method throws unless onError is given, and only that method is lost", () => {
+    const bad = `interface S { good @0 (a :Int32); broken @1 (a Int32); other @2 (); }`;
+    expect(() => parseCapnpSchema(bad)).toThrow();
+    const errors: string[] = [];
+    const file = parseCapnpSchema(bad, { onError: (m) => errors.push(m) });
+    expect(file.interfaces[0]!.methods.map((m) => m.name)).toEqual(["good", "other"]);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("interface S");
+  });
+
+  test("a malformed top-level declaration is skipped with onError", () => {
+    const errors: string[] = [];
+    const file = parseCapnpSchema(`struct Bad { x @0 Int32; } struct Good { y @0 :Int32; }`, {
+      onError: (m) => errors.push(m),
+    });
+    expect(file.structs.map((s) => s.name)).toEqual(["Good"]);
+    expect(errors).toHaveLength(1);
+  });
+
+  test("interface-typed fields, generic parameters and generic arguments convert honestly", () => {
+    const defs = fromCapnp(`
+      interface Callback { call @0 (); }
+      struct Pair(A) { a @0 :A; cb @1 :Callback; list @2 :List(Callback); }
+      struct User { pair @0 :Pair(Text); }
+    `);
+    expect(Object.keys(defs).sort()).toEqual(["Pair", "User"]);
+    const pair = fields(defs.Pair!);
+    expect(defs.Pair!.meta.typeParams).toEqual(["A"]);
+    expect(pair.a!.shape.kind).toBe("unknown");
+    expect(pair.a!.meta.capnpTypeParam).toBe("A");
+    expect(pair.cb!.shape.kind).toBe("unknown");
+    expect(pair.cb!.meta.capnpInterface).toBe("Callback");
+    const list = pair.list!.shape as { element: TypeRef };
+    expect(list.element.meta.capnpInterface).toBe("Callback");
+    const user = fields(defs.User!).pair!;
+    expect(user.shape).toEqual({ kind: "ref", target: "Pair" });
+    expect((user.meta.typeArgs as TypeRef[])[0]!.shape.kind).toBe("string");
+  });
+
+  test("using, const and annotation declarations are recorded as skipped", () => {
+    const file = parseCapnpSchema(`
+      using Other = import "other.capnp";
+      using import "third.capnp".Foo;
+      const answer :Int32 = 42;
+      annotation note(struct) :Text;
+      interface I { const limit :Int32 = 3; ping @0 (); }
+    `);
+    expect(file.skipped).toEqual([
+      { kind: "using", name: "Other", line: 2 },
+      { kind: "using", line: 3 },
+      { kind: "const", name: "answer", line: 4 },
+      { kind: "annotation", name: "note", line: 5 },
+      { kind: "const", name: "limit", scope: "I", line: 6 },
+    ]);
+  });
+
+  test("a struct field named `interface` is still a field", () => {
+    const defs = fromCapnp(`struct S { interface @0 :Text; }`);
+    expect(field(fields(defs.S!), "interface").shape.kind).toBe("string");
+  });
+});
