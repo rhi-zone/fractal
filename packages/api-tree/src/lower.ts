@@ -19,7 +19,7 @@ import { toJsonSchema } from "@rhi-zone/fractal-type-ir/json-schema";
 import type { ApiDescription, Operation, Segment } from "./api-description.ts";
 import { addressKey } from "./api-description.ts";
 import type { JsonSchema } from "./extract.ts";
-import { isLeaf, type Handler, type Node } from "./node.ts";
+import { isLeaf, readMetaBag, type Handler, type Node } from "./node.ts";
 import { escapeJoin } from "./path.ts";
 import type { SchemaMap, ToolTypeInfo, TypeRefMap } from "./tree.ts";
 
@@ -138,10 +138,17 @@ export function lower(api: ApiDescription, opts: LowerOptions = {}): Lowered {
 // Re-keying for projectors.
 // ============================================================================
 
-/** How a leaf's tree position becomes a map key: `segments` are child keys, with each fallback rendered by `fallbackSegment(name)`. */
+/**
+ * How a leaf's tree position becomes a map key: child keys, with each
+ * fallback rendered by `fallbackSegment(name)`, joined by `delimiter`. With
+ * `namespace` set, a branch's `meta[namespace].segment` string replaces its
+ * key and a leaf's `meta[namespace].name` string replaces its whole key, the
+ * same overrides `walkNamedTree` callers (mcp, json-rpc) resolve names with.
+ */
 export type KeyConvention = {
   readonly delimiter: string;
   readonly fallbackSegment: (name: string) => string;
+  readonly namespace?: string;
 };
 
 /** `a/b/:id/c`: the key `extractRouteSchemas`/`toOpenApi`'s schema lookup use (without a tree-id prefix). */
@@ -153,16 +160,23 @@ export const nameKeys: KeyConvention = { delimiter: "_", fallbackSegment: (n) =>
 /** Every leaf's handler with its key under `convention`. */
 export function leafKeys(tree: Node, convention: KeyConvention): Map<Handler, string> {
   const out = new Map<Handler, string>();
+  const override = (n: Node, field: "name" | "segment"): string | undefined => {
+    if (convention.namespace === undefined) return undefined;
+    const v = readMetaBag<Record<string, unknown>>(n.meta[convention.namespace])[field];
+    return typeof v === "string" ? v : undefined;
+  };
+  const leaf = (n: Node, segs: readonly string[]): void => {
+    out.set(n.handler!, override(n, "name") ?? escapeJoin(segs, convention.delimiter));
+  };
   const walk = (n: Node, segs: readonly string[]): void => {
     for (const [key, child] of Object.entries(n.children ?? {})) {
-      const next = [...segs, key];
-      if (isLeaf(child)) out.set(child.handler!, escapeJoin(next, convention.delimiter));
-      else walk(child, next);
+      if (isLeaf(child)) leaf(child, [...segs, key]);
+      else walk(child, [...segs, override(child, "segment") ?? key]);
     }
     if (n.fallback !== undefined) {
       const next = [...segs, convention.fallbackSegment(n.fallback.name)];
       const sub = n.fallback.subtree;
-      if (isLeaf(sub)) out.set(sub.handler!, escapeJoin(next, convention.delimiter));
+      if (isLeaf(sub)) leaf(sub, next);
       else walk(sub, next);
     }
   };

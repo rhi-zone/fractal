@@ -82,7 +82,7 @@ const doc = {
   },
 };
 
-const dotted: KeyConvention = { delimiter: ".", fallbackSegment: (n) => n };
+const dotted: KeyConvention = { delimiter: ".", fallbackSegment: (n) => n, namespace: "jsonrpc" };
 
 /** The json-rpc projector's `SchemaMap`, keyed by dotted method name, from the lowered types. */
 function jsonRpcSchemas(lowered: ReturnType<typeof lower>): SchemaMap {
@@ -243,6 +243,12 @@ describe("names that are not plain dotted paths", () => {
   test("the json-rpc projector still names every method exactly", () => {
     const names = toMethods(lower(imported.api).tree).map((m) => m.name);
     expect(names.sort()).toEqual(["a..b", "eth", "eth.getBalance"]);
+  });
+
+  test("a renamed method's schema is keyed by its wire name", () => {
+    const lowered = lower(imported.api);
+    const methods = toMethods(lowered.tree, { schemas: jsonRpcSchemas(lowered) });
+    for (const m of methods) expect(m.resultSchema).toBeDefined();
   });
 });
 
