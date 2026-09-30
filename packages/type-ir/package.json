@@ -550,6 +550,14 @@
     "./from-smithy": {
       "types": "./dist/from-smithy.d.ts",
       "import": "./dist/from-smithy.js"
+    },
+    "./from-xsd": {
+      "types": "./dist/from-xsd.d.ts",
+      "import": "./dist/from-xsd.js"
+    },
+    "./from-raml": {
+      "types": "./dist/from-raml.d.ts",
+      "import": "./dist/from-raml.js"
     }
   },
   "publishConfig": {

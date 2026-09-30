@@ -2,14 +2,15 @@
 
 ## API descriptions in (2026-09-30)
 
-Built: `ApiDescription` + `lower()` + importers for OpenAPI/Swagger, AsyncAPI, GraphQL SDL, protobuf services, Cap'n Proto interfaces, OpenRPC, MCP listings, Smithy JSON AST, and an Overlay (1.0-1.2) applier, all in `packages/api-tree/src`. Design, decisions and limits: `docs/design/api-description-in.md`. Decisions there were made under a delegated ask and are not owner-certified. Open follow-ups:
+Built: `ApiDescription` + `lower()` + importers for OpenAPI/Swagger, AsyncAPI, GraphQL SDL, protobuf services, Cap'n Proto interfaces, OpenRPC, MCP listings, Smithy JSON AST, WSDL, RAML, TypeSpec, Postman, and an Overlay (1.0-1.2) applier, all in `packages/api-tree/src`. Design, decisions and limits: `docs/design/api-description-in.md`. Decisions there were made under a delegated ask and are not owner-certified. Open follow-ups:
 
-- **openapi projector ignores `meta.http.sourceMap`** — every input field becomes the JSON request body and path params are typed `string`, so query/header/cookie placement is lost on OpenAPI → fractal → OpenAPI. Also affects authored trees that use `http.source()`.
-- **exact http binding for re-addressed operations** — `moveTo` is relative and names new wildcards `"param"`. Forge-style regrouping, protobuf `google.api.http`, and non-mirroring Smithy `@http` routes keep their binding verbatim under `meta.<format>` instead. Needs an owner call: named wildcards in `moveTo` brush against the "no bound-variable machinery" invariant.
-- **no slot for error types** — non-2xx responses, OpenRPC errors, Smithy errors are kept in meta or diagnosed only.
-- **no input-side streaming** — client/bidi streaming rpcs are skipped.
+- ~~**openapi projector ignores `meta.http.sourceMap`**~~ — DONE (45a4f46): params/body follow the runtime decode; `$defs` hoisted to `components.schemas`.
+- **exact http binding for re-addressed operations** — `moveTo` is relative and names new wildcards `"param"`. Forge-style regrouping, protobuf `google.api.http`, non-mirroring Smithy `@http` routes, and most TypeSpec routes keep their binding verbatim under `meta.<format>` instead. Needs an owner call: named wildcards in `moveTo` brush against the "no bound-variable machinery" invariant.
+- **no slot for error types** — non-2xx responses, OpenRPC/Smithy/WSDL/TypeSpec/RAML/Postman errors are kept in meta or diagnosed only. Design options sent to the owner (sibling `errors` type + static kind→code meta / protocol-keyed errors / keep as is); waiting.
+- **no input-side streaming** — protobuf skips client/bidi rpcs, smithy keeps an input event stream as a `stream`-typed field. Options sent to the owner (stream as a param type / whole input as stream / keep diagnosing); waiting.
 - **graphql out**: type-ir `toGraphQL` prints `ID` as `String`; custom root type names (`schema { query: Root }`) aren't projected back.
-- **no OpenRPC emitter** on the out side (json-rpc projector emits methods, not an OpenRPC document).
+- ~~**no OpenRPC emitter**~~ — DONE: `toOpenRpc` in json-rpc-api-projector. `errorDataSchema` is emitted as an invented `x-error-data-schema` method extension (OpenRPC error `data` is a value, not a schema); every method gets `paramStructure: "by-name"`.
+- **postman auth objects** are kept verbatim in `meta.postman`, so an `ApiDescription` built from a collection can hold credentials (diagnosed; no projector emits them).
 - **`json-p3` pinned to 2.3.1** — 2.3.0 and 2.3.2 shipped without `.d.ts`. Optional peer of api-tree, only `overlay.ts` needs it.
 
 ## Completed this session (2026-07-25)

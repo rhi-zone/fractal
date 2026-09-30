@@ -53,10 +53,17 @@ format document ──from-<format>──▶ ApiDescription ──transforms─�
 | `from-openrpc.ts` `fromOpenRpcDocument` | OpenRPC 1.x | method name split on `.` |
 | `from-mcp.ts` `fromMcpListing` | MCP tools/prompts/resources/templates list results | `tools/<name>`, `prompts/<name>`, ... |
 | `from-smithy.ts` `fromSmithyModel` | Smithy 2.0 JSON AST | service, resources (identifiers as params), operation |
+| `from-wsdl.ts` `fromWsdlDocument` | WSDL 1.1 and 2.0 (embedded XSD via type-ir `from-xsd.ts`) | portType/interface, operation |
+| `from-raml.ts` `fromRamlDocument` | RAML 1.0 and 0.8 (type-ir `from-raml.ts` for RAML types) | URL path, then method (`http-address.ts`) |
+| `from-typespec.ts` `fromTypeSpecSource` | TypeSpec, via `@typespec/compiler` + `@typespec/http` | namespace, interface, operation |
+| `from-postman.ts` `fromPostmanCollection` | Postman Collection v2.1/v2.0 (types inferred from examples, marked `meta.inferred`) | URL path, then method (`http-address.ts`) |
 | `overlay.ts` `applyOverlay` | OpenAPI Overlay 1.0/1.1/1.2 over any JSON document | n/a (document to document) |
 
 Each importer's header lists its own mapping, spec references, and what it
-reports as a diagnostic. type-ir gained `from-smithy.ts` (Smithy shapes to
+reports as a diagnostic. URL-shaped importers share `http-address.ts`, so the
+URL-mirroring address convention lives in one place. On the out side,
+json-rpc-api-projector gained `toOpenRpc`, and `toOpenApi` now places
+parameters by the same rules as the runtime decode. type-ir gained `from-smithy.ts` (Smithy shapes to
 TypeRefs) and its Cap'n Proto parser now reads interfaces.
 
 ## Decisions
@@ -128,13 +135,10 @@ bag, so none of these needed a new mechanism.
   whose address doesn't mirror its URL (forge-style regrouping, protobuf
   `google.api.http`, Smithy `@http`) can't carry an exact http binding.
   Importers keep such bindings verbatim under `meta.<format>` with a
-  diagnostic. Fixing it would need named wildcards in `moveTo`, which brushes
+  diagnostic. TypeSpec is hit hardest: its addresses have no param segments,
+  so only param-free routes whose containers are named like the route get
+  `meta.http`. Fixing it would need named wildcards in `moveTo`, which brushes
   against the "no bound-variable machinery" invariant; open for the owner.
-- **The openapi projector ignores `meta.http.sourceMap`.** It emits every
-  input field as the JSON request body and types path params as strings, so
-  OpenAPI → fractal → OpenAPI preserves paths, methods, operationIds,
-  security, deprecation and response schemas, but not query/header/cookie
-  parameter placement. Tracked in TODO.md.
 - **Non-2xx responses / error types** have no slot in `Operation` yet;
   importers report them as a diagnostic.
 - **Client/bidi streaming** has no representation in the tree model

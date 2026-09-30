@@ -151,6 +151,22 @@
     "./schema-defs": {
       "types": "./dist/schema-defs.d.ts",
       "import": "./dist/schema-defs.js"
+    },
+    "./from-wsdl": {
+      "types": "./dist/from-wsdl.d.ts",
+      "import": "./dist/from-wsdl.js"
+    },
+    "./from-raml": {
+      "types": "./dist/from-raml.d.ts",
+      "import": "./dist/from-raml.js"
+    },
+    "./from-typespec": {
+      "types": "./dist/from-typespec.d.ts",
+      "import": "./dist/from-typespec.js"
+    },
+    "./from-postman": {
+      "types": "./dist/from-postman.d.ts",
+      "import": "./dist/from-postman.js"
     }
   },
   "publishConfig": {
