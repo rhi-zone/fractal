@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildSchema, type GraphQLFieldMap } from "graphql";
-import { toSDL } from "@rhi-zone/fractal-graphql-api-projector/schema";
+import { toSDL } from "@rhi-zone/fractal-graphql-api-projector";
 import { fromGraphqlSchema } from "./from-graphql.ts";
 import { lower, nameKeys, typeRefMap } from "./lower.ts";
 

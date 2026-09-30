@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { toOpenApi } from "@rhi-zone/fractal-http-api-projector/openapi";
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector/project";
-import { toSDL } from "@rhi-zone/fractal-graphql-api-projector/schema";
+import { toOpenApi } from "@rhi-zone/fractal-http-api-projector";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
+import { toSDL } from "@rhi-zone/fractal-graphql-api-projector";
 import { fromOpenApiDocument } from "./from-openapi.ts";
 import { flatMapOperations, patchOperations } from "./api-description.ts";
 import {

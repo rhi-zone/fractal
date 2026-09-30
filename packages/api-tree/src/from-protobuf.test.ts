@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector/project";
-import { toSDL } from "@rhi-zone/fractal-graphql-api-projector/schema";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
+import { toSDL } from "@rhi-zone/fractal-graphql-api-projector";
 import { fromProtobufSource } from "./from-protobuf.ts";
 import { concatApi } from "./api-description.ts";
 import { lower, nameKeys, schemaMap, typeRefMap } from "./lower.ts";

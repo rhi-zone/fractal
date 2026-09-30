@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { toMethods, type SchemaMap } from "@rhi-zone/fractal-json-rpc-api-projector/project";
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector/project";
+import { toMethods, type SchemaMap } from "@rhi-zone/fractal-json-rpc-api-projector";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
 import { fromOpenRpcDocument } from "./from-openrpc.ts";
 import { lower, nameKeys, schemaMap, type KeyConvention } from "./lower.ts";
 
