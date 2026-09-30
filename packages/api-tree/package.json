@@ -167,25 +167,45 @@
     "@rhi-zone/fractal-http-api-projector": "workspace:*",
     "@rhi-zone/fractal-json-rpc-api-projector": "workspace:*",
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
+    "@typespec/compiler": "^1.16.0",
+    "@typespec/http": "^1.16.0",
     "fast-check": "^4.9.0",
+    "fast-xml-parser": "^5.11.2",
     "graphql": "^16.9.0",
     "json-p3": "2.3.1",
     "protobufjs": "^8.7.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "yaml": "^2.9.1"
   },
   "peerDependencies": {
+    "@typespec/compiler": "^1.16.0",
+    "@typespec/http": "^1.16.0",
+    "fast-xml-parser": "^5.11.2",
     "graphql": "^16.9.0",
+    "json-p3": "2.3.1",
     "protobufjs": "^8.7.1",
-    "json-p3": "2.3.1"
+    "yaml": "^2.9.1"
   },
   "peerDependenciesMeta": {
+    "@typespec/compiler": {
+      "optional": true
+    },
+    "@typespec/http": {
+      "optional": true
+    },
+    "fast-xml-parser": {
+      "optional": true
+    },
     "graphql": {
+      "optional": true
+    },
+    "json-p3": {
       "optional": true
     },
     "protobufjs": {
       "optional": true
     },
-    "json-p3": {
+    "yaml": {
       "optional": true
     }
   },
