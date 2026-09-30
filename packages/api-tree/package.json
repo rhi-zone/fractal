@@ -147,6 +147,10 @@
     "./http-address": {
       "types": "./dist/http-address.d.ts",
       "import": "./dist/http-address.js"
+    },
+    "./schema-defs": {
+      "types": "./dist/schema-defs.d.ts",
+      "import": "./dist/schema-defs.js"
     }
   },
   "publishConfig": {

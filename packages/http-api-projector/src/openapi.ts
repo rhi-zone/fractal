@@ -32,6 +32,7 @@
 import { isLeaf, metaBagGetter } from "@rhi-zone/fractal-api-tree/node";
 import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
+import { hoistDefs } from "@rhi-zone/fractal-api-tree/schema-defs";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
 import { primaryStoreForMethod } from "./decode.ts";
@@ -763,73 +764,32 @@ function bindInput(
 }
 
 // ============================================================================
-// Named-schema hoisting: every schema's own `$defs` (the self-contained form
-// input/output schemas arrive in) moves to `components.schemas`, and
-// `#/$defs/NAME` refs are rewritten to `#/components/schemas/NAME` — within
-// an OpenAPI document a `#` fragment resolves against the document root
-// (OAS 3.1 §4.8.24.1 via JSON Schema 2020-12 §8.2), not the enclosing
-// schema. Two schemas defining one name differently keep the first under
-// that name; later ones are renamed `NAME_2`, `NAME_3`, ... within their own
-// schema.
+// Named-schema hoisting: each input/output schema arrives self-contained
+// (root + own `$defs`); within an OpenAPI document a `#` fragment resolves
+// against the document root (OAS 3.1 §4.8.24.1 via JSON Schema 2020-12
+// §8.2), so every `$defs` moves to `components.schemas` via `hoistDefs`.
 // ============================================================================
 
-function hoistDefs(
+function hoistPathDefs(
   paths: Record<string, Record<string, OpenApiOperation>>,
 ): Record<string, OpenApiSchema> {
-  const hoisted: Record<string, OpenApiSchema> = {};
-  const canonical = new Map<string, string>();
-
-  const visitSchemaHolder = (holder: Record<string, unknown>, field: string): void => {
-    const schema = holder[field];
+  const registry: Record<string, OpenApiSchema> = {};
+  const visit = (holder: Record<string, unknown>): void => {
+    const schema = holder.schema;
     if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return;
-    const { $defs, ...rest } = schema as Record<string, unknown>;
-    const rename = new Map<string, string>();
-    if (typeof $defs === "object" && $defs !== null) {
-      for (const [name, def] of Object.entries($defs as Record<string, unknown>)) {
-        const text = JSON.stringify(def);
-        let target = name;
-        for (let n = 2; hoisted[target] !== undefined && canonical.get(target) !== text; n++) {
-          target = `${name}_${n}`;
-        }
-        rename.set(name, target);
-        if (hoisted[target] === undefined) {
-          canonical.set(target, text);
-          hoisted[target] = def as OpenApiSchema;
-        }
-      }
-      for (const target of rename.values()) {
-        hoisted[target] = rewriteRefs(hoisted[target], rename) as OpenApiSchema;
-      }
-    }
-    holder[field] = rewriteRefs(rest, rename);
+    holder.schema = hoistDefs(schema as OpenApiSchema, registry, "#/components/schemas/");
   };
-
   for (const methods of Object.values(paths)) {
     for (const op of Object.values(methods)) {
       const o = op as Record<string, unknown>;
-      for (const p of (o.parameters as Record<string, unknown>[] | undefined) ?? []) {
-        visitSchemaHolder(p, "schema");
-      }
+      for (const p of (o.parameters as Record<string, unknown>[] | undefined) ?? []) visit(p);
       for (const holder of [o.requestBody, ...Object.values((o.responses as object) ?? {})]) {
         const content = (holder as { content?: Record<string, Record<string, unknown>> })?.content;
-        for (const media of Object.values(content ?? {})) visitSchemaHolder(media, "schema");
+        for (const media of Object.values(content ?? {})) visit(media);
       }
     }
   }
-  return hoisted;
-}
-
-function rewriteRefs(v: unknown, rename: ReadonlyMap<string, string>): unknown {
-  if (Array.isArray(v)) return v.map((x) => rewriteRefs(x, rename));
-  if (typeof v !== "object" || v === null) return v;
-  const out: Record<string, unknown> = {};
-  for (const [k, x] of Object.entries(v)) {
-    if (k === "$ref" && typeof x === "string" && x.startsWith("#/$defs/")) {
-      const name = decodeURIComponent(x.slice("#/$defs/".length));
-      out[k] = `#/components/schemas/${encodeURIComponent(rename.get(name) ?? name)}`;
-    } else out[k] = rewriteRefs(x, rename);
-  }
-  return out;
+  return registry;
 }
 
 // ============================================================================
@@ -960,7 +920,7 @@ async function buildDoc(
     paths[path]![method] = operation;
   }
 
-  const namedSchemas = hoistDefs(paths);
+  const namedSchemas = hoistPathDefs(paths);
   const components = {
     ...(Object.keys(securitySchemes).length > 0 ? { securitySchemes } : {}),
     ...(Object.keys(namedSchemas).length > 0 ? { schemas: namedSchemas } : {}),
