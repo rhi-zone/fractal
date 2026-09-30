@@ -41,6 +41,24 @@ format document ──from-<format>──▶ ApiDescription ──transforms─�
    `schemaMap`/`typeRefMap` re-key them per projector convention
    (`routeKeys`, `nameKeys`) by walking whatever tree is finally projected.
 
+## Formats
+
+| importer | reads | addressing |
+|---|---|---|
+| `from-openapi.ts` `fromOpenApiDocument` | OpenAPI 3.0/3.1, Swagger 2.0 | URL path, then lowercased method |
+| `from-asyncapi.ts` `fromAsyncApiDocument` | AsyncAPI 2.x, 3.0 | channel address, then operation id (or `send`/`receive`) |
+| `from-graphql.ts` `fromGraphqlSchema` | GraphQL SDL | flat root field name (`[operationType, name]` on a clash) |
+| `from-protobuf.ts` `fromProtobufSource` | `.proto` services (proto3, proto2) | package segments, service, method |
+| `from-capnp.ts` `fromCapnpSchema` | Cap'n Proto interfaces | interface (nested interfaces nest), method |
+| `from-openrpc.ts` `fromOpenRpcDocument` | OpenRPC 1.x | method name split on `.` |
+| `from-mcp.ts` `fromMcpListing` | MCP tools/prompts/resources/templates list results | `tools/<name>`, `prompts/<name>`, ... |
+| `from-smithy.ts` `fromSmithyModel` | Smithy 2.0 JSON AST | service, resources (identifiers as params), operation |
+| `overlay.ts` `applyOverlay` | OpenAPI Overlay 1.0/1.1/1.2 over any JSON document | n/a (document to document) |
+
+Each importer's header lists its own mapping, spec references, and what it
+reports as a diagnostic. type-ir gained `from-smithy.ts` (Smithy shapes to
+TypeRefs) and its Cap'n Proto parser now reads interfaces.
+
 ## Decisions
 
 **Flat operation list as the importer target, not `Node` directly.**
@@ -119,4 +137,11 @@ bag, so none of these needed a new mechanism.
   parameter placement. Tracked in TODO.md.
 - **Non-2xx responses / error types** have no slot in `Operation` yet;
   importers report them as a diagnostic.
-- **Client/bidi streaming** has no representation in the tree model.
+- **Client/bidi streaming** has no representation in the tree model
+  (protobuf skips such rpcs with a diagnostic).
+- **One flat `schemaMap` per convention.** With `namespace: "mcp"`, a tool
+  and a prompt sharing a `meta.mcp.name` share one key.
+- **Projector-side losses seen in round trips:** type-ir's `toGraphQL` prints
+  `ID` as `String`; the graphql projector always names roots
+  Query/Mutation/Subscription; mcp regenerates `idempotentHint: true` from
+  `readOnly`.

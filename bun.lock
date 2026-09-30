@@ -48,7 +48,6 @@
       },
       "dependencies": {
         "@rhi-zone/fractal-type-ir": "workspace:*",
-        "json-p3": "2.3.1",
       },
       "devDependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
@@ -59,15 +58,18 @@
         "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
         "fast-check": "^4.9.0",
         "graphql": "^16.9.0",
+        "json-p3": "2.3.1",
         "protobufjs": "^8.7.1",
         "typescript": "^6.0.3",
       },
       "peerDependencies": {
         "graphql": "^16.9.0",
+        "json-p3": "2.3.1",
         "protobufjs": "^8.7.1",
       },
       "optionalPeers": [
         "graphql",
+        "json-p3",
         "protobufjs",
       ],
     },

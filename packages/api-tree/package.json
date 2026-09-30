@@ -111,6 +111,38 @@
     "./from-openapi": {
       "types": "./dist/from-openapi.d.ts",
       "import": "./dist/from-openapi.js"
+    },
+    "./from-graphql": {
+      "types": "./dist/from-graphql.d.ts",
+      "import": "./dist/from-graphql.js"
+    },
+    "./from-protobuf": {
+      "types": "./dist/from-protobuf.d.ts",
+      "import": "./dist/from-protobuf.js"
+    },
+    "./from-capnp": {
+      "types": "./dist/from-capnp.d.ts",
+      "import": "./dist/from-capnp.js"
+    },
+    "./from-asyncapi": {
+      "types": "./dist/from-asyncapi.d.ts",
+      "import": "./dist/from-asyncapi.js"
+    },
+    "./from-openrpc": {
+      "types": "./dist/from-openrpc.d.ts",
+      "import": "./dist/from-openrpc.js"
+    },
+    "./from-mcp": {
+      "types": "./dist/from-mcp.d.ts",
+      "import": "./dist/from-mcp.js"
+    },
+    "./from-smithy": {
+      "types": "./dist/from-smithy.d.ts",
+      "import": "./dist/from-smithy.js"
+    },
+    "./overlay": {
+      "types": "./dist/overlay.d.ts",
+      "import": "./dist/overlay.js"
     }
   },
   "publishConfig": {
@@ -122,8 +154,7 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@rhi-zone/fractal-type-ir": "workspace:*",
-    "json-p3": "2.3.1"
+    "@rhi-zone/fractal-type-ir": "workspace:*"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -134,18 +165,23 @@
     "@rhi-zone/fractal-mcp-api-projector": "workspace:*",
     "fast-check": "^4.9.0",
     "graphql": "^16.9.0",
+    "json-p3": "2.3.1",
     "protobufjs": "^8.7.1",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "graphql": "^16.9.0",
-    "protobufjs": "^8.7.1"
+    "protobufjs": "^8.7.1",
+    "json-p3": "2.3.1"
   },
   "peerDependenciesMeta": {
     "graphql": {
       "optional": true
     },
     "protobufjs": {
+      "optional": true
+    },
+    "json-p3": {
       "optional": true
     }
   },

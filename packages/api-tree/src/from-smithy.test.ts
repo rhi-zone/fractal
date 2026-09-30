@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { toOpenApi } from "@rhi-zone/fractal-http-api-projector/openapi";
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector/project";
+import { toOpenApi } from "@rhi-zone/fractal-http-api-projector";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
 import { types } from "@rhi-zone/fractal-type-ir";
 import type { SmithyMember, SmithyModel } from "@rhi-zone/fractal-type-ir/from-smithy";
 import { addressKey } from "./api-description.ts";

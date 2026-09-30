@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { toTools } from "@rhi-zone/fractal-mcp-api-projector/project";
+import { toTools } from "@rhi-zone/fractal-mcp-api-projector";
 import { renderCapnp, toCapnpInterface } from "@rhi-zone/fractal-type-ir/capnp";
 import { t, types, type TypeRef } from "@rhi-zone/fractal-type-ir";
 import { addressKey, type Imported, type Operation } from "./api-description.ts";

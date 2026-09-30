@@ -546,6 +546,10 @@
     "./kinds/refinements": {
       "types": "./dist/kinds/refinements.d.ts",
       "import": "./dist/kinds/refinements.js"
+    },
+    "./from-smithy": {
+      "types": "./dist/from-smithy.d.ts",
+      "import": "./dist/from-smithy.js"
     }
   },
   "publishConfig": {
