@@ -34,8 +34,9 @@ import type { Handler, LeafMeta, Node } from "@rhi-zone/fractal-api-tree/node";
 import { escapeJoin } from "@rhi-zone/fractal-api-tree/path";
 import { resolveTags } from "@rhi-zone/fractal-api-tree/tags";
 import type { Tags } from "@rhi-zone/fractal-api-tree/tags";
+import { primaryStoreForMethod } from "./decode.ts";
 import { httpProjection } from "./dx.ts";
-import type { HttpRoute } from "./route.ts";
+import type { HttpRoute, Sources } from "./route.ts";
 import type { SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 
 // ============================================================================
@@ -137,12 +138,12 @@ export type OpenApiOperation = {
   readonly [key: string]: unknown;
 };
 
-/** An OpenAPI 3.1 path parameter. */
+/** An OpenAPI 3.1 Parameter Object (§4.8.12), schema form. */
 export type OpenApiParameter = {
   readonly name: string;
-  readonly in: "path";
-  readonly required: true;
-  readonly schema: { readonly type: "string" };
+  readonly in: "path" | "query" | "header" | "cookie";
+  readonly required: boolean;
+  readonly schema: OpenApiSchema;
 };
 
 /** An OpenAPI 3.1 document (partial — the fields this projection emits). */
@@ -170,7 +171,9 @@ export type OpenApiDoc = {
    * `collectSecuritySchemes` below).
    */
   readonly components?: {
-    readonly securitySchemes: Record<string, OpenApiSecurityScheme>;
+    readonly securitySchemes?: Record<string, OpenApiSecurityScheme>;
+    /** Named schemas hoisted out of the input/output schemas' own `$defs` (§4.8.7). */
+    readonly schemas?: Record<string, OpenApiSchema>;
   };
 };
 
@@ -243,11 +246,15 @@ export interface OpenApiLeafMeta {
 /** Public alias kept for the exported "resolved per-operation openapi meta" shape — see `getOpenApiMeta`. */
 export type OpenApiMeta = OpenApiLeafMetaProperties;
 
-const getOpenApiSharedMeta = metaBagGetter<OpenApiSharedMeta, "openapi", OpenApiSharedMetaProperties>(
+const getOpenApiSharedMeta = metaBagGetter<
+  OpenApiSharedMeta,
+  "openapi",
+  OpenApiSharedMetaProperties
+>("openapi");
+
+const getOpenApiMeta = metaBagGetter<OpenApiLeafMeta, "openapi", OpenApiLeafMetaProperties>(
   "openapi",
 );
-
-const getOpenApiMeta = metaBagGetter<OpenApiLeafMeta, "openapi", OpenApiLeafMetaProperties>("openapi");
 
 // ============================================================================
 // Internal: security scheme collection — walks the whole HttpRoute tree
@@ -476,6 +483,8 @@ export type RouteEntry = {
   readonly verb: string;
   /** The method entry's own meta bag. */
   readonly meta: LeafMeta & OpenApiLeafMeta;
+  /** The method entry's decode sources (where each input field is read from at request time), when the route carries them. */
+  readonly sources?: Sources;
 };
 
 /** Fallback "/"-joined path+verb key, for handlers absent from a `pathMap` — mirrors `nameFromPath`'s shape with `/` instead of `_`. */
@@ -526,7 +535,14 @@ export function listRoutes(
     const codenName = names?.get(entry.handler) ?? nameFromPath(path === "" ? "/" : path, verb);
     const schemaKey =
       pathMap?.get(entry.handler) ?? pathKeyFromPath(path === "" ? "/" : path, verb);
-    out.push({ codenName, schemaKey, path: path === "" ? "/" : path, verb, meta: entry.meta });
+    out.push({
+      codenName,
+      schemaKey,
+      path: path === "" ? "/" : path,
+      verb,
+      meta: entry.meta,
+      ...(entry.sources !== undefined ? { sources: entry.sources } : {}),
+    });
   }
 
   for (const [key, child] of Object.entries(route.children ?? {})) {
@@ -639,6 +655,184 @@ export async function toOpenApi(n: Node, opts: OpenApiOpts = {}): Promise<OpenAp
 }
 
 // ============================================================================
+// Input binding: which input fields are path/query/header/cookie parameters
+// and which make up the JSON request body. Mirrors the runtime decode
+// (route.ts `defaultDecode`): a field named by a path slug the leaf authored
+// is a path param; otherwise its `sourceMap` entry decides; otherwise the
+// method's primary store (`primaryStoreForMethod`). Fields bound to a store
+// that isn't part of the HTTP request (e.g. `caller`) appear nowhere.
+// ============================================================================
+
+const PARAM_STORES: ReadonlySet<string> = new Set(["path", "query", "header", "cookie"]);
+
+function bindInput(
+  inputSchema: OpenApiSchema | undefined,
+  path: string,
+  verb: string,
+  sources: Sources | undefined,
+): { parameters: OpenApiParameter[]; body: OpenApiSchema | undefined } {
+  const slugs = pathParams(path);
+  const authored = sources?.authoredPathParams;
+  const implicitPath = new Set(
+    authored !== undefined ? slugs.filter((n) => authored.includes(n)) : slugs,
+  );
+  const sourceMap = sources?.sourceMap ?? {};
+  const primary = primaryStoreForMethod(verb.toUpperCase());
+
+  const properties =
+    inputSchema !== undefined &&
+    typeof inputSchema.properties === "object" &&
+    inputSchema.properties !== null
+      ? (inputSchema.properties as Record<string, OpenApiSchema>)
+      : undefined;
+
+  const parameters: OpenApiParameter[] = [];
+  const boundPath = new Set<string>();
+
+  if (properties === undefined) {
+    for (const name of slugs) {
+      parameters.push({ name, in: "path", required: true, schema: { type: "string" } });
+    }
+    const isPlaceholder =
+      inputSchema === undefined ||
+      (Object.keys(inputSchema).length === 1 && inputSchema.type === "object");
+    const body = primary === "body" && !isPlaceholder ? inputSchema : undefined;
+    return { parameters, body };
+  }
+
+  const required = new Set(
+    Array.isArray(inputSchema!.required) ? (inputSchema!.required as string[]) : [],
+  );
+  const bodyProps: Record<string, OpenApiSchema> = {};
+  const bodyRequired: string[] = [];
+
+  for (const [name, schema] of Object.entries(properties)) {
+    let store: string;
+    let key = name;
+    if (implicitPath.has(name)) store = "path";
+    else if (sourceMap[name] !== undefined) {
+      store = sourceMap[name]!.store;
+      key = sourceMap[name]!.key ?? name;
+    } else store = primary;
+
+    if (store === "body") {
+      bodyProps[key] = schema;
+      if (required.has(name)) bodyRequired.push(key);
+    } else if (PARAM_STORES.has(store)) {
+      const inPath = store === "path";
+      if (inPath) boundPath.add(key);
+      parameters.push({
+        name: key,
+        in: store as OpenApiParameter["in"],
+        required: inPath || required.has(name),
+        schema,
+      });
+    }
+  }
+
+  // §4.8.12: every template expression in the path has a matching path parameter.
+  for (const name of slugs) {
+    if (!boundPath.has(name)) {
+      parameters.push({ name, in: "path", required: true, schema: { type: "string" } });
+    }
+  }
+
+  const bodyNames = Object.keys(bodyProps);
+  const body =
+    bodyNames.length > 0
+      ? {
+          type: "object",
+          properties: bodyProps,
+          ...(bodyRequired.length > 0 ? { required: bodyRequired } : {}),
+          ...(inputSchema!.additionalProperties !== undefined
+            ? { additionalProperties: inputSchema!.additionalProperties }
+            : {}),
+          ...(inputSchema!.$defs !== undefined ? { $defs: inputSchema!.$defs } : {}),
+        }
+      : undefined;
+
+  if (inputSchema!.$defs !== undefined) {
+    for (let i = 0; i < parameters.length; i++) {
+      parameters[i] = {
+        ...parameters[i]!,
+        schema: { ...parameters[i]!.schema, $defs: inputSchema!.$defs },
+      };
+    }
+  }
+  return { parameters, body };
+}
+
+// ============================================================================
+// Named-schema hoisting: every schema's own `$defs` (the self-contained form
+// input/output schemas arrive in) moves to `components.schemas`, and
+// `#/$defs/NAME` refs are rewritten to `#/components/schemas/NAME` — within
+// an OpenAPI document a `#` fragment resolves against the document root
+// (OAS 3.1 §4.8.24.1 via JSON Schema 2020-12 §8.2), not the enclosing
+// schema. Two schemas defining one name differently keep the first under
+// that name; later ones are renamed `NAME_2`, `NAME_3`, ... within their own
+// schema.
+// ============================================================================
+
+function hoistDefs(
+  paths: Record<string, Record<string, OpenApiOperation>>,
+): Record<string, OpenApiSchema> {
+  const hoisted: Record<string, OpenApiSchema> = {};
+  const canonical = new Map<string, string>();
+
+  const visitSchemaHolder = (holder: Record<string, unknown>, field: string): void => {
+    const schema = holder[field];
+    if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return;
+    const { $defs, ...rest } = schema as Record<string, unknown>;
+    const rename = new Map<string, string>();
+    if (typeof $defs === "object" && $defs !== null) {
+      for (const [name, def] of Object.entries($defs as Record<string, unknown>)) {
+        const text = JSON.stringify(def);
+        let target = name;
+        for (let n = 2; hoisted[target] !== undefined && canonical.get(target) !== text; n++) {
+          target = `${name}_${n}`;
+        }
+        rename.set(name, target);
+        if (hoisted[target] === undefined) {
+          canonical.set(target, text);
+          hoisted[target] = def as OpenApiSchema;
+        }
+      }
+      for (const target of rename.values()) {
+        hoisted[target] = rewriteRefs(hoisted[target], rename) as OpenApiSchema;
+      }
+    }
+    holder[field] = rewriteRefs(rest, rename);
+  };
+
+  for (const methods of Object.values(paths)) {
+    for (const op of Object.values(methods)) {
+      const o = op as Record<string, unknown>;
+      for (const p of (o.parameters as Record<string, unknown>[] | undefined) ?? []) {
+        visitSchemaHolder(p, "schema");
+      }
+      for (const holder of [o.requestBody, ...Object.values((o.responses as object) ?? {})]) {
+        const content = (holder as { content?: Record<string, Record<string, unknown>> })?.content;
+        for (const media of Object.values(content ?? {})) visitSchemaHolder(media, "schema");
+      }
+    }
+  }
+  return hoisted;
+}
+
+function rewriteRefs(v: unknown, rename: ReadonlyMap<string, string>): unknown {
+  if (Array.isArray(v)) return v.map((x) => rewriteRefs(x, rename));
+  if (typeof v !== "object" || v === null) return v;
+  const out: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v)) {
+    if (k === "$ref" && typeof x === "string" && x.startsWith("#/$defs/")) {
+      const name = decodeURIComponent(x.slice("#/$defs/".length));
+      out[k] = `#/components/schemas/${encodeURIComponent(rename.get(name) ?? name)}`;
+    } else out[k] = rewriteRefs(x, rename);
+  }
+  return out;
+}
+
+// ============================================================================
 // Shared doc builder
 // ============================================================================
 
@@ -700,36 +894,19 @@ async function buildDoc(
         ? openApiMeta.operationId
         : codenName.replace(/_/g, ".");
 
-    // Path parameters: extracted from the computed path
-    const paramNames = pathParams(path);
-    const parameters: OpenApiParameter[] = paramNames.map((name) => ({
-      name,
-      in: "path" as const,
-      required: true as const,
-      schema: { type: "string" as const },
-    }));
-
-    // requestBody: for non-GET methods that have a non-empty inputSchema
     const inputSchema = toolSchema?.inputSchema as OpenApiSchema | undefined;
-    const hasRequestBody =
-      method !== "get" &&
-      inputSchema !== undefined &&
-      !(
-        Object.keys(inputSchema).length === 1 &&
-        inputSchema["type"] === "object" &&
-        inputSchema["properties"] === undefined
-      );
-
-    const requestBody = hasRequestBody
-      ? {
-          required: true as const,
-          content: {
-            "application/json": {
-              schema: inputSchema as OpenApiSchema,
+    const { parameters, body } = bindInput(inputSchema, path, verb, entry.sources);
+    const requestBody =
+      body !== undefined
+        ? {
+            required: true as const,
+            content: {
+              "application/json": {
+                schema: body,
+              },
             },
-          },
-        }
-      : undefined;
+          }
+        : undefined;
 
     // 200 response schema from codegen output
     const outputSchema: OpenApiSchema = (toolSchema?.outputSchema as OpenApiSchema | undefined) ?? {
@@ -783,12 +960,18 @@ async function buildDoc(
     paths[path]![method] = operation;
   }
 
+  const namedSchemas = hoistDefs(paths);
+  const components = {
+    ...(Object.keys(securitySchemes).length > 0 ? { securitySchemes } : {}),
+    ...(Object.keys(namedSchemas).length > 0 ? { schemas: namedSchemas } : {}),
+  };
+
   return {
     openapi: "3.1.0",
     info: { title, version },
     paths,
     ...(Array.isArray(rootSecurity) ? { security: rootSecurity } : {}),
-    ...(Object.keys(securitySchemes).length > 0 ? { components: { securitySchemes } } : {}),
+    ...(Object.keys(components).length > 0 ? { components } : {}),
   };
 }
 

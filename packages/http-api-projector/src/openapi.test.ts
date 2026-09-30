@@ -9,7 +9,7 @@ import { widgetsTree } from "./__fixtures__/openapi-single-tree.fixture.ts";
 import { catalogTree, inventoryTree } from "./__fixtures__/openapi-two-trees.fixture.ts";
 import { httpRoute, type RouteLeafMeta } from "./route.ts";
 import { api } from "../../../examples/library-api/src/tree.ts";
-import { extractToolSchemas } from "@rhi-zone/fractal-api-tree/tree";
+import { extractToolSchemas, type SchemaMap } from "@rhi-zone/fractal-api-tree/tree";
 import { api as apiC, op } from "@rhi-zone/fractal-api-tree/node";
 import { http } from "./verbs.ts";
 
@@ -808,5 +808,92 @@ describe("toOpenApi(n, { sourceFile }) — auto-discovery treeId resolution", ()
     expect(Object.keys(schema?.properties ?? {})).toEqual(
       expect.arrayContaining(["warehouseId", "quantity"]),
     );
+  });
+});
+
+// ============================================================================
+// Input binding: parameters vs request body follow the runtime decode
+// ============================================================================
+
+describe("input binding", () => {
+  const input = (properties: Record<string, unknown>, required: string[] = []) =>
+    ({ inputSchema: { type: "object", properties, required } }) as unknown as SchemaMap[string];
+
+  it("splits fields across path, sourceMap stores and the method's primary store", async () => {
+    const tree = apiC({
+      items: apiC(
+        {},
+        {
+          fallback: {
+            name: "id",
+            subtree: apiC({
+              get: op((_: { id: string; q?: string }) => null, http.get, http.moveTo("..")),
+              put: op(
+                (_: { id: string; name: string; token: string; who: string }) => null,
+                http.put,
+                http.moveTo(".."),
+                http.source({ token: "header", who: "caller" }),
+              ),
+            }),
+          },
+        },
+      ),
+    });
+    const doc = await toOpenApi(tree, {
+      schemas: {
+        "items/:id/get": input({ id: { type: "string" }, q: { type: "integer" } }, ["id"]),
+        "items/:id/put": input(
+          {
+            id: { type: "string" },
+            name: { type: "string" },
+            token: { type: "string" },
+            who: { type: "string" },
+          },
+          ["id", "name", "token"],
+        ),
+      },
+    });
+    const get = doc.paths["/items/{id}"]!.get!;
+    expect(get.parameters).toEqual([
+      { name: "id", in: "path", required: true, schema: { type: "string" } },
+      { name: "q", in: "query", required: false, schema: { type: "integer" } },
+    ]);
+    expect(get.requestBody).toBeUndefined();
+
+    const put = doc.paths["/items/{id}"]!.put!;
+    expect(put.parameters).toEqual([
+      { name: "id", in: "path", required: true, schema: { type: "string" } },
+      { name: "token", in: "header", required: true, schema: { type: "string" } },
+    ]);
+    expect(put.requestBody!.content["application/json"].schema).toEqual({
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+    });
+  });
+
+  it("hoists $defs into components.schemas and renames a conflicting definition", async () => {
+    const tree = apiC({ a: op(() => null, http.get), b: op(() => null, http.get) });
+    const doc = await toOpenApi(tree, {
+      schemas: {
+        a: {
+          inputSchema: { type: "object" },
+          outputSchema: { $ref: "#/$defs/T", $defs: { T: { type: "string" } } },
+        },
+        b: {
+          inputSchema: { type: "object" },
+          outputSchema: {
+            type: "array",
+            items: { $ref: "#/$defs/T" },
+            $defs: { T: { type: "integer" } },
+          },
+        },
+      } as unknown as SchemaMap,
+    });
+    const out = (m: string) =>
+      doc.paths[m]!.get!.responses["200"].content["application/json"].schema as object;
+    expect(out("/a")).toEqual({ $ref: "#/components/schemas/T" });
+    expect(out("/b")).toEqual({ type: "array", items: { $ref: "#/components/schemas/T_2" } });
+    expect(doc.components?.schemas).toEqual({ T: { type: "string" }, T_2: { type: "integer" } });
   });
 });

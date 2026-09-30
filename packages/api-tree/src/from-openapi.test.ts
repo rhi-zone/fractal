@@ -193,8 +193,30 @@ describe("lower + projectors", () => {
     const schema = (
       show.responses["200"] as { content: Record<string, { schema: Record<string, unknown> }> }
     ).content["application/json"]!.schema;
-    expect(schema.$ref).toBe("#/$defs/Pet");
-    expect(Object.keys(schema.$defs as object)).toEqual(["Pet"]);
+    expect(schema).toEqual({ $ref: "#/components/schemas/Pet" });
+    expect(doc.components?.schemas?.Pet).toMatchObject({
+      properties: { owner: { $ref: "#/components/schemas/Pet" } },
+    });
+
+    const list = doc.paths["/pets"]!.get!;
+    expect(list.parameters).toEqual([
+      { name: "limit", in: "query", required: false, schema: { type: "integer", format: "int32" } },
+      { name: "X-Trace", in: "header", required: true, schema: { type: "string" } },
+    ]);
+    expect(list.requestBody).toBeUndefined();
+
+    const create = doc.paths["/pets"]!.post!;
+    expect(create.parameters).toBeUndefined();
+    expect(create.requestBody?.content["application/json"].schema).toEqual({
+      type: "object",
+      properties: { name: { type: "string" }, tag: { type: "string" } },
+      required: ["name"],
+    });
+
+    expect(show.parameters).toEqual([
+      { name: "petId", in: "path", required: true, schema: { type: "string" } },
+    ]);
+    expect(show.requestBody).toBeUndefined();
   });
 
   test("mcp tools carry the imported schemas and method-derived hints", () => {
