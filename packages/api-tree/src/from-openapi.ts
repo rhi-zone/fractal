@@ -27,14 +27,8 @@
 import { t, types, withMeta, type TypeRef } from "@rhi-zone/fractal-type-ir";
 import { fromJsonSchema } from "@rhi-zone/fractal-type-ir/from-json-schema";
 import { fromOpenApi20, fromOpenApi30 } from "@rhi-zone/fractal-type-ir/from-openapi";
-import type {
-  ApiDescription,
-  Diagnostic,
-  Group,
-  Imported,
-  Operation,
-  Segment,
-} from "./api-description.ts";
+import type { ApiDescription, Diagnostic, Group, Imported, Operation } from "./api-description.ts";
+import { httpAddressing } from "./http-address.ts";
 
 type Obj = Record<string, unknown>;
 
@@ -138,14 +132,9 @@ export function fromOpenApiDocument(input: unknown): ImportedOpenApi {
   }
   if (Object.keys(rootMeta).length > 0) groups.push({ address: [], meta: rootMeta });
 
-  // Param-segment names already bound at each tree position, keyed by the
-  // static prefix; a later path naming the same position differently is
-  // rebound to the first name (its input field keeps its own name and reads
-  // the path store under the first name).
-  const paramNameAt = new Map<string, string>();
-
   let hasErrorResponses = false;
   const paths = isObj(doc.paths) ? doc.paths : {};
+  const addressing = httpAddressing(Object.keys(paths));
 
   for (const [path, rawItem] of Object.entries(paths)) {
     const item = deref(doc, rawItem);
@@ -154,40 +143,19 @@ export function fromOpenApiDocument(input: unknown): ImportedOpenApi {
       continue;
     }
 
-    const segments: Segment[] = [];
-    const pathParamStoreKey = new Map<string, string>();
-    let unsupported = false;
-    let prefix = "";
-    for (const raw of path.split("/").filter((s) => s.length > 0)) {
-      const whole = /^\{([^{}]+)\}$/.exec(raw);
-      if (whole) {
-        const own = whole[1]!;
-        const bound = paramNameAt.get(prefix) ?? own;
-        paramNameAt.set(prefix, bound);
-        if (bound !== own) {
-          diagnostics.push({
-            at: `#/paths/${path}`,
-            message: `path parameter "${own}" shares its position with "${bound}" in another path; bound to "${bound}"`,
-          });
-        }
-        pathParamStoreKey.set(own, bound);
-        segments.push({ kind: "param", name: bound });
-        prefix += "/{}";
-      } else if (raw.includes("{")) {
-        unsupported = true;
-        break;
-      } else {
-        segments.push({ kind: "static", name: raw });
-        prefix += `/${raw}`;
-      }
-    }
-    if (unsupported) {
-      diagnostics.push({
-        at: `#/paths/${path}`,
-        message: "a path segment mixes literal text and a template expression; skipped",
-      });
+    const addressed = addressing.addressPath(path);
+    if (!addressed.ok) {
+      diagnostics.push({ at: `#/paths/${path}`, message: `${addressed.reason}; skipped` });
       continue;
     }
+    for (const { own, bound } of addressed.rebound) {
+      diagnostics.push({
+        at: `#/paths/${path}`,
+        message: `path parameter "${own}" shares its position with "${bound}" in another path; bound to "${bound}"`,
+      });
+    }
+    const segments = addressed.segments;
+    const pathParamStoreKey = addressed.pathParamKeys;
 
     const itemParams = Array.isArray(item.parameters) ? item.parameters : [];
 
@@ -347,20 +315,12 @@ export function fromOpenApiDocument(input: unknown): ImportedOpenApi {
         }
       }
 
-      // Operation key: the method, unless a sibling static path segment
-      // already uses that name at the same position.
-      const siblingTaken = Object.keys(paths).some((other) => {
-        const segs = other.split("/").filter((s) => s.length > 0);
-        const mine = path.split("/").filter((s) => s.length > 0);
-        return (
-          segs.length === mine.length + 1 &&
-          segs.slice(0, -1).join("/") === mine.join("/") &&
-          segs[segs.length - 1] === method
-        );
-      });
-      let key: string = method;
-      if (siblingTaken) {
-        key = asString(rawOp.operationId) ?? `http-${method}`;
+      const { key, collided } = addressing.operationKey(
+        path,
+        method,
+        asString(rawOp.operationId) ?? `http-${method}`,
+      );
+      if (collided) {
         diagnostics.push({
           at,
           message: `path segment "${method}" exists below this path; operation keyed "${key}"`,

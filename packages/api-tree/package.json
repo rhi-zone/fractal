@@ -143,6 +143,10 @@
     "./overlay": {
       "types": "./dist/overlay.d.ts",
       "import": "./dist/overlay.js"
+    },
+    "./http-address": {
+      "types": "./dist/http-address.d.ts",
+      "import": "./dist/http-address.js"
     }
   },
   "publishConfig": {
