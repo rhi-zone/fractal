@@ -122,7 +122,8 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@rhi-zone/fractal-type-ir": "workspace:*"
+    "@rhi-zone/fractal-type-ir": "workspace:*",
+    "json-p3": "2.3.1"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
