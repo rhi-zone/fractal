@@ -15,6 +15,14 @@ export type {
 export { getJsonRpcMeta, projectMethods, toMethods } from "./project.ts";
 
 export type {
+  OpenRpcContentDescriptor,
+  OpenRpcDoc,
+  OpenRpcMethod,
+  OpenRpcOptions,
+} from "./openrpc.ts";
+export { toOpenRpc } from "./openrpc.ts";
+
+export type {
   JsonRpcErrorObject,
   JsonRpcErrorResponse,
   JsonRpcId,

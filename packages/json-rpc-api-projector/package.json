@@ -27,6 +27,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./openrpc": {
+      "types": "./dist/openrpc.d.ts",
+      "import": "./dist/openrpc.js"
+    },
     "./project": {
       "types": "./dist/project.d.ts",
       "import": "./dist/project.js"
