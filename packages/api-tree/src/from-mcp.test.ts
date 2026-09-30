@@ -3,11 +3,9 @@ import {
   projectPrompts,
   projectResources,
   projectTools,
-  type SchemaMap,
 } from "@rhi-zone/fractal-mcp-api-projector";
 import { fromMcpListing } from "./from-mcp.ts";
-import { lower, toSelfContainedJsonSchema, type Lowered } from "./lower.ts";
-import { isLeaf, type Node } from "./node.ts";
+import { lower, nameKeys, schemaMap } from "./lower.ts";
 
 const listing = {
   tools: [
@@ -80,32 +78,6 @@ const listing = {
     },
   ],
 };
-
-/** Every leaf's JSON Schemas keyed by its exact `meta.mcp.name`, as the mcp projector looks them up. */
-function schemasByMcpName(lowered: Lowered): SchemaMap {
-  const out: Record<string, { inputSchema: object; outputSchema?: object; description?: string }> =
-    {};
-  const walk = (n: Node): void => {
-    if (isLeaf(n)) {
-      const name = (n.meta.mcp as { name?: string } | undefined)?.name;
-      const info = lowered.types.get(n.handler!);
-      if (name !== undefined && info !== undefined) {
-        out[name] = {
-          inputSchema: toSelfContainedJsonSchema(info.input, lowered.defs),
-          ...(info.output !== undefined
-            ? { outputSchema: toSelfContainedJsonSchema(info.output, lowered.defs) }
-            : {}),
-          ...(info.description !== undefined ? { description: info.description } : {}),
-        };
-      }
-      return;
-    }
-    for (const c of Object.values(n.children ?? {})) walk(c);
-    if (n.fallback !== undefined) walk(n.fallback.subtree);
-  };
-  walk(lowered.tree);
-  return out as SchemaMap;
-}
 
 describe("fromMcpListing", () => {
   const imported = fromMcpListing(listing);
@@ -214,7 +186,7 @@ describe("fromMcpListing", () => {
 describe("lower + mcp projector round trip", () => {
   const imported = fromMcpListing(listing);
   const lowered = lower(imported.api);
-  const schemas = schemasByMcpName(lowered);
+  const schemas = schemaMap(lowered, { ...nameKeys, namespace: "mcp" });
 
   test("tools come back with exact names, schemas and hints", () => {
     const tools = projectTools(lowered.tree, { schemas }).tools;
